@@ -1,6 +1,6 @@
 import streamlit as st
-from modules.config import AVAILABLE_PROVIDERS
 from modules.session_security import render_api_key_gate, get_session_llm_client
+from modules.config import AVAILABLE_PROVIDERS
 from modules.ingest import load_transcript
 from modules.preprocess import preprocess_text
 from modules.extract_llm import extract_process_llm
