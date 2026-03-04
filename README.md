@@ -1,96 +1,99 @@
-# Process2Diagram — Architecture v2
+# Process2Diagram — Arquitetura v2
 
-## Overview
+## Visão Geral
 
-Multi-provider LLM pipeline that converts meeting transcripts into process diagrams.
-Supports DeepSeek, Claude, OpenAI, Groq, and Gemini via a unified interface.
+Pipeline multi-provedor de LLM que converte transcrições de reuniões em diagramas de processo.
+Suporta DeepSeek, Claude, OpenAI, Groq e Gemini por meio de uma interface unificada.
 
 ---
 
-## Project Structure
+## Estrutura do Projeto
 
 ```
 process2diagram/
 │
-├── app.py                    # Streamlit UI + orchestration
+├── app.py                    # Interface Streamlit + orquestração
 ├── requirements.txt
 │
 └── modules/
-    ├── config.py             # ★ Provider registry — add new LLMs here
-    ├── session_security.py   # ★ API key security (session-only storage)
-    ├── schema.py             # Process data model (Steps, Edges, Decisions)
-    ├── ingest.py             # Transcript input handling
-    ├── preprocess.py         # Text cleaning
-    ├── extract_llm.py        # ★ Multi-LLM routing + extraction
-    ├── diagram_mermaid.py    # Mermaid flowchart generator
-    ├── diagram_drawio.py     # Draw.io XML generator
-    └── utils.py              # JSON export
+    ├── config.py             # ★ Registro de provedores — adicione novos LLMs aqui
+    ├── session_security.py   # ★ Segurança da chave de API (armazenamento apenas na sessão)
+    ├── schema.py             # Modelo de dados do processo (Etapas, Arestas, Decisões)
+    ├── ingest.py             # Leitura da transcrição
+    ├── preprocess.py         # Limpeza do texto
+    ├── extract_llm.py        # ★ Roteamento multi-LLM + extração
+    ├── diagram_mermaid.py    # Gerador de fluxograma Mermaid
+    ├── diagram_drawio.py     # Gerador de XML Draw.io
+    └── utils.py              # Exportação JSON
 ```
 
 ---
 
-## Adding a New LLM Provider
+## Como Adicionar um Novo Provedor de LLM
 
-Edit `modules/config.py` only. Add an entry:
+Edite apenas o arquivo `modules/config.py`. Adicione uma entrada:
 
 ```python
-"My Provider": {
-    "default_model": "my-model-name",
-    "base_url": "https://api.myprovider.com/v1",   # None for Anthropic
-    "api_key_label": "My Provider API Key",
-    "api_key_help": "Get your key at myprovider.com",
+"Meu Provedor": {
+    "default_model": "nome-do-modelo",
+    "base_url": "https://api.meuprovedor.com/v1",   # None para Anthropic
+    "api_key_label": "Chave de API — Meu Provedor",
+    "api_key_help": "Obtenha sua chave em meuprovedor.com",
     "api_key_prefix": "sk-",
-    "client_type": "openai_compatible",  # or "anthropic"
-    "cost_hint": "$X / $Y per 1M tokens",
+    "client_type": "openai_compatible",  # ou "anthropic"
+    "cost_hint": "$X / $Y por 1M tokens",
     "supports_json_mode": True,
     "supports_system_prompt": True,
 },
 ```
 
-If the provider uses the OpenAI-compatible API format → works automatically.
-If it uses a custom SDK → add a handler in `extract_llm.py → call_llm()`.
+Se o provedor expõe uma API compatível com o formato OpenAI → funciona automaticamente.
+Se utiliza um SDK próprio → adicione um handler em `extract_llm.py → call_llm()`.
 
 ---
 
-## API Key Security Model
+## Modelo de Segurança da Chave de API
 
-### Strategy: Session-state isolation
+### Estratégia: isolamento por sessão
 
-Keys are stored **only** in `st.session_state`, which is:
-- Server-side RAM for a single user's browser session
-- Destroyed when the tab closes or session expires
-- Never written to disk, database, logs, or environment variables
+As chaves são armazenadas **exclusivamente** em `st.session_state`, que é:
 
-### What this means in practice
+- Memória RAM do servidor, isolada por sessão de navegador
+- Destruída ao fechar a aba ou quando a sessão expira
+- Nunca gravada em disco, banco de dados, logs ou variáveis de ambiente
 
-| Threat | Protected? |
+### O que isso garante na prática
+
+| Ameaça | Protegido? |
 |---|---|
-| Another user on Streamlit Cloud sees your key | ✅ Yes — session state is isolated per user |
-| Key persists after tab close | ✅ No persistence |
-| Key appears in server logs | ✅ Never logged |
-| Key sent to third parties | ✅ Only sent to the chosen LLM provider |
-| Compromised Streamlit Cloud server | ❌ Not protected (use st.secrets for that) |
+| Outro usuário no Streamlit Cloud ver sua chave | ✅ Sim — sessões são completamente isoladas |
+| Chave persistir após fechar a aba | ✅ Não há persistência |
+| Chave aparecer nos logs do servidor | ✅ Nunca registrada |
+| Chave enviada a terceiros | ✅ Enviada apenas ao provedor de LLM escolhido |
+| Servidor Streamlit Cloud comprometido | ❌ Não protegido (use `st.secrets` neste caso) |
 
-### For higher-security deployments
+### Para implantações com maior nível de segurança
 
-Use a backend proxy pattern:
+Utilize o padrão de proxy backend:
+
 ```
-User → Your Backend (holds key in st.secrets) → LLM Provider
+Usuário → Seu Backend (chave armazenada em st.secrets) → Provedor de LLM
 ```
-The frontend never sees the key at all.
+
+Nesse modelo, o frontend nunca tem acesso à chave.
 
 ---
 
-## Running Locally
+## Executando Localmente
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Deploying to Streamlit Cloud
+## Implantando no Streamlit Cloud
 
-1. Push to GitHub
-2. Go to share.streamlit.io → New app
-3. Select repo, set `Main file: app.py`
-4. Deploy — no secrets config needed (users enter their own keys)
+1. Faça o push do repositório para o GitHub
+2. Acesse share.streamlit.io → New app
+3. Selecione o repositório e defina `Main file: app.py`
+4. Clique em Deploy — nenhuma configuração de secrets é necessária (cada usuário insere sua própria chave)
