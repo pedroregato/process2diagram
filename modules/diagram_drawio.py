@@ -1,65 +1,82 @@
-from __future__ import annotations
-from xml.sax.saxutils import escape
-from .schema import ProcessModel
+# modules/diagram_drawio.py
 
-def to_drawio_xml(proc: ProcessModel) -> str:
-    """
-    Gera um diagrama draw.io básico com layout em coluna.
-    (draw.io usa mxGraphModel dentro de <diagram>.)
-    """
-    # Layout simples: caixas empilhadas
-    x, y = 120, 80
-    w, h = 260, 70
-    gap = 40
+import xml.etree.ElementTree as ET
+from modules.schema import Process
 
-    # IDs numéricos para mxCells
-    base_id = 2
-    node_ids = {}
 
-    cells = []
-    # root / layer
-    cells.append('<mxCell id="0"/>')
-    cells.append('<mxCell id="1" parent="0"/>')
+_NODE_W = 160
+_NODE_H = 60
+_DECISION_W = 120
+_DECISION_H = 80
+_H_GAP = 80
+_START_X = 100
+_START_Y = 40
 
-    # nodes
-    cur_y = y
-    for idx, s in enumerate(proc.steps):
-        cid = str(base_id + idx)
-        node_ids[s.id] = cid
-        value = escape(s.title)
-        style = "rounded=1;whiteSpace=wrap;html=1;"
-        cells.append(
-            f'<mxCell id="{cid}" value="{value}" style="{style}" vertex="1" parent="1">'
-            f'<mxGeometry x="{x}" y="{cur_y}" width="{w}" height="{h}" as="geometry"/>'
-            f"</mxCell>"
-        )
-        cur_y += h + gap
 
-    # edges
-    edge_base = base_id + len(proc.steps)
-    for i, e in enumerate(proc.edges):
-        eid = str(edge_base + i)
-        src = node_ids.get(e.source)
-        tgt = node_ids.get(e.target)
-        if not src or not tgt:
-            continue
-        style = "endArrow=block;html=1;rounded=0;"
-        label = escape(e.label) if e.label else ""
-        cells.append(
-            f'<mxCell id="{eid}" value="{label}" style="{style}" edge="1" parent="1" source="{src}" target="{tgt}">'
-            f'<mxGeometry relative="1" as="geometry"/>'
-            f"</mxCell>"
-        )
+def generate_drawio(process: Process) -> str:
+    root = ET.Element("mxGraphModel")
+    root.set("dx", "1422")
+    root.set("dy", "762")
+    root.set("grid", "1")
+    root.set("gridSize", "10")
+    root.set("guides", "1")
+    root.set("tooltips", "1")
+    root.set("connect", "1")
+    root.set("arrows", "1")
+    root.set("fold", "1")
+    root.set("page", "1")
+    root.set("pageScale", "1")
+    root.set("pageWidth", "1169")
+    root.set("pageHeight", "827")
 
-    mxgraph = (
-        '<mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">'
-        "<root>"
-        + "".join(cells) +
-        "</root>"
-        "</mxGraphModel>"
-    )
+    parent = ET.SubElement(root, "root")
+    ET.SubElement(parent, "mxCell", id="0")
+    ET.SubElement(parent, "mxCell", id="1", parent="0")
 
-    xml = f'''<mxfile host="app.diagrams.net" modified="1" agent="process2diagram" version="22.1.0" type="device">
-  <diagram name="{escape(proc.name)}">{escape(mxgraph)}</diagram>
-</mxfile>'''
-    return xml
+    positions = {}
+    y = _START_Y
+
+    for i, step in enumerate(process.steps):
+        w = _DECISION_W if step.is_decision else _NODE_W
+        h = _DECISION_H if step.is_decision else _NODE_H
+        x = _START_X
+        positions[step.id] = (x, y, w, h)
+
+        cell = ET.SubElement(parent, "mxCell")
+        cell.set("id", step.id)
+        label = step.title
+        if step.actor:
+            label = f"[{step.actor}]\n{step.title}"
+        cell.set("value", label)
+        cell.set("vertex", "1")
+        cell.set("parent", "1")
+
+        if step.is_decision:
+            cell.set("style", "rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;")
+        else:
+            cell.set("style", "rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;")
+
+        geo = ET.SubElement(cell, "mxGeometry")
+        geo.set("x", str(x))
+        geo.set("y", str(y))
+        geo.set("width", str(w))
+        geo.set("height", str(h))
+        geo.set("as", "geometry")
+
+        y += h + _H_GAP
+
+    # Edges
+    for i, edge in enumerate(process.edges):
+        cell = ET.SubElement(parent, "mxCell")
+        cell.set("id", f"E{i:03d}")
+        cell.set("value", edge.label)
+        cell.set("edge", "1")
+        cell.set("source", edge.source)
+        cell.set("target", edge.target)
+        cell.set("parent", "1")
+        cell.set("style", "rounded=1;orthogonalLoop=1;jettySize=auto;exitX=0.5;exitY=1;exitDx=0;exitDy=0;")
+        geo = ET.SubElement(cell, "mxGeometry")
+        geo.set("relative", "1")
+        geo.set("as", "geometry")
+
+    return ET.tostring(root, encoding="unicode", xml_declaration=False)
