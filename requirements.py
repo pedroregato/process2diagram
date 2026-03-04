@@ -1,3 +1,3 @@
-streamlit==1.32.0
-pydantic==1.10.15
-python-dotenv==1.0.1
+streamlit>=1.35.0
+openai>=1.30.0
+anthropic>=0.28.0
