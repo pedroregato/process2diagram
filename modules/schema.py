@@ -1,24 +1,37 @@
-from __future__ import annotations
-from pydantic import BaseModel, Field
-from typing import List, Optional
+# modules/schema.py
+# ─────────────────────────────────────────────────────────────────────────────
+# Internal process model. All diagram generators consume this schema.
+# Keeping schema separate from extraction means any generator works with
+# any extractor (heuristic or any LLM provider).
+# ─────────────────────────────────────────────────────────────────────────────
+
+from dataclasses import dataclass, field
+from typing import Optional
 
 
-class Step(BaseModel):
-    id: str
-    title: str
-    description: Optional[str] = None
-    actor: Optional[str] = None
-    inputs: List[str] = Field(default_factory=list)
-    outputs: List[str] = Field(default_factory=list)
+@dataclass
+class Step:
+    id: str                          # e.g. "S01"
+    title: str                       # Short label for the diagram node
+    description: str = ""            # Full description from transcript
+    actor: Optional[str] = None      # Who performs this step
+    is_decision: bool = False        # True → diamond shape in diagram
+    decision_yes_target: Optional[str] = None   # Step ID for "yes" branch
+    decision_no_target: Optional[str] = None    # Step ID for "no" branch
 
 
-class Edge(BaseModel):
-    source: str
-    target: str
-    label: Optional[str] = None
+@dataclass
+class Edge:
+    source: str                      # Step ID
+    target: str                      # Step ID
+    label: str = ""                  # Optional edge label (e.g. "yes", "no")
 
 
-class ProcessModel(BaseModel):
-    name: str = "Process"
-    steps: List[Step]
-    edges: List[Edge]
+@dataclass
+class Process:
+    name: str
+    steps: list[Step] = field(default_factory=list)
+    edges: list[Edge] = field(default_factory=list)
+
+    def get_step(self, step_id: str) -> Optional[Step]:
+        return next((s for s in self.steps if s.id == step_id), None)
