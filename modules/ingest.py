@@ -1,6 +1,7 @@
-from __future__ import annotations
+# modules/ingest.py
+import io
 
-def load_transcript(text: str) -> str:
-    # Aqui você pode futuramente aceitar upload .txt/.docx etc.
-    return (text or "").strip()
-  
+
+def load_transcript(uploaded_file) -> str:
+    """Load transcript from Streamlit UploadedFile object."""
+    return io.TextIOWrapper(uploaded_file, encoding="utf-8").read()
