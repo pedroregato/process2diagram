@@ -1,328 +1,96 @@
-# Process2Diagram
+# Process2Diagram — Architecture v2
 
-Prototype application that converts **meeting transcripts into process diagrams**.
+## Overview
 
-The application receives a **natural language transcription**, extracts a **structured process**, and generates:
-
-* a **Mermaid flowchart**
-* a **Draw.io (.drawio XML) diagram**
-* a **structured JSON representation of the process**
-
-The goal is to demonstrate how **process documentation can be automatically generated from conversations**.
+Multi-provider LLM pipeline that converts meeting transcripts into process diagrams.
+Supports DeepSeek, Claude, OpenAI, Groq, and Gemini via a unified interface.
 
 ---
 
-# Overview
-
-Many business processes are defined during meetings but never formally documented.
-
-This project explores a pipeline that transforms **spoken descriptions of processes** into **visual diagrams automatically**.
-
-Pipeline:
+## Project Structure
 
 ```
-Meeting Transcript
-       │
-       ▼
-Text Preprocessing
-       │
-       ▼
-Process Extraction
-(heuristic or LLM-based)
-       │
-       ▼
-Structured Process Model
-       │
-       ├── JSON representation
-       ├── Mermaid diagram
-       └── Draw.io diagram
-```
-
----
-
-# Example
-
-Input transcript:
-
-```
-1) The NDOC team uploads the photo.
-2) The system detects faces using RetinaFace.
-3) The specialist identifies the people.
-4) The system generates the SVG legend.
-5) The files are uploaded to the ECM.
-```
-
-Generated diagram:
-
-```
-Upload Photo
-      │
-      ▼
-Face Detection
-      │
-      ▼
-Identify People
-      │
-      ▼
-Generate SVG Legend
-      │
-      ▼
-Upload to ECM
-```
-
----
-
-# Architecture
-
-The project is intentionally **modular**.
-
-The Streamlit application only orchestrates the pipeline.
-
-```
-process2diagram
+process2diagram/
 │
-├── app.py
+├── app.py                    # Streamlit UI + orchestration
+├── requirements.txt
 │
-├── modules
-│   ├── config.py
-│   ├── ingest.py
-│   ├── preprocess.py
-│   ├── schema.py
-│   ├── extract_heuristic.py
-│   ├── extract_llm.py
-│   ├── diagram_mermaid.py
-│   ├── diagram_drawio.py
-│   └── utils.py
-│
-└── requirements.txt
-```
-
-### app.py
-
-Streamlit interface and orchestration layer.
-
-### ingest.py
-
-Handles transcript ingestion.
-
-### preprocess.py
-
-Text normalization and filler word removal.
-
-### schema.py
-
-Defines the internal **process model**.
-
-### extract_heuristic.py
-
-Extracts process steps using rule-based heuristics.
-
-### extract_llm.py
-
-Placeholder for LLM-based extraction.
-
-### diagram_mermaid.py
-
-Generates Mermaid flowcharts.
-
-### diagram_drawio.py
-
-Generates Draw.io XML diagrams.
-
-### utils.py
-
-Utility functions such as JSON export.
-
----
-
-# Process Model
-
-The system converts the transcript into a structured representation.
-
-```
-Process
- ├── Steps
- │    ├── id
- │    ├── title
- │    ├── description
- │    └── actor
- │
- └── Edges
-      ├── source
-      └── target
-```
-
-Example JSON:
-
-```json
-{
-  "name": "Photo Processing",
-  "steps": [
-    {"id": "S01", "title": "Upload Photo"},
-    {"id": "S02", "title": "Detect Faces"},
-    {"id": "S03", "title": "Identify People"}
-  ],
-  "edges": [
-    {"source": "S01", "target": "S02"},
-    {"source": "S02", "target": "S03"}
-  ]
-}
+└── modules/
+    ├── config.py             # ★ Provider registry — add new LLMs here
+    ├── session_security.py   # ★ API key security (session-only storage)
+    ├── schema.py             # Process data model (Steps, Edges, Decisions)
+    ├── ingest.py             # Transcript input handling
+    ├── preprocess.py         # Text cleaning
+    ├── extract_llm.py        # ★ Multi-LLM routing + extraction
+    ├── diagram_mermaid.py    # Mermaid flowchart generator
+    ├── diagram_drawio.py     # Draw.io XML generator
+    └── utils.py              # JSON export
 ```
 
 ---
 
-# Installation
+## Adding a New LLM Provider
 
-Clone the repository:
+Edit `modules/config.py` only. Add an entry:
 
+```python
+"My Provider": {
+    "default_model": "my-model-name",
+    "base_url": "https://api.myprovider.com/v1",   # None for Anthropic
+    "api_key_label": "My Provider API Key",
+    "api_key_help": "Get your key at myprovider.com",
+    "api_key_prefix": "sk-",
+    "client_type": "openai_compatible",  # or "anthropic"
+    "cost_hint": "$X / $Y per 1M tokens",
+    "supports_json_mode": True,
+    "supports_system_prompt": True,
+},
 ```
-git clone https://github.com/your-user/process2diagram.git
-cd process2diagram
-```
 
-Install dependencies:
+If the provider uses the OpenAI-compatible API format → works automatically.
+If it uses a custom SDK → add a handler in `extract_llm.py → call_llm()`.
 
+---
+
+## API Key Security Model
+
+### Strategy: Session-state isolation
+
+Keys are stored **only** in `st.session_state`, which is:
+- Server-side RAM for a single user's browser session
+- Destroyed when the tab closes or session expires
+- Never written to disk, database, logs, or environment variables
+
+### What this means in practice
+
+| Threat | Protected? |
+|---|---|
+| Another user on Streamlit Cloud sees your key | ✅ Yes — session state is isolated per user |
+| Key persists after tab close | ✅ No persistence |
+| Key appears in server logs | ✅ Never logged |
+| Key sent to third parties | ✅ Only sent to the chosen LLM provider |
+| Compromised Streamlit Cloud server | ❌ Not protected (use st.secrets for that) |
+
+### For higher-security deployments
+
+Use a backend proxy pattern:
 ```
+User → Your Backend (holds key in st.secrets) → LLM Provider
+```
+The frontend never sees the key at all.
+
+---
+
+## Running Locally
+
+```bash
 pip install -r requirements.txt
-```
-
----
-
-# Running the Application
-
-Run Streamlit:
-
-```
 streamlit run app.py
 ```
 
-The application will open in the browser.
+## Deploying to Streamlit Cloud
 
----
-
-# Using the Application
-
-1. Paste a meeting transcript.
-2. Click **Generate Diagram**.
-3. The system will:
-
-   * preprocess the text
-   * extract process steps
-   * generate diagrams.
-
-Outputs available:
-
-* Mermaid diagram preview
-* Mermaid code
-* structured JSON
-* downloadable `.drawio` file
-
----
-
-# Deploying on Streamlit Cloud
-
-1. Push the repository to GitHub
-2. Go to **Streamlit Cloud**
-3. Create a new app
-4. Select the repository
-5. Set:
-
-```
-Main file: app.py
-```
-
-Streamlit Cloud will install dependencies from:
-
-```
-requirements.txt
-```
-
----
-
-# Limitations
-
-This PoC uses a **heuristic extractor**.
-
-Therefore:
-
-* extraction accuracy depends on transcript structure
-* numbered steps or bullet lists improve results
-* complex branching logic is not yet supported
-
----
-
-# Future Improvements
-
-Possible extensions include:
-
-### LLM-based process extraction
-
-Use an LLM to convert transcripts into structured processes.
-
-```
-Transcript
-   │
-   ▼
-LLM
-   │
-   ▼
-Process JSON
-```
-
-### BPMN generation
-
-Support BPMN diagrams.
-
-### Actor lanes (Swimlanes)
-
-Detect actors and generate swimlane diagrams.
-
-### Meeting audio pipeline
-
-```
-Audio Recording
-      │
-      ▼
-Speech-to-text
-      │
-      ▼
-Process extraction
-      │
-      ▼
-Diagram generation
-```
-
----
-
-# Potential Use Cases
-
-Business process documentation
-
-Operational workflows
-
-Meeting knowledge capture
-
-Process mining support
-
-Architecture documentation
-
----
-
-# Related Tools
-
-Draw.io (Diagrams.net)
-
-Mermaid
-
-Graphviz
-
-PlantUML
-
----
-
-# License
-
-MIT License.
-
-2️⃣ **Um exemplo real de transcrição → diagrama**
-3️⃣ **Uma versão mais sofisticada do pipeline usando LLM** (que melhora muito a qualidade da extração).
+1. Push to GitHub
+2. Go to share.streamlit.io → New app
+3. Select repo, set `Main file: app.py`
+4. Deploy — no secrets config needed (users enter their own keys)
