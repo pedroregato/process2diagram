@@ -1,6 +1,8 @@
 streamlit==1.42.0
-openai==1.65.0
 anthropic==0.49.0
+openai==1.65.0
+pandas
+
 
 
 
