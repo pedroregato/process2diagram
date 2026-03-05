@@ -1,6 +1,7 @@
 ## --- Pedro Gentil
 
 import streamlit as st
+import streamlit.components.v1 as components
 from modules.session_security import render_api_key_gate, get_session_llm_client
 from modules.config import AVAILABLE_PROVIDERS
 from modules.ingest import load_transcript
@@ -10,9 +11,8 @@ from modules.schema import Process
 from modules.diagram_mermaid import generate_mermaid
 from modules.diagram_drawio import generate_drawio
 from modules.utils import process_to_json
-import streamlit.components.v1 as components
 
-# ── Page config ────────────────────────────────────────────────────────────────
+# -- Page config ----------------------------------------------------------------
 st.set_page_config(
     page_title="Process2Diagram",
     page_icon="⚙️",
@@ -20,7 +20,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Custom CSS ──────────────────────────────────────────────────────────────────
+# -- Custom CSS -----------------------------------------------------------------
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
@@ -74,7 +74,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ── Sidebar: LLM Provider + API Key gate ───────────────────────────────────────
+# -- Sidebar: LLM Provider + API Key gate --------------------------------------
 with st.sidebar:
     st.markdown("## ⚙️ Process2Diagram")
     st.markdown("---")
@@ -94,7 +94,6 @@ with st.sidebar:
     st.markdown(f"**Cost:** {provider_cfg['cost_hint']}")
     st.markdown("---")
 
-    # API Key gate — stored only in st.session_state, never persisted
     render_api_key_gate(selected_provider, provider_cfg)
 
     st.markdown("---")
@@ -104,7 +103,7 @@ with st.sidebar:
     st.markdown("---")
     st.caption("Keys live **only in your session**.\nNever stored or logged.")
 
-# ── Main area ──────────────────────────────────────────────────────────────────
+# -- Main area -----------------------------------------------------------------
 st.markdown('<p class="main-title">Process2Diagram</p>', unsafe_allow_html=True)
 st.markdown('<p class="sub-title">Turn meeting transcripts into process diagrams — automatically.</p>', unsafe_allow_html=True)
 
@@ -112,7 +111,7 @@ if not get_session_llm_client(selected_provider):
     st.info(f"👈 Enter your **{selected_provider}** API key in the sidebar to start.")
     st.stop()
 
-# ── Input ──────────────────────────────────────────────────────────────────────
+# -- Input ---------------------------------------------------------------------
 st.markdown("### 📋 Transcript")
 col_input, col_help = st.columns([3, 1])
 
@@ -128,7 +127,7 @@ with col_help:
     st.markdown("**Tips for best results:**")
     st.markdown("""
 - Numbered steps work best
-- Bullet points also supported  
+- Bullet points also supported
 - Mention actors: *"the team"*, *"the system"*
 - Decision words: *"if"*, *"when"*, *"otherwise"*
     """)
@@ -138,7 +137,7 @@ if uploaded_file:
     transcript_text = load_transcript(uploaded_file)
     st.success(f"Loaded: {uploaded_file.name}")
 
-# ── Generate ───────────────────────────────────────────────────────────────────
+# -- Generate ------------------------------------------------------------------
 generate_btn = st.button("⚡ Generate Diagram", type="primary", use_container_width=True)
 
 if generate_btn:
@@ -164,24 +163,34 @@ if generate_btn:
 
     st.success(f"✅ Extracted **{len(process.steps)} steps** and **{len(process.edges)} connections**")
 
-    # ── Outputs ────────────────────────────────────────────────────────────────
+    # -- Outputs ---------------------------------------------------------------
     tab1, tab2, tab3 = st.tabs(["📊 Diagram", "📄 Mermaid Code", "🔧 Export"])
 
     with tab1:
         mermaid_code = generate_mermaid(process)
-		
-		st.markdown("#### Process Flow")
+        st.markdown("#### Process Flow")
 
-		mermaid_html = f"""
-		<div class="mermaid" style="background: white; padding: 1rem; border-radius: 8px;">
-		{mermaid_code}
-		</div>
-		<script type="module">
-		  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-		  mermaid.initialize({{ startOnLoad: true, theme: 'neutral' }});
-		</script>
-		"""
-		st.components.v1.html(mermaid_html, height=600, scrolling=True)
+        mermaid_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {{ margin: 0; padding: 16px; background: #f8fafc; font-family: sans-serif; }}
+    .mermaid {{ background: white; padding: 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
+  </style>
+</head>
+<body>
+  <div class="mermaid">
+{mermaid_code}
+  </div>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({{ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' }});
+  </script>
+</body>
+</html>
+"""
+        components.html(mermaid_html, height=700, scrolling=True)
 
         # Metrics row
         m1, m2, m3, m4 = st.columns(4)
