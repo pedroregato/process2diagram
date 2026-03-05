@@ -6,11 +6,19 @@ from modules.session_security import render_api_key_gate, get_session_llm_client
 from modules.config import AVAILABLE_PROVIDERS
 from modules.ingest import load_transcript
 from modules.preprocess import preprocess_text
-from modules.extract_llm import extract_process_llm, extract_process_bpmn
+from modules.extract_llm import extract_process_llm
+try:
+    from modules.extract_llm import extract_process_bpmn
+    _BPMN_AVAILABLE = True
+except ImportError:
+    _BPMN_AVAILABLE = False
 from modules.schema import Process
 from modules.diagram_mermaid import generate_mermaid
 from modules.diagram_drawio import generate_drawio
-from modules.diagram_bpmn import generate_bpmn_xml, generate_bpmn_preview
+try:
+    from modules.diagram_bpmn import generate_bpmn_xml, generate_bpmn_preview
+except ImportError:
+    generate_bpmn_xml = generate_bpmn_preview = None
 from modules.utils import process_to_json
 
 # -- Page config ----------------------------------------------------------------
@@ -101,8 +109,12 @@ with st.sidebar:
     st.markdown("### ⚙️ Options")
     output_language = st.selectbox("Output language", ["Auto-detect", "English", "Portuguese (BR)"])
     show_raw_json = st.checkbox("Show raw JSON", value=False)
-    generate_bpmn = st.checkbox("Also generate BPMN diagram", value=False,
-                                help="Runs a second LLM call with the BPMN 2.0 extraction prompt.")
+    if _BPMN_AVAILABLE:
+        generate_bpmn = st.checkbox("Also generate BPMN diagram", value=False,
+                                    help="Runs a second LLM call with the BPMN 2.0 extraction prompt.")
+    else:
+        generate_bpmn = False
+        st.caption("⚠️ BPMN module not available — update extract_llm.py")
     st.markdown("---")
     st.caption("Keys live **only in your session**.\nNever stored or logged.")
 
