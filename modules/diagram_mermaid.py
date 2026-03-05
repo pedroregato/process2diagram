@@ -1,5 +1,4 @@
 # modules/diagram_mermaid.py
-
 from modules.schema import Process
 
 
@@ -12,19 +11,15 @@ def generate_mermaid(process: Process) -> str:
     lines = ["flowchart TD"]
 
     for step in process.steps:
-        label = _sanitize(step.title)
-        actor_prefix = f"{step.actor}: " if step.actor else ""
-        full_label = f"{actor_prefix}{label}"
-
+        label = _sanitize(step.title)  # actor prefix removed — title only
         if step.is_decision:
-            lines.append(f'    {step.id}{{{{"  {full_label}  "}}}}')
+            lines.append(f'    {step.id}{{{{  "{label}"  }}}}')
         else:
-            lines.append(f'    {step.id}["{full_label}"]')
+            lines.append(f'    {step.id}["{label}"]')
 
     lines.append("")
 
     for edge in process.edges:
-        label_part = f'|"{_sanitize(edge.label)}"|' if edge.label else "-->"
         if edge.label:
             lines.append(f"    {edge.source} -->|{_sanitize(edge.label)}| {edge.target}")
         else:
