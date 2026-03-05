@@ -190,7 +190,7 @@ if generate_btn:
 </body>
 </html>
 """
-        components.html(mermaid_html, height=700, scrolling=True)
+        components.html(mermaid_html, height=1000, scrolling=True)
 
         # Metrics row
         m1, m2, m3, m4 = st.columns(4)
