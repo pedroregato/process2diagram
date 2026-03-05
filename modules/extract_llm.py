@@ -17,10 +17,15 @@
 
 import json
 import re
-from modules.schema import (
-    Process, Step, Edge,
-    BpmnProcess, BpmnElement, BpmnLane, BpmnPool, SequenceFlow,
-)
+
+# Core schema — always required
+from modules.schema import Process, Step, Edge
+
+# BPMN schema — imported lazily to avoid boot-time ImportError
+# if an older schema.py without BPMN classes is deployed.
+def _bpmn_imports():
+    from modules.schema import BpmnProcess, BpmnElement, BpmnLane, BpmnPool, SequenceFlow
+    return BpmnProcess, BpmnElement, BpmnLane, BpmnPool, SequenceFlow
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -297,8 +302,9 @@ def parse_response(raw: str) -> Process:
 #  RESPONSE PARSING — BPMN (new)
 # ════════════════════════════════════════════════════════════════════════════
 
-def _parse_element(raw: dict) -> BpmnElement:
+def _parse_element(raw: dict):
     """Converts one element dict from the LLM into a BpmnElement."""
+    _, BpmnElement, _, _, _ = _bpmn_imports()
     children = [_parse_element(c) for c in raw.get("children", [])]
     return BpmnElement(
         id=raw["id"],
@@ -320,13 +326,14 @@ def _parse_element(raw: dict) -> BpmnElement:
     )
 
 
-def parse_bpmn_response(raw: str) -> BpmnProcess:
+def parse_bpmn_response(raw: str):
     """
     Parses the LLM BPMN JSON response into a BpmnProcess.
 
     Builds pools/lanes automatically from the 'lanes' list and the
     actor field on each element.
     """
+    BpmnProcess, _, BpmnLane, BpmnPool, SequenceFlow = _bpmn_imports()
     data = _clean_json(raw)
 
     # ── Elements ──────────────────────────────────────────────────────────────
@@ -354,7 +361,7 @@ def parse_bpmn_response(raw: str) -> BpmnProcess:
         if actor and actor not in lane_names:
             lane_names.append(actor)
 
-    pools: list[BpmnPool] = []
+    pools = []
     if lane_names:
         pool = BpmnPool(id="pool_1", name=data.get("name", "Process"))
         for i, lane_name in enumerate(lane_names):
@@ -410,7 +417,7 @@ def extract_process_bpmn(
     provider: str,
     provider_cfg: dict,
     output_language: str = "Auto-detect",
-) -> BpmnProcess:
+):
     """
     New entry point — BPMN 2.0 advanced extraction.
     Called by app.py when the user requests BPMN output.
