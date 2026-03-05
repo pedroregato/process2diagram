@@ -1,3 +1,5 @@
+## --- Pedro Gentil
+
 import streamlit as st
 from modules.session_security import render_api_key_gate, get_session_llm_client
 from modules.config import AVAILABLE_PROVIDERS
