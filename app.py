@@ -6,10 +6,11 @@ from modules.session_security import render_api_key_gate, get_session_llm_client
 from modules.config import AVAILABLE_PROVIDERS
 from modules.ingest import load_transcript
 from modules.preprocess import preprocess_text
-from modules.extract_llm import extract_process_llm
+from modules.extract_llm import extract_process_llm, extract_process_bpmn
 from modules.schema import Process
 from modules.diagram_mermaid import generate_mermaid
 from modules.diagram_drawio import generate_drawio
+from modules.diagram_bpmn import generate_bpmn_xml, generate_bpmn_preview
 from modules.utils import process_to_json
 
 # -- Page config ----------------------------------------------------------------
@@ -100,6 +101,8 @@ with st.sidebar:
     st.markdown("### ⚙️ Options")
     output_language = st.selectbox("Output language", ["Auto-detect", "English", "Portuguese (BR)"])
     show_raw_json = st.checkbox("Show raw JSON", value=False)
+    generate_bpmn = st.checkbox("Also generate BPMN diagram", value=False,
+                                help="Runs a second LLM call with the BPMN 2.0 extraction prompt.")
     st.markdown("---")
     st.caption("Keys live **only in your session**.\nNever stored or logged.")
 
@@ -147,6 +150,7 @@ if generate_btn:
 
     client_info = get_session_llm_client(selected_provider)
 
+    # ── Mermaid / Draw.io extraction (original) ───────────────────────────────
     with st.spinner(f"Extracting process with {selected_provider}..."):
         clean_text = preprocess_text(transcript_text)
         try:
@@ -163,9 +167,38 @@ if generate_btn:
 
     st.success(f"✅ Extracted **{len(process.steps)} steps** and **{len(process.edges)} connections**")
 
-    # -- Outputs ---------------------------------------------------------------
-    tab1, tab2, tab3 = st.tabs(["📊 Diagram", "📄 Mermaid Code", "🔧 Export"])
+    # ── BPMN extraction (optional second call) ────────────────────────────────
+    bpmn_process = None
+    if generate_bpmn:
+        with st.spinner(f"Extracting BPMN model with {selected_provider}..."):
+            try:
+                bpmn_process = extract_process_bpmn(
+                    text=clean_text,
+                    client_info=client_info,
+                    provider=selected_provider,
+                    provider_cfg=provider_cfg,
+                    output_language=output_language,
+                )
+                n_elements = len(bpmn_process.elements)
+                n_flows    = len(bpmn_process.flows)
+                n_lanes    = len(bpmn_process.lanes_flat())
+                st.success(
+                    f"✅ BPMN extracted — **{n_elements} elements**, "
+                    f"**{n_flows} flows**, **{n_lanes} lanes**"
+                )
+            except Exception as e:
+                st.warning(f"BPMN extraction failed: {e}")
 
+    # -- Outputs ---------------------------------------------------------------
+    tab_labels = ["📊 Diagram", "📄 Mermaid Code", "🔧 Export"]
+    if bpmn_process:
+        tab_labels.append("📐 BPMN")
+
+    tabs = st.tabs(tab_labels)
+    tab1, tab2, tab3 = tabs[0], tabs[1], tabs[2]
+    tab_bpmn = tabs[3] if bpmn_process else None
+
+    # ── Tab 1: Mermaid diagram ────────────────────────────────────────────────
     with tab1:
         mermaid_code = generate_mermaid(process)
         st.markdown("#### Process Flow")
@@ -192,7 +225,6 @@ if generate_btn:
 """
         components.html(mermaid_html, height=1000, scrolling=True)
 
-        # Metrics row
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Steps", len(process.steps))
         m2.metric("Connections", len(process.edges))
@@ -204,11 +236,13 @@ if generate_btn:
         if actors:
             st.markdown(f"**Actors detected:** {', '.join(f'`{a}`' for a in actors)}")
 
+    # ── Tab 2: Mermaid code ───────────────────────────────────────────────────
     with tab2:
         mermaid_code = generate_mermaid(process)
         st.code(mermaid_code, language="text")
         st.caption("Paste this into [mermaid.live](https://mermaid.live) to preview and edit.")
 
+    # ── Tab 3: Export ─────────────────────────────────────────────────────────
     with tab3:
         col_dl1, col_dl2 = st.columns(2)
 
@@ -239,5 +273,86 @@ if generate_btn:
         st.markdown("#### Open .drawio file")
         st.markdown("1. Go to [diagrams.net](https://app.diagrams.net)\n2. File → Open from → Device\n3. Select the downloaded `.drawio` file")
 
-    # Store last result in session for reference
-    st.session_state["last_process"] = process
+    # ── Tab 4: BPMN ───────────────────────────────────────────────────────────
+    if tab_bpmn and bpmn_process:
+        with tab_bpmn:
+            st.markdown("#### BPMN 2.0 Process Diagram")
+
+            try:
+                bpmn_xml = generate_bpmn_xml(bpmn_process)
+
+                # Interactive preview via bpmn-js
+                bpmn_html = generate_bpmn_preview(bpmn_xml)
+                components.html(bpmn_html, height=620, scrolling=False)
+
+            except Exception as e:
+                st.error(f"BPMN diagram generation failed: {e}")
+                bpmn_xml = None
+
+            # Metrics
+            st.markdown("---")
+            b1, b2, b3, b4, b5 = st.columns(5)
+            b1.metric("Elements",  len(bpmn_process.elements))
+            b2.metric("Flows",     len(bpmn_process.flows))
+            b3.metric("Lanes",     len(bpmn_process.lanes_flat()))
+            b4.metric("Gateways",  len(bpmn_process.gateways()))
+            b5.metric("Tasks",     len(bpmn_process.tasks()))
+
+            if bpmn_process.lanes_flat():
+                lane_names = [l.name for l in bpmn_process.lanes_flat() if l.name]
+                st.markdown(f"**Lanes / Actors:** {', '.join(f'`{n}`' for n in lane_names)}")
+
+            # Boundary events summary
+            boundaries = bpmn_process.boundary_events()
+            if boundaries:
+                st.markdown("**Boundary events:**")
+                for be in boundaries:
+                    host = bpmn_process.get_element(be.attached_to) if be.attached_to else None
+                    host_name = host.name if host else be.attached_to
+                    interrupt = "interrupting" if be.is_interrupting else "non-interrupting"
+                    st.markdown(f"- `{be.name}` ({be.event_type}, {interrupt}) → attached to **{host_name}**")
+
+            # Sub-processes summary
+            subprocs = bpmn_process.sub_processes()
+            if subprocs:
+                st.markdown("**Sub-processes:**")
+                for sp in subprocs:
+                    st.markdown(f"- `{sp.name}` — {len(sp.children)} inner element(s)")
+
+            # Downloads
+            st.markdown("---")
+            if bpmn_xml:
+                col_b1, col_b2 = st.columns(2)
+                with col_b1:
+                    st.download_button(
+                        label="⬇️ Download .bpmn",
+                        data=bpmn_xml,
+                        file_name=f"{bpmn_process.name.replace(' ', '_')}.bpmn",
+                        mime="application/xml",
+                        use_container_width=True,
+                    )
+                with col_b2:
+                    st.download_button(
+                        label="⬇️ Download BPMN as .xml",
+                        data=bpmn_xml,
+                        file_name=f"{bpmn_process.name.replace(' ', '_')}_bpmn.xml",
+                        mime="application/xml",
+                        use_container_width=True,
+                    )
+
+                st.markdown("#### Open in Camunda Modeler or diagrams.net")
+                st.markdown(
+                    "1. Download the `.bpmn` file above\n"
+                    "2. Open [Camunda Modeler](https://camunda.com/download/modeler/) "
+                    "or [diagrams.net](https://app.diagrams.net)\n"
+                    "3. File → Open → select the `.bpmn` file\n"
+                    "4. Edit, annotate and export as needed"
+                )
+
+                if show_raw_json:
+                    st.markdown("#### Raw BPMN XML")
+                    st.code(bpmn_xml, language="xml")
+
+    # Store last results in session
+    st.session_state["last_process"]      = process
+    st.session_state["last_bpmn_process"] = bpmn_process
