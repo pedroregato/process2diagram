@@ -10,6 +10,7 @@ from modules.schema import Process
 from modules.diagram_mermaid import generate_mermaid
 from modules.diagram_drawio import generate_drawio
 from modules.utils import process_to_json
+import streamlit.components.v1 as components
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -168,8 +169,19 @@ if generate_btn:
 
     with tab1:
         mermaid_code = generate_mermaid(process)
-        st.markdown("#### Process Flow")
-        st.markdown(f"```mermaid\n{mermaid_code}\n```")
+		
+		st.markdown("#### Process Flow")
+
+		mermaid_html = f"""
+		<div class="mermaid" style="background: white; padding: 1rem; border-radius: 8px;">
+		{mermaid_code}
+		</div>
+		<script type="module">
+		  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+		  mermaid.initialize({{ startOnLoad: true, theme: 'neutral' }});
+		</script>
+		"""
+		st.components.v1.html(mermaid_html, height=600, scrolling=True)
 
         # Metrics row
         m1, m2, m3, m4 = st.columns(4)
