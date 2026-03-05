@@ -133,6 +133,8 @@ with col_help:
 - Bullet points also supported
 - Mention actors: *"the team"*, *"the system"*
 - Decision words: *"if"*, *"when"*, *"otherwise"*
+- Multiple actors → swimlanes auto-generated
+- Enable **BPMN** in sidebar for full BPMN 2.0
     """)
 
 uploaded_file = st.file_uploader("Or upload a .txt file", type=["txt"])
@@ -223,18 +225,19 @@ if generate_btn:
 </body>
 </html>
 """
-        components.html(mermaid_html, height=1000, scrolling=True)
+        components.html(mermaid_html, height=1200, scrolling=True)
 
-        m1, m2, m3, m4 = st.columns(4)
+        m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("Steps", len(process.steps))
         m2.metric("Connections", len(process.edges))
-        actors = list(set(s.actor for s in process.steps if s.actor))
-        m3.metric("Actors", len(actors))
+        actors = list(dict.fromkeys(s.actor for s in process.steps if s.actor))  # ordered, deduped
+        m3.metric("Actors / Lanes", len(actors))
         decisions = [s for s in process.steps if s.is_decision]
         m4.metric("Decisions", len(decisions))
+        m5.metric("Swimlanes", "✅" if actors else "—")
 
         if actors:
-            st.markdown(f"**Actors detected:** {', '.join(f'`{a}`' for a in actors)}")
+            st.markdown(f"**Lanes detected:** {', '.join(f'`{a}`' for a in actors)}")
 
     # ── Tab 2: Mermaid code ───────────────────────────────────────────────────
     with tab2:
