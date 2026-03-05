@@ -37,9 +37,9 @@ JSON schema:
   "steps": [
     {
       "id": "S01",
-      "title": "<short action label>",
+      "title": "<short action label — NO actor name here>",
       "description": "<full description>",
-      "actor": "<who performs this, or null>",
+      "actor": "<who performs this step, or null>",
       "is_decision": false
     }
   ],
@@ -50,10 +50,15 @@ JSON schema:
 
 Rules:
 - Step IDs must be S01, S02, S03... in order.
-- For decision steps set is_decision=true and create two edges with label "yes" and "no".
+- CRITICAL: The "title" field must contain ONLY the action label (e.g. "Register ticket").
+  NEVER include the actor name in the title. WRONG: "system: Register ticket". RIGHT: "Register ticket".
+  The actor belongs ONLY in the "actor" field.
+- For decision steps set is_decision=true and create two outgoing edges with labels "sim"/"não" or "yes"/"no".
 - Keep titles SHORT (3-6 words max) — they appear inside diagram nodes.
-- Descriptions can be longer.
-- Detect actors from context (e.g. "the team", "the system", "manager").
+- Decision step titles must be questions or conditions (e.g. "Prioridade alta?", "Resolved in 2h?").
+- Descriptions can be longer and may include the actor context.
+- Detect actors from context (e.g. "the team", "the system", "manager", "analista nível 1").
+- Normalize actor names consistently: if the same role is mentioned multiple ways, use one canonical name.
 - Output language: {output_language}
 - Return ONLY the JSON. Nothing else."""
 
