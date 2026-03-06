@@ -884,4 +884,445 @@ def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
     .djs-label {{
       font-family: inherit !important;
       font-size: 12px !important;
-      fill: #1e293b
+      fill: #1e293b !important;
+      font-weight: 500 !important;
+      text-anchor: middle !important;
+      dominant-baseline: middle !important;
+      pointer-events: none !important;
+    }}
+    
+    .djs-shape:hover .djs-label {{
+      fill: #0f172a !important;
+      font-weight: 600 !important;
+    }}
+    
+    /* Edge styling */
+    .djs-connection .djs-visual > path {{
+      stroke: #94a3b8 !important;
+      stroke-width: 2px !important;
+      marker-end: url('#sequenceflow-arrow') !important;
+      transition: all 0.2s ease;
+    }}
+    
+    .djs-connection:hover .djs-visual > path {{
+      stroke: #2563eb !important;
+      stroke-width: 3px !important;
+    }}
+    
+    /* Edge label styling */
+    .djs-connection .djs-label {{
+      fill: #64748b !important;
+      font-size: 11px !important;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }}
+    
+    /* Lane styling */
+    .djs-shape[data-element-type="lane"] .djs-visual > rect {{
+      fill: #f8fafc !important;
+      stroke: #cbd5e1 !important;
+      stroke-dasharray: 4 2 !important;
+    }}
+    
+    .djs-shape[data-element-type="participant"] .djs-visual > rect {{
+      fill: #f1f5f9 !important;
+      stroke: #94a3b8 !important;
+      stroke-width: 2px !important;
+    }}
+    
+    /* Toolbar styling */
+    #toolbar {{
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(12px);
+      border-radius: 14px;
+      padding: 8px 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      z-index: 1000;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }}
+    
+    .tb-btn {{
+      width: 36px;
+      height: 36px;
+      border: none;
+      background: transparent;
+      color: #94a3b8;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }}
+    
+    .tb-btn:hover {{
+      background: rgba(255, 255, 255, 0.1);
+      color: #f1f5f9;
+      transform: scale(1.05);
+    }}
+    
+    .tb-btn:active {{
+      transform: scale(0.95);
+    }}
+    
+    .tb-divider {{
+      width: 1px;
+      height: 24px;
+      background: rgba(255, 255, 255, 0.15);
+      margin: 0 4px;
+    }}
+    
+    #zoom-label {{
+      color: #cbd5e1;
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      min-width: 48px;
+      text-align: center;
+      font-weight: 500;
+    }}
+    
+    #err {{
+      display: none;
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: white;
+      border: 1px solid #fecaca;
+      border-radius: 12px;
+      padding: 20px 28px;
+      max-width: 600px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: #dc2626;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      z-index: 2000;
+      backdrop-filter: blur(8px);
+      background: rgba(255, 255, 255, 0.98);
+    }}
+  </style>
+  
+  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-js.css">
+  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/diagram-js.css">
+  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-font/css/bpmn-embedded.css">
+</head>
+<body>
+<div id="viewport">
+  <div id="bpmn-container"></div>
+</div>
+
+<div id="toolbar">
+  <button class="tb-btn" id="btn-out" title="Zoom out (Ctrl -)">−</button>
+  <span id="zoom-label">100%</span>
+  <button class="tb-btn" id="btn-in" title="Zoom in (Ctrl +)">+</button>
+  <div class="tb-divider"></div>
+  <button class="tb-btn" id="btn-fit" title="Fit to screen (0)">⤢</button>
+  <button class="tb-btn" id="btn-reset" title="Reset view (R)">↺</button>
+  <div class="tb-divider"></div>
+  <button class="tb-btn" id="btn-center" title="Center view">◎</button>
+</div>
+
+<div id="err"></div>
+
+<script src="https://unpkg.com/bpmn-js@17/dist/bpmn-viewer.development.js"></script>
+<script>
+(function() {{
+  const xml = `{xml_js}`;
+  const errDiv = document.getElementById('err');
+  const vp = document.getElementById('viewport');
+  const zoomLbl = document.getElementById('zoom-label');
+  
+  // ── State management ─────────────────────────────────────────────────
+  let scale = 1, tx = 0, ty = 0;
+  let dragging = false, startX, startY, startTx, startTy;
+  let lastDist = null;
+  
+  // Animation frame for smooth updates
+  let rafId = null;
+  
+  function apply() {{
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(() => {{
+      vp.style.transform = `translate(${{tx}}px, ${{ty}}px) scale(${{scale}})`;
+      zoomLbl.textContent = Math.round(scale * 100) + '%';
+      rafId = null;
+    }});
+  }}
+  
+  function clamp(s) {{
+    return Math.min(Math.max(s, 0.1), 5);
+  }}
+  
+  function zoomTo(ns, cx, cy) {{
+    const r = ns / scale;
+    tx = cx - r * (cx - tx);
+    ty = cy - r * (cy - ty);
+    scale = ns;
+    apply();
+  }}
+  
+  // ── Fit to screen with padding ───────────────────────────────────────
+  function fitToScreen() {{
+    const svg = document.querySelector('#bpmn-container svg');
+    if (!svg) return;
+    
+    let sw, sh;
+    const vb = svg.viewBox && svg.viewBox.baseVal;
+    
+    if (vb && vb.width > 10 && vb.height > 10) {{
+      sw = vb.width;
+      sh = vb.height;
+    }} else {{
+      const bbox = svg.getBBox();
+      if (bbox && bbox.width > 10) {{
+        sw = bbox.width;
+        sh = bbox.height;
+      }} else {{
+        sw = parseFloat(svg.getAttribute('width')) || 1200;
+        sh = parseFloat(svg.getAttribute('height')) || 800;
+      }}
+    }}
+    
+    if (!sw || !sh || sw < 10) return;
+    
+    const padding = 60;
+    const W = window.innerWidth - padding * 2;
+    const H = window.innerHeight - padding * 2 - 80;
+    
+    const ns = clamp(Math.min(W / sw, H / sh) * 0.95);
+    
+    if (!isFinite(ns) || ns <= 0) return;
+    
+    scale = ns;
+    tx = (window.innerWidth - sw * scale) / 2;
+    ty = Math.max(40, (window.innerHeight - sh * scale) / 2);
+    
+    apply();
+  }}
+  
+  function centerView() {{
+    const svg = document.querySelector('#bpmn-container svg');
+    if (!svg) return;
+    
+    const vb = svg.viewBox && svg.viewBox.baseVal;
+    if (vb && vb.width > 10) {{
+      tx = (window.innerWidth - vb.width * scale) / 2;
+      ty = (window.innerHeight - vb.height * scale) / 2;
+      apply();
+    }}
+  }}
+  
+  // ── Mouse pan ────────────────────────────────────────────────────────
+  vp.addEventListener('mousedown', e => {{
+    if (e.button !== 0) return;
+    e.preventDefault();
+    dragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    startTx = tx;
+    startTy = ty;
+    vp.classList.add('grabbing');
+  }});
+  
+  window.addEventListener('mousemove', e => {{
+    if (!dragging) return;
+    e.preventDefault();
+    tx = startTx + e.clientX - startX;
+    ty = startTy + e.clientY - startY;
+    apply();
+  }});
+  
+  window.addEventListener('mouseup', () => {{
+    dragging = false;
+    vp.classList.remove('grabbing');
+  }});
+  
+  // ── Wheel zoom with smooth behavior ──────────────────────────────────
+  window.addEventListener('wheel', e => {{
+    e.preventDefault();
+    
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const ns = clamp(scale * delta);
+    
+    // Zoom toward mouse position
+    const mouseX = e.clientX;
+    const mouseY = e.clientY;
+    
+    zoomTo(ns, mouseX, mouseY);
+  }}, {{ passive: false }});
+  
+  // ── Touch support ────────────────────────────────────────────────────
+  vp.addEventListener('touchstart', e => {{
+    if (e.touches.length === 1) {{
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      startTx = tx;
+      startTy = ty;
+    }}
+    if (e.touches.length === 2) {{
+      lastDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+    }}
+  }}, {{ passive: true }});
+  
+  vp.addEventListener('touchmove', e => {{
+    e.preventDefault();
+    
+    if (e.touches.length === 1 && !lastDist) {{
+      tx = startTx + e.touches[0].clientX - startX;
+      ty = startTy + e.touches[0].clientY - startY;
+      apply();
+    }}
+    
+    if (e.touches.length === 2) {{
+      const d = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      
+      if (lastDist) {{
+        const ns = clamp(scale * d / lastDist);
+        zoomTo(ns, mx, my);
+      }}
+      lastDist = d;
+    }}
+  }}, {{ passive: false }});
+  
+  vp.addEventListener('touchend', () => {{
+    lastDist = null;
+  }});
+  
+  // ── Keyboard shortcuts ───────────────────────────────────────────────
+  window.addEventListener('keydown', e => {{
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    
+    if (e.key === '+' || e.key === '=') {{
+      e.preventDefault();
+      zoomTo(clamp(scale * 1.2), cx, cy);
+    }}
+    if (e.key === '-' || e.key === '_') {{
+      e.preventDefault();
+      zoomTo(clamp(scale * 0.8), cx, cy);
+    }}
+    if (e.key === '0') {{
+      e.preventDefault();
+      fitToScreen();
+    }}
+    if (e.key === 'r' || e.key === 'R') {{
+      e.preventDefault();
+      scale = 1;
+      tx = 0;
+      ty = 0;
+      apply();
+    }}
+    // Arrow key panning
+    const panStep = 50 / scale;
+    if (e.key === 'ArrowLeft') {{
+      e.preventDefault();
+      tx += panStep;
+      apply();
+    }}
+    if (e.key === 'ArrowRight') {{
+      e.preventDefault();
+      tx -= panStep;
+      apply();
+    }}
+    if (e.key === 'ArrowUp') {{
+      e.preventDefault();
+      ty += panStep;
+      apply();
+    }}
+    if (e.key === 'ArrowDown') {{
+      e.preventDefault();
+      ty -= panStep;
+      apply();
+    }}
+  }});
+  
+  // ── Toolbar buttons ──────────────────────────────────────────────────
+  const cx = () => window.innerWidth / 2;
+  const cy = () => window.innerHeight / 2;
+  
+  document.getElementById('btn-in').onclick = () => 
+    zoomTo(clamp(scale * 1.2), cx(), cy());
+  
+  document.getElementById('btn-out').onclick = () => 
+    zoomTo(clamp(scale * 0.8), cx(), cy());
+  
+  document.getElementById('btn-fit').onclick = fitToScreen;
+  
+  document.getElementById('btn-reset').onclick = () => {{
+    scale = 1;
+    tx = 0;
+    ty = 0;
+    apply();
+  }};
+  
+  document.getElementById('btn-center').onclick = centerView;
+  
+  // ── Initialize bpmn-js ───────────────────────────────────────────────
+  const viewer = new BpmnJS({{
+    container: '#bpmn-container',
+    keyboard: {{ bindTo: null }}, // Disable built-in keyboard
+    modules: [] // Use minimal modules for better performance
+  }});
+  
+  // Add custom arrow marker
+  const svgNamespace = "http://www.w3.org/2000/svg";
+  const defs = document.createElementNS(svgNamespace, "defs");
+  const marker = document.createElementNS(svgNamespace, "marker");
+  marker.setAttribute("id", "sequenceflow-arrow");
+  marker.setAttribute("viewBox", "0 0 10 10");
+  marker.setAttribute("refX", "9");
+  marker.setAttribute("refY", "5");
+  marker.setAttribute("markerWidth", "6");
+  marker.setAttribute("markerHeight", "6");
+  marker.setAttribute("orient", "auto");
+  
+  const path = document.createElementNS(svgNamespace, "path");
+  path.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
+  path.setAttribute("fill", "#94a3b8");
+  marker.appendChild(path);
+  defs.appendChild(marker);
+  
+  viewer.importXML(xml)
+    .then(() => {{
+      // Disable built-in zoom/scroll
+      try {{
+        const zs = viewer.get('zoomScroll');
+        zs._enabled = false;
+      }} catch(_) {{}}
+      
+      // Add arrow marker to SVG
+      const svg = document.querySelector('#bpmn-container svg');
+      if (svg && !svg.querySelector('#sequenceflow-arrow')) {{
+        svg.insertBefore(defs, svg.firstChild);
+      }}
+      
+      // Fit to screen after rendering
+      setTimeout(() => fitToScreen(), 300);
+    }})
+    .catch(err => {{
+      errDiv.style.display = 'block';
+      errDiv.innerHTML = '<b>⚠️ BPMN rendering error:</b><br>' + 
+        err.message.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      console.error('BPMN import error:', err);
+    }});
+}})();
+</script>
+</body>
+</html>"""
