@@ -424,9 +424,14 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         _wp(edge, tx,          ty + th / 2)   # target left-centre
 
         if flow.name:
+            # Place label at midpoint of the edge, offset slightly above
+            mid_x = int((sx + sw + tx) / 2)
+            mid_y = int((sy + sh / 2 + ty + th / 2) / 2) - 16
             lbl = _sub(edge, DI + "BPMNLabel")
-            _sub(lbl, DC + "Bounds",
-                 {"x": "0", "y": "0", "width": "60", "height": "14"})
+            _sub(lbl, DC + "Bounds", {
+                "x": str(mid_x), "y": str(mid_y),
+                "width": "60", "height": "20",
+            })
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -595,36 +600,33 @@ def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
   }}
 
   function fitToScreen() {{
-    // Use the bpmn-js SVG natural size from viewBox
     const svg = document.querySelector('#bpmn-container svg');
     if (!svg) return;
     let sw, sh;
+    // viewBox reflects actual BPMN content bounds — always prefer it
     const vb = svg.viewBox && svg.viewBox.baseVal;
-    const cr = svg.getBoundingClientRect();
-    if (cr.width > 10) {{
-      sw = cr.width;
-      sh = cr.height;
-    }} else if (vb && vb.width > 0) {{
+    if (vb && vb.width > 10 && vb.height > 10) {{
       sw = vb.width;
       sh = vb.height;
     }} else {{
+      // Fallback: use natural SVG attributes
       sw = parseFloat(svg.getAttribute('width'))  || 800;
       sh = parseFloat(svg.getAttribute('height')) || 600;
     }}
     if (!sw || !sh || sw < 10) return;
     const W = window.innerWidth, H = window.innerHeight - 60;
-    const ns = clamp(Math.min((W - 80) / sw, (H - 80) / sh));
+    const ns = clamp(Math.min((W - 40) / sw, (H - 40) / sh));
     if (!isFinite(ns) || ns <= 0) return;
     scale = ns;
     tx = (W - sw * scale) / 2;
-    ty = (H - sh * scale) / 2;
+    ty = Math.max(20, (H - sh * scale) / 2);
     apply();
   }}
 
   function fitWhenReady(n) {{
     const svg = document.querySelector('#bpmn-container svg');
-    const cr  = svg && svg.getBoundingClientRect();
-    if (cr && cr.width > 10) {{ fitToScreen(); }}
+    const vb  = svg && svg.viewBox && svg.viewBox.baseVal;
+    if (vb && vb.width > 10) {{ fitToScreen(); }}
     else if (n > 0) {{ setTimeout(() => fitWhenReady(n - 1), 300); }}
   }}
 
