@@ -25,11 +25,11 @@ DDI = "{%s}" % _NS["di"]
 TASK_W,  TASK_H   = 120, 60
 GW_W,    GW_H     = 50,  50
 EV_W,    EV_H     = 36,  36
-H_GAP             = 70          # more breathing room between elements
+H_GAP             = 70
 V_PAD             = 55
 LANE_HEADER_W     = 100         # wide enough for ~12-char lane name rotated vertically
-POOL_HEADER_W     = 30          # bpmn-js renders pool title horizontally at top — 30 is correct
-FIRST_X           = 100         # left margin inside lane content area
+POOL_HEADER_W     = 100         # wide enough for rotated pool name
+FIRST_X           = 80          # left margin inside lane content area
 MIN_LANE_H        = 180
 
 
@@ -204,6 +204,7 @@ def _build_flow(parent, flow):
 # ── Layout ────────────────────────────────────────────────────────────────────
 
 def _topo_sort(ids, flows):
+    """Topological sort. startEvents always first, endEvents always last."""
     id_set = set(ids)
     indeg  = {i: 0 for i in ids}
     succ   = {i: [] for i in ids}
@@ -226,6 +227,21 @@ def _topo_sort(ids, flows):
     return result
 
 
+def _sort_lane_elements(lane_ids, el_map, flows):
+    """
+    Sort elements within a single lane:
+    - startEvent always first
+    - endEvent always last
+    - rest in topological order
+    """
+    id_set = set(lane_ids)
+    starts = [i for i in lane_ids if el_map.get(i) and el_map[i].type == "startEvent"]
+    ends   = [i for i in lane_ids if el_map.get(i) and el_map[i].type == "endEvent"]
+    middle = [i for i in lane_ids if i not in starts and i not in ends]
+    middle_sorted = _topo_sort(middle, flows)
+    return starts + middle_sorted + ends
+
+
 def _compute_layout(bpmn, lane_assignment):
     shapes      = {}
     pool_shapes = {}
@@ -243,10 +259,14 @@ def _compute_layout(bpmn, lane_assignment):
             lid = lane_assignment.get(eid)
             if lid and lid in lane_order:
                 lane_order[lid].append(eid)
-            # Elements not in any lane (should not happen after _assign_lanes fix,
-            # but guard anyway) → put in first lane
             elif pool.lanes:
                 lane_order[pool.lanes[0].id].append(eid)
+
+        # Re-sort each lane: startEvents first, endEvents last, rest topo-sorted
+        for lane in pool.lanes:
+            lane_order[lane.id] = _sort_lane_elements(
+                lane_order[lane.id], el_map, bpmn.flows
+            )
 
         # Lane heights
         lane_h = {}
@@ -350,15 +370,16 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
 
     # Pool / lane shapes
     for eid, (x, y, w, h) in pool_shapes.items():
+        is_lane = eid in lane_ids
         shape = _sub(plane, DI + "BPMNShape",
                      {"id": eid + "_di", "bpmnElement": eid, "isHorizontal": "true"})
         b = _sub(shape, DC + "Bounds")
         b.set("x", str(int(x))); b.set("y", str(int(y)))
         b.set("width", str(int(w))); b.set("height", str(int(h)))
 
-        if eid in lane_ids:
-            # Explicit label area: left strip of the lane (the header column)
-            # bpmn-js uses this to size the rotated lane name text box
+        if is_lane:
+            # Label bounds = the lane header strip (left side of lane, LANE_HEADER_W wide)
+            # bpmn-js rotates text to fit this rectangle
             lbl = _sub(shape, DI + "BPMNLabel")
             lb  = _sub(lbl, DC + "Bounds")
             lb.set("x",      str(int(x)))
