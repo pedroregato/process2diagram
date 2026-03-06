@@ -7,18 +7,9 @@ from modules.config import AVAILABLE_PROVIDERS
 from modules.ingest import load_transcript
 from modules.preprocess import preprocess_text
 from modules.extract_llm import extract_process_llm
-try:
-    from modules.extract_llm import extract_process_bpmn
-    _BPMN_AVAILABLE = True
-except ImportError:
-    _BPMN_AVAILABLE = False
 from modules.schema import Process
 from modules.diagram_mermaid import generate_mermaid
 from modules.diagram_drawio import generate_drawio
-try:
-    from modules.diagram_bpmn import generate_bpmn_xml, generate_bpmn_preview
-except ImportError:
-    generate_bpmn_xml = generate_bpmn_preview = None
 from modules.utils import process_to_json
 
 # -- Page config ----------------------------------------------------------------
@@ -109,12 +100,6 @@ with st.sidebar:
     st.markdown("### ⚙️ Options")
     output_language = st.selectbox("Output language", ["Auto-detect", "English", "Portuguese (BR)"])
     show_raw_json = st.checkbox("Show raw JSON", value=False)
-    if _BPMN_AVAILABLE:
-        generate_bpmn = st.checkbox("Also generate BPMN diagram", value=False,
-                                    help="Runs a second LLM call with the BPMN 2.0 extraction prompt.")
-    else:
-        generate_bpmn = False
-        st.caption("⚠️ BPMN module not available — update extract_llm.py")
     st.markdown("---")
     st.caption("Keys live **only in your session**.\nNever stored or logged.")
 
@@ -145,8 +130,6 @@ with col_help:
 - Bullet points also supported
 - Mention actors: *"the team"*, *"the system"*
 - Decision words: *"if"*, *"when"*, *"otherwise"*
-- Multiple actors → swimlanes auto-generated
-- Enable **BPMN** in sidebar for full BPMN 2.0
     """)
 
 uploaded_file = st.file_uploader("Or upload a .txt file", type=["txt"])
@@ -164,7 +147,6 @@ if generate_btn:
 
     client_info = get_session_llm_client(selected_provider)
 
-    # ── Mermaid / Draw.io extraction (original) ───────────────────────────────
     with st.spinner(f"Extracting process with {selected_provider}..."):
         clean_text = preprocess_text(transcript_text)
         try:
@@ -181,38 +163,9 @@ if generate_btn:
 
     st.success(f"✅ Extracted **{len(process.steps)} steps** and **{len(process.edges)} connections**")
 
-    # ── BPMN extraction (optional second call) ────────────────────────────────
-    bpmn_process = None
-    if generate_bpmn:
-        with st.spinner(f"Extracting BPMN model with {selected_provider}..."):
-            try:
-                bpmn_process = extract_process_bpmn(
-                    text=clean_text,
-                    client_info=client_info,
-                    provider=selected_provider,
-                    provider_cfg=provider_cfg,
-                    output_language=output_language,
-                )
-                n_elements = len(bpmn_process.elements)
-                n_flows    = len(bpmn_process.flows)
-                n_lanes    = len(bpmn_process.lanes_flat())
-                st.success(
-                    f"✅ BPMN extracted — **{n_elements} elements**, "
-                    f"**{n_flows} flows**, **{n_lanes} lanes**"
-                )
-            except Exception as e:
-                st.warning(f"BPMN extraction failed: {e}")
-
     # -- Outputs ---------------------------------------------------------------
-    tab_labels = ["📊 Diagram", "📄 Mermaid Code", "🔧 Export"]
-    if bpmn_process:
-        tab_labels.append("📐 BPMN")
+    tab1, tab2, tab3 = st.tabs(["📊 Diagram", "📄 Mermaid Code", "🔧 Export"])
 
-    tabs = st.tabs(tab_labels)
-    tab1, tab2, tab3 = tabs[0], tabs[1], tabs[2]
-    tab_bpmn = tabs[3] if bpmn_process else None
-
-    # ── Tab 1: Mermaid diagram ────────────────────────────────────────────────
     with tab1:
         mermaid_code = generate_mermaid(process)
         st.markdown("#### Process Flow")
@@ -222,42 +175,200 @@ if generate_btn:
 <html>
 <head>
   <style>
-    body {{ margin: 0; padding: 16px; background: #f8fafc; font-family: sans-serif; }}
-    .mermaid {{ background: white; padding: 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
+    * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+    body {{ background: #f8fafc; font-family: 'IBM Plex Sans', sans-serif; overflow: hidden; }}
+    #toolbar {{
+      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+      display: flex; align-items: center; gap: 4px;
+      background: rgba(15,23,42,0.92); backdrop-filter: blur(12px);
+      border-radius: 12px; padding: 6px 10px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.3); z-index: 100; user-select: none;
+    }}
+    .tb-btn {{
+      width: 32px; height: 32px; border: none; background: transparent;
+      color: #94a3b8; border-radius: 6px; cursor: pointer; font-size: 15px;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s, color 0.15s;
+    }}
+    .tb-btn:hover {{ background: rgba(255,255,255,0.1); color: #e2e8f0; }}
+    .tb-divider {{ width: 1px; height: 20px; background: rgba(255,255,255,0.12); margin: 0 2px; }}
+    #zoom-label {{ color: #64748b; font-size: 11px; font-family: monospace; min-width: 38px; text-align: center; }}
+    #canvas {{ width: 100vw; height: 100vh; overflow: hidden; cursor: grab; position: relative; }}
+    #canvas.grabbing {{ cursor: grabbing; }}
+    #diagram-wrap {{ position: absolute; top: 0; left: 0; transform-origin: 0 0; padding: 40px; }}
+    .mermaid {{ background: white; border-radius: 10px; padding: 32px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08); display: inline-block; }}
+    #minimap {{
+      position: fixed; bottom: 72px; right: 16px; width: 160px; height: 100px;
+      background: rgba(15,23,42,0.85); backdrop-filter: blur(8px);
+      border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
+      overflow: hidden; opacity: 0; transition: opacity 0.2s;
+    }}
+    #minimap.visible {{ opacity: 1; }}
+    #minimap-viewport {{
+      position: absolute; border: 1.5px solid #38bdf8;
+      background: rgba(56,189,248,0.12); border-radius: 2px; pointer-events: none;
+    }}
+    #toast {{
+      position: fixed; top: 16px; left: 50%;
+      transform: translateX(-50%) translateY(-60px);
+      background: rgba(15,23,42,0.92); color: #e2e8f0; font-size: 12px;
+      padding: 6px 14px; border-radius: 20px;
+      transition: transform 0.25s cubic-bezier(.34,1.56,.64,1);
+      pointer-events: none; font-family: monospace;
+    }}
+    #toast.show {{ transform: translateX(-50%) translateY(0); }}
   </style>
 </head>
 <body>
-  <div class="mermaid">
-{mermaid_code}
+<div id="canvas">
+  <div id="diagram-wrap">
+    <div class="mermaid">{mermaid_code}</div>
   </div>
-  <script type="module">
-    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({{ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' }});
-  </script>
+</div>
+<div id="toolbar">
+  <button class="tb-btn" id="btn-zoom-out" title="Zoom out">&#8722;</button>
+  <span id="zoom-label">100%</span>
+  <button class="tb-btn" id="btn-zoom-in" title="Zoom in">&#43;</button>
+  <div class="tb-divider"></div>
+  <button class="tb-btn" id="btn-fit" title="Fit to screen">&#8862;</button>
+  <button class="tb-btn" id="btn-reset" title="Reset view">&#8634;</button>
+  <div class="tb-divider"></div>
+  <button class="tb-btn" id="btn-minimap" title="Toggle minimap">&#8862;</button>
+</div>
+<div id="minimap"><div id="minimap-viewport"></div></div>
+<div id="toast"></div>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({{ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' }});
+  await new Promise(r => setTimeout(r, 700));
+  const canvas = document.getElementById('canvas');
+  const wrap = document.getElementById('diagram-wrap');
+  const zoomLbl = document.getElementById('zoom-label');
+  const minimap = document.getElementById('minimap');
+  const mmvp = document.getElementById('minimap-viewport');
+  const toast = document.getElementById('toast');
+  let scale = 1, tx = 40, ty = 40, dragging = false;
+  let startX, startY, startTx, startTy, minimapOn = false, lastDist = null;
+  let touchTx, touchTy;
+  function apply() {{
+    wrap.style.transform = `translate(${{tx}}px, ${{ty}}px) scale(${{scale}})`;
+    zoomLbl.textContent = Math.round(scale * 100) + '%';
+    updateMinimap();
+  }}
+  function clamp(s) {{ return Math.min(Math.max(s, 0.1), 5); }}
+  function zoomTo(ns, cx, cy) {{
+    const r = ns / scale; tx = cx - r*(cx-tx); ty = cy - r*(cy-ty);
+    scale = ns; apply();
+  }}
+  function fitToScreen() {{
+    const svg = wrap.querySelector('svg');
+    if (!svg) return;
+    const sw = svg.getBoundingClientRect().width / scale;
+    const sh = svg.getBoundingClientRect().height / scale;
+    const ns = clamp(Math.min((canvas.clientWidth-80)/sw, (canvas.clientHeight-80)/sh));
+    scale = ns;
+    tx = (canvas.clientWidth - sw*scale) / 2;
+    ty = (canvas.clientHeight - sh*scale) / 2;
+    apply();
+  }}
+  function updateMinimap() {{
+    if (!minimapOn) return;
+    const svg = wrap.querySelector('svg');
+    if (!svg) return;
+    const sw = svg.getBoundingClientRect().width / scale;
+    const sh = svg.getBoundingClientRect().height / scale;
+    const mw = minimap.clientWidth, mh = minimap.clientHeight;
+    const r = Math.min(mw/sw, mh/sh) * 0.9;
+    mmvp.style.width  = (canvas.clientWidth/scale*r) + 'px';
+    mmvp.style.height = (canvas.clientHeight/scale*r) + 'px';
+    mmvp.style.left   = (-tx/scale*r + (mw-sw*r)/2) + 'px';
+    mmvp.style.top    = (-ty/scale*r + (mh-sh*r)/2) + 'px';
+  }}
+  function showToast(msg) {{
+    toast.textContent = msg; toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 1800);
+  }}
+  canvas.addEventListener('wheel', e => {{
+    e.preventDefault();
+    const r = canvas.getBoundingClientRect();
+    zoomTo(clamp(scale * (e.deltaY > 0 ? 0.9 : 1.1)), e.clientX-r.left, e.clientY-r.top);
+  }}, {{passive: false}});
+  canvas.addEventListener('mousedown', e => {{
+    if (e.button !== 0) return;
+    dragging = true; startX = e.clientX; startY = e.clientY;
+    startTx = tx; startTy = ty; canvas.classList.add('grabbing');
+  }});
+  window.addEventListener('mousemove', e => {{
+    if (!dragging) return;
+    tx = startTx + e.clientX - startX; ty = startTy + e.clientY - startY; apply();
+  }});
+  window.addEventListener('mouseup', () => {{ dragging = false; canvas.classList.remove('grabbing'); }});
+  canvas.addEventListener('touchstart', e => {{
+    if (e.touches.length === 1) {{
+      startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+      touchTx = tx; touchTy = ty;
+    }}
+    if (e.touches.length === 2) {{
+      lastDist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+    }}
+  }}, {{passive: true}});
+  canvas.addEventListener('touchmove', e => {{
+    if (e.touches.length === 1) {{
+      tx = touchTx + e.touches[0].clientX - startX;
+      ty = touchTy + e.touches[0].clientY - startY; apply();
+    }}
+    if (e.touches.length === 2) {{
+      const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+      const mx = (e.touches[0].clientX+e.touches[1].clientX)/2;
+      const my = (e.touches[0].clientY+e.touches[1].clientY)/2;
+      if (lastDist) zoomTo(clamp(scale*d/lastDist), mx, my);
+      lastDist = d;
+    }}
+    e.preventDefault();
+  }}, {{passive: false}});
+  canvas.addEventListener('touchend', () => {{ lastDist = null; }});
+  window.addEventListener('keydown', e => {{
+    const cx = canvas.clientWidth/2, cy = canvas.clientHeight/2;
+    if (e.key==='+' || e.key==='=') zoomTo(clamp(scale*1.15), cx, cy);
+    if (e.key==='-') zoomTo(clamp(scale*0.87), cx, cy);
+    if (e.key==='0') fitToScreen();
+    if (e.key==='r' || e.key==='R') {{ scale=1; tx=40; ty=40; apply(); }}
+  }});
+  document.getElementById('btn-zoom-in').onclick  = () => zoomTo(clamp(scale*1.2), canvas.clientWidth/2, canvas.clientHeight/2);
+  document.getElementById('btn-zoom-out').onclick = () => zoomTo(clamp(scale*0.8), canvas.clientWidth/2, canvas.clientHeight/2);
+  document.getElementById('btn-fit').onclick = fitToScreen;
+  document.getElementById('btn-reset').onclick = () => {{ scale=1; tx=40; ty=40; apply(); }};
+  document.getElementById('btn-minimap').onclick = () => {{
+    minimapOn = !minimapOn;
+    minimap.classList.toggle('visible', minimapOn);
+    updateMinimap();
+    showToast(minimapOn ? 'Minimap on' : 'Minimap off');
+  }};
+  setTimeout(fitToScreen, 400);
+</script>
 </body>
 </html>
 """
-        components.html(mermaid_html, height=1200, scrolling=True)
+        components.html(mermaid_html, height=1000, scrolling=False)
 
-        m1, m2, m3, m4, m5 = st.columns(5)
+        # Metrics row
+        m1, m2, m3, m4 = st.columns(4)
         m1.metric("Steps", len(process.steps))
         m2.metric("Connections", len(process.edges))
-        actors = list(dict.fromkeys(s.actor for s in process.steps if s.actor))  # ordered, deduped
-        m3.metric("Actors / Lanes", len(actors))
+        actors = list(set(s.actor for s in process.steps if s.actor))
+        m3.metric("Actors", len(actors))
         decisions = [s for s in process.steps if s.is_decision]
         m4.metric("Decisions", len(decisions))
-        m5.metric("Swimlanes", "✅" if actors else "—")
 
         if actors:
-            st.markdown(f"**Lanes detected:** {', '.join(f'`{a}`' for a in actors)}")
+            st.markdown(f"**Actors detected:** {', '.join(f'`{a}`' for a in actors)}")
 
-    # ── Tab 2: Mermaid code ───────────────────────────────────────────────────
     with tab2:
         mermaid_code = generate_mermaid(process)
         st.code(mermaid_code, language="text")
         st.caption("Paste this into [mermaid.live](https://mermaid.live) to preview and edit.")
 
-    # ── Tab 3: Export ─────────────────────────────────────────────────────────
     with tab3:
         col_dl1, col_dl2 = st.columns(2)
 
@@ -288,86 +399,5 @@ if generate_btn:
         st.markdown("#### Open .drawio file")
         st.markdown("1. Go to [diagrams.net](https://app.diagrams.net)\n2. File → Open from → Device\n3. Select the downloaded `.drawio` file")
 
-    # ── Tab 4: BPMN ───────────────────────────────────────────────────────────
-    if tab_bpmn and bpmn_process:
-        with tab_bpmn:
-            st.markdown("#### BPMN 2.0 Process Diagram")
-
-            try:
-                bpmn_xml = generate_bpmn_xml(bpmn_process)
-
-                # Interactive preview via bpmn-js
-                bpmn_html = generate_bpmn_preview(bpmn_xml)
-                components.html(bpmn_html, height=620, scrolling=False)
-
-            except Exception as e:
-                st.error(f"BPMN diagram generation failed: {e}")
-                bpmn_xml = None
-
-            # Metrics
-            st.markdown("---")
-            b1, b2, b3, b4, b5 = st.columns(5)
-            b1.metric("Elements",  len(bpmn_process.elements))
-            b2.metric("Flows",     len(bpmn_process.flows))
-            b3.metric("Lanes",     len(bpmn_process.lanes_flat()))
-            b4.metric("Gateways",  len(bpmn_process.gateways()))
-            b5.metric("Tasks",     len(bpmn_process.tasks()))
-
-            if bpmn_process.lanes_flat():
-                lane_names = [l.name for l in bpmn_process.lanes_flat() if l.name]
-                st.markdown(f"**Lanes / Actors:** {', '.join(f'`{n}`' for n in lane_names)}")
-
-            # Boundary events summary
-            boundaries = bpmn_process.boundary_events()
-            if boundaries:
-                st.markdown("**Boundary events:**")
-                for be in boundaries:
-                    host = bpmn_process.get_element(be.attached_to) if be.attached_to else None
-                    host_name = host.name if host else be.attached_to
-                    interrupt = "interrupting" if be.is_interrupting else "non-interrupting"
-                    st.markdown(f"- `{be.name}` ({be.event_type}, {interrupt}) → attached to **{host_name}**")
-
-            # Sub-processes summary
-            subprocs = bpmn_process.sub_processes()
-            if subprocs:
-                st.markdown("**Sub-processes:**")
-                for sp in subprocs:
-                    st.markdown(f"- `{sp.name}` — {len(sp.children)} inner element(s)")
-
-            # Downloads
-            st.markdown("---")
-            if bpmn_xml:
-                col_b1, col_b2 = st.columns(2)
-                with col_b1:
-                    st.download_button(
-                        label="⬇️ Download .bpmn",
-                        data=bpmn_xml,
-                        file_name=f"{bpmn_process.name.replace(' ', '_')}.bpmn",
-                        mime="application/xml",
-                        use_container_width=True,
-                    )
-                with col_b2:
-                    st.download_button(
-                        label="⬇️ Download BPMN as .xml",
-                        data=bpmn_xml,
-                        file_name=f"{bpmn_process.name.replace(' ', '_')}_bpmn.xml",
-                        mime="application/xml",
-                        use_container_width=True,
-                    )
-
-                st.markdown("#### Open in Camunda Modeler or diagrams.net")
-                st.markdown(
-                    "1. Download the `.bpmn` file above\n"
-                    "2. Open [Camunda Modeler](https://camunda.com/download/modeler/) "
-                    "or [diagrams.net](https://app.diagrams.net)\n"
-                    "3. File → Open → select the `.bpmn` file\n"
-                    "4. Edit, annotate and export as needed"
-                )
-
-                if show_raw_json:
-                    st.markdown("#### Raw BPMN XML")
-                    st.code(bpmn_xml, language="xml")
-
-    # Store last results in session
-    st.session_state["last_process"]      = process
-    st.session_state["last_bpmn_process"] = bpmn_process
+    # Store last result in session for reference
+    st.session_state["last_process"] = process
