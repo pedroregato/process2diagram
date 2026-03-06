@@ -5,20 +5,14 @@ import re
 from modules.schema import Process, Step, Edge
 
 
-# ── BPMN classes loaded lazily to avoid ImportError if schema is old ──────────
-
 def _bpmn_imports():
     from modules.schema import BpmnProcess, BpmnElement, BpmnLane, BpmnPool, SequenceFlow
     return BpmnProcess, BpmnElement, BpmnLane, BpmnPool, SequenceFlow
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  PROMPT — Mermaid / Draw.io
-# ══════════════════════════════════════════════════════════════════════════════
-
 SYSTEM_PROMPT = """You are a business process analyst. Extract a structured process from a meeting transcript.
 
-Return ONLY a valid JSON object — no markdown, no explanation, no code fences.
+Return ONLY a valid JSON object, no markdown, no explanation, no code fences.
 
 JSON schema:
 {
@@ -26,7 +20,7 @@ JSON schema:
   "steps": [
     {
       "id": "S01",
-      "title": "<short action label — NO actor name here>",
+      "title": "<short action label, NO actor name here>",
       "description": "<full description>",
       "actor": "<who performs this step, or null>",
       "is_decision": false
@@ -39,24 +33,20 @@ JSON schema:
 
 Rules:
 - Step IDs: S01, S02, S03 in order.
-- CRITICAL: "title" must contain ONLY the action. NEVER include actor name in title.
-  WRONG: "sistema: Registrar chamado"  RIGHT: "Registrar chamado"
-- For decision steps set is_decision=true and create two edges labeled "sim"/"nao" or "yes"/"no".
-- Titles SHORT (3-6 words). Decision titles must be questions (e.g. "Prioridade alta?").
-- actor field: detect from context. Normalize consistently (one canonical name per role).
+- CRITICAL: title must contain ONLY the action. NEVER include actor name in title.
+  WRONG: sistema: Registrar chamado   RIGHT: Registrar chamado
+- Decision steps: is_decision=true, two edges labeled sim/nao or yes/no.
+- Titles SHORT 3-6 words. Decision titles must be questions.
+- actor field: detect from context, normalize consistently.
 - Output language: {output_language}
 - Return ONLY the JSON."""
 
 
-def build_prompt(text: str, output_language: str) -> tuple[str, str]:
+def build_prompt(text, output_language):
     system = SYSTEM_PROMPT.replace("{output_language}", output_language)
-    user = f"Extract the process from this transcript:\n\n{text}"
+    user = "Extract the process from this transcript:\n\n" + text
     return system, user
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  PROMPT — BPMN 2.0
-# ══════════════════════════════════════════════════════════════════════════════
 
 BPMN_SYSTEM_PROMPT = """You are a certified BPMN 2.0 process analyst.
 Extract a complete BPMN process model from a meeting transcript.
@@ -91,8 +81,7 @@ Element types:
   Tasks: userTask, serviceTask, scriptTask, sendTask, receiveTask, manualTask, businessRuleTask, callActivity, task
   Gateways: exclusiveGateway, parallelGateway, inclusiveGateway, eventBasedGateway, complexGateway
   Sub-processes: subProcess, adHocSubProcess
-
-event_type values: none | message | timer | error | escalation | cancel | compensation | signal | terminate | conditional | link
+  event_type: none | message | timer | error | escalation | cancel | compensation | signal | terminate | conditional | link
 
 Rules:
 1. Always start with startEvent, end with endEvent.
@@ -101,32 +90,27 @@ Rules:
 4. Error/timeout -> boundaryEvent on the task.
 5. Detect actors; map each to a lane.
 6. IDs: SE1, T01-T99, GW1+, EE1+, BE1+, SP1+, F01+
-7. Names SHORT (max 6 words).
+7. Names SHORT max 6 words.
 8. Output language: {output_language}
 9. Return ONLY the JSON."""
 
 
-def build_bpmn_prompt(text: str, output_language: str) -> tuple[str, str]:
+def build_bpmn_prompt(text, output_language):
     system = BPMN_SYSTEM_PROMPT.replace("{output_language}", output_language)
-    user = f"Extract the BPMN process from this transcript:\n\n{text}"
+    user = "Extract the BPMN process from this transcript:\n\n" + text
     return system, user
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  LLM ROUTING
-# ══════════════════════════════════════════════════════════════════════════════
-
-def call_llm(system: str, user: str, client_info: dict, provider_cfg: dict) -> str:
+def call_llm(system, user, client_info, provider_cfg):
     client_type = provider_cfg["client_type"]
     api_key = client_info["api_key"]
     model = provider_cfg["default_model"]
-
     if client_type == "openai_compatible":
         return _call_openai_compatible(system, user, api_key, model, provider_cfg)
     elif client_type == "anthropic":
         return _call_anthropic(system, user, api_key, model)
     else:
-        raise ValueError(f"Unknown client_type: {client_type}")
+        raise ValueError("Unknown client_type: " + client_type)
 
 
 def _call_openai_compatible(system, user, api_key, model, provider_cfg):
@@ -154,20 +138,16 @@ def _call_anthropic(system, user, api_key, model):
     return message.content[0].text
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  RESPONSE PARSING — Mermaid / Draw.io
-# ══════════════════════════════════════════════════════════════════════════════
-
-def _clean_json(raw: str) -> dict:
+def _clean_json(raw):
     clean = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
     start = clean.find("{")
     end = clean.rfind("}") + 1
     if start == -1 or end == 0:
-        raise ValueError(f"No JSON in LLM response:\n{raw[:300]}")
+        raise ValueError("No JSON in LLM response:\n" + raw[:300])
     return json.loads(clean[start:end])
 
 
-def parse_response(raw: str) -> Process:
+def parse_response(raw):
     data = _clean_json(raw)
     steps = [
         Step(
@@ -186,11 +166,7 @@ def parse_response(raw: str) -> Process:
     return Process(name=data.get("name", "Process"), steps=steps, edges=edges)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  RESPONSE PARSING — BPMN
-# ══════════════════════════════════════════════════════════════════════════════
-
-def _parse_element(raw: dict):
+def _parse_element(raw):
     _, BpmnElement, _, _, _ = _bpmn_imports()
     children = [_parse_element(c) for c in raw.get("children", [])]
     return BpmnElement(
@@ -213,12 +189,10 @@ def _parse_element(raw: dict):
     )
 
 
-def parse_bpmn_response(raw: str):
+def parse_bpmn_response(raw):
     BpmnProcess, _, BpmnLane, BpmnPool, SequenceFlow = _bpmn_imports()
     data = _clean_json(raw)
-
     elements = [_parse_element(e) for e in data.get("elements", [])]
-
     flows = [
         SequenceFlow(
             id=f["id"], source=f["source"], target=f["target"],
@@ -227,13 +201,11 @@ def parse_bpmn_response(raw: str):
         )
         for f in data.get("flows", [])
     ]
-
     lane_names = list(data.get("lanes", []))
     for el in elements:
         actor = el.actor or el.lane
         if actor and actor not in lane_names:
             lane_names.append(actor)
-
     pools = []
     if lane_names:
         pool = BpmnPool(id="pool_1", name=data.get("name", "Process"))
@@ -243,9 +215,8 @@ def parse_bpmn_response(raw: str):
                 if (el.actor == lane_name or el.lane == lane_name)
                 and el.type != "boundaryEvent"
             ]
-            pool.lanes.append(BpmnLane(id=f"lane_{i+1}", name=lane_name, element_ids=member_ids))
+            pool.lanes.append(BpmnLane(id="lane_" + str(i + 1), name=lane_name, element_ids=member_ids))
         pools.append(pool)
-
     return BpmnProcess(
         name=data.get("name", "Process"),
         documentation=data.get("documentation", ""),
@@ -253,11 +224,7 @@ def parse_bpmn_response(raw: str):
     )
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  PUBLIC ENTRY POINTS
-# ══════════════════════════════════════════════════════════════════════════════
-
-def _lang_instruction(output_language: str) -> str:
+def _lang_instruction(output_language):
     return {
         "Auto-detect": "same language as the input transcript",
         "English": "English",
@@ -265,27 +232,15 @@ def _lang_instruction(output_language: str) -> str:
     }.get(output_language, "same language as the input transcript")
 
 
-def extract_process_llm(
-    text: str,
-    client_info: dict,
-    provider: str,
-    provider_cfg: dict,
-    output_language: str = "Auto-detect",
-) -> Process:
-    """Entry point for Mermaid / Draw.io extraction. Called by app.py."""
+def extract_process_llm(text, client_info, provider, provider_cfg, output_language="Auto-detect"):
+    """Entry point for Mermaid / Draw.io extraction."""
     system, user = build_prompt(text, _lang_instruction(output_language))
     raw = call_llm(system, user, client_info, provider_cfg)
     return parse_response(raw)
 
 
-def extract_process_bpmn(
-    text: str,
-    client_info: dict,
-    provider: str,
-    provider_cfg: dict,
-    output_language: str = "Auto-detect",
-):
-    """Entry point for BPMN 2.0 extraction. Called by app.py."""
+def extract_process_bpmn(text, client_info, provider, provider_cfg, output_language="Auto-detect"):
+    """Entry point for BPMN 2.0 extraction."""
     system, user = build_bpmn_prompt(text, _lang_instruction(output_language))
     raw = call_llm(system, user, client_info, provider_cfg)
     return parse_bpmn_response(raw)
