@@ -252,9 +252,35 @@ if generate_btn:
   function zoomTo(ns,cx,cy) {{ const r=ns/scale; tx=cx-r*(cx-tx); ty=cy-r*(cy-ty); scale=ns; apply(); }}
   function fitToScreen() {{
     const svg=wrap.querySelector('svg'); if(!svg) return;
-    const sw=svg.getBoundingClientRect().width/scale, sh=svg.getBoundingClientRect().height/scale;
-    const ns=clamp(Math.min((canvas.clientWidth-80)/sw,(canvas.clientHeight-80)/sh));
-    scale=ns; tx=(canvas.clientWidth-sw*scale)/2; ty=(canvas.clientHeight-sh*scale)/2; apply();
+    // Use viewBox if getBoundingClientRect returns 0 (svg not yet painted)
+    let sw, sh;
+    const rect = svg.getBoundingClientRect();
+    if (rect.width > 10 && rect.height > 10) {{
+      sw = rect.width / scale;
+      sh = rect.height / scale;
+    }} else {{
+      // Fallback: read natural size from viewBox or width/height attributes
+      const vb = svg.viewBox && svg.viewBox.baseVal;
+      sw = (vb && vb.width > 0) ? vb.width : parseFloat(svg.getAttribute('width')) || 800;
+      sh = (vb && vb.height > 0) ? vb.height : parseFloat(svg.getAttribute('height')) || 600;
+    }}
+    if (!sw || !sh || sw < 10 || sh < 10) return; // still not ready
+    const ns = clamp(Math.min((canvas.clientWidth - 80) / sw, (canvas.clientHeight - 80) / sh));
+    if (!isFinite(ns) || ns <= 0) return;
+    scale = ns;
+    tx = (canvas.clientWidth  - sw * scale) / 2;
+    ty = (canvas.clientHeight - sh * scale) / 2;
+    apply();
+  }}
+  // Retry fit until SVG is properly sized
+  function fitWhenReady(attempts) {{
+    const svg = wrap.querySelector('svg');
+    const rect = svg && svg.getBoundingClientRect();
+    if (rect && rect.width > 10 && rect.height > 10) {{
+      fitToScreen();
+    }} else if (attempts > 0) {{
+      setTimeout(() => fitWhenReady(attempts - 1), 300);
+    }}
   }}
   function updateMinimap() {{
     if(!minimapOn) return;
@@ -278,7 +304,8 @@ if generate_btn:
   document.getElementById('btn-fit').onclick=fitToScreen;
   document.getElementById('btn-reset').onclick=()=>{{ scale=1;tx=40;ty=40;apply(); }};
   document.getElementById('btn-minimap').onclick=()=>{{ minimapOn=!minimapOn; minimap.classList.toggle('visible',minimapOn); updateMinimap(); showToast(minimapOn?'Minimap on':'Minimap off'); }};
-  setTimeout(fitToScreen, 400);
+  // Start trying to fit after mermaid renders — up to 10 retries × 300ms = 3s
+  setTimeout(() => fitWhenReady(10), 400);
 </script>
 </body>
 </html>"""
@@ -376,3 +403,21 @@ if generate_btn:
     st.session_state["last_process"] = process
     if bpmn_process:
         st.session_state["last_bpmn"] = bpmn_process
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
