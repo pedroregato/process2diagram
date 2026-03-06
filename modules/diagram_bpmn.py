@@ -1,11 +1,9 @@
 # modules/diagram_bpmn.py
-# BPMN 2.0 XML generator + bpmn-js preview with enhanced layout
+# BPMN 2.0 XML generator + bpmn-js preview
 # Compatible with: Camunda Modeler, Bizagi, draw.io, bpmn.io, Signavio
 
 import xml.etree.ElementTree as ET
 from modules.schema import BpmnProcess, BpmnElement, BpmnLane, BpmnPool, SequenceFlow
-import math
-from collections import defaultdict, deque
 
 # ── Namespaces ────────────────────────────────────────────────────────────────
 _NS = {
@@ -23,29 +21,21 @@ DI  = "{%s}" % _NS["bpmndi"]
 DC  = "{%s}" % _NS["dc"]
 DDI = "{%s}" % _NS["di"]
 
-# ── Layout constants (optimized) ─────────────────────────────────────────────
-TASK_W,  TASK_H   = 120, 72        # Slightly taller for better label fit
-GW_W,    GW_H     = 50,  50        # Diamond shape
-EV_W,    EV_H     = 36,  36        # Circle
-H_GAP             = 80             # Horizontal gap between elements
-V_GAP             = 40             # Vertical gap in flat layouts
-LANE_HEADER_W     = 120            # Wider for better lane name visibility
-POOL_HEADER_W     = 100            # Pool header width
-FIRST_X           = 100            # Left margin inside lane
-MIN_LANE_H        = 200            # Minimum lane height
-LANE_PADDING_Y    = 30             # Vertical padding inside lane
-LANE_PADDING_X    = 40             # Horizontal padding at lane ends
+# ── Layout constants ──────────────────────────────────────────────────────────
+TASK_W,  TASK_H   = 120, 60
+GW_W,    GW_H     = 50,  50
+EV_W,    EV_H     = 36,  36
+H_GAP             = 70
+V_PAD             = 55
+LANE_HEADER_W     = 100         # wide enough for ~12-char lane name rotated vertically
+POOL_HEADER_W     = 100         # wide enough for rotated pool name
+FIRST_X           = 80          # left margin inside lane content area
+MIN_LANE_H        = 180
 
-# Element type categories for better positioning
-EVENT_TYPES = {"startEvent", "endEvent", "intermediateThrowEvent", 
-               "intermediateCatchEvent", "boundaryEvent"}
-GATEWAY_TYPES = {"exclusiveGateway", "inclusiveGateway", "parallelGateway", 
-                 "eventBasedGateway", "complexGateway"}
-TASK_TYPES = {"task", "userTask", "serviceTask", "sendTask", "receiveTask",
-              "manualTask", "businessRuleTask", "scriptTask", "callActivity"}
 
 def _sub(parent, tag, attribs=None):
     return ET.SubElement(parent, tag, attribs or {})
+
 
 def _ev_def(etype):
     return {
@@ -61,31 +51,30 @@ def _ev_def(etype):
         "link":         "linkEventDefinition",
     }.get(etype)
 
+
 def _el_size(el):
     t = el.type
-    if t in EVENT_TYPES:
+    if t in ("startEvent", "endEvent", "intermediateThrowEvent",
+             "intermediateCatchEvent", "boundaryEvent"):
         return EV_W, EV_H
-    if t in GATEWAY_TYPES:
+    if "Gateway" in t:
         return GW_W, GW_H
     return TASK_W, TASK_H
 
-def _is_start_event(el):
-    return el.type == "startEvent"
 
-def _is_end_event(el):
-    return el.type == "endEvent"
-
-def _is_gateway(el):
-    return el.type in GATEWAY_TYPES
-
-# ── Enhanced lane assignment with better inference ───────────────────────────
+# ── Lane assignment ───────────────────────────────────────────────────────────
 
 def _assign_lanes(bpmn):
     """
-    Enhanced lane assignment with better inference and error handling.
     Returns a dict {element_id: lane_id} for every non-boundary element.
+
+    Priority:
+      1. Explicit assignment via lane.element_ids
+      2. Element actor/lane field matches a lane name
+      3. Flow-context inference (inherit from assigned neighbor)
+      4. Fallback: first lane (startEvent/endEvent land here naturally)
     """
-    if not bpmn.pools or not bpmn.pools[0].lanes:
+    if not bpmn.pools:
         return {}
 
     pool = bpmn.pools[0]
@@ -93,426 +82,268 @@ def _assign_lanes(bpmn):
         return {}
 
     assignment = {}
-    lane_by_name = {lane.name: lane.id for lane in pool.lanes}
-    lane_by_id = {lane.id: lane for lane in pool.lanes}
-    
+
     # Step 1 — explicit element_ids in lane definition
     for lane in pool.lanes:
         for eid in lane.element_ids:
             assignment[eid] = lane.id
 
-    # Step 2 — match by actor/lane name
+    # Step 2 — match by actor/lane name on the element itself
+    lane_by_name = {lane.name: lane.id for lane in pool.lanes}
     for el in bpmn.elements:
-        if el.type == "boundaryEvent" or el.id in assignment:
+        if el.type == "boundaryEvent":
+            continue
+        if el.id in assignment:
             continue
         actor = el.actor or el.lane
         if actor and actor in lane_by_name:
             assignment[el.id] = lane_by_name[actor]
 
-    # Step 3 — build flow graph for inference
-    flow_graph = defaultdict(list)
-    reverse_graph = defaultdict(list)
-    for flow in bpmn.flows:
-        flow_graph[flow.source].append(flow.target)
-        reverse_graph[flow.target].append(flow.source)
+    # Collect still-unassigned non-boundary element ids
+    all_ids = {e.id for e in bpmn.elements if e.type != "boundaryEvent"}
+    unassigned = all_ids - set(assignment.keys())
 
-    # Step 4 — propagate assignments through flows
+    if not unassigned:
+        return assignment
+
+    # Step 3 — flow-context inference
+    predecessors = {e.id: [] for e in bpmn.elements}
+    successors   = {e.id: [] for e in bpmn.elements}
+    for f in bpmn.flows:
+        if f.source in predecessors:
+            successors[f.source].append(f.target)
+        if f.target in predecessors:
+            predecessors[f.target].append(f.source)
+
     changed = True
-    unassigned = {e.id for e in bpmn.elements 
-                  if e.type != "boundaryEvent" and e.id not in assignment}
-    
-    # First pass: propagate from assigned to unassigned
-    queue = deque(assignment.keys())
-    visited = set(assignment.keys())
-    
-    while queue:
-        current = queue.popleft()
-        current_lane = assignment[current]
-        
-        # Forward propagation
-        for target in flow_graph[current]:
-            if target not in assignment and target in unassigned:
-                assignment[target] = current_lane
-                unassigned.discard(target)
-                queue.append(target)
-        
-        # Backward propagation
-        for source in reverse_graph[current]:
-            if source not in assignment and source in unassigned:
-                assignment[source] = current_lane
-                unassigned.discard(source)
-                queue.append(source)
-
-    # Step 5 — intelligent fallback for remaining elements
-    if unassigned:
-        # Find most connected lane for each unassigned element
+    while changed and unassigned:
+        changed = False
         for eid in list(unassigned):
-            # Check all neighbors
-            neighbors = set(flow_graph[eid] + reverse_graph[eid])
-            assigned_neighbors = [n for n in neighbors if n in assignment]
-            
-            if assigned_neighbors:
-                # Use most common lane among neighbors
-                from collections import Counter
-                lane_counts = Counter(assignment[n] for n in assigned_neighbors)
-                assignment[eid] = lane_counts.most_common(1)[0][0]
-                unassigned.discard(eid)
+            neighbors = predecessors.get(eid, []) + successors.get(eid, [])
+            for nid in neighbors:
+                if nid in assignment:
+                    assignment[eid] = assignment[nid]
+                    unassigned.discard(eid)
+                    changed = True
+                    break
 
-    # Step 6 — final fallback to first lane
+    # Step 4 — true fallback: first lane (catches startEvent/endEvent with actor=null)
     fallback_lane = pool.lanes[0].id
     for eid in unassigned:
         assignment[eid] = fallback_lane
 
     return assignment
 
-# ── Enhanced layout engine with grid-based positioning ───────────────────────
 
-def _build_element_graph(bpmn):
-    """Build enhanced graph representation with level calculation."""
-    graph = {}
-    reverse_graph = {}
-    
-    # Initialize
-    for el in bpmn.elements:
-        if el.type != "boundaryEvent":
-            graph[el.id] = []
-            reverse_graph[el.id] = []
-    
-    # Add flows
-    for flow in bpmn.flows:
-        if flow.source in graph and flow.target in graph:
-            graph[flow.source].append(flow.target)
-            reverse_graph[flow.target].append(flow.source)
-    
-    return graph, reverse_graph
+# ── Process XML builders ──────────────────────────────────────────────────────
 
-def _calculate_element_levels(graph, start_nodes):
-    """
-    Calculate optimal levels for each element using longest path.
-    Returns dict {element_id: level_index}
-    """
-    levels = {}
-    
-    # Initialize with start nodes
-    queue = deque()
-    for node in start_nodes:
-        levels[node] = 0
-        queue.append(node)
-    
-    # BFS with level assignment
+def _build_el(parent, el):
+    t = el.type
+    if t in ("startEvent", "endEvent", "intermediateThrowEvent", "intermediateCatchEvent"):
+        node = _sub(parent, B + t, {"id": el.id, "name": el.name})
+        d = _ev_def(el.event_type)
+        if d:
+            _sub(node, B + d, {"id": el.id + "_def"})
+
+    elif t == "boundaryEvent":
+        attrs = {
+            "id": el.id, "name": el.name,
+            "attachedToRef": el.attached_to or "",
+            "cancelActivity": str(el.is_interrupting).lower(),
+        }
+        node = _sub(parent, B + "boundaryEvent", attrs)
+        d = _ev_def(el.event_type)
+        if d:
+            _sub(node, B + d, {"id": el.id + "_def"})
+
+    elif "Gateway" in t:
+        _sub(parent, B + t, {"id": el.id, "name": el.name})
+
+    elif t == "subProcess":
+        node = _sub(parent, B + "subProcess",
+                    {"id": el.id, "name": el.name, "triggeredByEvent": "false"})
+        for child in el.children:
+            _build_el(node, child)
+
+    elif t == "callActivity":
+        attrs = {"id": el.id, "name": el.name}
+        if el.called_element:
+            attrs["calledElement"] = el.called_element
+        _sub(parent, B + "callActivity", attrs)
+
+    else:
+        tag = t if t in ("userTask", "serviceTask", "scriptTask", "sendTask",
+                         "receiveTask", "manualTask", "businessRuleTask") else "task"
+        node = _sub(parent, B + tag, {"id": el.id, "name": el.name})
+        if el.is_loop:
+            _sub(node, B + "standardLoopCharacteristics", {"id": el.id + "_loop"})
+        elif el.is_parallel_multi:
+            mi = _sub(node, B + "multiInstanceLoopCharacteristics", {"id": el.id + "_mi"})
+            mi.set("isSequential", "false")
+        elif el.is_sequential_multi:
+            mi = _sub(node, B + "multiInstanceLoopCharacteristics", {"id": el.id + "_mi"})
+            mi.set("isSequential", "true")
+
+    if el.documentation:
+        kids = list(parent)
+        if kids:
+            _sub(kids[-1], B + "documentation", {}).text = el.documentation
+
+
+def _build_flow(parent, flow):
+    node = _sub(parent, B + "sequenceFlow", {
+        "id": flow.id, "name": flow.name,
+        "sourceRef": flow.source, "targetRef": flow.target,
+    })
+    if flow.condition:
+        c = _sub(node, B + "conditionExpression",
+                 {"{%s}type" % _NS["xsi"]: "tFormalExpression"})
+        c.text = flow.condition
+
+
+# ── Layout ────────────────────────────────────────────────────────────────────
+
+def _topo_sort(ids, flows):
+    """Topological sort. startEvents always first, endEvents always last."""
+    id_set = set(ids)
+    indeg  = {i: 0 for i in ids}
+    succ   = {i: [] for i in ids}
+    for f in flows:
+        if f.source in id_set and f.target in id_set:
+            succ[f.source].append(f.target)
+            indeg[f.target] += 1
+    queue  = [i for i in ids if indeg[i] == 0]
+    result = []
     while queue:
-        current = queue.popleft()
-        current_level = levels[current]
-        
-        for neighbor in graph.get(current, []):
-            new_level = current_level + 1
-            if neighbor not in levels or new_level > levels[neighbor]:
-                levels[neighbor] = new_level
-                queue.append(neighbor)
-    
-    return levels
+        n = queue.pop(0)
+        result.append(n)
+        for m in succ[n]:
+            indeg[m] -= 1
+            if indeg[m] == 0:
+                queue.append(m)
+    for i in ids:
+        if i not in result:
+            result.append(i)
+    return result
 
-def _optimize_lane_element_positions(lane_elements, el_map, graph):
+
+def _sort_lane_elements(lane_ids, el_map, flows):
     """
-    Optimize element positions within a lane using level-based layout.
-    Returns list of (element_id, level, row_index) tuples.
+    Sort elements within a single lane:
+    - startEvent always first
+    - endEvent always last
+    - rest in topological order
     """
-    if not lane_elements:
-        return []
-    
-    # Identify start and end nodes
-    start_nodes = [eid for eid in lane_elements 
-                   if _is_start_event(el_map[eid]) or not reverse_graph.get(eid)]
-    
-    # Calculate levels
-    levels = _calculate_element_levels(graph, start_nodes)
-    
-    # Group elements by level
-    level_groups = defaultdict(list)
-    for eid in lane_elements:
-        if eid in levels:
-            level = levels[eid]
-            level_groups[level].append(eid)
-    
-    # Sort levels
-    max_level = max(level_groups.keys()) if level_groups else 0
-    
-    # Distribute elements vertically within lanes if needed (parallel paths)
-    # For now, simple single row per level
-    positioned = []
-    for level in range(max_level + 1):
-        elements = level_groups.get(level, [])
-        # Sort elements within level for consistent order
-        elements.sort(key=lambda eid: el_map[eid].type)
-        for eid in elements:
-            positioned.append((eid, level, 0))  # row 0 for now
-    
-    return positioned
+    id_set = set(lane_ids)
+    starts = [i for i in lane_ids if el_map.get(i) and el_map[i].type == "startEvent"]
+    ends   = [i for i in lane_ids if el_map.get(i) and el_map[i].type == "endEvent"]
+    middle = [i for i in lane_ids if i not in starts and i not in ends]
+    middle_sorted = _topo_sort(middle, flows)
+    return starts + middle_sorted + ends
+
 
 def _compute_layout(bpmn, lane_assignment):
-    """Enhanced layout computation with better spacing and positioning."""
-    shapes = {}
+    shapes      = {}
     pool_shapes = {}
-    
-    # Filter out boundary events for main layout
+
     non_boundary = [e for e in bpmn.elements if e.type != "boundaryEvent"]
+    order  = _topo_sort([e.id for e in non_boundary], bpmn.flows)
     el_map = {e.id: e for e in bpmn.elements}
-    
-    # Build graph
-    graph, reverse_graph = _build_element_graph(bpmn)
-    
+
     if bpmn.pools:
         pool = bpmn.pools[0]
-        
-        # Group elements by lane
-        lane_elements = defaultdict(list)
-        for eid, lid in lane_assignment.items():
-            if eid in el_map:
-                lane_elements[lid].append(eid)
-        
-        # Calculate optimal positions for each lane
-        lane_positions = {}
+
+        # Group ordered elements by lane (using fully-resolved assignment)
+        lane_order = {lane.id: [] for lane in pool.lanes}
+        for eid in order:
+            lid = lane_assignment.get(eid)
+            if lid and lid in lane_order:
+                lane_order[lid].append(eid)
+            elif pool.lanes:
+                lane_order[pool.lanes[0].id].append(eid)
+
+        # Re-sort each lane: startEvents first, endEvents last, rest topo-sorted
         for lane in pool.lanes:
-            if lane.id in lane_elements:
-                lane_positions[lane.id] = _optimize_lane_element_positions(
-                    lane_elements[lane.id], el_map, graph
-                )
-            else:
-                lane_positions[lane.id] = []
-        
-        # Calculate lane heights based on content
-        lane_heights = {}
+            lane_order[lane.id] = _sort_lane_elements(
+                lane_order[lane.id], el_map, bpmn.flows
+            )
+
+        # Lane heights
+        lane_h = {}
         for lane in pool.lanes:
-            positions = lane_positions.get(lane.id, [])
-            if positions:
-                # Group by row (for future multi-row support)
-                rows = defaultdict(list)
-                for eid, level, row in positions:
-                    rows[row].append(eid)
-                
-                # Calculate height needed
-                num_rows = len(rows)
-                max_row_height = max((_el_size(el_map[eid])[1] for eid in lane_elements[lane.id]), default=TASK_H)
-                lane_heights[lane.id] = max(
-                    MIN_LANE_H,
-                    num_rows * (max_row_height + LANE_PADDING_Y * 2)
-                )
-            else:
-                lane_heights[lane.id] = MIN_LANE_H
-        
-        # Calculate total height and width
-        total_h = sum(lane_heights[l.id] for l in pool.lanes)
-        
-        # Calculate required width based on maximum level across lanes
-        max_levels = {}
-        for lid, positions in lane_positions.items():
-            if positions:
-                max_levels[lid] = max(level for _, level, _ in positions)
-            else:
-                max_levels[lid] = 0
-        
-        # Calculate width needed for each lane
-        lane_widths = {}
+            els_in_lane = [el_map[eid] for eid in lane_order[lane.id] if eid in el_map]
+            max_h = max((_el_size(e)[1] for e in els_in_lane), default=TASK_H)
+            lane_h[lane.id] = max(MIN_LANE_H, max_h + V_PAD * 2)
+
+        total_h = sum(lane_h[l.id] for l in pool.lanes)
+
+        # Compute pool width — minimum 700, trailing gap after last element
+        pool_w = 700
         for lane in pool.lanes:
-            if lane.id in lane_positions and lane_positions[lane.id]:
-                max_level = max_levels[lane.id]
-                elements_at_level = defaultdict(list)
-                for eid, level, _ in lane_positions[lane.id]:
-                    elements_at_level[level].append(eid)
-                
-                # Calculate width needed for each level
-                level_widths = []
-                for level in range(max_level + 1):
-                    elements = elements_at_level.get(level, [])
-                    if elements:
-                        total_width = (len(elements) - 1) * H_GAP
-                        for eid in elements:
-                            w, _ = _el_size(el_map[eid])
-                            total_width += w
-                        total_width += LANE_PADDING_X * 2
-                        level_widths.append(total_width)
-                
-                lane_widths[lane.id] = max(level_widths) if level_widths else 700
-            else:
-                lane_widths[lane.id] = 700
-        
-        # Overall pool width (maximum across lanes)
-        pool_w = max(lane_widths.values()) + POOL_HEADER_W + LANE_HEADER_W
-        
-        # Create pool shape
+            els = lane_order[lane.id]
+            if els:
+                w = POOL_HEADER_W + LANE_HEADER_W + FIRST_X
+                for eid in els:
+                    if eid in el_map:
+                        ew, _ = _el_size(el_map[eid])
+                        w += ew + H_GAP
+                w += FIRST_X  # trailing right margin
+                pool_w = max(pool_w, w)
+
         pool_shapes[pool.id] = (0, 0, pool_w, total_h)
-        
-        # Position lanes and elements
+
         cur_y = 0
         for lane in pool.lanes:
-            lh = lane_heights[lane.id]
+            lh = lane_h[lane.id]
+            lx = POOL_HEADER_W
             lw = pool_w - POOL_HEADER_W
-            pool_shapes[lane.id] = (POOL_HEADER_W, cur_y, lw, lh)
-            
-            # Position elements in this lane
-            positions = lane_positions.get(lane.id, [])
-            if positions:
-                # Group by level for x-position calculation
-                level_x_positions = {}
-                level_groups = defaultdict(list)
-                for eid, level, row in positions:
-                    level_groups[level].append(eid)
-                
-                # Calculate x positions for each level
-                for level, elements in level_groups.items():
-                    total_width = sum(_el_size(el_map[eid])[0] for eid in elements)
-                    total_width += (len(elements) - 1) * H_GAP
-                    
-                    start_x = POOL_HEADER_W + LANE_HEADER_W + LANE_PADDING_X
-                    
-                    # Distribute elements evenly at this level
-                    cur_x = start_x
-                    for eid in elements:
-                        el = el_map[eid]
-                        w, h = _el_size(el)
-                        
-                        # Center vertically in lane
-                        y_pos = cur_y + (lh - h) / 2
-                        
-                        shapes[el.id] = (int(cur_x), int(y_pos), w, h)
-                        level_x_positions[eid] = cur_x
-                        cur_x += w + H_GAP
-            
+            pool_shapes[lane.id] = (lx, cur_y, lw, lh)
+
+            cur_x = lx + LANE_HEADER_W + FIRST_X
+            for eid in lane_order[lane.id]:
+                if eid not in el_map:
+                    continue
+                el = el_map[eid]
+                w, h = _el_size(el)
+                shapes[el.id] = (int(cur_x), int(cur_y + (lh - h) / 2), w, h)
+                cur_x += w + H_GAP
+
             cur_y += lh
-    
+
     else:
-        # Flat layout with grid-based positioning
-        start_nodes = [e.id for e in non_boundary if _is_start_event(e)]
-        if not start_nodes and non_boundary:
-            start_nodes = [non_boundary[0].id]
-        
-        levels = _calculate_element_levels(graph, start_nodes)
-        
-        # Group by level
-        level_groups = defaultdict(list)
-        for e in non_boundary:
-            if e.id in levels:
-                level_groups[levels[e.id]].append(e.id)
-        
-        # Calculate positions
-        max_level = max(level_groups.keys()) if level_groups else 0
-        
-        # Determine vertical spacing based on content
-        total_height = sum(_el_size(el_map[eid])[1] for level in level_groups.values() 
-                          for eid in level) + (len(level_groups) + 1) * V_GAP
-        
-        cur_y = V_GAP
-        for level in range(max_level + 1):
-            elements = level_groups.get(level, [])
-            if elements:
-                # Sort elements for consistent layout
-                elements.sort(key=lambda eid: el_map[eid].type)
-                
-                # Calculate total width needed for this level
-                total_width = sum(_el_size(el_map[eid])[0] for eid in elements)
-                total_width += (len(elements) - 1) * H_GAP
-                
-                # Center the level horizontally
-                start_x = max(FIRST_X, (1200 - total_width) / 2)
-                
-                cur_x = start_x
-                max_h = 0
-                
-                for eid in elements:
-                    el = el_map[eid]
-                    w, h = _el_size(el)
-                    shapes[el.id] = (int(cur_x), int(cur_y), w, h)
-                    max_h = max(max_h, h)
-                    cur_x += w + H_GAP
-                
-                cur_y += max_h + V_GAP
-    
-    # Position boundary events (attached to their host)
+        # No pools — flat vertical layout
+        cur_y = V_PAD
+        for eid in order:
+            if eid not in el_map:
+                continue
+            el = el_map[eid]
+            if el.type == "boundaryEvent":
+                continue
+            w, h = _el_size(el)
+            shapes[el.id] = (FIRST_X, int(cur_y), w, h)
+            cur_y += h + H_GAP
+
+    # Boundary events: anchored on host element
     for el in bpmn.elements:
         if el.type == "boundaryEvent" and el.attached_to:
             host = shapes.get(el.attached_to)
             if host:
                 hx, hy, hw, hh = host
-                # Position at bottom center of host
-                shapes[el.id] = (
-                    hx + (hw - EV_W) // 2,
-                    hy + hh - EV_H // 2,
-                    EV_W, EV_H
-                )
-    
+                shapes[el.id] = (hx + hw - EV_W // 2,
+                                  hy + hh - EV_H // 2,
+                                  EV_W, EV_H)
+            # No host shape → boundary event gets no DI (bpmn-js skips it gracefully)
+
     return shapes, pool_shapes
 
-# ── Enhanced edge routing ────────────────────────────────────────────────────
 
-def _calculate_edge_points(src_coords, tgt_coords, src_type, tgt_type):
-    """
-    Calculate optimal edge routing with better connection points.
-    Returns list of waypoints.
-    """
-    sx, sy, sw, sh = src_coords
-    tx, ty, tw, th = tgt_coords
-    
-    points = []
-    
-    # Determine connection sides based on relative positions
-    dx = (tx + tw/2) - (sx + sw/2)
-    dy = (ty + th/2) - (sy + sh/2)
-    
-    # Source connection point
-    if abs(dx) > abs(dy):
-        # Horizontal movement dominant
-        if dx > 0:
-            # Source to right
-            points.append((sx + sw, sy + sh/2))
-        else:
-            # Source to left
-            points.append((sx, sy + sh/2))
-    else:
-        # Vertical movement dominant
-        if dy > 0:
-            # Source down
-            points.append((sx + sw/2, sy + sh))
-        else:
-            # Source up
-            points.append((sx + sw/2, sy))
-    
-    # Add intermediate points for orthogonal routing if needed
-    if abs(dx) > 100 and abs(dy) > 50:
-        # Need a bend
-        mid_x = (sx + sw/2 + tx + tw/2) / 2
-        mid_y = (sy + sh/2 + ty + th/2) / 2
-        
-        if abs(dx) > abs(dy):
-            # First horizontal, then vertical
-            points.append((mid_x, sy + sh/2))
-            points.append((mid_x, ty + th/2))
-        else:
-            # First vertical, then horizontal
-            points.append((sx + sw/2, mid_y))
-            points.append((tx + tw/2, mid_y))
-    
-    # Target connection point
-    if abs(dx) > abs(dy):
-        if dx > 0:
-            # Target from left
-            points.append((tx, ty + th/2))
-        else:
-            # Target from right
-            points.append((tx + tw, ty + th/2))
-    else:
-        if dy > 0:
-            # Target from top
-            points.append((tx + tw/2, ty))
-        else:
-            # Target from bottom
-            points.append((tx + tw/2, ty + th))
-    
-    return points
+# ── DI builder ────────────────────────────────────────────────────────────────
 
 def _wp(edge, x, y):
     wp = _sub(edge, DDI + "waypoint")
     wp.set("x", str(int(x)))
     wp.set("y", str(int(y)))
+
 
 def _valid(coords):
     """Return True only if all coords are real finite numbers > 0."""
@@ -524,25 +355,20 @@ def _valid(coords):
     except Exception:
         return False
 
-# ── Enhanced DI builder ──────────────────────────────────────────────────────
 
 def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
-    """Enhanced DI builder with better edge routing."""
     plane = _sub(diagram, DI + "BPMNPlane",
                  {"id": "plane_1", "bpmnElement": plane_ref})
-    
-    # Build element type map for routing decisions
-    el_map = {el.id: el for el in bpmn.elements}
-    
-    # Collect lane ids
+
+    # Collect lane ids for identification
     lane_ids = set()
     pool_ids = set()
     for pool in bpmn.pools:
         pool_ids.add(pool.id)
         for lane in pool.lanes:
             lane_ids.add(lane.id)
-    
-    # Pool / lane shapes with enhanced label positioning
+
+    # Pool / lane shapes
     for eid, (x, y, w, h) in pool_shapes.items():
         is_lane = eid in lane_ids
         shape = _sub(plane, DI + "BPMNShape",
@@ -550,103 +376,68 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         b = _sub(shape, DC + "Bounds")
         b.set("x", str(int(x))); b.set("y", str(int(y)))
         b.set("width", str(int(w))); b.set("height", str(int(h)))
-        
+
         if is_lane:
-            # Enhanced lane label positioning - vertical text
+            # Label bounds = the lane header strip (left side of lane, LANE_HEADER_W wide)
+            # bpmn-js rotates text to fit this rectangle
             lbl = _sub(shape, DI + "BPMNLabel")
-            lb = _sub(lbl, DC + "Bounds")
-            # Position label in the lane header with proper dimensions for vertical text
-            lb.set("x", str(int(x + 10)))
-            lb.set("y", str(int(y + 10)))
-            lb.set("width", str(LANE_HEADER_W - 20))
-            lb.set("height", str(int(h - 20)))
-    
-    # Element shapes with enhanced label positioning
+            lb  = _sub(lbl, DC + "Bounds")
+            lb.set("x",      str(int(x)))
+            lb.set("y",      str(int(y)))
+            lb.set("width",  str(LANE_HEADER_W))
+            lb.set("height", str(int(h)))
+
+    # Element shapes — only emit if coords are valid finite numbers
     for el in bpmn.elements:
         if el.id not in shapes:
             continue
-        coords = shapes.get(el.id)
+        coords = shapes[el.id]
         if not _valid(coords):
             continue
         x, y, w, h = coords
-        
         shape = _sub(plane, DI + "BPMNShape", {"id": el.id + "_di", "bpmnElement": el.id})
         b = _sub(shape, DC + "Bounds")
         b.set("x", str(int(x))); b.set("y", str(int(y)))
         b.set("width", str(int(w))); b.set("height", str(int(h)))
-        
-        # Enhanced label positioning based on element type
         lbl = _sub(shape, DI + "BPMNLabel")
-        lb = _sub(lbl, DC + "Bounds")
-        
-        if el.type in EVENT_TYPES:
-            # Events: label below
-            lb.set("x", str(int(x - 10)))
-            lb.set("y", str(int(y + h + 5)))
-            lb.set("width", str(int(w + 20)))
-        elif el.type in GATEWAY_TYPES:
-            # Gateways: label below with extra space for diamond
-            lb.set("x", str(int(x - 15)))
-            lb.set("y", str(int(y + h + 5)))
-            lb.set("width", str(int(w + 30)))
-        else:
-            # Tasks: label inside if possible, otherwise below
-            lb.set("x", str(int(x)))
-            lb.set("y", str(int(y + h + 2)))
-            lb.set("width", str(int(w)))
-        lb.set("height", "20")
-    
-    # Edges with enhanced routing
+        lb  = _sub(lbl, DC + "Bounds")
+        lb.set("x", str(int(x))); lb.set("y", str(int(y + h + 2)))
+        lb.set("width", str(int(w))); lb.set("height", "20")
+
+    # Edges — only emit if BOTH endpoints have valid shapes
     for flow in bpmn.flows:
         src_coords = shapes.get(flow.source)
         tgt_coords = shapes.get(flow.target)
-        
+
+        # Skip edge entirely if either endpoint has no valid shape
+        # (avoids the SVGMatrix non-finite crash in bpmn-js)
         if not src_coords or not tgt_coords:
             continue
         if not _valid(src_coords) or not _valid(tgt_coords):
             continue
-        
+
         edge = _sub(plane, DI + "BPMNEdge",
                     {"id": flow.id + "_di", "bpmnElement": flow.id})
-        
-        # Calculate optimal edge points
-        src_type = el_map[flow.source].type if flow.source in el_map else ""
-        tgt_type = el_map[flow.target].type if flow.target in el_map else ""
-        
-        points = _calculate_edge_points(src_coords, tgt_coords, src_type, tgt_type)
-        
-        # Add waypoints
-        for px, py in points:
-            _wp(edge, px, py)
-        
-        # Enhanced label positioning for edges
+        sx, sy, sw, sh = src_coords
+        tx, ty, tw, th = tgt_coords
+        _wp(edge, sx + sw,     sy + sh / 2)   # source right-centre
+        _wp(edge, tx,          ty + th / 2)   # target left-centre
+
         if flow.name:
-            # Find midpoint of the edge for label placement
-            if len(points) >= 2:
-                mid_idx = len(points) // 2
-                p1 = points[mid_idx - 1]
-                p2 = points[mid_idx]
-                mid_x = (p1[0] + p2[0]) / 2
-                mid_y = (p1[1] + p2[1]) / 2
-            else:
-                # Fallback to simple midpoint
-                sx, sy, sw, sh = src_coords
-                tx, ty, tw, th = tgt_coords
-                mid_x = (sx + sw/2 + tx + tw/2) / 2
-                mid_y = (sy + sh/2 + ty + th/2) / 2
-            
+            # Place label at midpoint of the edge, offset slightly above
+            mid_x = int((sx + sw + tx) / 2)
+            mid_y = int((sy + sh / 2 + ty + th / 2) / 2) - 16
             lbl = _sub(edge, DI + "BPMNLabel")
             _sub(lbl, DC + "Bounds", {
-                "x": str(int(mid_x - 30)),
-                "y": str(int(mid_y - 15)),
-                "width": "60",
-                "height": "20",
+                "x": str(mid_x), "y": str(mid_y),
+                "width": "60", "height": "20",
             })
 
-# ── Public API (unchanged interface) ─────────────────────────────────────────
+
+# ── Public API ────────────────────────────────────────────────────────────────
 
 def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
-    """Generate enhanced BPMN 2.0 XML with better layout."""
+    """Generate BPMN 2.0 XML. Save as .bpmn to open in Camunda, Bizagi, draw.io, etc."""
     defs = ET.Element(B + "definitions", {
         "xmlns":           _NS["bpmn"],
         "xmlns:bpmndi":    _NS["bpmndi"],
@@ -658,7 +449,7 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
         "exporter":        "Process2Diagram",
         "exporterVersion": "2.0",
     })
-    
+
     process_id = "process_1"
     proc = _sub(defs, B + "process", {
         "id": process_id, "name": bpmn.name,
@@ -666,217 +457,280 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
     })
     if bpmn.documentation:
         _sub(proc, B + "documentation", {}).text = bpmn.documentation
-    
+
     lane_assignment = _assign_lanes(bpmn)
-    
-    # Lane set with improved member collection
+
+    # Lane set — rebuilt from the fully-resolved assignment so every element is covered
     if bpmn.pools:
         pool = bpmn.pools[0]
         lset = _sub(proc, B + "laneSet", {"id": pool.id + "_lset"})
-        
-        # Group elements by lane based on assignment
-        lane_members = defaultdict(list)
+        lane_members = {lane.id: [] for lane in pool.lanes}
         for eid, lid in lane_assignment.items():
-            lane_members[lid].append(eid)
-        
+            if lid in lane_members:
+                lane_members[lid].append(eid)
         for lane in pool.lanes:
             ln = _sub(lset, B + "lane", {"id": lane.id, "name": lane.name})
-            # Sort members for consistent XML
-            for eid in sorted(lane_members.get(lane.id, [])):
+            for eid in lane_members[lane.id]:
                 _sub(ln, B + "flowNodeRef", {}).text = eid
-    
-    # Build elements and flows
+
+    # Elements & flows
     for el in bpmn.elements:
         _build_el(proc, el)
     for flow in bpmn.flows:
         _build_flow(proc, flow)
-    
-    # Collaboration (for pools)
+
+    # Collaboration (required when pools exist — BPMNPlane must ref collab, not process)
     collab_id = None
     if bpmn.pools:
-        pool = bpmn.pools[0]
+        pool      = bpmn.pools[0]
         collab_id = "collab_1"
-        collab = _sub(defs, B + "collaboration", {"id": collab_id})
+        collab    = _sub(defs, B + "collaboration", {"id": collab_id})
         _sub(collab, B + "participant",
              {"id": pool.id, "name": pool.name, "processRef": process_id})
-    
-    # Enhanced diagram interchange
+
+    # Diagram interchange
     shapes, pool_shapes = _compute_layout(bpmn, lane_assignment)
     plane_ref = collab_id if collab_id else process_id
-    diagram = _sub(defs, DI + "BPMNDiagram", {"id": "diagram_1"})
+    diagram   = _sub(defs, DI + "BPMNDiagram", {"id": "diagram_1"})
     _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn)
-    
+
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + \
            ET.tostring(defs, encoding="unicode")
 
 
 def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
-    """HTML with enhanced bpmn-js viewer and better rendering."""
-    xml = generate_bpmn_xml(bpmn)
+    """HTML with bpmn-js viewer + manual pan/zoom (works inside Streamlit iframe)."""
+    xml    = generate_bpmn_xml(bpmn)
     xml_js = xml.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
-    
+
     return f"""<!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    * {{
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+    *{{margin:0;padding:0;box-sizing:border-box}}
+    body{{background:#f8fafc;overflow:hidden;user-select:none;}}
+
+    /* Wrapper that receives our manual transform */
+    #viewport{{
+      position:absolute;top:0;left:0;
+      transform-origin:0 0;
+      cursor:grab;
     }}
-    
-    body {{
-      background: #f8fafc;
-      overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    #viewport.grabbing{{cursor:grabbing;}}
+
+    /* bpmn-js mounts here — let it size naturally */
+    #bpmn-container{{
+      position:relative;
+      width:4000px; /* large enough; clipped by overflow:hidden on body */
+      height:3000px;
     }}
-    
-    /* Main viewport with transform */
-    #viewport {{
-      position: absolute;
-      top: 0;
-      left: 0;
-      transform-origin: 0 0;
-      cursor: grab;
-      transition: transform 0.05s ease;
-      will-change: transform;
+
+    /* Hide bpmn-js's own scrollbars / overlays that fight with our pan */
+    .djs-container > svg {{ display:block; }}
+    .djs-overlay-container{{pointer-events:none!important;}}
+
+    #toolbar{{
+      position:fixed;bottom:16px;left:50%;transform:translateX(-50%);
+      display:flex;align-items:center;gap:4px;
+      background:rgba(15,23,42,0.92);backdrop-filter:blur(12px);
+      border-radius:12px;padding:6px 10px;
+      box-shadow:0 4px 24px rgba(0,0,0,0.3);z-index:100;
+      pointer-events:all;
     }}
-    
-    #viewport.grabbing {{
-      cursor: grabbing;
-      transition: none;
+    .tb-btn{{
+      width:32px;height:32px;border:none;background:transparent;
+      color:#94a3b8;border-radius:6px;cursor:pointer;font-size:15px;
+      display:flex;align-items:center;justify-content:center;
+      transition:background 0.15s,color 0.15s;
     }}
-    
-    /* bpmn-js container */
-    #bpmn-container {{
-      position: relative;
-      width: 4000px;
-      height: 3000px;
+    .tb-btn:hover{{background:rgba(255,255,255,0.1);color:#e2e8f0}}
+    .tb-divider{{width:1px;height:20px;background:rgba(255,255,255,0.12);margin:0 2px}}
+    #zoom-label{{color:#64748b;font-size:11px;font-family:monospace;min-width:38px;text-align:center}}
+    #err{{
+      display:none;position:fixed;top:16px;left:50%;transform:translateX(-50%);
+      background:white;border:1px solid #fca5a5;border-radius:8px;
+      padding:16px 24px;max-width:600px;font-family:monospace;font-size:12px;
+      color:#dc2626;box-shadow:0 4px 24px rgba(0,0,0,0.15);z-index:200
     }}
-    
-    /* Enhanced bpmn-js styling */
-    .djs-container {{
-      background: transparent !important;
+  </style>
+  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-js.css">
+  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/diagram-js.css">
+  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-font/css/bpmn-embedded.css">
+</head>
+<body>
+<div id="viewport">
+  <div id="bpmn-container"></div>
+</div>
+<div id="toolbar">
+  <button class="tb-btn" id="btn-out"   title="Zoom out">&#8722;</button>
+  <span   id="zoom-label">100%</span>
+  <button class="tb-btn" id="btn-in"    title="Zoom in">&#43;</button>
+  <div class="tb-divider"></div>
+  <button class="tb-btn" id="btn-fit"   title="Fit to screen">&#8862;</button>
+  <button class="tb-btn" id="btn-reset" title="Reset view">&#8634;</button>
+</div>
+<div id="err"></div>
+
+<script src="https://unpkg.com/bpmn-js@17/dist/bpmn-viewer.development.js"></script>
+<script>
+(function() {{
+  const xml    = `{xml_js}`;
+  const errDiv = document.getElementById('err');
+  const vp     = document.getElementById('viewport');
+  const zoomLbl= document.getElementById('zoom-label');
+
+  // ── State ──────────────────────────────────────────────────────────────
+  let scale = 1, tx = 0, ty = 0;
+  let dragging = false, startX, startY, startTx, startTy;
+  let lastDist = null, touchTx, touchTy;
+
+  function apply() {{
+    vp.style.transform = `translate(${{tx}}px,${{ty}}px) scale(${{scale}})`;
+    zoomLbl.textContent = Math.round(scale * 100) + '%';
+  }}
+
+  function clamp(s) {{ return Math.min(Math.max(s, 0.05), 8); }}
+
+  function zoomTo(ns, cx, cy) {{
+    const r = ns / scale;
+    tx = cx - r * (cx - tx);
+    ty = cy - r * (cy - ty);
+    scale = ns;
+    apply();
+  }}
+
+  function fitToScreen() {{
+    const svg = document.querySelector('#bpmn-container svg');
+    if (!svg) return;
+    let sw, sh;
+    // viewBox reflects actual BPMN content bounds — always prefer it
+    const vb = svg.viewBox && svg.viewBox.baseVal;
+    if (vb && vb.width > 10 && vb.height > 10) {{
+      sw = vb.width;
+      sh = vb.height;
+    }} else {{
+      // Fallback: use natural SVG attributes
+      sw = parseFloat(svg.getAttribute('width'))  || 800;
+      sh = parseFloat(svg.getAttribute('height')) || 600;
     }}
-    
-    .djs-container > svg {{
-      display: block;
-      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.05));
+    if (!sw || !sh || sw < 10) return;
+    const W = window.innerWidth, H = window.innerHeight - 60;
+    const ns = clamp(Math.min((W - 40) / sw, (H - 40) / sh));
+    if (!isFinite(ns) || ns <= 0) return;
+    scale = ns;
+    tx = (W - sw * scale) / 2;
+    ty = Math.max(20, (H - sh * scale) / 2);
+    apply();
+  }}
+
+  function fitWhenReady(n) {{
+    const svg = document.querySelector('#bpmn-container svg');
+    const vb  = svg && svg.viewBox && svg.viewBox.baseVal;
+    if (vb && vb.width > 10) {{ fitToScreen(); }}
+    else if (n > 0) {{ setTimeout(() => fitWhenReady(n - 1), 300); }}
+  }}
+
+  // ── Mouse pan ──────────────────────────────────────────────────────────
+  vp.addEventListener('mousedown', e => {{
+    if (e.button !== 0) return;
+    dragging = true; startX = e.clientX; startY = e.clientY;
+    startTx = tx; startTy = ty;
+    vp.classList.add('grabbing');
+    e.preventDefault();
+  }});
+  window.addEventListener('mousemove', e => {{
+    if (!dragging) return;
+    tx = startTx + e.clientX - startX;
+    ty = startTy + e.clientY - startY;
+    apply();
+  }});
+  window.addEventListener('mouseup', () => {{
+    dragging = false; vp.classList.remove('grabbing');
+  }});
+
+  // ── Wheel zoom ─────────────────────────────────────────────────────────
+  window.addEventListener('wheel', e => {{
+    e.preventDefault();
+    const ns = clamp(scale * (e.deltaY > 0 ? 0.9 : 1.1));
+    zoomTo(ns, e.clientX, e.clientY);
+  }}, {{ passive: false }});
+
+  // ── Touch ──────────────────────────────────────────────────────────────
+  vp.addEventListener('touchstart', e => {{
+    if (e.touches.length === 1) {{
+      startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+      touchTx = tx; touchTy = ty;
     }}
-    
-    /* Improved element styling */
-    .djs-shape .djs-visual > :nth-child(1) {{
-      fill: white !important;
-      stroke: #2563eb !important;
-      stroke-width: 2px !important;
-      transition: all 0.2s ease;
+    if (e.touches.length === 2) {{
+      lastDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
     }}
-    
-    .djs-shape:hover .djs-visual > :nth-child(1) {{
-      stroke: #3b82f6 !important;
-      stroke-width: 3px !important;
-      filter: drop-shadow(0 4px 6px rgba(37, 99, 235, 0.2));
+  }}, {{ passive: true }});
+
+  vp.addEventListener('touchmove', e => {{
+    if (e.touches.length === 1) {{
+      tx = touchTx + e.touches[0].clientX - startX;
+      ty = touchTy + e.touches[0].clientY - startY;
+      apply();
     }}
-    
-    /* Event styling */
-    .djs-shape[data-element-type$="Event"] .djs-visual > :nth-child(1) {{
-      fill: #f0f9ff !important;
-      stroke: #0891b2 !important;
+    if (e.touches.length === 2) {{
+      const d  = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      if (lastDist) zoomTo(clamp(scale * d / lastDist), mx, my);
+      lastDist = d;
     }}
-    
-    /* Gateway styling */
-    .djs-shape[data-element-type$="Gateway"] .djs-visual > :nth-child(1) {{
-      fill: #f5f3ff !important;
-      stroke: #7c3aed !important;
-    }}
-    
-    /* Task styling */
-    .djs-shape[data-element-type$="Task"] .djs-visual > :nth-child(1),
-    .djs-shape[data-element-type="callActivity"] .djs-visual > :nth-child(1) {{
-      fill: #ffffff !important;
-      stroke: #2563eb !important;
-    }}
-    
-    /* Label styling */
-    .djs-label {{
-      font-family: inherit !important;
-      font-size: 12px !important;
-      fill: #1e293b !important;
-      font-weight: 500 !important;
-      text-anchor: middle !important;
-      dominant-baseline: middle !important;
-      pointer-events: none !important;
-    }}
-    
-    .djs-shape:hover .djs-label {{
-      fill: #0f172a !important;
-      font-weight: 600 !important;
-    }}
-    
-    /* Edge styling */
-    .djs-connection .djs-visual > path {{
-      stroke: #94a3b8 !important;
-      stroke-width: 2px !important;
-      marker-end: url('#sequenceflow-arrow') !important;
-      transition: all 0.2s ease;
-    }}
-    
-    .djs-connection:hover .djs-visual > path {{
-      stroke: #2563eb !important;
-      stroke-width: 3px !important;
-    }}
-    
-    /* Edge label styling */
-    .djs-connection .djs-label {{
-      fill: #64748b !important;
-      font-size: 11px !important;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 2px 6px;
-      border-radius: 4px;
-    }}
-    
-    /* Lane styling */
-    .djs-shape[data-element-type="lane"] .djs-visual > rect {{
-      fill: #f8fafc !important;
-      stroke: #cbd5e1 !important;
-      stroke-dasharray: 4 2 !important;
-    }}
-    
-    .djs-shape[data-element-type="participant"] .djs-visual > rect {{
-      fill: #f1f5f9 !important;
-      stroke: #94a3b8 !important;
-      stroke-width: 2px !important;
-    }}
-    
-    /* Toolbar styling */
-    #toolbar {{
-      position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      background: rgba(15, 23, 42, 0.95);
-      backdrop-filter: blur(12px);
-      border-radius: 14px;
-      padding: 8px 12px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-      z-index: 1000;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }}
-    
-    .tb-btn {{
-      width: 36px;
-      height: 36px;
-      border: none;
-      background: transparent;
-      color: #94a3b8;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 18px;
-      display: flex;
-      align-items: center;
-      justify-content: center
+    e.preventDefault();
+  }}, {{ passive: false }});
+
+  vp.addEventListener('touchend', () => {{ lastDist = null; }});
+
+  // ── Keyboard ───────────────────────────────────────────────────────────
+  window.addEventListener('keydown', e => {{
+    const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+    if (e.key === '+' || e.key === '=') zoomTo(clamp(scale * 1.15), cx, cy);
+    if (e.key === '-')                  zoomTo(clamp(scale * 0.87), cx, cy);
+    if (e.key === '0')                  fitToScreen();
+    if (e.key === 'r' || e.key === 'R') {{ scale=1; tx=0; ty=0; apply(); }}
+  }});
+
+  // ── Toolbar buttons ────────────────────────────────────────────────────
+  const cx = () => window.innerWidth / 2, cy = () => window.innerHeight / 2;
+  document.getElementById('btn-in').onclick    = () => zoomTo(clamp(scale * 1.2), cx(), cy());
+  document.getElementById('btn-out').onclick   = () => zoomTo(clamp(scale * 0.8), cx(), cy());
+  document.getElementById('btn-fit').onclick   = fitToScreen;
+  document.getElementById('btn-reset').onclick = () => {{ scale=1; tx=0; ty=0; apply(); }};
+
+  // ── Mount bpmn-js (read-only, no built-in pan/zoom modules needed) ─────
+  // We use NavigatedViewer but immediately disable its keyboard/scroll
+  // so our handlers above are the single source of truth.
+  const viewer = new BpmnJS({{
+    container: '#bpmn-container',
+    // Disable built-in keyboard shortcuts (they conflict with ours)
+    keyboard: {{ bindTo: null }},
+  }});
+
+  viewer.importXML(xml)
+    .then(() => {{
+      // Kill bpmn-js scroll listener — we own the wheel event
+      try {{
+        const zs = viewer.get('zoomScroll');
+        zs._enabled = false;
+      }} catch(_) {{}}
+
+      // Let bpmn-js render at its natural 1:1 scale, then fit via our logic
+      setTimeout(() => fitWhenReady(10), 400);
+    }})
+    .catch(err => {{
+      errDiv.style.display = 'block';
+      errDiv.innerHTML = '<b>BPMN render error:</b><br>' + err.message;
+    }});
+}})();
+</script>
+</body>
+</html>"""
