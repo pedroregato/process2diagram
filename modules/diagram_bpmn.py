@@ -47,6 +47,7 @@ TASK_TYPES = {"task", "userTask", "serviceTask", "sendTask", "receiveTask",
 def _sub(parent, tag, attribs=None):
     return ET.SubElement(parent, tag, attribs or {})
 
+
 def _ev_def(etype):
     return {
         "message":      "messageEventDefinition",
@@ -61,6 +62,7 @@ def _ev_def(etype):
         "link":         "linkEventDefinition",
     }.get(etype)
 
+
 def _el_size(el):
     t = el.type
     if t in EVENT_TYPES:
@@ -69,14 +71,18 @@ def _el_size(el):
         return GW_W, GW_H
     return TASK_W, TASK_H
 
+
 def _is_start_event(el):
     return el.type == "startEvent"
+
 
 def _is_end_event(el):
     return el.type == "endEvent"
 
+
 def _is_gateway(el):
     return el.type in GATEWAY_TYPES
+
 
 # ── Enhanced lane assignment with better inference ───────────────────────────
 
@@ -94,7 +100,6 @@ def _assign_lanes(bpmn):
 
     assignment = {}
     lane_by_name = {lane.name: lane.id for lane in pool.lanes}
-    lane_by_id = {lane.id: lane for lane in pool.lanes}
     
     # Step 1 — explicit element_ids in lane definition
     for lane in pool.lanes:
@@ -117,13 +122,11 @@ def _assign_lanes(bpmn):
         reverse_graph[flow.target].append(flow.source)
 
     # Step 4 — propagate assignments through flows
-    changed = True
     unassigned = {e.id for e in bpmn.elements 
                   if e.type != "boundaryEvent" and e.id not in assignment}
     
-    # First pass: propagate from assigned to unassigned
+    # Propagate from assigned to unassigned
     queue = deque(assignment.keys())
-    visited = set(assignment.keys())
     
     while queue:
         current = queue.popleft()
@@ -159,11 +162,13 @@ def _assign_lanes(bpmn):
                 unassigned.discard(eid)
 
     # Step 6 — final fallback to first lane
-    fallback_lane = pool.lanes[0].id
-    for eid in unassigned:
-        assignment[eid] = fallback_lane
+    if unassigned and pool.lanes:
+        fallback_lane = pool.lanes[0].id
+        for eid in unassigned:
+            assignment[eid] = fallback_lane
 
     return assignment
+
 
 # ── Enhanced layout engine with grid-based positioning ───────────────────────
 
@@ -185,6 +190,7 @@ def _build_element_graph(bpmn):
             reverse_graph[flow.target].append(flow.source)
     
     return graph, reverse_graph
+
 
 def _calculate_element_levels(graph, start_nodes):
     """
@@ -212,7 +218,8 @@ def _calculate_element_levels(graph, start_nodes):
     
     return levels
 
-def _optimize_lane_element_positions(lane_elements, el_map, graph):
+
+def _optimize_lane_element_positions(lane_elements, el_map, graph, reverse_graph):
     """
     Optimize element positions within a lane using level-based layout.
     Returns list of (element_id, level, row_index) tuples.
@@ -233,9 +240,12 @@ def _optimize_lane_element_positions(lane_elements, el_map, graph):
         if eid in levels:
             level = levels[eid]
             level_groups[level].append(eid)
+        else:
+            # Put unleveled elements at the end
+            level_groups[999].append(eid)
     
     # Sort levels
-    max_level = max(level_groups.keys()) if level_groups else 0
+    max_level = max([l for l in level_groups.keys() if l != 999], default=0)
     
     # Distribute elements vertically within lanes if needed (parallel paths)
     # For now, simple single row per level
@@ -243,11 +253,17 @@ def _optimize_lane_element_positions(lane_elements, el_map, graph):
     for level in range(max_level + 1):
         elements = level_groups.get(level, [])
         # Sort elements within level for consistent order
-        elements.sort(key=lambda eid: el_map[eid].type)
+        elements.sort(key=lambda eid: (el_map[eid].type, eid))
         for eid in elements:
             positioned.append((eid, level, 0))  # row 0 for now
     
+    # Add any remaining elements
+    if 999 in level_groups:
+        for eid in level_groups[999]:
+            positioned.append((eid, max_level + 1, 0))
+    
     return positioned
+
 
 def _compute_layout(bpmn, lane_assignment):
     """Enhanced layout computation with better spacing and positioning."""
@@ -261,7 +277,7 @@ def _compute_layout(bpmn, lane_assignment):
     # Build graph
     graph, reverse_graph = _build_element_graph(bpmn)
     
-    if bpmn.pools:
+    if bpmn.pools and bpmn.pools[0].lanes:
         pool = bpmn.pools[0]
         
         # Group elements by lane
@@ -273,9 +289,9 @@ def _compute_layout(bpmn, lane_assignment):
         # Calculate optimal positions for each lane
         lane_positions = {}
         for lane in pool.lanes:
-            if lane.id in lane_elements:
+            if lane.id in lane_elements and lane_elements[lane.id]:
                 lane_positions[lane.id] = _optimize_lane_element_positions(
-                    lane_elements[lane.id], el_map, graph
+                    lane_elements[lane.id], el_map, graph, reverse_graph
                 )
             else:
                 lane_positions[lane.id] = []
@@ -292,7 +308,7 @@ def _compute_layout(bpmn, lane_assignment):
                 
                 # Calculate height needed
                 num_rows = len(rows)
-                max_row_height = max((_el_size(el_map[eid])[1] for eid in lane_elements[lane.id]), default=TASK_H)
+                max_row_height = max((_el_size(el_map[eid])[1] for eid in lane_elements.get(lane.id, [])), default=TASK_H)
                 lane_heights[lane.id] = max(
                     MIN_LANE_H,
                     num_rows * (max_row_height + LANE_PADDING_Y * 2)
@@ -300,14 +316,14 @@ def _compute_layout(bpmn, lane_assignment):
             else:
                 lane_heights[lane.id] = MIN_LANE_H
         
-        # Calculate total height and width
+        # Calculate total height
         total_h = sum(lane_heights[l.id] for l in pool.lanes)
         
         # Calculate required width based on maximum level across lanes
         max_levels = {}
         for lid, positions in lane_positions.items():
             if positions:
-                max_levels[lid] = max(level for _, level, _ in positions)
+                max_levels[lid] = max([level for _, level, _ in positions], default=0)
             else:
                 max_levels[lid] = 0
         
@@ -353,7 +369,6 @@ def _compute_layout(bpmn, lane_assignment):
             positions = lane_positions.get(lane.id, [])
             if positions:
                 # Group by level for x-position calculation
-                level_x_positions = {}
                 level_groups = defaultdict(list)
                 for eid, level, row in positions:
                     level_groups[level].append(eid)
@@ -375,7 +390,6 @@ def _compute_layout(bpmn, lane_assignment):
                         y_pos = cur_y + (lh - h) / 2
                         
                         shapes[el.id] = (int(cur_x), int(y_pos), w, h)
-                        level_x_positions[eid] = cur_x
                         cur_x += w + H_GAP
             
             cur_y += lh
@@ -397,16 +411,12 @@ def _compute_layout(bpmn, lane_assignment):
         # Calculate positions
         max_level = max(level_groups.keys()) if level_groups else 0
         
-        # Determine vertical spacing based on content
-        total_height = sum(_el_size(el_map[eid])[1] for level in level_groups.values() 
-                          for eid in level) + (len(level_groups) + 1) * V_GAP
-        
         cur_y = V_GAP
         for level in range(max_level + 1):
             elements = level_groups.get(level, [])
             if elements:
                 # Sort elements for consistent layout
-                elements.sort(key=lambda eid: el_map[eid].type)
+                elements.sort(key=lambda eid: (el_map[eid].type, eid))
                 
                 # Calculate total width needed for this level
                 total_width = sum(_el_size(el_map[eid])[0] for eid in elements)
@@ -441,6 +451,73 @@ def _compute_layout(bpmn, lane_assignment):
                 )
     
     return shapes, pool_shapes
+
+
+# ── Process XML builders ──────────────────────────────────────────────────────
+
+def _build_el(parent, el):
+    t = el.type
+    if t in ("startEvent", "endEvent", "intermediateThrowEvent", "intermediateCatchEvent"):
+        node = _sub(parent, B + t, {"id": el.id, "name": el.name})
+        d = _ev_def(el.event_type)
+        if d:
+            _sub(node, B + d, {"id": el.id + "_def"})
+
+    elif t == "boundaryEvent":
+        attrs = {
+            "id": el.id, "name": el.name,
+            "attachedToRef": el.attached_to or "",
+            "cancelActivity": str(el.is_interrupting).lower(),
+        }
+        node = _sub(parent, B + "boundaryEvent", attrs)
+        d = _ev_def(el.event_type)
+        if d:
+            _sub(node, B + d, {"id": el.id + "_def"})
+
+    elif "Gateway" in t:
+        _sub(parent, B + t, {"id": el.id, "name": el.name})
+
+    elif t == "subProcess":
+        node = _sub(parent, B + "subProcess",
+                    {"id": el.id, "name": el.name, "triggeredByEvent": "false"})
+        for child in el.children:
+            _build_el(node, child)
+
+    elif t == "callActivity":
+        attrs = {"id": el.id, "name": el.name}
+        if el.called_element:
+            attrs["calledElement"] = el.called_element
+        _sub(parent, B + "callActivity", attrs)
+
+    else:
+        tag = t if t in ("userTask", "serviceTask", "scriptTask", "sendTask",
+                         "receiveTask", "manualTask", "businessRuleTask") else "task"
+        node = _sub(parent, B + tag, {"id": el.id, "name": el.name})
+        if el.is_loop:
+            _sub(node, B + "standardLoopCharacteristics", {"id": el.id + "_loop"})
+        elif el.is_parallel_multi:
+            mi = _sub(node, B + "multiInstanceLoopCharacteristics", {"id": el.id + "_mi"})
+            mi.set("isSequential", "false")
+        elif el.is_sequential_multi:
+            mi = _sub(node, B + "multiInstanceLoopCharacteristics", {"id": el.id + "_mi"})
+            mi.set("isSequential", "true")
+
+    if el.documentation:
+        kids = list(parent)
+        if kids:
+            _sub(kids[-1], B + "documentation", {}).text = el.documentation
+
+
+def _build_flow(parent, flow):
+    node = _sub(parent, B + "sequenceFlow", {
+        "id": flow.id, "name": flow.name,
+        "sourceRef": flow.source, "targetRef": flow.target,
+    })
+    if flow.condition:
+        c = _sub(node, B + "conditionExpression",
+                 {"{%s}type" % _NS["xsi"]: "tFormalExpression"})
+        c.text = flow.condition
+
 
 # ── Enhanced edge routing ────────────────────────────────────────────────────
 
@@ -509,10 +586,12 @@ def _calculate_edge_points(src_coords, tgt_coords, src_type, tgt_type):
     
     return points
 
+
 def _wp(edge, x, y):
     wp = _sub(edge, DDI + "waypoint")
     wp.set("x", str(int(x)))
     wp.set("y", str(int(y)))
+
 
 def _valid(coords):
     """Return True only if all coords are real finite numbers > 0."""
@@ -523,6 +602,7 @@ def _valid(coords):
         )
     except Exception:
         return False
+
 
 # ── Enhanced DI builder ──────────────────────────────────────────────────────
 
@@ -643,7 +723,8 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
                 "height": "20",
             })
 
-# ── Public API (unchanged interface) ─────────────────────────────────────────
+
+# ── Public API ────────────────────────────────────────────────────────────────
 
 def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
     """Generate enhanced BPMN 2.0 XML with better layout."""
@@ -670,7 +751,7 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
     lane_assignment = _assign_lanes(bpmn)
     
     # Lane set with improved member collection
-    if bpmn.pools:
+    if bpmn.pools and bpmn.pools[0].lanes:
         pool = bpmn.pools[0]
         lset = _sub(proc, B + "laneSet", {"id": pool.id + "_lset"})
         
@@ -803,476 +884,4 @@ def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
     .djs-label {{
       font-family: inherit !important;
       font-size: 12px !important;
-      fill: #1e293b !important;
-      font-weight: 500 !important;
-      text-anchor: middle !important;
-      dominant-baseline: middle !important;
-      pointer-events: none !important;
-    }}
-    
-    .djs-shape:hover .djs-label {{
-      fill: #0f172a !important;
-      font-weight: 600 !important;
-    }}
-    
-    /* Edge styling */
-    .djs-connection .djs-visual > path {{
-      stroke: #94a3b8 !important;
-      stroke-width: 2px !important;
-      marker-end: url('#sequenceflow-arrow') !important;
-      transition: all 0.2s ease;
-    }}
-    
-    .djs-connection:hover .djs-visual > path {{
-      stroke: #2563eb !important;
-      stroke-width: 3px !important;
-    }}
-    
-    /* Edge label styling */
-    .djs-connection .djs-label {{
-      fill: #64748b !important;
-      font-size: 11px !important;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 2px 6px;
-      border-radius: 4px;
-    }}
-    
-    /* Lane styling */
-    .djs-shape[data-element-type="lane"] .djs-visual > rect {{
-      fill: #f8fafc !important;
-      stroke: #cbd5e1 !important;
-      stroke-dasharray: 4 2 !important;
-    }}
-    
-    .djs-shape[data-element-type="participant"] .djs-visual > rect {{
-      fill: #f1f5f9 !important;
-      stroke: #94a3b8 !important;
-      stroke-width: 2px !important;
-    }}
-    
-    /* Toolbar styling */
-    #toolbar {{
-      position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      background: rgba(15, 23, 42, 0.95);
-      backdrop-filter: blur(12px);
-      border-radius: 14px;
-      padding: 8px 12px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-      z-index: 1000;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }}
-    
-    .tb-btn {{
-      width: 36px;
-      height: 36px;
-      border: none;
-      background: transparent;
-      color: #94a3b8;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 18px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s ease;
-    }}
-    
-    .tb-btn:hover {{
-      background: rgba(255, 255, 255, 0.1);
-      color: #f1f5f9;
-      transform: scale(1.05);
-    }}
-    
-    .tb-btn:active {{
-      transform: scale(0.95);
-    }}
-    
-    .tb-divider {{
-      width: 1px;
-      height: 24px;
-      background: rgba(255, 255, 255, 0.15);
-      margin: 0 4px;
-    }}
-    
-    #zoom-label {{
-      color: #cbd5e1;
-      font-size: 12px;
-      font-family: 'JetBrains Mono', monospace;
-      min-width: 48px;
-      text-align: center;
-      font-weight: 500;
-    }}
-    
-    #err {{
-      display: none;
-      position: fixed;
-      top: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: white;
-      border: 1px solid #fecaca;
-      border-radius: 12px;
-      padding: 20px 28px;
-      max-width: 600px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 13px;
-      color: #dc2626;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-      z-index: 2000;
-      backdrop-filter: blur(8px);
-      background: rgba(255, 255, 255, 0.98);
-    }}
-    
-    /* Mini-map indicator (optional) */
-    #minimap {{
-      position: fixed;
-      top: 24px;
-      right: 24px;
-      width: 160px;
-      height: 120px;
-      background: rgba(15, 23, 42, 0.8);
-      backdrop-filter: blur(8px);
-      border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-      z-index: 900;
-      opacity: 0.5;
-      transition: opacity 0.3s ease;
-      pointer-events: none;
-      overflow: hidden;
-    }}
-    
-    #minimap:hover {{
-      opacity: 1;
-    }}
-    
-    #minimap-canvas {{
-      width: 100%;
-      height: 100%;
-      transform: scale(0.15);
-      transform-origin: 0 0;
-    }}
-  </style>
-  
-  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-js.css">
-  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/diagram-js.css">
-  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-font/css/bpmn-embedded.css">
-</head>
-<body>
-<div id="viewport">
-  <div id="bpmn-container"></div>
-</div>
-
-<div id="toolbar">
-  <button class="tb-btn" id="btn-out" title="Zoom out (Ctrl -)">−</button>
-  <span id="zoom-label">100%</span>
-  <button class="tb-btn" id="btn-in" title="Zoom in (Ctrl +)">+</button>
-  <div class="tb-divider"></div>
-  <button class="tb-btn" id="btn-fit" title="Fit to screen (0)">⤢</button>
-  <button class="tb-btn" id="btn-reset" title="Reset view (R)">↺</button>
-  <div class="tb-divider"></div>
-  <button class="tb-btn" id="btn-center" title="Center view">◎</button>
-</div>
-
-<div id="err"></div>
-
-<script src="https://unpkg.com/bpmn-js@17/dist/bpmn-viewer.development.js"></script>
-<script>
-(function() {{
-  const xml = `{xml_js}`;
-  const errDiv = document.getElementById('err');
-  const vp = document.getElementById('viewport');
-  const zoomLbl = document.getElementById('zoom-label');
-  
-  // ── State management ─────────────────────────────────────────────────
-  let scale = 1, tx = 0, ty = 0;
-  let dragging = false, startX, startY, startTx, startTy;
-  let lastDist = null;
-  
-  // Animation frame for smooth updates
-  let rafId = null;
-  
-  function apply() {{
-    if (rafId) cancelAnimationFrame(rafId);
-    rafId = requestAnimationFrame(() => {{
-      vp.style.transform = `translate(${{tx}}px, ${{ty}}px) scale(${{scale}})`;
-      zoomLbl.textContent = Math.round(scale * 100) + '%';
-      rafId = null;
-    }});
-  }}
-  
-  function clamp(s) {{
-    return Math.min(Math.max(s, 0.1), 5);
-  }}
-  
-  function zoomTo(ns, cx, cy) {{
-    const r = ns / scale;
-    tx = cx - r * (cx - tx);
-    ty = cy - r * (cy - ty);
-    scale = ns;
-    apply();
-  }}
-  
-  // ── Fit to screen with padding ───────────────────────────────────────
-  function fitToScreen() {{
-    const svg = document.querySelector('#bpmn-container svg');
-    if (!svg) return;
-    
-    let sw, sh;
-    const vb = svg.viewBox && svg.viewBox.baseVal;
-    
-    if (vb && vb.width > 10 && vb.height > 10) {{
-      sw = vb.width;
-      sh = vb.height;
-    }} else {{
-      const bbox = svg.getBBox();
-      if (bbox && bbox.width > 10) {{
-        sw = bbox.width;
-        sh = bbox.height;
-      }} else {{
-        sw = parseFloat(svg.getAttribute('width')) || 1200;
-        sh = parseFloat(svg.getAttribute('height')) || 800;
-      }}
-    }}
-    
-    if (!sw || !sh || sw < 10) return;
-    
-    const padding = 60;
-    const W = window.innerWidth - padding * 2;
-    const H = window.innerHeight - padding * 2 - 80;
-    
-    const ns = clamp(Math.min(W / sw, H / sh) * 0.95);
-    
-    if (!isFinite(ns) || ns <= 0) return;
-    
-    scale = ns;
-    tx = (window.innerWidth - sw * scale) / 2;
-    ty = Math.max(40, (window.innerHeight - sh * scale) / 2);
-    
-    apply();
-  }}
-  
-  function centerView() {{
-    const svg = document.querySelector('#bpmn-container svg');
-    if (!svg) return;
-    
-    const vb = svg.viewBox && svg.viewBox.baseVal;
-    if (vb && vb.width > 10) {{
-      tx = (window.innerWidth - vb.width * scale) / 2;
-      ty = (window.innerHeight - vb.height * scale) / 2;
-      apply();
-    }}
-  }}
-  
-  // ── Mouse pan ────────────────────────────────────────────────────────
-  vp.addEventListener('mousedown', e => {{
-    if (e.button !== 0) return;
-    e.preventDefault();
-    dragging = true;
-    startX = e.clientX;
-    startY = e.clientY;
-    startTx = tx;
-    startTy = ty;
-    vp.classList.add('grabbing');
-  }});
-  
-  window.addEventListener('mousemove', e => {{
-    if (!dragging) return;
-    e.preventDefault();
-    tx = startTx + e.clientX - startX;
-    ty = startTy + e.clientY - startY;
-    apply();
-  }});
-  
-  window.addEventListener('mouseup', () => {{
-    dragging = false;
-    vp.classList.remove('grabbing');
-  }});
-  
-  // ── Wheel zoom with smooth behavior ──────────────────────────────────
-  window.addEventListener('wheel', e => {{
-    e.preventDefault();
-    
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const ns = clamp(scale * delta);
-    
-    // Zoom toward mouse position
-    const rect = vp.getBoundingClientRect();
-    const mouseX = e.clientX;
-    const mouseY = e.clientY;
-    
-    zoomTo(ns, mouseX, mouseY);
-  }}, {{ passive: false }});
-  
-  // ── Touch support ────────────────────────────────────────────────────
-  vp.addEventListener('touchstart', e => {{
-    if (e.touches.length === 1) {{
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-      startTx = tx;
-      startTy = ty;
-    }}
-    if (e.touches.length === 2) {{
-      lastDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-    }}
-  }}, {{ passive: true }});
-  
-  vp.addEventListener('touchmove', e => {{
-    e.preventDefault();
-    
-    if (e.touches.length === 1 && !lastDist) {{
-      tx = startTx + e.touches[0].clientX - startX;
-      ty = startTy + e.touches[0].clientY - startY;
-      apply();
-    }}
-    
-    if (e.touches.length === 2) {{
-      const d = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-      const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-      
-      if (lastDist) {{
-        const ns = clamp(scale * d / lastDist);
-        zoomTo(ns, mx, my);
-      }}
-      lastDist = d;
-    }}
-  }}, {{ passive: false }});
-  
-  vp.addEventListener('touchend', () => {{
-    lastDist = null;
-  }});
-  
-  // ── Keyboard shortcuts ───────────────────────────────────────────────
-  window.addEventListener('keydown', e => {{
-    const cx = window.innerWidth / 2;
-    const cy = window.innerHeight / 2;
-    
-    if (e.key === '+' || e.key === '=') {{
-      e.preventDefault();
-      zoomTo(clamp(scale * 1.2), cx, cy);
-    }}
-    if (e.key === '-' || e.key === '_') {{
-      e.preventDefault();
-      zoomTo(clamp(scale * 0.8), cx, cy);
-    }}
-    if (e.key === '0') {{
-      e.preventDefault();
-      fitToScreen();
-    }}
-    if (e.key === 'r' || e.key === 'R') {{
-      e.preventDefault();
-      scale = 1;
-      tx = 0;
-      ty = 0;
-      apply();
-    }}
-    // Arrow key panning
-    const panStep = 50 / scale;
-    if (e.key === 'ArrowLeft') {{
-      e.preventDefault();
-      tx += panStep;
-      apply();
-    }}
-    if (e.key === 'ArrowRight') {{
-      e.preventDefault();
-      tx -= panStep;
-      apply();
-    }}
-    if (e.key === 'ArrowUp') {{
-      e.preventDefault();
-      ty += panStep;
-      apply();
-    }}
-    if (e.key === 'ArrowDown') {{
-      e.preventDefault();
-      ty -= panStep;
-      apply();
-    }}
-  }});
-  
-  // ── Toolbar buttons ──────────────────────────────────────────────────
-  const cx = () => window.innerWidth / 2;
-  const cy = () => window.innerHeight / 2;
-  
-  document.getElementById('btn-in').onclick = () => 
-    zoomTo(clamp(scale * 1.2), cx(), cy());
-  
-  document.getElementById('btn-out').onclick = () => 
-    zoomTo(clamp(scale * 0.8), cx(), cy());
-  
-  document.getElementById('btn-fit').onclick = fitToScreen;
-  
-  document.getElementById('btn-reset').onclick = () => {{
-    scale = 1;
-    tx = 0;
-    ty = 0;
-    apply();
-  }};
-  
-  document.getElementById('btn-center').onclick = centerView;
-  
-  // ── Initialize bpmn-js ───────────────────────────────────────────────
-  const viewer = new BpmnJS({{
-    container: '#bpmn-container',
-    keyboard: {{ bindTo: null }}, // Disable built-in keyboard
-    modules: [] // Use minimal modules for better performance
-  }});
-  
-  // Add custom arrow marker
-  const svgNamespace = "http://www.w3.org/2000/svg";
-  const defs = document.createElementNS(svgNamespace, "defs");
-  const marker = document.createElementNS(svgNamespace, "marker");
-  marker.setAttribute("id", "sequenceflow-arrow");
-  marker.setAttribute("viewBox", "0 0 10 10");
-  marker.setAttribute("refX", "9");
-  marker.setAttribute("refY", "5");
-  marker.setAttribute("markerWidth", "6");
-  marker.setAttribute("markerHeight", "6");
-  marker.setAttribute("orient", "auto");
-  
-  const path = document.createElementNS(svgNamespace, "path");
-  path.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
-  path.setAttribute("fill", "#94a3b8");
-  marker.appendChild(path);
-  defs.appendChild(marker);
-  
-  viewer.importXML(xml)
-    .then(() => {{
-      // Disable built-in zoom/scroll
-      try {{
-        const zs = viewer.get('zoomScroll');
-        zs._enabled = false;
-      }} catch(_) {{}}
-      
-      // Add arrow marker to SVG
-      const svg = document.querySelector('#bpmn-container svg');
-      if (svg && !svg.querySelector('#sequenceflow-arrow')) {{
-        svg.insertBefore(defs, svg.firstChild);
-      }}
-      
-      // Fit to screen after rendering
-      setTimeout(() => fitToScreen(), 300);
-    }})
-    .catch(err => {{
-      errDiv.style.display = 'block';
-      errDiv.innerHTML = '<b>⚠️ BPMN rendering error:</b><br>' + 
-        err.message.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      console.error('BPMN import error:', err);
-    }});
-}})();
-</script>
-</body>
-</html>"""
+      fill: #1e293b
