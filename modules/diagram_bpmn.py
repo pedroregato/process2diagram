@@ -454,7 +454,7 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
 
 
 def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
-    """HTML with bpmn-js viewer. Use inside Streamlit components.html()."""
+    """HTML with bpmn-js viewer + manual pan/zoom (works inside Streamlit iframe)."""
     xml    = generate_bpmn_xml(bpmn)
     xml_js = xml.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
 
@@ -463,14 +463,34 @@ def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
 <head>
   <style>
     *{{margin:0;padding:0;box-sizing:border-box}}
-    body{{background:#f8fafc;overflow:hidden}}
-    #canvas{{width:100vw;height:100vh}}
+    body{{background:#f8fafc;overflow:hidden;user-select:none;}}
+
+    /* Wrapper that receives our manual transform */
+    #viewport{{
+      position:absolute;top:0;left:0;
+      transform-origin:0 0;
+      cursor:grab;
+    }}
+    #viewport.grabbing{{cursor:grabbing;}}
+
+    /* bpmn-js mounts here — let it size naturally */
+    #bpmn-container{{
+      position:relative;
+      width:4000px; /* large enough; clipped by overflow:hidden on body */
+      height:3000px;
+    }}
+
+    /* Hide bpmn-js's own scrollbars / overlays that fight with our pan */
+    .djs-container > svg {{ display:block; }}
+    .djs-overlay-container{{pointer-events:none!important;}}
+
     #toolbar{{
       position:fixed;bottom:16px;left:50%;transform:translateX(-50%);
       display:flex;align-items:center;gap:4px;
       background:rgba(15,23,42,0.92);backdrop-filter:blur(12px);
       border-radius:12px;padding:6px 10px;
       box-shadow:0 4px 24px rgba(0,0,0,0.3);z-index:100;
+      pointer-events:all;
     }}
     .tb-btn{{
       width:32px;height:32px;border:none;background:transparent;
@@ -480,64 +500,195 @@ def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
     }}
     .tb-btn:hover{{background:rgba(255,255,255,0.1);color:#e2e8f0}}
     .tb-divider{{width:1px;height:20px;background:rgba(255,255,255,0.12);margin:0 2px}}
-    #zoom-label{{color:#64748b;font-size:11px;font-family:monospace;
-      min-width:38px;text-align:center}}
-    #err{{display:none;position:fixed;top:16px;left:50%;
-      transform:translateX(-50%);
+    #zoom-label{{color:#64748b;font-size:11px;font-family:monospace;min-width:38px;text-align:center}}
+    #err{{
+      display:none;position:fixed;top:16px;left:50%;transform:translateX(-50%);
       background:white;border:1px solid #fca5a5;border-radius:8px;
       padding:16px 24px;max-width:600px;font-family:monospace;font-size:12px;
-      color:#dc2626;box-shadow:0 4px 24px rgba(0,0,0,0.15);z-index:200}}
+      color:#dc2626;box-shadow:0 4px 24px rgba(0,0,0,0.15);z-index:200
+    }}
   </style>
   <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-js.css">
   <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/diagram-js.css">
   <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-font/css/bpmn-embedded.css">
 </head>
 <body>
-<div id="canvas"></div>
+<div id="viewport">
+  <div id="bpmn-container"></div>
+</div>
 <div id="toolbar">
   <button class="tb-btn" id="btn-out"   title="Zoom out">&#8722;</button>
   <span   id="zoom-label">100%</span>
   <button class="tb-btn" id="btn-in"    title="Zoom in">&#43;</button>
   <div class="tb-divider"></div>
   <button class="tb-btn" id="btn-fit"   title="Fit to screen">&#8862;</button>
-  <button class="tb-btn" id="btn-reset" title="Reset zoom">&#8634;</button>
+  <button class="tb-btn" id="btn-reset" title="Reset view">&#8634;</button>
 </div>
 <div id="err"></div>
+
 <script src="https://unpkg.com/bpmn-js@17/dist/bpmn-viewer.development.js"></script>
 <script>
-const xml     = `{xml_js}`;
-const viewer  = new BpmnJS({{container:'#canvas'}});
-const zoomLbl = document.getElementById('zoom-label');
-const errDiv  = document.getElementById('err');
+(function() {{
+  const xml    = `{xml_js}`;
+  const errDiv = document.getElementById('err');
+  const vp     = document.getElementById('viewport');
+  const zoomLbl= document.getElementById('zoom-label');
 
-function updateLabel() {{
-  try {{ zoomLbl.textContent = Math.round(viewer.get('canvas').zoom()*100)+'%'; }} catch(e){{}}
-}}
+  // ── State ──────────────────────────────────────────────────────────────
+  let scale = 1, tx = 0, ty = 0;
+  let dragging = false, startX, startY, startTx, startTy;
+  let lastDist = null, touchTx, touchTy;
 
-viewer.importXML(xml)
-  .then(() => {{
-    setTimeout(() => {{
-      try {{
-        viewer.get('canvas').zoom('fit-viewport', 'auto');
-      }} catch(e) {{
-        try {{ viewer.get('canvas').zoom(0.75); }} catch(_) {{}}
-      }}
-      updateLabel();
-    }}, 150);
-  }})
-  .catch(err => {{
-    errDiv.style.display = 'block';
-    errDiv.innerHTML = '<b>BPMN render error:</b><br>' + err.message;
+  function apply() {{
+    vp.style.transform = `translate(${{tx}}px,${{ty}}px) scale(${{scale}})`;
+    zoomLbl.textContent = Math.round(scale * 100) + '%';
+  }}
+
+  function clamp(s) {{ return Math.min(Math.max(s, 0.05), 8); }}
+
+  function zoomTo(ns, cx, cy) {{
+    const r = ns / scale;
+    tx = cx - r * (cx - tx);
+    ty = cy - r * (cy - ty);
+    scale = ns;
+    apply();
+  }}
+
+  function fitToScreen() {{
+    // Use the bpmn-js SVG natural size from viewBox
+    const svg = document.querySelector('#bpmn-container svg');
+    if (!svg) return;
+    let sw, sh;
+    const vb = svg.viewBox && svg.viewBox.baseVal;
+    const cr = svg.getBoundingClientRect();
+    if (cr.width > 10) {{
+      sw = cr.width;
+      sh = cr.height;
+    }} else if (vb && vb.width > 0) {{
+      sw = vb.width;
+      sh = vb.height;
+    }} else {{
+      sw = parseFloat(svg.getAttribute('width'))  || 800;
+      sh = parseFloat(svg.getAttribute('height')) || 600;
+    }}
+    if (!sw || !sh || sw < 10) return;
+    const W = window.innerWidth, H = window.innerHeight - 60;
+    const ns = clamp(Math.min((W - 80) / sw, (H - 80) / sh));
+    if (!isFinite(ns) || ns <= 0) return;
+    scale = ns;
+    tx = (W - sw * scale) / 2;
+    ty = (H - sh * scale) / 2;
+    apply();
+  }}
+
+  function fitWhenReady(n) {{
+    const svg = document.querySelector('#bpmn-container svg');
+    const cr  = svg && svg.getBoundingClientRect();
+    if (cr && cr.width > 10) {{ fitToScreen(); }}
+    else if (n > 0) {{ setTimeout(() => fitWhenReady(n - 1), 300); }}
+  }}
+
+  // ── Mouse pan ──────────────────────────────────────────────────────────
+  vp.addEventListener('mousedown', e => {{
+    if (e.button !== 0) return;
+    dragging = true; startX = e.clientX; startY = e.clientY;
+    startTx = tx; startTy = ty;
+    vp.classList.add('grabbing');
+    e.preventDefault();
+  }});
+  window.addEventListener('mousemove', e => {{
+    if (!dragging) return;
+    tx = startTx + e.clientX - startX;
+    ty = startTy + e.clientY - startY;
+    apply();
+  }});
+  window.addEventListener('mouseup', () => {{
+    dragging = false; vp.classList.remove('grabbing');
   }});
 
-document.getElementById('btn-in').onclick    = () => {{ viewer.get('zoomScroll').stepZoom(1);  updateLabel(); }};
-document.getElementById('btn-out').onclick   = () => {{ viewer.get('zoomScroll').stepZoom(-1); updateLabel(); }};
-document.getElementById('btn-fit').onclick   = () => {{
-  try {{ viewer.get('canvas').zoom('fit-viewport','auto'); }} catch(e) {{ viewer.get('canvas').zoom(0.75); }}
-  updateLabel();
-}};
-document.getElementById('btn-reset').onclick = () => {{ viewer.get('canvas').zoom(1); updateLabel(); }};
-viewer.get('eventBus').on('canvas.viewbox.changed', updateLabel);
+  // ── Wheel zoom ─────────────────────────────────────────────────────────
+  window.addEventListener('wheel', e => {{
+    e.preventDefault();
+    const ns = clamp(scale * (e.deltaY > 0 ? 0.9 : 1.1));
+    zoomTo(ns, e.clientX, e.clientY);
+  }}, {{ passive: false }});
+
+  // ── Touch ──────────────────────────────────────────────────────────────
+  vp.addEventListener('touchstart', e => {{
+    if (e.touches.length === 1) {{
+      startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+      touchTx = tx; touchTy = ty;
+    }}
+    if (e.touches.length === 2) {{
+      lastDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+    }}
+  }}, {{ passive: true }});
+
+  vp.addEventListener('touchmove', e => {{
+    if (e.touches.length === 1) {{
+      tx = touchTx + e.touches[0].clientX - startX;
+      ty = touchTy + e.touches[0].clientY - startY;
+      apply();
+    }}
+    if (e.touches.length === 2) {{
+      const d  = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      if (lastDist) zoomTo(clamp(scale * d / lastDist), mx, my);
+      lastDist = d;
+    }}
+    e.preventDefault();
+  }}, {{ passive: false }});
+
+  vp.addEventListener('touchend', () => {{ lastDist = null; }});
+
+  // ── Keyboard ───────────────────────────────────────────────────────────
+  window.addEventListener('keydown', e => {{
+    const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+    if (e.key === '+' || e.key === '=') zoomTo(clamp(scale * 1.15), cx, cy);
+    if (e.key === '-')                  zoomTo(clamp(scale * 0.87), cx, cy);
+    if (e.key === '0')                  fitToScreen();
+    if (e.key === 'r' || e.key === 'R') {{ scale=1; tx=0; ty=0; apply(); }}
+  }});
+
+  // ── Toolbar buttons ────────────────────────────────────────────────────
+  const cx = () => window.innerWidth / 2, cy = () => window.innerHeight / 2;
+  document.getElementById('btn-in').onclick    = () => zoomTo(clamp(scale * 1.2), cx(), cy());
+  document.getElementById('btn-out').onclick   = () => zoomTo(clamp(scale * 0.8), cx(), cy());
+  document.getElementById('btn-fit').onclick   = fitToScreen;
+  document.getElementById('btn-reset').onclick = () => {{ scale=1; tx=0; ty=0; apply(); }};
+
+  // ── Mount bpmn-js (read-only, no built-in pan/zoom modules needed) ─────
+  // We use NavigatedViewer but immediately disable its keyboard/scroll
+  // so our handlers above are the single source of truth.
+  const viewer = new BpmnJS({{
+    container: '#bpmn-container',
+    // Disable built-in keyboard shortcuts (they conflict with ours)
+    keyboard: {{ bindTo: null }},
+  }});
+
+  viewer.importXML(xml)
+    .then(() => {{
+      // Kill bpmn-js scroll listener — we own the wheel event
+      try {{
+        const zs = viewer.get('zoomScroll');
+        zs._enabled = false;
+      }} catch(_) {{}}
+
+      // Let bpmn-js render at its natural 1:1 scale, then fit via our logic
+      setTimeout(() => fitWhenReady(10), 400);
+    }})
+    .catch(err => {{
+      errDiv.style.display = 'block';
+      errDiv.innerHTML = '<b>BPMN render error:</b><br>' + err.message;
+    }});
+}})();
 </script>
 </body>
 </html>"""
