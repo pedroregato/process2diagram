@@ -25,12 +25,12 @@ DDI = "{%s}" % _NS["di"]
 TASK_W,  TASK_H   = 120, 60
 GW_W,    GW_H     = 50,  50
 EV_W,    EV_H     = 36,  36
-H_GAP             = 60
-V_PAD             = 50
-LANE_HEADER_W     = 30
-POOL_HEADER_W     = 30
-FIRST_X           = 80
-MIN_LANE_H        = 160
+H_GAP             = 70          # more breathing room between elements
+V_PAD             = 55
+LANE_HEADER_W     = 100         # wide enough for ~12-char lane name rotated vertically
+POOL_HEADER_W     = 30          # bpmn-js renders pool title horizontally at top — 30 is correct
+FIRST_X           = 100         # left margin inside lane content area
+MIN_LANE_H        = 180
 
 
 def _sub(parent, tag, attribs=None):
@@ -257,8 +257,8 @@ def _compute_layout(bpmn, lane_assignment):
 
         total_h = sum(lane_h[l.id] for l in pool.lanes)
 
-        # Compute pool width
-        pool_w = 600
+        # Compute pool width — minimum 700, trailing gap after last element
+        pool_w = 700
         for lane in pool.lanes:
             els = lane_order[lane.id]
             if els:
@@ -267,6 +267,7 @@ def _compute_layout(bpmn, lane_assignment):
                     if eid in el_map:
                         ew, _ = _el_size(el_map[eid])
                         w += ew + H_GAP
+                w += FIRST_X  # trailing right margin
                 pool_w = max(pool_w, w)
 
         pool_shapes[pool.id] = (0, 0, pool_w, total_h)
@@ -339,6 +340,14 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
     plane = _sub(diagram, DI + "BPMNPlane",
                  {"id": "plane_1", "bpmnElement": plane_ref})
 
+    # Collect lane ids for identification
+    lane_ids = set()
+    pool_ids = set()
+    for pool in bpmn.pools:
+        pool_ids.add(pool.id)
+        for lane in pool.lanes:
+            lane_ids.add(lane.id)
+
     # Pool / lane shapes
     for eid, (x, y, w, h) in pool_shapes.items():
         shape = _sub(plane, DI + "BPMNShape",
@@ -346,6 +355,16 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         b = _sub(shape, DC + "Bounds")
         b.set("x", str(int(x))); b.set("y", str(int(y)))
         b.set("width", str(int(w))); b.set("height", str(int(h)))
+
+        if eid in lane_ids:
+            # Explicit label area: left strip of the lane (the header column)
+            # bpmn-js uses this to size the rotated lane name text box
+            lbl = _sub(shape, DI + "BPMNLabel")
+            lb  = _sub(lbl, DC + "Bounds")
+            lb.set("x",      str(int(x)))
+            lb.set("y",      str(int(y)))
+            lb.set("width",  str(LANE_HEADER_W))
+            lb.set("height", str(int(h)))
 
     # Element shapes — only emit if coords are valid finite numbers
     for el in bpmn.elements:
