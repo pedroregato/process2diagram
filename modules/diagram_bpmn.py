@@ -39,16 +39,16 @@ def _sub(parent, tag, attribs=None):
 
 def _ev_def(etype):
     return {
-        "message": "messageEventDefinition",
-        "timer": "timerEventDefinition",
-        "error": "errorEventDefinition",
-        "signal": "signalEventDefinition",
-        "escalation": "escalationEventDefinition",
-        "terminate": "terminateEventDefinition",
+        "message":      "messageEventDefinition",
+        "timer":        "timerEventDefinition",
+        "error":        "errorEventDefinition",
+        "signal":       "signalEventDefinition",
+        "escalation":   "escalationEventDefinition",
+        "terminate":    "terminateEventDefinition",
         "compensation": "compensateEventDefinition",
-        "cancel": "cancelEventDefinition",
-        "conditional": "conditionalEventDefinition",
-        "link": "linkEventDefinition",
+        "cancel":       "cancelEventDefinition",
+        "conditional":  "conditionalEventDefinition",
+        "link":         "linkEventDefinition",
     }.get(etype)
 
 
@@ -67,28 +67,46 @@ def _el_size(el):
 def _assign_lanes(bpmn):
     """
     Returns a dict {element_id: lane_id} for every non-boundary element.
-    Elements not in any lane are assigned by flow-context (inherit from neighbor)
-    or to the last lane as fallback.
+
+    Priority:
+      1. Explicit assignment via lane.element_ids
+      2. Element actor/lane field matches a lane name
+      3. Flow-context inference (inherit from assigned neighbor)
+      4. Fallback: first lane (startEvent/endEvent land here naturally)
     """
     if not bpmn.pools:
         return {}
 
     pool = bpmn.pools[0]
+    if not pool.lanes:
+        return {}
+
     assignment = {}
 
-    # Direct assignment from lane.element_ids
+    # Step 1 — explicit element_ids in lane definition
     for lane in pool.lanes:
         for eid in lane.element_ids:
             assignment[eid] = lane.id
 
-    # Find unassigned non-boundary elements
+    # Step 2 — match by actor/lane name on the element itself
+    lane_by_name = {lane.name: lane.id for lane in pool.lanes}
+    for el in bpmn.elements:
+        if el.type == "boundaryEvent":
+            continue
+        if el.id in assignment:
+            continue
+        actor = el.actor or el.lane
+        if actor and actor in lane_by_name:
+            assignment[el.id] = lane_by_name[actor]
+
+    # Collect still-unassigned non-boundary element ids
     all_ids = {e.id for e in bpmn.elements if e.type != "boundaryEvent"}
     unassigned = all_ids - set(assignment.keys())
 
-    if not unassigned or not pool.lanes:
+    if not unassigned:
         return assignment
 
-    # Build adjacency for flow-context inference
+    # Step 3 — flow-context inference
     predecessors = {e.id: [] for e in bpmn.elements}
     successors   = {e.id: [] for e in bpmn.elements}
     for f in bpmn.flows:
@@ -97,13 +115,11 @@ def _assign_lanes(bpmn):
         if f.target in predecessors:
             predecessors[f.target].append(f.source)
 
-    # Iteratively assign unassigned elements from neighbors
     changed = True
     while changed and unassigned:
         changed = False
         for eid in list(unassigned):
-            # Look at predecessors then successors
-            neighbors = predecessors[eid] + successors[eid]
+            neighbors = predecessors.get(eid, []) + successors.get(eid, [])
             for nid in neighbors:
                 if nid in assignment:
                     assignment[eid] = assignment[nid]
@@ -111,8 +127,8 @@ def _assign_lanes(bpmn):
                     changed = True
                     break
 
-    # Remaining truly isolated → last lane
-    fallback_lane = pool.lanes[-1].id
+    # Step 4 — true fallback: first lane (catches startEvent/endEvent with actor=null)
+    fallback_lane = pool.lanes[0].id
     for eid in unassigned:
         assignment[eid] = fallback_lane
 
@@ -215,19 +231,22 @@ def _compute_layout(bpmn, lane_assignment):
     pool_shapes = {}
 
     non_boundary = [e for e in bpmn.elements if e.type != "boundaryEvent"]
-    order = _topo_sort([e.id for e in non_boundary], bpmn.flows)
+    order  = _topo_sort([e.id for e in non_boundary], bpmn.flows)
     el_map = {e.id: e for e in bpmn.elements}
 
     if bpmn.pools:
         pool = bpmn.pools[0]
 
-        # Group ordered elements by lane (using resolved assignment)
-        lane_order = {}
-        for lane in pool.lanes:
-            lane_order[lane.id] = [
-                eid for eid in order
-                if lane_assignment.get(eid) == lane.id
-            ]
+        # Group ordered elements by lane (using fully-resolved assignment)
+        lane_order = {lane.id: [] for lane in pool.lanes}
+        for eid in order:
+            lid = lane_assignment.get(eid)
+            if lid and lid in lane_order:
+                lane_order[lid].append(eid)
+            # Elements not in any lane (should not happen after _assign_lanes fix,
+            # but guard anyway) → put in first lane
+            elif pool.lanes:
+                lane_order[pool.lanes[0].id].append(eid)
 
         # Lane heights
         lane_h = {}
@@ -271,6 +290,7 @@ def _compute_layout(bpmn, lane_assignment):
             cur_y += lh
 
     else:
+        # No pools — flat vertical layout
         cur_y = V_PAD
         for eid in order:
             if eid not in el_map:
@@ -282,7 +302,7 @@ def _compute_layout(bpmn, lane_assignment):
             shapes[el.id] = (FIRST_X, int(cur_y), w, h)
             cur_y += h + H_GAP
 
-    # Boundary events: anchored on host
+    # Boundary events: anchored on host element
     for el in bpmn.elements:
         if el.type == "boundaryEvent" and el.attached_to:
             host = shapes.get(el.attached_to)
@@ -291,7 +311,7 @@ def _compute_layout(bpmn, lane_assignment):
                 shapes[el.id] = (hx + hw - EV_W // 2,
                                   hy + hh - EV_H // 2,
                                   EV_W, EV_H)
-            # If host not found: do NOT add shape — bpmn-js handles missing DI gracefully
+            # No host shape → boundary event gets no DI (bpmn-js skips it gracefully)
 
     return shapes, pool_shapes
 
@@ -305,7 +325,14 @@ def _wp(edge, x, y):
 
 
 def _valid(coords):
-    return all(v == v and abs(v) != float("inf") for v in coords)
+    """Return True only if all coords are real finite numbers > 0."""
+    try:
+        return all(
+            isinstance(v, (int, float)) and v == v and abs(v) != float("inf") and v >= 0
+            for v in coords
+        )
+    except Exception:
+        return False
 
 
 def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
@@ -320,13 +347,14 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         b.set("x", str(int(x))); b.set("y", str(int(y)))
         b.set("width", str(int(w))); b.set("height", str(int(h)))
 
-    # Element shapes — only emit if coords are valid
+    # Element shapes — only emit if coords are valid finite numbers
     for el in bpmn.elements:
         if el.id not in shapes:
-            continue  # skip entirely — no DI shape = bpmn-js ignores it
-        x, y, w, h = shapes[el.id]
-        if not _valid((x, y, w, h)):
             continue
+        coords = shapes[el.id]
+        if not _valid(coords):
+            continue
+        x, y, w, h = coords
         shape = _sub(plane, DI + "BPMNShape", {"id": el.id + "_di", "bpmnElement": el.id})
         b = _sub(shape, DC + "Bounds")
         b.set("x", str(int(x))); b.set("y", str(int(y)))
@@ -336,21 +364,25 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         lb.set("x", str(int(x))); lb.set("y", str(int(y + h + 2)))
         lb.set("width", str(int(w))); lb.set("height", "20")
 
-    # Edges — only emit waypoints if both endpoints have valid shapes
+    # Edges — only emit if BOTH endpoints have valid shapes
     for flow in bpmn.flows:
+        src_coords = shapes.get(flow.source)
+        tgt_coords = shapes.get(flow.target)
+
+        # Skip edge entirely if either endpoint has no valid shape
+        # (avoids the SVGMatrix non-finite crash in bpmn-js)
+        if not src_coords or not tgt_coords:
+            continue
+        if not _valid(src_coords) or not _valid(tgt_coords):
+            continue
+
         edge = _sub(plane, DI + "BPMNEdge",
                     {"id": flow.id + "_di", "bpmnElement": flow.id})
-        src = shapes.get(flow.source)
-        tgt = shapes.get(flow.target)
-        if src and tgt and _valid(src) and _valid(tgt):
-            sx, sy, sw, sh = src
-            tx, ty, tw, th = tgt
-            _wp(edge, sx + sw,     sy + sh / 2)  # source right-center
-            _wp(edge, tx,          ty + th / 2)  # target left-center
-        else:
-            # Minimal valid waypoints so bpmn-js doesn't crash on this flow
-            _wp(edge, 50, 50)
-            _wp(edge, 100, 50)
+        sx, sy, sw, sh = src_coords
+        tx, ty, tw, th = tgt_coords
+        _wp(edge, sx + sw,     sy + sh / 2)   # source right-centre
+        _wp(edge, tx,          ty + th / 2)   # target left-centre
+
         if flow.name:
             lbl = _sub(edge, DI + "BPMNLabel")
             _sub(lbl, DC + "Bounds",
@@ -383,11 +415,10 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
 
     lane_assignment = _assign_lanes(bpmn)
 
-    # Lane set — use resolved assignment so all elements are covered
+    # Lane set — rebuilt from the fully-resolved assignment so every element is covered
     if bpmn.pools:
         pool = bpmn.pools[0]
         lset = _sub(proc, B + "laneSet", {"id": pool.id + "_lset"})
-        # Rebuild element_ids from resolved assignment
         lane_members = {lane.id: [] for lane in pool.lanes}
         for eid, lid in lane_assignment.items():
             if lid in lane_members:
@@ -403,7 +434,7 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
     for flow in bpmn.flows:
         _build_flow(proc, flow)
 
-    # Collaboration
+    # Collaboration (required when pools exist — BPMNPlane must ref collab, not process)
     collab_id = None
     if bpmn.pools:
         pool      = bpmn.pools[0]
@@ -485,12 +516,10 @@ function updateLabel() {{
 
 viewer.importXML(xml)
   .then(() => {{
-    // Small delay ensures all shapes are rendered before fit
     setTimeout(() => {{
       try {{
         viewer.get('canvas').zoom('fit-viewport', 'auto');
       }} catch(e) {{
-        // fit-viewport failed — set a safe default zoom instead
         try {{ viewer.get('canvas').zoom(0.75); }} catch(_) {{}}
       }}
       updateLabel();
