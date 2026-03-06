@@ -1,533 +1,454 @@
 # modules/diagram_bpmn.py
-# ─────────────────────────────────────────────────────────────────────────────
-# Generates:
-#   1. generate_bpmn_xml(process)  → valid BPMN 2.0 XML string (.bpmn file)
-#   2. generate_bpmn_preview(xml)  → self-contained HTML with bpmn-js viewer
-#
-# The XML is consumable by Camunda Modeler, bpmn-js, Bizagi and any
-# BPMN 2.0 compliant tool.
-#
-# Layout strategy: vertical top-down, lanes stacked horizontally.
-# Each lane gets its own column; elements are distributed evenly in Y.
-# ─────────────────────────────────────────────────────────────────────────────
+# Generates valid BPMN 2.0 XML (.bpmn) from a BpmnProcess model.
+# Compatible with: Camunda Modeler, Signavio, Bizagi, draw.io, bpmn.io
 
 import xml.etree.ElementTree as ET
-from typing import Optional
 from modules.schema import BpmnProcess, BpmnElement, BpmnLane, BpmnPool, SequenceFlow
 
-
-# ── Layout constants ──────────────────────────────────────────────────────────
-
-_TASK_W = 120
-_TASK_H = 60
-_EVENT_R = 36          # diameter
-_GW_SIZE = 50          # diamond width = height
-_SUB_W = 160
-_SUB_H = 100
-
-_COL_W = 200           # horizontal space per lane column
-_ROW_H = 100           # vertical gap between rows
-_MARGIN_X = 80         # left margin inside lane
-_MARGIN_Y = 60         # top margin
-_POOL_HEADER_W = 30    # width of pool label bar
-_LANE_HEADER_H = 30    # height of lane label bar (horizontal layout)
-
-
-# ── BPMN XML namespaces ───────────────────────────────────────────────────────
-
-_NS = {
+# ── Namespaces ────────────────────────────────────────────────────────────────
+NS = {
     "bpmn":  "http://www.omg.org/spec/BPMN/20100524/MODEL",
     "bpmndi":"http://www.omg.org/spec/BPMN/20100524/DI",
     "dc":    "http://www.omg.org/spec/DD/20100524/DC",
     "di":    "http://www.omg.org/spec/DD/20100524/DI",
     "xsi":   "http://www.w3.org/2001/XMLSchema-instance",
 }
-
-for prefix, uri in _NS.items():
+for prefix, uri in NS.items():
     ET.register_namespace(prefix, uri)
 
-_BPMN  = _NS["bpmn"]
-_DI    = _NS["bpmndi"]
-_DC    = _NS["dc"]
-_DIDC  = _NS["di"]
+B  = "{%s}" % NS["bpmn"]
+DI = "{%s}" % NS["bpmndi"]
+DC = "{%s}" % NS["dc"]
+DID= "{%s}" % NS["di"]
 
+# ── Layout constants ──────────────────────────────────────────────────────────
+TASK_W, TASK_H       = 120, 60
+GW_W,   GW_H         = 50,  50
+EVENT_W, EVENT_H     = 36,  36
+LANE_W               = 800
+LANE_HEADER          = 30
+ROW_H                = 100   # vertical spacing between elements
+COL_X                = 180   # x of first element column
+START_Y              = 40    # y of first row
+POOL_HEADER          = 30
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── BPMN tag helpers ──────────────────────────────────────────────────────────
 
-def _tag(ns: str, local: str) -> str:
-    return f"{{{ns}}}{local}"
-
-
-def _sub(parent, ns: str, local: str, **attrs) -> ET.Element:
-    el = ET.SubElement(parent, _tag(ns, local))
-    for k, v in attrs.items():
-        el.set(k.replace("_", ":").replace("__", ":"), str(v))
+def _tag(parent, local, attribs=None, text=None):
+    el = ET.SubElement(parent, B + local, attribs or {})
+    if text:
+        el.text = text
     return el
 
 
-def _bounds(parent, x: float, y: float, w: float, h: float) -> ET.Element:
-    b = ET.SubElement(parent, _tag(_DC, "Bounds"))
-    b.set("x", str(round(x)))
-    b.set("y", str(round(y)))
-    b.set("width", str(round(w)))
-    b.set("height", str(round(h)))
-    return b
+def _event_def_tag(etype):
+    mapping = {
+        "message":      "messageEventDefinition",
+        "timer":        "timerEventDefinition",
+        "error":        "errorEventDefinition",
+        "signal":       "signalEventDefinition",
+        "escalation":   "escalationEventDefinition",
+        "terminate":    "terminateEventDefinition",
+        "compensation": "compensateEventDefinition",
+        "cancel":       "cancelEventDefinition",
+        "conditional":  "conditionalEventDefinition",
+        "link":         "linkEventDefinition",
+    }
+    return mapping.get(etype)
 
 
-def _waypoint(parent, x: float, y: float) -> ET.Element:
-    wp = ET.SubElement(parent, _tag(_DIDC, "waypoint"))
-    wp.set("x", str(round(x)))
-    wp.set("y", str(round(y)))
-    return wp
+# ── Element XML builders ──────────────────────────────────────────────────────
+
+def _build_element(parent, el: BpmnElement, process_id: str):
+    t = el.type
+
+    if t == "startEvent":
+        node = _tag(parent, "startEvent", {"id": el.id, "name": el.name})
+        defn = _event_def_tag(el.event_type)
+        if defn:
+            _tag(node, defn, {"id": el.id + "_def"})
+
+    elif t == "endEvent":
+        node = _tag(parent, "endEvent", {"id": el.id, "name": el.name})
+        defn = _event_def_tag(el.event_type)
+        if defn:
+            _tag(node, defn, {"id": el.id + "_def"})
+
+    elif t == "intermediateThrowEvent":
+        node = _tag(parent, "intermediateThrowEvent", {"id": el.id, "name": el.name})
+        defn = _event_def_tag(el.event_type)
+        if defn:
+            _tag(node, defn, {"id": el.id + "_def"})
+
+    elif t == "intermediateCatchEvent":
+        node = _tag(parent, "intermediateCatchEvent", {"id": el.id, "name": el.name})
+        defn = _event_def_tag(el.event_type)
+        if defn:
+            _tag(node, defn, {"id": el.id + "_def"})
+
+    elif t == "boundaryEvent":
+        attrs = {
+            "id": el.id, "name": el.name,
+            "attachedToRef": el.attached_to or "",
+            "cancelActivity": str(el.is_interrupting).lower(),
+        }
+        node = _tag(parent, "boundaryEvent", attrs)
+        defn = _event_def_tag(el.event_type)
+        if defn:
+            _tag(node, defn, {"id": el.id + "_def"})
+
+    elif t in ("exclusiveGateway", "parallelGateway",
+               "inclusiveGateway", "eventBasedGateway", "complexGateway"):
+        _tag(parent, t, {"id": el.id, "name": el.name})
+
+    elif t == "subProcess":
+        attrs = {"id": el.id, "name": el.name,
+                 "triggeredByEvent": "false"}
+        node = _tag(parent, "subProcess", attrs)
+        for child in el.children:
+            _build_element(node, child, process_id)
+
+    elif t == "callActivity":
+        attrs = {"id": el.id, "name": el.name}
+        if el.called_element:
+            attrs["calledElement"] = el.called_element
+        _tag(parent, "callActivity", attrs)
+
+    else:
+        # userTask, serviceTask, scriptTask, sendTask, receiveTask,
+        # manualTask, businessRuleTask, task  → all map to their BPMN tag
+        tag_name = t if t in (
+            "userTask","serviceTask","scriptTask","sendTask",
+            "receiveTask","manualTask","businessRuleTask",
+        ) else "task"
+        attrs = {"id": el.id, "name": el.name}
+        if el.is_loop:
+            node = _tag(parent, tag_name, attrs)
+            _tag(node, "standardLoopCharacteristics", {"id": el.id + "_loop"})
+        elif el.is_parallel_multi:
+            node = _tag(parent, tag_name, attrs)
+            mi = _tag(node, "multiInstanceLoopCharacteristics", {"id": el.id + "_mi"})
+            mi.set("isSequential", "false")
+        elif el.is_sequential_multi:
+            node = _tag(parent, tag_name, attrs)
+            mi = _tag(node, "multiInstanceLoopCharacteristics", {"id": el.id + "_mi"})
+            mi.set("isSequential", "true")
+        else:
+            _tag(parent, tag_name, attrs)
+
+    if el.documentation:
+        doc_parent = parent.find(B + t) or parent[-1]
+        _tag(doc_parent, "documentation", {}, el.documentation)
 
 
-# ── Event definition tag mapping ─────────────────────────────────────────────
-
-_EVENT_DEF_TAG: dict[str, str] = {
-    "message":      "messageEventDefinition",
-    "timer":        "timerEventDefinition",
-    "error":        "errorEventDefinition",
-    "escalation":   "escalationEventDefinition",
-    "cancel":       "cancelEventDefinition",
-    "compensation": "compensateEventDefinition",
-    "signal":       "signalEventDefinition",
-    "terminate":    "terminateEventDefinition",
-    "conditional":  "conditionalEventDefinition",
-    "link":         "linkEventDefinition",
-}
-
-# bpmn-js shape style overrides for event types
-_EVENT_SHAPE_STYLE: dict[str, str] = {
-    "startEvent":              "shape=mxgraph.bpmn.shape;perimeter=mxgraph.bpmn.perimeter.event_perimeter;symbol=general;isLooping=0;isSequential=0;isCompensation=0;",
-    "endEvent":                "shape=mxgraph.bpmn.shape;perimeter=mxgraph.bpmn.perimeter.event_perimeter;symbol=terminate;strokeWidth=3;",
-    "intermediateThrowEvent":  "shape=mxgraph.bpmn.shape;perimeter=mxgraph.bpmn.perimeter.event_perimeter;symbol=general;strokeWidth=1.5;",
-    "intermediateCatchEvent":  "shape=mxgraph.bpmn.shape;perimeter=mxgraph.bpmn.perimeter.event_perimeter;symbol=general;strokeWidth=1.5;",
-    "boundaryEvent":           "shape=mxgraph.bpmn.shape;perimeter=mxgraph.bpmn.perimeter.event_perimeter;symbol=general;strokeWidth=1.5;",
-    "exclusiveGateway":        "rhombus;",
-    "parallelGateway":         "rhombus;",
-    "inclusiveGateway":        "rhombus;",
-    "eventBasedGateway":       "rhombus;",
-    "complexGateway":          "rhombus;",
-    "subProcess":              "rounded=1;arcSize=10;",
-    "adHocSubProcess":         "rounded=1;arcSize=10;",
-    "callActivity":            "rounded=1;arcSize=10;strokeWidth=4;",
-    "dataObject":              "shape=mxgraph.bpmn.shape;symbol=dataObject;",
-    "dataStore":               "shape=mxgraph.bpmn.shape;symbol=dataStore;",
-}
+def _build_flow(parent, flow: SequenceFlow):
+    attrs = {
+        "id":        flow.id,
+        "name":      flow.name,
+        "sourceRef": flow.source,
+        "targetRef": flow.target,
+    }
+    if flow.is_default:
+        attrs["default"] = flow.id
+    node = _tag(parent, "sequenceFlow", attrs)
+    if flow.condition:
+        cond = _tag(node, "conditionExpression",
+                    {"xsi:type": "tFormalExpression"})
+        cond.text = flow.condition
+    return node
 
 
 # ── Layout engine ─────────────────────────────────────────────────────────────
 
-def _compute_layout(process: BpmnProcess) -> dict[str, tuple[float, float, float, float]]:
+def _layout(bpmn: BpmnProcess):
     """
-    Returns {element_id: (x, y, w, h)} for every element.
-
-    Strategy:
-      - If pools/lanes exist: each lane is a horizontal band.
-        Elements in each lane are distributed left-to-right in order.
-      - If no lanes: single-column vertical layout.
+    Assigns (x, y, w, h) to every element and returns two dicts:
+      shapes: {element_id: (x, y, w, h)}
+      pool_shapes: {pool_or_lane_id: (x, y, w, h)}
     """
-    positions: dict[str, tuple[float, float, float, float]] = {}
-    lanes_flat = process.lanes_flat()
+    shapes = {}
+    pool_shapes = {}
 
-    def _size(el: BpmnElement) -> tuple[float, float]:
-        if el.type in ("startEvent", "endEvent",
-                       "intermediateThrowEvent", "intermediateCatchEvent",
-                       "boundaryEvent"):
-            return _EVENT_R, _EVENT_R
-        if "Gateway" in el.type:
-            return _GW_SIZE, _GW_SIZE
-        if el.type in ("subProcess", "adHocSubProcess"):
-            return _SUB_W, _SUB_H
-        return _TASK_W, _TASK_H
+    if bpmn.pools:
+        pool = bpmn.pools[0]
+        n_lanes = len(pool.lanes)
+        lane_h = max(ROW_H * 4, ROW_H * 2 + START_Y * 2)
 
-    if lanes_flat:
-        # Horizontal-band layout: lanes stacked top-to-bottom
-        lane_h = 140
-        x_start = _POOL_HEADER_W + _MARGIN_X
+        # Collect order of elements per lane
+        lane_elements = {}
+        for lane in pool.lanes:
+            ids = lane.element_ids
+            lane_elements[lane.id] = [e for e in bpmn.elements if e.id in ids]
 
-        # Assign elements to lanes
-        lane_elements: dict[str, list[BpmnElement]] = {}
-        for lane in lanes_flat:
-            lane_elements[lane.id] = [
-                process.get_element(eid)
-                for eid in lane.element_ids
-                if process.get_element(eid) is not None
-            ]
+        # Auto-size lane height based on element count
+        for lane in pool.lanes:
+            count = max(len(lane_elements.get(lane.id, [])), 1)
+            lane_h = max(lane_h, ROW_H * count + START_Y)
 
-        # Elements not in any lane → append to a virtual "unassigned" lane
-        assigned = {eid for lane in lanes_flat for eid in lane.element_ids}
-        unassigned = [e for e in process.elements
-                      if e.id not in assigned and e.type != "boundaryEvent"]
-        if unassigned:
-            # Create virtual last lane
-            virtual = BpmnLane(id="_unassigned", name="")
-            lane_elements["_unassigned"] = unassigned
-            lanes_flat.append(virtual)
+        pool_y = 0
+        pool_h = lane_h * n_lanes + POOL_HEADER
 
-        y_offset = _LANE_HEADER_H
-        for lane in lanes_flat:
+        pool_shapes[pool.id] = (0, pool_y, LANE_W + LANE_HEADER + POOL_HEADER, pool_h)
+
+        for li, lane in enumerate(pool.lanes):
+            lx = POOL_HEADER
+            ly = pool_y + POOL_HEADER + li * lane_h
+            pool_shapes[lane.id] = (lx, ly, LANE_W + LANE_HEADER, lane_h)
+
             els = lane_elements.get(lane.id, [])
-            x = x_start
-            for el in els:
-                w, h = _size(el)
-                cy = y_offset + (lane_h - h) / 2
-                positions[el.id] = (x, cy, w, h)
-                x += w + 60
-            y_offset += lane_h
-
-        # Boundary events: snap to bottom-right of host
-        for el in process.boundary_events():
-            if el.attached_to and el.attached_to in positions:
-                hx, hy, hw, hh = positions[el.attached_to]
-                w, h = _size(el)
-                positions[el.id] = (hx + hw - w / 2, hy + hh - h / 2, w, h)
+            for ei, el in enumerate(els):
+                w, h = _element_size(el)
+                x = lx + LANE_HEADER + COL_X + ei * (TASK_W + 80)
+                y = ly + (lane_h - h) / 2
+                shapes[el.id] = (int(x), int(y), w, h)
 
     else:
-        # Single-column vertical layout
-        x = _MARGIN_X + 60
-        y = _MARGIN_Y
-        for el in process.elements:
-            if el.type == "boundaryEvent":
-                continue  # placed after their host
-            w, h = _size(el)
-            positions[el.id] = (x, y, w, h)
-            y += h + _ROW_H
+        # No pools — simple vertical layout
+        for i, el in enumerate(bpmn.elements):
+            w, h = _element_size(el)
+            x = COL_X
+            y = START_Y + i * ROW_H
+            shapes[el.id] = (x, y, w, h)
 
-        for el in process.boundary_events():
-            if el.attached_to and el.attached_to in positions:
-                hx, hy, hw, hh = positions[el.attached_to]
-                w, h = _size(el)
-                positions[el.id] = (hx + hw - w / 2, hy + hh - h / 2, w, h)
+    # Boundary events: overlay on host element
+    for el in bpmn.elements:
+        if el.type == "boundaryEvent" and el.attached_to:
+            host = shapes.get(el.attached_to)
+            if host:
+                hx, hy, hw, hh = host
+                shapes[el.id] = (hx + hw - EVENT_W // 2, hy + hh - EVENT_H // 2,
+                                  EVENT_W, EVENT_H)
 
-    return positions
-
-
-def _compute_pool_bounds(
-    process: BpmnProcess,
-    positions: dict[str, tuple[float, float, float, float]],
-) -> tuple[float, float, float, float]:
-    """Returns (x, y, total_w, total_h) for the enclosing pool rectangle."""
-    if not positions:
-        return (0, 0, 600, 400)
-    xs = [v[0] for v in positions.values()]
-    ys = [v[1] for v in positions.values()]
-    x2s = [v[0] + v[2] for v in positions.values()]
-    y2s = [v[1] + v[3] for v in positions.values()]
-    pad = 40
-    x = min(xs) - pad
-    y = min(ys) - pad
-    w = max(x2s) - x + pad
-    h = max(y2s) - y + pad
-    return (x, y, w, h)
+    return shapes, pool_shapes
 
 
-# ── XML builder ───────────────────────────────────────────────────────────────
-
-def _build_element_xml(
-    parent: ET.Element,
-    el: BpmnElement,
-    process_id: str,
-) -> None:
-    """Appends the semantic BPMN XML for one element."""
-    tag = _tag(_BPMN, el.type)
-    node = ET.SubElement(parent, tag)
-    node.set("id", el.id)
-    node.set("name", el.name)
-
-    if el.type == "boundaryEvent" and el.attached_to:
-        node.set("attachedToRef", el.attached_to)
-        node.set("cancelActivity", "true" if el.is_interrupting else "false")
-
-    if el.is_loop:
-        li = ET.SubElement(node, _tag(_BPMN, "standardLoopCharacteristics"))
-        li.set("id", f"{el.id}_loop")
-
-    if el.is_parallel_multi:
-        mi = ET.SubElement(node, _tag(_BPMN, "multiInstanceLoopCharacteristics"))
-        mi.set("id", f"{el.id}_mi")
-        mi.set("isSequential", "false")
-
-    if el.is_sequential_multi:
-        mi = ET.SubElement(node, _tag(_BPMN, "multiInstanceLoopCharacteristics"))
-        mi.set("id", f"{el.id}_mi")
-        mi.set("isSequential", "true")
-
-    if el.documentation:
-        doc = ET.SubElement(node, _tag(_BPMN, "documentation"))
-        doc.text = el.documentation
-
-    # Event definition
-    if el.event_type != "none":
-        def_tag = _EVENT_DEF_TAG.get(el.event_type)
-        if def_tag:
-            edef = ET.SubElement(node, _tag(_BPMN, def_tag))
-            edef.set("id", f"{el.id}_def")
-
-    # Sub-process children (recursive)
-    if el.type in ("subProcess", "adHocSubProcess"):
-        for child in el.children:
-            _build_element_xml(node, child, process_id)
-
-    if el.called_element:
-        node.set("calledElement", el.called_element)
+def _element_size(el: BpmnElement):
+    if el.type in ("startEvent","endEvent","intermediateThrowEvent",
+                   "intermediateCatchEvent","boundaryEvent"):
+        return EVENT_W, EVENT_H
+    if "Gateway" in el.type:
+        return GW_W, GW_H
+    return TASK_W, TASK_H
 
 
-def generate_bpmn_xml(process: BpmnProcess) -> str:
-    """
-    Generates a complete, valid BPMN 2.0 XML document.
-    Returns a UTF-8 string.
-    """
-    positions = _compute_layout(process)
+# ── DI (diagram interchange) builder ─────────────────────────────────────────
 
-    # ── Root: definitions ─────────────────────────────────────────────────────
-    definitions = ET.Element(_tag(_BPMN, "definitions"))
-    definitions.set("xmlns:bpmn",   _BPMN)
-    definitions.set("xmlns:bpmndi", _DI)
-    definitions.set("xmlns:dc",     _DC)
-    definitions.set("xmlns:di",     _DIDC)
-    definitions.set("xmlns:xsi",    _NS["xsi"])
-    definitions.set("id", "Definitions_1")
-    definitions.set("targetNamespace", "http://bpmn.io/schema/bpmn")
-    definitions.set("exporter", "Process2Diagram")
-    definitions.set("exporterVersion", "2.0")
+def _build_di(diagram, plane_id, shapes, pool_shapes, bpmn, flows_idx):
+    plane = ET.SubElement(diagram, DI + "BPMNPlane",
+                          {"id": plane_id + "_plane",
+                           "bpmnElement": plane_id})
 
-    # ── Collaboration (pools) ─────────────────────────────────────────────────
-    collab_el = None
-    if process.pools:
-        collab_el = ET.SubElement(definitions, _tag(_BPMN, "collaboration"))
-        collab_el.set("id", "collaboration_1")
-        for pool in process.pools:
-            p_node = ET.SubElement(collab_el, _tag(_BPMN, "participant"))
-            p_node.set("id", pool.id)
-            p_node.set("name", pool.name)
-            p_node.set("processRef", process.process_id)
-
-    # ── Process ───────────────────────────────────────────────────────────────
-    proc_el = ET.SubElement(definitions, _tag(_BPMN, "process"))
-    proc_el.set("id", process.process_id)
-    proc_el.set("name", process.name)
-    proc_el.set("isExecutable", "true" if process.is_executable else "false")
-
-    if process.documentation:
-        doc = ET.SubElement(proc_el, _tag(_BPMN, "documentation"))
-        doc.text = process.documentation
-
-    # Lanes inside process
-    if process.pools:
-        for pool in process.pools:
-            if pool.lanes:
-                lset = ET.SubElement(proc_el, _tag(_BPMN, "laneSet"))
-                lset.set("id", f"{pool.id}_laneSet")
-                for lane in pool.lanes:
-                    lane_el = ET.SubElement(lset, _tag(_BPMN, "lane"))
-                    lane_el.set("id", lane.id)
-                    lane_el.set("name", lane.name)
-                    for eid in lane.element_ids:
-                        ref = ET.SubElement(lane_el, _tag(_BPMN, "flowNodeRef"))
-                        ref.text = eid
-
-    # Elements (top-level, non-boundary first, then boundary)
-    non_boundary = [e for e in process.elements if e.type != "boundaryEvent"]
-    boundary     = [e for e in process.elements if e.type == "boundaryEvent"]
-    for el in non_boundary + boundary:
-        _build_element_xml(proc_el, el, process.process_id)
-
-    # Sequence flows
-    for flow in process.flows:
-        sf = ET.SubElement(proc_el, _tag(_BPMN, "sequenceFlow"))
-        sf.set("id", flow.id)
-        sf.set("name", flow.name)
-        sf.set("sourceRef", flow.source)
-        sf.set("targetRef", flow.target)
-        if flow.condition:
-            cond = ET.SubElement(sf, _tag(_BPMN, "conditionExpression"))
-            cond.set("{http://www.w3.org/2001/XMLSchema-instance}type", "bpmn:tFormalExpression")
-            cond.text = flow.condition
-        if flow.is_default:
-            # Mark source gateway's default attribute
-            src_el = process.get_element(flow.source)
-            if src_el:
-                # Find the element node already written and set default attr
-                for node in proc_el:
-                    if node.get("id") == flow.source:
-                        node.set("default", flow.id)
-
-    # ── BPMN Diagram (DI) ─────────────────────────────────────────────────────
-    diagram = ET.SubElement(definitions, _tag(_DI, "BPMNDiagram"))
-    diagram.set("id", "BPMNDiagram_1")
-    plane = ET.SubElement(diagram, _tag(_DI, "BPMNPlane"))
-    plane.set("id", "BPMNPlane_1")
-    plane.set("bpmnElement", "collaboration_1" if process.pools else process.process_id)
-
-    # Pool shape
-    if process.pools:
-        pool_x, pool_y, pool_w, pool_h = _compute_pool_bounds(process, positions)
-        for pool in process.pools:
-            ps = ET.SubElement(plane, _tag(_DI, "BPMNShape"))
-            ps.set("id", f"{pool.id}_di")
-            ps.set("bpmnElement", pool.id)
-            ps.set("isHorizontal", "true")
-            _bounds(ps, pool_x - _POOL_HEADER_W, pool_y, pool_w + _POOL_HEADER_W, pool_h)
-
-            # Lane shapes
-            lane_h_total = pool_h / max(len(pool.lanes), 1)
-            for i, lane in enumerate(pool.lanes):
-                ls = ET.SubElement(plane, _tag(_DI, "BPMNShape"))
-                ls.set("id", f"{lane.id}_di")
-                ls.set("bpmnElement", lane.id)
-                ls.set("isHorizontal", "true")
-                _bounds(ls, pool_x, pool_y + i * lane_h_total, pool_w, lane_h_total)
+    # Pool & lane shapes
+    for eid, (x, y, w, h) in pool_shapes.items():
+        shape = ET.SubElement(plane, DI + "BPMNShape",
+                              {"id": eid + "_di", "bpmnElement": eid,
+                               "isHorizontal": "true"})
+        bounds = ET.SubElement(shape, DC + "Bounds")
+        bounds.set("x", str(x)); bounds.set("y", str(y))
+        bounds.set("width", str(w)); bounds.set("height", str(h))
 
     # Element shapes
-    for el in process.elements:
-        if el.id not in positions:
+    for el in bpmn.elements:
+        if el.id not in shapes:
             continue
-        x, y, w, h = positions[el.id]
-        shape = ET.SubElement(plane, _tag(_DI, "BPMNShape"))
-        shape.set("id", f"{el.id}_di")
-        shape.set("bpmnElement", el.id)
+        x, y, w, h = shapes[el.id]
+        is_marker = el.type in ("startEvent","endEvent","intermediateCatchEvent",
+                                 "intermediateThrowEvent","boundaryEvent")
+        attrs = {"id": el.id + "_di", "bpmnElement": el.id}
+        if not is_marker:
+            attrs["isExpanded"] = str(el.is_expanded).lower() if el.type == "subProcess" else "false"
+        shape = ET.SubElement(plane, DI + "BPMNShape", attrs)
+        bounds = ET.SubElement(shape, DC + "Bounds")
+        bounds.set("x", str(x)); bounds.set("y", str(y))
+        bounds.set("width", str(w)); bounds.set("height", str(h))
+        lbl = ET.SubElement(shape, DI + "BPMNLabel")
+        lbl_bounds = ET.SubElement(lbl, DC + "Bounds")
+        lbl_bounds.set("x", str(x)); lbl_bounds.set("y", str(y + h + 2))
+        lbl_bounds.set("width", str(w)); lbl_bounds.set("height", "14")
 
-        # Gateways need isMarkerVisible
-        if "Gateway" in el.type:
-            shape.set("isMarkerVisible", "true")
-
-        # Sub-processes: expanded flag
-        if el.type in ("subProcess", "adHocSubProcess"):
-            shape.set("isExpanded", "true" if el.is_expanded else "false")
-
-        _bounds(shape, x, y, w, h)
-
-        # Sub-process children DI
-        if el.type in ("subProcess", "adHocSubProcess") and el.is_expanded:
-            child_y = y + 40
-            child_x = x + 20
-            for child in el.children:
-                cshape = ET.SubElement(plane, _tag(_DI, "BPMNShape"))
-                cshape.set("id", f"{child.id}_di")
-                cshape.set("bpmnElement", child.id)
-                _bounds(cshape, child_x, child_y, _TASK_W, _TASK_H)
-                child_x += _TASK_W + 30
-
-    # Sequence flow edges
-    for flow in process.flows:
-        src_pos = positions.get(flow.source)
-        tgt_pos = positions.get(flow.target)
-        if not src_pos or not tgt_pos:
-            continue
-
-        edge = ET.SubElement(plane, _tag(_DI, "BPMNEdge"))
-        edge.set("id", f"{flow.id}_di")
-        edge.set("bpmnElement", flow.id)
-
-        sx, sy, sw, sh = src_pos
-        tx, ty, tw, th = tgt_pos
-
-        # Simple 2-waypoint path: center-bottom → center-top
-        _waypoint(edge, sx + sw / 2, sy + sh)
-        _waypoint(edge, tx + tw / 2, ty)
-
+    # Edges
+    for flow in bpmn.flows:
+        src = shapes.get(flow.source)
+        tgt = shapes.get(flow.target)
+        edge = ET.SubElement(plane, DI + "BPMNEdge",
+                             {"id": flow.id + "_di", "bpmnElement": flow.id})
+        if src and tgt:
+            sx, sy, sw, sh = src
+            tx2, ty2, tw, th = tgt
+            wp1 = ET.SubElement(edge, DID + "waypoint")
+            wp1.set("x", str(sx + sw // 2)); wp1.set("y", str(sy + sh // 2))
+            wp2 = ET.SubElement(edge, DID + "waypoint")
+            wp2.set("x", str(tx2 + tw // 2)); wp2.set("y", str(ty2 + th // 2))
         if flow.name:
-            label = ET.SubElement(edge, _tag(_DI, "BPMNLabel"))
-            mx = (sx + sw / 2 + tx + tw / 2) / 2
-            my = (sy + sh + ty) / 2
-            _bounds(label, mx - 30, my - 10, 60, 20)
-
-    return ET.tostring(definitions, encoding="unicode", xml_declaration=False)
+            lbl = ET.SubElement(edge, DI + "BPMNLabel")
+            ET.SubElement(lbl, DC + "Bounds",
+                          {"x": "0","y": "0","width": "50","height": "14"})
 
 
-# ── bpmn-js HTML preview ──────────────────────────────────────────────────────
+# ── Public entry point ────────────────────────────────────────────────────────
 
-def generate_bpmn_preview(bpmn_xml: str) -> str:
+def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
     """
-    Returns a self-contained HTML page that renders the BPMN XML
-    using bpmn-js NavigatedViewer (zoom + pan built-in).
-    Safe to embed in st.components.html().
+    Generates a valid BPMN 2.0 XML string from a BpmnProcess.
+    The output can be saved as .bpmn and opened in any BPMN tool.
     """
-    # Escape backticks so the XML can be safely embedded in a JS template literal
-    escaped_xml = bpmn_xml.replace("\\", "\\\\").replace("`", "\\`").replace("${", "\\${")
+    # Root
+    defs = ET.Element(B + "definitions", {
+        "xmlns":      NS["bpmn"],
+        "xmlns:bpmndi": NS["bpmndi"],
+        "xmlns:dc":   NS["dc"],
+        "xmlns:di":   NS["di"],
+        "xmlns:xsi":  NS["xsi"],
+        "targetNamespace": "http://process2diagram.io/bpmn",
+        "id":         "definitions_1",
+        "exporter":   "Process2Diagram",
+        "exporterVersion": "2.0",
+    })
+
+    process_id = "process_1"
+    proc = ET.SubElement(defs, B + "process", {
+        "id":          process_id,
+        "name":        bpmn.name,
+        "isExecutable":"false",
+        "processType": "None",
+    })
+
+    if bpmn.documentation:
+        _tag(proc, "documentation", {}, bpmn.documentation)
+
+    # Lanes
+    if bpmn.pools:
+        pool = bpmn.pools[0]
+        lset = _tag(proc, "laneSet", {"id": pool.id + "_lset", "name": ""})
+        for lane in pool.lanes:
+            ln = _tag(lset, "lane", {"id": lane.id, "name": lane.name})
+            for eid in lane.element_ids:
+                _tag(ln, "flowNodeRef", {}, eid)
+
+    # Elements
+    for el in bpmn.elements:
+        _build_element(proc, el, process_id)
+
+    # Flows
+    flows_idx = {}
+    for flow in bpmn.flows:
+        _build_flow(proc, flow)
+        flows_idx[flow.id] = flow
+
+    # Collaboration (pool box)
+    if bpmn.pools:
+        pool = bpmn.pools[0]
+        collab = ET.SubElement(defs, B + "collaboration", {"id": "collab_1"})
+        ET.SubElement(collab, B + "participant", {
+            "id":          pool.id,
+            "name":        pool.name,
+            "processRef":  process_id,
+        })
+
+    # Diagram interchange
+    diagram = ET.SubElement(defs, DI + "BPMNDiagram", {"id": "diagram_1"})
+    shapes, pool_shapes = _layout(bpmn)
+    _build_di(diagram, process_id, shapes, pool_shapes, bpmn, flows_idx)
+
+    return ET.tostring(defs, encoding="unicode", xml_declaration=False)
+
+
+def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
+    """
+    Returns an HTML string that renders the BPMN using bpmn-js (Camunda viewer).
+    Embed in a Streamlit components.html() call.
+    """
+    xml = generate_bpmn_xml(bpmn)
+    xml_escaped = xml.replace("`", "\\`").replace("$", "\\$")
 
     return f"""<!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8" />
   <style>
-    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    html, body {{ width: 100%; height: 100%; background: #f8fafc; }}
-    #canvas {{
-      width: 100%;
-      height: calc(100vh - 48px);
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,.1);
-    }}
+    * {{ margin:0; padding:0; box-sizing:border-box; }}
+    body {{ background:#f8fafc; overflow:hidden; }}
+    #canvas {{ width:100vw; height:100vh; }}
     #toolbar {{
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      background: #0f172a;
-      height: 48px;
+      position:fixed; bottom:16px; left:50%; transform:translateX(-50%);
+      display:flex; align-items:center; gap:4px;
+      background:rgba(15,23,42,0.92); backdrop-filter:blur(12px);
+      border-radius:12px; padding:6px 10px;
+      box-shadow:0 4px 24px rgba(0,0,0,0.3); z-index:100;
     }}
-    #toolbar button {{
-      background: #1e293b;
-      color: #e2e8f0;
-      border: 1px solid #334155;
-      border-radius: 4px;
-      padding: 4px 10px;
-      cursor: pointer;
-      font-size: 12px;
-      font-family: monospace;
+    .tb-btn {{
+      width:32px; height:32px; border:none; background:transparent;
+      color:#94a3b8; border-radius:6px; cursor:pointer; font-size:15px;
+      display:flex; align-items:center; justify-content:center;
+      transition:background 0.15s, color 0.15s;
     }}
-    #toolbar button:hover {{ background: #334155; }}
-    #toolbar span {{
-      color: #94a3b8;
-      font-size: 12px;
-      font-family: monospace;
-      margin-left: auto;
+    .tb-btn:hover {{ background:rgba(255,255,255,0.1); color:#e2e8f0; }}
+    .tb-divider {{ width:1px; height:20px; background:rgba(255,255,255,0.12); margin:0 2px; }}
+    #zoom-label {{ color:#64748b; font-size:11px; font-family:monospace; min-width:38px; text-align:center; }}
+    #toast {{
+      position:fixed; top:16px; left:50%;
+      transform:translateX(-50%) translateY(-60px);
+      background:rgba(15,23,42,0.92); color:#e2e8f0; font-size:12px;
+      padding:6px 14px; border-radius:20px;
+      transition:transform 0.25s cubic-bezier(.34,1.56,.64,1);
+      pointer-events:none; font-family:monospace;
     }}
-    #error-box {{
-      display: none;
-      padding: 12px 16px;
-      background: #fef2f2;
-      color: #b91c1c;
-      font-family: monospace;
-      font-size: 12px;
-      border-left: 4px solid #dc2626;
-      margin: 12px;
-      border-radius: 4px;
-    }}
+    #toast.show {{ transform:translateX(-50%) translateY(0); }}
   </style>
+  <link rel="stylesheet"
+    href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-js.css">
+  <link rel="stylesheet"
+    href="https://unpkg.com/bpmn-js@17/dist/assets/diagram-js.css">
+  <link rel="stylesheet"
+    href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-font/css/bpmn-embedded.css">
 </head>
 <body>
-  <div id="toolbar">
-    <button onclick="viewer.get('zoomScroll').reset()">⟳ Fit</button>
-    <button onclick="viewer.get('zoomScroll').zoom(0.2)">＋ Zoom In</button>
-    <button onclick="viewer.get('zoomScroll').zoom(-0.2)">－ Zoom Out</button>
-    <span id="info">Loading…</span>
-  </div>
-  <div id="error-box"></div>
-  <div id="canvas"></div>
+<div id="canvas"></div>
+<div id="toolbar">
+  <button class="tb-btn" id="btn-zoom-out" title="Zoom out">&#8722;</button>
+  <span id="zoom-label">100%</span>
+  <button class="tb-btn" id="btn-zoom-in"  title="Zoom in">&#43;</button>
+  <div class="tb-divider"></div>
+  <button class="tb-btn" id="btn-fit"   title="Fit to screen">&#8862;</button>
+  <button class="tb-btn" id="btn-reset" title="Reset view">&#8634;</button>
+</div>
+<div id="toast"></div>
 
-  <script src="https://unpkg.com/bpmn-js@17/dist/bpmn-navigated-viewer.production.min.js"></script>
-  <script>
-    const XML = `{escaped_xml}`;
+<script src="https://unpkg.com/bpmn-js@17/dist/bpmn-viewer.development.js"></script>
+<script>
+  const bpmnXml = `{xml_escaped}`;
+  const viewer = new BpmnJS({{ container: '#canvas' }});
+  const zoomLbl = document.getElementById('zoom-label');
+  const toast   = document.getElementById('toast');
 
-    const viewer = new BpmnJS({{ container: '#canvas' }});
+  function showToast(msg) {{
+    toast.textContent = msg; toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 1800);
+  }}
+  function updateZoomLabel() {{
+    const z = viewer.get('canvas').zoom();
+    zoomLbl.textContent = Math.round(z * 100) + '%';
+  }}
 
-    viewer.importXML(XML).then(function(result) {{
-      const warnings = result.warnings;
-      viewer.get('canvas').zoom('fit-viewport');
-      const info = document.getElementById('info');
-      const elCount = XML.match(/bpmnElement=/g);
-      info.textContent = 'Rendered · ' + (elCount ? elCount.length : '?') + ' elements' +
-                         (warnings.length ? ' · ⚠ ' + warnings.length + ' warning(s)' : '');
-    }}).catch(function(err) {{
-      const box = document.getElementById('error-box');
-      box.style.display = 'block';
-      box.textContent = 'BPMN render error: ' + err.message;
-      document.getElementById('info').textContent = 'Render failed';
-    }});
-  </script>
+  viewer.importXML(bpmnXml).then(() => {{
+    viewer.get('canvas').zoom('fit-viewport', 'auto');
+    updateZoomLabel();
+  }}).catch(err => {{
+    document.body.innerHTML = '<pre style="color:red;padding:16px">' +
+      'BPMN render error:\\n' + err.message + '</pre>';
+  }});
+
+  document.getElementById('btn-zoom-in').onclick = () => {{
+    viewer.get('zoomScroll').stepZoom(1); updateZoomLabel();
+  }};
+  document.getElementById('btn-zoom-out').onclick = () => {{
+    viewer.get('zoomScroll').stepZoom(-1); updateZoomLabel();
+  }};
+  document.getElementById('btn-fit').onclick = () => {{
+    viewer.get('canvas').zoom('fit-viewport', 'auto'); updateZoomLabel();
+  }};
+  document.getElementById('btn-reset').onclick = () => {{
+    viewer.get('canvas').zoom(1); updateZoomLabel();
+  }};
+</script>
 </body>
 </html>"""
