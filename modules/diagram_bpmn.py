@@ -1,5 +1,6 @@
 # modules/diagram_bpmn.py
-# Generates valid BPMN 2.0 XML (.bpmn) compatible with bpmn-js, Camunda, Bizagi, draw.io
+# BPMN 2.0 XML generator + bpmn-js preview
+# Compatible with: Camunda Modeler, Bizagi, draw.io, bpmn.io, Signavio
 
 import xml.etree.ElementTree as ET
 from modules.schema import BpmnProcess, BpmnElement, BpmnLane, BpmnPool, SequenceFlow
@@ -24,11 +25,11 @@ DDI = "{%s}" % _NS["di"]
 TASK_W,  TASK_H   = 120, 60
 GW_W,    GW_H     = 50,  50
 EV_W,    EV_H     = 36,  36
-H_GAP             = 60   # horizontal gap between elements
-V_PAD             = 40   # vertical padding inside lane
-LANE_HEADER_W     = 30   # width of lane label column
-POOL_HEADER_W     = 30   # width of pool label column
-FIRST_X           = 80   # x of first element inside lane (relative to lane start)
+H_GAP             = 60
+V_PAD             = 50
+LANE_HEADER_W     = 30
+POOL_HEADER_W     = 30
+FIRST_X           = 80
 MIN_LANE_H        = 160
 
 
@@ -38,8 +39,10 @@ def _sub(parent, tag, attribs=None):
 
 def _ev_def(etype):
     return {
-        "message": "messageEventDefinition", "timer": "timerEventDefinition",
-        "error": "errorEventDefinition",     "signal": "signalEventDefinition",
+        "message": "messageEventDefinition",
+        "timer": "timerEventDefinition",
+        "error": "errorEventDefinition",
+        "signal": "signalEventDefinition",
         "escalation": "escalationEventDefinition",
         "terminate": "terminateEventDefinition",
         "compensation": "compensateEventDefinition",
@@ -51,28 +54,87 @@ def _ev_def(etype):
 
 def _el_size(el):
     t = el.type
-    if t in ("startEvent","endEvent","intermediateThrowEvent",
-             "intermediateCatchEvent","boundaryEvent"):
+    if t in ("startEvent", "endEvent", "intermediateThrowEvent",
+             "intermediateCatchEvent", "boundaryEvent"):
         return EV_W, EV_H
     if "Gateway" in t:
         return GW_W, GW_H
     return TASK_W, TASK_H
 
 
-# ── Process XML ───────────────────────────────────────────────────────────────
+# ── Lane assignment ───────────────────────────────────────────────────────────
+
+def _assign_lanes(bpmn):
+    """
+    Returns a dict {element_id: lane_id} for every non-boundary element.
+    Elements not in any lane are assigned by flow-context (inherit from neighbor)
+    or to the last lane as fallback.
+    """
+    if not bpmn.pools:
+        return {}
+
+    pool = bpmn.pools[0]
+    assignment = {}
+
+    # Direct assignment from lane.element_ids
+    for lane in pool.lanes:
+        for eid in lane.element_ids:
+            assignment[eid] = lane.id
+
+    # Find unassigned non-boundary elements
+    all_ids = {e.id for e in bpmn.elements if e.type != "boundaryEvent"}
+    unassigned = all_ids - set(assignment.keys())
+
+    if not unassigned or not pool.lanes:
+        return assignment
+
+    # Build adjacency for flow-context inference
+    predecessors = {e.id: [] for e in bpmn.elements}
+    successors   = {e.id: [] for e in bpmn.elements}
+    for f in bpmn.flows:
+        if f.source in predecessors:
+            successors[f.source].append(f.target)
+        if f.target in predecessors:
+            predecessors[f.target].append(f.source)
+
+    # Iteratively assign unassigned elements from neighbors
+    changed = True
+    while changed and unassigned:
+        changed = False
+        for eid in list(unassigned):
+            # Look at predecessors then successors
+            neighbors = predecessors[eid] + successors[eid]
+            for nid in neighbors:
+                if nid in assignment:
+                    assignment[eid] = assignment[nid]
+                    unassigned.discard(eid)
+                    changed = True
+                    break
+
+    # Remaining truly isolated → last lane
+    fallback_lane = pool.lanes[-1].id
+    for eid in unassigned:
+        assignment[eid] = fallback_lane
+
+    return assignment
+
+
+# ── Process XML builders ──────────────────────────────────────────────────────
 
 def _build_el(parent, el):
     t = el.type
-    if t in ("startEvent","endEvent","intermediateThrowEvent","intermediateCatchEvent"):
+    if t in ("startEvent", "endEvent", "intermediateThrowEvent", "intermediateCatchEvent"):
         node = _sub(parent, B + t, {"id": el.id, "name": el.name})
         d = _ev_def(el.event_type)
         if d:
             _sub(node, B + d, {"id": el.id + "_def"})
 
     elif t == "boundaryEvent":
-        attrs = {"id": el.id, "name": el.name,
-                 "attachedToRef": el.attached_to or "",
-                 "cancelActivity": str(el.is_interrupting).lower()}
+        attrs = {
+            "id": el.id, "name": el.name,
+            "attachedToRef": el.attached_to or "",
+            "cancelActivity": str(el.is_interrupting).lower(),
+        }
         node = _sub(parent, B + "boundaryEvent", attrs)
         d = _ev_def(el.event_type)
         if d:
@@ -94,10 +156,9 @@ def _build_el(parent, el):
         _sub(parent, B + "callActivity", attrs)
 
     else:
-        tag = t if t in ("userTask","serviceTask","scriptTask","sendTask",
-                         "receiveTask","manualTask","businessRuleTask") else "task"
-        attrs = {"id": el.id, "name": el.name}
-        node = _sub(parent, B + tag, attrs)
+        tag = t if t in ("userTask", "serviceTask", "scriptTask", "sendTask",
+                         "receiveTask", "manualTask", "businessRuleTask") else "task"
+        node = _sub(parent, B + tag, {"id": el.id, "name": el.name})
         if el.is_loop:
             _sub(node, B + "standardLoopCharacteristics", {"id": el.id + "_loop"})
         elif el.is_parallel_multi:
@@ -108,16 +169,16 @@ def _build_el(parent, el):
             mi.set("isSequential", "true")
 
     if el.documentation:
-        # attach documentation to the last added child
         kids = list(parent)
         if kids:
             _sub(kids[-1], B + "documentation", {}).text = el.documentation
 
 
 def _build_flow(parent, flow):
-    attrs = {"id": flow.id, "name": flow.name,
-             "sourceRef": flow.source, "targetRef": flow.target}
-    node = _sub(parent, B + "sequenceFlow", attrs)
+    node = _sub(parent, B + "sequenceFlow", {
+        "id": flow.id, "name": flow.name,
+        "sourceRef": flow.source, "targetRef": flow.target,
+    })
     if flow.condition:
         c = _sub(node, B + "conditionExpression",
                  {"{%s}type" % _NS["xsi"]: "tFormalExpression"})
@@ -126,12 +187,10 @@ def _build_flow(parent, flow):
 
 # ── Layout ────────────────────────────────────────────────────────────────────
 
-def _topo_sort(elements, flows):
-    """Return element ids in approximate topological order."""
-    ids   = [e.id for e in elements]
-    indeg = {i: 0 for i in ids}
-    succ  = {i: [] for i in ids}
+def _topo_sort(ids, flows):
     id_set = set(ids)
+    indeg  = {i: 0 for i in ids}
+    succ   = {i: [] for i in ids}
     for f in flows:
         if f.source in id_set and f.target in id_set:
             succ[f.source].append(f.target)
@@ -145,102 +204,85 @@ def _topo_sort(elements, flows):
             indeg[m] -= 1
             if indeg[m] == 0:
                 queue.append(m)
-    # append any remaining (cycles)
     for i in ids:
         if i not in result:
             result.append(i)
     return result
 
 
-def _compute_layout(bpmn):
-    """
-    Returns:
-      shapes      : {element_id: (x, y, w, h)}   — absolute coords
-      pool_shapes : {pool/lane_id: (x, y, w, h)}  — absolute coords
-    """
+def _compute_layout(bpmn, lane_assignment):
     shapes      = {}
     pool_shapes = {}
 
-    order = _topo_sort(
-        [e for e in bpmn.elements if e.type != "boundaryEvent"],
-        bpmn.flows
-    )
+    non_boundary = [e for e in bpmn.elements if e.type != "boundaryEvent"]
+    order = _topo_sort([e.id for e in non_boundary], bpmn.flows)
+    el_map = {e.id: e for e in bpmn.elements}
 
     if bpmn.pools:
         pool = bpmn.pools[0]
 
-        # Collect ordered elements per lane
-        lane_els = {}
+        # Group ordered elements by lane (using resolved assignment)
+        lane_order = {}
         for lane in pool.lanes:
-            s = set(lane.element_ids)
-            lane_els[lane.id] = [eid for eid in order if eid in s]
+            lane_order[lane.id] = [
+                eid for eid in order
+                if lane_assignment.get(eid) == lane.id
+            ]
 
-        # Compute lane heights
+        # Lane heights
         lane_h = {}
         for lane in pool.lanes:
-            els = lane_els[lane.id]
-            max_h = max((_el_size(e)[1] for e in bpmn.elements if e.id in set(els)),
-                        default=TASK_H)
+            els_in_lane = [el_map[eid] for eid in lane_order[lane.id] if eid in el_map]
+            max_h = max((_el_size(e)[1] for e in els_in_lane), default=TASK_H)
             lane_h[lane.id] = max(MIN_LANE_H, max_h + V_PAD * 2)
 
-        total_pool_h = sum(lane_h[l.id] for l in pool.lanes)
+        total_h = sum(lane_h[l.id] for l in pool.lanes)
 
-        # Pool shape (absolute)
-        pool_x = 0
-        pool_y = 0
-        pool_w = POOL_HEADER_W + LANE_HEADER_W
-
-        # First pass: compute max width needed
+        # Compute pool width
+        pool_w = 600
         for lane in pool.lanes:
-            els = lane_els[lane.id]
+            els = lane_order[lane.id]
             if els:
-                total_w = FIRST_X
+                w = POOL_HEADER_W + LANE_HEADER_W + FIRST_X
                 for eid in els:
-                    el = next((e for e in bpmn.elements if e.id == eid), None)
-                    if el:
-                        w, _ = _el_size(el)
-                        total_w += w + H_GAP
-                pool_w = max(pool_w, POOL_HEADER_W + LANE_HEADER_W + total_w + H_GAP)
+                    if eid in el_map:
+                        ew, _ = _el_size(el_map[eid])
+                        w += ew + H_GAP
+                pool_w = max(pool_w, w)
 
-        pool_shapes[pool.id] = (pool_x, pool_y,
-                                max(pool_w, 600), total_pool_h + 0)
+        pool_shapes[pool.id] = (0, 0, pool_w, total_h)
 
-        # Lane shapes and element positions
-        cur_y = pool_y
+        cur_y = 0
         for lane in pool.lanes:
             lh = lane_h[lane.id]
-            lx = pool_x + POOL_HEADER_W
-            ly = cur_y
-            lw = pool_shapes[pool.id][2] - POOL_HEADER_W
-            pool_shapes[lane.id] = (lx, ly, lw, lh)
+            lx = POOL_HEADER_W
+            lw = pool_w - POOL_HEADER_W
+            pool_shapes[lane.id] = (lx, cur_y, lw, lh)
 
-            els = lane_els[lane.id]
             cur_x = lx + LANE_HEADER_W + FIRST_X
-            for eid in els:
-                el = next((e for e in bpmn.elements if e.id == eid), None)
-                if not el:
+            for eid in lane_order[lane.id]:
+                if eid not in el_map:
                     continue
+                el = el_map[eid]
                 w, h = _el_size(el)
-                x = int(cur_x)
-                y = int(ly + (lh - h) / 2)
-                shapes[el.id] = (x, y, w, h)
+                shapes[el.id] = (int(cur_x), int(cur_y + (lh - h) / 2), w, h)
                 cur_x += w + H_GAP
 
             cur_y += lh
 
     else:
-        # No pools — simple vertical layout
         cur_y = V_PAD
         for eid in order:
-            el = next((e for e in bpmn.elements
-                       if e.id == eid and e.type != "boundaryEvent"), None)
-            if not el:
+            if eid not in el_map:
+                continue
+            el = el_map[eid]
+            if el.type == "boundaryEvent":
                 continue
             w, h = _el_size(el)
             shapes[el.id] = (FIRST_X, int(cur_y), w, h)
             cur_y += h + H_GAP
 
-    # Boundary events: anchored to bottom-right of host
+    # Boundary events: anchored on host
     for el in bpmn.elements:
         if el.type == "boundaryEvent" and el.attached_to:
             host = shapes.get(el.attached_to)
@@ -249,9 +291,7 @@ def _compute_layout(bpmn):
                 shapes[el.id] = (hx + hw - EV_W // 2,
                                   hy + hh - EV_H // 2,
                                   EV_W, EV_H)
-            else:
-                # Host not found — place off-canvas so bpmn-js doesn't crash
-                shapes[el.id] = (10, 10, EV_W, EV_H)
+            # If host not found: do NOT add shape — bpmn-js handles missing DI gracefully
 
     return shapes, pool_shapes
 
@@ -264,54 +304,53 @@ def _wp(edge, x, y):
     wp.set("y", str(int(y)))
 
 
-def _build_di(diagram, plane_bpmn_el, shapes, pool_shapes, bpmn):
-    plane = _sub(diagram, DI + "BPMNPlane",
-                 {"id": "plane_1", "bpmnElement": plane_bpmn_el})
+def _valid(coords):
+    return all(v == v and abs(v) != float("inf") for v in coords)
 
-    # Pool / lane shapes (isHorizontal=true required for lanes)
+
+def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
+    plane = _sub(diagram, DI + "BPMNPlane",
+                 {"id": "plane_1", "bpmnElement": plane_ref})
+
+    # Pool / lane shapes
     for eid, (x, y, w, h) in pool_shapes.items():
         shape = _sub(plane, DI + "BPMNShape",
-                     {"id": eid + "_di", "bpmnElement": eid,
-                      "isHorizontal": "true"})
+                     {"id": eid + "_di", "bpmnElement": eid, "isHorizontal": "true"})
         b = _sub(shape, DC + "Bounds")
         b.set("x", str(int(x))); b.set("y", str(int(y)))
         b.set("width", str(int(w))); b.set("height", str(int(h)))
 
-    # Element shapes
+    # Element shapes — only emit if coords are valid
     for el in bpmn.elements:
         if el.id not in shapes:
-            continue
+            continue  # skip entirely — no DI shape = bpmn-js ignores it
         x, y, w, h = shapes[el.id]
-        # Validate — skip if any coord is invalid
-        if any(v != v or abs(v) == float("inf") for v in (x, y, w, h)):
+        if not _valid((x, y, w, h)):
             continue
-        attrs = {"id": el.id + "_di", "bpmnElement": el.id}
-        shape = _sub(plane, DI + "BPMNShape", attrs)
+        shape = _sub(plane, DI + "BPMNShape", {"id": el.id + "_di", "bpmnElement": el.id})
         b = _sub(shape, DC + "Bounds")
         b.set("x", str(int(x))); b.set("y", str(int(y)))
         b.set("width", str(int(w))); b.set("height", str(int(h)))
-        # Label below element
         lbl = _sub(shape, DI + "BPMNLabel")
         lb  = _sub(lbl, DC + "Bounds")
         lb.set("x", str(int(x))); lb.set("y", str(int(y + h + 2)))
         lb.set("width", str(int(w))); lb.set("height", "20")
 
-    # Edges
+    # Edges — only emit waypoints if both endpoints have valid shapes
     for flow in bpmn.flows:
-        src = shapes.get(flow.source)
-        tgt = shapes.get(flow.target)
         edge = _sub(plane, DI + "BPMNEdge",
                     {"id": flow.id + "_di", "bpmnElement": flow.id})
-        if src and tgt:
+        src = shapes.get(flow.source)
+        tgt = shapes.get(flow.target)
+        if src and tgt and _valid(src) and _valid(tgt):
             sx, sy, sw, sh = src
             tx, ty, tw, th = tgt
-            # Source: right-center; Target: left-center
-            _wp(edge, sx + sw,       sy + sh / 2)
-            _wp(edge, tx,            ty + th / 2)
+            _wp(edge, sx + sw,     sy + sh / 2)  # source right-center
+            _wp(edge, tx,          ty + th / 2)  # target left-center
         else:
-            # Fallback waypoints to avoid SVGMatrix crash
-            _wp(edge, 100, 100)
-            _wp(edge, 200, 100)
+            # Minimal valid waypoints so bpmn-js doesn't crash on this flow
+            _wp(edge, 50, 50)
+            _wp(edge, 100, 50)
         if flow.name:
             lbl = _sub(edge, DI + "BPMNLabel")
             _sub(lbl, DC + "Bounds",
@@ -321,17 +360,17 @@ def _build_di(diagram, plane_bpmn_el, shapes, pool_shapes, bpmn):
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
-    """Generate BPMN 2.0 XML string. Save as .bpmn to open in any BPMN tool."""
+    """Generate BPMN 2.0 XML. Save as .bpmn to open in Camunda, Bizagi, draw.io, etc."""
     defs = ET.Element(B + "definitions", {
-        "xmlns":          _NS["bpmn"],
-        "xmlns:bpmndi":   _NS["bpmndi"],
-        "xmlns:dc":       _NS["dc"],
-        "xmlns:di":       _NS["di"],
-        "xmlns:xsi":      _NS["xsi"],
-        "targetNamespace":"http://process2diagram.io/bpmn",
-        "id":             "definitions_1",
-        "exporter":       "Process2Diagram",
-        "exporterVersion":"2.0",
+        "xmlns":           _NS["bpmn"],
+        "xmlns:bpmndi":    _NS["bpmndi"],
+        "xmlns:dc":        _NS["dc"],
+        "xmlns:di":        _NS["di"],
+        "xmlns:xsi":       _NS["xsi"],
+        "targetNamespace": "http://process2diagram.io/bpmn",
+        "id":              "definitions_1",
+        "exporter":        "Process2Diagram",
+        "exporterVersion": "2.0",
     })
 
     process_id = "process_1"
@@ -342,20 +381,25 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
     if bpmn.documentation:
         _sub(proc, B + "documentation", {}).text = bpmn.documentation
 
-    # Lane set
+    lane_assignment = _assign_lanes(bpmn)
+
+    # Lane set — use resolved assignment so all elements are covered
     if bpmn.pools:
         pool = bpmn.pools[0]
         lset = _sub(proc, B + "laneSet", {"id": pool.id + "_lset"})
+        # Rebuild element_ids from resolved assignment
+        lane_members = {lane.id: [] for lane in pool.lanes}
+        for eid, lid in lane_assignment.items():
+            if lid in lane_members:
+                lane_members[lid].append(eid)
         for lane in pool.lanes:
             ln = _sub(lset, B + "lane", {"id": lane.id, "name": lane.name})
-            for eid in lane.element_ids:
+            for eid in lane_members[lane.id]:
                 _sub(ln, B + "flowNodeRef", {}).text = eid
 
-    # Elements
+    # Elements & flows
     for el in bpmn.elements:
         _build_el(proc, el)
-
-    # Flows
     for flow in bpmn.flows:
         _build_flow(proc, flow)
 
@@ -365,13 +409,11 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
         pool      = bpmn.pools[0]
         collab_id = "collab_1"
         collab    = _sub(defs, B + "collaboration", {"id": collab_id})
-        _sub(collab, B + "participant", {
-            "id": pool.id, "name": pool.name, "processRef": process_id,
-        })
+        _sub(collab, B + "participant",
+             {"id": pool.id, "name": pool.name, "processRef": process_id})
 
     # Diagram interchange
-    # CRITICAL: BPMNPlane must reference collaboration when it exists
-    shapes, pool_shapes = _compute_layout(bpmn)
+    shapes, pool_shapes = _compute_layout(bpmn, lane_assignment)
     plane_ref = collab_id if collab_id else process_id
     diagram   = _sub(defs, DI + "BPMNDiagram", {"id": "diagram_1"})
     _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn)
@@ -381,9 +423,8 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
 
 
 def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
-    """HTML with bpmn-js viewer + zoom/pan toolbar. Use in components.html()."""
-    xml = generate_bpmn_xml(bpmn)
-    # Escape backticks and $ for JS template literal
+    """HTML with bpmn-js viewer. Use inside Streamlit components.html()."""
+    xml    = generate_bpmn_xml(bpmn)
     xml_js = xml.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
 
     return f"""<!DOCTYPE html>
@@ -408,11 +449,13 @@ def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
     }}
     .tb-btn:hover{{background:rgba(255,255,255,0.1);color:#e2e8f0}}
     .tb-divider{{width:1px;height:20px;background:rgba(255,255,255,0.12);margin:0 2px}}
-    #zoom-label{{color:#64748b;font-size:11px;font-family:monospace;min-width:38px;text-align:center}}
-    #err{{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-      background:white;border:1px solid #fca5a5;border-radius:8px;padding:24px;
-      max-width:500px;font-family:monospace;font-size:12px;color:#dc2626;
-      box-shadow:0 4px 24px rgba(0,0,0,0.15)}}
+    #zoom-label{{color:#64748b;font-size:11px;font-family:monospace;
+      min-width:38px;text-align:center}}
+    #err{{display:none;position:fixed;top:16px;left:50%;
+      transform:translateX(-50%);
+      background:white;border:1px solid #fca5a5;border-radius:8px;
+      padding:16px 24px;max-width:600px;font-family:monospace;font-size:12px;
+      color:#dc2626;box-shadow:0 4px 24px rgba(0,0,0,0.15);z-index:200}}
   </style>
   <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-js.css">
   <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/diagram-js.css">
@@ -431,27 +474,40 @@ def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
 <div id="err"></div>
 <script src="https://unpkg.com/bpmn-js@17/dist/bpmn-viewer.development.js"></script>
 <script>
-const xml = `{xml_js}`;
+const xml     = `{xml_js}`;
 const viewer  = new BpmnJS({{container:'#canvas'}});
 const zoomLbl = document.getElementById('zoom-label');
 const errDiv  = document.getElementById('err');
 
-function updateLabel(){{
+function updateLabel() {{
   try {{ zoomLbl.textContent = Math.round(viewer.get('canvas').zoom()*100)+'%'; }} catch(e){{}}
 }}
 
-viewer.importXML(xml).then(()=>{{
-  viewer.get('canvas').zoom('fit-viewport','auto');
-  updateLabel();
-}}).catch(err=>{{
-  errDiv.style.display='block';
-  errDiv.textContent = 'BPMN render error:\\n' + err.message;
-}});
+viewer.importXML(xml)
+  .then(() => {{
+    // Small delay ensures all shapes are rendered before fit
+    setTimeout(() => {{
+      try {{
+        viewer.get('canvas').zoom('fit-viewport', 'auto');
+      }} catch(e) {{
+        // fit-viewport failed — set a safe default zoom instead
+        try {{ viewer.get('canvas').zoom(0.75); }} catch(_) {{}}
+      }}
+      updateLabel();
+    }}, 150);
+  }})
+  .catch(err => {{
+    errDiv.style.display = 'block';
+    errDiv.innerHTML = '<b>BPMN render error:</b><br>' + err.message;
+  }});
 
-document.getElementById('btn-in').onclick    = ()=>{{ viewer.get('zoomScroll').stepZoom(1);  updateLabel(); }};
-document.getElementById('btn-out').onclick   = ()=>{{ viewer.get('zoomScroll').stepZoom(-1); updateLabel(); }};
-document.getElementById('btn-fit').onclick   = ()=>{{ viewer.get('canvas').zoom('fit-viewport','auto'); updateLabel(); }};
-document.getElementById('btn-reset').onclick = ()=>{{ viewer.get('canvas').zoom(1); updateLabel(); }};
+document.getElementById('btn-in').onclick    = () => {{ viewer.get('zoomScroll').stepZoom(1);  updateLabel(); }};
+document.getElementById('btn-out').onclick   = () => {{ viewer.get('zoomScroll').stepZoom(-1); updateLabel(); }};
+document.getElementById('btn-fit').onclick   = () => {{
+  try {{ viewer.get('canvas').zoom('fit-viewport','auto'); }} catch(e) {{ viewer.get('canvas').zoom(0.75); }}
+  updateLabel();
+}};
+document.getElementById('btn-reset').onclick = () => {{ viewer.get('canvas').zoom(1); updateLabel(); }};
 viewer.get('eventBus').on('canvas.viewbox.changed', updateLabel);
 </script>
 </body>
