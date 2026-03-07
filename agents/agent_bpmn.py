@@ -226,26 +226,30 @@ class AgentBPMN(BaseAgent):
 
     @staticmethod
     def _generate_mermaid(model: BPMNModel) -> str:
-
         def _safe(t: str) -> str:
+            if not t:
+                return "Step"
+            # Remove caracteres problemáticos mas mantém formatação básica
             t = t.replace('"', "'")
-            t = re.sub(r'[()\[\]{}/\\:;|<>]', " ", t)
+            t = re.sub(r'[\\/;|<>]', " ", t)  # Remove apenas caracteres realmente problemáticos
             t = re.sub(r' {2,}', " ", t).strip()
-            return t or "Step"
+            return t
 
         lines = ["flowchart TD"]
 
         for step in model.steps:
             label = _safe(step.title)
             if step.is_decision:
-                lines.append(f'    {step.id}{{"{label}"}}')
+                # Para decisões: usar colchetes duplos (sintaxe correta do Mermaid)
+                lines.append(f'    {step.id}{{{label}}}')
             else:
-                lines.append(f'    {step.id}["{label}"]')
+                # Para tarefas: usar colchetes simples
+                lines.append(f'    {step.id}[{label}]')
 
         for edge in model.edges:
             if edge.label:
                 safe_lbl = _safe(edge.label)
-                # Mermaid requires quoted labels when they contain spaces
+                # No Mermaid, labels com espaços precisam de aspas
                 if " " in safe_lbl:
                     arrow = f'-- "{safe_lbl}" -->'
                 else:
@@ -254,6 +258,7 @@ class AgentBPMN(BaseAgent):
                 arrow = "-->"
             lines.append(f"    {edge.source} {arrow} {edge.target}")
 
+        # Estilo para decisões
         decision_ids = [s.id for s in model.steps if s.is_decision]
         for did in decision_ids:
             lines.append(f"    style {did} fill:#fff3cd,stroke:#f59e0b")
