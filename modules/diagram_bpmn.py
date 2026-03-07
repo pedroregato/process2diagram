@@ -504,6 +504,7 @@ def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
       border-radius: 8px;
       cursor: pointer;
       font-size: 18px;
+      transition: all 0.2s ease;
     }}
     
     .tb-btn:hover {{
@@ -563,6 +564,7 @@ def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
   <script src="https://unpkg.com/bpmn-js@17.9.1/dist/bpmn-viewer.development.js"></script>
   <script>
     (function() {{
+      // Create viewer
       const viewer = new BpmnJS({{
         container: '#bpmn-container'
       }});
@@ -571,41 +573,51 @@ def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
       const errDiv = document.getElementById('err');
       const zoomLbl = document.getElementById('zoom-label');
       
+      // Import XML
       viewer.importXML(xml)
         .then(() => {{
           const canvas = viewer.get('canvas');
           
+          // Update zoom label
           function updateZoom() {{
             zoomLbl.textContent = Math.round(canvas.zoom() * 100) + '%';
           }}
           
-          document.getElementById('btn-in').onclick = () => {{
+          // Button handlers
+          document.getElementById('btn-in').addEventListener('click', () => {{
             canvas.zoom(1.2);
             updateZoom();
-          }};
+          }});
           
-          document.getElementById('btn-out').onclick = () => {{
+          document.getElementById('btn-out').addEventListener('click', () => {{
             canvas.zoom(0.8);
             updateZoom();
-          }};
+          }});
           
-          document.getElementById('btn-fit').onclick = () => {{
+          document.getElementById('btn-fit').addEventListener('click', () => {{
             canvas.zoom('fit-viewport');
             updateZoom();
-          }};
+          }});
           
-          document.getElementById('btn-reset').onclick = () => {{
+          document.getElementById('btn-reset').addEventListener('click', () => {{
             canvas.zoom(1);
             canvas.scroll({{ dx: 0, dy: 0 }});
             updateZoom();
-          }};
+          }});
           
+          // Listen for zoom changes
           canvas.on('viewbox.changed', updateZoom);
-          setTimeout(() => canvas.zoom('fit-viewport'), 200);
+          
+          // Initial fit
+          setTimeout(() => {{
+            canvas.zoom('fit-viewport');
+            updateZoom();
+          }}, 200);
         }})
         .catch(err => {{
           errDiv.style.display = 'block';
           errDiv.innerHTML = '<b>Erro:</b> ' + err.message;
+          console.error(err);
         }});
     }})();
   </script>
