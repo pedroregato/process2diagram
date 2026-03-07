@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import re
+
 from agents.base_agent import BaseAgent
 from core.knowledge_hub import KnowledgeHub, BPMNModel, BPMNStep, BPMNEdge
 
@@ -224,12 +226,11 @@ class AgentBPMN(BaseAgent):
 
     @staticmethod
     def _generate_mermaid(model: BPMNModel) -> str:
-        import re as _re
 
         def _safe(t: str) -> str:
             t = t.replace('"', "'")
-            t = _re.sub(r'[()\[\]{}/\\:;|<>]', " ", t)
-            t = _re.sub(r' {2,}', " ", t).strip()
+            t = re.sub(r'[()\[\]{}/\\:;|<>]', " ", t)
+            t = re.sub(r' {2,}', " ", t).strip()
             return t or "Step"
 
         lines = ["flowchart TD"]
@@ -244,7 +245,11 @@ class AgentBPMN(BaseAgent):
         for edge in model.edges:
             if edge.label:
                 safe_lbl = _safe(edge.label)
-                arrow = f"-- {safe_lbl} -->"
+                # Mermaid requires quoted labels when they contain spaces
+                if " " in safe_lbl:
+                    arrow = f'-- "{safe_lbl}" -->'
+                else:
+                    arrow = f"-- {safe_lbl} -->"
             else:
                 arrow = "-->"
             lines.append(f"    {edge.source} {arrow} {edge.target}")
@@ -301,3 +306,4 @@ class AgentBPMN(BaseAgent):
             f"  {inner}\n"
             "</root></mxGraphModel>"
         )
+    
