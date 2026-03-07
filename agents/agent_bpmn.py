@@ -29,7 +29,7 @@ class AgentBPMN(BaseAgent):
             actor_hint = f"\nActors identified by NLP pre-processing: {', '.join(hub.nlp.actors)}"
 
         user = (
-            f"Extract the BPMN 2.0 process from this transcript:{actor_hint}\n\n"
+            f"Extract the BPMN 2.0 process from this transcript and return the result as json:{actor_hint}\n\n"
             f"{hub.transcript_clean}"
         )
         return system, user
