@@ -2,6 +2,8 @@
 agent: bpmn
 spec: BPMN 2.0 (OMG — ISO/IEC 19510)
 version: 1.0
+project: process2diagram
+iniciativa: Pedro Regato
 ---
 
 ## Identidade
@@ -85,3 +87,4 @@ Se não houver atores claros, omita lanes e use processo plano.
 7. **Sem invenção**: não adicione etapas que não estejam na transcrição.
 8. **Output language**: {output_language}
 9. **Retorne APENAS o JSON**. Nenhum texto, nenhum markdown.
+
