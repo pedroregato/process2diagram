@@ -68,6 +68,28 @@ _NARRATIVE_SPLITTER = re.compile(
 )
 
 
+# ── spaCy cache — loaded once per process, not per instantiation ─────────────
+
+def _load_spacy_cached():
+    """
+    Load spaCy model once and cache at module level.
+    Called by NLPChunker._load_spacy() on first instantiation only.
+    """
+    if not hasattr(_load_spacy_cached, "_cache"):
+        try:
+            import spacy
+            try:
+                _load_spacy_cached._cache = spacy.load("pt_core_news_lg")
+            except OSError:
+                try:
+                    _load_spacy_cached._cache = spacy.load("pt_core_news_sm")
+                except OSError:
+                    _load_spacy_cached._cache = None
+        except ImportError:
+            _load_spacy_cached._cache = None
+    return _load_spacy_cached._cache
+
+
 # ── NLP Chunker ───────────────────────────────────────────────────────────────
 
 class NLPChunker:
@@ -249,15 +271,5 @@ class NLPChunker:
 
     @staticmethod
     def _load_spacy():
-        """Try to load spaCy model. Silently return None if not installed."""
-        try:
-            import spacy
-            try:
-                return spacy.load("pt_core_news_lg")
-            except OSError:
-                try:
-                    return spacy.load("pt_core_news_sm")
-                except OSError:
-                    return None
-        except ImportError:
-            return None
+        """Try to load spaCy model. Result is cached at class level after first call."""
+        return _load_spacy_cached()

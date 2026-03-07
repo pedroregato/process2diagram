@@ -152,4 +152,3 @@ class AgentMinutes(BaseAgent):
         ]
 
         return "\n".join(lines)
-    

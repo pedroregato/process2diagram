@@ -18,6 +18,20 @@ from agents.agent_minutes import AgentMinutes
 # ── BPMN viewer (presentation layer — separated from generator) ───────────────
 from modules.bpmn_viewer import preview_from_xml
 
+
+# ── Cached agent factory ──────────────────────────────────────────────────────
+@st.cache_resource(show_spinner=False)
+def _get_orchestrator(provider_key: str, api_key: str):
+    """
+    Cache the Orchestrator (and its agents) across reruns.
+    Keyed by provider + api_key so it refreshes if the user changes provider.
+    Caching avoids re-loading spaCy and SKILL.md files on every interaction.
+    """
+    from modules.config import AVAILABLE_PROVIDERS
+    cfg = AVAILABLE_PROVIDERS[provider_key]
+    client_info = {"api_key": api_key}
+    return Orchestrator(client_info=client_info, provider_cfg=cfg)
+
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Process2Diagram",
@@ -147,11 +161,9 @@ if generate_btn:
 
     # ── Run Orchestrator ──────────────────────────────────────────────────────
     try:
-        orchestrator = Orchestrator(
-            client_info=client_info,
-            provider_cfg=provider_cfg,
-            progress_callback=update_progress,
-        )
+        # Retrieve cached orchestrator (agents + spaCy loaded once per session)
+        orchestrator = _get_orchestrator(selected_provider, client_info["api_key"])
+        orchestrator._progress = update_progress  # attach fresh callback each run
         hub = orchestrator.run(
             hub,
             output_language=output_language,
@@ -379,3 +391,4 @@ if generate_btn:
 
     # Store in session
     st.session_state["hub"] = hub
+
