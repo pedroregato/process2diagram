@@ -18,20 +18,6 @@ from agents.agent_minutes import AgentMinutes
 # ── BPMN viewer (presentation layer — separated from generator) ───────────────
 from modules.bpmn_viewer import preview_from_xml
 
-
-# ── Cached agent factory ──────────────────────────────────────────────────────
-@st.cache_resource(show_spinner=False)
-def _get_orchestrator(provider_key: str, api_key: str):
-    """
-    Cache the Orchestrator (and its agents) across reruns.
-    Keyed by provider + api_key so it refreshes if the user changes provider.
-    Caching avoids re-loading spaCy and SKILL.md files on every interaction.
-    """
-    from modules.config import AVAILABLE_PROVIDERS
-    cfg = AVAILABLE_PROVIDERS[provider_key]
-    client_info = {"api_key": api_key}
-    return Orchestrator(client_info=client_info, provider_cfg=cfg)
-
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Process2Diagram",
@@ -127,6 +113,73 @@ if uploaded_file:
     transcript_text = load_transcript(uploaded_file)
     st.success(f"Carregado: {uploaded_file.name}")
 
+
+# ── Diagnóstico — sempre visível, fora do bloco generate_btn ──────────────────
+with st.expander("🛠️ Diagnóstico — Arquivos de Skill em Runtime", expanded=False):
+    st.caption(
+        "Mostra o conteúdo **real** dos arquivos lidos pelo servidor. "
+        "Use para confirmar que os skills estão corretos no repositório após cada commit."
+    )
+
+    from pathlib import Path
+    import re as _re
+
+    _SKILL_FILES = {
+        "skill_bpmn.md":     "skills/skill_bpmn.md",
+        "skill_minutes.md":  "skills/skill_minutes.md",
+    }
+    _SUSPICIOUS = [
+        "cache_resource", "reruns", "KnowledgeHub", "st.cache",
+        "Bearer", "base_agent", "ensure_utf8", "NLPChunker",
+    ]
+
+    for fname, rel_path in _SKILL_FILES.items():
+        p = Path(rel_path)
+        st.markdown(f"#### 📄 `{rel_path}`")
+
+        if not p.exists():
+            st.error(
+                f"❌ **Arquivo não encontrado:** `{rel_path}`  \n"
+                "O agente está rodando **sem system prompt**. "
+                "Verifique o nome e o caminho no repositório."
+            )
+            continue
+
+        raw = p.read_text(encoding="utf-8", errors="replace")
+        found_suspicious = [t for t in _SUSPICIOUS if t in raw]
+        has_placeholder  = "{output_language}" in raw
+        non_ascii        = sum(1 for c in raw if ord(c) > 127)
+        json_hits        = len(_re.findall(r"json", raw, _re.IGNORECASE))
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Tamanho",          f"{len(raw):,} chars")
+        c2.metric("Não-ASCII",         non_ascii)
+        c3.metric("Ocorr. 'json'",     json_hits)
+        c4.metric("{output_language}", "✅" if has_placeholder else "❌")
+
+        if found_suspicious:
+            st.error(
+                "⚠️ **Conteúdo suspeito** — tokens encontrados: "
+                + ", ".join(f"`{t}`" for t in found_suspicious)
+                + "  \nEste arquivo pode estar corrompido com texto de chat. "
+                "Substitua pelo arquivo correto no repositório."
+            )
+        else:
+            st.success("✅ Arquivo íntegro — nenhum conteúdo suspeito detectado.")
+
+        if not has_placeholder:
+            st.warning("⚠️ Placeholder `{output_language}` ausente — instrução de idioma não será injetada.")
+
+        st.code(raw, language="markdown")
+        st.download_button(
+            label=f"⬇️ Baixar {fname}",
+            data=raw.encode("utf-8"),
+            file_name=fname,
+            mime="text/markdown",
+            key=f"diag_dl_{fname}",
+        )
+        st.divider()
+
 # ── Generate ──────────────────────────────────────────────────────────────────
 generate_btn = st.button("⚡ Processar Transcrição", type="primary", use_container_width=True)
 
@@ -161,9 +214,11 @@ if generate_btn:
 
     # ── Run Orchestrator ──────────────────────────────────────────────────────
     try:
-        # Retrieve cached orchestrator (agents + spaCy loaded once per session)
-        orchestrator = _get_orchestrator(selected_provider, client_info["api_key"])
-        orchestrator._progress = update_progress  # attach fresh callback each run
+        orchestrator = Orchestrator(
+            client_info=client_info,
+            provider_cfg=provider_cfg,
+            progress_callback=update_progress,
+        )
         hub = orchestrator.run(
             hub,
             output_language=output_language,
@@ -392,3 +447,4 @@ if generate_btn:
     # Store in session
     st.session_state["hub"] = hub
 
+    
