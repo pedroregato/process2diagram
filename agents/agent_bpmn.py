@@ -5,7 +5,6 @@
 # Reads:  hub.transcript_clean, hub.nlp (actors, segments)
 # Writes: hub.bpmn  (BPMNModel — steps, edges, lanes, mermaid, drawio_xml,
 #                                bpmn_xml via bpmn_generator)
-# Pedro Gentil
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ from core.knowledge_hub import KnowledgeHub, BPMNModel, BPMNStep, BPMNEdge
 class AgentBPMN(BaseAgent):
 
     name = "bpmn"
-    skill_path = "skills/SKILL_BPMN.md"
+    skill_path = "skills/skill_bpmn.md"
 
     # ── Prompt ────────────────────────────────────────────────────────────────
 
@@ -30,7 +29,7 @@ class AgentBPMN(BaseAgent):
             actor_hint = f"\nActors identified by NLP pre-processing: {', '.join(hub.nlp.actors)}"
 
         user = (
-            f"Extract the BPMN 2.0 process from this transcript and return the result as json:{actor_hint}\n\n"
+            f"Extract the BPMN 2.0 process from this transcript:{actor_hint}\n\n"
             f"{hub.transcript_clean}"
         )
         return system, user
@@ -274,3 +273,4 @@ class AgentBPMN(BaseAgent):
             f"  {inner}\n"
             "</root></mxGraphModel>"
         )
+    

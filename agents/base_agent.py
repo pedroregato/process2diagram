@@ -125,7 +125,13 @@ class BaseAgent(ABC):
             if "json" not in user_msg.lower():
                 kwargs["messages"][-1]["content"] = user_msg + "\n\nRespond with valid json only."
 
-        resp = client.chat.completions.create(**kwargs)
+        try:
+            resp = client.chat.completions.create(**kwargs)
+        except UnicodeEncodeError:
+            # Fallback: strip non-BMP chars and retry once
+            for msg in kwargs["messages"]:
+                msg["content"] = msg["content"].encode("utf-16", "surrogatepass").decode("utf-16")
+            resp = client.chat.completions.create(**kwargs)
         tokens = resp.usage.total_tokens if resp.usage else 0
         return resp.choices[0].message.content, tokens
 
@@ -187,21 +193,19 @@ class BaseAgent(ABC):
             try:
                 raw = self._call_llm(system, user, hub)
                 return parse(raw)
-            except (ValueError, KeyError) as exc:
+            except (ValueError, KeyError, UnicodeEncodeError) as exc:
                 last_error = exc
                 if attempt < self.max_retries:
-                    # Sanitize: error message may contain non-ASCII chars from the
-                    # LLM response, which cause codec errors when re-injected.
-                    safe_exc = str(exc).encode("ascii", errors="ignore").decode("ascii")
+                    # Use str(exc) directly — no ASCII encoding, API accepts UTF-8.
                     user = (
                         f"{user}\n\n"
-                        f"IMPORTANT: Your previous response caused a parse error:\n{safe_exc}\n"
+                        f"IMPORTANT: Your previous response caused a parse error:\n{str(exc)}\n"
                         f"Return ONLY valid JSON. No markdown. No explanation."
                     )
 
         raise RuntimeError(
             f"[{self.name}] Failed after {1 + self.max_retries} attempts. "
-            f"Last error: {last_error}"
+            f"Last error: {repr(last_error)}"
         )
 
     # ── Skill loading ─────────────────────────────────────────────────────────
