@@ -7,6 +7,7 @@
 #   - Versioned: each write bumps `version` for traceability.
 #   - Serializable: to_dict() / from_dict() for JSON export and persistence.
 #   - Agents write only their own section; Orchestrator owns the top level.
+#   - Iniciativa de Pedro Gentil
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
