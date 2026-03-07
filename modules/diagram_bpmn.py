@@ -5,7 +5,6 @@
 import xml.etree.ElementTree as ET
 from modules.schema import BpmnProcess, BpmnElement, BpmnLane, BpmnPool, SequenceFlow
 from collections import defaultdict, deque
-import math
 
 # ── Namespaces ────────────────────────────────────────────────────────────────
 _NS = {
@@ -24,32 +23,22 @@ DC  = "{%s}" % _NS["dc"]
 DDI = "{%s}" % _NS["di"]
 
 # ── Layout constants ──────────────────────────────────────────────────────────
-TASK_W,  TASK_H   = 120, 72
+TASK_W,  TASK_H   = 120, 60
 GW_W,    GW_H     = 50,  50
 EV_W,    EV_H     = 36,  36
-H_GAP             = 80
-V_GAP             = 40
-LANE_HEADER_W     = 120
+H_GAP             = 70
+V_PAD             = 55
+LANE_HEADER_W     = 100
 POOL_HEADER_W     = 100
-FIRST_X           = 100
-MIN_LANE_H        = 200
-LANE_PADDING_X    = 40
-LANE_PADDING_Y    = 30
-
-# Element type categories
-EVENT_TYPES = {"startEvent", "endEvent", "intermediateThrowEvent", 
-               "intermediateCatchEvent", "boundaryEvent"}
-GATEWAY_TYPES = {"exclusiveGateway", "inclusiveGateway", "parallelGateway", 
-                 "eventBasedGateway", "complexGateway"}
+FIRST_X           = 80
+MIN_LANE_H        = 180
 
 
 def _sub(parent, tag, attribs=None):
-    """Create subelement with optional attributes."""
     return ET.SubElement(parent, tag, attribs or {})
 
 
 def _ev_def(etype):
-    """Map event type to BPMN definition element."""
     return {
         "message":      "messageEventDefinition",
         "timer":        "timerEventDefinition",
@@ -65,41 +54,97 @@ def _ev_def(etype):
 
 
 def _el_size(el):
-    """Get element dimensions based on type."""
     t = el.type
-    if t in EVENT_TYPES:
+    if t in ("startEvent", "endEvent", "intermediateThrowEvent",
+             "intermediateCatchEvent", "boundaryEvent"):
         return EV_W, EV_H
-    if t in GATEWAY_TYPES:
+    if "Gateway" in t:
         return GW_W, GW_H
     return TASK_W, TASK_H
 
 
-def _is_start_event(el):
-    """Check if element is a start event."""
-    return el.type == "startEvent"
+# ── Lane assignment ───────────────────────────────────────────────────────────
+
+def _assign_lanes(bpmn):
+    """
+    Returns a dict {element_id: lane_id} for every non-boundary element.
+    """
+    if not bpmn.pools:
+        return {}
+
+    pool = bpmn.pools[0]
+    if not pool.lanes:
+        return {}
+
+    assignment = {}
+
+    # Step 1 — explicit element_ids in lane definition
+    for lane in pool.lanes:
+        for eid in lane.element_ids:
+            if eid:
+                assignment[eid] = lane.id
+
+    # Step 2 — match by actor/lane name on the element itself
+    lane_by_name = {lane.name: lane.id for lane in pool.lanes}
+    for el in bpmn.elements:
+        if el.type == "boundaryEvent":
+            continue
+        if el.id in assignment:
+            continue
+        actor = el.actor or el.lane
+        if actor and actor in lane_by_name:
+            assignment[el.id] = lane_by_name[actor]
+
+    # Collect still-unassigned non-boundary element ids
+    all_ids = {e.id for e in bpmn.elements if e.type != "boundaryEvent"}
+    unassigned = all_ids - set(assignment.keys())
+
+    if not unassigned:
+        return assignment
+
+    # Step 3 — flow-context inference
+    predecessors = {e.id: [] for e in bpmn.elements}
+    successors = {e.id: [] for e in bpmn.elements}
+    for f in bpmn.flows:
+        if f.source in predecessors:
+            successors[f.source].append(f.target)
+        if f.target in predecessors:
+            predecessors[f.target].append(f.source)
+
+    changed = True
+    while changed and unassigned:
+        changed = False
+        for eid in list(unassigned):
+            neighbors = predecessors.get(eid, []) + successors.get(eid, [])
+            for nid in neighbors:
+                if nid in assignment:
+                    assignment[eid] = assignment[nid]
+                    unassigned.discard(eid)
+                    changed = True
+                    break
+
+    # Step 4 — true fallback: first lane
+    if unassigned and pool.lanes:
+        fallback_lane = pool.lanes[0].id
+        for eid in unassigned:
+            assignment[eid] = fallback_lane
+
+    return assignment
 
 
-def _is_end_event(el):
-    """Check if element is an end event."""
-    return el.type == "endEvent"
-
+# ── Process XML builders ──────────────────────────────────────────────────────
 
 def _build_el(parent, el):
-    """Build BPMN element XML."""
     t = el.type
-    
-    # Eventos
     if t in ("startEvent", "endEvent", "intermediateThrowEvent", "intermediateCatchEvent"):
         node = _sub(parent, B + t, {"id": el.id, "name": el.name})
         d = _ev_def(el.event_type)
         if d:
             _sub(node, B + d, {"id": el.id + "_def"})
 
-    # Boundary events
     elif t == "boundaryEvent":
         attrs = {
-            "id": el.id, 
-            "name": el.name,
+            "id": el.id, "name": el.name,
             "attachedToRef": el.attached_to or "",
             "cancelActivity": str(el.is_interrupting).lower(),
         }
@@ -108,31 +153,25 @@ def _build_el(parent, el):
         if d:
             _sub(node, B + d, {"id": el.id + "_def"})
 
-    # Gateways
     elif "Gateway" in t:
         _sub(parent, B + t, {"id": el.id, "name": el.name})
 
-    # Subprocesses
     elif t == "subProcess":
         node = _sub(parent, B + "subProcess",
                     {"id": el.id, "name": el.name, "triggeredByEvent": "false"})
         for child in el.children:
             _build_el(node, child)
 
-    # Call activities
     elif t == "callActivity":
         attrs = {"id": el.id, "name": el.name}
         if el.called_element:
             attrs["calledElement"] = el.called_element
         _sub(parent, B + "callActivity", attrs)
 
-    # Tasks
     else:
         tag = t if t in ("userTask", "serviceTask", "scriptTask", "sendTask",
                          "receiveTask", "manualTask", "businessRuleTask") else "task"
         node = _sub(parent, B + tag, {"id": el.id, "name": el.name})
-        
-        # Loop characteristics
         if el.is_loop:
             _sub(node, B + "standardLoopCharacteristics", {"id": el.id + "_loop"})
         elif el.is_parallel_multi:
@@ -142,7 +181,6 @@ def _build_el(parent, el):
             mi = _sub(node, B + "multiInstanceLoopCharacteristics", {"id": el.id + "_mi"})
             mi.set("isSequential", "true")
 
-    # Documentation
     if el.documentation:
         kids = list(parent)
         if kids:
@@ -150,12 +188,9 @@ def _build_el(parent, el):
 
 
 def _build_flow(parent, flow):
-    """Build sequence flow XML."""
     node = _sub(parent, B + "sequenceFlow", {
-        "id": flow.id, 
-        "name": flow.name,
-        "sourceRef": flow.source, 
-        "targetRef": flow.target,
+        "id": flow.id, "name": flow.name,
+        "sourceRef": flow.source, "targetRef": flow.target,
     })
     if flow.condition:
         c = _sub(node, B + "conditionExpression",
@@ -163,195 +198,148 @@ def _build_flow(parent, flow):
         c.text = flow.condition
 
 
-def _assign_lanes(bpmn):
-    """
-    Assign elements to lanes based on various rules.
-    Returns dict {element_id: lane_id}
-    """
-    if not bpmn.pools or not bpmn.pools[0].lanes:
-        return {}
+# ── Layout ────────────────────────────────────────────────────────────────────
 
-    pool = bpmn.pools[0]
-    if not pool.lanes:
-        return {}
-
-    assignment = {}
-    lane_by_name = {lane.name: lane.id for lane in pool.lanes}
-    lane_by_id = {lane.id: lane for lane in pool.lanes}
-
-    # Step 1: Explicit assignment from lane.element_ids
-    for lane in pool.lanes:
-        for eid in lane.element_ids:
-            if eid:  # Ensure not empty
-                assignment[eid] = lane.id
-
-    # Step 2: Match by actor/lane name on element
-    for el in bpmn.elements:
-        if el.type == "boundaryEvent" or el.id in assignment:
-            continue
-        actor = el.actor or el.lane
-        if actor and actor in lane_by_name:
-            assignment[el.id] = lane_by_name[actor]
-
-    # Build flow graph for propagation
-    flow_graph = defaultdict(list)
-    reverse_graph = defaultdict(list)
-    for flow in bpmn.flows:
-        flow_graph[flow.source].append(flow.target)
-        reverse_graph[flow.target].append(flow.source)
-
-    # Step 3: Propagate assignments through flows
-    unassigned = {e.id for e in bpmn.elements 
-                  if e.type != "boundaryEvent" and e.id not in assignment}
-    
-    # BFS propagation
-    queue = deque(assignment.keys())
+def _topo_sort(ids, flows):
+    """Topological sort."""
+    id_set = set(ids)
+    indeg = {i: 0 for i in ids}
+    succ = {i: [] for i in ids}
+    for f in flows:
+        if f.source in id_set and f.target in id_set:
+            succ[f.source].append(f.target)
+            indeg[f.target] += 1
+    queue = [i for i in ids if indeg[i] == 0]
+    result = []
     while queue:
-        current = queue.popleft()
-        current_lane = assignment.get(current)
-        if not current_lane:
-            continue
-            
-        # Forward propagation
-        for target in flow_graph.get(current, []):
-            if target not in assignment and target in unassigned:
-                assignment[target] = current_lane
-                unassigned.discard(target)
-                queue.append(target)
-        
-        # Backward propagation
-        for source in reverse_graph.get(current, []):
-            if source not in assignment and source in unassigned:
-                assignment[source] = current_lane
-                unassigned.discard(source)
-                queue.append(source)
+        n = queue.pop(0)
+        result.append(n)
+        for m in succ[n]:
+            indeg[m] -= 1
+            if indeg[m] == 0:
+                queue.append(m)
+    for i in ids:
+        if i not in result:
+            result.append(i)
+    return result
 
-    # Step 4: Fallback to first lane for any remaining elements
-    if unassigned and pool.lanes:
-        fallback_lane = pool.lanes[0].id
-        for eid in unassigned:
-            assignment[eid] = fallback_lane
-            print(f"DEBUG: Assigned {eid} to fallback lane {fallback_lane}")
 
-    # Debug output
-    print(f"DEBUG: Total assignments: {len(assignment)}")
-    for lane in pool.lanes:
-        lane_elements = [eid for eid, lid in assignment.items() if lid == lane.id]
-        print(f"DEBUG: Lane '{lane.name}' has {len(lane_elements)} elements: {lane_elements}")
-
-    return assignment
+def _sort_lane_elements(lane_ids, el_map, flows):
+    """Sort elements within a single lane."""
+    id_set = set(lane_ids)
+    starts = [i for i in lane_ids if el_map.get(i) and el_map[i].type == "startEvent"]
+    ends = [i for i in lane_ids if el_map.get(i) and el_map[i].type == "endEvent"]
+    middle = [i for i in lane_ids if i not in starts and i not in ends]
+    middle_sorted = _topo_sort(middle, flows)
+    return starts + middle_sorted + ends
 
 
 def _compute_layout(bpmn, lane_assignment):
-    """Compute positions for all elements."""
     shapes = {}
     pool_shapes = {}
-    
-    # Filter out boundary events for main layout
+
     non_boundary = [e for e in bpmn.elements if e.type != "boundaryEvent"]
+    order = _topo_sort([e.id for e in non_boundary], bpmn.flows)
     el_map = {e.id: e for e in bpmn.elements}
-    
-    if bpmn.pools and bpmn.pools[0].lanes:
+
+    if bpmn.pools:
         pool = bpmn.pools[0]
-        
-        # Group elements by lane
-        lane_elements = defaultdict(list)
-        for eid, lid in lane_assignment.items():
-            if eid in el_map:
-                lane_elements[lid].append(eid)
-        
-        # Calculate lane heights based on content
-        lane_heights = {}
+
+        # Group ordered elements by lane
+        lane_order = {lane.id: [] for lane in pool.lanes}
+        for eid in order:
+            lid = lane_assignment.get(eid)
+            if lid and lid in lane_order:
+                lane_order[lid].append(eid)
+            elif pool.lanes:
+                lane_order[pool.lanes[0].id].append(eid)
+
+        # Re-sort each lane
         for lane in pool.lanes:
-            elements = lane_elements.get(lane.id, [])
-            if elements:
-                # Find tallest element in this lane
-                max_h = max((_el_size(el_map[eid])[1] for eid in elements), default=TASK_H)
-                # Add padding
-                lane_heights[lane.id] = max(MIN_LANE_H, max_h + LANE_PADDING_Y * 2)
-            else:
-                lane_heights[lane.id] = MIN_LANE_H
-        
-        total_h = sum(lane_heights[l.id] for l in pool.lanes)
-        
-        # Calculate pool width based on maximum row width
-        pool_w = 800  # minimum width
+            lane_order[lane.id] = _sort_lane_elements(
+                lane_order[lane.id], el_map, bpmn.flows
+            )
+
+        # Lane heights
+        lane_h = {}
         for lane in pool.lanes:
-            elements = lane_elements.get(lane.id, [])
-            if elements:
-                # Calculate total width needed for this lane
-                total_width = LANE_PADDING_X * 2
-                for eid in elements:
-                    w, _ = _el_size(el_map[eid])
-                    total_width += w + H_GAP
-                total_width += POOL_HEADER_W + LANE_HEADER_W
-                pool_w = max(pool_w, total_width)
-        
-        # Create pool shape
+            els_in_lane = [el_map[eid] for eid in lane_order[lane.id] if eid in el_map]
+            max_h = max((_el_size(e)[1] for e in els_in_lane), default=TASK_H)
+            lane_h[lane.id] = max(MIN_LANE_H, max_h + V_PAD * 2)
+
+        total_h = sum(lane_h[l.id] for l in pool.lanes)
+
+        # Compute pool width
+        pool_w = 700
+        for lane in pool.lanes:
+            els = lane_order[lane.id]
+            if els:
+                w = POOL_HEADER_W + LANE_HEADER_W + FIRST_X
+                for eid in els:
+                    if eid in el_map:
+                        ew, _ = _el_size(el_map[eid])
+                        w += ew + H_GAP
+                w += FIRST_X
+                pool_w = max(pool_w, w)
+
         pool_shapes[pool.id] = (0, 0, pool_w, total_h)
-        
-        # Position lanes and elements
+
         cur_y = 0
         for lane in pool.lanes:
-            lh = lane_heights[lane.id]
+            lh = lane_h[lane.id]
+            lx = POOL_HEADER_W
             lw = pool_w - POOL_HEADER_W
-            pool_shapes[lane.id] = (POOL_HEADER_W, cur_y, lw, lh)
-            
-            # Position elements in this lane
-            elements = lane_elements.get(lane.id, [])
-            if elements:
-                start_x = POOL_HEADER_W + LANE_HEADER_W + LANE_PADDING_X
-                cur_x = start_x
-                
-                for eid in elements:
-                    el = el_map[eid]
-                    w, h = _el_size(el)
-                    # Center vertically in lane
-                    y_pos = cur_y + (lh - h) / 2
-                    shapes[el.id] = (int(cur_x), int(y_pos), w, h)
-                    cur_x += w + H_GAP
-            
+            pool_shapes[lane.id] = (lx, cur_y, lw, lh)
+
+            cur_x = lx + LANE_HEADER_W + FIRST_X
+            for eid in lane_order[lane.id]:
+                if eid not in el_map:
+                    continue
+                el = el_map[eid]
+                w, h = _el_size(el)
+                shapes[el.id] = (int(cur_x), int(cur_y + (lh - h) / 2), w, h)
+                cur_x += w + H_GAP
+
             cur_y += lh
-    
+
     else:
-        # Flat layout (no pools/lanes)
-        # Simple vertical stacking
-        cur_y = V_GAP
-        for e in non_boundary:
-            w, h = _el_size(e)
-            shapes[e.id] = (FIRST_X, int(cur_y), w, h)
-            cur_y += h + V_GAP
-    
-    # Position boundary events (attached to their host)
+        # No pools — flat vertical layout
+        cur_y = V_PAD
+        for eid in order:
+            if eid not in el_map:
+                continue
+            el = el_map[eid]
+            if el.type == "boundaryEvent":
+                continue
+            w, h = _el_size(el)
+            shapes[el.id] = (FIRST_X, int(cur_y), w, h)
+            cur_y += h + H_GAP
+
+    # Boundary events: anchored on host element
     for el in bpmn.elements:
         if el.type == "boundaryEvent" and el.attached_to:
             host = shapes.get(el.attached_to)
             if host:
                 hx, hy, hw, hh = host
-                # Position at bottom center of host
-                shapes[el.id] = (
-                    hx + (hw - EV_W) // 2,
-                    hy + hh - EV_H // 2,
-                    EV_W, EV_H
-                )
-    
+                shapes[el.id] = (hx + hw - EV_W // 2,
+                                  hy + hh - EV_H // 2,
+                                  EV_W, EV_H)
+
     return shapes, pool_shapes
 
 
+# ── DI builder ────────────────────────────────────────────────────────────────
+
 def _wp(edge, x, y):
-    """Add waypoint to edge."""
     wp = _sub(edge, DDI + "waypoint")
     wp.set("x", str(int(x)))
     wp.set("y", str(int(y)))
 
 
 def _valid(coords):
-    """Check if coordinates are valid numbers."""
     try:
         return all(
-            isinstance(v, (int, float)) and 
-            math.isfinite(v) and 
-            v >= 0
+            isinstance(v, (int, float)) and v == v and abs(v) != float("inf") and v >= 0
             for v in coords
         )
     except Exception:
@@ -359,17 +347,16 @@ def _valid(coords):
 
 
 def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
-    """Build diagram interchange (layout)."""
     plane = _sub(diagram, DI + "BPMNPlane",
                  {"id": "plane_1", "bpmnElement": plane_ref})
-    
-    # Collect lane IDs for identification
+
+    # Collect lane ids for identification
     lane_ids = set()
     for pool in bpmn.pools:
         for lane in pool.lanes:
             lane_ids.add(lane.id)
-    
-    # Draw pools and lanes
+
+    # Pool / lane shapes
     for eid, (x, y, w, h) in pool_shapes.items():
         is_lane = eid in lane_ids
         shape = _sub(plane, DI + "BPMNShape",
@@ -379,28 +366,25 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         b.set("y", str(int(y)))
         b.set("width", str(int(w)))
         b.set("height", str(int(h)))
-        
+
         if is_lane:
-            # Lane label - positioned vertically in the header
+            # Label bounds for lane - adjusted for better centering
             lbl = _sub(shape, DI + "BPMNLabel")
             lb = _sub(lbl, DC + "Bounds")
-            # Position in the lane header, centered vertically
             lb.set("x", str(int(x + 10)))
             lb.set("y", str(int(y + 10)))
             lb.set("width", str(LANE_HEADER_W - 20))
             lb.set("height", str(int(h - 20)))
-    
-    # Draw flow elements (tasks, events, gateways)
+
+    # Element shapes
     for el in bpmn.elements:
         if el.id not in shapes:
             continue
-        coords = shapes.get(el.id)
+        coords = shapes[el.id]
         if not _valid(coords):
             continue
         x, y, w, h = coords
-        
-        shape = _sub(plane, DI + "BPMNShape", 
-                    {"id": el.id + "_di", "bpmnElement": el.id})
+        shape = _sub(plane, DI + "BPMNShape", {"id": el.id + "_di", "bpmnElement": el.id})
         b = _sub(shape, DC + "Bounds")
         b.set("x", str(int(x)))
         b.set("y", str(int(y)))
@@ -414,31 +398,27 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         lb.set("y", str(int(y + h + 2)))
         lb.set("width", str(int(w)))
         lb.set("height", "20")
-    
-    # Draw sequence flows
+
+    # Edges
     for flow in bpmn.flows:
         src_coords = shapes.get(flow.source)
         tgt_coords = shapes.get(flow.target)
-        
+
         if not src_coords or not tgt_coords:
             continue
         if not _valid(src_coords) or not _valid(tgt_coords):
             continue
-        
+
         edge = _sub(plane, DI + "BPMNEdge",
                     {"id": flow.id + "_di", "bpmnElement": flow.id})
-        
         sx, sy, sw, sh = src_coords
         tx, ty, tw, th = tgt_coords
-        
-        # Simple straight line from source right side to target left side
-        _wp(edge, sx + sw, sy + sh/2)  # Source right-center
-        _wp(edge, tx, ty + th/2)        # Target left-center
-        
-        # Flow label
+        _wp(edge, sx + sw, sy + sh / 2)
+        _wp(edge, tx, ty + th / 2)
+
         if flow.name:
             mid_x = int((sx + sw + tx) / 2)
-            mid_y = int((sy + sh/2 + ty + th/2) / 2) - 10
+            mid_y = int((sy + sh / 2 + ty + th / 2) / 2) - 16
             lbl = _sub(edge, DI + "BPMNLabel")
             _sub(lbl, DC + "Bounds", {
                 "x": str(mid_x - 30),
@@ -448,9 +428,10 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
             })
 
 
+# ── Public API ────────────────────────────────────────────────────────────────
+
 def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
-    """Generate complete BPMN 2.0 XML."""
-    # Create root definitions element
+    """Generate BPMN 2.0 XML."""
     defs = ET.Element(B + "definitions", {
         "xmlns": _NS["bpmn"],
         "xmlns:bpmndi": _NS["bpmndi"],
@@ -462,49 +443,37 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
         "exporter": "Process2Diagram",
         "exporterVersion": "2.0",
     })
-    
-    # Create process
+
     process_id = "process_1"
     proc = _sub(defs, B + "process", {
-        "id": process_id, 
-        "name": bpmn.name,
-        "isExecutable": "false", 
-        "processType": "None",
+        "id": process_id, "name": bpmn.name,
+        "isExecutable": "false", "processType": "None",
     })
-    
-    # Process documentation
     if bpmn.documentation:
         _sub(proc, B + "documentation", {}).text = bpmn.documentation
-    
-    # Assign elements to lanes
+
     lane_assignment = _assign_lanes(bpmn)
-    
-    # Create lane set if pools exist
-    if bpmn.pools and bpmn.pools[0].lanes:
+
+    # Lane set
+    if bpmn.pools:
         pool = bpmn.pools[0]
         lset = _sub(proc, B + "laneSet", {"id": pool.id + "_lset"})
-        
-        # Group elements by lane
-        lane_members = defaultdict(list)
+        lane_members = {lane.id: [] for lane in pool.lanes}
         for eid, lid in lane_assignment.items():
-            lane_members[lid].append(eid)
-        
-        # Create lane elements
+            if lid in lane_members:
+                lane_members[lid].append(eid)
         for lane in pool.lanes:
             ln = _sub(lset, B + "lane", {"id": lane.id, "name": lane.name})
-            # Add flow node references
-            for eid in sorted(lane_members.get(lane.id, [])):
+            for eid in lane_members[lane.id]:
                 _sub(ln, B + "flowNodeRef", {}).text = eid
-    
-    # Add all flow elements
+
+    # Elements & flows
     for el in bpmn.elements:
         _build_el(proc, el)
-    
-    # Add all sequence flows
     for flow in bpmn.flows:
         _build_flow(proc, flow)
-    
-    # Create collaboration if pools exist
+
+    # Collaboration
     collab_id = None
     if bpmn.pools:
         pool = bpmn.pools[0]
@@ -512,26 +481,22 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
         collab = _sub(defs, B + "collaboration", {"id": collab_id})
         _sub(collab, B + "participant",
              {"id": pool.id, "name": pool.name, "processRef": process_id})
-    
-    # Calculate layout
+
+    # Diagram interchange
     shapes, pool_shapes = _compute_layout(bpmn, lane_assignment)
-    
-    # Create diagram
     plane_ref = collab_id if collab_id else process_id
     diagram = _sub(defs, DI + "BPMNDiagram", {"id": "diagram_1"})
     _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn)
-    
-    # Return formatted XML
+
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + \
            ET.tostring(defs, encoding="unicode")
 
 
 def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
-    """Generate HTML with embedded bpmn-js viewer."""
+    """HTML with bpmn-js viewer."""
     xml = generate_bpmn_xml(bpmn)
-    # Escape for JavaScript string
     xml_js = xml.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
-    
+
     return f"""<!DOCTYPE html>
 <html>
 <head>
