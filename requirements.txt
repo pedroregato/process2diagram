@@ -1,3 +1,50 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Process2Diagram — requirements.txt
+# v3 — Arquitetura Multi-Agente
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Interface ─────────────────────────────────────────────────────────────────
 streamlit==1.42.0
+
+# ── LLM Providers ────────────────────────────────────────────────────────────
 anthropic==0.49.0
-openai==1.65.0
+openai==1.65.0                  # também usado por DeepSeek, Groq e Gemini
+
+# ── NLP / Chunker (Agente sem LLM) ───────────────────────────────────────────
+spacy>=3.7,<4.0                 # motor NLP
+# Modelo pt após instalar: python -m spacy download pt_core_news_lg
+
+# ── Exportação de documentos ──────────────────────────────────────────────────
+weasyprint>=62.0                # exportação PDF (requer GTK no Windows — ver nota)
+# Alternativa leve para PDF (sem GTK):
+# reportlab>=4.0
+
+# ── Validação de schema ────────────────────────────────────────────────────────
+jsonschema>=4.21                # validação do Knowledge Hub e modelos JSON
+lxml>=5.0                       # validação do BPMN XML contra XSD da OMG
+
+# ── Utilitários ───────────────────────────────────────────────────────────────
+python-dateutil>=2.9            # parsing de datas nos action items
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NOTAS DE INSTALAÇÃO
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# 1. Instalar dependências:
+#       pip install -r requirements.txt
+#
+# 2. Baixar modelo spaCy em português:
+#       python -m spacy download pt_core_news_lg
+#    Alternativa mais leve (menor acurácia):
+#       python -m spacy download pt_core_news_sm
+#
+# 3. WeasyPrint no Windows exige GTK3.
+#    Instruções: https://doc.courtbouillon.org/weasyprint/stable/first_steps.html
+#    Se preferir evitar GTK, substitua weasyprint por reportlab:
+#       pip install reportlab
+#    e use o exportador export_pdf_reportlab.py (a implementar na PC2).
+#
+# 4. Exportação DOCX usa Node.js (docx npm package).
+#    Requer Node.js >= 18 instalado separadamente:
+#       npm install -g docx
+# ─────────────────────────────────────────────────────────────────────────────
