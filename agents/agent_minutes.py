@@ -18,7 +18,7 @@ from core.knowledge_hub import KnowledgeHub, MinutesModel, ActionItem
 class AgentMinutes(BaseAgent):
 
     name = "minutes"
-    skill_path = "skills/SKILL_MINUTES.md"
+    skill_path = "skills/skill_minutes.md"
 
     # ── Prompt ────────────────────────────────────────────────────────────────
 
@@ -30,9 +30,14 @@ class AgentMinutes(BaseAgent):
         if hub.nlp.actors:
             actor_hint = f"\nParticipants identified by NLP: {', '.join(hub.nlp.actors)}"
 
+        # Limit transcript to ~12 000 chars to avoid truncated JSON responses.
+        transcript = hub.transcript_clean[:12_000]
+        if len(hub.transcript_clean) > 12_000:
+            transcript += "\n\n[transcript truncated — produce minutes from the portion above]"
+
         user = (
             f"Produce the structured meeting minutes from this transcript:{actor_hint}\n\n"
-            f"{hub.transcript_clean}"
+            f"{transcript}"
         )
         return system, user
 
@@ -147,3 +152,4 @@ class AgentMinutes(BaseAgent):
         ]
 
         return "\n".join(lines)
+    

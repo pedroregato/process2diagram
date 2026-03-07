@@ -28,9 +28,15 @@ class AgentBPMN(BaseAgent):
         if hub.nlp.actors:
             actor_hint = f"\nActors identified by NLP pre-processing: {', '.join(hub.nlp.actors)}"
 
+        # Limit transcript to ~12 000 chars to stay within token budget.
+        # Long meetings (3h+) can exceed max_tokens and cause truncated JSON.
+        transcript = hub.transcript_clean[:12_000]
+        if len(hub.transcript_clean) > 12_000:
+            transcript += "\n\n[transcript truncated — extract process from the portion above]"
+
         user = (
             f"Extract the BPMN 2.0 process from this transcript:{actor_hint}\n\n"
-            f"{hub.transcript_clean}"
+            f"{transcript}"
         )
         return system, user
 
@@ -207,18 +213,40 @@ class AgentBPMN(BaseAgent):
     # ── Mermaid generator ─────────────────────────────────────────────────────
 
     @staticmethod
+    def _sanitize_mermaid_label(text: str) -> str:
+        """Remove/replace characters that break Mermaid syntax."""
+        # Replace problematic chars: quotes, parens, brackets, colons, slashes
+        text = text.replace('"', "'")
+        text = re.sub(r'[()\[\]{}/\\:;|<>]', " ", text)
+        # Collapse multiple spaces
+        text = re.sub(r' {2,}', " ", text).strip()
+        return text or "Step"
+
+    @staticmethod
     def _generate_mermaid(model: BPMNModel) -> str:
+        import re as _re
+
+        def _safe(t: str) -> str:
+            t = t.replace('"', "'")
+            t = _re.sub(r'[()\[\]{}/\\:;|<>]', " ", t)
+            t = _re.sub(r' {2,}', " ", t).strip()
+            return t or "Step"
+
         lines = ["flowchart TD"]
 
         for step in model.steps:
-            label = step.title.replace('"', "'")
+            label = _safe(step.title)
             if step.is_decision:
                 lines.append(f'    {step.id}{{"{label}"}}')
             else:
                 lines.append(f'    {step.id}["{label}"]')
 
         for edge in model.edges:
-            arrow = f"-- {edge.label} -->" if edge.label else "-->"
+            if edge.label:
+                safe_lbl = _safe(edge.label)
+                arrow = f"-- {safe_lbl} -->"
+            else:
+                arrow = "-->"
             lines.append(f"    {edge.source} {arrow} {edge.target}")
 
         decision_ids = [s.id for s in model.steps if s.is_decision]
