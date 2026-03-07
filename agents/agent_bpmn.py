@@ -5,6 +5,7 @@
 # Reads:  hub.transcript_clean, hub.nlp (actors, segments)
 # Writes: hub.bpmn  (BPMNModel — steps, edges, lanes, mermaid, drawio_xml,
 #                                bpmn_xml via bpmn_generator)
+# Pedro Gentil
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
