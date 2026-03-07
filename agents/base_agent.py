@@ -120,6 +120,11 @@ class BaseAgent(ABC):
         )
         if self.provider_cfg.get("supports_json_mode"):
             kwargs["response_format"] = {"type": "json_object"}
+            # DeepSeek (and some providers) require the literal word 'json'
+            # in the prompt when json_object mode is active.
+            user_msg = kwargs["messages"][-1]["content"]
+            if "json" not in user_msg.lower():
+                kwargs["messages"][-1]["content"] = user_msg + "\n\nRespond with valid json only."
 
         resp = client.chat.completions.create(**kwargs)
         tokens = resp.usage.total_tokens if resp.usage else 0
