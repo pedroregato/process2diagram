@@ -109,25 +109,18 @@ class BaseAgent(ABC):
     def _call_openai(self, system: str, user: str, api_key: str, model: str) -> tuple[str, int]:
         from openai import OpenAI
         client = OpenAI(api_key=api_key, base_url=self.provider_cfg.get("base_url"))
-
-        # Sanitize to ASCII-safe unicode — some providers (DeepSeek) reject
-        # non-ASCII characters in certain API paths / error messages.
-        def _safe(s: str) -> str:
-            return s.encode("utf-8", errors="replace").decode("utf-8")
-
         kwargs: dict[str, Any] = dict(
             model=model,
             messages=[
-                {"role": "system", "content": _safe(system)},
-                {"role": "user",   "content": _safe(user)},
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
             ],
             max_tokens=3000,
             temperature=0.1,
         )
         if self.provider_cfg.get("supports_json_mode"):
             kwargs["response_format"] = {"type": "json_object"}
-            # DeepSeek (and some providers) require the literal word "json"
-            # in the prompt when json_object mode is active.
+            # DeepSeek requires the literal word "json" in the prompt.
             user_msg = kwargs["messages"][-1]["content"]
             if "json" not in user_msg.lower():
                 kwargs["messages"][-1]["content"] = user_msg + "\n\nRespond with valid json only."
@@ -197,10 +190,12 @@ class BaseAgent(ABC):
             except (ValueError, KeyError) as exc:
                 last_error = exc
                 if attempt < self.max_retries:
-                    # Inject error context into next attempt
+                    # Sanitize: error message may contain non-ASCII chars from the
+                    # LLM response, which cause codec errors when re-injected.
+                    safe_exc = str(exc).encode("ascii", errors="ignore").decode("ascii")
                     user = (
                         f"{user}\n\n"
-                        f"IMPORTANT: Your previous response caused a parse error:\n{exc}\n"
+                        f"IMPORTANT: Your previous response caused a parse error:\n{safe_exc}\n"
                         f"Return ONLY valid JSON. No markdown. No explanation."
                     )
 
