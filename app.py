@@ -1,6 +1,16 @@
 ## --- Process2Diagram v3 — Multi-Agent Architecture
 ## --- Pedro Gentil
 
+import sys
+import os
+from pathlib import Path
+
+# ── Fix import path ───────────────────────────────────────────────────────────
+# Adiciona o diretório raiz ao PYTHONPATH para resolver importações
+root_dir = Path(__file__).parent.absolute()
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
+
 import json
 import streamlit as st
 import streamlit.components.v1 as components
@@ -73,7 +83,7 @@ with st.sidebar:
     output_language = st.selectbox("Output language", ["Auto-detect", "Portuguese (BR)", "English"])
 
     st.markdown("### 🤖 Active Agents")
-    run_bpmn    = st.checkbox("Agente BPMN", value=True)
+    run_bpmn = st.checkbox("Agente BPMN", value=True)
     run_minutes = st.checkbox("Agente Ata de Reunião", value=True)
 
     show_raw_json = st.checkbox("Show raw JSON", value=False)
@@ -82,7 +92,8 @@ with st.sidebar:
 
 # ── Main area ─────────────────────────────────────────────────────────────────
 st.markdown('<p class="main-title">Process2Diagram</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-title">Turn meeting transcripts into process diagrams — automatically.</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">Turn meeting transcripts into process diagrams — automatically.</p>',
+            unsafe_allow_html=True)
 
 if not get_session_llm_client(selected_provider):
     st.info(f"👈 Enter your **{selected_provider}** API key in the sidebar to start.")
@@ -113,7 +124,6 @@ if uploaded_file:
     transcript_text = load_transcript(uploaded_file)
     st.success(f"Carregado: {uploaded_file.name}")
 
-
 # ── Diagnóstico — sempre visível, fora do bloco generate_btn ──────────────────
 with st.expander("🛠️ Diagnóstico — Arquivos de Skill em Runtime", expanded=False):
     st.caption(
@@ -125,8 +135,8 @@ with st.expander("🛠️ Diagnóstico — Arquivos de Skill em Runtime", expand
     import re as _re
 
     _SKILL_FILES = {
-        "skill_bpmn.md":     "skills/skill_bpmn.md",
-        "skill_minutes.md":  "skills/skill_minutes.md",
+        "skill_bpmn.md": "skills/skill_bpmn.md",
+        "skill_minutes.md": "skills/skill_minutes.md",
     }
     _SUSPICIOUS = [
         "cache_resource", "reruns", "KnowledgeHub", "st.cache",
@@ -147,14 +157,14 @@ with st.expander("🛠️ Diagnóstico — Arquivos de Skill em Runtime", expand
 
         raw = p.read_text(encoding="utf-8", errors="replace")
         found_suspicious = [t for t in _SUSPICIOUS if t in raw]
-        has_placeholder  = "{output_language}" in raw
-        non_ascii        = sum(1 for c in raw if ord(c) > 127)
-        json_hits        = len(_re.findall(r"json", raw, _re.IGNORECASE))
+        has_placeholder = "{output_language}" in raw
+        non_ascii = sum(1 for c in raw if ord(c) > 127)
+        json_hits = len(_re.findall(r"json", raw, _re.IGNORECASE))
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Tamanho",          f"{len(raw):,} chars")
-        c2.metric("Não-ASCII",         non_ascii)
-        c3.metric("Ocorr. 'json'",     json_hits)
+        c1.metric("Tamanho", f"{len(raw):,} chars")
+        c2.metric("Não-ASCII", non_ascii)
+        c3.metric("Ocorr. 'json'", json_hits)
         c4.metric("{output_language}", "✅" if has_placeholder else "❌")
 
         if found_suspicious:
@@ -162,7 +172,7 @@ with st.expander("🛠️ Diagnóstico — Arquivos de Skill em Runtime", expand
                 "⚠️ **Conteúdo suspeito** — tokens encontrados: "
                 + ", ".join(f"`{t}`" for t in found_suspicious)
                 + "  \nEste arquivo pode estar corrompido com texto de chat. "
-                "Substitua pelo arquivo correto no repositório."
+                  "Substitua pelo arquivo correto no repositório."
             )
         else:
             st.success("✅ Arquivo íntegro — nenhum conteúdo suspeito detectado.")
@@ -203,6 +213,7 @@ if generate_btn:
     progress_placeholder = st.empty()
     agent_status: dict[str, str] = {}
 
+
     def update_progress(step_name: str, status: str):
         agent_status[step_name] = status
         icons = {"running": "⏳", "done": "✅", "error": "❌"}
@@ -211,6 +222,7 @@ if generate_btn:
             icon = next((v for k, v in icons.items() if k in st_val), "🔵")
             lines.append(f"{icon} **{name}** — {st_val}")
         progress_placeholder.markdown("  \n".join(lines))
+
 
     # ── Run Orchestrator ──────────────────────────────────────────────────────
     try:
@@ -255,7 +267,8 @@ if generate_btn:
     # ── Tab: BPMN 2.0 (bpmn-js viewer) ───────────────────────────────────────
     if hub.bpmn.ready:
         with tabs[tab_idx]:
-            st.caption("Renderizado com [bpmn-js](https://bpmn.io) · Arraste para mover · Scroll para zoom · Tecla 0 para ajustar tela")
+            st.caption(
+                "Renderizado com [bpmn-js](https://bpmn.io) · Arraste para mover · Scroll para zoom · Tecla 0 para ajustar tela")
 
             if hub.bpmn.bpmn_xml:
                 # Rich BPMN 2.0 viewer — pools, lanes, símbolos oficiais
@@ -267,6 +280,12 @@ if generate_btn:
             else:
                 # Fallback: Mermaid quando bpmn_generator não disponível
                 st.info("ℹ️ Viewer bpmn-js indisponível — exibindo Mermaid como fallback.")
+
+                # Diagnóstico do Mermaid
+                with st.expander("🔍 Diagnóstico Mermaid - Conteúdo Bruto", expanded=True):
+                    st.code(hub.bpmn.mermaid, language="text")
+                    st.caption("Verifique se há caracteres especiais ou formatação incorreta")
+
                 mermaid_html = f"""<!DOCTYPE html><html>
 <head><style>body{{margin:0;padding:16px;background:#f8fafc;}}
 .mermaid{{background:white;padding:24px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);}}</style></head>
@@ -274,6 +293,25 @@ if generate_btn:
 <script type="module">
   import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
   mermaid.initialize({{startOnLoad:true,theme:'neutral',securityLevel:'loose'}});
+
+  // Log de erros do Mermaid
+  window.addEventListener('load', function() {{
+    setTimeout(function() {{
+      const errorElements = document.querySelectorAll('.mermaid .error');
+      if (errorElements.length) {{
+        console.error('Mermaid errors:', errorElements);
+        const errorDiv = document.createElement('div');
+        errorDiv.style.color = 'red';
+        errorDiv.style.padding = '10px';
+        errorDiv.style.margin = '10px 0';
+        errorDiv.style.border = '1px solid red';
+        errorDiv.style.borderRadius = '4px';
+        errorDiv.innerHTML = '<b>Erro de sintaxe Mermaid:</b> ' + 
+          Array.from(errorElements).map(el => el.textContent).join(' | ');
+        document.body.insertBefore(errorDiv, document.body.firstChild);
+      }}
+    }}, 1000);
+  }});
 </script></body></html>"""
                 components.html(mermaid_html, height=800, scrolling=True)
 
@@ -282,6 +320,12 @@ if generate_btn:
         # ── Tab: Mermaid ──────────────────────────────────────────────────────
         with tabs[tab_idx]:
             st.caption("Fluxograma Mermaid · Cole em [mermaid.live](https://mermaid.live) para editar.")
+
+            # Diagnóstico do Mermaid
+            with st.expander("🔍 Diagnóstico Mermaid - Conteúdo Bruto", expanded=True):
+                st.code(hub.bpmn.mermaid, language="text")
+                st.caption("Verifique se há: parênteses não escapados, aspas não fechadas, caracteres especiais")
+
             mermaid_html = f"""<!DOCTYPE html><html>
 <head><style>body{{margin:0;padding:16px;background:#f8fafc;}}
 .mermaid{{background:white;padding:24px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);}}</style></head>
@@ -289,6 +333,18 @@ if generate_btn:
 <script type="module">
   import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
   mermaid.initialize({{startOnLoad:true,theme:'neutral',securityLevel:'loose'}});
+
+  // Capturar erros de renderização
+  window.addEventListener('load', function() {{
+    setTimeout(function() {{
+      const errorElements = document.querySelectorAll('.mermaid .error');
+      if (errorElements.length) {{
+        console.error('Mermaid syntax errors:', errorElements);
+        const errorMsg = Array.from(errorElements).map(el => el.textContent).join('\\n');
+        alert('Erro de sintaxe Mermaid:\\n' + errorMsg);
+      }}
+    }}, 500);
+  }});
 </script></body></html>"""
             components.html(mermaid_html, height=900, scrolling=True)
             st.code(hub.bpmn.mermaid, language="text")
@@ -446,4 +502,4 @@ if generate_btn:
 
     # Store in session
     st.session_state["hub"] = hub
-
+    
