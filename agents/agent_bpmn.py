@@ -306,4 +306,3 @@ class AgentBPMN(BaseAgent):
             f"  {inner}\n"
             "</root></mxGraphModel>"
         )
-    
