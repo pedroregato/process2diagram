@@ -313,7 +313,7 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         for lane in pool.lanes:
             lane_ids.add(lane.id)
     
-    # Pool/lane shapes
+    # Pool/lane shapes com labels centralizados
     for eid, (x, y, w, h) in pool_shapes.items():
         is_lane = eid in lane_ids
         shape = _sub(plane, DI + "BPMNShape",
@@ -325,66 +325,14 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         b.set("height", str(int(h)))
         
         if is_lane:
+            # CORREÇÃO: Label da lane centralizado verticalmente
             lbl = _sub(shape, DI + "BPMNLabel")
             lb = _sub(lbl, DC + "Bounds")
-            lb.set("x", str(int(x + 10)))
-            lb.set("y", str(int(y + 10)))
+            # Posicionar no centro da lane, com rotação via CSS
+            lb.set("x", str(int(x + 10)))  # Pequeno offset da borda
+            lb.set("y", str(int(y + h/2 - 10)))  # Centralizado verticalmente
             lb.set("width", str(LANE_HEADER_W - 20))
-            lb.set("height", str(int(h - 20)))
-    
-    # Element shapes
-    for el in bpmn.elements:
-        if el.id not in shapes:
-            continue
-        coords = shapes.get(el.id)
-        if not _valid(coords):
-            continue
-        x, y, w, h = coords
-        
-        shape = _sub(plane, DI + "BPMNShape", {"id": el.id + "_di", "bpmnElement": el.id})
-        b = _sub(shape, DC + "Bounds")
-        b.set("x", str(int(x)))
-        b.set("y", str(int(y)))
-        b.set("width", str(int(w)))
-        b.set("height", str(int(h)))
-        
-        lbl = _sub(shape, DI + "BPMNLabel")
-        lb = _sub(lbl, DC + "Bounds")
-        lb.set("x", str(int(x)))
-        lb.set("y", str(int(y + h + 2)))
-        lb.set("width", str(int(w)))
-        lb.set("height", "20")
-    
-    # Edges
-    for flow in bpmn.flows:
-        src_coords = shapes.get(flow.source)
-        tgt_coords = shapes.get(flow.target)
-        
-        if not src_coords or not tgt_coords:
-            continue
-        if not _valid(src_coords) or not _valid(tgt_coords):
-            continue
-        
-        edge = _sub(plane, DI + "BPMNEdge",
-                    {"id": flow.id + "_di", "bpmnElement": flow.id})
-        
-        sx, sy, sw, sh = src_coords
-        tx, ty, tw, th = tgt_coords
-        
-        _wp(edge, sx + sw, sy + sh/2)
-        _wp(edge, tx, ty + th/2)
-        
-        if flow.name:
-            mid_x = int((sx + sw + tx) / 2)
-            mid_y = int((sy + sh/2 + ty + th/2) / 2) - 10
-            lbl = _sub(edge, DI + "BPMNLabel")
-            _sub(lbl, DC + "Bounds", {
-                "x": str(mid_x - 30),
-                "y": str(mid_y),
-                "width": "60",
-                "height": "20",
-            })
-
+            lb.set("height", "20")  # Altura fixa para o texto rotacionado
 
 def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
     """Generate BPMN 2.0 XML."""
@@ -471,6 +419,7 @@ def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
       height: 100%;
       overflow: hidden;
       background: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }}
     
     #bpmn-container {{
@@ -479,6 +428,23 @@ def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
       position: relative;
     }}
     
+    /* Estilo para labels das lanes */
+    .djs-label {{
+      font-family: inherit !important;
+      font-size: 12px !important;
+      font-weight: 500 !important;
+      fill: #1e293b !important;
+    }}
+    
+    /* Forçar rotação do texto das lanes */
+    .djs-shape[data-element-type="lane"] .djs-label {{
+      transform: rotate(-90deg) !important;
+      transform-origin: center !important;
+      text-anchor: middle !important;
+      dominant-baseline: middle !important;
+    }}
+    
+    /* Toolbar */
     #toolbar {{
       position: fixed;
       bottom: 24px;
@@ -493,6 +459,7 @@ def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
       padding: 8px 12px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
       z-index: 1000;
+      border: 1px solid rgba(255, 255, 255, 0.1);
     }}
     
     .tb-btn {{
@@ -505,6 +472,9 @@ def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
       cursor: pointer;
       font-size: 18px;
       transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }}
     
     .tb-btn:hover {{
@@ -522,7 +492,7 @@ def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
     #zoom-label {{
       color: #cbd5e1;
       font-size: 12px;
-      font-family: monospace;
+      font-family: 'JetBrains Mono', monospace;
       min-width: 48px;
       text-align: center;
     }}
@@ -541,6 +511,19 @@ def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
       z-index: 2000;
     }}
+    
+    #loading {{
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      color: #64748b;
+      z-index: 1500;
+    }}
   </style>
   
   <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.9.1/dist/assets/bpmn-js.css">
@@ -548,15 +531,16 @@ def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
   <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.9.1/dist/assets/bpmn-font/css/bpmn.css">
 </head>
 <body>
+  <div id="loading">Carregando diagrama...</div>
   <div id="bpmn-container"></div>
   
   <div id="toolbar">
-    <button class="tb-btn" id="btn-out" title="Zoom out">−</button>
+    <button class="tb-btn" id="btn-out" title="Zoom out (Ctrl -)">−</button>
     <span id="zoom-label">100%</span>
-    <button class="tb-btn" id="btn-in" title="Zoom in">+</button>
+    <button class="tb-btn" id="btn-in" title="Zoom in (Ctrl +)">+</button>
     <div class="tb-divider"></div>
-    <button class="tb-btn" id="btn-fit" title="Fit to screen">⤢</button>
-    <button class="tb-btn" id="btn-reset" title="Reset">↺</button>
+    <button class="tb-btn" id="btn-fit" title="Fit to screen (0)">⤢</button>
+    <button class="tb-btn" id="btn-reset" title="Reset view (R)">↺</button>
   </div>
   
   <div id="err"></div>
@@ -564,60 +548,75 @@ def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
   <script src="https://unpkg.com/bpmn-js@17.9.1/dist/bpmn-viewer.development.js"></script>
   <script>
     (function() {{
-      // Create viewer
+      const loadingEl = document.getElementById('loading');
+      const errDiv = document.getElementById('err');
+      const zoomLbl = document.getElementById('zoom-label');
+      
+      // Criar viewer
       const viewer = new BpmnJS({{
         container: '#bpmn-container'
       }});
       
       const xml = `{xml_js}`;
-      const errDiv = document.getElementById('err');
-      const zoomLbl = document.getElementById('zoom-label');
       
-      // Import XML
+      // Função para atualizar label de zoom
+      function updateZoomLabel() {{
+        try {{
+          const canvas = viewer.get('canvas');
+          const zoom = canvas.zoom();
+          zoomLbl.textContent = Math.round(zoom * 100) + '%';
+        }} catch (e) {{
+          console.warn('Erro ao atualizar zoom:', e);
+        }}
+      }}
+      
+      // Importar XML
       viewer.importXML(xml)
         .then(() => {{
+          loadingEl.style.display = 'none';
+          
           const canvas = viewer.get('canvas');
           
-          // Update zoom label
-          function updateZoom() {{
-            zoomLbl.textContent = Math.round(canvas.zoom() * 100) + '%';
-          }}
+          // CORREÇÃO 1: Usar evento via eventBus em vez de canvas.on
+          const eventBus = viewer.get('eventBus');
+          eventBus.on('canvas.viewbox.changed', function() {{
+            updateZoomLabel();
+          }});
           
-          // Button handlers
+          // Configurar botões
           document.getElementById('btn-in').addEventListener('click', () => {{
             canvas.zoom(1.2);
-            updateZoom();
+            updateZoomLabel();
           }});
           
           document.getElementById('btn-out').addEventListener('click', () => {{
             canvas.zoom(0.8);
-            updateZoom();
+            updateZoomLabel();
           }});
           
           document.getElementById('btn-fit').addEventListener('click', () => {{
             canvas.zoom('fit-viewport');
-            updateZoom();
+            updateZoomLabel();
           }});
           
           document.getElementById('btn-reset').addEventListener('click', () => {{
             canvas.zoom(1);
             canvas.scroll({{ dx: 0, dy: 0 }});
-            updateZoom();
+            updateZoomLabel();
           }});
           
-          // Listen for zoom changes
-          canvas.on('viewbox.changed', updateZoom);
-          
-          // Initial fit
+          // CORREÇÃO 2: Ajustar posição dos labels das lanes via CSS
+          // Isso já foi feito no CSS acima, mas podemos forçar um re-render
           setTimeout(() => {{
             canvas.zoom('fit-viewport');
-            updateZoom();
-          }}, 200);
+            updateZoomLabel();
+          }}, 300);
         }})
         .catch(err => {{
+          loadingEl.style.display = 'none';
           errDiv.style.display = 'block';
           errDiv.innerHTML = '<b>Erro:</b> ' + err.message;
-          console.error(err);
+          console.error('Erro ao importar BPMN:', err);
         }});
     }})();
   </script>
