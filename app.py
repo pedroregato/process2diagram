@@ -323,18 +323,24 @@ if generate_btn:
                 st.code(hub.bpmn.mermaid, language="text")
                 st.caption("Verifique se há: parênteses não escapados, aspas não fechadas, caracteres especiais")
 
-            mermaid_html = f"""<!DOCTYPE html><html>
-<head><style>
-  body{{margin:0;padding:16px;background:#f8fafc;}}
-  .mermaid{{background:white;padding:24px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);}}
-</style></head>
+            mermaid_html = f"""<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {{ margin: 0; padding: 16px; background: #f8fafc; font-family: sans-serif; }}
+    .mermaid {{ background: white; padding: 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
+  </style>
+</head>
 <body>
-  <div class="mermaid">{hub.bpmn.mermaid}</div>
+  <div class="mermaid">
+{hub.bpmn.mermaid}
+  </div>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({{startOnLoad:true,theme:'neutral',securityLevel:'loose'}});
+    mermaid.initialize({{ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' }});
   </script>
-</body></html>"""
+</body>
+</html>"""
             components.html(mermaid_html, height=900, scrolling=True)
             st.code(hub.bpmn.mermaid, language="text")
 
@@ -493,4 +499,3 @@ if generate_btn:
 
     # Store in session
     st.session_state["hub"] = hub
-    
