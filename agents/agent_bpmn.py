@@ -217,79 +217,74 @@ class AgentBPMN(BaseAgent):
     @staticmethod
     def _sanitize_mermaid_label(text: str) -> str:
         """Remove/replace characters that break Mermaid syntax."""
+        if not text:
+            return "Step"
+
+        # Substitui caracteres acentuados por seus equivalentes sem acento
+        acentos = {
+            'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a', 'ä': 'a',
+            'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
+            'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
+            'ó': 'o', 'ò': 'o', 'õ': 'o', 'ô': 'o', 'ö': 'o',
+            'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u',
+            'ç': 'c', 'ñ': 'n',
+            'Á': 'A', 'À': 'A', 'Ã': 'A', 'Â': 'A', 'Ä': 'A',
+            'É': 'E', 'È': 'E', 'Ê': 'E', 'Ë': 'E',
+            'Í': 'I', 'Ì': 'I', 'Î': 'I', 'Ï': 'I',
+            'Ó': 'O', 'Ò': 'O', 'Õ': 'O', 'Ô': 'O', 'Ö': 'O',
+            'Ú': 'U', 'Ù': 'U', 'Û': 'U', 'Ü': 'U',
+            'Ç': 'C', 'Ñ': 'N'
+        }
+
+        for acento, sem_acento in acentos.items():
+            text = text.replace(acento, sem_acento)
+
         # Replace problematic chars: quotes, parens, brackets, colons, slashes
         text = text.replace('"', "'")
         text = re.sub(r'[()\[\]{}/\\:;|<>]', " ", text)
+
         # Collapse multiple spaces
         text = re.sub(r' {2,}', " ", text).strip()
+
         return text or "Step"
 
     @staticmethod
     def _generate_mermaid(model: BPMNModel) -> str:
-        def _safe_label(t: str) -> str:
-            """Sanitiza texto para uso como label no Mermaid."""
-            if not t:
-                return ""
-            # Remove caracteres que causam problemas no Mermaid
-            t = t.replace('"', "'")  # Aspas duplas causam erro
-            t = t.replace('\n', ' ')  # Quebras de linha
-            t = t.replace('\r', '')
-            t = re.sub(r'[<>]', '', t)  # Remove < e > que podem ser interpretados como HTML
-            t = re.sub(r'[|]', ' ', t)  # Pipe pode ser interpretado como separador
-            t = re.sub(r' {2,}', ' ', t).strip()
-            return t
-
         def _needs_quotes(text: str) -> bool:
             """Verifica se o texto precisa de aspas no Mermaid."""
             if not text:
                 return False
-            # Precisa de aspas se: começa com número, tem espaços, tem caracteres especiais
-            if text[0].isdigit():
-                return True
+            # Precisa de aspas se tem espaços ou começa com número
             if ' ' in text:
                 return True
-            if any(c in text for c in '.,;:!@#$%&*()[]{}'):
+            if text and text[0].isdigit():
                 return True
             return False
 
         lines = ["flowchart TD"]
 
-        # Adiciona os nós (steps)
         for step in model.steps:
-            label = _safe_label(step.title)
-            if not label:
-                label = "Step"
-
+            label = AgentBPMN._sanitize_mermaid_label(step.title)
             if step.is_decision:
-                # Decisão: formato com chaves duplas
                 lines.append(f'    {step.id}{{{label}}}')
             else:
-                # Tarefa: formato com colchetes
                 lines.append(f'    {step.id}[{label}]')
 
-        # Adiciona as arestas (edges)
         for edge in model.edges:
-            source = edge.source
-            target = edge.target
-
             if edge.label:
-                safe_label = _safe_label(edge.label)
-                if safe_label:
-                    if _needs_quotes(safe_label):
-                        arrow = f'-- "{safe_label}" -->'
-                    else:
-                        arrow = f'-- {safe_label} -->'
+                safe_lbl = AgentBPMN._sanitize_mermaid_label(edge.label)
+                # Adiciona aspas se necessário
+                if _needs_quotes(safe_lbl):
+                    arrow = f'-- "{safe_lbl}" -->'
                 else:
-                    arrow = "-->"
+                    arrow = f'-- {safe_lbl} -->'
             else:
                 arrow = "-->"
+            lines.append(f"    {edge.source} {arrow} {edge.target}")
 
-            lines.append(f'    {source} {arrow} {target}')
-
-        # Adiciona estilo para decisões
         decision_ids = [s.id for s in model.steps if s.is_decision]
         for did in decision_ids:
-            lines.append(f'    style {did} fill:#fff3cd,stroke:#f59e0b')
+            lines.append(f"    style {did} fill:#fff3cd,stroke:#f59e0b")
 
         return "\n".join(lines)
 
