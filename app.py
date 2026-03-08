@@ -289,32 +289,27 @@ if generate_btn:
                     st.caption("Verifique se há caracteres especiais ou formatação incorreta")
 
                 mermaid_html = f"""<!DOCTYPE html><html>
-<head><style>body{{margin:0;padding:16px;background:#f8fafc;}}
-.mermaid{{background:white;padding:24px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);}}</style></head>
-<body><div class="mermaid">{hub.bpmn.mermaid}</div>
-<script type="module">
-  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-  mermaid.initialize({{startOnLoad:true,theme:'neutral',securityLevel:'loose'}});
-
-  // Log de erros do Mermaid
-  window.addEventListener('load', function() {{
-    setTimeout(function() {{
-      const errorElements = document.querySelectorAll('.mermaid .error');
-      if (errorElements.length) {{
-        console.error('Mermaid errors:', errorElements);
-        const errorDiv = document.createElement('div');
-        errorDiv.style.color = 'red';
-        errorDiv.style.padding = '10px';
-        errorDiv.style.margin = '10px 0';
-        errorDiv.style.border = '1px solid red';
-        errorDiv.style.borderRadius = '4px';
-        errorDiv.innerHTML = '<b>Erro de sintaxe Mermaid:</b> ' + 
-          Array.from(errorElements).map(el => el.textContent).join(' | ');
-        document.body.insertBefore(errorDiv, document.body.firstChild);
-      }}
-    }}, 1000);
-  }});
-</script></body></html>"""
+                <head><style>
+                  body{{margin:0;padding:16px;background:#f8fafc;}}
+                  #mermaid-diagram{{background:white;padding:24px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);overflow:auto;}}
+                  #mermaid-error{{color:#dc2626;padding:12px;border:1px solid #dc2626;border-radius:4px;background:#fef2f2;display:none;margin-bottom:8px;}}
+                </style></head>
+                <body>
+                  <div id="mermaid-error"></div>
+                  <div id="mermaid-diagram"></div>
+                  <script type="module">
+                    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+                    mermaid.initialize({{startOnLoad:false,theme:'neutral',securityLevel:'loose'}});
+                    const code = {repr(hub.bpmn.mermaid)};
+                    try {{
+                      const {{svg}} = await mermaid.render('mermaid-svg-800', code);
+                      document.getElementById('mermaid-diagram').innerHTML = svg;
+                    }} catch(err) {{
+                      document.getElementById('mermaid-error').style.display = 'block';
+                      document.getElementById('mermaid-error').textContent = 'Mermaid error: ' + err.message;
+                    }}
+                  </script>
+                </body></html>"""
                 components.html(mermaid_html, height=800, scrolling=True)
 
         tab_idx += 1
@@ -329,25 +324,27 @@ if generate_btn:
                 st.caption("Verifique se há: parênteses não escapados, aspas não fechadas, caracteres especiais")
 
             mermaid_html = f"""<!DOCTYPE html><html>
-<head><style>body{{margin:0;padding:16px;background:#f8fafc;}}
-.mermaid{{background:white;padding:24px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);}}</style></head>
-<body><div class="mermaid">{hub.bpmn.mermaid}</div>
-<script type="module">
-  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-  mermaid.initialize({{startOnLoad:true,theme:'neutral',securityLevel:'loose'}});
-
-  // Capturar erros de renderização
-  window.addEventListener('load', function() {{
-    setTimeout(function() {{
-      const errorElements = document.querySelectorAll('.mermaid .error');
-      if (errorElements.length) {{
-        console.error('Mermaid syntax errors:', errorElements);
-        const errorMsg = Array.from(errorElements).map(el => el.textContent).join('\\n');
-        alert('Erro de sintaxe Mermaid:\\n' + errorMsg);
-      }}
-    }}, 500);
-  }});
-</script></body></html>"""
+            <head><style>
+              body{{margin:0;padding:16px;background:#f8fafc;}}
+              #mermaid-diagram{{background:white;padding:24px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);overflow:auto;}}
+              #mermaid-error{{color:#dc2626;padding:12px;border:1px solid #dc2626;border-radius:4px;background:#fef2f2;display:none;margin-bottom:8px;}}
+            </style></head>
+            <body>
+              <div id="mermaid-error"></div>
+              <div id="mermaid-diagram"></div>
+              <script type="module">
+                import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+                mermaid.initialize({{startOnLoad:false,theme:'neutral',securityLevel:'loose'}});
+                const code = {repr(hub.bpmn.mermaid)};
+                try {{
+                  const {{svg}} = await mermaid.render('mermaid-svg-900', code);
+                  document.getElementById('mermaid-diagram').innerHTML = svg;
+                }} catch(err) {{
+                  document.getElementById('mermaid-error').style.display = 'block';
+                  document.getElementById('mermaid-error').textContent = 'Mermaid error: ' + err.message;
+                }}
+              </script>
+            </body></html>"""
             components.html(mermaid_html, height=900, scrolling=True)
             st.code(hub.bpmn.mermaid, language="text")
 
@@ -506,3 +503,5 @@ if generate_btn:
 
     # Store in session
     st.session_state["hub"] = hub
+
+    
