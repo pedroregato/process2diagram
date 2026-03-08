@@ -288,38 +288,84 @@ if generate_btn:
                     st.code(hub.bpmn.mermaid, language="text")
                     st.caption("Verifique se há caracteres especiais ou formatação incorreta")
 
-                import base64 as _b64f, urllib.request as _ureqf
-                _fb64 = _b64f.urlsafe_b64encode(hub.bpmn.mermaid.encode("utf-8")).decode("ascii")
+                import base64 as _b64f, zlib as _zlibf, requests as _reqf
+                _fb = hub.bpmn.mermaid.encode("utf-8")
+                _fsvg = ""
                 try:
-                    with _ureqf.urlopen(f"https://mermaid.ink/svg/{_fb64}", timeout=10) as _r:
-                        st.image(_r.read(), use_container_width=True)
-                except Exception as _fe:
-                    st.warning(f"mermaid.ink indisponível: {_fe}. Use o expander abaixo para copiar o código.")
+                    _fk = _b64f.urlsafe_b64encode(_fb).decode()
+                    _fr = _reqf.get(f"https://mermaid.ink/svg/{_fk}",
+                                    headers={"User-Agent": "Mozilla/5.0 Chrome/120.0"},
+                                    timeout=8)
+                    if _fr.status_code == 200:
+                        _fsvg = _fr.text
+                except Exception:
+                    pass
+                if not _fsvg:
+                    try:
+                        _fkb = _b64f.urlsafe_b64encode(_zlibf.compress(_fb, 9)).decode()
+                        _fr2 = _reqf.get(f"https://kroki.io/mermaid/svg/{_fkb}",
+                                         headers={"User-Agent": "Mozilla/5.0"}, timeout=8)
+                        if _fr2.status_code == 200:
+                            _fsvg = _fr2.text
+                    except Exception:
+                        pass
+                if _fsvg:
+                    components.html(f"""<html><body style="margin:0;background:#f8fafc">
+                        <div style="padding:24px;background:white;border-radius:8px">{_fsvg}</div>
+                        </body></html>""", height=600, scrolling=True)
+                else:
+                    st.warning("Não foi possível renderizar. Use a aba Mermaid para visualizar.")
 
         tab_idx += 1
 
         # ── Tab: Mermaid ──────────────────────────────────────────────────────
         with tabs[tab_idx]:
             import base64 as _b64
-            import urllib.request as _ureq
+            import zlib as _zlib
 
             _mmd_bytes = hub.bpmn.mermaid.encode("utf-8")
-            _mmd_b64   = _b64.urlsafe_b64encode(_mmd_bytes).decode("ascii")
-            _live_url  = "https://mermaid.live/edit#base64:" + _b64.b64encode(_mmd_bytes).decode()
+            _live_b64  = _b64.b64encode(_mmd_bytes).decode()
+            _live_url  = f"https://mermaid.live/edit#base64:{_live_b64}"
 
-            # Busca o SVG server-side para evitar restrições CSP/CORS do iframe
-            _svg_inline = ""
-            try:
-                _ink_url = f"https://mermaid.ink/svg/{_mmd_b64}"
-                with _ureq.urlopen(_ink_url, timeout=10) as _r:
-                    _svg_inline = _r.read().decode("utf-8")
-            except Exception as _e:
-                _svg_inline = f'''<div style="color:#dc2626;padding:16px;border:1px solid #dc2626;border-radius:6px;background:#fef2f2">
-                  ⚠️ Não foi possível carregar o diagrama via mermaid.ink ({_e}).<br>
-                  Cole o código abaixo em <a href="{_live_url}" target="_blank">mermaid.live</a> para visualizar.
-                </div>'''
+            # Gera SVG server-side — tenta mermaid.ink e kroki.io como fallback
+            def _fetch_svg(mmd: str) -> str:
+                import requests as _req
 
-            _viewer_html = f"""<!DOCTYPE html>
+                # Tentativa 1: mermaid.ink com headers de browser
+                try:
+                    _b = mmd.encode("utf-8")
+                    _k = _b64.urlsafe_b64encode(_b).decode()
+                    _r = _req.get(
+                        f"https://mermaid.ink/svg/{_k}",
+                        headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) Chrome/120.0 Safari/537.36",
+                                 "Referer": "https://mermaid.live/"},
+                        timeout=8,
+                    )
+                    if _r.status_code == 200 and "<svg" in _r.text:
+                        return _r.text
+                except Exception:
+                    pass
+
+                # Tentativa 2: kroki.io (deflate + base64url)
+                try:
+                    _compressed = _zlib.compress(mmd.encode("utf-8"), 9)
+                    _kb64 = _b64.urlsafe_b64encode(_compressed).decode()
+                    _r2 = _req.get(
+                        f"https://kroki.io/mermaid/svg/{_kb64}",
+                        headers={"User-Agent": "Mozilla/5.0"},
+                        timeout=8,
+                    )
+                    if _r2.status_code == 200 and "<svg" in _r2.text:
+                        return _r2.text
+                except Exception:
+                    pass
+
+                return ""
+
+            _svg = _fetch_svg(hub.bpmn.mermaid)
+
+            if _svg:
+                _viewer_html = f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8"/>
@@ -329,13 +375,11 @@ if generate_btn:
   #toolbar {{
     display: flex; align-items: center; gap: 8px;
     padding: 8px 12px; background: white;
-    border-bottom: 1px solid #e2e8f0;
-    font-size: 13px; color: #475569;
+    border-bottom: 1px solid #e2e8f0; font-size: 13px;
   }}
   #toolbar button {{
     border: 1px solid #cbd5e1; background: white; border-radius: 6px;
     padding: 4px 10px; cursor: pointer; font-size: 13px; color: #334155;
-    transition: background .15s;
   }}
   #toolbar button:hover {{ background: #f1f5f9; }}
   #toolbar .sep {{ width: 1px; height: 20px; background: #e2e8f0; margin: 0 2px; }}
@@ -345,11 +389,7 @@ if generate_btn:
     overflow: hidden; cursor: grab; position: relative; background: #f8fafc;
   }}
   #canvas.grabbing {{ cursor: grabbing; }}
-  #viewport {{
-    position: absolute; top: 0; left: 0;
-    transform-origin: 0 0;
-    padding: 24px;
-  }}
+  #viewport {{ position: absolute; top: 0; left: 0; transform-origin: 0 0; padding: 24px; }}
   #viewport svg {{ display: block; }}
 </style>
 </head>
@@ -365,99 +405,78 @@ if generate_btn:
   <span class="hint">Scroll para zoom · Arrastar para mover</span>
 </div>
 <div id="canvas">
-  <div id="viewport">{_svg_inline}</div>
+  <div id="viewport">{_svg}</div>
 </div>
 <script>
-  const canvas   = document.getElementById('canvas');
-  const viewport = document.getElementById('viewport');
-  const svg      = viewport.querySelector('svg');
-
+  const canvas = document.getElementById('canvas');
+  const vp     = document.getElementById('viewport');
+  const svg    = vp.querySelector('svg');
   let scale = 1, tx = 20, ty = 20;
-  let dragging = false, startX = 0, startY = 0, startTx = 0, startTy = 0;
+  let drag = false, sx = 0, sy = 0, stx = 0, sty = 0;
 
-  function applyTransform() {{
-    viewport.style.transform = `translate(${{tx}}px, ${{ty}}px) scale(${{scale}})`;
-  }}
+  function applyT() {{ vp.style.transform = `translate(${{tx}}px,${{ty}}px) scale(${{scale}})`; }}
 
-  function zoom(factor, cx, cy) {{
-    const rect = canvas.getBoundingClientRect();
-    cx = (cx !== undefined) ? cx : rect.width  / 2;
-    cy = (cy !== undefined) ? cy : rect.height / 2;
-    const prev = scale;
-    scale = Math.min(Math.max(scale * factor, 0.1), 10);
-    tx = cx - (cx - tx) * (scale / prev);
-    ty = cy - (cy - ty) * (scale / prev);
-    applyTransform();
+  function zoom(f, cx, cy) {{
+    const r = canvas.getBoundingClientRect();
+    cx = cx ?? r.width / 2; cy = cy ?? r.height / 2;
+    const p = scale;
+    scale = Math.min(Math.max(scale * f, 0.1), 10);
+    tx = cx - (cx - tx) * scale / p;
+    ty = cy - (cy - ty) * scale / p;
+    applyT();
   }}
 
   function resetView() {{
     if (!svg) return;
-    const cRect = canvas.getBoundingClientRect();
-    const vb    = svg.viewBox.baseVal;
-    const sw    = vb && vb.width  ? vb.width  : svg.getBoundingClientRect().width  || 800;
-    const sh    = vb && vb.height ? vb.height : svg.getBoundingClientRect().height || 400;
-    const pad   = 48;
-    scale = Math.min((cRect.width - pad) / sw, (cRect.height - pad) / sh, 1.5);
-    tx = (cRect.width  - sw * scale) / 2;
-    ty = (cRect.height - sh * scale) / 2;
-    applyTransform();
+    const r  = canvas.getBoundingClientRect();
+    const vb = svg.viewBox.baseVal;
+    const sw = (vb && vb.width)  ? vb.width  : (svg.width.baseVal.value  || 800);
+    const sh = (vb && vb.height) ? vb.height : (svg.height.baseVal.value || 400);
+    scale = Math.min((r.width - 48) / sw, (r.height - 48) / sh, 1.5);
+    tx = (r.width  - sw * scale) / 2;
+    ty = (r.height - sh * scale) / 2;
+    applyT();
   }}
 
-  // Init após render
-  setTimeout(resetView, 80);
+  setTimeout(resetView, 60);
 
-  // Scroll = zoom
   canvas.addEventListener('wheel', e => {{
     e.preventDefault();
     const r = canvas.getBoundingClientRect();
     zoom(e.deltaY < 0 ? 1.1 : 0.909, e.clientX - r.left, e.clientY - r.top);
-  }}, {{ passive: false }});
+  }}, {{passive: false}});
 
-  // Drag
   canvas.addEventListener('mousedown', e => {{
-    dragging = true; canvas.classList.add('grabbing');
-    startX = e.clientX; startY = e.clientY; startTx = tx; startTy = ty;
+    drag = true; canvas.classList.add('grabbing');
+    sx = e.clientX; sy = e.clientY; stx = tx; sty = ty;
   }});
   window.addEventListener('mousemove', e => {{
-    if (!dragging) return;
-    tx = startTx + e.clientX - startX;
-    ty = startTy + e.clientY - startY;
-    applyTransform();
+    if (!drag) return;
+    tx = stx + e.clientX - sx; ty = sty + e.clientY - sy; applyT();
   }});
-  window.addEventListener('mouseup', () => {{ dragging = false; canvas.classList.remove('grabbing'); }});
+  window.addEventListener('mouseup', () => {{ drag = false; canvas.classList.remove('grabbing'); }});
 
-  // Touch
-  let lastDist = null;
+  let ld = null;
   canvas.addEventListener('touchstart', e => {{
-    if (e.touches.length === 1) {{
-      dragging = true;
-      startX = e.touches[0].clientX; startY = e.touches[0].clientY;
-      startTx = tx; startTy = ty;
-    }}
-  }}, {{ passive: true }});
+    if (e.touches.length === 1) {{ drag = true; sx = e.touches[0].clientX; sy = e.touches[0].clientY; stx = tx; sty = ty; }}
+  }}, {{passive: true}});
   canvas.addEventListener('touchmove', e => {{
     if (e.touches.length === 2) {{
       e.preventDefault();
-      const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
-                           e.touches[0].clientY - e.touches[1].clientY);
-      if (lastDist) zoom(d / lastDist);
-      lastDist = d;
-    }} else if (e.touches.length === 1 && dragging) {{
-      tx = startTx + e.touches[0].clientX - startX;
-      ty = startTy + e.touches[0].clientY - startY;
-      applyTransform();
-    }}
-  }}, {{ passive: false }});
-  canvas.addEventListener('touchend', () => {{ dragging = false; lastDist = null; }});
+      const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      if (ld) zoom(d / ld); ld = d;
+    }} else if (drag) {{ tx = stx + e.touches[0].clientX - sx; ty = sty + e.touches[0].clientY - sy; applyT(); }}
+  }}, {{passive: false}});
+  canvas.addEventListener('touchend', () => {{ drag = false; ld = null; }});
 </script>
 </body>
 </html>"""
+                components.html(_viewer_html, height=560, scrolling=False)
+            else:
+                st.warning("⚠️ Não foi possível gerar o diagrama automaticamente. Cole o código abaixo em [mermaid.live]({}) para visualizar.".format(_live_url))
 
-            components.html(_viewer_html, height=560, scrolling=False)
-
-            with st.expander("📄 Código-fonte Mermaid", expanded=False):
+            with st.expander("📄 Código-fonte Mermaid", expanded=not bool(_svg)):
                 st.code(hub.bpmn.mermaid, language="text")
-                st.caption(f"Cole em [mermaid.live]({_live_url}) para editar interativamente.")
 
         tab_idx += 1
 
@@ -614,3 +633,4 @@ if generate_btn:
 
     # Store in session
     st.session_state["hub"] = hub
+    
