@@ -129,16 +129,10 @@ class MermaidGenerator:
         if edge.label:
             safe_label = cls.sanitize_text(edge.label)
             if safe_label:
-                if cls.needs_quotes(safe_label):
-                    arrow = f'-- "{safe_label}" -->'
-                else:
-                    arrow = f'-- {safe_label} -->'
-            else:
-                arrow = "-->"
-        else:
-            arrow = "-->"
+                # Pipe syntax -->|label| is canonical Mermaid — no quotes needed
+                return f'    {source} -->|{safe_label}| {target}'
 
-        return f'    {source} {arrow} {target}'
+        return f'    {source} --> {target}'
 
     @classmethod
     def generate(cls, model: BPMNModel) -> str:
