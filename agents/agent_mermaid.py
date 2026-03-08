@@ -145,7 +145,7 @@ class MermaidGenerator:
         Returns:
             String com a sintaxe Mermaid do diagrama
         """
-        lines = ["flowchart TD"]
+        lines = ["flowchart LR"]
 
         # Adiciona nós (steps)
         for step in model.steps:
@@ -167,3 +167,4 @@ class MermaidGenerator:
 def generate_mermaid(model: BPMNModel) -> str:
     """Gera diagrama Mermaid a partir de um modelo BPMN."""
     return MermaidGenerator.generate(model)
+
