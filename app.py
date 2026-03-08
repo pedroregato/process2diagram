@@ -298,7 +298,7 @@ if generate_btn:
                   <div id="mermaid-error"></div>
                   <div id="mermaid-diagram"></div>
                   <script type="module">
-                    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.esm.min.mjs';
+                    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
                     mermaid.initialize({{startOnLoad:false,theme:'neutral',securityLevel:'loose'}});
                     const code = {repr(hub.bpmn.mermaid)};
                     try {{
@@ -324,27 +324,17 @@ if generate_btn:
                 st.caption("Verifique se há: parênteses não escapados, aspas não fechadas, caracteres especiais")
 
             mermaid_html = f"""<!DOCTYPE html><html>
-            <head><style>
-              body{{margin:0;padding:16px;background:#f8fafc;}}
-              #mermaid-diagram{{background:white;padding:24px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);overflow:auto;}}
-              #mermaid-error{{color:#dc2626;padding:12px;border:1px solid #dc2626;border-radius:4px;background:#fef2f2;display:none;margin-bottom:8px;}}
-            </style></head>
-            <body>
-              <div id="mermaid-error"></div>
-              <div id="mermaid-diagram"></div>
-              <script type="module">
-                import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.esm.min.mjs';
-                mermaid.initialize({{startOnLoad:false,theme:'neutral',securityLevel:'loose'}});
-                const code = {repr(hub.bpmn.mermaid)};
-                try {{
-                  const {{svg}} = await mermaid.render('mermaid-svg-900', code);
-                  document.getElementById('mermaid-diagram').innerHTML = svg;
-                }} catch(err) {{
-                  document.getElementById('mermaid-error').style.display = 'block';
-                  document.getElementById('mermaid-error').textContent = 'Mermaid error: ' + err.message;
-                }}
-              </script>
-            </body></html>"""
+<head><style>
+  body{{margin:0;padding:16px;background:#f8fafc;}}
+  .mermaid{{background:white;padding:24px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);}}
+</style></head>
+<body>
+  <div class="mermaid">{hub.bpmn.mermaid}</div>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({{startOnLoad:true,theme:'neutral',securityLevel:'loose'}});
+  </script>
+</body></html>"""
             components.html(mermaid_html, height=900, scrolling=True)
             st.code(hub.bpmn.mermaid, language="text")
 
@@ -503,4 +493,4 @@ if generate_btn:
 
     # Store in session
     st.session_state["hub"] = hub
-
+    
