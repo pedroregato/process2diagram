@@ -335,8 +335,8 @@ if generate_btn:
   #toolbar .hint{{margin-left:auto;color:#94a3b8;font-size:12px;}}
   #canvas{{width:100%;height:calc(100vh - 45px);overflow:hidden;cursor:grab;position:relative;background:#f8fafc;}}
   #canvas.grabbing{{cursor:grabbing;}}
-  #vp{{position:absolute;top:0;left:0;transform-origin:0 0;}}
-  #vp img{{display:block;max-width:none;user-select:none;-webkit-user-drag:none;}}
+  #vp{{position:absolute;top:0;left:0;transform-origin:0 0;padding:16px;}}
+  #vp svg{{display:block;}}
 </style>
 </head>
 <body>
@@ -350,32 +350,62 @@ if generate_btn:
   </a>
   <span class="hint">Scroll = zoom · Arrastar = mover</span>
 </div>
-<div id="canvas">
-  <div id="vp">
-    <img id="img" src="{_ink_url}" draggable="false" onload="fit()" onerror="err()"/>
-  </div>
-</div>
+<div id="canvas"><div id="vp"><p id="msg" style="padding:16px;color:#64748b">⏳ Carregando...</p></div></div>
 <script>
-var C=document.getElementById('canvas'),VP=document.getElementById('vp'),IMG=document.getElementById('img');
+var C=document.getElementById('canvas'),VP=document.getElementById('vp');
 var sc=1,tx=0,ty=0,drag=false,x0=0,y0=0,tx0=0,ty0=0;
 function T(){{VP.style.transform='translate('+tx+'px,'+ty+'px) scale('+sc+')';}}
+
+function fit(){{
+  var svg=VP.querySelector('svg');
+  if(!svg)return;
+  var r=C.getBoundingClientRect();
+  // Ler viewBox para obter dimensões reais do SVG
+  var vb=svg.getAttribute('viewBox');
+  var iw,ih;
+  if(vb){{
+    var parts=vb.trim().split(/[\s,]+/);
+    iw=parseFloat(parts[2]); ih=parseFloat(parts[3]);
+  }}
+  if(!iw||!ih){{
+    var bb=svg.getBBox();
+    iw=bb.width||svg.scrollWidth||800;
+    ih=bb.height||svg.scrollHeight||400;
+  }}
+  if(!iw||!ih){{iw=800;ih=400;}}
+  sc=Math.min((r.width-32)/iw,(r.height-32)/ih,2);
+  tx=(r.width-iw*sc)/2; ty=(r.height-ih*sc)/2; T();
+}}
+
 function zoom(f,cx,cy){{
   var r=C.getBoundingClientRect();
   cx=cx!==undefined?cx:r.width/2; cy=cy!==undefined?cy:r.height/2;
   var p=sc; sc=Math.min(Math.max(sc*f,0.05),20);
   tx=cx-(cx-tx)*sc/p; ty=cy-(cy-ty)*sc/p; T();
 }}
-function fit(){{
-  // Para SVG o naturalWidth pode ser 0 — usar offsetWidth após render
-  var r=C.getBoundingClientRect();
-  var iw=IMG.naturalWidth||IMG.offsetWidth||IMG.width||900;
-  var ih=IMG.naturalHeight||IMG.offsetHeight||IMG.height||500;
-  // Se ainda zero, aguardar e tentar novamente
-  if(iw<=1||ih<=1){{setTimeout(fit,150);return;}}
-  sc=Math.min((r.width-64)/iw,(r.height-64)/ih);
-  tx=(r.width-iw*sc)/2; ty=(r.height-ih*sc)/2; T();
-}}
-function err(){{C.innerHTML='<p style="padding:20px;color:#dc2626">Erro ao carregar. <a href="{_live_url}" target="_blank">Abrir no mermaid.live →</a></p>';}}
+
+// Fetch SVG inline — browser não tem restrição de CORS para fetch de imagens SVG
+fetch('{_ink_url}')
+  .then(function(r){{
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.text();
+  }})
+  .then(function(svgText){{
+    VP.innerHTML=svgText;
+    // Garantir que o SVG não tenha width/height fixos que atrapalhem o scale
+    var svg=VP.querySelector('svg');
+    if(svg){{
+      svg.removeAttribute('width');
+      svg.removeAttribute('height');
+      svg.style.width='auto';
+      svg.style.height='auto';
+    }}
+    setTimeout(fit,50);
+  }})
+  .catch(function(e){{
+    VP.innerHTML='<p style="padding:16px;color:#dc2626">Erro: '+e.message+'. <a href="{_live_url}" target="_blank">Abrir no mermaid.live →</a></p>';
+  }});
+
 C.addEventListener('wheel',function(e){{e.preventDefault();var r=C.getBoundingClientRect();zoom(e.deltaY<0?1.12:0.893,e.clientX-r.left,e.clientY-r.top);}},{{passive:false}});
 C.addEventListener('mousedown',function(e){{drag=true;C.classList.add('grabbing');x0=e.clientX;y0=e.clientY;tx0=tx;ty0=ty;}});
 window.addEventListener('mousemove',function(e){{if(!drag)return;tx=tx0+e.clientX-x0;ty=ty0+e.clientY-y0;T();}});
@@ -387,8 +417,6 @@ C.addEventListener('touchmove',function(e){{
   else if(drag){{tx=tx0+e.touches[0].clientX-x0;ty=ty0+e.touches[0].clientY-y0;T();}}
 }},{{passive:false}});
 C.addEventListener('touchend',function(){{drag=false;ld=null;}});
-// Fallback: se onload já disparou antes do script
-if(IMG.complete&&IMG.naturalWidth)fit();
 </script>
 </body>
 </html>"""
