@@ -323,41 +323,33 @@ if generate_btn:
             _live_url  = "https://mermaid.live/edit#base64:" + _b64.b64encode(_mmd_bytes).decode()
             _ink_url   = f"https://mermaid.ink/svg/{_ink_b64}"
 
-            # O browser faz a requisição ao mermaid.ink (sem bloqueio 403)
-            # Pan/zoom implementado via CSS transform no wrapper da imagem
+            st.markdown(f"**URL gerada:** [{_ink_url[:80]}...]({_ink_url})")
+            st.markdown(f"**mermaid.live:** [abrir diagrama]({_live_url})")
+
             _viewer_html = f"""<!DOCTYPE html>
 <html>
-<head>
-<meta charset="utf-8"/>
+<head><meta charset="utf-8"/>
 <style>
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  html, body {{ width: 100%; height: 100%; background: #f8fafc; font-family: sans-serif; overflow: hidden; }}
+  * {{ box-sizing:border-box; margin:0; padding:0; }}
+  html,body {{ width:100%; height:100%; background:#f8fafc; font-family:sans-serif; overflow:hidden; }}
   #toolbar {{
-    display: flex; align-items: center; gap: 8px;
-    padding: 8px 12px; background: white;
-    border-bottom: 1px solid #e2e8f0; font-size: 13px;
+    display:flex; align-items:center; gap:8px;
+    padding:8px 12px; background:white; border-bottom:1px solid #e2e8f0; font-size:13px;
   }}
   #toolbar button {{
-    border: 1px solid #cbd5e1; background: white; border-radius: 6px;
-    padding: 4px 10px; cursor: pointer; font-size: 13px; color: #334155;
+    border:1px solid #cbd5e1; background:white; border-radius:6px;
+    padding:4px 10px; cursor:pointer; font-size:13px; color:#334155;
   }}
-  #toolbar button:hover {{ background: #f1f5f9; }}
-  #toolbar .sep {{ width: 1px; height: 20px; background: #e2e8f0; margin: 0 2px; }}
-  #toolbar .hint {{ margin-left: auto; color: #94a3b8; font-size: 12px; }}
+  #toolbar button:hover {{ background:#f1f5f9; }}
+  #toolbar .hint {{ margin-left:auto; color:#94a3b8; font-size:12px; }}
+  #status {{ padding:8px 12px; font-size:12px; color:#64748b; background:#f1f5f9; }}
   #canvas {{
-    width: 100%; height: calc(100vh - 45px);
-    overflow: hidden; cursor: grab; position: relative; background: #f8fafc;
+    width:100%; height:calc(100vh - 90px);
+    overflow:hidden; cursor:grab; position:relative; background:#f8fafc;
   }}
-  #canvas.grabbing {{ cursor: grabbing; }}
-  #viewport {{
-    position: absolute; top: 0; left: 0;
-    transform-origin: 0 0;
-    padding: 24px;
-  }}
-  #viewport img {{
-    display: block; max-width: none;
-    user-select: none; -webkit-user-drag: none;
-  }}
+  #canvas.grabbing {{ cursor:grabbing; }}
+  #viewport {{ position:absolute; top:0; left:0; transform-origin:0 0; padding:24px; }}
+  #viewport img {{ display:block; max-width:none; user-select:none; }}
 </style>
 </head>
 <body>
@@ -365,81 +357,76 @@ if generate_btn:
   <button onclick="zoom(1.2)">＋</button>
   <button onclick="zoom(0.8)">－</button>
   <button onclick="resetView()">⊙ Reset</button>
-  <div class="sep"></div>
+  &nbsp;
   <a href="{_live_url}" target="_blank" style="text-decoration:none;">
     <button>✏️ Editar no mermaid.live</button>
   </a>
   <span class="hint">Scroll para zoom · Arrastar para mover</span>
 </div>
+<div id="status">⏳ Carregando diagrama...</div>
 <div id="canvas">
   <div id="viewport">
     <img id="diagram" src="{_ink_url}" draggable="false"
-         onload="resetView()"
-         onerror="this.parentNode.innerHTML='<p style=\'padding:16px;color:#dc2626\'> Diagrama indisponível. <a href=\'{_live_url}\' target=\'_blank\'>Abrir no mermaid.live</a></p>'"/>
+         onload="onImgLoad()"
+         onerror="onImgError()"/>
   </div>
 </div>
 <script>
   const canvas = document.getElementById('canvas');
   const vp     = document.getElementById('viewport');
-  let scale = 1, tx = 0, ty = 0;
-  let drag = false, sx = 0, sy = 0, stx = 0, sty = 0;
+  const status = document.getElementById('status');
+  let scale=1, tx=0, ty=0, drag=false, sx=0, sy=0, stx=0, sty=0;
 
-  function applyT() {{ vp.style.transform = `translate(${{tx}}px,${{ty}}px) scale(${{scale}})`; }}
+  function applyT() {{ vp.style.transform=`translate(${{tx}}px,${{ty}}px) scale(${{scale}})`; }}
 
-  function zoom(f, cx, cy) {{
-    const r = canvas.getBoundingClientRect();
-    cx = (cx !== undefined) ? cx : r.width  / 2;
-    cy = (cy !== undefined) ? cy : r.height / 2;
-    const p = scale;
-    scale = Math.min(Math.max(scale * f, 0.1), 10);
-    tx = cx - (cx - tx) * scale / p;
-    ty = cy - (cy - ty) * scale / p;
-    applyT();
+  function zoom(f,cx,cy) {{
+    const r=canvas.getBoundingClientRect();
+    cx=(cx!==undefined)?cx:r.width/2; cy=(cy!==undefined)?cy:r.height/2;
+    const p=scale; scale=Math.min(Math.max(scale*f,0.1),10);
+    tx=cx-(cx-tx)*scale/p; ty=cy-(cy-ty)*scale/p; applyT();
   }}
 
   function resetView() {{
-    const img = document.getElementById('diagram');
-    if (!img || !img.naturalWidth) return;
-    const r  = canvas.getBoundingClientRect();
-    const iw = img.naturalWidth, ih = img.naturalHeight;
-    scale = Math.min((r.width - 48) / iw, (r.height - 48) / ih, 1.5);
-    tx = (r.width  - iw * scale) / 2;
-    ty = (r.height - ih * scale) / 2;
+    const img=document.getElementById('diagram');
+    if(!img||!img.naturalWidth) return;
+    const r=canvas.getBoundingClientRect();
+    scale=Math.min((r.width-48)/img.naturalWidth,(r.height-48)/img.naturalHeight,1.5);
+    tx=(r.width-img.naturalWidth*scale)/2;
+    ty=(r.height-img.naturalHeight*scale)/2;
     applyT();
   }}
 
-  canvas.addEventListener('wheel', e => {{
+  function onImgLoad() {{
+    status.textContent='✅ Diagrama carregado com sucesso.';
+    status.style.color='#16a34a';
+    resetView();
+  }}
+
+  function onImgError() {{
+    status.innerHTML='❌ Falha ao carregar imagem do mermaid.ink. '
+      +'<a href="{_live_url}" target="_blank">Abrir no mermaid.live →</a>';
+    status.style.color='#dc2626';
+    document.getElementById('diagram').style.display='none';
+  }}
+
+  canvas.addEventListener('wheel',e=>{{
     e.preventDefault();
-    const r = canvas.getBoundingClientRect();
-    zoom(e.deltaY < 0 ? 1.1 : 0.909, e.clientX - r.left, e.clientY - r.top);
-  }}, {{passive: false}});
-
-  canvas.addEventListener('mousedown', e => {{
-    drag = true; canvas.classList.add('grabbing');
-    sx = e.clientX; sy = e.clientY; stx = tx; sty = ty;
-  }});
-  window.addEventListener('mousemove', e => {{
-    if (!drag) return;
-    tx = stx + e.clientX - sx; ty = sty + e.clientY - sy; applyT();
-  }});
-  window.addEventListener('mouseup', () => {{ drag = false; canvas.classList.remove('grabbing'); }});
-
-  let ld = null;
-  canvas.addEventListener('touchstart', e => {{
-    if (e.touches.length === 1) {{ drag = true; sx = e.touches[0].clientX; sy = e.touches[0].clientY; stx = tx; sty = ty; }}
-  }}, {{passive: true}});
-  canvas.addEventListener('touchmove', e => {{
-    if (e.touches.length === 2) {{
+    const r=canvas.getBoundingClientRect();
+    zoom(e.deltaY<0?1.1:0.909,e.clientX-r.left,e.clientY-r.top);
+  }},{{passive:false}});
+  canvas.addEventListener('mousedown',e=>{{drag=true;canvas.classList.add('grabbing');sx=e.clientX;sy=e.clientY;stx=tx;sty=ty;}});
+  window.addEventListener('mousemove',e=>{{if(!drag)return;tx=stx+e.clientX-sx;ty=sty+e.clientY-sy;applyT();}});
+  window.addEventListener('mouseup',()=>{{drag=false;canvas.classList.remove('grabbing');}});
+  let ld=null;
+  canvas.addEventListener('touchstart',e=>{{if(e.touches.length===1){{drag=true;sx=e.touches[0].clientX;sy=e.touches[0].clientY;stx=tx;sty=ty;}}}},{{passive:true}});
+  canvas.addEventListener('touchmove',e=>{{
+    if(e.touches.length===2){{
       e.preventDefault();
-      const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
-                           e.touches[0].clientY - e.touches[1].clientY);
-      if (ld) zoom(d / ld); ld = d;
-    }} else if (drag) {{
-      tx = stx + e.touches[0].clientX - sx;
-      ty = sty + e.touches[0].clientY - sy; applyT();
-    }}
-  }}, {{passive: false}});
-  canvas.addEventListener('touchend', () => {{ drag = false; ld = null; }});
+      const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      if(ld)zoom(d/ld);ld=d;
+    }}else if(drag){{tx=stx+e.touches[0].clientX-sx;ty=sty+e.touches[0].clientY-sy;applyT();}}
+  }},{{passive:false}});
+  canvas.addEventListener('touchend',()=>{{drag=false;ld=null;}});
 </script>
 </body>
 </html>"""
@@ -448,7 +435,6 @@ if generate_btn:
 
             with st.expander("📄 Código-fonte Mermaid", expanded=False):
                 st.code(hub.bpmn.mermaid, language="text")
-                st.caption(f"Cole em [mermaid.live]({_live_url}) para editar interativamente.")
 
         tab_idx += 1
 
@@ -605,3 +591,4 @@ if generate_btn:
 
     # Store in session
     st.session_state["hub"] = hub
+    
