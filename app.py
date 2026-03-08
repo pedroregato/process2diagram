@@ -288,29 +288,12 @@ if generate_btn:
                     st.code(hub.bpmn.mermaid, language="text")
                     st.caption("Verifique se há caracteres especiais ou formatação incorreta")
 
-                mermaid_html = f"""<!DOCTYPE html><html>
-                <head><style>
-                  body{{margin:0;padding:16px;background:#f8fafc;}}
-                  #mermaid-diagram{{background:white;padding:24px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);overflow:auto;}}
-                  #mermaid-error{{color:#dc2626;padding:12px;border:1px solid #dc2626;border-radius:4px;background:#fef2f2;display:none;margin-bottom:8px;}}
-                </style></head>
-                <body>
-                  <div id="mermaid-error"></div>
-                  <div id="mermaid-diagram"></div>
-                  <script type="module">
-                    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-                    mermaid.initialize({{startOnLoad:false,theme:'neutral',securityLevel:'loose'}});
-                    const code = {repr(hub.bpmn.mermaid)};
-                    try {{
-                      const {{svg}} = await mermaid.render('mermaid-svg-800', code);
-                      document.getElementById('mermaid-diagram').innerHTML = svg;
-                    }} catch(err) {{
-                      document.getElementById('mermaid-error').style.display = 'block';
-                      document.getElementById('mermaid-error').textContent = 'Mermaid error: ' + err.message;
-                    }}
-                  </script>
-                </body></html>"""
-                components.html(mermaid_html, height=800, scrolling=True)
+                # Renderiza via mermaid.ink (API REST, sem JS/eval no cliente)
+                import base64 as _b64
+                _mmd_b64 = _b64.urlsafe_b64encode(hub.bpmn.mermaid.encode("utf-8")).decode("ascii")
+                _ink_url = f"https://mermaid.ink/svg/{_mmd_b64}"
+                st.image(_ink_url, use_container_width=True)
+                st.caption("Diagrama gerado via mermaid.ink")
 
         tab_idx += 1
 
@@ -323,42 +306,12 @@ if generate_btn:
                 st.code(hub.bpmn.mermaid, language="text")
                 st.caption("Verifique se há: parênteses não escapados, aspas não fechadas, caracteres especiais")
 
-            mermaid_html = f"""<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    html, body {{ margin: 0; padding: 0; width: 100%; height: 100%; }}
-    body {{ padding: 16px; background: #f8fafc; font-family: sans-serif; box-sizing: border-box; }}
-    #mermaid-container {{
-      background: white;
-      padding: 24px;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      min-width: 600px;
-      min-height: 200px;
-      width: 100%;
-      box-sizing: border-box;
-    }}
-  </style>
-</head>
-<body>
-  <div id="mermaid-container">
-    <pre class="mermaid">
-{hub.bpmn.mermaid}
-    </pre>
-  </div>
-  <script type="module">
-    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({{
-      startOnLoad: true,
-      theme: 'neutral',
-      securityLevel: 'loose',
-      flowchart: {{ useMaxWidth: true, htmlLabels: true }}
-    }});
-  </script>
-</body>
-</html>"""
-            components.html(mermaid_html, height=900, scrolling=True)
+            # Renderiza via mermaid.ink (API REST, sem JS/eval no cliente)
+            import base64, urllib.parse
+            _mmd_b64 = base64.urlsafe_b64encode(hub.bpmn.mermaid.encode("utf-8")).decode("ascii")
+            _ink_url = f"https://mermaid.ink/svg/{_mmd_b64}"
+            st.image(_ink_url, use_container_width=True)
+            st.caption("Diagrama gerado via mermaid.ink")
             st.code(hub.bpmn.mermaid, language="text")
 
         tab_idx += 1
