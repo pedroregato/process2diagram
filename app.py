@@ -24,6 +24,8 @@ from modules.ingest import load_transcript
 from core.knowledge_hub import KnowledgeHub
 from agents.orchestrator import Orchestrator
 from agents.agent_minutes import AgentMinutes
+# Adicione esta linha junto com as outras imports (após a linha 20 aproximadamente)
+from agents.agent_mermaid import generate_mermaid
 
 # ── BPMN viewer (presentation layer — separated from generator) ───────────────
 from modules.bpmn_viewer import preview_from_xml
@@ -428,9 +430,11 @@ if generate_btn:
 
             with col3:
                 # Mermaid continua disponível como download de texto
+                # Gera o Mermaid na hora do download
+                mermaid_content = generate_mermaid(hub.bpmn)
                 st.download_button(
                     "⬇️ Fluxo .mermaid",
-                    data=hub.bpmn.mermaid,
+                    data=mermaid_content,
                     file_name=f"{hub.bpmn.name.replace(' ', '_')}.mmd",
                     mime="text/plain",
                     use_container_width=True,

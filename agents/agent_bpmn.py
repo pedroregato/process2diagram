@@ -3,13 +3,13 @@
 # BPMN Agent — expert em BPMN 2.0 (OMG / ISO-IEC 19510).
 #
 # Reads:  hub.transcript_clean, hub.nlp (actors, segments)
-# Writes: hub.bpmn  (BPMNModel — steps, edges, lanes, mermaid, drawio_xml,
-#                                bpmn_xml via bpmn_generator)
+# Writes: hub.bpmn  (BPMNModel — steps, edges, lanes, bpmn_xml, drawio_xml)
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
 
 import re
+from typing import Optional
 
 from agents.base_agent import BaseAgent
 from core.knowledge_hub import KnowledgeHub, BPMNModel, BPMNStep, BPMNEdge
@@ -49,9 +49,13 @@ class AgentBPMN(BaseAgent):
         data = self._call_with_retry(system, user, hub)
 
         hub.bpmn = self._build_model(data)
-        hub.bpmn.mermaid    = self._generate_mermaid(hub.bpmn)
-        hub.bpmn.drawio_xml = self._generate_drawio(hub.bpmn)
         hub.bpmn.bpmn_xml   = self._generate_bpmn_xml(hub.bpmn)
+        hub.bpmn.drawio_xml = self._generate_drawio(hub.bpmn)
+
+        # 🔥 NOVO: Gerar Mermaid
+        from agents.agent_mermaid import generate_mermaid
+        hub.bpmn.mermaid = generate_mermaid(hub.bpmn)
+
         hub.bpmn.ready = True
         hub.mark_agent_run(self.name)
         hub.bump()
@@ -208,85 +212,10 @@ class AgentBPMN(BaseAgent):
 
             return generate_bpmn_xml(bpmn_process)
 
-        except Exception:
+        except Exception as e:
             # bpmn_generator not available or bridge error — degrade gracefully
+            print(f"Erro ao gerar BPMN XML: {e}")
             return ""
-
-    # ── Mermaid generator ─────────────────────────────────────────────────────
-
-    @staticmethod
-    def _sanitize_mermaid_label(text: str) -> str:
-        """Remove/replace characters that break Mermaid syntax."""
-        if not text:
-            return "Step"
-
-        # Substitui caracteres acentuados por seus equivalentes sem acento
-        acentos = {
-            'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a', 'ä': 'a',
-            'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
-            'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
-            'ó': 'o', 'ò': 'o', 'õ': 'o', 'ô': 'o', 'ö': 'o',
-            'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u',
-            'ç': 'c', 'ñ': 'n',
-            'Á': 'A', 'À': 'A', 'Ã': 'A', 'Â': 'A', 'Ä': 'A',
-            'É': 'E', 'È': 'E', 'Ê': 'E', 'Ë': 'E',
-            'Í': 'I', 'Ì': 'I', 'Î': 'I', 'Ï': 'I',
-            'Ó': 'O', 'Ò': 'O', 'Õ': 'O', 'Ô': 'O', 'Ö': 'O',
-            'Ú': 'U', 'Ù': 'U', 'Û': 'U', 'Ü': 'U',
-            'Ç': 'C', 'Ñ': 'N'
-        }
-
-        for acento, sem_acento in acentos.items():
-            text = text.replace(acento, sem_acento)
-
-        # Replace problematic chars: quotes, parens, brackets, colons, slashes
-        text = text.replace('"', "'")
-        text = re.sub(r'[()\[\]{}/\\:;|<>]', " ", text)
-
-        # Collapse multiple spaces
-        text = re.sub(r' {2,}', " ", text).strip()
-
-        return text or "Step"
-
-    @staticmethod
-    def _generate_mermaid(model: BPMNModel) -> str:
-        def _needs_quotes(text: str) -> bool:
-            """Verifica se o texto precisa de aspas no Mermaid."""
-            if not text:
-                return False
-            # Precisa de aspas se tem espaços ou começa com número
-            if ' ' in text:
-                return True
-            if text and text[0].isdigit():
-                return True
-            return False
-
-        lines = ["flowchart TD"]
-
-        for step in model.steps:
-            label = AgentBPMN._sanitize_mermaid_label(step.title)
-            if step.is_decision:
-                lines.append(f'    {step.id}{{{label}}}')
-            else:
-                lines.append(f'    {step.id}[{label}]')
-
-        for edge in model.edges:
-            if edge.label:
-                safe_lbl = AgentBPMN._sanitize_mermaid_label(edge.label)
-                # Adiciona aspas se necessário
-                if _needs_quotes(safe_lbl):
-                    arrow = f'-- "{safe_lbl}" -->'
-                else:
-                    arrow = f'-- {safe_lbl} -->'
-            else:
-                arrow = "-->"
-            lines.append(f"    {edge.source} {arrow} {edge.target}")
-
-        decision_ids = [s.id for s in model.steps if s.is_decision]
-        for did in decision_ids:
-            lines.append(f"    style {did} fill:#fff3cd,stroke:#f59e0b")
-
-        return "\n".join(lines)
 
     # ── Draw.io generator ─────────────────────────────────────────────────────
 
@@ -309,7 +238,8 @@ class AgentBPMN(BaseAgent):
                 style = "rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;"
                 w, h = W, H
 
-            label = step.title.replace("<", "&lt;").replace(">", "&gt;")
+            # Sanitiza o label para XML
+            label = step.title.replace("<", "&lt;").replace(">", "&gt;").replace("&", "&amp;")
             cells.append(
                 f'<mxCell id="{step.id}" value="{label}" style="{style}" '
                 f'vertex="1" parent="1">'
@@ -319,6 +249,8 @@ class AgentBPMN(BaseAgent):
 
         for i, edge in enumerate(model.edges):
             label = edge.label or ""
+            # Sanitiza o label para XML
+            label = label.replace("<", "&lt;").replace(">", "&gt;").replace("&", "&amp;")
             cells.append(
                 f'<mxCell id="e{i}" value="{label}" edge="1" '
                 f'source="{edge.source}" target="{edge.target}" parent="1">'
@@ -334,4 +266,3 @@ class AgentBPMN(BaseAgent):
             f"  {inner}\n"
             "</root></mxGraphModel>"
         )
-
