@@ -298,7 +298,7 @@ if generate_btn:
                   <div id="mermaid-error"></div>
                   <div id="mermaid-diagram"></div>
                   <script type="module">
-                    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+                    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.esm.min.mjs';
                     mermaid.initialize({{startOnLoad:false,theme:'neutral',securityLevel:'loose'}});
                     const code = {repr(hub.bpmn.mermaid)};
                     try {{
@@ -333,7 +333,7 @@ if generate_btn:
               <div id="mermaid-error"></div>
               <div id="mermaid-diagram"></div>
               <script type="module">
-                import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+                import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.esm.min.mjs';
                 mermaid.initialize({{startOnLoad:false,theme:'neutral',securityLevel:'loose'}});
                 const code = {repr(hub.bpmn.mermaid)};
                 try {{
@@ -504,3 +504,4 @@ if generate_btn:
     # Store in session
     st.session_state["hub"] = hub
 
+    
