@@ -327,17 +327,34 @@ if generate_btn:
 <html>
 <head>
   <style>
-    body {{ margin: 0; padding: 16px; background: #f8fafc; font-family: sans-serif; }}
-    .mermaid {{ background: white; padding: 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
+    html, body {{ margin: 0; padding: 0; width: 100%; height: 100%; }}
+    body {{ padding: 16px; background: #f8fafc; font-family: sans-serif; box-sizing: border-box; }}
+    #mermaid-container {{
+      background: white;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      min-width: 600px;
+      min-height: 200px;
+      width: 100%;
+      box-sizing: border-box;
+    }}
   </style>
 </head>
 <body>
-  <div class="mermaid">
+  <div id="mermaid-container">
+    <pre class="mermaid">
 {hub.bpmn.mermaid}
+    </pre>
   </div>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({{ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' }});
+    mermaid.initialize({{
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: {{ useMaxWidth: true, htmlLabels: true }}
+    }});
   </script>
 </body>
 </html>"""
