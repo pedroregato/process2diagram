@@ -4,7 +4,6 @@
 import sys
 from pathlib import Path
 import json
-import base64
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -59,31 +58,222 @@ st.markdown("""
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-def mermaid_to_ink_url(mermaid_text: str) -> str:
-    """
-    Converte Mermaid text em URL do mermaid.ink usando base64 URL-safe.
-    """
-    payload = base64.urlsafe_b64encode(mermaid_text.encode("utf-8")).decode("ascii")
-    return f"https://mermaid.ink/svg/{payload}"
-
-
 def render_mermaid_block(mermaid_text: str, *, show_code: bool = True, key_suffix: str = "") -> None:
     """
-    Renderiza Mermaid de forma estável via mermaid.ink.
+    Renderiza Mermaid interativamente com zoom, pan e fit-to-screen.
+    Usa mermaid JS via CDN dentro de um components.html.
     """
-    with st.expander("🔍 Diagnóstico Mermaid - Conteúdo Bruto", expanded=True):
-        st.code(mermaid_text, language="text")
-        st.caption("Verifique se há: parênteses não escapados, aspas não fechadas, caracteres especiais")
+    import hashlib
 
-    try:
-        ink_url = mermaid_to_ink_url(mermaid_text)
-        st.image(ink_url, use_container_width=True)
-        st.caption("Diagrama gerado via mermaid.ink")
-    except Exception as exc:
-        st.error(f"Falha ao montar a URL do Mermaid: {exc}")
+    # Escape the mermaid text for safe embedding in JS template literal
+    escaped = (
+        mermaid_text
+        .replace("\\", "\\\\")
+        .replace("`", "\\`")
+        .replace("${", "\\${")
+    )
+
+    uid = hashlib.md5((mermaid_text + key_suffix).encode()).hexdigest()[:8]
+
+    html_code = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{ background: #fff; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }}
+
+  .toolbar {{
+    position: absolute; top: 8px; right: 8px; z-index: 100;
+    display: flex; gap: 4px;
+  }}
+  .toolbar button {{
+    width: 32px; height: 32px; border: 1px solid #cbd5e1; border-radius: 6px;
+    background: #fff; cursor: pointer; font-size: 16px; display: flex;
+    align-items: center; justify-content: center; color: #475569;
+    transition: all 0.15s;
+  }}
+  .toolbar button:hover {{ background: #f1f5f9; border-color: #94a3b8; }}
+  .toolbar button:active {{ background: #e2e8f0; }}
+
+  #container {{
+    width: 100%; height: 100vh; overflow: hidden;
+    cursor: grab; position: relative; background: #fafafa;
+    border: 1px solid #e2e8f0; border-radius: 8px;
+  }}
+  #container:active {{ cursor: grabbing; }}
+
+  #viewport {{
+    transform-origin: 0 0;
+    position: absolute; top: 0; left: 0;
+    will-change: transform;
+  }}
+
+  .zoom-hint {{
+    position: absolute; bottom: 8px; left: 8px; z-index: 100;
+    font-size: 11px; color: #94a3b8;
+    pointer-events: none;
+  }}
+
+  .loading {{
+    display: flex; align-items: center; justify-content: center;
+    height: 100vh; color: #64748b; font-size: 14px;
+  }}
+</style>
+</head>
+<body>
+
+<div id="loading" class="loading">Renderizando diagrama...</div>
+
+<div id="wrapper" style="display:none; width:100%; height:100vh; position:relative;">
+  <div class="toolbar">
+    <button onclick="zoomIn()" title="Zoom in">+</button>
+    <button onclick="zoomOut()" title="Zoom out">−</button>
+    <button onclick="fitToScreen()" title="Fit to screen">⊡</button>
+    <button onclick="resetView()" title="Reset">↺</button>
+  </div>
+  <div class="zoom-hint" id="zoomHint">Scroll: zoom · Drag: mover · ⊡ ajustar</div>
+  <div id="container">
+    <div id="viewport">
+      <div id="diagram_{uid}" class="mermaid">
+{escaped}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+(function() {{
+  // ── State ──
+  let scale = 1, panX = 0, panY = 0;
+  let dragging = false, startX = 0, startY = 0;
+  const MIN_SCALE = 0.1, MAX_SCALE = 5;
+
+  const container = document.getElementById("container");
+  const viewport  = document.getElementById("viewport");
+
+  function applyTransform() {{
+    viewport.style.transform =
+      "translate(" + panX + "px, " + panY + "px) scale(" + scale + ")";
+    document.getElementById("zoomHint").textContent =
+      Math.round(scale * 100) + "% · Scroll: zoom · Drag: mover · ⊡ ajustar";
+  }}
+
+  // ── Zoom ──
+  window.zoomIn  = function() {{ scale = Math.min(scale * 1.25, MAX_SCALE); applyTransform(); }};
+  window.zoomOut = function() {{ scale = Math.max(scale / 1.25, MIN_SCALE); applyTransform(); }};
+
+  window.resetView = function() {{
+    scale = 1; panX = 0; panY = 0; applyTransform();
+  }};
+
+  window.fitToScreen = function() {{
+    const svg = viewport.querySelector("svg");
+    if (!svg) return;
+    const vb = svg.viewBox.baseVal;
+    const svgW = vb && vb.width  > 0 ? vb.width  : svg.scrollWidth;
+    const svgH = vb && vb.height > 0 ? vb.height : svg.scrollHeight;
+    const cW = container.clientWidth;
+    const cH = container.clientHeight;
+    if (svgW === 0 || svgH === 0) return;
+    scale = Math.min(cW / svgW, cH / svgH, 2) * 0.92;
+    panX = (cW - svgW * scale) / 2;
+    panY = (cH - svgH * scale) / 2;
+    applyTransform();
+  }};
+
+  // ── Wheel zoom (centered on cursor) ──
+  container.addEventListener("wheel", function(e) {{
+    e.preventDefault();
+    const rect = container.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const oldScale = scale;
+    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    scale = Math.min(Math.max(scale * factor, MIN_SCALE), MAX_SCALE);
+    // Keep point under cursor stable
+    panX = mx - (mx - panX) * (scale / oldScale);
+    panY = my - (my - panY) * (scale / oldScale);
+    applyTransform();
+  }}, {{ passive: false }});
+
+  // ── Drag / pan ──
+  container.addEventListener("mousedown", function(e) {{
+    dragging = true; startX = e.clientX - panX; startY = e.clientY - panY;
+  }});
+  window.addEventListener("mousemove", function(e) {{
+    if (!dragging) return;
+    panX = e.clientX - startX; panY = e.clientY - startY;
+    applyTransform();
+  }});
+  window.addEventListener("mouseup", function() {{ dragging = false; }});
+
+  // ── Touch support ──
+  let lastTouchDist = 0;
+  container.addEventListener("touchstart", function(e) {{
+    if (e.touches.length === 1) {{
+      dragging = true;
+      startX = e.touches[0].clientX - panX;
+      startY = e.touches[0].clientY - panY;
+    }} else if (e.touches.length === 2) {{
+      dragging = false;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      lastTouchDist = Math.sqrt(dx * dx + dy * dy);
+    }}
+  }}, {{ passive: true }});
+  container.addEventListener("touchmove", function(e) {{
+    if (e.touches.length === 1 && dragging) {{
+      panX = e.touches[0].clientX - startX;
+      panY = e.touches[0].clientY - startY;
+      applyTransform();
+    }} else if (e.touches.length === 2) {{
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (lastTouchDist > 0) {{
+        const factor = dist / lastTouchDist;
+        scale = Math.min(Math.max(scale * factor, MIN_SCALE), MAX_SCALE);
+        applyTransform();
+      }}
+      lastTouchDist = dist;
+    }}
+  }}, {{ passive: true }});
+  container.addEventListener("touchend", function() {{
+    dragging = false; lastTouchDist = 0;
+  }});
+
+  // ── Mermaid init ──
+  mermaid.initialize({{
+    startOnLoad: false,
+    theme: "default",
+    flowchart: {{ curve: "basis", useMaxWidth: false }},
+    securityLevel: "loose"
+  }});
+
+  mermaid.run({{ querySelector: "#diagram_{uid}" }}).then(function() {{
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("wrapper").style.display = "block";
+    // Auto fit after a small delay for SVG to settle
+    setTimeout(fitToScreen, 120);
+  }}).catch(function(err) {{
+    document.getElementById("loading").innerHTML =
+      "<div style='color:#dc2626;padding:24px;'>" +
+      "<b>Mermaid render error:</b><br><pre style='white-space:pre-wrap;font-size:12px;'>" +
+      err.toString() + "</pre></div>";
+  }});
+}})();
+</script>
+</body>
+</html>
+"""
+
+    components.html(html_code, height=620, scrolling=False)
 
     if show_code:
-        st.code(mermaid_text, language="text")
+        with st.expander("📝 Código Mermaid", expanded=False):
+            st.code(mermaid_text, language="text")
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
