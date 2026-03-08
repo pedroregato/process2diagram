@@ -167,4 +167,3 @@ class MermaidGenerator:
 def generate_mermaid(model: BPMNModel) -> str:
     """Gera diagrama Mermaid a partir de um modelo BPMN."""
     return MermaidGenerator.generate(model)
-
