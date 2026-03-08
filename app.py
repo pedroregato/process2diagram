@@ -288,84 +288,44 @@ if generate_btn:
                     st.code(hub.bpmn.mermaid, language="text")
                     st.caption("Verifique se há caracteres especiais ou formatação incorreta")
 
-                import base64 as _b64f, zlib as _zlibf, requests as _reqf
-                _fb = hub.bpmn.mermaid.encode("utf-8")
-                _fsvg = ""
-                try:
-                    _fk = _b64f.urlsafe_b64encode(_fb).decode()
-                    _fr = _reqf.get(f"https://mermaid.ink/svg/{_fk}",
-                                    headers={"User-Agent": "Mozilla/5.0 Chrome/120.0"},
-                                    timeout=8)
-                    if _fr.status_code == 200:
-                        _fsvg = _fr.text
-                except Exception:
-                    pass
-                if not _fsvg:
-                    try:
-                        _fkb = _b64f.urlsafe_b64encode(_zlibf.compress(_fb, 9)).decode()
-                        _fr2 = _reqf.get(f"https://kroki.io/mermaid/svg/{_fkb}",
-                                         headers={"User-Agent": "Mozilla/5.0"}, timeout=8)
-                        if _fr2.status_code == 200:
-                            _fsvg = _fr2.text
-                    except Exception:
-                        pass
-                if _fsvg:
-                    components.html(f"""<html><body style="margin:0;background:#f8fafc">
-                        <div style="padding:24px;background:white;border-radius:8px">{_fsvg}</div>
-                        </body></html>""", height=600, scrolling=True)
-                else:
-                    st.warning("Não foi possível renderizar. Use a aba Mermaid para visualizar.")
+                mermaid_html = f"""<!DOCTYPE html><html>
+                <head><style>
+                  body{{margin:0;padding:16px;background:#f8fafc;}}
+                  #mermaid-diagram{{background:white;padding:24px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);overflow:auto;}}
+                  #mermaid-error{{color:#dc2626;padding:12px;border:1px solid #dc2626;border-radius:4px;background:#fef2f2;display:none;margin-bottom:8px;}}
+                </style></head>
+                <body>
+                  <div id="mermaid-error"></div>
+                  <div id="mermaid-diagram"></div>
+                  <script type="module">
+                    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+                    mermaid.initialize({{startOnLoad:false,theme:'neutral',securityLevel:'loose'}});
+                    const code = {repr(hub.bpmn.mermaid)};
+                    try {{
+                      const {{svg}} = await mermaid.render('mermaid-svg-800', code);
+                      document.getElementById('mermaid-diagram').innerHTML = svg;
+                    }} catch(err) {{
+                      document.getElementById('mermaid-error').style.display = 'block';
+                      document.getElementById('mermaid-error').textContent = 'Mermaid error: ' + err.message;
+                    }}
+                  </script>
+                </body></html>"""
+                components.html(mermaid_html, height=800, scrolling=True)
 
         tab_idx += 1
 
         # ── Tab: Mermaid ──────────────────────────────────────────────────────
         with tabs[tab_idx]:
             import base64 as _b64
-            import zlib as _zlib
 
             _mmd_bytes = hub.bpmn.mermaid.encode("utf-8")
-            _live_b64  = _b64.b64encode(_mmd_bytes).decode()
-            _live_url  = f"https://mermaid.live/edit#base64:{_live_b64}"
+            _ink_b64   = _b64.urlsafe_b64encode(_mmd_bytes).decode("ascii")
+            _live_url  = "https://mermaid.live/edit#base64:" + _b64.b64encode(_mmd_bytes).decode()
+            _ink_url   = f"https://mermaid.ink/svg/{_ink_b64}"
 
-            # Gera SVG server-side — tenta mermaid.ink e kroki.io como fallback
-            def _fetch_svg(mmd: str) -> str:
-                import requests as _req
-
-                # Tentativa 1: mermaid.ink com headers de browser
-                try:
-                    _b = mmd.encode("utf-8")
-                    _k = _b64.urlsafe_b64encode(_b).decode()
-                    _r = _req.get(
-                        f"https://mermaid.ink/svg/{_k}",
-                        headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) Chrome/120.0 Safari/537.36",
-                                 "Referer": "https://mermaid.live/"},
-                        timeout=8,
-                    )
-                    if _r.status_code == 200 and "<svg" in _r.text:
-                        return _r.text
-                except Exception:
-                    pass
-
-                # Tentativa 2: kroki.io (deflate + base64url)
-                try:
-                    _compressed = _zlib.compress(mmd.encode("utf-8"), 9)
-                    _kb64 = _b64.urlsafe_b64encode(_compressed).decode()
-                    _r2 = _req.get(
-                        f"https://kroki.io/mermaid/svg/{_kb64}",
-                        headers={"User-Agent": "Mozilla/5.0"},
-                        timeout=8,
-                    )
-                    if _r2.status_code == 200 and "<svg" in _r2.text:
-                        return _r2.text
-                except Exception:
-                    pass
-
-                return ""
-
-            _svg = _fetch_svg(hub.bpmn.mermaid)
-
-            if _svg:
-                _viewer_html = f"""<!DOCTYPE html>
+            # O browser faz a requisição ao mermaid.ink (sem bloqueio 403)
+            # Pan/zoom implementado via CSS transform no wrapper da imagem
+            _viewer_html = f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8"/>
@@ -389,8 +349,15 @@ if generate_btn:
     overflow: hidden; cursor: grab; position: relative; background: #f8fafc;
   }}
   #canvas.grabbing {{ cursor: grabbing; }}
-  #viewport {{ position: absolute; top: 0; left: 0; transform-origin: 0 0; padding: 24px; }}
-  #viewport svg {{ display: block; }}
+  #viewport {{
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0;
+    padding: 24px;
+  }}
+  #viewport img {{
+    display: block; max-width: none;
+    user-select: none; -webkit-user-drag: none;
+  }}
 </style>
 </head>
 <body>
@@ -405,20 +372,24 @@ if generate_btn:
   <span class="hint">Scroll para zoom · Arrastar para mover</span>
 </div>
 <div id="canvas">
-  <div id="viewport">{_svg}</div>
+  <div id="viewport">
+    <img id="diagram" src="{_ink_url}" draggable="false"
+         onload="resetView()"
+         onerror="this.parentNode.innerHTML='<p style=\'padding:16px;color:#dc2626\'> Diagrama indisponível. <a href=\'{_live_url}\' target=\'_blank\'>Abrir no mermaid.live</a></p>'"/>
+  </div>
 </div>
 <script>
   const canvas = document.getElementById('canvas');
   const vp     = document.getElementById('viewport');
-  const svg    = vp.querySelector('svg');
-  let scale = 1, tx = 20, ty = 20;
+  let scale = 1, tx = 0, ty = 0;
   let drag = false, sx = 0, sy = 0, stx = 0, sty = 0;
 
   function applyT() {{ vp.style.transform = `translate(${{tx}}px,${{ty}}px) scale(${{scale}})`; }}
 
   function zoom(f, cx, cy) {{
     const r = canvas.getBoundingClientRect();
-    cx = cx ?? r.width / 2; cy = cy ?? r.height / 2;
+    cx = (cx !== undefined) ? cx : r.width  / 2;
+    cy = (cy !== undefined) ? cy : r.height / 2;
     const p = scale;
     scale = Math.min(Math.max(scale * f, 0.1), 10);
     tx = cx - (cx - tx) * scale / p;
@@ -427,18 +398,15 @@ if generate_btn:
   }}
 
   function resetView() {{
-    if (!svg) return;
+    const img = document.getElementById('diagram');
+    if (!img || !img.naturalWidth) return;
     const r  = canvas.getBoundingClientRect();
-    const vb = svg.viewBox.baseVal;
-    const sw = (vb && vb.width)  ? vb.width  : (svg.width.baseVal.value  || 800);
-    const sh = (vb && vb.height) ? vb.height : (svg.height.baseVal.value || 400);
-    scale = Math.min((r.width - 48) / sw, (r.height - 48) / sh, 1.5);
-    tx = (r.width  - sw * scale) / 2;
-    ty = (r.height - sh * scale) / 2;
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    scale = Math.min((r.width - 48) / iw, (r.height - 48) / ih, 1.5);
+    tx = (r.width  - iw * scale) / 2;
+    ty = (r.height - ih * scale) / 2;
     applyT();
   }}
-
-  setTimeout(resetView, 60);
 
   canvas.addEventListener('wheel', e => {{
     e.preventDefault();
@@ -463,20 +431,24 @@ if generate_btn:
   canvas.addEventListener('touchmove', e => {{
     if (e.touches.length === 2) {{
       e.preventDefault();
-      const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                           e.touches[0].clientY - e.touches[1].clientY);
       if (ld) zoom(d / ld); ld = d;
-    }} else if (drag) {{ tx = stx + e.touches[0].clientX - sx; ty = sty + e.touches[0].clientY - sy; applyT(); }}
+    }} else if (drag) {{
+      tx = stx + e.touches[0].clientX - sx;
+      ty = sty + e.touches[0].clientY - sy; applyT();
+    }}
   }}, {{passive: false}});
   canvas.addEventListener('touchend', () => {{ drag = false; ld = null; }});
 </script>
 </body>
 </html>"""
-                components.html(_viewer_html, height=560, scrolling=False)
-            else:
-                st.warning("⚠️ Não foi possível gerar o diagrama automaticamente. Cole o código abaixo em [mermaid.live]({}) para visualizar.".format(_live_url))
 
-            with st.expander("📄 Código-fonte Mermaid", expanded=not bool(_svg)):
+            components.html(_viewer_html, height=560, scrolling=False)
+
+            with st.expander("📄 Código-fonte Mermaid", expanded=False):
                 st.code(hub.bpmn.mermaid, language="text")
+                st.caption(f"Cole em [mermaid.live]({_live_url}) para editar interativamente.")
 
         tab_idx += 1
 
@@ -633,4 +605,3 @@ if generate_btn:
 
     # Store in session
     st.session_state["hub"] = hub
-    
