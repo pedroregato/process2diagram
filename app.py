@@ -323,110 +323,72 @@ if generate_btn:
             _live_url  = "https://mermaid.live/edit#base64:" + _b64.b64encode(_mmd_bytes).decode()
             _ink_url   = f"https://mermaid.ink/svg/{_ink_b64}"
 
-            st.markdown(f"**URL gerada:** [{_ink_url[:80]}...]({_ink_url})")
-            st.markdown(f"**mermaid.live:** [abrir diagrama]({_live_url})")
-
             _viewer_html = f"""<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"/>
 <style>
-  * {{ box-sizing:border-box; margin:0; padding:0; }}
-  html,body {{ width:100%; height:100%; background:#f8fafc; font-family:sans-serif; overflow:hidden; }}
-  #toolbar {{
-    display:flex; align-items:center; gap:8px;
-    padding:8px 12px; background:white; border-bottom:1px solid #e2e8f0; font-size:13px;
-  }}
-  #toolbar button {{
-    border:1px solid #cbd5e1; background:white; border-radius:6px;
-    padding:4px 10px; cursor:pointer; font-size:13px; color:#334155;
-  }}
-  #toolbar button:hover {{ background:#f1f5f9; }}
-  #toolbar .hint {{ margin-left:auto; color:#94a3b8; font-size:12px; }}
-  #status {{ padding:8px 12px; font-size:12px; color:#64748b; background:#f1f5f9; }}
-  #canvas {{
-    width:100%; height:calc(100vh - 90px);
-    overflow:hidden; cursor:grab; position:relative; background:#f8fafc;
-  }}
-  #canvas.grabbing {{ cursor:grabbing; }}
-  #viewport {{ position:absolute; top:0; left:0; transform-origin:0 0; padding:24px; }}
-  #viewport img {{ display:block; max-width:none; user-select:none; }}
+  *{{box-sizing:border-box;margin:0;padding:0;}}
+  html,body{{width:100%;height:100%;background:#f8fafc;font-family:sans-serif;overflow:hidden;}}
+  #toolbar{{display:flex;align-items:center;gap:8px;padding:8px 12px;background:white;border-bottom:1px solid #e2e8f0;font-size:13px;}}
+  #toolbar button{{border:1px solid #cbd5e1;background:white;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;color:#334155;}}
+  #toolbar button:hover{{background:#f1f5f9;}}
+  #toolbar .hint{{margin-left:auto;color:#94a3b8;font-size:12px;}}
+  #canvas{{width:100%;height:calc(100vh - 45px);overflow:hidden;cursor:grab;position:relative;background:#f8fafc;}}
+  #canvas.grabbing{{cursor:grabbing;}}
+  #vp{{position:absolute;top:0;left:0;transform-origin:0 0;}}
+  #vp img{{display:block;max-width:none;user-select:none;-webkit-user-drag:none;}}
 </style>
 </head>
 <body>
 <div id="toolbar">
   <button onclick="zoom(1.2)">＋</button>
   <button onclick="zoom(0.8)">－</button>
-  <button onclick="resetView()">⊙ Reset</button>
+  <button onclick="fit()">⊙ Fit</button>
   &nbsp;
   <a href="{_live_url}" target="_blank" style="text-decoration:none;">
-    <button>✏️ Editar no mermaid.live</button>
+    <button>✏️ mermaid.live</button>
   </a>
-  <span class="hint">Scroll para zoom · Arrastar para mover</span>
+  <span class="hint">Scroll = zoom · Arrastar = mover</span>
 </div>
-<div id="status">⏳ Carregando diagrama...</div>
 <div id="canvas">
-  <div id="viewport">
-    <img id="diagram" src="{_ink_url}" draggable="false"
-         onload="onImgLoad()"
-         onerror="onImgError()"/>
+  <div id="vp">
+    <img id="img" src="{_ink_url}" draggable="false" onload="fit()" onerror="err()"/>
   </div>
 </div>
 <script>
-  const canvas = document.getElementById('canvas');
-  const vp     = document.getElementById('viewport');
-  const status = document.getElementById('status');
-  let scale=1, tx=0, ty=0, drag=false, sx=0, sy=0, stx=0, sty=0;
-
-  function applyT() {{ vp.style.transform=`translate(${{tx}}px,${{ty}}px) scale(${{scale}})`; }}
-
-  function zoom(f,cx,cy) {{
-    const r=canvas.getBoundingClientRect();
-    cx=(cx!==undefined)?cx:r.width/2; cy=(cy!==undefined)?cy:r.height/2;
-    const p=scale; scale=Math.min(Math.max(scale*f,0.1),10);
-    tx=cx-(cx-tx)*scale/p; ty=cy-(cy-ty)*scale/p; applyT();
-  }}
-
-  function resetView() {{
-    const img=document.getElementById('diagram');
-    if(!img||!img.naturalWidth) return;
-    const r=canvas.getBoundingClientRect();
-    scale=Math.min((r.width-48)/img.naturalWidth,(r.height-48)/img.naturalHeight,1.5);
-    tx=(r.width-img.naturalWidth*scale)/2;
-    ty=(r.height-img.naturalHeight*scale)/2;
-    applyT();
-  }}
-
-  function onImgLoad() {{
-    status.textContent='✅ Diagrama carregado com sucesso.';
-    status.style.color='#16a34a';
-    resetView();
-  }}
-
-  function onImgError() {{
-    status.innerHTML='❌ Falha ao carregar imagem do mermaid.ink. '
-      +'<a href="{_live_url}" target="_blank">Abrir no mermaid.live →</a>';
-    status.style.color='#dc2626';
-    document.getElementById('diagram').style.display='none';
-  }}
-
-  canvas.addEventListener('wheel',e=>{{
-    e.preventDefault();
-    const r=canvas.getBoundingClientRect();
-    zoom(e.deltaY<0?1.1:0.909,e.clientX-r.left,e.clientY-r.top);
-  }},{{passive:false}});
-  canvas.addEventListener('mousedown',e=>{{drag=true;canvas.classList.add('grabbing');sx=e.clientX;sy=e.clientY;stx=tx;sty=ty;}});
-  window.addEventListener('mousemove',e=>{{if(!drag)return;tx=stx+e.clientX-sx;ty=sty+e.clientY-sy;applyT();}});
-  window.addEventListener('mouseup',()=>{{drag=false;canvas.classList.remove('grabbing');}});
-  let ld=null;
-  canvas.addEventListener('touchstart',e=>{{if(e.touches.length===1){{drag=true;sx=e.touches[0].clientX;sy=e.touches[0].clientY;stx=tx;sty=ty;}}}},{{passive:true}});
-  canvas.addEventListener('touchmove',e=>{{
-    if(e.touches.length===2){{
-      e.preventDefault();
-      const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
-      if(ld)zoom(d/ld);ld=d;
-    }}else if(drag){{tx=stx+e.touches[0].clientX-sx;ty=sty+e.touches[0].clientY-sy;applyT();}}
-  }},{{passive:false}});
-  canvas.addEventListener('touchend',()=>{{drag=false;ld=null;}});
+var C=document.getElementById('canvas'),VP=document.getElementById('vp'),IMG=document.getElementById('img');
+var sc=1,tx=0,ty=0,drag=false,x0=0,y0=0,tx0=0,ty0=0;
+function T(){{VP.style.transform='translate('+tx+'px,'+ty+'px) scale('+sc+')';}}
+function zoom(f,cx,cy){{
+  var r=C.getBoundingClientRect();
+  cx=cx!==undefined?cx:r.width/2; cy=cy!==undefined?cy:r.height/2;
+  var p=sc; sc=Math.min(Math.max(sc*f,0.05),20);
+  tx=cx-(cx-tx)*sc/p; ty=cy-(cy-ty)*sc/p; T();
+}}
+function fit(){{
+  // Para SVG o naturalWidth pode ser 0 — usar offsetWidth após render
+  var r=C.getBoundingClientRect();
+  var iw=IMG.naturalWidth||IMG.offsetWidth||IMG.width||900;
+  var ih=IMG.naturalHeight||IMG.offsetHeight||IMG.height||500;
+  // Se ainda zero, aguardar e tentar novamente
+  if(iw<=1||ih<=1){{setTimeout(fit,150);return;}}
+  sc=Math.min((r.width-64)/iw,(r.height-64)/ih);
+  tx=(r.width-iw*sc)/2; ty=(r.height-ih*sc)/2; T();
+}}
+function err(){{C.innerHTML='<p style="padding:20px;color:#dc2626">Erro ao carregar. <a href="{_live_url}" target="_blank">Abrir no mermaid.live →</a></p>';}}
+C.addEventListener('wheel',function(e){{e.preventDefault();var r=C.getBoundingClientRect();zoom(e.deltaY<0?1.12:0.893,e.clientX-r.left,e.clientY-r.top);}},{{passive:false}});
+C.addEventListener('mousedown',function(e){{drag=true;C.classList.add('grabbing');x0=e.clientX;y0=e.clientY;tx0=tx;ty0=ty;}});
+window.addEventListener('mousemove',function(e){{if(!drag)return;tx=tx0+e.clientX-x0;ty=ty0+e.clientY-y0;T();}});
+window.addEventListener('mouseup',function(){{drag=false;C.classList.remove('grabbing');}});
+var ld=null;
+C.addEventListener('touchstart',function(e){{if(e.touches.length===1){{drag=true;x0=e.touches[0].clientX;y0=e.touches[0].clientY;tx0=tx;ty0=ty;}}}},{{passive:true}});
+C.addEventListener('touchmove',function(e){{
+  if(e.touches.length===2){{e.preventDefault();var d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);if(ld)zoom(d/ld);ld=d;}}
+  else if(drag){{tx=tx0+e.touches[0].clientX-x0;ty=ty0+e.touches[0].clientY-y0;T();}}
+}},{{passive:false}});
+C.addEventListener('touchend',function(){{drag=false;ld=null;}});
+// Fallback: se onload já disparou antes do script
+if(IMG.complete&&IMG.naturalWidth)fit();
 </script>
 </body>
 </html>"""
@@ -435,6 +397,7 @@ if generate_btn:
 
             with st.expander("📄 Código-fonte Mermaid", expanded=False):
                 st.code(hub.bpmn.mermaid, language="text")
+                st.caption(f"Cole em [mermaid.live]({_live_url}) para editar interativamente.")
 
         tab_idx += 1
 
