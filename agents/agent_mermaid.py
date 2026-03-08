@@ -106,11 +106,11 @@ class MermaidGenerator:
         label = cls.sanitize_text(step.title)
 
         if step.is_decision:
-            # Nó de decisão: usa chaves
-            return f'    {node_id}{{{label}}}'
+            # Nó de decisão: usa chaves — aspas obrigatórias para labels com espaço/acento
+            return f'    {node_id}{{"{label}"}}'
         else:
-            # Nó de tarefa: usa colchetes
-            return f'    {node_id}[{label}]'
+            # Nó de tarefa: usa colchetes — aspas obrigatórias para labels com espaço/acento
+            return f'    {node_id}["{label}"]'
 
     @classmethod
     def format_edge(cls, edge: BPMNEdge) -> str:
