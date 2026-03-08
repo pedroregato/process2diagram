@@ -1,6 +1,5 @@
 ## --- Process2Diagram v3 — Multi-Agent Architecture
 ## --- Pedro Gentil
-## -- estável?
 
 import sys
 import os
@@ -289,66 +288,13 @@ if generate_btn:
                     st.code(hub.bpmn.mermaid, language="text")
                     st.caption("Verifique se há caracteres especiais ou formatação incorreta")
 
+                # Renderiza via mermaid.ink (API REST, sem JS/eval no cliente)
                 import base64 as _b64
-                _mm_bytes = hub.bpmn.mermaid.encode("utf-8")
-                _mm_b64 = _b64.b64encode(_mm_bytes).decode("ascii")
-                _mm_url = f"https://mermaid.ink/svg/{_mm_b64}"
-                mermaid_html = f"""<!DOCTYPE html><html>
-                <head><style>
-                  body{{margin:0;padding:0;background:#f8fafc;overflow:hidden;}}
-                  #container{{width:100%;height:800px;position:relative;background:white;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);overflow:hidden;}}
-                  #viewport{{position:absolute;top:0;left:0;transform-origin:0 0;}}
-                  #mermaid-error{{color:#dc2626;padding:12px;border:1px solid #dc2626;border-radius:4px;background:#fef2f2;margin:16px;}}
-                  #loading{{display:flex;align-items:center;justify-content:center;height:100%;color:#64748b;font-family:sans-serif;font-size:14px;}}
-                  .controls{{position:absolute;bottom:12px;right:12px;display:flex;gap:6px;z-index:10;}}
-                  .btn{{background:white;border:1px solid #cbd5e1;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;color:#334155;}}
-                  .btn:hover{{background:#f1f5f9;}}
-                </style></head>
-                <body>
-                  <div id="container">
-                    <div id="loading">⏳ Carregando diagrama...</div>
-                    <div id="viewport"></div>
-                    <div class="controls">
-                      <button class="btn" onclick="zoom(1.2)">＋</button>
-                      <button class="btn" onclick="zoom(0.8)">－</button>
-                      <button class="btn" onclick="fit()">⊡ Fit</button>
-                    </div>
-                  </div>
-                  <script>
-                    var VP=document.getElementById('viewport'),C=document.getElementById('container');
-                    var sc=1,tx=0,ty=0,dragging=false,sx=0,sy=0;
-                    function T(){{VP.style.transform='translate('+tx+'px,'+ty+'px) scale('+sc+')';}}
-                    function zoom(f){{sc*=f;T();}}
-                    function fit(){{
-                      var svg=VP.querySelector('svg'); if(!svg)return;
-                      var r=C.getBoundingClientRect();
-                      var vb=svg.getAttribute('viewBox'); var iw,ih;
-                      if(vb){{var p=vb.trim().split(/[\\s,]+/);iw=parseFloat(p[2]);ih=parseFloat(p[3]);}}
-                      if(!iw||!ih){{var bb=svg.getBBox();iw=bb.width||800;ih=bb.height||400;}}
-                      if(!iw||!ih){{iw=800;ih=400;}}
-                      sc=Math.min((r.width-32)/iw,(r.height-32)/ih,2);
-                      tx=(r.width-iw*sc)/2; ty=(r.height-ih*sc)/2; T();
-                    }}
-                    C.addEventListener('mousedown',function(e){{dragging=true;sx=e.clientX-tx;sy=e.clientY-ty;}});
-                    window.addEventListener('mousemove',function(e){{if(dragging){{tx=e.clientX-sx;ty=e.clientY-sy;T();}}}});
-                    window.addEventListener('mouseup',function(){{dragging=false;}});
-                    C.addEventListener('wheel',function(e){{e.preventDefault();zoom(e.deltaY<0?1.1:0.9);}},{{passive:false}});
-                    fetch('{_mm_url}')
-                      .then(function(r){{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}})
-                      .then(function(svgText){{
-                        document.getElementById('loading').style.display='none';
-                        VP.innerHTML=svgText;
-                        var svg=VP.querySelector('svg');
-                        if(svg){{svg.removeAttribute('width');svg.removeAttribute('height');svg.style.width='auto';svg.style.height='auto';}}
-                        setTimeout(fit,50);
-                      }})
-                      .catch(function(e){{
-                        document.getElementById('loading').style.display='none';
-                        C.innerHTML='<div id="mermaid-error">Erro ao carregar diagrama: '+e.message+'. <a href="https://mermaid.live" target="_blank">Abrir no mermaid.live →</a></div>';
-                      }});
-                  </script>
-                </body></html>"""
-                components.html(mermaid_html, height=800, scrolling=False)
+
+                _mmd_b64 = _b64.urlsafe_b64encode(hub.bpmn.mermaid.encode("utf-8")).decode("ascii")
+                _ink_url = f"https://mermaid.ink/svg/{_mmd_b64}"
+                st.image(_ink_url, use_container_width=True)
+                st.caption("Diagrama gerado via mermaid.ink")
 
         tab_idx += 1
 
@@ -361,66 +307,13 @@ if generate_btn:
                 st.code(hub.bpmn.mermaid, language="text")
                 st.caption("Verifique se há: parênteses não escapados, aspas não fechadas, caracteres especiais")
 
-            import base64 as _b64
-            _mm_bytes = hub.bpmn.mermaid.encode("utf-8")
-            _mm_b64 = _b64.b64encode(_mm_bytes).decode("ascii")
-            _mm_url = f"https://mermaid.ink/svg/{_mm_b64}"
-            mermaid_html = f"""<!DOCTYPE html><html>
-            <head><style>
-              body{{margin:0;padding:0;background:#f8fafc;overflow:hidden;}}
-              #container{{width:100%;height:880px;position:relative;background:white;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);overflow:hidden;}}
-              #viewport{{position:absolute;top:0;left:0;transform-origin:0 0;}}
-              #mermaid-error{{color:#dc2626;padding:12px;border:1px solid #dc2626;border-radius:4px;background:#fef2f2;margin:16px;}}
-              #loading{{display:flex;align-items:center;justify-content:center;height:100%;color:#64748b;font-family:sans-serif;font-size:14px;}}
-              .controls{{position:absolute;bottom:12px;right:12px;display:flex;gap:6px;z-index:10;}}
-              .btn{{background:white;border:1px solid #cbd5e1;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;color:#334155;}}
-              .btn:hover{{background:#f1f5f9;}}
-            </style></head>
-            <body>
-              <div id="container">
-                <div id="loading">⏳ Carregando diagrama...</div>
-                <div id="viewport"></div>
-                <div class="controls">
-                  <button class="btn" onclick="zoom(1.2)">＋</button>
-                  <button class="btn" onclick="zoom(0.8)">－</button>
-                  <button class="btn" onclick="fit()">⊡ Fit</button>
-                </div>
-              </div>
-              <script>
-                var VP=document.getElementById('viewport'),C=document.getElementById('container');
-                var sc=1,tx=0,ty=0,dragging=false,sx=0,sy=0;
-                function T(){{VP.style.transform='translate('+tx+'px,'+ty+'px) scale('+sc+')';}}
-                function zoom(f){{sc*=f;T();}}
-                function fit(){{
-                  var svg=VP.querySelector('svg'); if(!svg)return;
-                  var r=C.getBoundingClientRect();
-                  var vb=svg.getAttribute('viewBox'); var iw,ih;
-                  if(vb){{var p=vb.trim().split(/[\\s,]+/);iw=parseFloat(p[2]);ih=parseFloat(p[3]);}}
-                  if(!iw||!ih){{var bb=svg.getBBox();iw=bb.width||800;ih=bb.height||400;}}
-                  if(!iw||!ih){{iw=800;ih=400;}}
-                  sc=Math.min((r.width-32)/iw,(r.height-32)/ih,2);
-                  tx=(r.width-iw*sc)/2; ty=(r.height-ih*sc)/2; T();
-                }}
-                C.addEventListener('mousedown',function(e){{dragging=true;sx=e.clientX-tx;sy=e.clientY-ty;}});
-                window.addEventListener('mousemove',function(e){{if(dragging){{tx=e.clientX-sx;ty=e.clientY-sy;T();}}}});
-                window.addEventListener('mouseup',function(){{dragging=false;}});
-                C.addEventListener('wheel',function(e){{e.preventDefault();zoom(e.deltaY<0?1.1:0.9);}},{{passive:false}});
-                fetch('{_mm_url}')
-                  .then(function(r){{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}})
-                  .then(function(svgText){{
-                    document.getElementById('loading').style.display='none';
-                    VP.innerHTML=svgText;
-                    var svg=VP.querySelector('svg');
-                    if(svg){{svg.removeAttribute('width');svg.removeAttribute('height');svg.style.width='auto';svg.style.height='auto';}}
-                    setTimeout(fit,50);
-                  }})
-                  .catch(function(e){{
-                    document.getElementById('loading').style.display='none';
-                    C.innerHTML='<div id="mermaid-error">Erro ao carregar diagrama: '+e.message+'. <a href="https://mermaid.live" target="_blank">Abrir no mermaid.live →</a></div>';
-                  }});
-              </script>
-            </body></html>"""
-            components.html(mermaid_html, height=900, scrolling=False)
+            # Renderiza via mermaid.ink (API REST, sem JS/eval no cliente)
+            import base64, urllib.parse
+
+            _mmd_b64 = base64.urlsafe_b64encode(hub.bpmn.mermaid.encode("utf-8")).decode("ascii")
+            _ink_url = f"https://mermaid.ink/svg/{_mmd_b64}"
+            st.image(_ink_url, use_container_width=True)
+            st.caption("Diagrama gerado via mermaid.ink")
             st.code(hub.bpmn.mermaid, language="text")
 
         tab_idx += 1
