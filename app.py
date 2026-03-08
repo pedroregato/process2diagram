@@ -2,18 +2,17 @@
 ## --- Pedro Gentil
 
 import sys
-import os
 from pathlib import Path
+import json
+import base64
+
+import streamlit as st
+import streamlit.components.v1 as components
 
 # ── Fix import path ───────────────────────────────────────────────────────────
-# Adiciona o diretório raiz ao PYTHONPATH para resolver importações
 root_dir = Path(__file__).parent.absolute()
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
-
-import json
-import streamlit as st
-import streamlit.components.v1 as components
 
 # ── Core imports ──────────────────────────────────────────────────────────────
 from modules.session_security import render_api_key_gate, get_session_llm_client
@@ -24,10 +23,9 @@ from modules.ingest import load_transcript
 from core.knowledge_hub import KnowledgeHub
 from agents.orchestrator import Orchestrator
 from agents.agent_minutes import AgentMinutes
-# Adicione esta linha junto com as outras imports (após a linha 20 aproximadamente)
 from agents.agent_mermaid import generate_mermaid
 
-# ── BPMN viewer (presentation layer — separated from generator) ───────────────
+# ── BPMN viewer (presentation layer — separated from generator) ──────────────
 from modules.bpmn_viewer import preview_from_xml
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -59,6 +57,35 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+def mermaid_to_ink_url(mermaid_text: str) -> str:
+    """
+    Converte Mermaid text em URL do mermaid.ink usando base64 URL-safe.
+    """
+    payload = base64.urlsafe_b64encode(mermaid_text.encode("utf-8")).decode("ascii")
+    return f"https://mermaid.ink/svg/{payload}"
+
+
+def render_mermaid_block(mermaid_text: str, *, show_code: bool = True, key_suffix: str = "") -> None:
+    """
+    Renderiza Mermaid de forma estável via mermaid.ink.
+    """
+    with st.expander("🔍 Diagnóstico Mermaid - Conteúdo Bruto", expanded=True):
+        st.code(mermaid_text, language="text")
+        st.caption("Verifique se há: parênteses não escapados, aspas não fechadas, caracteres especiais")
+
+    try:
+        ink_url = mermaid_to_ink_url(mermaid_text)
+        st.image(ink_url, use_container_width=True)
+        st.caption("Diagrama gerado via mermaid.ink")
+    except Exception as exc:
+        st.error(f"Falha ao montar a URL do Mermaid: {exc}")
+
+    if show_code:
+        st.code(mermaid_text, language="text")
+
+
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## ⚙️ Process2Diagram")
@@ -68,7 +95,8 @@ with st.sidebar:
     st.markdown("### 🤖 LLM Provider")
     provider_names = list(AVAILABLE_PROVIDERS.keys())
     selected_provider = st.selectbox(
-        "Choose provider", provider_names,
+        "Choose provider",
+        provider_names,
         index=provider_names.index("DeepSeek") if "DeepSeek" in provider_names else 0,
         key="selected_provider",
     )
@@ -94,8 +122,10 @@ with st.sidebar:
 
 # ── Main area ─────────────────────────────────────────────────────────────────
 st.markdown('<p class="main-title">Process2Diagram</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-title">Turn meeting transcripts into process diagrams — automatically.</p>',
-            unsafe_allow_html=True)
+st.markdown(
+    '<p class="sub-title">Turn meeting transcripts into process diagrams — automatically.</p>',
+    unsafe_allow_html=True,
+)
 
 if not get_session_llm_client(selected_provider):
     st.info(f"👈 Enter your **{selected_provider}** API key in the sidebar to start.")
@@ -107,8 +137,16 @@ col_input, col_help = st.columns([3, 1])
 
 with col_input:
     transcript_text = st.text_area(
-        "Paste your meeting transcript here", height=220,
-        placeholder="Exemplo:\n1) A equipe faz upload da foto.\n2) O sistema detecta rostos.\n3) O especialista identifica as pessoas.\n4) O sistema gera a legenda SVG.\n5) Os arquivos são enviados ao ECM.",
+        "Paste your meeting transcript here",
+        height=220,
+        placeholder=(
+            "Exemplo:\n"
+            "1) A equipe faz upload da foto.\n"
+            "2) O sistema detecta rostos.\n"
+            "3) O especialista identifica as pessoas.\n"
+            "4) O sistema gera a legenda SVG.\n"
+            "5) Os arquivos são enviados ao ECM."
+        ),
         key="transcript_input",
     )
 
@@ -126,14 +164,13 @@ if uploaded_file:
     transcript_text = load_transcript(uploaded_file)
     st.success(f"Carregado: {uploaded_file.name}")
 
-# ── Diagnóstico — sempre visível, fora do bloco generate_btn ──────────────────
+# ── Diagnóstico — sempre visível, fora do bloco generate_btn ─────────────────
 with st.expander("🛠️ Diagnóstico — Arquivos de Skill em Runtime", expanded=False):
     st.caption(
         "Mostra o conteúdo **real** dos arquivos lidos pelo servidor. "
         "Use para confirmar que os skills estão corretos no repositório após cada commit."
     )
 
-    from pathlib import Path
     import re as _re
 
     _SKILL_FILES = {
@@ -215,7 +252,6 @@ if generate_btn:
     progress_placeholder = st.empty()
     agent_status: dict[str, str] = {}
 
-
     def update_progress(step_name: str, status: str):
         agent_status[step_name] = status
         icons = {"running": "⏳", "done": "✅", "error": "❌"}
@@ -224,7 +260,6 @@ if generate_btn:
             icon = next((v for k, v in icons.items() if k in st_val), "🔵")
             lines.append(f"{icon} **{name}** — {st_val}")
         progress_placeholder.markdown("  \n".join(lines))
-
 
     # ── Run Orchestrator ──────────────────────────────────────────────────────
     try:
@@ -270,51 +305,25 @@ if generate_btn:
     if hub.bpmn.ready:
         with tabs[tab_idx]:
             st.caption(
-                "Renderizado com [bpmn-js](https://bpmn.io) · Arraste para mover · Scroll para zoom · Tecla 0 para ajustar tela")
+                "Renderizado com [bpmn-js](https://bpmn.io) · Arraste para mover · Scroll para zoom · Tecla 0 para ajustar tela"
+            )
 
             if hub.bpmn.bpmn_xml:
-                # Rich BPMN 2.0 viewer — pools, lanes, símbolos oficiais
                 bpmn_html = preview_from_xml(hub.bpmn.bpmn_xml)
                 components.html(bpmn_html, height=1000, scrolling=False)
 
                 if hub.bpmn.lanes:
                     st.markdown(f"**Swimlanes:** {', '.join(f'`{l}`' for l in hub.bpmn.lanes)}")
             else:
-                # Fallback: Mermaid quando bpmn_generator não disponível
                 st.info("ℹ️ Viewer bpmn-js indisponível — exibindo Mermaid como fallback.")
-
-                # Diagnóstico do Mermaid
-                with st.expander("🔍 Diagnóstico Mermaid - Conteúdo Bruto", expanded=True):
-                    st.code(hub.bpmn.mermaid, language="text")
-                    st.caption("Verifique se há caracteres especiais ou formatação incorreta")
-
-                # Renderiza via mermaid.ink (API REST, sem JS/eval no cliente)
-                import base64 as _b64
-
-                _mmd_b64 = _b64.urlsafe_b64encode(hub.bpmn.mermaid.encode("utf-8")).decode("ascii")
-                _ink_url = f"https://mermaid.ink/svg/{_mmd_b64}"
-                st.image(_ink_url, use_container_width=True)
-                st.caption("Diagrama gerado via mermaid.ink")
+                render_mermaid_block(hub.bpmn.mermaid, show_code=False, key_suffix="bpmn_fallback")
 
         tab_idx += 1
 
         # ── Tab: Mermaid ──────────────────────────────────────────────────────
         with tabs[tab_idx]:
             st.caption("Fluxograma Mermaid · Cole em [mermaid.live](https://mermaid.live) para editar.")
-
-            # Diagnóstico do Mermaid
-            with st.expander("🔍 Diagnóstico Mermaid - Conteúdo Bruto", expanded=True):
-                st.code(hub.bpmn.mermaid, language="text")
-                st.caption("Verifique se há: parênteses não escapados, aspas não fechadas, caracteres especiais")
-
-            # Renderiza via mermaid.ink (API REST, sem JS/eval no cliente)
-            import base64, urllib.parse
-
-            _mmd_b64 = base64.urlsafe_b64encode(hub.bpmn.mermaid.encode("utf-8")).decode("ascii")
-            _ink_url = f"https://mermaid.ink/svg/{_mmd_b64}"
-            st.image(_ink_url, use_container_width=True)
-            st.caption("Diagrama gerado via mermaid.ink")
-            st.code(hub.bpmn.mermaid, language="text")
+            render_mermaid_block(hub.bpmn.mermaid, show_code=True, key_suffix="mermaid_tab")
 
         tab_idx += 1
 
@@ -374,7 +383,6 @@ if generate_btn:
             col1, col2, col3 = st.columns(3)
 
             with col1:
-                # BPMN XML oficial OMG — abre no Camunda, Bizagi, draw.io
                 if hub.bpmn.bpmn_xml:
                     st.download_button(
                         "⬇️ Diagrama .bpmn",
@@ -394,8 +402,6 @@ if generate_btn:
                 )
 
             with col3:
-                # Mermaid continua disponível como download de texto
-                # Gera o Mermaid na hora do download
                 mermaid_content = generate_mermaid(hub.bpmn)
                 st.download_button(
                     "⬇️ Fluxo .mermaid",
@@ -407,13 +413,13 @@ if generate_btn:
 
             st.markdown("---")
 
-            # BPMN JSON estruturado
             bpmn_json = json.dumps({
                 "name": hub.bpmn.name,
                 "steps": [vars(s) for s in hub.bpmn.steps],
                 "edges": [vars(e) for e in hub.bpmn.edges],
                 "lanes": hub.bpmn.lanes,
             }, ensure_ascii=False, indent=2)
+
             st.download_button(
                 "⬇️ BPMN estruturado .json",
                 data=bpmn_json,
@@ -421,7 +427,6 @@ if generate_btn:
                 mime="application/json",
             )
 
-            # Instruções de importação
             with st.expander("Como importar o diagrama"):
                 st.markdown("""
 | Ferramenta | Como importar |
@@ -471,3 +476,4 @@ if generate_btn:
 
     # Store in session
     st.session_state["hub"] = hub
+    
