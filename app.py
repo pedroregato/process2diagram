@@ -288,31 +288,183 @@ if generate_btn:
                     st.code(hub.bpmn.mermaid, language="text")
                     st.caption("Verifique se há caracteres especiais ou formatação incorreta")
 
-                # Renderiza via mermaid.ink (API REST, sem JS/eval no cliente)
-                import base64 as _b64
-                _mmd_b64 = _b64.urlsafe_b64encode(hub.bpmn.mermaid.encode("utf-8")).decode("ascii")
-                _ink_url = f"https://mermaid.ink/svg/{_mmd_b64}"
-                st.image(_ink_url, use_container_width=True)
-                st.caption("Diagrama gerado via mermaid.ink")
+                import base64 as _b64f
+                _fb64 = _b64f.urlsafe_b64encode(hub.bpmn.mermaid.encode("utf-8")).decode("ascii")
+                st.image(f"https://mermaid.ink/svg/{_fb64}", use_container_width=True)
 
         tab_idx += 1
 
         # ── Tab: Mermaid ──────────────────────────────────────────────────────
         with tabs[tab_idx]:
-            st.caption("Fluxograma Mermaid · Cole em [mermaid.live](https://mermaid.live) para editar.")
+            import base64 as _b64
 
-            # Diagnóstico do Mermaid
-            with st.expander("🔍 Diagnóstico Mermaid - Conteúdo Bruto", expanded=True):
+            _mmd_bytes = hub.bpmn.mermaid.encode("utf-8")
+            _mmd_b64   = _b64.urlsafe_b64encode(_mmd_bytes).decode("ascii")
+            _ink_svg   = f"https://mermaid.ink/svg/{_mmd_b64}"
+            _ink_png   = f"https://mermaid.ink/img/{_mmd_b64}"
+            _live_url  = f"https://mermaid.live/edit#base64:{_b64.b64encode(_mmd_bytes).decode()}"
+
+            # ── viewer com pan/zoom via SVG embutido num iframe ───────────────
+            _viewer_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: 100%; height: 100%; background: #f8fafc; font-family: sans-serif; }}
+
+  #toolbar {{
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    background: white;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 13px; color: #475569;
+  }}
+  #toolbar button {{
+    border: 1px solid #cbd5e1; background: white; border-radius: 6px;
+    padding: 4px 10px; cursor: pointer; font-size: 13px; color: #334155;
+    transition: background .15s;
+  }}
+  #toolbar button:hover {{ background: #f1f5f9; }}
+  #toolbar .sep {{ width: 1px; height: 20px; background: #e2e8f0; margin: 0 2px; }}
+  #toolbar .hint {{ margin-left: auto; color: #94a3b8; font-size: 12px; }}
+
+  #canvas {{
+    width: 100%; height: calc(100vh - 45px);
+    overflow: hidden; cursor: grab; position: relative;
+  }}
+  #canvas.grabbing {{ cursor: grabbing; }}
+
+  #viewport {{
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0;
+  }}
+  #viewport img {{
+    display: block;
+    max-width: none;
+    user-select: none; -webkit-user-drag: none;
+  }}
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <button onclick="zoom(1.2)">＋</button>
+  <button onclick="zoom(0.8)">－</button>
+  <button onclick="resetView()">⊙ Reset</button>
+  <div class="sep"></div>
+  <a href="{_live_url}" target="_blank" style="text-decoration:none;">
+    <button>✏️ Editar no mermaid.live</button>
+  </a>
+  <span class="hint">Scroll para zoom · Arrastar para mover</span>
+</div>
+
+<div id="canvas">
+  <div id="viewport">
+    <img id="diagram" src="{_ink_svg}" draggable="false"
+         onload="initAfterLoad()" onerror="showError()"/>
+  </div>
+</div>
+
+<script>
+  const canvas   = document.getElementById('canvas');
+  const viewport = document.getElementById('viewport');
+  const img      = document.getElementById('diagram');
+
+  let scale = 1, tx = 0, ty = 0;
+  let dragging = false, startX = 0, startY = 0, startTx = 0, startTy = 0;
+
+  function applyTransform() {{
+    viewport.style.transform = `translate(${{tx}}px, ${{ty}}px) scale(${{scale}})`;
+  }}
+
+  function zoom(factor, cx, cy) {{
+    const rect = canvas.getBoundingClientRect();
+    cx = cx ?? rect.width  / 2;
+    cy = cy ?? rect.height / 2;
+    const prevScale = scale;
+    scale = Math.min(Math.max(scale * factor, 0.15), 8);
+    tx = cx - (cx - tx) * (scale / prevScale);
+    ty = cy - (cy - ty) * (scale / prevScale);
+    applyTransform();
+  }}
+
+  function resetView() {{
+    const rect  = canvas.getBoundingClientRect();
+    const iw    = img.naturalWidth  || img.width  || 800;
+    const ih    = img.naturalHeight || img.height || 400;
+    const pad   = 32;
+    scale = Math.min((rect.width - pad) / iw, (rect.height - pad) / ih, 1);
+    tx = (rect.width  - iw * scale) / 2;
+    ty = (rect.height - ih * scale) / 2;
+    applyTransform();
+  }}
+
+  function initAfterLoad() {{ resetView(); }}
+
+  function showError() {{
+    img.style.display = 'none';
+    canvas.innerHTML = '<p style="padding:24px;color:#dc2626">Erro ao carregar diagrama via mermaid.ink. Verifique a sintaxe no painel abaixo.</p>';
+  }}
+
+  // scroll = zoom
+  canvas.addEventListener('wheel', e => {{
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    zoom(e.deltaY < 0 ? 1.1 : 0.9,
+         e.clientX - rect.left,
+         e.clientY - rect.top);
+  }}, {{ passive: false }});
+
+  // drag
+  canvas.addEventListener('mousedown', e => {{
+    dragging = true; canvas.classList.add('grabbing');
+    startX = e.clientX; startY = e.clientY;
+    startTx = tx; startTy = ty;
+  }});
+  window.addEventListener('mousemove', e => {{
+    if (!dragging) return;
+    tx = startTx + (e.clientX - startX);
+    ty = startTy + (e.clientY - startY);
+    applyTransform();
+  }});
+  window.addEventListener('mouseup', () => {{
+    dragging = false; canvas.classList.remove('grabbing');
+  }});
+
+  // touch
+  let lastDist = null;
+  canvas.addEventListener('touchstart', e => {{
+    if (e.touches.length === 1) {{
+      dragging = true;
+      startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+      startTx = tx; startTy = ty;
+    }}
+  }}, {{ passive: true }});
+  canvas.addEventListener('touchmove', e => {{
+    if (e.touches.length === 2) {{
+      e.preventDefault();
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      if (lastDist) zoom(dist / lastDist);
+      lastDist = dist;
+    }} else if (e.touches.length === 1 && dragging) {{
+      tx = startTx + (e.touches[0].clientX - startX);
+      ty = startTy + (e.touches[0].clientY - startY);
+      applyTransform();
+    }}
+  }}, {{ passive: false }});
+  canvas.addEventListener('touchend', () => {{ dragging = false; lastDist = null; }});
+</script>
+</body>
+</html>"""
+
+            components.html(_viewer_html, height=560, scrolling=False)
+
+            # ── código fonte colapsável ───────────────────────────────────────
+            with st.expander("📄 Código-fonte Mermaid", expanded=False):
                 st.code(hub.bpmn.mermaid, language="text")
-                st.caption("Verifique se há: parênteses não escapados, aspas não fechadas, caracteres especiais")
-
-            # Renderiza via mermaid.ink (API REST, sem JS/eval no cliente)
-            import base64, urllib.parse
-            _mmd_b64 = base64.urlsafe_b64encode(hub.bpmn.mermaid.encode("utf-8")).decode("ascii")
-            _ink_url = f"https://mermaid.ink/svg/{_mmd_b64}"
-            st.image(_ink_url, use_container_width=True)
-            st.caption("Diagrama gerado via mermaid.ink")
-            st.code(hub.bpmn.mermaid, language="text")
+                st.caption("Cole em [mermaid.live]({}) para editar interativamente.".format(_live_url))
 
         tab_idx += 1
 
