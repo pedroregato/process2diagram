@@ -142,42 +142,39 @@ def render_mermaid_block(mermaid_text: str, *, show_code: bool = True, key_suffi
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>
 (function() {{
-  // ── State ──
-  let scale = 1, panX = 0, panY = 0;
-  let dragging = false, startX = 0, startY = 0;
-  const MIN_SCALE = 0.1, MAX_SCALE = 5;
+  // ── Pan / Zoom state ──
+  var scale = 1, panX = 0, panY = 0;
+  var dragging = false, startX = 0, startY = 0;
+  var MIN_SCALE = 0.1, MAX_SCALE = 5;
 
-  const container = document.getElementById("container");
-  const viewport  = document.getElementById("viewport");
+  var container = document.getElementById("container");
+  var viewport  = document.getElementById("viewport");
 
   function applyTransform() {{
     viewport.style.transform =
       "translate(" + panX + "px, " + panY + "px) scale(" + scale + ")";
-    document.getElementById("zoomHint").textContent =
+    var hint = document.getElementById("zoomHint");
+    if (hint) hint.textContent =
       Math.round(scale * 100) + "% · Scroll: zoom · Drag: mover · ⊡ ajustar";
   }}
 
-  // ── Zoom ──
   window.zoomIn  = function() {{ scale = Math.min(scale * 1.25, MAX_SCALE); applyTransform(); }};
   window.zoomOut = function() {{ scale = Math.max(scale / 1.25, MIN_SCALE); applyTransform(); }};
-
-  window.resetView = function() {{
-    scale = 1; panX = 0; panY = 0; applyTransform();
-  }};
+  window.resetView = function() {{ scale = 1; panX = 0; panY = 0; applyTransform(); }};
 
   window.fitToScreen = function() {{
-    const svg = viewport.querySelector("svg");
+    var svg = viewport.querySelector("svg");
     if (!svg) return;
-    const vb = svg.viewBox.baseVal;
-    const svgW = vb && vb.width  > 0 ? vb.width  : svg.scrollWidth;
-    const svgH = vb && vb.height > 0 ? vb.height : svg.scrollHeight;
-    const cW = container.clientWidth;
-    const cH = container.clientHeight;
+    var bb = svg.getBBox ? svg.getBBox() : null;
+    var vb = svg.viewBox ? svg.viewBox.baseVal : null;
+    var svgW = (vb && vb.width  > 0) ? vb.width  : (bb ? bb.width  : svg.scrollWidth);
+    var svgH = (vb && vb.height > 0) ? vb.height : (bb ? bb.height : svg.scrollHeight);
+    var cW = container.clientWidth;
+    var cH = container.clientHeight;
     if (svgW === 0 || svgH === 0) return;
-    scale = Math.min(cW / svgW, cH / svgH, 2) * 0.92;
+    scale = Math.min(cW / svgW, cH / svgH, 2) * 0.90;
     panX = (cW - svgW * scale) / 2;
     panY = (cH - svgH * scale) / 2;
     applyTransform();
@@ -186,13 +183,12 @@ def render_mermaid_block(mermaid_text: str, *, show_code: bool = True, key_suffi
   // ── Wheel zoom (centered on cursor) ──
   container.addEventListener("wheel", function(e) {{
     e.preventDefault();
-    const rect = container.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    const oldScale = scale;
-    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    var rect = container.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var oldScale = scale;
+    var factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
     scale = Math.min(Math.max(scale * factor, MIN_SCALE), MAX_SCALE);
-    // Keep point under cursor stable
     panX = mx - (mx - panX) * (scale / oldScale);
     panY = my - (my - panY) * (scale / oldScale);
     applyTransform();
@@ -210,7 +206,7 @@ def render_mermaid_block(mermaid_text: str, *, show_code: bool = True, key_suffi
   window.addEventListener("mouseup", function() {{ dragging = false; }});
 
   // ── Touch support ──
-  let lastTouchDist = 0;
+  var lastTouchDist = 0;
   container.addEventListener("touchstart", function(e) {{
     if (e.touches.length === 1) {{
       dragging = true;
@@ -218,8 +214,8 @@ def render_mermaid_block(mermaid_text: str, *, show_code: bool = True, key_suffi
       startY = e.touches[0].clientY - panY;
     }} else if (e.touches.length === 2) {{
       dragging = false;
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      var dx = e.touches[0].clientX - e.touches[1].clientX;
+      var dy = e.touches[0].clientY - e.touches[1].clientY;
       lastTouchDist = Math.sqrt(dx * dx + dy * dy);
     }}
   }}, {{ passive: true }});
@@ -229,11 +225,11 @@ def render_mermaid_block(mermaid_text: str, *, show_code: bool = True, key_suffi
       panY = e.touches[0].clientY - startY;
       applyTransform();
     }} else if (e.touches.length === 2) {{
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      var dx = e.touches[0].clientX - e.touches[1].clientX;
+      var dy = e.touches[0].clientY - e.touches[1].clientY;
+      var dist = Math.sqrt(dx * dx + dy * dy);
       if (lastTouchDist > 0) {{
-        const factor = dist / lastTouchDist;
+        var factor = dist / lastTouchDist;
         scale = Math.min(Math.max(scale * factor, MIN_SCALE), MAX_SCALE);
         applyTransform();
       }}
@@ -244,25 +240,54 @@ def render_mermaid_block(mermaid_text: str, *, show_code: bool = True, key_suffi
     dragging = false; lastTouchDist = 0;
   }});
 
-  // ── Mermaid init ──
-  mermaid.initialize({{
-    startOnLoad: false,
-    theme: "default",
-    flowchart: {{ curve: "basis", useMaxWidth: false }},
-    securityLevel: "loose"
-  }});
+  // ── Load Mermaid with CDN fallback ──
+  var cdns = [
+    "https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js",
+    "https://unpkg.com/mermaid@10/dist/mermaid.min.js",
+    "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"
+  ];
+  var cdnIdx = 0;
 
-  mermaid.run({{ querySelector: "#diagram_{uid}" }}).then(function() {{
-    document.getElementById("loading").style.display = "none";
-    document.getElementById("wrapper").style.display = "block";
-    // Auto fit after a small delay for SVG to settle
-    setTimeout(fitToScreen, 120);
-  }}).catch(function(err) {{
-    document.getElementById("loading").innerHTML =
-      "<div style='color:#dc2626;padding:24px;'>" +
-      "<b>Mermaid render error:</b><br><pre style='white-space:pre-wrap;font-size:12px;'>" +
-      err.toString() + "</pre></div>";
-  }});
+  function tryLoadCDN() {{
+    if (cdnIdx >= cdns.length) {{
+      document.getElementById("loading").innerHTML =
+        "<div style='color:#dc2626;padding:24px;text-align:center;'>" +
+        "<b>Não foi possível carregar Mermaid JS</b><br>" +
+        "<span style='font-size:13px;color:#64748b;'>CDNs bloqueados no iframe.<br>" +
+        "Cole o código Mermaid em <a href=\\"https://mermaid.live\\" target=\\"_blank\\">mermaid.live</a></span></div>";
+      document.getElementById("wrapper").style.display = "block";
+      return;
+    }}
+    var s = document.createElement("script");
+    s.src = cdns[cdnIdx];
+    s.onload = function() {{ runMermaid(); }};
+    s.onerror = function() {{ cdnIdx++; tryLoadCDN(); }};
+    document.head.appendChild(s);
+  }}
+
+  function runMermaid() {{
+    mermaid.initialize({{
+      startOnLoad: false,
+      theme: "default",
+      flowchart: {{ curve: "basis", useMaxWidth: false }},
+      securityLevel: "loose"
+    }});
+
+    mermaid.run({{ querySelector: "#diagram_{uid}" }}).then(function() {{
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("wrapper").style.display = "block";
+      setTimeout(fitToScreen, 150);
+    }}).catch(function(err) {{
+      document.getElementById("loading").innerHTML =
+        "<div style='color:#dc2626;padding:24px;'>" +
+        "<b>Mermaid render error:</b><br>" +
+        "<pre style='white-space:pre-wrap;font-size:12px;'>" +
+        err.toString() + "</pre></div>";
+      document.getElementById("wrapper").style.display = "block";
+    }});
+  }}
+
+  tryLoadCDN();
 }})();
 </script>
 </body>
