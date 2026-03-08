@@ -288,144 +288,139 @@ if generate_btn:
                     st.code(hub.bpmn.mermaid, language="text")
                     st.caption("Verifique se há caracteres especiais ou formatação incorreta")
 
+                import base64 as _b64
+                _mm_bytes = hub.bpmn.mermaid.encode("utf-8")
+                _mm_b64 = _b64.b64encode(_mm_bytes).decode("ascii")
+                _mm_url = f"https://mermaid.ink/svg/{_mm_b64}"
                 mermaid_html = f"""<!DOCTYPE html><html>
                 <head><style>
-                  body{{margin:0;padding:16px;background:#f8fafc;}}
-                  #mermaid-diagram{{background:white;padding:24px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);overflow:auto;}}
-                  #mermaid-error{{color:#dc2626;padding:12px;border:1px solid #dc2626;border-radius:4px;background:#fef2f2;display:none;margin-bottom:8px;}}
+                  body{{margin:0;padding:0;background:#f8fafc;overflow:hidden;}}
+                  #container{{width:100%;height:800px;position:relative;background:white;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);overflow:hidden;}}
+                  #viewport{{position:absolute;top:0;left:0;transform-origin:0 0;}}
+                  #mermaid-error{{color:#dc2626;padding:12px;border:1px solid #dc2626;border-radius:4px;background:#fef2f2;margin:16px;}}
+                  #loading{{display:flex;align-items:center;justify-content:center;height:100%;color:#64748b;font-family:sans-serif;font-size:14px;}}
+                  .controls{{position:absolute;bottom:12px;right:12px;display:flex;gap:6px;z-index:10;}}
+                  .btn{{background:white;border:1px solid #cbd5e1;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;color:#334155;}}
+                  .btn:hover{{background:#f1f5f9;}}
                 </style></head>
                 <body>
-                  <div id="mermaid-error"></div>
-                  <div id="mermaid-diagram"></div>
-                  <script type="module">
-                    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-                    mermaid.initialize({{startOnLoad:false,theme:'neutral',securityLevel:'loose'}});
-                    const code = {repr(hub.bpmn.mermaid)};
-                    try {{
-                      const {{svg}} = await mermaid.render('mermaid-svg-800', code);
-                      document.getElementById('mermaid-diagram').innerHTML = svg;
-                    }} catch(err) {{
-                      document.getElementById('mermaid-error').style.display = 'block';
-                      document.getElementById('mermaid-error').textContent = 'Mermaid error: ' + err.message;
+                  <div id="container">
+                    <div id="loading">⏳ Carregando diagrama...</div>
+                    <div id="viewport"></div>
+                    <div class="controls">
+                      <button class="btn" onclick="zoom(1.2)">＋</button>
+                      <button class="btn" onclick="zoom(0.8)">－</button>
+                      <button class="btn" onclick="fit()">⊡ Fit</button>
+                    </div>
+                  </div>
+                  <script>
+                    var VP=document.getElementById('viewport'),C=document.getElementById('container');
+                    var sc=1,tx=0,ty=0,dragging=false,sx=0,sy=0;
+                    function T(){{VP.style.transform='translate('+tx+'px,'+ty+'px) scale('+sc+')';}}
+                    function zoom(f){{sc*=f;T();}}
+                    function fit(){{
+                      var svg=VP.querySelector('svg'); if(!svg)return;
+                      var r=C.getBoundingClientRect();
+                      var vb=svg.getAttribute('viewBox'); var iw,ih;
+                      if(vb){{var p=vb.trim().split(/[\\s,]+/);iw=parseFloat(p[2]);ih=parseFloat(p[3]);}}
+                      if(!iw||!ih){{var bb=svg.getBBox();iw=bb.width||800;ih=bb.height||400;}}
+                      if(!iw||!ih){{iw=800;ih=400;}}
+                      sc=Math.min((r.width-32)/iw,(r.height-32)/ih,2);
+                      tx=(r.width-iw*sc)/2; ty=(r.height-ih*sc)/2; T();
                     }}
+                    C.addEventListener('mousedown',function(e){{dragging=true;sx=e.clientX-tx;sy=e.clientY-ty;}});
+                    window.addEventListener('mousemove',function(e){{if(dragging){{tx=e.clientX-sx;ty=e.clientY-sy;T();}}}});
+                    window.addEventListener('mouseup',function(){{dragging=false;}});
+                    C.addEventListener('wheel',function(e){{e.preventDefault();zoom(e.deltaY<0?1.1:0.9);}},{{passive:false}});
+                    fetch('{_mm_url}')
+                      .then(function(r){{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}})
+                      .then(function(svgText){{
+                        document.getElementById('loading').style.display='none';
+                        VP.innerHTML=svgText;
+                        var svg=VP.querySelector('svg');
+                        if(svg){{svg.removeAttribute('width');svg.removeAttribute('height');svg.style.width='auto';svg.style.height='auto';}}
+                        setTimeout(fit,50);
+                      }})
+                      .catch(function(e){{
+                        document.getElementById('loading').style.display='none';
+                        C.innerHTML='<div id="mermaid-error">Erro ao carregar diagrama: '+e.message+'. <a href="https://mermaid.live" target="_blank">Abrir no mermaid.live →</a></div>';
+                      }});
                   </script>
                 </body></html>"""
-                components.html(mermaid_html, height=800, scrolling=True)
+                components.html(mermaid_html, height=800, scrolling=False)
 
         tab_idx += 1
 
         # ── Tab: Mermaid ──────────────────────────────────────────────────────
         with tabs[tab_idx]:
-            import base64 as _b64
+            st.caption("Fluxograma Mermaid · Cole em [mermaid.live](https://mermaid.live) para editar.")
 
-            _mmd_bytes = hub.bpmn.mermaid.encode("utf-8")
-            _ink_b64   = _b64.urlsafe_b64encode(_mmd_bytes).decode("ascii")
-            _live_url  = "https://mermaid.live/edit#base64:" + _b64.b64encode(_mmd_bytes).decode()
-            _ink_url   = f"https://mermaid.ink/svg/{_ink_b64}"
-
-            _viewer_html = f"""<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"/>
-<style>
-  *{{box-sizing:border-box;margin:0;padding:0;}}
-  html,body{{width:100%;height:100%;background:#f8fafc;font-family:sans-serif;overflow:hidden;}}
-  #toolbar{{display:flex;align-items:center;gap:8px;padding:8px 12px;background:white;border-bottom:1px solid #e2e8f0;font-size:13px;}}
-  #toolbar button{{border:1px solid #cbd5e1;background:white;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;color:#334155;}}
-  #toolbar button:hover{{background:#f1f5f9;}}
-  #toolbar .hint{{margin-left:auto;color:#94a3b8;font-size:12px;}}
-  #canvas{{width:100%;height:calc(100vh - 45px);overflow:hidden;cursor:grab;position:relative;background:#f8fafc;}}
-  #canvas.grabbing{{cursor:grabbing;}}
-  #vp{{position:absolute;top:0;left:0;transform-origin:0 0;padding:16px;}}
-  #vp svg{{display:block;}}
-</style>
-</head>
-<body>
-<div id="toolbar">
-  <button onclick="zoom(1.2)">＋</button>
-  <button onclick="zoom(0.8)">－</button>
-  <button onclick="fit()">⊙ Fit</button>
-  &nbsp;
-  <a href="{_live_url}" target="_blank" style="text-decoration:none;">
-    <button>✏️ mermaid.live</button>
-  </a>
-  <span class="hint">Scroll = zoom · Arrastar = mover</span>
-</div>
-<div id="canvas"><div id="vp"><p id="msg" style="padding:16px;color:#64748b">⏳ Carregando...</p></div></div>
-<script>
-var C=document.getElementById('canvas'),VP=document.getElementById('vp');
-var sc=1,tx=0,ty=0,drag=false,x0=0,y0=0,tx0=0,ty0=0;
-function T(){{VP.style.transform='translate('+tx+'px,'+ty+'px) scale('+sc+')';}}
-
-function fit(){{
-  var svg=VP.querySelector('svg');
-  if(!svg)return;
-  var r=C.getBoundingClientRect();
-  // Ler viewBox para obter dimensões reais do SVG
-  var vb=svg.getAttribute('viewBox');
-  var iw,ih;
-  if(vb){{
-    var parts=vb.trim().split(/[\s,]+/);
-    iw=parseFloat(parts[2]); ih=parseFloat(parts[3]);
-  }}
-  if(!iw||!ih){{
-    var bb=svg.getBBox();
-    iw=bb.width||svg.scrollWidth||800;
-    ih=bb.height||svg.scrollHeight||400;
-  }}
-  if(!iw||!ih){{iw=800;ih=400;}}
-  sc=Math.min((r.width-32)/iw,(r.height-32)/ih,2);
-  tx=(r.width-iw*sc)/2; ty=(r.height-ih*sc)/2; T();
-}}
-
-function zoom(f,cx,cy){{
-  var r=C.getBoundingClientRect();
-  cx=cx!==undefined?cx:r.width/2; cy=cy!==undefined?cy:r.height/2;
-  var p=sc; sc=Math.min(Math.max(sc*f,0.05),20);
-  tx=cx-(cx-tx)*sc/p; ty=cy-(cy-ty)*sc/p; T();
-}}
-
-// Fetch SVG inline — browser não tem restrição de CORS para fetch de imagens SVG
-fetch('{_ink_url}')
-  .then(function(r){{
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    return r.text();
-  }})
-  .then(function(svgText){{
-    VP.innerHTML=svgText;
-    // Garantir que o SVG não tenha width/height fixos que atrapalhem o scale
-    var svg=VP.querySelector('svg');
-    if(svg){{
-      svg.removeAttribute('width');
-      svg.removeAttribute('height');
-      svg.style.width='auto';
-      svg.style.height='auto';
-    }}
-    setTimeout(fit,50);
-  }})
-  .catch(function(e){{
-    VP.innerHTML='<p style="padding:16px;color:#dc2626">Erro: '+e.message+'. <a href="{_live_url}" target="_blank">Abrir no mermaid.live →</a></p>';
-  }});
-
-C.addEventListener('wheel',function(e){{e.preventDefault();var r=C.getBoundingClientRect();zoom(e.deltaY<0?1.12:0.893,e.clientX-r.left,e.clientY-r.top);}},{{passive:false}});
-C.addEventListener('mousedown',function(e){{drag=true;C.classList.add('grabbing');x0=e.clientX;y0=e.clientY;tx0=tx;ty0=ty;}});
-window.addEventListener('mousemove',function(e){{if(!drag)return;tx=tx0+e.clientX-x0;ty=ty0+e.clientY-y0;T();}});
-window.addEventListener('mouseup',function(){{drag=false;C.classList.remove('grabbing');}});
-var ld=null;
-C.addEventListener('touchstart',function(e){{if(e.touches.length===1){{drag=true;x0=e.touches[0].clientX;y0=e.touches[0].clientY;tx0=tx;ty0=ty;}}}},{{passive:true}});
-C.addEventListener('touchmove',function(e){{
-  if(e.touches.length===2){{e.preventDefault();var d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);if(ld)zoom(d/ld);ld=d;}}
-  else if(drag){{tx=tx0+e.touches[0].clientX-x0;ty=ty0+e.touches[0].clientY-y0;T();}}
-}},{{passive:false}});
-C.addEventListener('touchend',function(){{drag=false;ld=null;}});
-</script>
-</body>
-</html>"""
-
-            components.html(_viewer_html, height=560, scrolling=False)
-
-            with st.expander("📄 Código-fonte Mermaid", expanded=False):
+            # Diagnóstico do Mermaid
+            with st.expander("🔍 Diagnóstico Mermaid - Conteúdo Bruto", expanded=True):
                 st.code(hub.bpmn.mermaid, language="text")
-                st.caption(f"Cole em [mermaid.live]({_live_url}) para editar interativamente.")
+                st.caption("Verifique se há: parênteses não escapados, aspas não fechadas, caracteres especiais")
+
+            import base64 as _b64
+            _mm_bytes = hub.bpmn.mermaid.encode("utf-8")
+            _mm_b64 = _b64.b64encode(_mm_bytes).decode("ascii")
+            _mm_url = f"https://mermaid.ink/svg/{_mm_b64}"
+            mermaid_html = f"""<!DOCTYPE html><html>
+            <head><style>
+              body{{margin:0;padding:0;background:#f8fafc;overflow:hidden;}}
+              #container{{width:100%;height:880px;position:relative;background:white;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);overflow:hidden;}}
+              #viewport{{position:absolute;top:0;left:0;transform-origin:0 0;}}
+              #mermaid-error{{color:#dc2626;padding:12px;border:1px solid #dc2626;border-radius:4px;background:#fef2f2;margin:16px;}}
+              #loading{{display:flex;align-items:center;justify-content:center;height:100%;color:#64748b;font-family:sans-serif;font-size:14px;}}
+              .controls{{position:absolute;bottom:12px;right:12px;display:flex;gap:6px;z-index:10;}}
+              .btn{{background:white;border:1px solid #cbd5e1;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;color:#334155;}}
+              .btn:hover{{background:#f1f5f9;}}
+            </style></head>
+            <body>
+              <div id="container">
+                <div id="loading">⏳ Carregando diagrama...</div>
+                <div id="viewport"></div>
+                <div class="controls">
+                  <button class="btn" onclick="zoom(1.2)">＋</button>
+                  <button class="btn" onclick="zoom(0.8)">－</button>
+                  <button class="btn" onclick="fit()">⊡ Fit</button>
+                </div>
+              </div>
+              <script>
+                var VP=document.getElementById('viewport'),C=document.getElementById('container');
+                var sc=1,tx=0,ty=0,dragging=false,sx=0,sy=0;
+                function T(){{VP.style.transform='translate('+tx+'px,'+ty+'px) scale('+sc+')';}}
+                function zoom(f){{sc*=f;T();}}
+                function fit(){{
+                  var svg=VP.querySelector('svg'); if(!svg)return;
+                  var r=C.getBoundingClientRect();
+                  var vb=svg.getAttribute('viewBox'); var iw,ih;
+                  if(vb){{var p=vb.trim().split(/[\\s,]+/);iw=parseFloat(p[2]);ih=parseFloat(p[3]);}}
+                  if(!iw||!ih){{var bb=svg.getBBox();iw=bb.width||800;ih=bb.height||400;}}
+                  if(!iw||!ih){{iw=800;ih=400;}}
+                  sc=Math.min((r.width-32)/iw,(r.height-32)/ih,2);
+                  tx=(r.width-iw*sc)/2; ty=(r.height-ih*sc)/2; T();
+                }}
+                C.addEventListener('mousedown',function(e){{dragging=true;sx=e.clientX-tx;sy=e.clientY-ty;}});
+                window.addEventListener('mousemove',function(e){{if(dragging){{tx=e.clientX-sx;ty=e.clientY-sy;T();}}}});
+                window.addEventListener('mouseup',function(){{dragging=false;}});
+                C.addEventListener('wheel',function(e){{e.preventDefault();zoom(e.deltaY<0?1.1:0.9);}},{{passive:false}});
+                fetch('{_mm_url}')
+                  .then(function(r){{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}})
+                  .then(function(svgText){{
+                    document.getElementById('loading').style.display='none';
+                    VP.innerHTML=svgText;
+                    var svg=VP.querySelector('svg');
+                    if(svg){{svg.removeAttribute('width');svg.removeAttribute('height');svg.style.width='auto';svg.style.height='auto';}}
+                    setTimeout(fit,50);
+                  }})
+                  .catch(function(e){{
+                    document.getElementById('loading').style.display='none';
+                    C.innerHTML='<div id="mermaid-error">Erro ao carregar diagrama: '+e.message+'. <a href="https://mermaid.live" target="_blank">Abrir no mermaid.live →</a></div>';
+                  }});
+              </script>
+            </body></html>"""
+            components.html(mermaid_html, height=900, scrolling=False)
+            st.code(hub.bpmn.mermaid, language="text")
 
         tab_idx += 1
 
@@ -582,4 +577,3 @@ C.addEventListener('touchend',function(){{drag=false;ld=null;}});
 
     # Store in session
     st.session_state["hub"] = hub
-    
