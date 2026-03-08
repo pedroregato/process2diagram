@@ -1,5 +1,6 @@
 ## --- Process2Diagram v3 — Multi-Agent Architecture
 ## --- Pedro Gentil
+## -- estável?
 
 import sys
 import os
@@ -577,5 +578,3 @@ if generate_btn:
 
     # Store in session
     st.session_state["hub"] = hub
-
-    
