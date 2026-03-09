@@ -433,7 +433,40 @@ if generate_btn:
         # ── Tab: Mermaid ──────────────────────────────────────────────────────
         with tabs[tab_idx]:
             st.caption("Fluxograma Mermaid · Cole em [mermaid.live](https://mermaid.live) para editar.")
-            render_mermaid_block(hub.bpmn.mermaid, show_code=True, key_suffix="mermaid_tab")
+
+            # Seletor de direção
+            import re as _re_dir
+            col_dir, _ = st.columns([1, 3])
+            with col_dir:
+                direction = st.radio(
+                    "Direção do fluxo",
+                    ["⬇️ Vertical (TD)", "➡️ Horizontal (LR)"],
+                    index=0,
+                    horizontal=True,
+                    key="mermaid_direction",
+                )
+
+            mermaid_code = hub.bpmn.mermaid
+            if "Horizontal" in direction:
+                # Troca TD/TB por LR no header do flowchart
+                mermaid_code = _re_dir.sub(
+                    r'^(flowchart\s+)(TD|TB)',
+                    r'\1LR',
+                    mermaid_code,
+                    count=1,
+                    flags=_re_dir.MULTILINE,
+                )
+            else:
+                # Garante TD
+                mermaid_code = _re_dir.sub(
+                    r'^(flowchart\s+)(LR|RL)',
+                    r'\1TD',
+                    mermaid_code,
+                    count=1,
+                    flags=_re_dir.MULTILINE,
+                )
+
+            render_mermaid_block(mermaid_code, show_code=True, key_suffix=f"mermaid_tab_{direction}")
 
         tab_idx += 1
 
