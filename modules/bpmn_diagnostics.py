@@ -228,4 +228,3 @@ def _render_skill_viewer() -> None:
                 f"Verifique se o path está correto e se o arquivo "
                 f"foi commitado no repositório."
             )
-            

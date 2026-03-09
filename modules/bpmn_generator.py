@@ -638,6 +638,16 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
 
     lane_ids = {lane.id for pool in bpmn.pools for lane in pool.lanes}
 
+    # Build lane_index for smart waypoint routing
+    lane_assignment = _assign_lanes(bpmn)
+    pool     = bpmn.pools[0] if bpmn.pools else None
+    lanes    = pool.lanes    if pool       else []
+    lane_idx = {lane.id: i for i, lane in enumerate(lanes)}
+
+    def _lane_index_of(eid):
+        lid = lane_assignment.get(eid)
+        return lane_idx.get(lid, -1) if lid else -1
+
     for eid, (x, y, w, h) in pool_shapes.items():
         is_lane = eid in lane_ids
         shape = _sub(plane, DI + "BPMNShape",
@@ -678,10 +688,29 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
                     {"id": flow.id + "_di", "bpmnElement": flow.id})
         sx, sy, sw, sh = src
         tx, ty, tw, th = tgt
-        _wp(edge, sx + sw, sy + sh / 2)   # source right-centre
-        _wp(edge, tx,      ty + th / 2)   # target left-centre
+
+        # ── Smart waypoint routing ────────────────────────────────────────────
+        # Same lane → right-centre to left-centre (horizontal flow)
+        # Cross-lane downward  → bottom-centre to top-centre
+        # Cross-lane upward    → top-centre    to bottom-centre
+        src_li = _lane_index_of(flow.source)
+        tgt_li = _lane_index_of(flow.target)
+
+        if src_li == tgt_li or src_li == -1 or tgt_li == -1:
+            # Same lane: standard horizontal connection
+            _wp(edge, sx + sw,         sy + sh / 2)   # right-centre
+            _wp(edge, tx,              ty + th / 2)   # left-centre
+        elif tgt_li > src_li:
+            # Downward cross-lane: exit bottom, enter top
+            _wp(edge, sx + sw / 2,     sy + sh)       # bottom-centre
+            _wp(edge, tx + tw / 2,     ty)            # top-centre
+        else:
+            # Upward cross-lane: exit top, enter bottom
+            _wp(edge, sx + sw / 2,     sy)            # top-centre
+            _wp(edge, tx + tw / 2,     ty + th)       # bottom-centre
+
         if flow.name:
-            mid_x = int((sx + sw + tx) / 2) - 30
+            mid_x = int((sx + sw / 2 + tx + tw / 2) / 2) - 30
             mid_y = int((sy + sh / 2 + ty + th / 2) / 2) - 16
             lbl = _sub(edge, DI + "BPMNLabel")
             _sub(lbl, DC + "Bounds", {
@@ -1006,4 +1035,3 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
 
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + \
            ET.tostring(defs, encoding="unicode")
-    
