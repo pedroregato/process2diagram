@@ -3,13 +3,11 @@
 # BPMN Agent — expert em BPMN 2.0 (OMG / ISO-IEC 19510).
 #
 # Reads:  hub.transcript_clean, hub.nlp (actors, segments)
-# Writes: hub.bpmn  (BPMNModel — steps, edges, lanes, bpmn_xml, drawio_xml)
+# Writes: hub.bpmn  (BPMNModel — steps, edges, lanes, mermaid, drawio_xml,
+#                                bpmn_xml via bpmn_generator)
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
-
-import re
-from typing import Optional
 
 from agents.base_agent import BaseAgent
 from core.knowledge_hub import KnowledgeHub, BPMNModel, BPMNStep, BPMNEdge
@@ -30,15 +28,9 @@ class AgentBPMN(BaseAgent):
         if hub.nlp.actors:
             actor_hint = f"\nActors identified by NLP pre-processing: {', '.join(hub.nlp.actors)}"
 
-        # Limit transcript to ~12 000 chars to stay within token budget.
-        # Long meetings (3h+) can exceed max_tokens and cause truncated JSON.
-        transcript = hub.transcript_clean[:12_000]
-        if len(hub.transcript_clean) > 12_000:
-            transcript += "\n\n[transcript truncated — extract process from the portion above]"
-
         user = (
             f"Extract the BPMN 2.0 process from this transcript:{actor_hint}\n\n"
-            f"{transcript}"
+            f"{hub.transcript_clean}"
         )
         return system, user
 
@@ -49,13 +41,9 @@ class AgentBPMN(BaseAgent):
         data = self._call_with_retry(system, user, hub)
 
         hub.bpmn = self._build_model(data)
-        hub.bpmn.bpmn_xml   = self._generate_bpmn_xml(hub.bpmn)
+        hub.bpmn.mermaid    = self._generate_mermaid(hub.bpmn)
         hub.bpmn.drawio_xml = self._generate_drawio(hub.bpmn)
-
-        # 🔥 NOVO: Gerar Mermaid
-        from agents.agent_mermaid import generate_mermaid
-        hub.bpmn.mermaid = generate_mermaid(hub.bpmn)
-
+        hub.bpmn.bpmn_xml   = self._generate_bpmn_xml(hub.bpmn)
         hub.bpmn.ready = True
         hub.mark_agent_run(self.name)
         hub.bump()
@@ -146,12 +134,18 @@ class AgentBPMN(BaseAgent):
                 ))
 
                 if i == len(model.steps) - 1:
+                    # ev_end lane = lane of the terminal step (no outgoing edges).
+                    # Avoids placing ev_end in a wrong lane when the last declared
+                    # step is not the actual process terminator.
+                    source_ids = {e.source for e in model.edges}
+                    terminal_steps = [s for s in model.steps if s.id not in source_ids]
+                    end_lane = terminal_steps[-1].lane if terminal_steps else step.lane
                     elements.append(BpmnElement(
                         id="ev_end",
                         name="Fim",
                         type="endEvent",
                         actor=None,
-                        lane=step.lane,
+                        lane=end_lane,
                     ))
 
             # ── Sequence flows ────────────────────────────────────────────────
@@ -212,10 +206,32 @@ class AgentBPMN(BaseAgent):
 
             return generate_bpmn_xml(bpmn_process)
 
-        except Exception as e:
+        except Exception:
             # bpmn_generator not available or bridge error — degrade gracefully
-            print(f"Erro ao gerar BPMN XML: {e}")
             return ""
+
+    # ── Mermaid generator ─────────────────────────────────────────────────────
+
+    @staticmethod
+    def _generate_mermaid(model: BPMNModel) -> str:
+        lines = ["flowchart TD"]
+
+        for step in model.steps:
+            label = step.title.replace('"', "'")
+            if step.is_decision:
+                lines.append(f'    {step.id}{{"{label}"}}')
+            else:
+                lines.append(f'    {step.id}["{label}"]')
+
+        for edge in model.edges:
+            arrow = f"-- {edge.label} -->" if edge.label else "-->"
+            lines.append(f"    {edge.source} {arrow} {edge.target}")
+
+        decision_ids = [s.id for s in model.steps if s.is_decision]
+        for did in decision_ids:
+            lines.append(f"    style {did} fill:#fff3cd,stroke:#f59e0b")
+
+        return "\n".join(lines)
 
     # ── Draw.io generator ─────────────────────────────────────────────────────
 
@@ -238,8 +254,7 @@ class AgentBPMN(BaseAgent):
                 style = "rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;"
                 w, h = W, H
 
-            # Sanitiza o label para XML
-            label = step.title.replace("<", "&lt;").replace(">", "&gt;").replace("&", "&amp;")
+            label = step.title.replace("<", "&lt;").replace(">", "&gt;")
             cells.append(
                 f'<mxCell id="{step.id}" value="{label}" style="{style}" '
                 f'vertex="1" parent="1">'
@@ -249,8 +264,6 @@ class AgentBPMN(BaseAgent):
 
         for i, edge in enumerate(model.edges):
             label = edge.label or ""
-            # Sanitiza o label para XML
-            label = label.replace("<", "&lt;").replace(">", "&gt;").replace("&", "&amp;")
             cells.append(
                 f'<mxCell id="e{i}" value="{label}" edge="1" '
                 f'source="{edge.source}" target="{edge.target}" parent="1">'
