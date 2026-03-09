@@ -47,21 +47,18 @@ _TEMPLATE = """\
     .djs-overlay-container {{ pointer-events: none !important; }}
 
     #toolbar {{
-      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+      position: fixed; top: 8px; right: 8px;
       display: flex; align-items: center; gap: 4px;
-      background: rgba(15,23,42,0.92); backdrop-filter: blur(12px);
-      border-radius: 12px; padding: 6px 10px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.3); z-index: 100;
+      z-index: 100;
     }}
     .tb-btn {{
-      width:32px; height:32px; border:none; background:transparent;
-      color:#94a3b8; border-radius:6px; cursor:pointer; font-size:16px;
+      width:32px; height:32px; border:1px solid #cbd5e1; background:#fff;
+      border-radius:6px; cursor:pointer; font-size:14px;
       display:flex; align-items:center; justify-content:center;
-      transition: background 0.15s, color 0.15s;
+      color:#475569; transition: all 0.15s;
     }}
-    .tb-btn:hover {{ background: rgba(255,255,255,0.1); color:#e2e8f0; }}
-    .tb-divider {{ width:1px; height:20px; background:rgba(255,255,255,0.12); margin:0 2px; }}
-    #zoom-label {{ color:#64748b; font-size:11px; font-family:monospace; min-width:40px; text-align:center; }}
+    .tb-btn:hover {{ background:#f1f5f9; border-color:#94a3b8; }}
+    #zoom-label {{ color:#94a3b8; font-size:11px; font-family:monospace; min-width:40px; text-align:center; }}
 
     #loading {{
       position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
@@ -85,13 +82,12 @@ _TEMPLATE = """\
   <div id="bpmn-container"></div>
 </div>
 <div id="toolbar">
-  <button class="tb-btn" id="btn-out"   title="Zoom out">&#8722;</button>
-  <span   id="zoom-label">100%</span>
   <button class="tb-btn" id="btn-in"    title="Zoom in">&#43;</button>
-  <div class="tb-divider"></div>
-  <button class="tb-btn" id="btn-fit"   title="Fit to screen">&#8862;</button>
+  <button class="tb-btn" id="btn-out"   title="Zoom out">&#8722;</button>
+  <button class="tb-btn" id="btn-fit"   title="Fit to screen">&#8865;</button>
   <button class="tb-btn" id="btn-reset" title="Reset view">&#8634;</button>
 </div>
+<div id="zoom-label" style="position:fixed;bottom:8px;left:8px;z-index:100;font-size:11px;color:#94a3b8;pointer-events:none">100% | Scroll: zoom | Drag: mover</div>
 <div id="err"></div>
 
 <script src="https://unpkg.com/bpmn-js@17/dist/bpmn-viewer.development.js"></script>
@@ -110,7 +106,7 @@ _TEMPLATE = """\
 
   function apply() {{
     vp.style.transform = `translate(${{tx}}px,${{ty}}px) scale(${{scale}})`;
-    zoomLbl.textContent = Math.round(scale * 100) + '%';
+    zoomLbl.textContent = Math.round(scale * 100) + '% | Scroll: zoom | Drag: mover';
   }}
 
   function clamp(s) {{ return Math.min(Math.max(s, 0.05), 8); }}
@@ -292,3 +288,4 @@ def preview_from_xml(xml: str) -> str:
     """
     xml_js = xml.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
     return _TEMPLATE.format(xml_js=xml_js)
+  
