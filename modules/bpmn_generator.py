@@ -469,41 +469,69 @@ def _assign_columns(order, flows):
     """
     Assign a global column index (0-based) to every element.
 
-    Rules
-    -----
-    1. Process elements in topological order.
-    2. Each element's column = max(predecessor columns) + 1.
-       (Start nodes with no predecessors get column 0.)
-    3. This guarantees:
-       - Diverging gateway branches all start at gateway_col + 1,
-         so they occupy the same column slot in their respective lanes.
-       - Converging gateways are placed *after* all their branches,
-         eliminating the most common source of edge crossings.
+    Strategy
+    --------
+    Regular elements get EVEN column indices (0, 2, 4, …) based on
+    topological depth.  Link event PAIRS share an ODD slot between the
+    source's even column and the target's even column:
 
-    Returns
-    -------
-    dict {element_id: column_index}
+      source at col S  →  throw at S+1  (odd, exclusive)
+      target at col T  →  catch at S+1  (same odd slot, different lane → no overlap)
+
+    Because odd slots contain ONLY link events, regular elements never
+    share a column with a link event regardless of the graph topology.
+
+    Returns dict {element_id: column_index}
     """
-    # Build predecessor map (only within the order set)
-    id_set = set(order)
-    pred_col = {eid: -1 for eid in order}   # max predecessor column seen so far
+    import re as _re
 
-    # Index flows by target for fast lookup
+    link_throw_ids = {eid for eid in order if _re.match(r'lnk_throw_\d+', eid)}
+    link_catch_ids = {eid for eid in order if _re.match(r'lnk_catch_\d+', eid)}
+    link_ids       = link_throw_ids | link_catch_ids
+
+    id_set   = set(order)
     preds_of = {eid: [] for eid in order}
+    succs_of = {eid: [] for eid in order}
     for f in flows:
         if f.source in id_set and f.target in id_set:
             preds_of[f.target].append(f.source)
+            succs_of[f.source].append(f.target)
 
-    col = {}
+    # ── Pass 1: depth for regular elements (depth 0,1,2,…) ───────────────────
+    depth = {}
     for eid in order:
-        preds = preds_of[eid]
-        if not preds:
+        if eid in link_ids:
+            continue
+        preds = [p for p in preds_of[eid] if p not in link_ids and p in depth]
+        depth[eid] = (max(depth[p] for p in preds) + 1) if preds else 0
+
+    # Regular elements → even columns: depth d → col 2*d
+    col = {eid: d * 2 for eid, d in depth.items()}
+
+    # ── Pass 2: link pairs → odd columns ─────────────────────────────────────
+    # throw_N and catch_N share the same odd column = col[source_of_throw] + 1
+    # This guarantees the odd slot is between source and target and is exclusive.
+    for throw_id in link_throw_ids:
+        src = next((p for p in preds_of[throw_id] if p not in link_ids), None)
+        throw_col = (col[src] + 1) if src and src in col else 1
+        col[throw_id] = throw_col
+
+        # Partner catch gets the SAME column (they're in different lanes → no visual clash)
+        n = throw_id.replace("lnk_throw_", "")
+        catch_id = f"lnk_catch_{n}"
+        if catch_id in link_catch_ids:
+            col[catch_id] = throw_col
+
+    # Fallback for any catch without a paired throw
+    for catch_id in link_catch_ids:
+        if catch_id not in col:
+            tgt = next((s for s in succs_of[catch_id] if s not in link_ids), None)
+            col[catch_id] = max(0, col[tgt] - 1) if tgt and tgt in col else 1
+
+    # Any remaining unassigned
+    for eid in order:
+        if eid not in col:
             col[eid] = 0
-        else:
-            # Column must be at least 1 past every predecessor's column.
-            # Use the maximum so converging nodes land after all branches.
-            max_pred = max(col[p] for p in preds if p in col)
-            col[eid] = max_pred + 1
 
     return col
 
@@ -638,16 +666,6 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
 
     lane_ids = {lane.id for pool in bpmn.pools for lane in pool.lanes}
 
-    # Build lane_index for smart waypoint routing
-    lane_assignment = _assign_lanes(bpmn)
-    pool     = bpmn.pools[0] if bpmn.pools else None
-    lanes    = pool.lanes    if pool       else []
-    lane_idx = {lane.id: i for i, lane in enumerate(lanes)}
-
-    def _lane_index_of(eid):
-        lid = lane_assignment.get(eid)
-        return lane_idx.get(lid, -1) if lid else -1
-
     for eid, (x, y, w, h) in pool_shapes.items():
         is_lane = eid in lane_ids
         shape = _sub(plane, DI + "BPMNShape",
@@ -688,29 +706,10 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
                     {"id": flow.id + "_di", "bpmnElement": flow.id})
         sx, sy, sw, sh = src
         tx, ty, tw, th = tgt
-
-        # ── Smart waypoint routing ────────────────────────────────────────────
-        # Same lane → right-centre to left-centre (horizontal flow)
-        # Cross-lane downward  → bottom-centre to top-centre
-        # Cross-lane upward    → top-centre    to bottom-centre
-        src_li = _lane_index_of(flow.source)
-        tgt_li = _lane_index_of(flow.target)
-
-        if src_li == tgt_li or src_li == -1 or tgt_li == -1:
-            # Same lane: standard horizontal connection
-            _wp(edge, sx + sw,         sy + sh / 2)   # right-centre
-            _wp(edge, tx,              ty + th / 2)   # left-centre
-        elif tgt_li > src_li:
-            # Downward cross-lane: exit bottom, enter top
-            _wp(edge, sx + sw / 2,     sy + sh)       # bottom-centre
-            _wp(edge, tx + tw / 2,     ty)            # top-centre
-        else:
-            # Upward cross-lane: exit top, enter bottom
-            _wp(edge, sx + sw / 2,     sy)            # top-centre
-            _wp(edge, tx + tw / 2,     ty + th)       # bottom-centre
-
+        _wp(edge, sx + sw, sy + sh / 2)   # source right-centre
+        _wp(edge, tx,      ty + th / 2)   # target left-centre
         if flow.name:
-            mid_x = int((sx + sw / 2 + tx + tw / 2) / 2) - 30
+            mid_x = int((sx + sw + tx) / 2) - 30
             mid_y = int((sy + sh / 2 + ty + th / 2) / 2) - 16
             lbl = _sub(edge, DI + "BPMNLabel")
             _sub(lbl, DC + "Bounds", {
