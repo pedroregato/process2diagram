@@ -168,8 +168,10 @@ def _render_expander(report: dict) -> None:
         _render_summary(report)
         _render_lane_issues(report)
         _render_link_events_info(report)
-        st.divider()
-        _render_skill_viewer()
+
+    # Skill viewer é um expander separado — Streamlit não permite
+    # expanders aninhados dentro de outros expanders.
+    _render_skill_viewer()
 
 
 def _render_summary(report: dict) -> None:
@@ -226,3 +228,4 @@ def _render_skill_viewer() -> None:
                 f"Verifique se o path está correto e se o arquivo "
                 f"foi commitado no repositório."
             )
+            
