@@ -4,7 +4,6 @@
 import sys
 from pathlib import Path
 import json
-import base64
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -42,317 +41,237 @@ st.markdown("""
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
   html, body, [class*="css"] { font-family: 'IBM Plex Sans', sans-serif; }
   h1, h2, h3 { font-family: 'IBM Plex Mono', monospace !important; letter-spacing: -0.03em; }
-  .main-title {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 2.4rem;
-    font-weight: 600;
-    letter-spacing: -0.04em;
-    color: #0f172a;
-    margin-bottom: 0;
-  }
-  .sub-title {
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-weight: 300;
-    color: #64748b;
-    margin-top: 0.2rem;
-    font-size: 1rem;
-  }
-  .stTextArea textarea {
-    font-family: 'IBM Plex Mono', monospace !important;
-    font-size: 0.85rem;
-  }
+  .main-title { font-family: 'IBM Plex Mono', monospace; font-size: 2.4rem; font-weight: 600;
+    letter-spacing: -0.04em; color: #0f172a; margin-bottom: 0; }
+  .sub-title { font-family: 'IBM Plex Sans', sans-serif; font-weight: 300; color: #64748b;
+    margin-top: 0.2rem; font-size: 1rem; }
+  .stTextArea textarea { font-family: 'IBM Plex Mono', monospace !important; font-size: 0.85rem; }
   .block-container { padding-top: 2rem; }
   div[data-testid="stSidebar"] { background: #0f172a; color: #e2e8f0; }
   div[data-testid="stSidebar"] * { color: #e2e8f0 !important; }
   div[data-testid="stSidebar"] .stSelectbox label,
   div[data-testid="stSidebar"] .stTextInput label { color: #94a3b8 !important; }
-  .agent-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    margin: 2px;
-  }
+  .agent-badge { display: inline-block; padding: 2px 8px; border-radius: 12px;
+    font-size: 0.75rem; font-weight: 600; margin: 2px; }
 </style>
 """, unsafe_allow_html=True)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-def mermaid_to_ink_url(mermaid_text: str) -> str:
+def render_mermaid_block(mermaid_text: str, *, show_code: bool = True, key_suffix: str = "") -> None:
     """
-    Converte Mermaid text em URL do mermaid.ink.
-    Usa base64 padrão para ficar alinhado com a estratégia que já vinha
-    sendo usada na versão interativa anterior.
+    Renderiza Mermaid com pan/zoom/fit interativo.
+    Estratégia: busca SVG via mermaid.ink server-side, depois injeta
+    com controles de pan/zoom via CSS transform — zero CDN no iframe.
     """
-    payload = base64.b64encode(mermaid_text.encode("utf-8")).decode("ascii")
-    return f"https://mermaid.ink/svg/{payload}"
+    import hashlib
+    import base64
+    import urllib.request
+    import urllib.error
 
+    uid = hashlib.md5((mermaid_text + key_suffix).encode()).hexdigest()[:8]
 
-def render_mermaid_block(
-    mermaid_text: str,
-    *,
-    show_code: bool = True,
-    height: int = 880,
-) -> None:
-    """
-    Renderiza Mermaid de forma interativa sem usar o parser Mermaid no browser.
-    O SVG é obtido do mermaid.ink e exibido dentro de um viewport com:
-    - zoom por mouse wheel e botões
-    - drag/pan
-    - fit
-    - reset
-    """
-    with st.expander("🔍 Diagnóstico Mermaid - Conteúdo Bruto", expanded=True):
-        st.code(mermaid_text, language="text")
-        st.caption(
-            "Verifique se há: parênteses não escapados, aspas não fechadas, caracteres especiais"
-        )
-
+    # ── Tentar obter SVG do mermaid.ink ──────────────────────────────────
+    svg_content = None
     try:
-        ink_url = mermaid_to_ink_url(mermaid_text)
+        payload = base64.urlsafe_b64encode(mermaid_text.encode("utf-8")).decode("ascii")
+        ink_url = f"https://mermaid.ink/svg/{payload}"
+        req = urllib.request.Request(ink_url, headers={"User-Agent": "Process2Diagram/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            svg_content = resp.read().decode("utf-8")
+    except Exception as exc:
+        st.warning(f"⚠️ Não foi possível renderizar via mermaid.ink: {exc}")
+        st.code(mermaid_text, language="text")
+        st.caption("Cole o código acima em [mermaid.live](https://mermaid.live) para visualizar.")
+        return
 
-        mermaid_html = f"""<!DOCTYPE html>
+    if not svg_content or "<svg" not in svg_content.lower():
+        st.warning("⚠️ mermaid.ink retornou resposta inválida.")
+        st.code(mermaid_text, language="text")
+        return
+
+    # ── Escape SVG for safe JS embedding ──
+    svg_escaped = (
+        svg_content
+        .replace("\\", "\\\\")
+        .replace("`", "\\`")
+        .replace("${", "\\${")
+    )
+
+    html_code = f"""
+<!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <style>
-    html, body {{
-      margin: 0;
-      padding: 0;
-      background: #f8fafc;
-      overflow: hidden;
-      font-family: Arial, sans-serif;
-    }}
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{ background: #fff; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }}
 
-    #container {{
-      width: 100%;
-      height: {height}px;
-      position: relative;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.10);
-      overflow: hidden;
-      border: 1px solid #e2e8f0;
-    }}
+  .toolbar {{
+    position: absolute; top: 8px; right: 8px; z-index: 100;
+    display: flex; gap: 4px;
+  }}
+  .toolbar button {{
+    width: 32px; height: 32px; border: 1px solid #cbd5e1; border-radius: 6px;
+    background: #fff; cursor: pointer; font-size: 16px; display: flex;
+    align-items: center; justify-content: center; color: #475569;
+    transition: all 0.15s;
+  }}
+  .toolbar button:hover {{ background: #f1f5f9; border-color: #94a3b8; }}
+  .toolbar button:active {{ background: #e2e8f0; }}
 
-    #viewport {{
-      position: absolute;
-      top: 0;
-      left: 0;
-      transform-origin: 0 0;
-      cursor: grab;
-      will-change: transform;
-    }}
+  #container {{
+    width: 100%; height: 100vh; overflow: hidden;
+    cursor: grab; position: relative; background: #fafafa;
+    border: 1px solid #e2e8f0; border-radius: 8px;
+  }}
+  #container:active {{ cursor: grabbing; }}
 
-    #viewport.dragging {{
-      cursor: grabbing;
-    }}
+  #viewport {{
+    transform-origin: 0 0;
+    position: absolute; top: 0; left: 0;
+    will-change: transform;
+  }}
+  #viewport svg {{
+    display: block;
+  }}
 
-    #mermaid-error {{
-      color: #dc2626;
-      padding: 12px;
-      border: 1px solid #dc2626;
-      border-radius: 4px;
-      background: #fef2f2;
-      margin: 16px;
-      font-size: 14px;
-    }}
-
-    #loading {{
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      color: #64748b;
-      font-size: 14px;
-    }}
-
-    .controls {{
-      position: absolute;
-      bottom: 12px;
-      right: 12px;
-      display: flex;
-      gap: 6px;
-      z-index: 10;
-    }}
-
-    .btn {{
-      background: white;
-      border: 1px solid #cbd5e1;
-      border-radius: 6px;
-      padding: 4px 10px;
-      cursor: pointer;
-      font-size: 13px;
-      color: #334155;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.06);
-    }}
-
-    .btn:hover {{
-      background: #f1f5f9;
-    }}
-
-    .hint {{
-      position: absolute;
-      top: 10px;
-      left: 12px;
-      z-index: 10;
-      background: rgba(255,255,255,0.92);
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      padding: 6px 10px;
-      font-size: 12px;
-      color: #475569;
-    }}
-  </style>
+  .zoom-hint {{
+    position: absolute; bottom: 8px; left: 8px; z-index: 100;
+    font-size: 11px; color: #94a3b8;
+    pointer-events: none;
+  }}
+</style>
 </head>
 <body>
-  <div id="container">
-    <div id="loading">⏳ Carregando diagrama...</div>
-    <div class="hint">Scroll = zoom · Arrastar = mover · Fit = ajustar</div>
-    <div id="viewport"></div>
 
-    <div class="controls">
-      <button class="btn" onclick="zoom(1.2)">＋</button>
-      <button class="btn" onclick="zoom(0.8)">－</button>
-      <button class="btn" onclick="fit()">⊡ Fit</button>
-      <button class="btn" onclick="resetView()">⟲ Reset</button>
-    </div>
+<div style="width:100%; height:100vh; position:relative;">
+  <div class="toolbar">
+    <button onclick="zoomIn()" title="Zoom in">+</button>
+    <button onclick="zoomOut()" title="Zoom out">&minus;</button>
+    <button onclick="fitToScreen()" title="Fit to screen">&#8865;</button>
+    <button onclick="resetView()" title="Reset">&#8634;</button>
   </div>
+  <div class="zoom-hint" id="zoomHint">Scroll: zoom &middot; Drag: mover &middot; &#8865; ajustar</div>
+  <div id="container">
+    <div id="viewport">{svg_escaped}</div>
+  </div>
+</div>
 
-  <script>
-    const VP = document.getElementById('viewport');
-    const C  = document.getElementById('container');
-    const loading = document.getElementById('loading');
+<script>
+(function() {{
+  var scale = 1, panX = 0, panY = 0;
+  var dragging = false, startX = 0, startY = 0;
+  var MIN_SCALE = 0.1, MAX_SCALE = 5;
 
-    let sc = 1;
-    let tx = 0;
-    let ty = 0;
-    let dragging = false;
-    let sx = 0;
-    let sy = 0;
+  var container = document.getElementById("container");
+  var viewport  = document.getElementById("viewport");
 
-    function applyTransform() {{
-      VP.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + sc + ')';
+  function applyTransform() {{
+    viewport.style.transform =
+      "translate(" + panX + "px, " + panY + "px) scale(" + scale + ")";
+    var hint = document.getElementById("zoomHint");
+    if (hint) hint.textContent =
+      Math.round(scale * 100) + "% | Scroll: zoom | Drag: mover";
+  }}
+
+  window.zoomIn  = function() {{ scale = Math.min(scale * 1.25, MAX_SCALE); applyTransform(); }};
+  window.zoomOut = function() {{ scale = Math.max(scale / 1.25, MIN_SCALE); applyTransform(); }};
+  window.resetView = function() {{ scale = 1; panX = 0; panY = 0; applyTransform(); }};
+
+  window.fitToScreen = function() {{
+    var svg = viewport.querySelector("svg");
+    if (!svg) return;
+    var svgW = svg.getAttribute("width")  ? parseFloat(svg.getAttribute("width"))  : 0;
+    var svgH = svg.getAttribute("height") ? parseFloat(svg.getAttribute("height")) : 0;
+    if (svgW === 0 || svgH === 0) {{
+      var vb = svg.viewBox ? svg.viewBox.baseVal : null;
+      if (vb && vb.width > 0) {{ svgW = vb.width; svgH = vb.height; }}
     }}
-
-    function zoom(factor) {{
-      sc *= factor;
-      sc = Math.max(0.15, Math.min(sc, 8));
-      applyTransform();
+    if (svgW === 0 || svgH === 0) {{
+      svgW = svg.scrollWidth || svg.clientWidth || 800;
+      svgH = svg.scrollHeight || svg.clientHeight || 600;
     }}
+    var cW = container.clientWidth;
+    var cH = container.clientHeight;
+    scale = Math.min(cW / svgW, cH / svgH, 2) * 0.90;
+    panX = (cW - svgW * scale) / 2;
+    panY = (cH - svgH * scale) / 2;
+    applyTransform();
+  }};
 
-    function resetView() {{
-      sc = 1;
-      tx = 0;
-      ty = 0;
-      applyTransform();
-      setTimeout(fit, 30);
-    }}
+  // Wheel zoom (centered on cursor)
+  container.addEventListener("wheel", function(e) {{
+    e.preventDefault();
+    var rect = container.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var oldScale = scale;
+    var factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    scale = Math.min(Math.max(scale * factor, MIN_SCALE), MAX_SCALE);
+    panX = mx - (mx - panX) * (scale / oldScale);
+    panY = my - (my - panY) * (scale / oldScale);
+    applyTransform();
+  }}, {{ passive: false }});
 
-    function fit() {{
-      const svg = VP.querySelector('svg');
-      if (!svg) return;
+  // Drag / pan
+  container.addEventListener("mousedown", function(e) {{
+    dragging = true; startX = e.clientX - panX; startY = e.clientY - panY;
+  }});
+  window.addEventListener("mousemove", function(e) {{
+    if (!dragging) return;
+    panX = e.clientX - startX; panY = e.clientY - startY;
+    applyTransform();
+  }});
+  window.addEventListener("mouseup", function() {{ dragging = false; }});
 
-      const rect = C.getBoundingClientRect();
-      const vb = svg.getAttribute('viewBox');
-
-      let iw, ih;
-      if (vb) {{
-        const p = vb.trim().split(/[\\s,]+/);
-        iw = parseFloat(p[2]);
-        ih = parseFloat(p[3]);
-      }}
-
-      if (!iw || !ih) {{
-        try {{
-          const bb = svg.getBBox();
-          iw = bb.width || 800;
-          ih = bb.height || 400;
-        }} catch (e) {{
-          iw = 800;
-          ih = 400;
-        }}
-      }}
-
-      const padding = 32;
-      sc = Math.min((rect.width - padding) / iw, (rect.height - padding) / ih, 2);
-      sc = Math.max(sc, 0.15);
-
-      tx = (rect.width - iw * sc) / 2;
-      ty = (rect.height - ih * sc) / 2;
-
-      applyTransform();
-    }}
-
-    C.addEventListener('mousedown', function(e) {{
+  // Touch support
+  var lastTouchDist = 0;
+  container.addEventListener("touchstart", function(e) {{
+    if (e.touches.length === 1) {{
       dragging = true;
-      sx = e.clientX - tx;
-      sy = e.clientY - ty;
-      VP.classList.add('dragging');
-    }});
-
-    window.addEventListener('mousemove', function(e) {{
-      if (!dragging) return;
-      tx = e.clientX - sx;
-      ty = e.clientY - sy;
-      applyTransform();
-    }});
-
-    window.addEventListener('mouseup', function() {{
+      startX = e.touches[0].clientX - panX;
+      startY = e.touches[0].clientY - panY;
+    }} else if (e.touches.length === 2) {{
       dragging = false;
-      VP.classList.remove('dragging');
-    }});
+      var dx = e.touches[0].clientX - e.touches[1].clientX;
+      var dy = e.touches[0].clientY - e.touches[1].clientY;
+      lastTouchDist = Math.sqrt(dx * dx + dy * dy);
+    }}
+  }}, {{ passive: true }});
+  container.addEventListener("touchmove", function(e) {{
+    if (e.touches.length === 1 && dragging) {{
+      panX = e.touches[0].clientX - startX;
+      panY = e.touches[0].clientY - startY;
+      applyTransform();
+    }} else if (e.touches.length === 2) {{
+      var dx = e.touches[0].clientX - e.touches[1].clientX;
+      var dy = e.touches[0].clientY - e.touches[1].clientY;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (lastTouchDist > 0) {{
+        var factor = dist / lastTouchDist;
+        scale = Math.min(Math.max(scale * factor, MIN_SCALE), MAX_SCALE);
+        applyTransform();
+      }}
+      lastTouchDist = dist;
+    }}
+  }}, {{ passive: true }});
+  container.addEventListener("touchend", function() {{
+    dragging = false; lastTouchDist = 0;
+  }});
 
-    C.addEventListener('wheel', function(e) {{
-      e.preventDefault();
-      zoom(e.deltaY < 0 ? 1.1 : 0.9);
-    }}, {{ passive: false }});
-
-    fetch('{ink_url}')
-      .then(function(r) {{
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.text();
-      }})
-      .then(function(svgText) {{
-        loading.style.display = 'none';
-        VP.innerHTML = svgText;
-
-        const svg = VP.querySelector('svg');
-        if (svg) {{
-          svg.removeAttribute('width');
-          svg.removeAttribute('height');
-          svg.style.width = 'auto';
-          svg.style.height = 'auto';
-          svg.style.maxWidth = 'none';
-        }}
-
-        setTimeout(fit, 60);
-      }})
-      .catch(function(e) {{
-        loading.style.display = 'none';
-        C.innerHTML =
-          '<div id="mermaid-error">Erro ao carregar diagrama: '
-          + e.message
-          + '. Tente validar o conteúdo Mermaid ou abrir no mermaid.live.</div>';
-      }});
-  </script>
+  // Auto-fit on load
+  fitToScreen();
+}})();
+</script>
 </body>
 </html>
 """
-        components.html(mermaid_html, height=height + 20, scrolling=False)
 
-    except Exception as exc:
-        st.error(f"Falha ao renderizar Mermaid: {exc}")
-        try:
-            ink_url = mermaid_to_ink_url(mermaid_text)
-            st.image(ink_url, use_container_width=True)
-            st.caption("Fallback estático: diagrama gerado via mermaid.ink")
-        except Exception as inner_exc:
-            st.error(f"Falha também no fallback estático: {inner_exc}")
+    components.html(html_code, height=620, scrolling=False)
 
     if show_code:
-        st.code(mermaid_text, language="text")
+        with st.expander("📝 Código Mermaid", expanded=False):
+            st.code(mermaid_text, language="text")
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -436,7 +355,7 @@ if uploaded_file:
 # ── Diagnóstico — sempre visível, fora do bloco generate_btn ─────────────────
 with st.expander("🛠️ Diagnóstico — Arquivos de Skill em Runtime", expanded=False):
     st.caption(
-        "Mostra o conteúdo real dos arquivos lidos pelo servidor. "
+        "Mostra o conteúdo **real** dos arquivos lidos pelo servidor. "
         "Use para confirmar que os skills estão corretos no repositório após cada commit."
     )
 
@@ -457,8 +376,8 @@ with st.expander("🛠️ Diagnóstico — Arquivos de Skill em Runtime", expand
 
         if not p.exists():
             st.error(
-                f"❌ Arquivo não encontrado: `{rel_path}`\n\n"
-                "O agente está rodando sem system prompt. "
+                f"❌ **Arquivo não encontrado:** `{rel_path}`  \n"
+                "O agente está rodando **sem system prompt**. "
                 "Verifique o nome e o caminho no repositório."
             )
             continue
@@ -477,9 +396,9 @@ with st.expander("🛠️ Diagnóstico — Arquivos de Skill em Runtime", expand
 
         if found_suspicious:
             st.error(
-                "⚠️ Conteúdo suspeito — tokens encontrados: "
+                "⚠️ **Conteúdo suspeito** — tokens encontrados: "
                 + ", ".join(f"`{t}`" for t in found_suspicious)
-                + "\nEste arquivo pode estar corrompido com texto de chat. "
+                + "  \nEste arquivo pode estar corrompido com texto de chat. "
                   "Substitua pelo arquivo correto no repositório."
             )
         else:
@@ -570,12 +489,11 @@ if generate_btn:
     tabs = st.tabs(tabs_to_show)
     tab_idx = 0
 
-    # ── Tab: BPMN 2.0 ─────────────────────────────────────────────────────────
+    # ── Tab: BPMN 2.0 (bpmn-js viewer) ───────────────────────────────────────
     if hub.bpmn.ready:
         with tabs[tab_idx]:
             st.caption(
-                "Renderizado com bpmn-js quando houver BPMN XML. "
-                "Se não houver, usa Mermaid interativo como fallback."
+                "Renderizado com [bpmn-js](https://bpmn.io) · Arraste para mover · Scroll para zoom · Tecla 0 para ajustar tela"
             )
 
             if hub.bpmn.bpmn_xml:
@@ -585,26 +503,15 @@ if generate_btn:
                 if hub.bpmn.lanes:
                     st.markdown(f"**Swimlanes:** {', '.join(f'`{l}`' for l in hub.bpmn.lanes)}")
             else:
-                st.info("ℹ️ Viewer BPMN indisponível — exibindo Mermaid como fallback.")
-                render_mermaid_block(
-                    hub.bpmn.mermaid,
-                    show_code=False,
-                    height=820,
-                )
+                st.info("ℹ️ Viewer bpmn-js indisponível — exibindo Mermaid como fallback.")
+                render_mermaid_block(hub.bpmn.mermaid, show_code=False, key_suffix="bpmn_fallback")
 
         tab_idx += 1
 
         # ── Tab: Mermaid ──────────────────────────────────────────────────────
         with tabs[tab_idx]:
-            st.caption(
-                "Fluxograma Mermaid renderizado via SVG remoto. "
-                "Suporta zoom, drag, fit e reset."
-            )
-            render_mermaid_block(
-                hub.bpmn.mermaid,
-                show_code=True,
-                height=920,
-            )
+            st.caption("Fluxograma Mermaid · Cole em [mermaid.live](https://mermaid.live) para editar.")
+            render_mermaid_block(hub.bpmn.mermaid, show_code=True, key_suffix="mermaid_tab")
 
         tab_idx += 1
 
@@ -716,7 +623,7 @@ if generate_btn:
 | **Bizagi Modeler** | File → Open → selecione o `.bpmn` |
 | **draw.io** | File → Open from Device → selecione o `.drawio` |
 | **bpmn.io** | Arraste o `.bpmn` para o canvas |
-| **Mermaid Live** | Cole o conteúdo do `.mmd` em mermaid.live |
+| **Mermaid Live** | Cole o conteúdo do `.mmd` em [mermaid.live](https://mermaid.live) |
 """)
 
         if hub.minutes.ready:
@@ -755,4 +662,5 @@ if generate_btn:
             mime="application/json",
         )
 
+    # Store in session
     st.session_state["hub"] = hub
