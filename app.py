@@ -60,215 +60,137 @@ st.markdown("""
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def render_mermaid_block(mermaid_text: str, *, show_code: bool = True, key_suffix: str = "") -> None:
     """
-    Renderiza Mermaid com pan/zoom/fit interativo.
-    Estratégia: busca SVG via mermaid.ink server-side, depois injeta
-    com controles de pan/zoom via CSS transform — zero CDN no iframe.
+    Renderiza Mermaid com pan/zoom/fit interativo e boa resolução.
+    SVG é buscado server-side via mermaid.ink, depois width/height fixos
+    são removidos para que o SVG escale via viewBox (resolução perfeita).
     """
-    import hashlib
+    import re
     import base64
     import urllib.request
-    import urllib.error
 
-    uid = hashlib.md5((mermaid_text + key_suffix).encode()).hexdigest()[:8]
+    payload = base64.urlsafe_b64encode(mermaid_text.encode("utf-8")).decode("ascii")
+    ink_url = f"https://mermaid.ink/svg/{payload}"
 
-    # ── Tentar obter SVG do mermaid.ink ──────────────────────────────────
+    # ── Buscar SVG server-side ───────────────────────────────────────────
     svg_content = None
+    fetch_error = None
     try:
-        payload = base64.urlsafe_b64encode(mermaid_text.encode("utf-8")).decode("ascii")
-        ink_url = f"https://mermaid.ink/svg/{payload}"
         req = urllib.request.Request(ink_url, headers={"User-Agent": "Process2Diagram/1.0"})
         with urllib.request.urlopen(req, timeout=15) as resp:
             svg_content = resp.read().decode("utf-8")
+        if not svg_content or "<svg" not in svg_content.lower():
+            svg_content = None
+            fetch_error = "Resposta não contém SVG válido"
     except Exception as exc:
-        st.warning(f"⚠️ Não foi possível renderizar via mermaid.ink: {exc}")
-        st.code(mermaid_text, language="text")
-        st.caption("Cole o código acima em [mermaid.live](https://mermaid.live) para visualizar.")
-        return
+        fetch_error = str(exc)
 
-    if not svg_content or "<svg" not in svg_content.lower():
-        st.warning("⚠️ mermaid.ink retornou resposta inválida.")
-        st.code(mermaid_text, language="text")
-        return
+    # ── Caminho A: SVG obtido → renderizar com pan/zoom ──────────────────
+    if svg_content:
+        # Garantir que o SVG tem viewBox e remover width/height fixos
+        # para que escale via CSS sem perda de resolução
+        svg_tag_match = re.search(r'<svg[^>]*>', svg_content)
+        if svg_tag_match:
+            svg_tag = svg_tag_match.group(0)
+            # Extrair width/height originais para construir viewBox se ausente
+            w_match = re.search(r'width="([\d.]+)', svg_tag)
+            h_match = re.search(r'height="([\d.]+)', svg_tag)
+            has_viewbox = 'viewBox' in svg_tag or 'viewbox' in svg_tag
 
-    # ── Escape SVG for safe JS embedding ──
-    svg_escaped = (
-        svg_content
-        .replace("\\", "\\\\")
-        .replace("`", "\\`")
-        .replace("${", "\\${")
-    )
+            if w_match and h_match and not has_viewbox:
+                vb = f'viewBox="0 0 {w_match.group(1)} {h_match.group(1)}"'
+                new_tag = svg_tag.replace('<svg', f'<svg {vb}', 1)
+                svg_content = svg_content.replace(svg_tag, new_tag, 1)
+                svg_tag = new_tag
 
-    html_code = f"""
-<!DOCTYPE html>
-<html>
-<head>
-<style>
-  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-  body {{ background: #fff; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }}
+            # Remover width/height fixos → SVG se adapta ao container
+            svg_tag_clean = re.sub(r'\s*width="[^"]*"', '', svg_tag)
+            svg_tag_clean = re.sub(r'\s*height="[^"]*"', '', svg_tag_clean)
+            # Adicionar width/height 100% para preencher viewport
+            svg_tag_clean = svg_tag_clean.replace('<svg', '<svg width="100%" height="100%"', 1)
+            svg_content = svg_content.replace(svg_tag, svg_tag_clean, 1)
 
-  .toolbar {{
-    position: absolute; top: 8px; right: 8px; z-index: 100;
-    display: flex; gap: 4px;
-  }}
-  .toolbar button {{
-    width: 32px; height: 32px; border: 1px solid #cbd5e1; border-radius: 6px;
-    background: #fff; cursor: pointer; font-size: 16px; display: flex;
-    align-items: center; justify-content: center; color: #475569;
-    transition: all 0.15s;
-  }}
-  .toolbar button:hover {{ background: #f1f5f9; border-color: #94a3b8; }}
-  .toolbar button:active {{ background: #e2e8f0; }}
+        svg_safe = svg_content.replace("</script>", "<\\/script>")
 
-  #container {{
-    width: 100%; height: 100vh; overflow: hidden;
-    cursor: grab; position: relative; background: #fafafa;
-    border: 1px solid #e2e8f0; border-radius: 8px;
-  }}
-  #container:active {{ cursor: grabbing; }}
-
-  #viewport {{
-    transform-origin: 0 0;
-    position: absolute; top: 0; left: 0;
-    will-change: transform;
-  }}
-  #viewport svg {{
-    display: block;
-  }}
-
-  .zoom-hint {{
-    position: absolute; bottom: 8px; left: 8px; z-index: 100;
-    font-size: 11px; color: #94a3b8;
-    pointer-events: none;
-  }}
-</style>
-</head>
-<body>
-
-<div style="width:100%; height:100vh; position:relative;">
-  <div class="toolbar">
-    <button onclick="zoomIn()" title="Zoom in">+</button>
-    <button onclick="zoomOut()" title="Zoom out">&minus;</button>
-    <button onclick="fitToScreen()" title="Fit to screen">&#8865;</button>
-    <button onclick="resetView()" title="Reset">&#8634;</button>
-  </div>
-  <div class="zoom-hint" id="zoomHint">Scroll: zoom &middot; Drag: mover &middot; &#8865; ajustar</div>
-  <div id="container">
-    <div id="viewport">{svg_escaped}</div>
-  </div>
+        html_code = """<!DOCTYPE html>
+<html><head><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
+.toolbar{position:absolute;top:8px;right:8px;z-index:100;display:flex;gap:4px}
+.toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;border-radius:6px;
+background:#fff;cursor:pointer;font-size:16px;display:flex;align-items:center;
+justify-content:center;color:#475569;transition:all .15s}
+.toolbar button:hover{background:#f1f5f9;border-color:#94a3b8}
+#container{width:100%;height:100vh;overflow:hidden;cursor:grab;position:relative;
+background:#fafafa;border:1px solid #e2e8f0;border-radius:8px}
+#container:active{cursor:grabbing}
+#viewport{transform-origin:0 0;position:absolute;top:0;left:0;will-change:transform}
+#viewport svg{display:block;max-width:none}
+.zoom-hint{position:absolute;bottom:8px;left:8px;z-index:100;font-size:11px;
+color:#94a3b8;pointer-events:none}
+</style></head><body>
+<div style="width:100%;height:100vh;position:relative">
+<div class="toolbar">
+<button onclick="zoomIn()" title="Zoom in">+</button>
+<button onclick="zoomOut()" title="Zoom out">&minus;</button>
+<button onclick="fitToScreen()" title="Fit">&#8865;</button>
+<button onclick="resetView()" title="Reset">&#8634;</button>
 </div>
-
+<div class="zoom-hint" id="zoomHint">Scroll: zoom | Drag: mover</div>
+<div id="container"><div id="viewport">""" + svg_safe + """</div></div>
+</div>
 <script>
-(function() {{
-  var scale = 1, panX = 0, panY = 0;
-  var dragging = false, startX = 0, startY = 0;
-  var MIN_SCALE = 0.1, MAX_SCALE = 5;
+(function(){
+var scale=1,panX=0,panY=0,dragging=false,startX=0,startY=0;
+var MIN=0.1,MAX=5;
+var c=document.getElementById("container"),v=document.getElementById("viewport");
+function apply(){
+v.style.transform="translate("+panX+"px,"+panY+"px) scale("+scale+")";
+var h=document.getElementById("zoomHint");
+if(h) h.textContent=Math.round(scale*100)+"% | Scroll: zoom | Drag: mover";
+}
+window.zoomIn=function(){scale=Math.min(scale*1.25,MAX);apply()};
+window.zoomOut=function(){scale=Math.max(scale/1.25,MIN);apply()};
+window.resetView=function(){scale=1;panX=0;panY=0;apply()};
+window.fitToScreen=function(){
+var s=v.querySelector("svg");if(!s)return;
+var vb=s.viewBox?s.viewBox.baseVal:null;
+var w=0,h=0;
+if(vb&&vb.width>0){w=vb.width;h=vb.height}
+else{w=s.getBBox().width||s.scrollWidth||800;h=s.getBBox().height||s.scrollHeight||600}
+// Set SVG to its natural size for clean scaling
+s.style.width=w+"px";s.style.height=h+"px";
+s.setAttribute("width",w);s.setAttribute("height",h);
+var cW=c.clientWidth,cH=c.clientHeight;
+scale=Math.min(cW/w,cH/h,2)*0.92;
+panX=(cW-w*scale)/2;panY=(cH-h*scale)/2;apply();
+};
+c.addEventListener("wheel",function(e){
+e.preventDefault();var r=c.getBoundingClientRect();
+var mx=e.clientX-r.left,my=e.clientY-r.top,os=scale;
+var f=e.deltaY<0?1.12:1/1.12;
+scale=Math.min(Math.max(scale*f,MIN),MAX);
+panX=mx-(mx-panX)*(scale/os);panY=my-(my-panY)*(scale/os);apply();
+},{passive:false});
+c.addEventListener("mousedown",function(e){dragging=true;startX=e.clientX-panX;startY=e.clientY-panY});
+window.addEventListener("mousemove",function(e){if(!dragging)return;panX=e.clientX-startX;panY=e.clientY-startY;apply()});
+window.addEventListener("mouseup",function(){dragging=false});
+fitToScreen();
+})();
+</script></body></html>"""
 
-  var container = document.getElementById("container");
-  var viewport  = document.getElementById("viewport");
+        components.html(html_code, height=620, scrolling=False)
 
-  function applyTransform() {{
-    viewport.style.transform =
-      "translate(" + panX + "px, " + panY + "px) scale(" + scale + ")";
-    var hint = document.getElementById("zoomHint");
-    if (hint) hint.textContent =
-      Math.round(scale * 100) + "% | Scroll: zoom | Drag: mover";
-  }}
+    # ── Caminho B: fallback — imagem estática ────────────────────────────
+    else:
+        st.warning(f"⚠️ Não foi possível obter SVG interativo: {fetch_error}")
+        try:
+            img_url = f"https://mermaid.ink/img/{payload}"
+            st.image(img_url, use_container_width=True)
+            st.caption("Diagrama via mermaid.ink (sem zoom interativo)")
+        except Exception:
+            st.error("Não foi possível renderizar. Cole o código abaixo em [mermaid.live](https://mermaid.live).")
 
-  window.zoomIn  = function() {{ scale = Math.min(scale * 1.25, MAX_SCALE); applyTransform(); }};
-  window.zoomOut = function() {{ scale = Math.max(scale / 1.25, MIN_SCALE); applyTransform(); }};
-  window.resetView = function() {{ scale = 1; panX = 0; panY = 0; applyTransform(); }};
-
-  window.fitToScreen = function() {{
-    var svg = viewport.querySelector("svg");
-    if (!svg) return;
-    var svgW = svg.getAttribute("width")  ? parseFloat(svg.getAttribute("width"))  : 0;
-    var svgH = svg.getAttribute("height") ? parseFloat(svg.getAttribute("height")) : 0;
-    if (svgW === 0 || svgH === 0) {{
-      var vb = svg.viewBox ? svg.viewBox.baseVal : null;
-      if (vb && vb.width > 0) {{ svgW = vb.width; svgH = vb.height; }}
-    }}
-    if (svgW === 0 || svgH === 0) {{
-      svgW = svg.scrollWidth || svg.clientWidth || 800;
-      svgH = svg.scrollHeight || svg.clientHeight || 600;
-    }}
-    var cW = container.clientWidth;
-    var cH = container.clientHeight;
-    scale = Math.min(cW / svgW, cH / svgH, 2) * 0.90;
-    panX = (cW - svgW * scale) / 2;
-    panY = (cH - svgH * scale) / 2;
-    applyTransform();
-  }};
-
-  // Wheel zoom (centered on cursor)
-  container.addEventListener("wheel", function(e) {{
-    e.preventDefault();
-    var rect = container.getBoundingClientRect();
-    var mx = e.clientX - rect.left;
-    var my = e.clientY - rect.top;
-    var oldScale = scale;
-    var factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-    scale = Math.min(Math.max(scale * factor, MIN_SCALE), MAX_SCALE);
-    panX = mx - (mx - panX) * (scale / oldScale);
-    panY = my - (my - panY) * (scale / oldScale);
-    applyTransform();
-  }}, {{ passive: false }});
-
-  // Drag / pan
-  container.addEventListener("mousedown", function(e) {{
-    dragging = true; startX = e.clientX - panX; startY = e.clientY - panY;
-  }});
-  window.addEventListener("mousemove", function(e) {{
-    if (!dragging) return;
-    panX = e.clientX - startX; panY = e.clientY - startY;
-    applyTransform();
-  }});
-  window.addEventListener("mouseup", function() {{ dragging = false; }});
-
-  // Touch support
-  var lastTouchDist = 0;
-  container.addEventListener("touchstart", function(e) {{
-    if (e.touches.length === 1) {{
-      dragging = true;
-      startX = e.touches[0].clientX - panX;
-      startY = e.touches[0].clientY - panY;
-    }} else if (e.touches.length === 2) {{
-      dragging = false;
-      var dx = e.touches[0].clientX - e.touches[1].clientX;
-      var dy = e.touches[0].clientY - e.touches[1].clientY;
-      lastTouchDist = Math.sqrt(dx * dx + dy * dy);
-    }}
-  }}, {{ passive: true }});
-  container.addEventListener("touchmove", function(e) {{
-    if (e.touches.length === 1 && dragging) {{
-      panX = e.touches[0].clientX - startX;
-      panY = e.touches[0].clientY - startY;
-      applyTransform();
-    }} else if (e.touches.length === 2) {{
-      var dx = e.touches[0].clientX - e.touches[1].clientX;
-      var dy = e.touches[0].clientY - e.touches[1].clientY;
-      var dist = Math.sqrt(dx * dx + dy * dy);
-      if (lastTouchDist > 0) {{
-        var factor = dist / lastTouchDist;
-        scale = Math.min(Math.max(scale * factor, MIN_SCALE), MAX_SCALE);
-        applyTransform();
-      }}
-      lastTouchDist = dist;
-    }}
-  }}, {{ passive: true }});
-  container.addEventListener("touchend", function() {{
-    dragging = false; lastTouchDist = 0;
-  }});
-
-  // Auto-fit on load
-  fitToScreen();
-}})();
-</script>
-</body>
-</html>
-"""
-
-    components.html(html_code, height=620, scrolling=False)
-
+    # ── Código fonte ─────────────────────────────────────────────────────
     if show_code:
         with st.expander("📝 Código Mermaid", expanded=False):
             st.code(mermaid_text, language="text")
@@ -664,3 +586,4 @@ if generate_btn:
 
     # Store in session
     st.session_state["hub"] = hub
+    
