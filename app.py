@@ -197,8 +197,18 @@ c.addEventListener("mousedown",function(e){dragging=true;startX=e.clientX-panX;s
 window.addEventListener("mousemove",function(e){if(!dragging)return;panX=e.clientX-startX;panY=e.clientY-startY;apply()});
 window.addEventListener("mouseup",function(){dragging=false});
 
-// Init
+// Init — wait for SVG to be fully laid out before fitting
 setDir(currentDir);
+function robustFit(){
+var s=v.querySelector("svg");
+if(!s){setTimeout(robustFit,100);return}
+var vb=s.viewBox?s.viewBox.baseVal:null;
+var w=(vb&&vb.width>0)?vb.width:s.scrollWidth;
+if(!w||w<10){setTimeout(robustFit,100);return}
+fitToScreen();
+}
+if(document.readyState==="complete"){setTimeout(robustFit,80)}
+else{window.addEventListener("load",function(){setTimeout(robustFit,80)})}
 })();
 </script></body></html>"""
 
