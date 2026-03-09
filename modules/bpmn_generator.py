@@ -237,12 +237,59 @@ def _topo_sort(ids, flows):
     return result
 
 
-def _sort_lane_elements(lane_ids, el_map, flows):
-    """Sort elements within a lane: startEvents first, endEvents last, rest topo-sorted."""
-    starts = [i for i in lane_ids if el_map.get(i) and el_map[i].type == "startEvent"]
-    ends   = [i for i in lane_ids if el_map.get(i) and el_map[i].type == "endEvent"]
-    middle = [i for i in lane_ids if i not in starts and i not in ends]
-    return starts + _topo_sort(middle, flows) + ends
+def _assign_columns(order, flows):
+    """
+    Assign a global column index (0-based) to every element.
+
+    Rules
+    -----
+    1. Process elements in topological order.
+    2. Each element's column = max(predecessor columns) + 1.
+       (Start nodes with no predecessors get column 0.)
+    3. This guarantees:
+       - Diverging gateway branches all start at gateway_col + 1,
+         so they occupy the same column slot in their respective lanes.
+       - Converging gateways are placed *after* all their branches,
+         eliminating the most common source of edge crossings.
+
+    Returns
+    -------
+    dict {element_id: column_index}
+    """
+    # Build predecessor map (only within the order set)
+    id_set = set(order)
+    pred_col = {eid: -1 for eid in order}   # max predecessor column seen so far
+
+    # Index flows by target for fast lookup
+    preds_of = {eid: [] for eid in order}
+    for f in flows:
+        if f.source in id_set and f.target in id_set:
+            preds_of[f.target].append(f.source)
+
+    col = {}
+    for eid in order:
+        preds = preds_of[eid]
+        if not preds:
+            col[eid] = 0
+        else:
+            # Column must be at least 1 past every predecessor's column.
+            # Use the maximum so converging nodes land after all branches.
+            max_pred = max(col[p] for p in preds if p in col)
+            col[eid] = max_pred + 1
+
+    return col
+
+
+def _col_x(col_index, col_widths, base_x):
+    """
+    Return the left-edge X for the given column index.
+    col_widths[c] = width of the widest element in column c.
+    base_x        = x offset where column 0 starts.
+    """
+    x = base_x
+    for c in range(col_index):
+        x += col_widths.get(c, TASK_W) + H_GAP
+    return x
 
 
 def _compute_layout(bpmn, lane_assignment):
@@ -256,6 +303,17 @@ def _compute_layout(bpmn, lane_assignment):
     if bpmn.pools:
         pool = bpmn.pools[0]
 
+        # ── Step 1: assign global columns ─────────────────────────────────────
+        col_of = _assign_columns(order, bpmn.flows)
+
+        # ── Step 2: compute the width of each column (widest element in it) ───
+        col_widths = {}
+        for eid in order:
+            c = col_of.get(eid, 0)
+            w, _ = _el_size(el_map[eid]) if eid in el_map else (TASK_W, TASK_H)
+            col_widths[c] = max(col_widths.get(c, 0), w)
+
+        # ── Step 3: bucket elements per lane, preserving column order ─────────
         lane_order = {lane.id: [] for lane in pool.lanes}
         for eid in order:
             lid = lane_assignment.get(eid)
@@ -264,11 +322,7 @@ def _compute_layout(bpmn, lane_assignment):
             elif pool.lanes:
                 lane_order[pool.lanes[0].id].append(eid)
 
-        for lane in pool.lanes:
-            lane_order[lane.id] = _sort_lane_elements(
-                lane_order[lane.id], el_map, bpmn.flows
-            )
-
+        # ── Step 4: lane heights ───────────────────────────────────────────────
         lane_h = {}
         for lane in pool.lanes:
             els_in_lane = [el_map[eid] for eid in lane_order[lane.id] if eid in el_map]
@@ -277,38 +331,39 @@ def _compute_layout(bpmn, lane_assignment):
 
         total_h = sum(lane_h[l.id] for l in pool.lanes)
 
-        pool_w = 700
-        for lane in pool.lanes:
-            els = lane_order[lane.id]
-            if els:
-                w = POOL_HEADER_W + LANE_HEADER_W + FIRST_X
-                for eid in els:
-                    if eid in el_map:
-                        ew, _ = _el_size(el_map[eid])
-                        w += ew + H_GAP
-                w += FIRST_X
-                pool_w = max(pool_w, w)
+        # ── Step 5: pool width from column grid ───────────────────────────────
+        base_x = POOL_HEADER_W + LANE_HEADER_W + FIRST_X
+        max_col = max(col_of.values(), default=0)
+        pool_w = base_x + sum(col_widths.get(c, TASK_W) + H_GAP
+                              for c in range(max_col + 1)) + FIRST_X
+        pool_w = max(pool_w, 700)
 
         pool_shapes[pool.id] = (0, 0, pool_w, total_h)
 
+        # ── Step 6: position each element using its column's X ─────────────────
         cur_y = 0
         for lane in pool.lanes:
-            lh = lane_h[lane.id]
-            lx = POOL_HEADER_W
-            lw = pool_w - POOL_HEADER_W
+            lh  = lane_h[lane.id]
+            lx  = POOL_HEADER_W
+            lw  = pool_w - POOL_HEADER_W
             pool_shapes[lane.id] = (lx, cur_y, lw, lh)
 
-            cur_x = lx + LANE_HEADER_W + FIRST_X
             for eid in lane_order[lane.id]:
                 if eid not in el_map:
                     continue
-                el = el_map[eid]
+                el   = el_map[eid]
                 w, h = _el_size(el)
-                shapes[el.id] = (int(cur_x), int(cur_y + (lh - h) / 2), w, h)
-                cur_x += w + H_GAP
+                c    = col_of.get(eid, 0)
+                # Centre the element horizontally within its column slot
+                col_slot_w = col_widths.get(c, TASK_W)
+                x = _col_x(c, col_widths, base_x) + (col_slot_w - w) // 2
+                y = cur_y + (lh - h) // 2          # vertically centred in lane
+                shapes[el.id] = (int(x), int(y), w, h)
+
             cur_y += lh
 
     else:
+        # ── No-pool fallback: single vertical column per element ───────────────
         cur_y = V_PAD
         for eid in order:
             if eid not in el_map:
@@ -320,7 +375,7 @@ def _compute_layout(bpmn, lane_assignment):
             shapes[el.id] = (FIRST_X, int(cur_y), w, h)
             cur_y += h + H_GAP
 
-    # Boundary events: anchored on host element
+    # ── Boundary events: anchored on host element ──────────────────────────────
     for el in bpmn.elements:
         if el.type == "boundaryEvent" and el.attached_to:
             host = shapes.get(el.attached_to)
