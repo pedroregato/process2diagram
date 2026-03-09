@@ -699,29 +699,32 @@ def analyse_bpmn_crossings(bpmn: BpmnProcess) -> dict:
     Returns
     -------
     {
-      "total_flows":        int,
-      "cross_lane_flows":   [ {id, source, target, src_lane, tgt_lane,
-                               lane_span, heuristic} ],
-      "geometric_crossings":[ {flow_a, flow_b} ],
-      "lane_spanning":      [ {id, source, target, src_lane, tgt_lane,
-                               lane_span} ],
+      "total_flows":          int,
+      "cross_lane_flows":     [ {id, source, source_name, target, target_name,
+                                 src_lane, tgt_lane, lane_span} ],
+      "geometric_crossings":  [ {flow_a, name_a, flow_b, name_b} ],
+      "lane_spanning":        [ {id, source, source_name, target, target_name,
+                                 src_lane, tgt_lane, lane_span} ],
+      "element_lane_issues":  [ {element_id, name, lane, issue} ],
       "will_use_link_events": bool,
-      "link_pairs_needed":  int,
-      "summary":            str           # human-readable paragraph
+      "link_pairs_needed":    int,
+      "summary":              str    # human-readable, pt-BR
     }
     """
     lane_assignment = _assign_lanes(bpmn)
     non_boundary    = [e for e in bpmn.elements if e.type != "boundaryEvent"]
-    order           = _topo_sort([e.id for e in non_boundary], bpmn.flows)
     el_map          = {e.id: e for e in bpmn.elements}
 
     # Compute layout so we have real coordinates
     shapes, _ = _compute_layout(bpmn, lane_assignment)
 
-    pool     = bpmn.pools[0] if bpmn.pools else None
-    lanes    = pool.lanes    if pool       else []
+    pool       = bpmn.pools[0] if bpmn.pools else None
+    lanes      = pool.lanes    if pool       else []
     lane_index = {lane.id: idx for idx, lane in enumerate(lanes)}
     lane_name  = {lane.id: lane.name for lane in lanes}
+
+    def el_name(eid):
+        return el_map[eid].name if eid in el_map else eid
 
     # ── Cross-lane flows ──────────────────────────────────────────────────────
     cross_lane_flows = []
@@ -730,17 +733,19 @@ def analyse_bpmn_crossings(bpmn: BpmnProcess) -> dict:
         tgt_lid = lane_assignment.get(f.target)
         if not src_lid or not tgt_lid or src_lid == tgt_lid:
             continue
-        si = lane_index.get(src_lid, -1)
-        ti = lane_index.get(tgt_lid, -1)
+        si   = lane_index.get(src_lid, -1)
+        ti   = lane_index.get(tgt_lid, -1)
         span = abs(si - ti) if (si >= 0 and ti >= 0) else 1
         cross_lane_flows.append({
-            "id":       f.id,
-            "source":   f.source,
-            "target":   f.target,
-            "name":     f.name or "",
-            "src_lane": lane_name.get(src_lid, src_lid),
-            "tgt_lane": lane_name.get(tgt_lid, tgt_lid),
-            "lane_span": span,
+            "id":          f.id,
+            "source":      f.source,
+            "source_name": el_name(f.source),
+            "target":      f.target,
+            "target_name": el_name(f.target),
+            "name":        f.name or "",
+            "src_lane":    lane_name.get(src_lid, src_lid),
+            "tgt_lane":    lane_name.get(tgt_lid, tgt_lid),
+            "lane_span":   span,
         })
 
     # ── Geometric crossings ───────────────────────────────────────────────────
@@ -760,56 +765,130 @@ def analyse_bpmn_crossings(bpmn: BpmnProcess) -> dict:
                 fa = next((f for f in bpmn.flows if f.id == fid_a), None)
                 fb = next((f for f in bpmn.flows if f.id == fid_b), None)
                 geometric_pairs.append({
-                    "flow_a": fid_a,
-                    "src_a":  fa.source if fa else "?",
-                    "tgt_a":  fa.target if fa else "?",
-                    "flow_b": fid_b,
-                    "src_b":  fb.source if fb else "?",
-                    "tgt_b":  fb.target if fb else "?",
+                    "flow_a":  fid_a,
+                    "name_a":  f"{el_name(fa.source)} → {el_name(fa.target)}" if fa else fid_a,
+                    "flow_b":  fid_b,
+                    "name_b":  f"{el_name(fb.source)} → {el_name(fb.target)}" if fb else fid_b,
                 })
 
-    # ── Lane-spanning flows ───────────────────────────────────────────────────
+    # ── Lane-spanning flows (visual overlaps) ─────────────────────────────────
     lane_spanning = [f for f in cross_lane_flows if f["lane_span"] >= 2]
 
-    # ── What link-event pass will flag ───────────────────────────────────────
-    crossing_ids    = _detect_crossings(bpmn.flows, shapes, lane_assignment, pool)
-    link_pairs      = len(crossing_ids)
+    # ── Element lane issues ───────────────────────────────────────────────────
+    # Flag elements that are likely in the wrong lane:
+    #   • endEvent not in the last lane used by majority of terminal elements
+    #   • startEvent not in the first lane
+    #   • Any element whose assigned lane differs from its declared .lane field
+    element_lane_issues = []
+    for el in bpmn.elements:
+        if el.type == "boundaryEvent":
+            continue
+        assigned_lid = lane_assignment.get(el.id)
+        if not assigned_lid:
+            continue
+        assigned_lane_name = lane_name.get(assigned_lid, assigned_lid)
+
+        # Check declared lane on element vs assigned lane
+        declared = (el.lane or "").strip().lower()
+        assigned  = assigned_lane_name.strip().lower()
+        if declared and declared != assigned:
+            element_lane_issues.append({
+                "element_id": el.id,
+                "name":       el.name,
+                "type":       el.type,
+                "declared_lane":  el.lane,
+                "assigned_lane":  assigned_lane_name,
+                "issue": f"Elemento declarado na lane '{el.lane}' mas atribuído a '{assigned_lane_name}'",
+            })
+
+        # Additional: end/start events in unexpected lanes
+        if el.type == "endEvent":
+            # Find what lane the majority of the last few elements are in
+            predecessors = [f.source for f in bpmn.flows if f.target == el.id]
+            if predecessors:
+                pred_lanes = [lane_assignment.get(p) for p in predecessors if lane_assignment.get(p)]
+                if pred_lanes and assigned_lid not in pred_lanes:
+                    pred_names = [lane_name.get(l, l) for l in pred_lanes]
+                    element_lane_issues.append({
+                        "element_id": el.id,
+                        "name":       el.name,
+                        "type":       el.type,
+                        "declared_lane":  el.lane,
+                        "assigned_lane":  assigned_lane_name,
+                        "issue": f"End Event na lane '{assigned_lane_name}' mas predecessores estão em {pred_names}",
+                    })
+
+    # ── What link-event pass will flag ────────────────────────────────────────
+    crossing_ids = _detect_crossings(bpmn.flows, shapes, lane_assignment, pool)
+    link_pairs   = len(crossing_ids)
 
     # ── Human-readable summary ────────────────────────────────────────────────
     lines = []
-    lines.append(f"Diagrama contém {len(bpmn.flows)} sequence flows, "
-                 f"dos quais {len(cross_lane_flows)} são cross-lane.")
+    lines.append(
+        f"Diagrama contém {len(bpmn.flows)} sequence flows, "
+        f"{len(cross_lane_flows)} cross-lane e "
+        f"{len(non_boundary)} elementos."
+    )
 
+    # Geometric crossings
     if geometric_pairs:
-        lines.append(f"\n{len(geometric_pairs)} cruzamento(s) geométrico(s) detectado(s) "
-                     f"(segmentos que se intersectam fisicamente):")
+        lines.append(f"\n🔴 {len(geometric_pairs)} cruzamento(s) geométrico(s) — segmentos que se intersectam fisicamente:")
         for p in geometric_pairs:
-            lines.append(f"  • {p['flow_a']} ({p['src_a']}→{p['tgt_a']})  ✕  "
-                         f"{p['flow_b']} ({p['src_b']}→{p['tgt_b']})")
+            lines.append(f"   • {p['name_a']}   ✕   {p['name_b']}")
     else:
-        lines.append("\nNenhum cruzamento geométrico estrito detectado — "
-                     "os flows cross-lane compartilham pontos de chegada (convergência).")
+        lines.append("\n✅ Nenhum cruzamento geométrico estrito detectado.")
 
+    # Lane-spanning
     if lane_spanning:
-        lines.append(f"\n{len(lane_spanning)} flow(s) com lane-spanning ≥2 "
-                     f"(pulam pelo menos uma lane intermediária, causando sobreposição visual):")
+        lines.append(
+            f"\n🟡 {len(lane_spanning)} flow(s) com sobreposição visual "
+            f"(pulam lane intermediária, span ≥ 2):"
+        )
         for f in lane_spanning:
-            direction = "↓" if f["lane_span"] > 0 else "↑"
-            lines.append(f"  • {f['id']}: {f['source']} → {f['target']}  "
-                         f"({f['src_lane']} {direction} {f['tgt_lane']}, "
-                         f"span={f['lane_span']} lanes)")
-
-    if link_pairs:
-        lines.append(f"\n→ O gerador substituirá {link_pairs} flow(s) por pares de "
-                     f"Link Events (throw + catch) para eliminar os cruzamentos visuais.")
+            direction = "↓" if lane_index.get(lane_assignment.get(bpmn.flows[0].source if bpmn.flows else ""), 0) <= \
+                                lane_index.get(lane_assignment.get(bpmn.flows[0].target if bpmn.flows else ""), 0) \
+                                else "↑"
+            si = lane_index.get(lane_assignment.get(f["source"], ""), -1)
+            ti = lane_index.get(lane_assignment.get(f["target"], ""), -1)
+            arrow = "↓" if ti >= si else "↑"
+            lines.append(
+                f"   • {f['source_name']} → {f['target_name']}"
+                f"  ({f['src_lane']} {arrow} {f['tgt_lane']}, span={f['lane_span']})"
+            )
     else:
-        lines.append("\n→ Nenhuma substituição por Link Events necessária.")
+        lines.append("\n✅ Nenhuma sobreposição visual por lane-spanning detectada.")
+
+    # Element lane issues
+    seen_issues = set()
+    unique_issues = []
+    for issue in element_lane_issues:
+        key = (issue["element_id"], issue["issue"])
+        if key not in seen_issues:
+            seen_issues.add(key)
+            unique_issues.append(issue)
+    element_lane_issues = unique_issues
+
+    if element_lane_issues:
+        lines.append(f"\n⚠️  {len(element_lane_issues)} elemento(s) com lane suspeita:")
+        for iss in element_lane_issues:
+            lines.append(f"   • [{iss['type']}] \"{iss['name']}\": {iss['issue']}")
+
+    # Link events outcome
+    if link_pairs:
+        lines.append(
+            f"\n🔧 Ação: {link_pairs} flow(s) serão substituídos por pares de "
+            f"Link Events (intermediateThrowEvent + intermediateCatchEvent) "
+            f"para eliminar cruzamentos visuais."
+        )
+    else:
+        lines.append("\n✅ Nenhuma substituição por Link Events necessária.")
 
     return {
         "total_flows":          len(bpmn.flows),
         "cross_lane_flows":     cross_lane_flows,
         "geometric_crossings":  geometric_pairs,
         "lane_spanning":        lane_spanning,
+        "element_lane_issues":  element_lane_issues,
         "will_use_link_events": link_pairs > 0,
         "link_pairs_needed":    link_pairs,
         "summary":              "\n".join(lines),
