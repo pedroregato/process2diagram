@@ -148,8 +148,29 @@ _TEMPLATE = """\
     const svg = document.querySelector('#bpmn-container svg');
     const vb  = svg && svg.viewBox && svg.viewBox.baseVal;
     if (vb && vb.width > 10) {{ fitToScreen(); }}
-    else if (n > 0) {{ setTimeout(() => fitWhenReady(n - 1), 300); }}
+    else if (n > 0) {{ setTimeout(() => fitWhenReady(n - 1), 200); }}
   }}
+
+  // Watch for SVG insertion and auto-fit as soon as it's ready
+  const observer = new MutationObserver(() => {{
+    const svg = document.querySelector('#bpmn-container svg');
+    if (svg) {{
+      observer.disconnect();
+      // Wait for bpmn-js to finish laying out elements
+      let attempts = 0;
+      const checkAndFit = () => {{
+        const vb = svg.viewBox && svg.viewBox.baseVal;
+        if (vb && vb.width > 10 && vb.height > 10) {{
+          fitToScreen();
+        }} else if (attempts < 20) {{
+          attempts++;
+          setTimeout(checkAndFit, 150);
+        }}
+      }};
+      setTimeout(checkAndFit, 100);
+    }}
+  }});
+  observer.observe(document.getElementById('bpmn-container'), {{ childList: true, subtree: true }});
 
   // ── Mouse pan ───────────────────────────────────────────────────────────
   vp.addEventListener('mousedown', e => {{
