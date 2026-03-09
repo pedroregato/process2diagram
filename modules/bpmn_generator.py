@@ -509,24 +509,27 @@ def _assign_columns(order, flows):
     col = {eid: d * 2 for eid, d in depth.items()}
 
     # ── Pass 2: link pairs → odd columns ─────────────────────────────────────
-    # throw_N and catch_N share the same odd column = col[source_of_throw] + 1
-    # This guarantees the odd slot is between source and target and is exclusive.
+    # throw_N  → odd col immediately AFTER its source:  col[source] + 1
+    # catch_N  → odd col immediately BEFORE its target: col[target] - 1
+    #
+    # Throw and catch are in different lanes and different columns, which is
+    # correct BPMN semantics: the link "teleports" flow across lanes.
+    # The odd-column guarantee ensures neither event shares a column with
+    # any regular element (regular elements are always even-indexed).
+
     for throw_id in link_throw_ids:
         src = next((p for p in preds_of[throw_id] if p not in link_ids), None)
-        throw_col = (col[src] + 1) if src and src in col else 1
-        col[throw_id] = throw_col
+        col[throw_id] = (col[src] + 1) if src and src in col else 1
 
-        # Partner catch gets the SAME column (they're in different lanes → no visual clash)
-        n = throw_id.replace("lnk_throw_", "")
-        catch_id = f"lnk_catch_{n}"
-        if catch_id in link_catch_ids:
-            col[catch_id] = throw_col
-
-    # Fallback for any catch without a paired throw
     for catch_id in link_catch_ids:
-        if catch_id not in col:
-            tgt = next((s for s in succs_of[catch_id] if s not in link_ids), None)
-            col[catch_id] = max(0, col[tgt] - 1) if tgt and tgt in col else 1
+        tgt = next((s for s in succs_of[catch_id] if s not in link_ids), None)
+        if tgt and tgt in col:
+            col[catch_id] = col[tgt] - 1
+        else:
+            # fallback: use throw partner's column
+            n = catch_id.replace("lnk_catch_", "")
+            partner = f"lnk_throw_{n}"
+            col[catch_id] = col.get(partner, 1)
 
     # Any remaining unassigned
     for eid in order:
@@ -985,9 +988,9 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
     1. Assign lanes
     2. Build process XML (first pass)
     3. Compute column-based layout → concrete shapes
-    4. Detect crossing edges → replace with Link Event pairs (if any)
-    5. If crossings found: rebuild process XML + recompute layout
-    6. Build DI (diagram interchange)
+    4. Iteratively detect crossing edges → replace with Link Event pairs
+       (repeat until no new crossings found, max 5 iterations)
+    5. Build DI (diagram interchange)
     """
     process_id = "process_1"
     lane_assignment = _assign_lanes(bpmn)
@@ -1008,19 +1011,20 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
     # ── Pass 2: compute layout ────────────────────────────────────────────────
     shapes, pool_shapes = _compute_layout(bpmn, lane_assignment)
 
-    # ── Pass 3: link-event crossing elimination ───────────────────────────────
-    # _apply_link_events mutates bpmn.elements / bpmn.flows / lane_assignment
-    # in-place.  If any substitution happened we must rebuild the <process>
-    # element and recompute the layout with the new elements.
-    if _apply_link_events(bpmn, lane_assignment, shapes):
-        # Recreate `defs` from scratch to avoid duplicate namespace declarations
-        # that Python's ElementTree produces when you remove/re-add children.
-        defs = _make_defs()
+    # ── Pass 3: iterative link-event crossing elimination ────────────────────
+    # Each iteration may produce new elements whose flows cross other flows.
+    # We repeat until no new crossings are found or we hit the safety limit.
+    MAX_ITERATIONS = 5
+    for _iteration in range(MAX_ITERATIONS):
+        if not _apply_link_events(bpmn, lane_assignment, shapes):
+            break   # converged — no new crossings
 
+        # Rebuild defs from scratch (avoids duplicate namespace declarations)
+        defs = _make_defs()
         _build_process_xml(defs, bpmn, process_id, lane_assignment)
 
         if collab_id:
-            pool = bpmn.pools[0]
+            pool   = bpmn.pools[0]
             collab = _sub(defs, B + "collaboration", {"id": collab_id})
             _sub(collab, B + "participant",
                  {"id": pool.id, "name": pool.name, "processRef": process_id})
