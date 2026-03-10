@@ -105,11 +105,20 @@ def _segments_intersect(s1, s2):
     return eps < t < 1 - eps and eps < u < 1 - eps
 
 
+def _is_link_flow(flow):
+    """True if either endpoint of this flow is a generated link event."""
+    return (flow.source.startswith("lnk_") or flow.target.startswith("lnk_"))
+
+
 def _detect_crossings(flows, shapes, lane_assignment=None, pool=None):
     """
     Return a set of flow IDs that should be replaced with Link Event pairs.
 
-    Two complementary heuristics are applied:
+    IMPORTANT: flows that already involve link events (lnk_throw_N or
+    lnk_catch_N) are excluded from detection. This prevents the iterative
+    injection loop from re-detecting short flows created in a previous pass.
+
+    Two complementary heuristics are applied to the remaining flows:
 
     1. GEOMETRIC INTERSECTION
        Pairs of edges whose straight-line segments properly intersect
@@ -121,12 +130,12 @@ def _detect_crossings(flows, shapes, lane_assignment=None, pool=None):
        will visually overlap with flows in those lanes even when no
        strict geometric intersection exists.  Any flow whose source
        and target are separated by ≥2 lane boundaries is flagged.
-
-       Example: S01(lane 0) → S04(lane 2) passes through lane 1 visually,
-       overlapping with S02 → S04 (lane 1 → lane 2).
     """
+    # Only consider flows between original (non-link) elements
+    candidate_flows = [f for f in flows if not _is_link_flow(f)]
+
     segs = {}
-    for f in flows:
+    for f in candidate_flows:
         s = _edge_segment(f, shapes)
         if s:
             segs[f.id] = s
@@ -147,7 +156,7 @@ def _detect_crossings(flows, shapes, lane_assignment=None, pool=None):
     # ── Heuristic 2: lane-spanning ────────────────────────────────────────────
     if lane_assignment and pool and pool.lanes:
         lane_index = {lane.id: idx for idx, lane in enumerate(pool.lanes)}
-        for f in flows:
+        for f in candidate_flows:
             src_lid = lane_assignment.get(f.source)
             tgt_lid = lane_assignment.get(f.target)
             if not src_lid or not tgt_lid or src_lid == tgt_lid:
@@ -156,8 +165,6 @@ def _detect_crossings(flows, shapes, lane_assignment=None, pool=None):
             ti = lane_index.get(tgt_lid, -1)
             if si < 0 or ti < 0:
                 continue
-            # Number of lane boundaries crossed = |index_diff|
-            # A flow crossing ≥2 boundaries spans at least one intermediate lane
             if abs(si - ti) >= 2:
                 crossing_ids.add(f.id)
 
@@ -1019,10 +1026,10 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
     # ── Pass 2: compute layout ────────────────────────────────────────────────
     shapes, pool_shapes = _compute_layout(bpmn, lane_assignment)
 
-    # ── Pass 3: iterative link-event crossing elimination ────────────────────
-    # Each iteration may produce new elements whose flows cross other flows.
-    # We repeat until no new crossings are found or we hit the safety limit.
-    MAX_ITERATIONS = 5
+    # ── Pass 3: link-event crossing elimination ──────────────────────────────
+    # _detect_crossings now excludes flows involving link events, so a single
+    # pass is sufficient. We keep MAX_ITERATIONS=1 for clarity.
+    MAX_ITERATIONS = 1
     for _iteration in range(MAX_ITERATIONS):
         if not _apply_link_events(bpmn, lane_assignment, shapes):
             break   # converged — no new crossings
