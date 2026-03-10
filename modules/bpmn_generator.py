@@ -1147,4 +1147,3 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
 
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + \
            ET.tostring(defs, encoding="unicode")
-    
