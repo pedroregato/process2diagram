@@ -1,5 +1,7 @@
 ## --- Process2Diagram v3 — Multi-Agent Architecture
 ## --- Pedro Gentil
+###    -- O efeito: qualquer st.download_button clicado causa rerun normalmente, 
+###    mas o hub está no session_state e a UI rederiza completa como se nada tivesse acontecido.
 
 import sys
 from pathlib import Path
