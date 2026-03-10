@@ -154,6 +154,8 @@ def _detect_crossings(flows, shapes, lane_assignment=None, pool=None):
                 crossing_ids.add(fid_a if span_a >= span_b else fid_b)
 
     # ── Heuristic 2: lane-spanning ────────────────────────────────────────────
+    # A cross-lane flow skipping ≥2 intermediate lanes is flagged regardless
+    # of geometry (it visually overlaps elements in the skipped lanes).
     if lane_assignment and pool and pool.lanes:
         lane_index = {lane.id: idx for idx, lane in enumerate(pool.lanes)}
         for f in candidate_flows:
@@ -166,6 +168,38 @@ def _detect_crossings(flows, shapes, lane_assignment=None, pool=None):
             if si < 0 or ti < 0:
                 continue
             if abs(si - ti) >= 2:
+                crossing_ids.add(f.id)
+
+    # ── Heuristic 3: large horizontal span on cross-lane flows ────────────────
+    # A cross-lane flow that travels far to the right (≥ 2 task-column widths
+    # past its source) draws a long diagonal that visually cuts through other
+    # flows in the same lane, even when no strict geometric intersection exists.
+    #
+    # This catches cases like:
+    #   S01 (col 1, lane A)  →  S05 (col 5, lane B)
+    # where S01 also has outgoing flows to S02, S03, S04 in lane A at cols 2–4,
+    # and the diagonal S01→S05 visually crosses those outgoing flows.
+    #
+    # Threshold: target is ≥ 2 column-widths (≈ 320 px) to the right of the
+    # source's RIGHT edge. This means the flow is not a simple adjacent-column
+    # hop but a genuine long-range connection.
+    LONG_CROSS_PX = 320   # ≈ 2 × (TASK_W=160) + some H_GAP
+    if lane_assignment and pool:
+        for f in candidate_flows:
+            if f.id in crossing_ids:
+                continue   # already flagged
+            src_lid = lane_assignment.get(f.source)
+            tgt_lid = lane_assignment.get(f.target)
+            if not src_lid or not tgt_lid or src_lid == tgt_lid:
+                continue   # same-lane flows don't draw cross-lane diagonals
+            src_shape = shapes.get(f.source)
+            tgt_shape = shapes.get(f.target)
+            if not src_shape or not tgt_shape:
+                continue
+            # Distance from the right edge of source to left edge of target
+            src_right = src_shape[0] + src_shape[2]
+            tgt_left  = tgt_shape[0]
+            if (tgt_left - src_right) >= LONG_CROSS_PX:
                 crossing_ids.add(f.id)
 
     return crossing_ids
@@ -1053,3 +1087,4 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
 
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + \
            ET.tostring(defs, encoding="unicode")
+    
