@@ -174,10 +174,23 @@ def _detect_crossings(flows, shapes, lane_assignment=None, pool=None):
                 crossing_ids.add(fid_b)
 
     # ── Heuristic 2: lane-spanning ────────────────────────────────────────────
-    # A cross-lane flow skipping ≥2 intermediate lanes is flagged regardless
-    # of geometry (it visually overlaps elements in the skipped lanes).
+    # A cross-lane flow skipping ≥2 intermediate lanes may visually overlap
+    # elements in those skipped lanes. BUT: only flag it if the skipped lanes
+    # actually contain elements in the column range between source and target.
+    # If the intermediate lanes are empty (or their elements are outside the
+    # column range), the flow crosses an empty strip — no visual problem.
     if lane_assignment and pool and pool.lanes:
         lane_index = {lane.id: idx for idx, lane in enumerate(pool.lanes)}
+
+        # Build a set of (lane_id, col_x) for every element that has a shape
+        # so we can quickly check if a lane has elements in a column range
+        lane_col_x = {}  # lane_id → set of element centre-x values
+        for eid, shp in shapes.items():
+            lid = lane_assignment.get(eid)
+            if lid:
+                cx = shp[0] + shp[2] / 2
+                lane_col_x.setdefault(lid, set()).add(cx)
+
         for f in candidate_flows:
             src_lid = lane_assignment.get(f.source)
             tgt_lid = lane_assignment.get(f.target)
@@ -187,7 +200,31 @@ def _detect_crossings(flows, shapes, lane_assignment=None, pool=None):
             ti = lane_index.get(tgt_lid, -1)
             if si < 0 or ti < 0:
                 continue
-            if abs(si - ti) >= 2:
+            if abs(si - ti) < 2:
+                continue   # adjacent lanes: no intermediate to check
+
+            # Determine the X range covered by this flow
+            src_shp = shapes.get(f.source)
+            tgt_shp = shapes.get(f.target)
+            if not src_shp or not tgt_shp:
+                crossing_ids.add(f.id)   # conservative: flag if no shape data
+                continue
+
+            x_min = min(src_shp[0] + src_shp[2] / 2, tgt_shp[0] + tgt_shp[2] / 2)
+            x_max = max(src_shp[0] + src_shp[2] / 2, tgt_shp[0] + tgt_shp[2] / 2)
+
+            # Check each skipped (intermediate) lane for elements in range
+            lo, hi = min(si, ti), max(si, ti)
+            skipped_lane_ids = [
+                lane.id for lane in pool.lanes
+                if lo < lane_index[lane.id] < hi
+            ]
+            has_elements_in_range = any(
+                any(x_min - 50 <= cx <= x_max + 50
+                    for cx in lane_col_x.get(lid, set()))
+                for lid in skipped_lane_ids
+            )
+            if has_elements_in_range:
                 crossing_ids.add(f.id)
 
     # ── Heuristic 3: large horizontal span on cross-lane flows ────────────────
@@ -1110,3 +1147,4 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
 
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + \
            ET.tostring(defs, encoding="unicode")
+    
