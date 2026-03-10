@@ -131,11 +131,16 @@ def _detect_crossings(flows, shapes, lane_assignment=None, pool=None):
        strict geometric intersection exists.  Any flow whose source
        and target are separated by ≥2 lane boundaries is flagged.
     """
-    # Only consider flows between original (non-link) elements
+    # Only consider flows between original (non-link) elements as candidates
+    # for replacement. Link event flows are excluded to avoid re-injection loops.
     candidate_flows = [f for f in flows if not _is_link_flow(f)]
 
+    # However, link flows CAN act as geometric obstacles for detection purposes:
+    # after pass 1 injects catch elements, a flow like S01→S02 may cross the
+    # newly-placed catch→target flows. We include link flows in the segment map
+    # but never flag them as crossing_ids.
     segs = {}
-    for f in candidate_flows:
+    for f in flows:   # ALL flows for obstacle geometry
         s = _edge_segment(f, shapes)
         if s:
             segs[f.id] = s
@@ -143,15 +148,30 @@ def _detect_crossings(flows, shapes, lane_assignment=None, pool=None):
     crossing_ids = set()
 
     # ── Heuristic 1: geometric intersection ───────────────────────────────────
+    # Compare every candidate flow against ALL flows (including link flows as
+    # obstacles). Only flag the candidate (non-link) side.
+    candidate_ids = {f.id for f in candidate_flows}
     flist = list(segs.items())
     for i in range(len(flist)):
         fid_a, seg_a = flist[i]
         for j in range(i + 1, len(flist)):
             fid_b, seg_b = flist[j]
-            if _segments_intersect(seg_a, seg_b):
+            if not _segments_intersect(seg_a, seg_b):
+                continue
+            # At least one side must be a candidate (non-link) flow
+            a_is_cand = fid_a in candidate_ids
+            b_is_cand = fid_b in candidate_ids
+            if not (a_is_cand or b_is_cand):
+                continue
+            if a_is_cand and b_is_cand:
+                # Both original: flag the longer (bigger vertical span)
                 span_a = abs(seg_a[3] - seg_a[1])
                 span_b = abs(seg_b[3] - seg_b[1])
                 crossing_ids.add(fid_a if span_a >= span_b else fid_b)
+            elif a_is_cand:
+                crossing_ids.add(fid_a)
+            else:
+                crossing_ids.add(fid_b)
 
     # ── Heuristic 2: lane-spanning ────────────────────────────────────────────
     # A cross-lane flow skipping ≥2 intermediate lanes is flagged regardless
@@ -1061,9 +1081,12 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
     shapes, pool_shapes = _compute_layout(bpmn, lane_assignment)
 
     # ── Pass 3: link-event crossing elimination ──────────────────────────────
-    # _detect_crossings now excludes flows involving link events, so a single
-    # pass is sufficient. We keep MAX_ITERATIONS=1 for clarity.
-    MAX_ITERATIONS = 1
+    # Pass 1 replaces span≥2 and long cross-lane flows with link event pairs.
+    # Pass 2 (geometric only) catches flows that now cross the newly-placed
+    # catch elements — e.g. S01→S02 crossing catch flows added in pass 1.
+    # _detect_crossings already excludes flows involving link events, so
+    # the second pass only ever flags original flows — no explosion risk.
+    MAX_ITERATIONS = 2
     for _iteration in range(MAX_ITERATIONS):
         if not _apply_link_events(bpmn, lane_assignment, shapes):
             break   # converged — no new crossings
@@ -1087,4 +1110,3 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
 
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + \
            ET.tostring(defs, encoding="unicode")
-    
