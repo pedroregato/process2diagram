@@ -74,6 +74,10 @@ Se não houver atores claros, omita lanes e use processo plano.
 - **Sem lane de sistema para eventos**: Start Event e End Event nunca ficam
   em lanes de sistemas automatizados (serviceTask) — sempre no ator humano
   ou organizacional principal do fluxo.
+- **Ordenação de lanes**: o array "lanes" deve listar as lanes na ordem
+  visual de cima para baixo no diagrama. Coloque o ator principal que inicia
+  o processo no topo, lanes de suporte/sistema no meio, e atores secundários
+  abaixo. Uma boa ordenação minimiza cruzamentos visuais de sequence flows.
 
 ## Formato de Saída (JSON — NUNCA use markdown)
 
@@ -110,3 +114,4 @@ Se não houver atores claros, omita lanes e use processo plano.
 8. **Lane do End Event = lane do passo que o precede diretamente** (ver Regras Críticas de Lane).
 9. **Output language**: {output_language}
 10. **Retorne APENAS o JSON**. Nenhum texto, nenhum markdown.
+
