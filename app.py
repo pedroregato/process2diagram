@@ -380,6 +380,7 @@ with st.expander("🛠️ Diagnóstico — Arquivos de Skill em Runtime", expand
 generate_btn = st.button("⚡ Processar Transcrição", type="primary", use_container_width=True)
 
 if generate_btn:
+    st.session_state.pop("hub", None)   # limpa resultado anterior
     if not transcript_text or len(transcript_text.strip()) < 20:
         st.warning("Por favor, forneça uma transcrição com pelo menos algumas linhas.")
         st.stop()
@@ -426,6 +427,15 @@ if generate_btn:
         st.stop()
 
     progress_placeholder.empty()
+
+    # ── Salva no session_state ANTES de qualquer UI ───────────────────────────
+    # Garante que o hub sobrevive ao rerun causado por st.download_button
+    st.session_state["hub"] = hub
+
+# ── Renderização — FORA do if generate_btn, recupera do session_state ─────────
+# Desta forma, download buttons, tab switches e outros widgets não apagam a UI
+hub = st.session_state.get("hub")
+if hub is not None:
 
     # ── Metrics banner ────────────────────────────────────────────────────────
     col_a, col_b, col_c, col_d = st.columns(4)
@@ -626,7 +636,3 @@ if generate_btn:
             file_name="knowledge_hub.json",
             mime="application/json",
         )
-
-    # Store in session
-    st.session_state["hub"] = hub
-    
