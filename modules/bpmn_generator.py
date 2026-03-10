@@ -582,11 +582,41 @@ def _compute_layout(bpmn, lane_assignment):
                 lane_order[pool.lanes[0].id].append(eid)
 
         # ── Step 4: lane heights ───────────────────────────────────────────────
+        # A lane needs enough vertical space to stack all elements that share
+        # the same column slot without overlapping each other.
+        #
+        # Algorithm:
+        #   1. For each lane, group its elements by column.
+        #   2. Count how many elements share each column (parallel stack depth).
+        #   3. Lane height = V_PAD*2 + sum of heights in the tallest column stack,
+        #      with V_GAP between stacked items.
+        #   4. Enforce MIN_LANE_H.
+        #
+        # This makes lanes with parallel branches (multiple elements per column)
+        # automatically taller than lanes with purely sequential flows.
+        V_GAP = 20   # vertical gap between stacked elements in the same column
+
         lane_h = {}
         for lane in pool.lanes:
-            els_in_lane = [el_map[eid] for eid in lane_order[lane.id] if eid in el_map]
-            max_h = max((_el_size(e)[1] for e in els_in_lane), default=TASK_H)
-            lane_h[lane.id] = max(MIN_LANE_H, max_h + V_PAD * 2)
+            eids_in_lane = [eid for eid in lane_order[lane.id] if eid in el_map]
+            if not eids_in_lane:
+                lane_h[lane.id] = MIN_LANE_H
+                continue
+
+            # Group by column
+            col_groups = {}
+            for eid in eids_in_lane:
+                c = col_of.get(eid, 0)
+                col_groups.setdefault(c, []).append(eid)
+
+            # Height needed for the tallest column stack
+            max_stack_h = 0
+            for c, eids_in_col in col_groups.items():
+                stack_h = sum(_el_size(el_map[eid])[1] for eid in eids_in_col)
+                stack_h += V_GAP * (len(eids_in_col) - 1)
+                max_stack_h = max(max_stack_h, stack_h)
+
+            lane_h[lane.id] = max(MIN_LANE_H, max_stack_h + V_PAD * 2)
 
         total_h = sum(lane_h[l.id] for l in pool.lanes)
 
@@ -607,16 +637,35 @@ def _compute_layout(bpmn, lane_assignment):
             lw  = pool_w - POOL_HEADER_W
             pool_shapes[lane.id] = (lx, cur_y, lw, lh)
 
-            for eid in lane_order[lane.id]:
-                if eid not in el_map:
-                    continue
+            # Group elements in this lane by column, preserving topo order
+            eids_in_lane = [eid for eid in lane_order[lane.id] if eid in el_map]
+            col_groups   = {}
+            for eid in eids_in_lane:
+                c = col_of.get(eid, 0)
+                col_groups.setdefault(c, []).append(eid)
+
+            for eid in eids_in_lane:
                 el   = el_map[eid]
                 w, h = _el_size(el)
                 c    = col_of.get(eid, 0)
-                # Centre the element horizontally within its column slot
+
+                # X: centred within the column slot
                 col_slot_w = col_widths.get(c, TASK_W)
                 x = _col_x(c, col_widths, base_x) + (col_slot_w - w) // 2
-                y = cur_y + (lh - h) // 2          # vertically centred in lane
+
+                # Y: distribute elements sharing the same column vertically
+                stack = col_groups[c]
+                stack_total_h = sum(_el_size(el_map[s])[1] for s in stack)
+                stack_total_h += V_GAP * (len(stack) - 1)
+                stack_top_y   = cur_y + (lh - stack_total_h) // 2  # centred in lane
+
+                y_offset = 0
+                for s in stack:
+                    if s == eid:
+                        break
+                    y_offset += _el_size(el_map[s])[1] + V_GAP
+
+                y = stack_top_y + y_offset
                 shapes[el.id] = (int(x), int(y), w, h)
 
             cur_y += lh
