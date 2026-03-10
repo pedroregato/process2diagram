@@ -469,72 +469,31 @@ def _assign_columns(order, flows):
     """
     Assign a global column index (0-based) to every element.
 
-    Strategy
-    --------
-    Regular elements get EVEN column indices (0, 2, 4, …) based on
-    topological depth.  Link event PAIRS share an ODD slot between the
-    source's even column and the target's even column:
-
-      source at col S  →  throw at S+1  (odd, exclusive)
-      target at col T  →  catch at S+1  (same odd slot, different lane → no overlap)
-
-    Because odd slots contain ONLY link events, regular elements never
-    share a column with a link event regardless of the graph topology.
+    Rules
+    -----
+    1. Process elements in topological order.
+    2. Each element's column = max(predecessor columns) + 1.
+       (Start nodes with no predecessors get column 0.)
+    3. Link events (lnk_throw_N, lnk_catch_N) are treated like regular
+       elements for column assignment — they inherit depth from their
+       predecessors/successors. Their X position is then fine-tuned in
+       _compute_layout to avoid overlapping regular elements in the same
+       lane and column.
 
     Returns dict {element_id: column_index}
     """
     import re as _re
 
-    link_throw_ids = {eid for eid in order if _re.match(r'lnk_throw_\d+', eid)}
-    link_catch_ids = {eid for eid in order if _re.match(r'lnk_catch_\d+', eid)}
-    link_ids       = link_throw_ids | link_catch_ids
-
     id_set   = set(order)
     preds_of = {eid: [] for eid in order}
-    succs_of = {eid: [] for eid in order}
     for f in flows:
         if f.source in id_set and f.target in id_set:
             preds_of[f.target].append(f.source)
-            succs_of[f.source].append(f.target)
 
-    # ── Pass 1: depth for regular elements (depth 0,1,2,…) ───────────────────
-    depth = {}
+    col = {}
     for eid in order:
-        if eid in link_ids:
-            continue
-        preds = [p for p in preds_of[eid] if p not in link_ids and p in depth]
-        depth[eid] = (max(depth[p] for p in preds) + 1) if preds else 0
-
-    # Regular elements → even columns: depth d → col 2*d
-    col = {eid: d * 2 for eid, d in depth.items()}
-
-    # ── Pass 2: link pairs → odd columns ─────────────────────────────────────
-    # throw_N  → odd col immediately AFTER its source:  col[source] + 1
-    # catch_N  → odd col immediately BEFORE its target: col[target] - 1
-    #
-    # Throw and catch are in different lanes and different columns, which is
-    # correct BPMN semantics: the link "teleports" flow across lanes.
-    # The odd-column guarantee ensures neither event shares a column with
-    # any regular element (regular elements are always even-indexed).
-
-    for throw_id in link_throw_ids:
-        src = next((p for p in preds_of[throw_id] if p not in link_ids), None)
-        col[throw_id] = (col[src] + 1) if src and src in col else 1
-
-    for catch_id in link_catch_ids:
-        tgt = next((s for s in succs_of[catch_id] if s not in link_ids), None)
-        if tgt and tgt in col:
-            col[catch_id] = col[tgt] - 1
-        else:
-            # fallback: use throw partner's column
-            n = catch_id.replace("lnk_catch_", "")
-            partner = f"lnk_throw_{n}"
-            col[catch_id] = col.get(partner, 1)
-
-    # Any remaining unassigned
-    for eid in order:
-        if eid not in col:
-            col[eid] = 0
+        preds = [p for p in preds_of[eid] if p in col]
+        col[eid] = (max(col[p] for p in preds) + 1) if preds else 0
 
     return col
 
