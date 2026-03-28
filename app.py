@@ -1,4 +1,4 @@
-## --- Process2Diagram v3 — Multi-Agent Architecture
+## --- Process2Diagram v3.1 — Multi-Agent Architecture
 ## --- Pedro Gentil
 
 import sys
@@ -239,7 +239,7 @@ with st.sidebar:
     _commit = _sp.run(["git", "rev-parse", "--short", "HEAD"],
                       capture_output=True, text=True).stdout.strip() or "unknown"
     st.markdown("## ⚙️ Process2Diagram")
-    st.markdown(f"*v3 — Multi-Agent* `{_commit}`")
+    st.markdown(f"*v3.1 — Multi-Agent* `{_commit}`")
     st.markdown("---")
 
     st.markdown("### 🤖 LLM Provider")
