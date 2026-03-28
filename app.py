@@ -235,8 +235,11 @@ else{window.addEventListener("load",function(){setTimeout(robustFit,80)})}
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
+    import subprocess as _sp
+    _commit = _sp.run(["git", "rev-parse", "--short", "HEAD"],
+                      capture_output=True, text=True).stdout.strip() or "unknown"
     st.markdown("## ⚙️ Process2Diagram")
-    st.markdown("*v3 — Multi-Agent*")
+    st.markdown(f"*v3 — Multi-Agent* `{_commit}`")
     st.markdown("---")
 
     st.markdown("### 🤖 LLM Provider")
