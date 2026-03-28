@@ -118,60 +118,19 @@ def _detect_crossings(flows, shapes, lane_assignment=None, pool=None):
     lnk_catch_N) are excluded from detection. This prevents the iterative
     injection loop from re-detecting short flows created in a previous pass.
 
-    Two complementary heuristics are applied to the remaining flows:
+    Only one heuristic is applied:
 
-    1. GEOMETRIC INTERSECTION
-       Pairs of edges whose straight-line segments properly intersect
-       (strictly interior — shared endpoints are not counted).
-       The longer edge (bigger vertical span) is flagged.
+    LANE-SPANNING  (requires lane_assignment + pool)
+      A cross-lane flow that *skips* one or more intermediate lanes
+      will visually overlap with flows in those lanes.  Any flow whose
+      source and target are separated by ≥2 lane boundaries is flagged.
 
-    2. LANE-SPANNING  (requires lane_assignment + pool)
-       A cross-lane flow that *skips* one or more intermediate lanes
-       will visually overlap with flows in those lanes even when no
-       strict geometric intersection exists.  Any flow whose source
-       and target are separated by ≥2 lane boundaries is flagged.
+    Adjacent-lane flows (span = 1) are intentionally left as-is.
+    bpmn-js routes their crossing arrows natively; using Link Events for
+    them causes layout distortion (the catch event ends up at column 0).
     """
-    # Only consider flows between original (non-link) elements as candidates
-    # for replacement. Link event flows are excluded to avoid re-injection loops.
     candidate_flows = [f for f in flows if not _is_link_flow(f)]
-
-    # However, link flows CAN act as geometric obstacles for detection purposes:
-    # after pass 1 injects catch elements, a flow like S01→S02 may cross the
-    # newly-placed catch→target flows. We include link flows in the segment map
-    # but never flag them as crossing_ids.
-    segs = {}
-    for f in flows:   # ALL flows for obstacle geometry
-        s = _edge_segment(f, shapes)
-        if s:
-            segs[f.id] = s
-
     crossing_ids = set()
-
-    # ── Heuristic 1: geometric intersection ───────────────────────────────────
-    # Compare every candidate flow against ALL flows (including link flows as
-    # obstacles). Only flag the candidate (non-link) side.
-    candidate_ids = {f.id for f in candidate_flows}
-    flist = list(segs.items())
-    for i in range(len(flist)):
-        fid_a, seg_a = flist[i]
-        for j in range(i + 1, len(flist)):
-            fid_b, seg_b = flist[j]
-            if not _segments_intersect(seg_a, seg_b):
-                continue
-            # At least one side must be a candidate (non-link) flow
-            a_is_cand = fid_a in candidate_ids
-            b_is_cand = fid_b in candidate_ids
-            if not (a_is_cand or b_is_cand):
-                continue
-            if a_is_cand and b_is_cand:
-                # Both original: flag the longer (bigger vertical span)
-                span_a = abs(seg_a[3] - seg_a[1])
-                span_b = abs(seg_b[3] - seg_b[1])
-                crossing_ids.add(fid_a if span_a >= span_b else fid_b)
-            elif a_is_cand:
-                crossing_ids.add(fid_a)
-            else:
-                crossing_ids.add(fid_b)
 
     # ── Heuristic 2: lane-spanning ────────────────────────────────────────────
     # A cross-lane flow skipping ≥2 intermediate lanes may visually overlap

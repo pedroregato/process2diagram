@@ -168,11 +168,16 @@ class AgentBPMN(BaseAgent):
                     condition=edge.condition or "",
                 ))
 
-            # Connect last step to endEvent
+            # Connect the actual terminal step (no outgoing edges) to endEvent.
+            # Using model.steps[-1] is wrong when the last declared step is an
+            # intermediate node (e.g. a loop-back like "Devolver para ajustes").
             if model.steps:
+                source_ids = {e.source for e in model.edges}
+                terminal_steps = [s for s in model.steps if s.id not in source_ids]
+                sf_end_source = terminal_steps[-1].id if terminal_steps else model.steps[-1].id
                 flows.append(SequenceFlow(
                     id="sf_end",
-                    source=model.steps[-1].id,
+                    source=sf_end_source,
                     target="ev_end",
                 ))
 
