@@ -218,6 +218,32 @@ def _detect_crossings(flows, shapes, lane_assignment=None, pool=None):
             if (tgt_left - src_right) >= LONG_CROSS_PX:
                 crossing_ids.add(f.id)
 
+    # ── Heuristic 4: backward cross-lane flows ────────────────────────────────
+    # A flow that returns to an earlier column while also crossing a lane
+    # boundary draws a long backward diagonal that will geometrically cross
+    # every forward flow occupying the same horizontal range.
+    #
+    # Example: S07 (col 6, Gestores) → S03 (col 3, Auditoria)
+    # This diagonal cuts across sf_004 (S04→S05) and others in the overlap zone.
+    #
+    # Detection rule: target's left edge is to the LEFT of source's left edge
+    # (target_x < source_x) AND the two endpoints are in different lanes.
+    if lane_assignment and pool:
+        for f in candidate_flows:
+            if f.id in crossing_ids:
+                continue   # already flagged
+            src_lid = lane_assignment.get(f.source)
+            tgt_lid = lane_assignment.get(f.target)
+            if not src_lid or not tgt_lid or src_lid == tgt_lid:
+                continue   # same-lane loops don't cross other lanes
+            src_shape = shapes.get(f.source)
+            tgt_shape = shapes.get(f.target)
+            if not src_shape or not tgt_shape:
+                continue
+            # Backward: target starts to the left of where source starts
+            if tgt_shape[0] < src_shape[0]:
+                crossing_ids.add(f.id)
+
     return crossing_ids
 
 
@@ -580,6 +606,14 @@ def _compute_layout(bpmn, lane_assignment):
 
         # ── Step 1: assign global columns ─────────────────────────────────────
         col_of = _assign_columns(order, bpmn.flows)
+
+        # Fix lnk_catch_N columns: catch events have no incoming flows so
+        # _assign_columns gives them col=0.  Place them at the same column as
+        # their target so they stack cleanly in the target lane rather than
+        # appearing at the diagram's left edge alongside the start event.
+        for f in bpmn.flows:
+            if f.source.startswith("lnk_catch_") and f.target in col_of:
+                col_of[f.source] = col_of[f.target]
 
         # ── Step 2: compute the width of each column (widest element in it) ───
         col_widths = {}
