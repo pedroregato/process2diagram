@@ -808,8 +808,23 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
                     {"id": flow.id + "_di", "bpmnElement": flow.id})
         sx, sy, sw, sh = src
         tx, ty, tw, th = tgt
-        _wp(edge, sx + sw, sy + sh / 2)   # source right-centre
-        _wp(edge, tx,      ty + th / 2)   # target left-centre
+
+        # When source and target x-ranges overlap they are stacked vertically
+        # in the same column. Using right→left waypoints draws a diagonal that
+        # clips through the target rectangle. Use vertical waypoints instead.
+        x_overlap = (sx < tx + tw) and (sx + sw > tx)
+        if x_overlap and (sy + sh) <= ty:
+            # source is directly above target: bottom-centre → top-centre
+            _wp(edge, sx + sw / 2, sy + sh)
+            _wp(edge, tx + tw / 2, ty)
+        elif x_overlap and sy >= (ty + th):
+            # source is directly below target: top-centre → bottom-centre
+            _wp(edge, sx + sw / 2, sy)
+            _wp(edge, tx + tw / 2, ty + th)
+        else:
+            _wp(edge, sx + sw, sy + sh / 2)   # source right-centre
+            _wp(edge, tx,      ty + th / 2)   # target left-centre
+
         if flow.name:
             mid_x = int((sx + sw + tx) / 2) - 30
             mid_y = int((sy + sh / 2 + ty + th / 2) / 2) - 16

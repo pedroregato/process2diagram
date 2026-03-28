@@ -1,0 +1,117 @@
+{
+  "name": "Cadastro de Estrutura e Organograma de Escola",
+  "steps": [
+    {
+      "id": "S01",
+      "title": "Iniciar cadastro de organograma",
+      "description": "O usuário clica no botão 'Cadastro de estrutura e organograma de escola' para iniciar o fluxo. O sistema exibe uma tela de inicialização onde o usuário pode opcionalmente preencher um título (ex: 'Cadastro da escola ABC') e campos como código e nome da escola. O usuário confirma para prosseguir.",
+      "actor": "usuário",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Auditoria"
+    },
+    {
+      "id": "S02",
+      "title": "Cadastrar escola (diretoria)",
+      "description": "O sistema exibe um formulário para cadastrar a primeira unidade (diretoria da escola). O usuário preenche código, nome, seleciona o diretor responsável, indica se possui catálogo mestre (obrigatório para escola) e anexa arquivos como organograma em PDF e e-mail de aprovação (mínimo 2 arquivos). O usuário pode salvar e continuar depois ou prosseguir.",
+      "actor": "usuário",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Auditoria"
+    },
+    {
+      "id": "S03",
+      "title": "Cadastrar unidades inferiores",
+      "description": "O sistema exibe uma tabela para cadastrar as unidades subordinadas (ex: vice-diretoria, assessoria). O usuário clica em 'incluir' para cada unidade, preenchendo tipo, código, nome, responsável, hierarquia (vinculação à unidade superior) e se possui catálogo técnico (sim/não). O sistema soma automaticamente o total de unidades e catálogos previstos. O usuário pode editar ou excluir registros.",
+      "actor": "usuário",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Auditoria"
+    },
+    {
+      "id": "S04",
+      "title": "Enviar para validação",
+      "description": "Após cadastrar todas as unidades, o usuário clica em 'enviar para validação'. O sistema transfere a demanda para a equipe de gestores validadores de documentos.",
+      "actor": "usuário",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Auditoria"
+    },
+    {
+      "id": "S05",
+      "title": "Validar cadastro",
+      "description": "Um validador (da equipe de gestores) assume a atividade. Ele visualiza o organograma anexado e a tabela de unidades cadastradas, conferindo os dados. O validador pode clicar nas linhas para ver detalhes ou abrir o organograma em PDF. Ao final, decide se valida ou devolve para ajustes.",
+      "actor": "validador",
+      "is_decision": true,
+      "task_type": "userTask",
+      "lane": "Gestores Validadores"
+    },
+    {
+      "id": "S06",
+      "title": "Cadastro validado",
+      "description": "Se o validador clicar em 'validar cadastro', o sistema executa atividades automáticas (ex: gerar documento) e finaliza o fluxo. O organograma fica registrado como encerrado e disponível para consulta, sem possibilidade de alteração direta (requer fluxo de alteração).",
+      "actor": "sistema",
+      "is_decision": false,
+      "task_type": "serviceTask",
+      "lane": "Sistema"
+    },
+    {
+      "id": "S07",
+      "title": "Devolver para ajustes",
+      "description": "Se o validador clicar em 'devolver', ele deve preencher uma observação obrigatória com os ajustes necessários. O sistema retorna a demanda para a atividade 'Cadastrar unidades inferiores' (S03) para correções.",
+      "actor": "validador",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Gestores Validadores"
+    }
+  ],
+  "edges": [
+    {
+      "source": "S01",
+      "target": "S02",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S02",
+      "target": "S03",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S03",
+      "target": "S04",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S04",
+      "target": "S05",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S05",
+      "target": "S06",
+      "label": "sim",
+      "condition": "validação aprovada"
+    },
+    {
+      "source": "S05",
+      "target": "S07",
+      "label": "não",
+      "condition": "validação reprovada"
+    },
+    {
+      "source": "S07",
+      "target": "S03",
+      "label": "",
+      "condition": ""
+    }
+  ],
+  "lanes": [
+    "Auditoria",
+    "Gestores Validadores",
+    "Sistema"
+  ]
+}
