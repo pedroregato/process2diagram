@@ -4,29 +4,29 @@
     {
       "id": "S01",
       "title": "Iniciar cadastro de organograma",
-      "description": "O usuário clica no botão 'Cadastro de estrutura e organograma de escola' para iniciar o fluxo. O sistema exibe uma tela de inicialização onde o usuário pode opcionalmente preencher um título (ex: 'Cadastro da escola ABC') e campos como código e nome da escola. O usuário confirma para prosseguir.",
+      "description": "O usuário clica no botão 'Cadastro de estrutura e organograma de escola' para iniciar o fluxo. O sistema exibe uma tela de inicialização onde o usuário pode opcionalmente preencher um título (ex: 'Cadastro da escola ABC teste'), código da escola e nome da escola. O usuário confirma para prosseguir.",
       "actor": "usuário",
       "is_decision": false,
       "task_type": "userTask",
-      "lane": "Auditoria"
+      "lane": "auditoria"
     },
     {
       "id": "S02",
       "title": "Cadastrar escola (diretoria)",
-      "description": "O sistema exibe um formulário para cadastrar a primeira unidade (diretoria da escola). O usuário preenche código, nome, seleciona o diretor responsável, indica se possui catálogo mestre (obrigatório para escola) e anexa arquivos como organograma em PDF e e-mail de aprovação (mínimo 2 arquivos). O usuário pode salvar e continuar depois ou prosseguir.",
+      "description": "O sistema exibe um formulário para cadastrar a primeira unidade (diretoria da escola). O usuário preenche código (ex: 16), nome da escola (ex: ABC teste), seleciona o diretor responsável, indica se possui catálogo mestre (sim, obrigatório para escola) e anexa arquivos: organograma em PDF e e-mail de aprovação (mínimo 2 arquivos). O usuário pode salvar e continuar depois ou prosseguir.",
       "actor": "usuário",
       "is_decision": false,
       "task_type": "userTask",
-      "lane": "Auditoria"
+      "lane": "auditoria"
     },
     {
       "id": "S03",
       "title": "Cadastrar unidades inferiores",
-      "description": "O sistema exibe uma tabela para cadastrar as unidades subordinadas (ex: vice-diretoria, assessoria). O usuário clica em 'incluir' para cada unidade, preenchendo tipo, código, nome, responsável, hierarquia (vinculação à unidade superior) e se possui catálogo técnico (sim/não). O sistema soma automaticamente o total de unidades e catálogos previstos. O usuário pode editar ou excluir registros.",
+      "description": "O sistema exibe uma tabela para cadastrar as unidades subordinadas (ex: vice-diretoria, assessoria). O usuário clica em 'incluir' para cada unidade, preenchendo tipo, código (ex: 16.1), nome, responsável, hierarquia (vinculação à unidade superior) e se possui catálogo técnico (sim/não). O sistema soma automaticamente o total de unidades e catálogos técnicos previstos. O usuário pode salvar e continuar depois.",
       "actor": "usuário",
       "is_decision": false,
       "task_type": "userTask",
-      "lane": "Auditoria"
+      "lane": "auditoria"
     },
     {
       "id": "S04",
@@ -35,34 +35,34 @@
       "actor": "usuário",
       "is_decision": false,
       "task_type": "userTask",
-      "lane": "Auditoria"
+      "lane": "auditoria"
     },
     {
       "id": "S05",
       "title": "Validar cadastro",
-      "description": "Um validador (da equipe de gestores) assume a atividade. Ele visualiza o organograma anexado e a tabela de unidades cadastradas, conferindo os dados. O validador pode clicar nas linhas para ver detalhes ou abrir o organograma em PDF. Ao final, decide se valida ou devolve para ajustes.",
+      "description": "Um validador (da equipe de gestores) acessa a tarefa, visualiza o organograma anexado e os dados cadastrados. O validador confere as informações e decide: validar o cadastro ou devolver para ajustes com observações.",
       "actor": "validador",
       "is_decision": true,
       "task_type": "userTask",
-      "lane": "Gestores Validadores"
+      "lane": "gestores validadores"
     },
     {
       "id": "S06",
       "title": "Cadastro validado",
-      "description": "Se o validador clicar em 'validar cadastro', o sistema executa atividades automáticas (ex: gerar documento) e finaliza o fluxo. O organograma fica registrado como encerrado e disponível para consulta, sem possibilidade de alteração direta (requer fluxo de alteração).",
+      "description": "Se o validador clicar em 'validar cadastro', o sistema executa atividades automáticas (ex: gerar documento) e finaliza o fluxo, marcando-o como encerrado. O organograma fica disponível para consulta, mas não pode ser alterado nesta versão.",
       "actor": "sistema",
       "is_decision": false,
       "task_type": "serviceTask",
-      "lane": "Sistema"
+      "lane": "sistema"
     },
     {
       "id": "S07",
       "title": "Devolver para ajustes",
-      "description": "Se o validador clicar em 'devolver', ele deve preencher uma observação obrigatória com os ajustes necessários. O sistema retorna a demanda para a atividade 'Cadastrar unidades inferiores' (S03) para correções.",
+      "description": "Se o validador clicar em 'devolver para ajustes', deve preencher observações obrigatórias. O sistema retorna a demanda para a atividade 'Cadastrar unidades inferiores' (S03) para correções.",
       "actor": "validador",
       "is_decision": false,
       "task_type": "userTask",
-      "lane": "Gestores Validadores"
+      "lane": "gestores validadores"
     }
   ],
   "edges": [
@@ -110,8 +110,8 @@
     }
   ],
   "lanes": [
-    "Auditoria",
-    "Gestores Validadores",
-    "Sistema"
+    "auditoria",
+    "gestores validadores",
+    "sistema"
   ]
 }

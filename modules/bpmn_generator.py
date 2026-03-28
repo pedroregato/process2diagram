@@ -796,7 +796,12 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         b.set("width", str(int(w))); b.set("height", str(int(h)))
         lbl = _sub(shape, DI + "BPMNLabel")
         lb  = _sub(lbl, DC + "Bounds")
-        lb.set("x", str(int(x))); lb.set("y", str(int(y + h + 2)))
+        # Events are small circles — place their label ABOVE so that vertical
+        # sequence flows exiting the bottom of the circle don't cross the text.
+        _event_types = ("startEvent", "endEvent",
+                        "intermediateThrowEvent", "intermediateCatchEvent")
+        lbl_y = (y - 22) if el.type in _event_types else (y + h + 2)
+        lb.set("x", str(int(x))); lb.set("y", str(int(lbl_y)))
         lb.set("width", str(int(w))); lb.set("height", "20")
 
     for flow in bpmn.flows:
