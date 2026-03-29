@@ -41,6 +41,7 @@ class AgentBPMN(BaseAgent):
         data = self._call_with_retry(system, user, hub)
 
         hub.bpmn = self._build_model(data)
+        self._enforce_rules(hub.bpmn)
         hub.bpmn.mermaid    = self._generate_mermaid(hub.bpmn)
         hub.bpmn.drawio_xml = self._generate_drawio(hub.bpmn)
         hub.bpmn.bpmn_xml   = self._generate_bpmn_xml(hub.bpmn)
@@ -80,6 +81,85 @@ class AgentBPMN(BaseAgent):
             edges=edges,
             lanes=data.get("lanes", []),
         )
+
+    # ── Post-extraction rule enforcement ─────────────────────────────────────
+
+    @staticmethod
+    def _enforce_rules(model: BPMNModel) -> None:
+        """
+        Applies deterministic post-processing rules that the LLM occasionally
+        violates. Mutates the model in-place.
+
+        Rules enforced:
+          1. serviceTask with generic/null actor → lane = None  (OMG §7.4)
+          2. Correction loop pointing to a gateway → redirected to the upstream
+             work step that feeds that gateway (the step immediately before the
+             gateway in the same lane as the correction step).
+        """
+        _GENERIC_ACTORS = {
+            "sistema", "system", "automático", "automatic",
+            "automaticamente", "auto", None,
+        }
+
+        step_map = {s.id: s for s in model.steps}
+
+        # ── Rule 1: serviceTask with unnamed system → lane = None ─────────────
+        for step in model.steps:
+            if step.task_type == "serviceTask":
+                actor_lower = (step.actor or "").lower().strip()
+                if actor_lower in _GENERIC_ACTORS or not actor_lower:
+                    step.lane = None
+
+        # ── Rule 2: correction loop pointing back to gateway ──────────────────
+        # Build index: for each node, list of outgoing edges
+        outgoing: dict[str, list] = {s.id: [] for s in model.steps}
+        for edge in model.edges:
+            if edge.source in outgoing:
+                outgoing[edge.source].append(edge)
+
+        # Build index: for each node, list of incoming edge sources
+        incoming: dict[str, list[str]] = {s.id: [] for s in model.steps}
+        for edge in model.edges:
+            if edge.target in incoming:
+                incoming[edge.target].append(edge.source)
+
+        gateway_ids = {s.id for s in model.steps if s.is_decision}
+
+        for edge in model.edges:
+            if edge.target not in gateway_ids:
+                continue
+
+            gw_id = edge.target
+            correction_id = edge.source
+            gw_step = step_map.get(gw_id)
+            correction_step = step_map.get(correction_id)
+            if not gw_step or not correction_step:
+                continue
+
+            # Is correction_id a direct outgoing branch of gw_id?
+            gw_out_targets = {e.target for e in outgoing.get(gw_id, [])}
+            if correction_id not in gw_out_targets:
+                continue
+
+            # Confirmed: correction step loops back to its own gateway.
+            # Find the upstream work step: a predecessor of gw_id that is NOT
+            # the correction step, preferring the same lane as correction_step.
+            upstream_candidates = [
+                src for src in incoming.get(gw_id, [])
+                if src != correction_id and src in step_map
+            ]
+            if not upstream_candidates:
+                continue
+
+            # Prefer a candidate in the same lane as the correction step
+            same_lane = [
+                c for c in upstream_candidates
+                if step_map[c].lane == correction_step.lane
+            ]
+            best = same_lane[0] if same_lane else upstream_candidates[0]
+
+            # Redirect the loop
+            edge.target = best
 
     # ── BPMN XML (OMG 2.0) via bpmn_generator ────────────────────────────────
 

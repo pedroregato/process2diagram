@@ -1,0 +1,185 @@
+{
+  "name": "Cadastro de estrutura e organograma de escola",
+  "requirements": [
+    {
+      "id": "REQ01",
+      "title": "Título do fluxo obrigatório",
+      "description": "O sistema deve exigir que o usuário preencha um título ao iniciar um fluxo de cadastro de organograma, para facilitar a identificação e gestão de múltiplos fluxos pendentes.",
+      "type": "validation",
+      "actor": "usuário",
+      "priority": "high",
+      "process_step": "inicialização do fluxo",
+      "source_quote": "Se você não colocar o título no dia seguinte, você não vai achar nada, porque não vai estar nada na sua atividade."
+    },
+    {
+      "id": "REQ02",
+      "title": "Campo código da escola",
+      "description": "O sistema deve ter um campo para inserir o código da escola durante o cadastro do organograma.",
+      "type": "ui_field",
+      "actor": "usuário",
+      "priority": "high",
+      "process_step": "cadastro da escola",
+      "source_quote": "Você tem que cadastrar o código da escola e o nome da escola."
+    },
+    {
+      "id": "REQ03",
+      "title": "Campo nome da escola",
+      "description": "O sistema deve ter um campo para inserir o nome da escola durante o cadastro do organograma.",
+      "type": "ui_field",
+      "actor": "usuário",
+      "priority": "high",
+      "process_step": "cadastro da escola",
+      "source_quote": "Você tem que cadastrar o código da escola e o nome da escola."
+    },
+    {
+      "id": "REQ04",
+      "title": "Campo diretor da escola",
+      "description": "O sistema deve ter um campo para selecionar ou inserir o diretor da escola durante o cadastro do organograma.",
+      "type": "ui_field",
+      "actor": "usuário",
+      "priority": "high",
+      "process_step": "cadastro da escola",
+      "source_quote": "Você vai selecionar o diretor da escola, certo? Quem o responsável? Quem o diretor?"
+    },
+    {
+      "id": "REQ05",
+      "title": "Campo catálogo mestre obrigatório",
+      "description": "O sistema deve ter um campo para indicar se a escola possui catálogo mestre, sendo obrigatório preenchê-lo durante o cadastro do organograma.",
+      "type": "ui_field",
+      "actor": "usuário",
+      "priority": "high",
+      "process_step": "cadastro da escola",
+      "source_quote": "Catálogo possui catálogo mestre? Sim, obrigatório quando a gente está fazendo o cadastro de escola."
+    },
+    {
+      "id": "REQ06",
+      "title": "Anexar arquivos do organograma",
+      "description": "O sistema deve permitir anexar arquivos (como PDF) do organograma e e-mail de aprovação durante o cadastro.",
+      "type": "functional",
+      "actor": "usuário",
+      "priority": "high",
+      "process_step": "cadastro da escola",
+      "source_quote": "Você vai colocar ele aqui, a gente está dentro do sistema que ele não existe aqui ainda, certo? Se eu clicar aqui em aqui inserir arquivos, certo?"
+    },
+    {
+      "id": "REQ07",
+      "title": "Validação mínimo dois arquivos",
+      "description": "O sistema deve validar que pelo menos dois arquivos sejam anexados: o organograma e o e-mail de aprovação.",
+      "type": "validation",
+      "actor": "sistema",
+      "priority": "high",
+      "process_step": "cadastro da escola",
+      "source_quote": "No mínimo, 2. No mínimo, organograma e aprovação."
+    },
+    {
+      "id": "REQ08",
+      "title": "Botão salvar para continuar depois",
+      "description": "O sistema deve ter um botão de salvar que permite ao usuário salvar o progresso e retomar o cadastro posteriormente.",
+      "type": "ui_field",
+      "actor": "usuário",
+      "priority": "medium",
+      "process_step": "cadastro da escola",
+      "source_quote": "Porque você pode entrar aqui e colocar aqui o 16 escola ABC teste e salvar, fechar essa tela e vir aqui e terminar mais tarde."
+    },
+    {
+      "id": "REQ09",
+      "title": "Cadastro de unidades do organograma",
+      "description": "O sistema deve permitir cadastrar unidades (como vice-diretoria, assessoria) dentro do organograma, com campos para tipo, código, nome e responsável.",
+      "type": "functional",
+      "actor": "usuário",
+      "priority": "high",
+      "process_step": "cadastro de unidades",
+      "source_quote": "Aqui nós vamos cadastrar agora a vice, vice, diretoria, botei 16.1 e eu vou botar aqui vice, diretoria, escola ABC."
+    },
+    {
+      "id": "REQ10",
+      "title": "Campo catálogo técnico por unidade",
+      "description": "O sistema deve ter um campo por unidade para indicar se possui catálogo técnico (sim/não), usado para contabilizar previsões.",
+      "type": "ui_field",
+      "actor": "usuário",
+      "priority": "medium",
+      "process_step": "cadastro de unidades",
+      "source_quote": "Esta unidade possui catálogo técnico? eu falo sim ou não?"
+    },
+    {
+      "id": "REQ11",
+      "title": "Contagem automática de catálogos previstos",
+      "description": "O sistema deve calcular automaticamente o total de catálogos técnicos previstos com base nas unidades marcadas com 'sim' no campo catálogo técnico.",
+      "type": "functional",
+      "actor": "sistema",
+      "priority": "medium",
+      "process_step": "cadastro de unidades",
+      "source_quote": "Conforme você fizer aqui e você colocar sim e não, eu somo aqui ou eu só somo no total de unidades que essa escola tem?"
+    },
+    {
+      "id": "REQ12",
+      "title": "Validação de organograma por equipe",
+      "description": "O sistema deve direcionar o organograma cadastrado para uma equipe de validação, onde um validador pode aprovar ou devolver com ajustes.",
+      "type": "business_rule",
+      "actor": "sistema",
+      "priority": "high",
+      "process_step": "validação",
+      "source_quote": "Essa Equipe, você vai me dizer quem vai fazer parte, certo? Vai aparecer daquela forma que estava antes."
+    },
+    {
+      "id": "REQ13",
+      "title": "Campo observação na devolução",
+      "description": "Ao devolver um organograma para ajustes, o validador deve preencher um campo de observação obrigatório explicando os ajustes necessários.",
+      "type": "validation",
+      "actor": "validador",
+      "priority": "high",
+      "process_step": "validação",
+      "source_quote": "Quando eu clicar na opção voltar, eu tenho que ter aquele campo XPTO que observação campo que você tem que dizer como obrigatório."
+    },
+    {
+      "id": "REQ14",
+      "title": "Visualização do organograma anexado",
+      "description": "O sistema deve permitir visualizar o arquivo do organograma anexado durante a validação para conferência.",
+      "type": "functional",
+      "actor": "validador",
+      "priority": "medium",
+      "process_step": "validação",
+      "source_quote": "Clica agora no organogram e você já cadastrou, clica aqui e mostra agora o cadastro desse organogram."
+    },
+    {
+      "id": "REQ15",
+      "title": "SLA configurável por processo",
+      "description": "O sistema deve permitir configurar acordos de nível de serviço (SLA) com prazos para a execução do processo de cadastro de organograma.",
+      "type": "non_functional",
+      "actor": "administrador",
+      "priority": "low",
+      "process_step": null,
+      "source_quote": "Pra pra gente definir OSLA, eu preciso o quê? Eu preciso definir qual a duração de cada uma dessas atividades aqui e qual o tempo máximo que esse processo pode ser executado."
+    },
+    {
+      "id": "REQ16",
+      "title": "Prioridade manual de atividades",
+      "description": "O sistema deve permitir que um gestor atribua prioridade manualmente às atividades pendentes de uma equipe, para facilitar a gestão de carga de trabalho.",
+      "type": "functional",
+      "actor": "gestor",
+      "priority": "medium",
+      "process_step": null,
+      "source_quote": "Eu posso ir lá e mudar. Como que fica a prioridade? Fica em morte crescente, 123, como que fica essa prioridade aparece?"
+    },
+    {
+      "id": "REQ17",
+      "title": "Identificador único de processo",
+      "description": "O sistema deve gerar automaticamente um identificador único para cada instância de processo (fluxo) de cadastro de organograma.",
+      "type": "non_functional",
+      "actor": "sistema",
+      "priority": "medium",
+      "process_step": null,
+      "source_quote": "Cada desses aqui uma demanda. Cada linha dessa uma demanda diferente."
+    },
+    {
+      "id": "REQ18",
+      "title": "Histórico de execução do processo",
+      "description": "O sistema deve manter um histórico detalhado de todas as atividades executadas no processo, incluindo datas, responsáveis e ações.",
+      "type": "functional",
+      "actor": "sistema",
+      "priority": "medium",
+      "process_step": null,
+      "source_quote": "Você vai ter também o histórico para ter o controle e saber exatamente o que foi feito, quem executou, como executou?"
+    }
+  ]
+}

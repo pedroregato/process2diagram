@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxGraphModel><root>
+  <mxCell id="0"/><mxCell id="1" parent="0"/>
+  <mxCell id="S01" value="Iniciar cadastro de organograma" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="160" y="80" width="160" height="60" as="geometry"/></mxCell>
+  <mxCell id="S02" value="Cadastrar escola (diretoria)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="360" y="80" width="160" height="60" as="geometry"/></mxCell>
+  <mxCell id="S03" value="Cadastrar unidades inferiores" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="560" y="80" width="160" height="60" as="geometry"/></mxCell>
+  <mxCell id="S04" value="Enviar para validação" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="760" y="80" width="160" height="60" as="geometry"/></mxCell>
+  <mxCell id="S05" value="Validar cadastro" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff3cd;strokeColor=#f59e0b;" vertex="1" parent="1"><mxGeometry x="160" y="260" width="120" height="80" as="geometry"/></mxCell>
+  <mxCell id="S06" value="Ajustar cadastro (se devolvido)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="360" y="260" width="160" height="60" as="geometry"/></mxCell>
+  <mxCell id="S07" value="Processar finalização" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="560" y="260" width="160" height="60" as="geometry"/></mxCell>
+  <mxCell id="S08" value="Organograma cadastrado" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="760" y="260" width="160" height="60" as="geometry"/></mxCell>
+  <mxCell id="e0" value="" edge="1" source="S01" target="S02" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+  <mxCell id="e1" value="" edge="1" source="S02" target="S03" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+  <mxCell id="e2" value="" edge="1" source="S03" target="S04" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+  <mxCell id="e3" value="" edge="1" source="S04" target="S05" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+  <mxCell id="e4" value="não" edge="1" source="S05" target="S06" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+  <mxCell id="e5" value="sim" edge="1" source="S05" target="S07" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+  <mxCell id="e6" value="" edge="1" source="S06" target="S05" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+  <mxCell id="e7" value="" edge="1" source="S07" target="S08" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel>
