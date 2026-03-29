@@ -71,6 +71,71 @@ def _grade_from_score(score: int) -> str:
     return "E"
 
 
+def _render_highlighted_transcript(clean_text: str, inconsistencies: list, key: str) -> None:
+    """
+    Render preprocessed transcript as HTML with inconsistencies highlighted in yellow.
+    Hovering over a highlight shows the LLM's reason as a tooltip.
+    Falls back to plain text if no inconsistencies.
+    """
+    import html as _html
+
+    if not inconsistencies:
+        components.html(
+            f"<div style='height:400px;overflow-y:scroll;font-family:monospace;"
+            f"font-size:0.8rem;line-height:1.7;padding:10px 12px;"
+            f"border:1px solid #e2e8f0;border-radius:6px;background:#fafafa'>"
+            f"{_html.escape(clean_text).replace(chr(10), '<br>')}</div>",
+            height=420,
+        )
+        return
+
+    # Collect (start, end, reason) for every inconsistency found in clean_text
+    spans: list[tuple[int, int, str]] = []
+    for inc in inconsistencies:
+        # The preprocessor may have wrapped the text as "[? ...]" — try both
+        candidates = [
+            f"[? {inc.text.rstrip('.')}]",
+            f"[? {inc.text}]",
+            inc.text,
+        ]
+        for candidate in candidates:
+            idx = clean_text.find(candidate)
+            if idx >= 0:
+                spans.append((idx, idx + len(candidate), inc.reason))
+                break
+
+    # Sort; drop overlapping spans (keep first)
+    spans.sort(key=lambda s: s[0])
+    merged: list[tuple[int, int, str]] = []
+    for s in spans:
+        if merged and s[0] < merged[-1][1]:
+            continue  # skip overlap
+        merged.append(s)
+
+    # Build HTML segment by segment
+    parts: list[str] = []
+    prev = 0
+    for start, end, reason in merged:
+        parts.append(_html.escape(clean_text[prev:start]))
+        tooltip = _html.escape(reason[:120])
+        highlighted = _html.escape(clean_text[start:end])
+        parts.append(
+            f'<mark title="{tooltip}" style="background:#fef08a;border-radius:3px;'
+            f'cursor:help;padding:1px 0">{highlighted}</mark>'
+        )
+        prev = end
+    parts.append(_html.escape(clean_text[prev:]))
+
+    body = "".join(parts).replace("\n", "<br>")
+    components.html(
+        f"<div style='height:400px;overflow-y:scroll;font-family:monospace;"
+        f"font-size:0.8rem;line-height:1.7;padding:10px 12px;"
+        f"border:1px solid #e2e8f0;border-radius:6px;background:#fafafa'>"
+        f"{body}</div>",
+        height=420,
+    )
+
+
 def _copy_button(text: str, key: str, label: str = "📋 Copiar") -> None:
     """Render a clipboard copy button via JavaScript (works in Streamlit Cloud iframes)."""
     import json as _json
@@ -687,14 +752,11 @@ if hub is not None:
                         key="dl_raw",
                     )
                 with col_clean:
-                    st.markdown("**Transcrição pré-processada** *(sujeita a curadoria)*")
-                    st.text_area(
-                        label="clean",
-                        value=hub.transcript_clean,
-                        height=400,
-                        disabled=True,
-                        label_visibility="collapsed",
-                        key="ta_clean",
+                    st.markdown("**Transcrição pré-processada** *(inconsistências em* 🟡 *— passe o mouse)*")
+                    _render_highlighted_transcript(
+                        hub.transcript_clean,
+                        tq.inconsistencies,
+                        key=f"hl_{tab_idx}",
                     )
                     _copy_button(hub.transcript_clean, key="tab_clean")
                     st.download_button(
