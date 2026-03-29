@@ -8,61 +8,61 @@
       "actor": "usuário",
       "is_decision": false,
       "task_type": "userTask",
-      "lane": "auditoria"
+      "lane": "Auditoria"
     },
     {
       "id": "S02",
-      "title": "Cadastrar escola (diretoria)",
-      "description": "O sistema exibe um formulário para cadastrar a primeira unidade (diretoria da escola). O usuário preenche: código (ex: 16), nome da escola (ex: ABC teste), diretor responsável, e indica se possui catálogo mestre (sim, obrigatório para escola). O usuário também anexa arquivos: organograma em PDF e e-mail de aprovação (mínimo 2 arquivos). O usuário pode salvar e continuar depois ou prosseguir.",
+      "title": "Cadastrar escola (primeira unidade)",
+      "description": "O sistema exibe um formulário para cadastrar a primeira unidade (diretoria) da escola. O usuário preenche: código da escola, nome da escola, diretor responsável, se possui catálogo mestre (sim, obrigatório para escola), e anexa arquivos (mínimo 2: organograma em PDF e e-mail de aprovação). O usuário pode salvar e continuar depois ou prosseguir.",
       "actor": "usuário",
       "is_decision": false,
       "task_type": "userTask",
-      "lane": "auditoria"
+      "lane": "Auditoria"
     },
     {
       "id": "S03",
       "title": "Cadastrar unidades inferiores",
-      "description": "O sistema exibe uma tabela para cadastrar as unidades subordinadas (ex: vice-diretoria, assessoria). O usuário clica em 'incluir' para cada unidade. Para cada unidade, preenche: tipo, código (ex: 16.1), nome, responsável, hierarquia (vinculação à unidade superior), e se possui catálogo técnico (sim/não). O sistema soma automaticamente o total de unidades e catálogos técnicos previstos. O usuário pode editar ou excluir unidades durante o cadastro.",
+      "description": "O sistema exibe uma tabela para cadastrar as unidades inferiores (subordinadas) do organograma. O usuário clica em 'incluir' para cada unidade. Para cada unidade, preenche: tipo, código, nome, responsável, hierarquia (vinculação à unidade superior), e se possui catálogo técnico (sim/não). O sistema soma automaticamente o total de unidades e catálogos técnicos previstos. O usuário pode salvar e continuar depois.",
       "actor": "usuário",
       "is_decision": false,
       "task_type": "userTask",
-      "lane": "auditoria"
+      "lane": "Auditoria"
     },
     {
       "id": "S04",
       "title": "Enviar para validação",
-      "description": "Após concluir o cadastro de todas as unidades, o usuário clica em 'enviar para validação'. O sistema encaminha o fluxo para a equipe de validação.",
+      "description": "Após cadastrar todas as unidades, o usuário clica em 'Enviar para validação'. O sistema encerra a atividade de cadastro e encaminha o fluxo para a equipe de validação.",
       "actor": "usuário",
       "is_decision": false,
       "task_type": "userTask",
-      "lane": "auditoria"
+      "lane": "Auditoria"
     },
     {
       "id": "S05",
-      "title": "Validar cadastro",
-      "description": "Um validador (da equipe de gestores validadores) acessa a tarefa. O validador revisa o cadastro: visualiza o organograma anexado, confere as unidades cadastradas na tabela, e pode clicar em cada linha para ver detalhes. O validador decide se aprova ou devolve para ajustes.",
+      "title": "Validar cadastro do organograma",
+      "description": "A atividade chega à equipe de gestores validadores de documentos. O validador executa a tarefa, visualiza o organograma anexado e os dados cadastrados, e decide se valida ou devolve para ajustes. Se devolver, deve preencher observações obrigatórias. Se validar, clica em 'Validar cadastro' para finalizar.",
       "actor": "validador",
       "is_decision": true,
       "task_type": "userTask",
-      "lane": "validação"
+      "lane": "Gestores Validadores"
     },
     {
       "id": "S06",
-      "title": "Cadastro validado",
-      "description": "Se o validador clicar em 'validar cadastro', o fluxo é finalizado. O sistema executa atividades automáticas (ex: gerar documento) e marca o workflow como encerrado. O organograma fica disponível para consulta, mas não pode ser editado nesta versão.",
-      "actor": "sistema",
-      "is_decision": false,
-      "task_type": "serviceTask",
-      "lane": "sistema"
-    },
-    {
-      "id": "S07",
       "title": "Devolver para ajustes",
-      "description": "Se o validador clicar em 'devolver para ajustes', deve preencher uma observação obrigatória com os ajustes necessários. O sistema retorna o fluxo para a atividade 'Cadastrar unidades inferiores' (S03) para correções.",
+      "description": "Caso o validador identifique problemas, clica em 'Devolver para ajustes', preenche observações obrigatórias e o fluxo retorna à atividade de cadastrar unidades inferiores (S03) para correções.",
       "actor": "validador",
       "is_decision": false,
       "task_type": "userTask",
-      "lane": "validação"
+      "lane": "Gestores Validadores"
+    },
+    {
+      "id": "S07",
+      "title": "Organograma validado e finalizado",
+      "description": "Após validação bem-sucedida, o sistema executa atividades automáticas (geração de documento, atualização de status) e finaliza o fluxo. O organograma fica disponível para consulta, mas não pode mais ser alterado nesta versão.",
+      "actor": "sistema",
+      "is_decision": false,
+      "task_type": "serviceTask",
+      "lane": null
     }
   ],
   "edges": [
@@ -93,25 +93,24 @@
     {
       "source": "S05",
       "target": "S06",
-      "label": "sim",
-      "condition": "validador aprova"
+      "label": "não",
+      "condition": "devolver para ajustes"
     },
     {
       "source": "S05",
       "target": "S07",
-      "label": "não",
-      "condition": "validador devolve"
+      "label": "sim",
+      "condition": "validar cadastro"
     },
     {
-      "source": "S07",
+      "source": "S06",
       "target": "S03",
       "label": "",
       "condition": ""
     }
   ],
   "lanes": [
-    "auditoria",
-    "validação",
-    "sistema"
+    "Auditoria",
+    "Gestores Validadores"
   ]
 }

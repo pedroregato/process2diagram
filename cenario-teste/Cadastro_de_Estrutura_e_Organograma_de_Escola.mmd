@@ -1,16 +1,16 @@
 flowchart LR
     S01["Iniciar cadastro de organograma"]
-    S02["Cadastrar escola diretoria"]
+    S02["Cadastrar escola primeira unidade"]
     S03["Cadastrar unidades inferiores"]
     S04["Enviar para validacao"]
-    S05{"Validar cadastro"}
-    S06["Cadastro validado"]
-    S07["Devolver para ajustes"]
+    S05{"Validar cadastro do organograma"}
+    S06["Devolver para ajustes"]
+    S07["Organograma validado e finalizado"]
     S01 --> S02
     S02 --> S03
     S03 --> S04
     S04 --> S05
-    S05 -->|sim| S06
-    S05 -->|nao| S07
-    S07 --> S03
+    S05 -->|nao| S06
+    S05 -->|sim| S07
+    S06 --> S03
     style S05 fill:#fff3cd,stroke:#f59e0b
