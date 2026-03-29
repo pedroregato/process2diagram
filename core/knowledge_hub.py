@@ -203,6 +203,41 @@ class KnowledgeHub:
     def new(cls) -> "KnowledgeHub":
         return cls()
 
+    # ── Session-state migration ───────────────────────────────────────────────
+
+    @classmethod
+    def migrate(cls, hub: "KnowledgeHub") -> "KnowledgeHub":
+        """
+        Migrate a hub loaded from st.session_state that may be missing fields
+        added in newer versions.
+
+        Call once after every st.session_state.get("hub") in app.py.
+        When adding a new field to any dataclass, add one line here.
+
+        Pattern:
+            if not hasattr(obj, 'field'):
+                obj.field = <default>
+        """
+        # ── v3.2: RequirementsModel added to hub ──────────────────────────────
+        if not hasattr(hub, 'requirements'):
+            hub.requirements = RequirementsModel()
+
+        # ── v3.2: drawio_xml removed from BPMNModel ───────────────────────────
+        if hasattr(hub.bpmn, 'drawio_xml'):
+            del hub.bpmn.__dict__['drawio_xml']
+
+        # ── v3.3: ActionItem.raised_by ────────────────────────────────────────
+        for ai in hub.minutes.action_items:
+            if not hasattr(ai, 'raised_by'):
+                ai.raised_by = None
+
+        # ── v3.3: RequirementItem.speaker ─────────────────────────────────────
+        for req in hub.requirements.requirements:
+            if not hasattr(req, 'speaker'):
+                req.speaker = None
+
+        return hub
+
     # ── Lifecycle helpers ─────────────────────────────────────────────────────
 
     def set_transcript(self, raw: str, clean: str = "") -> None:

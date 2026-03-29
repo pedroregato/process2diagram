@@ -441,18 +441,7 @@ if generate_btn:
 # Desta forma, download buttons, tab switches e outros widgets não apagam a UI
 hub = st.session_state.get("hub")
 if hub is not None:
-    # Migra hubs serializados de versões anteriores que não tinham todos os campos
-    if not hasattr(hub, 'requirements'):
-        from core.knowledge_hub import RequirementsModel
-        hub.requirements = RequirementsModel()
-    if hasattr(hub.bpmn, 'drawio_xml'):
-        del hub.bpmn.__dict__['drawio_xml']
-    for ai in hub.minutes.action_items:
-        if not hasattr(ai, 'raised_by'):
-            ai.raised_by = None
-    for req in hub.requirements.requirements:
-        if not hasattr(req, 'speaker'):
-            req.speaker = None
+    hub = KnowledgeHub.migrate(hub)
 
     # ── Metrics banner ────────────────────────────────────────────────────────
     col_a, col_b, col_c, col_d = st.columns(4)
