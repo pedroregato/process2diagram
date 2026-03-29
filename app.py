@@ -493,29 +493,28 @@ if hub is not None:
     if hub.transcript_quality.ready:
         with tabs[tab_idx]:
             tq = hub.transcript_quality
+            pp = getattr(hub, 'preprocessing', None)
 
-            # Grade badge colors
             grade_colors = {"A": "#16a34a", "B": "#65a30d", "C": "#ca8a04",
                             "D": "#ea580c", "E": "#dc2626"}
             grade_color = grade_colors.get(tq.grade, "#64748b")
 
-            # Top-line score + grade
+            # ── Top-line score + grade ─────────────────────────────────────
             st.markdown(
                 f"<div style='display:flex;align-items:center;gap:1.5rem;margin-bottom:1rem'>"
                 f"<div style='font-size:3.5rem;font-weight:700;color:{grade_color};font-family:monospace'>"
                 f"{tq.grade}</div>"
                 f"<div><div style='font-size:1.8rem;font-weight:600;color:{grade_color}'>"
                 f"{tq.overall_score:.1f} / 100</div>"
-                f"<div style='color:#64748b;font-size:0.9rem'>Nota ponderada da transcrição</div>"
+                f"<div style='color:#64748b;font-size:0.9rem'>Nota ponderada da transcrição (ASR bruta)</div>"
                 f"</div></div>",
                 unsafe_allow_html=True,
             )
 
-            # Criteria breakdown
+            # ── Criteria breakdown ─────────────────────────────────────────
             st.markdown("### Critérios de Avaliação")
             for c in tq.criteria:
                 weight_pct = int(c.weight * 100)
-                bar_color = grade_colors.get(_grade_from_score(c.score), "#64748b")
                 with st.expander(
                     f"**{c.criterion}** — {c.score}/100  (peso {weight_pct}%)",
                     expanded=False,
@@ -539,6 +538,71 @@ if hub is not None:
                     st.warning(f"**Recomendação:** {tq.recommendation}")
                 else:
                     st.error(f"**Recomendação:** {tq.recommendation}")
+
+            # ── Pré-processamento ──────────────────────────────────────────
+            if pp and pp.ready:
+                st.divider()
+                st.markdown("### 🧹 Pré-processamento Automático")
+
+                # Stats pills
+                stats_html = (
+                    f"<div style='display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.8rem'>"
+                    f"<span style='background:#f1f5f9;padding:4px 12px;border-radius:20px;"
+                    f"font-size:0.82rem'><b>{pp.fillers_removed}</b> fillers removidos</span>"
+                    f"<span style='background:#fef9c3;padding:4px 12px;border-radius:20px;"
+                    f"font-size:0.82rem'><b>{pp.artifact_turns}</b> turnos de artefato sinalizados "
+                    f"<code>[?]</code></span>"
+                    f"<span style='background:#f1f5f9;padding:4px 12px;border-radius:20px;"
+                    f"font-size:0.82rem'><b>{pp.repetitions_collapsed}</b> repetições colapsadas</span>"
+                    f"</div>"
+                )
+                st.markdown(stats_html, unsafe_allow_html=True)
+
+                if pp.metadata_issues:
+                    for issue in pp.metadata_issues:
+                        st.warning(f"⚠️ {issue}")
+
+                st.caption(
+                    "Turnos marcados com `[?]` são candidatos a artefatos de ASR. "
+                    "Revise antes de usar o texto pré-processado como fonte definitiva."
+                )
+
+                # Before / After
+                col_raw, col_clean = st.columns(2)
+                with col_raw:
+                    st.markdown("**Transcrição original (ASR bruta)**")
+                    st.text_area(
+                        label="raw",
+                        value=hub.transcript_raw,
+                        height=400,
+                        disabled=True,
+                        label_visibility="collapsed",
+                        key="ta_raw",
+                    )
+                    st.download_button(
+                        "⬇ Baixar original (.txt)",
+                        data=hub.transcript_raw,
+                        file_name="transcricao_original.txt",
+                        mime="text/plain",
+                        key="dl_raw",
+                    )
+                with col_clean:
+                    st.markdown("**Transcrição pré-processada** *(sujeita a curadoria)*")
+                    st.text_area(
+                        label="clean",
+                        value=hub.transcript_clean,
+                        height=400,
+                        disabled=True,
+                        label_visibility="collapsed",
+                        key="ta_clean",
+                    )
+                    st.download_button(
+                        "⬇ Baixar pré-processada (.txt)",
+                        data=hub.transcript_clean,
+                        file_name="transcricao_preprocessada.txt",
+                        mime="text/plain",
+                        key="dl_clean",
+                    )
 
         tab_idx += 1
 

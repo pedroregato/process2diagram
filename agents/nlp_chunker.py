@@ -104,9 +104,14 @@ class NLPChunker:
     # ── Public API ────────────────────────────────────────────────────────────
 
     def run(self, hub: KnowledgeHub) -> KnowledgeHub:
-        """Process transcript and populate hub.nlp. Also sets hub.transcript_clean."""
-        raw = hub.transcript_raw
-        clean = self._clean(raw)
+        """Process transcript and populate hub.nlp. Also sets hub.transcript_clean.
+
+        If hub.transcript_clean is already populated (by TranscriptPreprocessor),
+        uses it as the base and applies whitespace normalization only.
+        Otherwise falls back to the full _clean() pass.
+        """
+        base = hub.transcript_clean if hub.transcript_clean else hub.transcript_raw
+        clean = self._normalize_whitespace(base)
         hub.transcript_clean = clean
 
         segments = self._segment_and_classify(clean)
@@ -128,7 +133,12 @@ class NLPChunker:
 
     @staticmethod
     def _clean(text: str) -> str:
-        """Normalize whitespace and remove spoken-language fillers."""
+        """Normalize whitespace and remove spoken-language fillers.
+
+        Kept for backward compatibility. In the main pipeline this is no longer
+        called directly — use _normalize_whitespace() instead, since filler
+        removal is handled upstream by TranscriptPreprocessor.
+        """
         fillers = re.compile(
             r"\b(ã+|é+|ah+|eh+|uh+|hmm+|né|tá|tô|aí|bom|então\.\.\.|"
             r"type\.\.\.|um+|uh+|you know|like|so|well)\b",
@@ -137,6 +147,18 @@ class NLPChunker:
         text = re.sub(r"\r\n|\r", "\n", text)
         text = fillers.sub("", text)
         text = re.sub(r"\s{2,}", " ", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
+
+    @staticmethod
+    def _normalize_whitespace(text: str) -> str:
+        """Light normalization pass: line endings, excess whitespace only.
+
+        Does NOT remove fillers — those are already handled by TranscriptPreprocessor.
+        Called by run() when transcript_clean has been pre-populated.
+        """
+        text = re.sub(r"\r\n|\r", "\n", text)
+        text = re.sub(r"[^\S\n]{2,}", " ", text)   # collapse inline spaces only
         text = re.sub(r"\n{3,}", "\n\n", text)
         return text.strip()
 

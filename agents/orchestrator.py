@@ -28,7 +28,8 @@ from agents.agent_bpmn import AgentBPMN
 from agents.agent_minutes import AgentMinutes
 from agents.agent_requirements import AgentRequirements
 from agents.agent_transcript_quality import AgentTranscriptQuality
-from core.knowledge_hub import KnowledgeHub
+from core.knowledge_hub import KnowledgeHub, PreprocessingModel
+from modules.transcript_preprocessor import preprocess
 
 
 # Type alias for progress callbacks
@@ -48,7 +49,7 @@ class Orchestrator:
     """
 
     # Agent execution plan for PC1
-    _PLAN = ["transcript_quality", "nlp", "bpmn", "minutes", "requirements"]
+    _PLAN = ["transcript_quality", "preprocessing", "nlp", "bpmn", "minutes", "requirements"]
 
     def __init__(
         self,
@@ -105,6 +106,25 @@ class Orchestrator:
                 self._progress("Agente Qualidade", f"error: {exc}")
                 # Quality failure is non-fatal — pipeline continues
                 hub.bump()
+
+        # ── Step 0.5: Transcript Preprocessor (no LLM) ───────────────────────
+        self._progress("Pré-processamento", "running")
+        try:
+            result = preprocess(hub.transcript_raw)
+            hub.transcript_clean = result.clean_text
+            hub.preprocessing = PreprocessingModel(
+                fillers_removed=result.fillers_removed,
+                artifact_turns=result.artifact_turns,
+                repetitions_collapsed=result.repetitions_collapsed,
+                metadata_issues=result.metadata_issues,
+                ready=True,
+            )
+            hub.bump()
+            self._progress("Pré-processamento", "done")
+        except Exception as exc:
+            self._progress("Pré-processamento", f"error: {exc}")
+            # Preprocessing failure is non-fatal — pipeline continues with raw text
+            hub.bump()
 
         # ── Step 1: NLP Chunker (no LLM) ─────────────────────────────────────
         self._progress("NLP / Chunker", "running")

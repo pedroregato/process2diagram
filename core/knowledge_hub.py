@@ -134,6 +134,18 @@ class RequirementsModel:
     ready: bool = False
 
 
+# ── Preprocessing Model ───────────────────────────────────────────────────────
+
+@dataclass
+class PreprocessingModel:
+    """Output of the TranscriptPreprocessor (rule-based, no LLM)."""
+    fillers_removed: int = 0
+    artifact_turns: int = 0
+    repetitions_collapsed: int = 0
+    metadata_issues: list[str] = field(default_factory=list)
+    ready: bool = False
+
+
 # ── Transcript Quality Model ──────────────────────────────────────────────────
 
 @dataclass
@@ -212,6 +224,7 @@ class KnowledgeHub:
     transcript_raw: str = ""
     transcript_clean: str = ""
     transcript_quality: TranscriptQualityModel = field(default_factory=TranscriptQualityModel)
+    preprocessing: PreprocessingModel = field(default_factory=PreprocessingModel)
     nlp: NLPEnvelope = field(default_factory=NLPEnvelope)
     bpmn: BPMNModel = field(default_factory=BPMNModel)
     minutes: MinutesModel = field(default_factory=MinutesModel)
@@ -240,6 +253,10 @@ class KnowledgeHub:
             if not hasattr(obj, 'field'):
                 obj.field = <default>
         """
+        # ── v3.5: PreprocessingModel added to hub ─────────────────────────────
+        if not hasattr(hub, 'preprocessing'):
+            hub.preprocessing = PreprocessingModel()
+
         # ── v3.4: TranscriptQualityModel added to hub ─────────────────────────
         if not hasattr(hub, 'transcript_quality'):
             hub.transcript_quality = TranscriptQualityModel()
@@ -290,6 +307,7 @@ class KnowledgeHub:
     def status_summary(self) -> dict[str, bool]:
         return {
             "transcript_quality": self.transcript_quality.ready,
+            "preprocessing": self.preprocessing.ready,
             "nlp": self.nlp.ready,
             "bpmn": self.bpmn.ready,
             "minutes": self.minutes.ready,
