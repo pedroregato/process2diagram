@@ -157,6 +157,14 @@ class CriterionScore:
 
 
 @dataclass
+class InconsistencyItem:
+    speaker: str
+    timestamp: str
+    text: str
+    reason: str = ""   # LLM explanation: why this is likely background noise / artifact
+
+
+@dataclass
 class TranscriptQualityModel:
     """Output of the TranscriptQuality Agent."""
     criteria: list[CriterionScore] = field(default_factory=list)
@@ -164,6 +172,7 @@ class TranscriptQualityModel:
     grade: str = ""              # A / B / C / D / E
     overall_summary: str = ""
     recommendation: str = ""
+    inconsistencies: list[InconsistencyItem] = field(default_factory=list)
     ready: bool = False
 
 
@@ -256,6 +265,10 @@ class KnowledgeHub:
         # ── v3.5: PreprocessingModel added to hub ─────────────────────────────
         if not hasattr(hub, 'preprocessing'):
             hub.preprocessing = PreprocessingModel()
+
+        # ── v3.6: InconsistencyItem list added to TranscriptQualityModel ─────────
+        if not hasattr(hub.transcript_quality, 'inconsistencies'):
+            hub.transcript_quality.inconsistencies = []
 
         # ── v3.4: TranscriptQualityModel added to hub ─────────────────────────
         if not hasattr(hub, 'transcript_quality'):

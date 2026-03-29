@@ -71,6 +71,35 @@ def _grade_from_score(score: int) -> str:
     return "E"
 
 
+def _copy_button(text: str, key: str, label: str = "📋 Copiar") -> None:
+    """Render a clipboard copy button via JavaScript (works in Streamlit Cloud iframes)."""
+    import json as _json
+    safe = _json.dumps(text)   # properly escapes quotes, backslashes, newlines
+    components.html(
+        f"""
+        <button id="cbtn_{key}"
+          onclick="(function(){{
+            var el = document.createElement('textarea');
+            el.value = {safe};
+            el.style.position='fixed'; el.style.opacity='0';
+            document.body.appendChild(el);
+            el.focus(); el.select();
+            try {{ document.execCommand('copy'); }} catch(e) {{}}
+            document.body.removeChild(el);
+            var b = document.getElementById('cbtn_{key}');
+            b.textContent = '✅ Copiado!';
+            setTimeout(function(){{ b.textContent = '{label}'; }}, 2000);
+          }})()"
+          style="padding:5px 14px;border:1px solid #cbd5e1;border-radius:6px;
+                 background:#f8fafc;cursor:pointer;font-size:0.82rem;
+                 font-family:sans-serif;margin-top:4px">
+          {label}
+        </button>
+        """,
+        height=42,
+    )
+
+
 def render_mermaid_block(mermaid_text: str, *, show_code: bool = True, key_suffix: str = "") -> None:
     """
     Renderiza Mermaid com pan/zoom/fit interativo, boa resolução,
@@ -430,11 +459,13 @@ if "pp_result" in st.session_state:
         st.markdown("**Original (somente leitura)**")
         st.text_area("orig", value=transcript_text, height=300,
                      disabled=True, label_visibility="collapsed", key="ta_orig_pre")
+        _copy_button(transcript_text, key="pre_orig")
     with col_clean:
         st.markdown("**Pré-processada — edite aqui**")
         curated = st.text_area("clean", value=st.session_state.get("curated_clean", pp.clean_text),
                                height=300, label_visibility="collapsed", key="ta_curated")
         st.session_state["curated_clean"] = curated
+        _copy_button(curated, key="pre_clean")
 
 st.divider()
 
@@ -593,6 +624,20 @@ if hub is not None:
                 else:
                     st.error(f"**Recomendação:** {tq.recommendation}")
 
+            # ── Inconsistências detectadas pela IA ────────────────────────
+            if tq.inconsistencies:
+                st.divider()
+                st.markdown(f"### 🔍 Inconsistências Detectadas pela IA  `{len(tq.inconsistencies)}`")
+                st.caption(
+                    "Trechos identificados como prováveis ruídos de fundo, "
+                    "captura de microfone aberto ou artefatos de ASR. "
+                    "Use como guia para a curadoria manual."
+                )
+                for inc in tq.inconsistencies:
+                    label = f"**{inc.speaker}** `{inc.timestamp}` — *{inc.text}*"
+                    with st.expander(label, expanded=False):
+                        st.markdown(f"**Motivo:** {inc.reason}")
+
             # ── Pré-processamento ──────────────────────────────────────────
             if pp and pp.ready:
                 st.divider()
@@ -633,6 +678,7 @@ if hub is not None:
                         label_visibility="collapsed",
                         key="ta_raw",
                     )
+                    _copy_button(hub.transcript_raw, key="tab_orig")
                     st.download_button(
                         "⬇ Baixar original (.txt)",
                         data=hub.transcript_raw,
@@ -650,6 +696,7 @@ if hub is not None:
                         label_visibility="collapsed",
                         key="ta_clean",
                     )
+                    _copy_button(hub.transcript_clean, key="tab_clean")
                     st.download_button(
                         "⬇ Baixar pré-processada (.txt)",
                         data=hub.transcript_clean,

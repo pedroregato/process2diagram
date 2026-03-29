@@ -20,7 +20,7 @@
 from __future__ import annotations
 
 from agents.base_agent import BaseAgent
-from core.knowledge_hub import KnowledgeHub, TranscriptQualityModel, CriterionScore
+from core.knowledge_hub import KnowledgeHub, TranscriptQualityModel, CriterionScore, InconsistencyItem
 
 
 # Canonical criterion names exactly as the LLM is instructed to return them,
@@ -111,10 +111,22 @@ class AgentTranscriptQuality(BaseAgent):
 
         overall = round(weighted_sum, 1)
 
+        # Parse inconsistencies (LLM-detected background noise / semantic artifacts)
+        inconsistencies: list[InconsistencyItem] = []
+        for item in data.get("inconsistencies", []):
+            if isinstance(item, dict) and "text" in item:
+                inconsistencies.append(InconsistencyItem(
+                    speaker=item.get("speaker", ""),
+                    timestamp=item.get("timestamp", ""),
+                    text=item.get("text", ""),
+                    reason=item.get("reason", ""),
+                ))
+
         return TranscriptQualityModel(
             criteria=criteria_scores,
             overall_score=overall,
             grade=_grade(overall),
             overall_summary=data.get("overall_summary", ""),
             recommendation=data.get("recommendation", ""),
+            inconsistencies=inconsistencies,
         )

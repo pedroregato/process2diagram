@@ -131,6 +131,27 @@ Indicators: long unpunctuated blocks, missing commas in lists, no question marks
 
 ---
 
+## Step 1 — Inconsistency Detection (BEFORE scoring)
+
+Before scoring, scan every speaker turn for content that appears to be **background noise
+captured by an open microphone**, rather than intentional speech by the attributed speaker.
+
+Patterns to flag:
+- Isolated proper nouns (names, surnames) with no grammatical connection to the surrounding
+  dialogue — e.g. `"Os Teixeira está."`, `"Santos."`, `"Mello."`, `"Porto ano."`
+- Sentences that are grammatically complete but semantically disconnected from the meeting
+  topic — e.g. `"Good coisa dessa, Jesus."`, `"destinhos japonês"`
+- Phonetic approximations of numbers or codes — e.g. `"Audi zero 01"` (likely a system code)
+- Single words that are clearly a surname of someone physically present in the room
+  but not part of the meeting dialogue
+- Repetition bursts that signal audio codec failure — e.g. `"Ivo Ivo Ivo Ivo Ivo"`
+
+For each such turn, add one entry to `inconsistencies`.
+Cap at **20 entries** — prioritize the most impactful ones.
+If no inconsistencies are found, return an empty array.
+
+---
+
 ## Output Format
 
 Return a **single JSON object** with exactly this structure:
@@ -170,7 +191,15 @@ Return a **single JSON object** with exactly this structure:
     }
   ],
   "overall_summary": "<4-6 sentence narrative: state the artifact_ratio, identify the main failure patterns, name the strongest and weakest criteria, give an honest overall assessment>",
-  "recommendation": "<Actionable recommendation based on the grade: what the user should do — e.g., proceed as-is (A/B), manually review artifact turns before processing (C), use a different ASR tool or re-record (D/E)>"
+  "recommendation": "<Actionable recommendation based on the grade: what the user should do — e.g., proceed as-is (A/B), manually review artifact turns before processing (C), use a different ASR tool or re-record (D/E)>",
+  "inconsistencies": [
+    {
+      "speaker": "<exact speaker name as it appears in the transcript>",
+      "timestamp": "<timestamp string, e.g. '1:04'>",
+      "text": "<the exact problematic text>",
+      "reason": "<1-2 sentences: why this is likely background noise, ambient capture, or ASR artifact — not intentional speech>"
+    }
+  ]
 }
 ```
 
@@ -182,4 +211,6 @@ Return a **single JSON object** with exactly this structure:
 - Cite specific examples (actual words/phrases from the transcript) in each justification.
 - State artifact_ratio percentage in `overall_summary`.
 - Be honest: a transcript with >15% artifact turns is Poor or Unacceptable, not Good.
+- `inconsistencies` must be a JSON array (empty `[]` if none found, never omit the key).
+- Each inconsistency entry must have all four fields: speaker, timestamp, text, reason.
 - Return ONLY the JSON object — no markdown fences, no preamble.
