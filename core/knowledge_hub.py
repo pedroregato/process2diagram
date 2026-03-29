@@ -62,6 +62,27 @@ class BPMNEdge:
 
 
 @dataclass
+class BPMNPoolData:
+    """One participant's process in a multi-pool (collaboration) diagram."""
+    pool_id: str
+    name: str
+    steps: list[BPMNStep] = field(default_factory=list)
+    edges: list[BPMNEdge] = field(default_factory=list)
+    lanes: list[str] = field(default_factory=list)
+
+
+@dataclass
+class BPMNMessageFlow:
+    """A cross-pool message connection in a collaboration diagram."""
+    id: str
+    source_pool: str    # pool_id of source pool
+    source_step: str    # step id within source pool
+    target_pool: str    # pool_id of target pool
+    target_step: str    # step id within target pool ("start" → startEvent)
+    name: str = ""
+
+
+@dataclass
 class BPMNModel:
     """Output of the BPMN Agent."""
     name: str = ""
@@ -71,10 +92,14 @@ class BPMNModel:
     bpmn_xml: str = ""            # OMG BPMN 2.0 XML
     mermaid: str = ""
     ready: bool = False
+    # Multi-pool (collaboration) — populated when LLM returns pools format
+    is_collaboration: bool = False
+    pool_models: list[BPMNPoolData] = field(default_factory=list)
+    message_flows_data: list[BPMNMessageFlow] = field(default_factory=list)
 
     def to_process(self):
         """Bridge to legacy schema.Process for diagram generators."""
-        from core.schema import Process, Step, Edge
+        from core.schema import Process, Step, Edge  # type: ignore
         steps = [Step(
             id=s.id, title=s.title, description=s.description,
             actor=s.actor, is_decision=s.is_decision
@@ -277,6 +302,14 @@ class KnowledgeHub:
         # ── v3.2: RequirementsModel added to hub ──────────────────────────────
         if not hasattr(hub, 'requirements'):
             hub.requirements = RequirementsModel()
+
+        # ── v3.7: multi-pool collaboration fields added to BPMNModel ─────────
+        if not hasattr(hub.bpmn, 'is_collaboration'):
+            hub.bpmn.is_collaboration = False
+        if not hasattr(hub.bpmn, 'pool_models'):
+            hub.bpmn.pool_models = []
+        if not hasattr(hub.bpmn, 'message_flows_data'):
+            hub.bpmn.message_flows_data = []
 
         # ── v3.2: drawio_xml removed from BPMNModel ───────────────────────────
         if hasattr(hub.bpmn, 'drawio_xml'):

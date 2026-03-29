@@ -13,7 +13,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 import xml.etree.ElementTree as ET
-from modules.schema import BpmnProcess, BpmnElement, BpmnLane, BpmnPool, SequenceFlow
+from modules.schema import BpmnProcess, BpmnElement, BpmnLane, BpmnPool, SequenceFlow, MessageFlow
 
 # ── Namespaces ────────────────────────────────────────────────────────────────
 _NS = {
@@ -41,6 +41,7 @@ LANE_HEADER_W     = 100
 POOL_HEADER_W     = 100
 FIRST_X           = 80
 MIN_LANE_H        = 180
+POOL_GAP          = 50    # vertical gap between pools in a collaboration
 
 
 # ── Link-event crossing elimination ──────────────────────────────────────────
@@ -1111,15 +1112,18 @@ def _build_process_xml(defs, bpmn, process_id, lane_assignment):
 
     if bpmn.pools:
         pool = bpmn.pools[0]
-        lset = _sub(proc, B + "laneSet", {"id": pool.id + "_lset"})
-        lane_members = {lane.id: [] for lane in pool.lanes}
-        for eid, lid in lane_assignment.items():
-            if lid in lane_members:
-                lane_members[lid].append(eid)
-        for lane in pool.lanes:
-            ln = _sub(lset, B + "lane", {"id": lane.id, "name": lane.name})
-            for eid in lane_members[lane.id]:
-                _sub(ln, B + "flowNodeRef", {}).text = eid
+        # Exclude synthetic layout lanes from the BPMN process XML
+        real_lanes = [l for l in pool.lanes if not l.id.endswith(_SYN_LANE_SUFFIX)]
+        if real_lanes:
+            lset = _sub(proc, B + "laneSet", {"id": pool.id + "_lset"})
+            lane_members = {lane.id: [] for lane in real_lanes}
+            for eid, lid in lane_assignment.items():
+                if lid in lane_members:
+                    lane_members[lid].append(eid)
+            for lane in real_lanes:
+                ln = _sub(lset, B + "lane", {"id": lane.id, "name": lane.name})
+                for eid in lane_members[lane.id]:
+                    _sub(ln, B + "flowNodeRef", {}).text = eid
 
     for el in bpmn.elements:
         _build_el(proc, el)
@@ -1128,20 +1132,272 @@ def _build_process_xml(defs, bpmn, process_id, lane_assignment):
     return proc
 
 
+def _is_multi_pool(bpmn: BpmnProcess) -> bool:
+    """True when each pool carries its own elements/flows (collaboration mode)."""
+    return bool(bpmn.pools) and any(pool.elements for pool in bpmn.pools)
+
+
+_SYN_LANE_SUFFIX = "_syn_main"   # synthetic single-lane marker for pools without lanes
+
+
+def _pool_as_process(pool: BpmnPool) -> BpmnProcess:
+    """
+    Wrap a single pool's elements + flows in a thin BpmnProcess so that the
+    existing _assign_lanes / _compute_layout / _apply_link_events functions,
+    which all operate on BpmnProcess, work without modification per-pool.
+
+    When the pool has no lanes, a synthetic single lane is injected so that
+    _compute_layout (which requires at least one lane to position elements)
+    produces valid coordinates.  The synthetic lane is NOT emitted in the DI
+    output — it is identified by the _SYN_LANE_SUFFIX marker.
+    """
+    lanes = pool.lanes
+    if not lanes and pool.elements:
+        syn_lane = BpmnLane(
+            id=pool.id + _SYN_LANE_SUFFIX,
+            name="",
+            element_ids=[el.id for el in pool.elements
+                         if el.type != "boundaryEvent"],
+        )
+        lanes = [syn_lane]
+    return BpmnProcess(
+        name=pool.name,
+        elements=pool.elements,   # intentional reference — mutations propagate
+        flows=pool.flows,         # intentional reference
+        pools=[BpmnPool(id=pool.id, name=pool.name, lanes=lanes)],
+    )
+
+
+def _generate_bpmn_xml_multi(bpmn: BpmnProcess) -> str:
+    """
+    Generate BPMN 2.0 XML for a collaboration with N pools stacked vertically.
+
+    Pipeline per pool
+    -----------------
+    1. Assign lanes  (per pool, using existing _assign_lanes)
+    2. Compute column-based layout
+    3. Link-event crossing elimination (within each pool's sequence flows)
+    4. Apply y_offset so pools don't overlap vertically
+
+    Message flows are rendered as dashed BPMNEdge entries in the DI section.
+    """
+    collab_id = "collab_1"
+
+    # ── Per-pool bookkeeping ──────────────────────────────────────────────────
+    pool_procs:         list[BpmnProcess]       = []
+    lane_assignments:   list[dict]              = []
+    process_ids:        list[str]               = []
+
+    for i, pool in enumerate(bpmn.pools):
+        pool_proc  = _pool_as_process(pool)
+        process_id = f"process_{i + 1}"
+        la         = _assign_lanes(pool_proc)
+        pool_procs.append(pool_proc)
+        lane_assignments.append(la)
+        process_ids.append(process_id)
+
+    # ── Pass 1: build XML skeleton ────────────────────────────────────────────
+    defs   = _make_defs()
+    collab = _sub(defs, B + "collaboration", {"id": collab_id})
+    for i, pool in enumerate(bpmn.pools):
+        _build_process_xml(defs, pool_procs[i], process_ids[i], lane_assignments[i])
+        _sub(collab, B + "participant", {
+            "id": pool.id, "name": pool.name, "processRef": process_ids[i],
+        })
+    for mf in bpmn.message_flows:
+        mf_el = _sub(collab, B + "messageFlow", {
+            "id": mf.id, "sourceRef": mf.source, "targetRef": mf.target,
+        })
+        if mf.name:
+            mf_el.set("name", mf.name)
+
+    # ── Pass 2: layout + crossing elimination per pool ────────────────────────
+    all_shapes:      dict = {}   # element_id → (x, y, w, h) absolute
+    all_pool_shapes: dict = {}   # pool_id / lane_id → (x, y, w, h) absolute
+    MAX_ITERATIONS = 3
+    y_offset = 0
+
+    for i, pool in enumerate(bpmn.pools):
+        pp = pool_procs[i]
+        la = lane_assignments[i]
+
+        shapes, pool_shapes = _compute_layout(pp, la)
+        for _iter in range(MAX_ITERATIONS):
+            if not _apply_link_events(pp, la, shapes):
+                break
+            shapes, pool_shapes = _compute_layout(pp, la)
+
+        # Synchronise pool.elements / pool.flows after link-event injection
+        pool.elements = pp.elements
+        pool.flows    = pp.flows
+
+        # Compute this pool's total height
+        pool_h = pool_shapes.get(pool.id, (0, 0, 0, MIN_LANE_H))[3]
+
+        # Apply y_offset
+        for eid, (x, y, w, h) in shapes.items():
+            all_shapes[eid] = (x, y + y_offset, w, h)
+        for pid, (x, y, w, h) in pool_shapes.items():
+            all_pool_shapes[pid] = (x, y + y_offset, w, h)
+
+        y_offset += pool_h + POOL_GAP
+
+    # ── Pass 3: rebuild defs with updated elements (link events added) ────────
+    defs   = _make_defs()
+    collab = _sub(defs, B + "collaboration", {"id": collab_id})
+    for i, pool in enumerate(bpmn.pools):
+        _build_process_xml(defs, pool_procs[i], process_ids[i], lane_assignments[i])
+        _sub(collab, B + "participant", {
+            "id": pool.id, "name": pool.name, "processRef": process_ids[i],
+        })
+    for mf in bpmn.message_flows:
+        mf_el = _sub(collab, B + "messageFlow", {
+            "id": mf.id, "sourceRef": mf.source, "targetRef": mf.target,
+        })
+        if mf.name:
+            mf_el.set("name", mf.name)
+
+    # ── Pass 4: build DI ──────────────────────────────────────────────────────
+    diagram = _sub(defs, DI + "BPMNDiagram", {"id": "diagram_1"})
+    plane   = _sub(diagram, DI + "BPMNPlane",
+                   {"id": "plane_1", "bpmnElement": collab_id})
+
+    # Synthetic lanes are not real BPMN lanes — skip them in DI
+    real_lane_ids = {lane.id for pool in bpmn.pools for lane in pool.lanes}
+    _event_types  = ("startEvent", "endEvent",
+                     "intermediateThrowEvent", "intermediateCatchEvent")
+
+    # Pool and lane shapes
+    for eid, (x, y, w, h) in all_pool_shapes.items():
+        if eid.endswith(_SYN_LANE_SUFFIX):
+            continue   # synthetic layout lane — not a real BPMN lane
+        is_lane = eid in real_lane_ids
+        shape   = _sub(plane, DI + "BPMNShape",
+                       {"id": eid + "_di", "bpmnElement": eid,
+                        "isHorizontal": "true"})
+        b = _sub(shape, DC + "Bounds")
+        b.set("x", str(int(x))); b.set("y", str(int(y)))
+        b.set("width", str(int(w))); b.set("height", str(int(h)))
+        if is_lane:
+            lbl = _sub(shape, DI + "BPMNLabel")
+            lb  = _sub(lbl, DC + "Bounds")
+            lb.set("x",      str(int(x + 10)))
+            lb.set("y",      str(int(y + 10)))
+            lb.set("width",  str(LANE_HEADER_W - 20))
+            lb.set("height", str(int(h - 20)))
+
+    # Element shapes
+    all_elements = [el for pool in bpmn.pools for el in pool.elements]
+    for el in all_elements:
+        if el.id not in all_shapes:
+            continue
+        coords = all_shapes[el.id]
+        if not _valid(coords):
+            continue
+        x, y, w, h = coords
+        shape = _sub(plane, DI + "BPMNShape",
+                     {"id": el.id + "_di", "bpmnElement": el.id})
+        b = _sub(shape, DC + "Bounds")
+        b.set("x", str(int(x))); b.set("y", str(int(y)))
+        b.set("width", str(int(w))); b.set("height", str(int(h)))
+        lbl = _sub(shape, DI + "BPMNLabel")
+        lb  = _sub(lbl, DC + "Bounds")
+        lbl_y = (y - 22) if el.type in _event_types else (y + h + 2)
+        lb.set("x", str(int(x))); lb.set("y", str(int(lbl_y)))
+        lb.set("width", str(int(w))); lb.set("height", "20")
+
+    # Sequence flow edges (per pool — reuse _build_di waypoint logic)
+    all_flows = [f for pool in bpmn.pools for f in pool.flows]
+    for flow in all_flows:
+        src = all_shapes.get(flow.source)
+        tgt = all_shapes.get(flow.target)
+        if not src or not tgt or not _valid(src) or not _valid(tgt):
+            continue
+        edge = _sub(plane, DI + "BPMNEdge",
+                    {"id": flow.id + "_di", "bpmnElement": flow.id})
+        sx, sy, sw, sh = src
+        tx, ty, tw, th = tgt
+        x_overlap   = (sx < tx + tw) and (sx + sw > tx)
+        is_backward = (not x_overlap) and (sx > tx)
+        if x_overlap and (sy + sh) <= ty:
+            _wp(edge, sx + sw / 2, sy + sh)
+            _wp(edge, tx + tw / 2, ty)
+        elif x_overlap and sy >= (ty + th):
+            _wp(edge, sx + sw / 2, sy)
+            _wp(edge, tx + tw / 2, ty + th)
+        elif is_backward:
+            route_y = max(sy + sh, ty + th) + 25
+            _wp(edge, sx + sw,  sy + sh / 2)
+            _wp(edge, sx + sw,  route_y)
+            _wp(edge, tx,       route_y)
+            _wp(edge, tx,       ty + th / 2)
+        else:
+            _wp(edge, sx + sw, sy + sh / 2)
+            _wp(edge, tx,      ty + th / 2)
+        if flow.name:
+            if is_backward:
+                route_y = max(sy + sh, ty + th) + 25
+                mid_x = int((sx + sw + tx) / 2) - 30
+                mid_y = int(route_y) + 4
+            else:
+                mid_x = int((sx + sw + tx) / 2) - 30
+                mid_y = int((sy + sh / 2 + ty + th / 2) / 2) - 16
+            lbl = _sub(edge, DI + "BPMNLabel")
+            _sub(lbl, DC + "Bounds", {
+                "x": str(mid_x), "y": str(mid_y),
+                "width": "60", "height": "20",
+            })
+
+    # Message flow edges — vertical routing between pools
+    for mf in bpmn.message_flows:
+        src = all_shapes.get(mf.source)
+        tgt = all_shapes.get(mf.target)
+        if not src or not tgt or not _valid(src) or not _valid(tgt):
+            continue
+        edge = _sub(plane, DI + "BPMNEdge",
+                    {"id": mf.id + "_di", "bpmnElement": mf.id})
+        sx, sy, sw, sh = src
+        tx, ty, tw, th = tgt
+        # Route bottom→top or top→bottom depending on pool order
+        if sy < ty:
+            _wp(edge, sx + sw / 2, sy + sh)    # source bottom-centre
+            _wp(edge, tx + tw / 2, ty)          # target top-centre
+        else:
+            _wp(edge, sx + sw / 2, sy)          # source top-centre
+            _wp(edge, tx + tw / 2, ty + th)     # target bottom-centre
+        if mf.name:
+            mid_x = int((sx + sw / 2 + tx + tw / 2) / 2) - 40
+            mid_y = int((sy + ty) / 2) - 10
+            lbl = _sub(edge, DI + "BPMNLabel")
+            _sub(lbl, DC + "Bounds", {
+                "x": str(mid_x), "y": str(mid_y),
+                "width": "80", "height": "20",
+            })
+
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + \
+           ET.tostring(defs, encoding="unicode")
+
+
 def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
     """
     Generate BPMN 2.0 XML string.
     Save with .bpmn extension to open in Camunda, Bizagi, draw.io, bpmn.io.
 
-    Pipeline
-    --------
+    Dispatches to multi-pool path when pools carry their own elements/flows
+    (collaboration mode produced by AgentBPMN for multi-participant transcripts).
+
+    Single-pool pipeline
+    --------------------
     1. Assign lanes
     2. Build process XML (first pass)
     3. Compute column-based layout → concrete shapes
     4. Iteratively detect crossing edges → replace with Link Event pairs
-       (repeat until no new crossings found, max 5 iterations)
+       (repeat until no new crossings found, max 3 iterations)
     5. Build DI (diagram interchange)
     """
+    if _is_multi_pool(bpmn):
+        return _generate_bpmn_xml_multi(bpmn)
+
     process_id = "process_1"
     lane_assignment = _assign_lanes(bpmn)
 
@@ -1162,11 +1418,6 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
     shapes, pool_shapes = _compute_layout(bpmn, lane_assignment)
 
     # ── Pass 3: link-event crossing elimination ──────────────────────────────
-    # Pass 1 replaces span≥2 and long cross-lane flows with link event pairs.
-    # Pass 2 (geometric only) catches flows that now cross the newly-placed
-    # catch elements — e.g. S01→S02 crossing catch flows added in pass 1.
-    # _detect_crossings already excludes flows involving link events, so
-    # the second pass only ever flags original flows — no explosion risk.
     MAX_ITERATIONS = 3
     for _iteration in range(MAX_ITERATIONS):
         if not _apply_link_events(bpmn, lane_assignment, shapes):

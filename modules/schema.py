@@ -74,10 +74,23 @@ class BpmnLane:
 
 
 @dataclass
+class MessageFlow:
+    """Cross-pool message flow for BPMN collaboration diagrams."""
+    id: str
+    source: str    # element id in the flat XML namespace
+    target: str
+    name: str = ""
+
+
+@dataclass
 class BpmnPool:
     id: str
     name: str
     lanes: list = field(default_factory=list)
+    # Per-pool elements/flows for multi-pool collaboration diagrams.
+    # When populated, this pool owns its own sub-process (multi-pool mode).
+    elements: list = field(default_factory=list)
+    flows: list = field(default_factory=list)
 
 
 @dataclass
@@ -87,6 +100,7 @@ class BpmnProcess:
     elements: list = field(default_factory=list)
     flows: list = field(default_factory=list)
     pools: list = field(default_factory=list)
+    message_flows: list = field(default_factory=list)   # cross-pool MessageFlow list
 
     def get_element(self, eid: str):
         return next((e for e in self.elements if e.id == eid), None)
