@@ -108,17 +108,26 @@ class Orchestrator:
                 hub.bump()
 
         # ── Step 0.5: Transcript Preprocessor (no LLM) ───────────────────────
-        self._progress("Pré-processamento", "running")
+        # Skip if transcript_clean was already set externally (curated by user)
+        already_curated = (
+            hub.transcript_clean
+            and hub.transcript_clean.strip() != hub.transcript_raw.strip()
+        )
+        if already_curated:
+            self._progress("Pré-processamento", "skipped (texto curado pelo usuário)")
+        else:
+            self._progress("Pré-processamento", "running")
         try:
-            result = preprocess(hub.transcript_raw)
-            hub.transcript_clean = result.clean_text
-            hub.preprocessing = PreprocessingModel(
-                fillers_removed=result.fillers_removed,
-                artifact_turns=result.artifact_turns,
-                repetitions_collapsed=result.repetitions_collapsed,
-                metadata_issues=result.metadata_issues,
-                ready=True,
-            )
+            if not already_curated:
+                result = preprocess(hub.transcript_raw)
+                hub.transcript_clean = result.clean_text
+                hub.preprocessing = PreprocessingModel(
+                    fillers_removed=result.fillers_removed,
+                    artifact_turns=result.artifact_turns,
+                    repetitions_collapsed=result.repetitions_collapsed,
+                    metadata_issues=result.metadata_issues,
+                    ready=True,
+                )
             hub.bump()
             self._progress("Pré-processamento", "done")
         except Exception as exc:

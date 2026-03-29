@@ -390,6 +390,54 @@ with st.expander("🛠️ Diagnóstico — Arquivos de Skill em Runtime", expand
         )
         st.divider()
 
+# ── Pré-processamento independente ────────────────────────────────────────────
+preprocess_btn = st.button("🧹 Pré-processar Transcrição", use_container_width=True)
+
+if preprocess_btn:
+    if not transcript_text or len(transcript_text.strip()) < 20:
+        st.warning("Cole ou carregue uma transcrição antes de pré-processar.")
+    else:
+        from modules.transcript_preprocessor import preprocess as _preprocess
+        pp_result = _preprocess(transcript_text)
+        st.session_state["pp_result"] = pp_result
+        st.session_state["curated_clean"] = pp_result.clean_text
+        # Invalidate any previous pipeline result when transcript changes
+        st.session_state.pop("hub", None)
+
+# Mostra painel de curadoria se preprocessamento já foi feito
+if "pp_result" in st.session_state:
+    pp = st.session_state["pp_result"]
+    st.markdown("#### 🧹 Curadoria da Transcrição")
+    stats_html = (
+        f"<div style='display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.6rem'>"
+        f"<span style='background:#f1f5f9;padding:3px 10px;border-radius:20px;font-size:0.82rem'>"
+        f"<b>{pp.fillers_removed}</b> fillers removidos</span>"
+        f"<span style='background:#fef9c3;padding:3px 10px;border-radius:20px;font-size:0.82rem'>"
+        f"<b>{pp.artifact_turns}</b> artefatos <code>[?]</code></span>"
+        f"<span style='background:#f1f5f9;padding:3px 10px;border-radius:20px;font-size:0.82rem'>"
+        f"<b>{pp.repetitions_collapsed}</b> repetições colapsadas</span>"
+        f"</div>"
+    )
+    st.markdown(stats_html, unsafe_allow_html=True)
+    for issue in pp.metadata_issues:
+        st.warning(f"⚠️ {issue}")
+    st.caption(
+        "Revise o texto pré-processado abaixo. Itens marcados com `[?]` são candidatos a artefatos — "
+        "delete ou corrija conforme necessário. O botão **Processar Transcrição** usará este texto."
+    )
+    col_orig, col_clean = st.columns(2)
+    with col_orig:
+        st.markdown("**Original (somente leitura)**")
+        st.text_area("orig", value=transcript_text, height=300,
+                     disabled=True, label_visibility="collapsed", key="ta_orig_pre")
+    with col_clean:
+        st.markdown("**Pré-processada — edite aqui**")
+        curated = st.text_area("clean", value=st.session_state.get("curated_clean", pp.clean_text),
+                               height=300, label_visibility="collapsed", key="ta_curated")
+        st.session_state["curated_clean"] = curated
+
+st.divider()
+
 # ── Generate ──────────────────────────────────────────────────────────────────
 generate_btn = st.button("⚡ Processar Transcrição", type="primary", use_container_width=True)
 
@@ -407,7 +455,13 @@ if generate_btn:
 
     # ── Initialize Knowledge Hub ──────────────────────────────────────────────
     hub = KnowledgeHub.new()
-    hub.set_transcript(transcript_text)
+    # If user pre-processed and curated the text, inject it so the orchestrator
+    # skips the preprocessing step and uses the curated version directly.
+    curated_clean = st.session_state.get("curated_clean", "").strip()
+    if curated_clean and curated_clean != transcript_text.strip():
+        hub.set_transcript(transcript_text, clean=curated_clean)
+    else:
+        hub.set_transcript(transcript_text)
     hub.meta.llm_provider = selected_provider
 
     # ── Progress display ──────────────────────────────────────────────────────
