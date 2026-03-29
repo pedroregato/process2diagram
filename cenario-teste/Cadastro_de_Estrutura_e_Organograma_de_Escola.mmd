@@ -1,0 +1,16 @@
+flowchart LR
+    S01["Iniciar cadastro de organograma"]
+    S02["Preencher dados da escola"]
+    S03["Cadastrar unidades do organograma"]
+    S04["Enviar para validacao"]
+    S05{"Validar cadastro do organograma"}
+    S06["Ajustar cadastro se necessario"]
+    S07["Finalizar processo"]
+    S01 --> S02
+    S02 --> S03
+    S03 --> S04
+    S04 --> S05
+    S05 -->|sim| S07
+    S05 -->|nao| S06
+    S06 --> S04
+    style S05 fill:#fff3cd,stroke:#f59e0b

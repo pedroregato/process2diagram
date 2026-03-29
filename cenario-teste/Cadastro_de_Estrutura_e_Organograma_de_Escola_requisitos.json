@@ -1,0 +1,181 @@
+{
+  "name": "Cadastro de Estrutura e Organograma de Escola",
+  "requirements": [
+    {
+      "id": "REQ01",
+      "title": "Título do fluxo obrigatório",
+      "description": "O sistema deve exigir que o usuário preencha um título ao iniciar um fluxo de cadastro de organograma, para facilitar a identificação e gestão de múltiplos fluxos pendentes.",
+      "type": "validation",
+      "actor": "usuário",
+      "priority": "high",
+      "process_step": "inicialização do fluxo",
+      "source_quote": "Se você não colocar o título no dia seguinte, você não vai achar nada, porque não vai estar nada na sua atividade.",
+      "speaker": "PG"
+    },
+    {
+      "id": "REQ02",
+      "title": "Código e nome da escola",
+      "description": "O sistema deve ter campos para código da escola e nome da escola no formulário de cadastro de organograma.",
+      "type": "ui_field",
+      "actor": "usuário",
+      "priority": "high",
+      "process_step": "cadastro da escola",
+      "source_quote": "O Pedro falou para mim o seguinte, você tem que cadastrar o código da escola e o nome da escola.",
+      "speaker": "MF"
+    },
+    {
+      "id": "REQ03",
+      "title": "Diretor da escola obrigatório",
+      "description": "O sistema deve exigir a seleção do diretor da escola no cadastro da primeira unidade (diretoria).",
+      "type": "validation",
+      "actor": "usuário",
+      "priority": "high",
+      "process_step": "cadastro da escola",
+      "source_quote": "Você vai selecionar o diretor da escola, certo? Quem o responsável? Quem o diretor?",
+      "speaker": "NC"
+    },
+    {
+      "id": "REQ04",
+      "title": "Catálogo mestre obrigatório para escola",
+      "description": "No cadastro da primeira unidade (diretoria) de uma escola, o sistema deve exigir a indicação de que possui catálogo mestre.",
+      "type": "validation",
+      "actor": "usuário",
+      "priority": "high",
+      "process_step": "cadastro da escola",
+      "source_quote": "Catálogo possui catálogo mestre? Sim, obrigatório quando a gente está fazendo o cadastro de escola.",
+      "speaker": "NC"
+    },
+    {
+      "id": "REQ05",
+      "title": "Anexo de organograma e aprovação",
+      "description": "O sistema deve permitir o anexo de arquivos, incluindo pelo menos o organograma (ex: PDF) e o e-mail de aprovação, com validação de mínimo de 2 arquivos.",
+      "type": "functional",
+      "actor": "usuário",
+      "priority": "high",
+      "process_step": "cadastro da escola",
+      "source_quote": "No mínimo, 2. No mínimo, 2. No mínimo, 2.",
+      "speaker": "NC"
+    },
+    {
+      "id": "REQ06",
+      "title": "Cadastro de unidades com tipo, código, nome",
+      "description": "O sistema deve ter campos para tipo, código, nome e responsável no cadastro de cada unidade do organograma.",
+      "type": "ui_field",
+      "actor": "usuário",
+      "priority": "high",
+      "process_step": "cadastro de unidades",
+      "source_quote": "Tipo da Trindade perfeito, código da Trindade, nome da Trindade perfeito, perfeito, maravilha, perfeito, responsa, já estou vendo.",
+      "speaker": "MF"
+    },
+    {
+      "id": "REQ07",
+      "title": "Hierarquia de unidades",
+      "description": "O sistema deve permitir vincular cada unidade a sua unidade superior no organograma, com seleção a partir de uma lista das unidades já cadastradas.",
+      "type": "ui_field",
+      "actor": "usuário",
+      "priority": "high",
+      "process_step": "cadastro de unidades",
+      "source_quote": "Vincular a hierarquia, certo? Aqui eu vou botar a diretoria, que o primeiro certo.",
+      "speaker": "NC"
+    },
+    {
+      "id": "REQ08",
+      "title": "Indicação de catálogo técnico por unidade",
+      "description": "O sistema deve permitir indicar se cada unidade possui catálogo técnico (sim/não), com campo renomeado de 'documentação' para 'catálogo técnico'.",
+      "type": "ui_field",
+      "actor": "usuário",
+      "priority": "medium",
+      "process_step": "cadastro de unidades",
+      "source_quote": "Esta unidade possui documentação. Por que ainda a documentação já não entra o catálogo bonitinho?",
+      "speaker": "MF"
+    },
+    {
+      "id": "REQ09",
+      "title": "Contagem automática de unidades e catálogos",
+      "description": "O sistema deve calcular e exibir automaticamente o total de unidades cadastradas e o total de catálogos técnicos previstos (baseado nas respostas 'sim'), sem necessidade de preenchimento manual.",
+      "type": "functional",
+      "actor": "sistema",
+      "priority": "medium",
+      "process_step": "cadastro de unidades",
+      "source_quote": "Conforme você fizer aqui e você colocar sim e não, eu somo aqui ou eu só somo no total de unidades que essa escola tem?",
+      "speaker": "NC"
+    },
+    {
+      "id": "REQ10",
+      "title": "Salvar e continuar depois",
+      "description": "O sistema deve permitir salvar o progresso do cadastro e retomá-lo posteriormente a partir da tela 'Minhas tarefas'.",
+      "type": "functional",
+      "actor": "usuário",
+      "priority": "high",
+      "process_step": null,
+      "source_quote": "Você pode entrar aqui e colocar aqui o 16 escola ABC teste e salvar, fechar essa tela e vir aqui e terminar mais tarde.",
+      "speaker": "NC"
+    },
+    {
+      "id": "REQ11",
+      "title": "Validação com opção de devolver",
+      "description": "O sistema deve permitir que o validador devolva o cadastro para ajustes, com campo obrigatório de observações para justificar a devolução.",
+      "type": "functional",
+      "actor": "validador",
+      "priority": "high",
+      "process_step": "validação",
+      "source_quote": "Se você botar aqui observação e devolver para ajuste, se você clicar aqui em devolver, devolvendo para a atividade anterior, para que eles façam essa correção, você tem que colocar aqui o que você quer que eles corrijam.",
+      "speaker": "NC"
+    },
+    {
+      "id": "REQ12",
+      "title": "Visualização do organograma anexado",
+      "description": "O sistema deve permitir visualizar o organograma anexado (ex: PDF) durante a validação para conferência.",
+      "type": "functional",
+      "actor": "validador",
+      "priority": "high",
+      "process_step": "validação",
+      "source_quote": "Clica agora no organogram e você já cadastrou, clica aqui e mostra agora o cadastro desse organogram.",
+      "speaker": "MF"
+    },
+    {
+      "id": "REQ13",
+      "title": "SLA configurável por processo",
+      "description": "O sistema deve permitir configurar acordos de nível de serviço (SLA) com prazos para a execução do processo de cadastro de organograma.",
+      "type": "non_functional",
+      "actor": "área",
+      "priority": "medium",
+      "process_step": null,
+      "source_quote": "Pra pra gente definir o SLA, eu preciso o quê? Eu preciso definir qual a duração de cada uma dessas atividades aqui e qual o tempo máximo que esse processo pode ser deve ser executado.",
+      "speaker": "NC"
+    },
+    {
+      "id": "REQ14",
+      "title": "Prioridade manual via portal",
+      "description": "O sistema deve oferecer um portal onde a gestora possa definir e alterar manualmente a prioridade das tarefas pendentes da equipe.",
+      "type": "functional",
+      "actor": "gestora",
+      "priority": "medium",
+      "process_step": null,
+      "source_quote": "A prioridade, ela vai ter e ter essa prioridade, cada vai ter a sua prioridade diariamente, que eu posso ir lá e mudar.",
+      "speaker": "MF"
+    },
+    {
+      "id": "REQ15",
+      "title": "Identificador único de processo",
+      "description": "O sistema deve gerar automaticamente um identificador único para cada fluxo (workflow) de cadastro de organograma.",
+      "type": "non_functional",
+      "actor": "sistema",
+      "priority": "medium",
+      "process_step": null,
+      "source_quote": "Cada desses aqui uma demanda. Cada linha dessa uma demanda diferente.",
+      "speaker": "NC"
+    },
+    {
+      "id": "REQ16",
+      "title": "Botão de cancelar em formulários",
+      "description": "O sistema deve incluir um botão de cancelar em formulários para fechar sem salvar, posicionado distante dos botões de salvar para evitar acionamento acidental.",
+      "type": "ui_field",
+      "actor": "usuário",
+      "priority": "low",
+      "process_step": null,
+      "source_quote": "Cancelar somente feche. Quer dizer o seguinte, feche sem salvar, não salva não, porque eu não quero essa informação.",
+      "speaker": "PG"
+    }
+  ]
+}

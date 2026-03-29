@@ -818,6 +818,7 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         # in the same column. Using right→left waypoints draws a diagonal that
         # clips through the target rectangle. Use vertical waypoints instead.
         x_overlap = (sx < tx + tw) and (sx + sw > tx)
+        is_backward = (not x_overlap) and (sx > tx)
         if x_overlap and (sy + sh) <= ty:
             # source is directly above target: bottom-centre → top-centre
             _wp(edge, sx + sw / 2, sy + sh)
@@ -826,13 +827,30 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
             # source is directly below target: top-centre → bottom-centre
             _wp(edge, sx + sw / 2, sy)
             _wp(edge, tx + tw / 2, ty + th)
+        elif is_backward:
+            # Backward flow (source column > target column).
+            # A straight right→left line would cut through intermediate elements.
+            # Route via a U-shaped path below both elements:
+            #   source right-centre → below source → travel left → below target
+            #   → target left-centre
+            route_y = max(sy + sh, ty + th) + 25
+            _wp(edge, sx + sw, sy + sh / 2)   # source right-centre
+            _wp(edge, sx + sw, route_y)         # drop below source
+            _wp(edge, tx,      route_y)         # travel left below elements
+            _wp(edge, tx,      ty + th / 2)     # arrive at target left-centre
         else:
             _wp(edge, sx + sw, sy + sh / 2)   # source right-centre
             _wp(edge, tx,      ty + th / 2)   # target left-centre
 
         if flow.name:
-            mid_x = int((sx + sw + tx) / 2) - 30
-            mid_y = int((sy + sh / 2 + ty + th / 2) / 2) - 16
+            if is_backward:
+                # Label sits on the horizontal bottom segment, centred between source and target
+                route_y = max(sy + sh, ty + th) + 25
+                mid_x = int((sx + sw + tx) / 2) - 30
+                mid_y = int(route_y) + 4
+            else:
+                mid_x = int((sx + sw + tx) / 2) - 30
+                mid_y = int((sy + sh / 2 + ty + th / 2) / 2) - 16
             lbl = _sub(edge, DI + "BPMNLabel")
             _sub(lbl, DC + "Bounds", {
                 "x": str(mid_x), "y": str(mid_y),
