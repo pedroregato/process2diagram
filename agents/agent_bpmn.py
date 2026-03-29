@@ -95,6 +95,18 @@ class AgentBPMN(BaseAgent):
              work step that feeds that gateway (the step immediately before the
              gateway in the same lane as the correction step).
         """
+        # ── Rule 0: remove steps the LLM declared as startEvent/endEvent ────────
+        # The generator adds ev_start / ev_end automatically — steps with these
+        # types are redundant and would create duplicate events in the XML.
+        _EVENT_TYPES = {"startEvent", "endEvent", "start", "end"}
+        event_step_ids = {s.id for s in model.steps if s.task_type in _EVENT_TYPES}
+        if event_step_ids:
+            model.steps = [s for s in model.steps if s.id not in event_step_ids]
+            model.edges = [
+                e for e in model.edges
+                if e.source not in event_step_ids and e.target not in event_step_ids
+            ]
+
         _GENERIC_ACTORS = {
             "sistema", "system", "automático", "automatic",
             "automaticamente", "auto", None,
