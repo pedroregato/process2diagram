@@ -445,6 +445,8 @@ if hub is not None:
     if not hasattr(hub, 'requirements'):
         from core.knowledge_hub import RequirementsModel
         hub.requirements = RequirementsModel()
+    if hasattr(hub.bpmn, 'drawio_xml'):
+        del hub.bpmn.__dict__['drawio_xml']
 
     # ── Metrics banner ────────────────────────────────────────────────────────
     col_a, col_b, col_c, col_d = st.columns(4)
@@ -617,7 +619,7 @@ if hub is not None:
 
         if hub.bpmn.ready:
             st.markdown("**Diagrama BPMN**")
-            col1, col2, col3 = st.columns(3)
+            col1, col2 = st.columns(2)
 
             with col1:
                 if hub.bpmn.bpmn_xml:
@@ -630,15 +632,6 @@ if hub is not None:
                     )
 
             with col2:
-                st.download_button(
-                    "⬇️ Diagrama .drawio",
-                    data=hub.bpmn.drawio_xml,
-                    file_name=f"{hub.bpmn.name.replace(' ', '_')}.drawio",
-                    mime="application/xml",
-                    use_container_width=True,
-                )
-
-            with col3:
                 mermaid_content = generate_mermaid(hub.bpmn)
                 st.download_button(
                     "⬇️ Fluxo .mermaid",
@@ -670,7 +663,6 @@ if hub is not None:
 |---|---|
 | **Camunda Modeler** | File → Open → selecione o `.bpmn` |
 | **Bizagi Modeler** | File → Open → selecione o `.bpmn` |
-| **draw.io** | File → Open from Device → selecione o `.drawio` |
 | **bpmn.io** | Arraste o `.bpmn` para o canvas |
 | **Mermaid Live** | Cole o conteúdo do `.mmd` em [mermaid.live](https://mermaid.live) |
 """)

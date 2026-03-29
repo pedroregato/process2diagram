@@ -42,9 +42,8 @@ class AgentBPMN(BaseAgent):
 
         hub.bpmn = self._build_model(data)
         self._enforce_rules(hub.bpmn)
-        hub.bpmn.mermaid    = self._generate_mermaid(hub.bpmn)
-        hub.bpmn.drawio_xml = self._generate_drawio(hub.bpmn)
-        hub.bpmn.bpmn_xml   = self._generate_bpmn_xml(hub.bpmn)
+        hub.bpmn.mermaid  = self._generate_mermaid(hub.bpmn)
+        hub.bpmn.bpmn_xml = self._generate_bpmn_xml(hub.bpmn)
         hub.bpmn.ready = True
         hub.mark_agent_run(self.name)
         hub.bump()
@@ -331,49 +330,3 @@ class AgentBPMN(BaseAgent):
 
         return "\n".join(lines)
 
-    # ── Draw.io generator ─────────────────────────────────────────────────────
-
-    @staticmethod
-    def _generate_drawio(model: BPMNModel) -> str:
-        cells = []
-        x, y = 160, 80
-        step_positions: dict[str, tuple[int, int]] = {}
-        W, H, GAP = 160, 60, 40
-
-        for i, step in enumerate(model.steps):
-            cx = x + (i % 4) * (W + GAP)
-            cy = y + (i // 4) * (H + GAP * 3)
-            step_positions[step.id] = (cx, cy)
-
-            if step.is_decision:
-                style = "rhombus;whiteSpace=wrap;html=1;fillColor=#fff3cd;strokeColor=#f59e0b;"
-                w, h = 120, 80
-            else:
-                style = "rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;"
-                w, h = W, H
-
-            label = step.title.replace("<", "&lt;").replace(">", "&gt;")
-            cells.append(
-                f'<mxCell id="{step.id}" value="{label}" style="{style}" '
-                f'vertex="1" parent="1">'
-                f'<mxGeometry x="{cx}" y="{cy}" width="{w}" height="{h}" as="geometry"/>'
-                f"</mxCell>"
-            )
-
-        for i, edge in enumerate(model.edges):
-            label = edge.label or ""
-            cells.append(
-                f'<mxCell id="e{i}" value="{label}" edge="1" '
-                f'source="{edge.source}" target="{edge.target}" parent="1">'
-                f'<mxGeometry relative="1" as="geometry"/>'
-                f"</mxCell>"
-            )
-
-        inner = "\n  ".join(cells)
-        return (
-            '<?xml version="1.0" encoding="UTF-8"?>\n'
-            '<mxGraphModel><root>\n'
-            '  <mxCell id="0"/><mxCell id="1" parent="0"/>\n'
-            f"  {inner}\n"
-            "</root></mxGraphModel>"
-        )

@@ -70,7 +70,6 @@ class BPMNModel:
     lanes: list[str] = field(default_factory=list)
     bpmn_xml: str = ""            # OMG BPMN 2.0 XML
     mermaid: str = ""
-    drawio_xml: str = ""
     ready: bool = False
 
     def to_process(self):
