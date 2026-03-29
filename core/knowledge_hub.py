@@ -110,6 +110,29 @@ class MinutesModel:
     ready: bool = False
 
 
+# ── Requirements Model ────────────────────────────────────────────────────
+
+@dataclass
+class RequirementItem:
+    id: str
+    title: str
+    description: str = ""
+    type: str = "functional"      # ui_field | validation | business_rule | functional | non_functional
+    actor: Optional[str] = None
+    priority: str = "unspecified" # high | medium | low | unspecified
+    process_step: Optional[str] = None
+    source_quote: str = ""
+
+
+@dataclass
+class RequirementsModel:
+    """Output of the Requirements Agent."""
+    name: str = ""
+    requirements: list[RequirementItem] = field(default_factory=list)
+    markdown: str = ""
+    ready: bool = False
+
+
 # ── Validation Report ─────────────────────────────────────────────────────────
 
 @dataclass
@@ -169,6 +192,7 @@ class KnowledgeHub:
     nlp: NLPEnvelope = field(default_factory=NLPEnvelope)
     bpmn: BPMNModel = field(default_factory=BPMNModel)
     minutes: MinutesModel = field(default_factory=MinutesModel)
+    requirements: RequirementsModel = field(default_factory=RequirementsModel)
     validation: ValidationReport = field(default_factory=ValidationReport)
     meta: SessionMetadata = field(default_factory=SessionMetadata)
 
@@ -206,6 +230,7 @@ class KnowledgeHub:
             "nlp": self.nlp.ready,
             "bpmn": self.bpmn.ready,
             "minutes": self.minutes.ready,
+            "requirements": self.requirements.ready,
             "validation": self.validation.ready,
         }
 

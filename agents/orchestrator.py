@@ -3,13 +3,14 @@
 # Orchestrator — PC1 implementation.
 #
 # PC1 pipeline (sequential for Streamlit compatibility):
-#   1. NLPChunker  → hub.nlp
-#   2. AgentBPMN   → hub.bpmn
-#   3. AgentMinutes → hub.minutes
+#   1. NLPChunker        → hub.nlp
+#   2. AgentBPMN         → hub.bpmn
+#   3. AgentMinutes      → hub.minutes
+#   4. AgentRequirements → hub.requirements
 #
 # PC2 upgrade path:
 #   - Replace sequential calls with asyncio.gather() for parallel execution
-#   - Add AgentSBVR, AgentBMM
+#   - Add AgentSBVR, AgentBMM, AgentDecisionLog, AgentSLA
 #   - Add AgentValidator after all specialists complete
 #   - Integrate LangGraph for conditional re-routing on validation failures
 #
@@ -24,6 +25,7 @@ from typing import Callable, Optional
 from agents.nlp_chunker import NLPChunker
 from agents.agent_bpmn import AgentBPMN
 from agents.agent_minutes import AgentMinutes
+from agents.agent_requirements import AgentRequirements
 from core.knowledge_hub import KnowledgeHub
 
 
@@ -44,7 +46,7 @@ class Orchestrator:
     """
 
     # Agent execution plan for PC1
-    _PLAN = ["nlp", "bpmn", "minutes"]
+    _PLAN = ["nlp", "bpmn", "minutes", "requirements"]
 
     def __init__(
         self,
@@ -60,6 +62,7 @@ class Orchestrator:
         self._chunker = NLPChunker()
         self._agent_bpmn = AgentBPMN(client_info, provider_cfg)
         self._agent_minutes = AgentMinutes(client_info, provider_cfg)
+        self._agent_requirements = AgentRequirements(client_info, provider_cfg)
 
     # ── Main entry point ──────────────────────────────────────────────────────
 
@@ -69,15 +72,17 @@ class Orchestrator:
         output_language: str = "Auto-detect",
         run_bpmn: bool = True,
         run_minutes: bool = True,
+        run_requirements: bool = True,
     ) -> KnowledgeHub:
         """
         Execute PC1 pipeline.
 
         Args:
-            hub:             Initialized KnowledgeHub with transcript set.
-            output_language: Language preference for agent outputs.
-            run_bpmn:        Whether to run the BPMN agent.
-            run_minutes:     Whether to run the Minutes agent.
+            hub:               Initialized KnowledgeHub with transcript set.
+            output_language:   Language preference for agent outputs.
+            run_bpmn:          Whether to run the BPMN agent.
+            run_minutes:       Whether to run the Minutes agent.
+            run_requirements:  Whether to run the Requirements agent.
 
         Returns:
             Populated KnowledgeHub.
@@ -115,6 +120,16 @@ class Orchestrator:
             except Exception as exc:
                 self._progress("Agente Ata", f"error: {exc}")
                 raise RuntimeError(f"Minutes Agent failed: {exc}") from exc
+
+        # ── Step 4: Requirements Agent ────────────────────────────────────────
+        if run_requirements:
+            self._progress("Agente Requisitos", "running")
+            try:
+                hub = self._agent_requirements.run(hub, output_language)
+                self._progress("Agente Requisitos", "done")
+            except Exception as exc:
+                self._progress("Agente Requisitos", f"error: {exc}")
+                raise RuntimeError(f"Requirements Agent failed: {exc}") from exc
 
         return hub
 

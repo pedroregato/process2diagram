@@ -462,6 +462,8 @@ if hub is not None:
 
     if hub.minutes.ready:
         tabs_to_show += ["📋 Ata de Reunião"]
+    if hub.requirements.ready:
+        tabs_to_show += ["📝 Requisitos"]
     tabs_to_show += ["🔧 Exportar", "🔍 Knowledge Hub"]
 
     tabs = st.tabs(tabs_to_show)
@@ -540,6 +542,69 @@ if hub is not None:
 
         tab_idx += 1
 
+    # ── Tab: Requisitos ───────────────────────────────────────────────────────
+    if hub.requirements.ready:
+        with tabs[tab_idx]:
+            req = hub.requirements
+            type_labels = {
+                "ui_field":       "🖥️ Campo de tela",
+                "validation":     "✅ Validação",
+                "business_rule":  "📋 Regra de negócio",
+                "functional":     "⚙️ Funcional",
+                "non_functional": "📊 Não-funcional",
+            }
+            priority_colors = {"high": "🔴", "medium": "🟡", "low": "🟢", "unspecified": "⚪"}
+
+            col_r1, col_r2, col_r3 = st.columns(3)
+            col_r1.metric("Total de Requisitos", len(req.requirements))
+            high_count = sum(1 for r in req.requirements if r.priority == "high")
+            col_r2.metric("Alta Prioridade 🔴", high_count)
+            types_count = len(set(r.type for r in req.requirements))
+            col_r3.metric("Tipos distintos", types_count)
+
+            # Filter by type
+            selected_type = st.selectbox(
+                "Filtrar por tipo",
+                ["Todos"] + list(type_labels.values()),
+                key="req_type_filter",
+            )
+            type_reverse = {v: k for k, v in type_labels.items()}
+
+            rows = []
+            for r in req.requirements:
+                if selected_type != "Todos" and r.type != type_reverse.get(selected_type):
+                    continue
+                rows.append({
+                    "ID": r.id,
+                    "Tipo": type_labels.get(r.type, r.type),
+                    "Prioridade": priority_colors.get(r.priority, "⚪"),
+                    "Título": r.title,
+                    "Etapa": r.process_step or "—",
+                    "Ator": r.actor or "—",
+                })
+
+            if rows:
+                st.dataframe(rows, use_container_width=True)
+
+            # Detail expander per requirement
+            st.markdown("---")
+            st.markdown("### Detalhamento")
+            for r in req.requirements:
+                if selected_type != "Todos" and r.type != type_reverse.get(selected_type):
+                    continue
+                with st.expander(f"{r.id} — {r.title}  {priority_colors.get(r.priority, '')}"):
+                    st.markdown(f"**Tipo:** {type_labels.get(r.type, r.type)}")
+                    st.markdown(f"**Prioridade:** {priority_colors.get(r.priority, '⚪')} {r.priority}")
+                    if r.actor:
+                        st.markdown(f"**Ator:** {r.actor}")
+                    if r.process_step:
+                        st.markdown(f"**Etapa do processo:** {r.process_step}")
+                    st.markdown(f"**Descrição:** {r.description}")
+                    if r.source_quote:
+                        st.markdown(f"> *\"{r.source_quote}\"*")
+
+        tab_idx += 1
+
     # ── Tab: Exportar ─────────────────────────────────────────────────────────
     with tabs[tab_idx]:
         st.markdown("### ⬇️ Downloads")
@@ -613,6 +678,32 @@ if hub is not None:
                 file_name="ata_reuniao.md",
                 mime="text/markdown",
             )
+
+        if hub.requirements.ready:
+            st.markdown("**Requisitos**")
+            col_req1, col_req2 = st.columns(2)
+            with col_req1:
+                st.download_button(
+                    "⬇️ Requisitos .md",
+                    data=hub.requirements.markdown,
+                    file_name=f"{hub.requirements.name.replace(' ', '_')}_requisitos.md",
+                    mime="text/markdown",
+                    use_container_width=True,
+                )
+            with col_req2:
+                import json as _json
+                req_json = _json.dumps(
+                    {"name": hub.requirements.name,
+                     "requirements": [r.__dict__ for r in hub.requirements.requirements]},
+                    ensure_ascii=False, indent=2
+                )
+                st.download_button(
+                    "⬇️ Requisitos .json",
+                    data=req_json,
+                    file_name=f"{hub.requirements.name.replace(' ', '_')}_requisitos.json",
+                    mime="application/json",
+                    use_container_width=True,
+                )
 
     tab_idx += 1
 

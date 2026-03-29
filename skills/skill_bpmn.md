@@ -50,6 +50,29 @@ Quando a transcrição mencionar quem realiza cada etapa (ex: "o cliente envia",
 "o sistema valida", "a equipe jurídica aprova"), agrupe as etapas em lanes.
 Se não houver atores claros, omita lanes e use processo plano.
 
+## Lane de Sistema — Quando Criar (e Quando Não Criar)
+
+Segundo a especificação OMG BPMN 2.0 (§7.4), uma Lane representa uma **unidade
+organizacional com responsabilidade formal** — não apenas "onde algo acontece".
+
+**Crie uma lane de sistema SOMENTE quando:**
+- O nome do sistema for declarado explicitamente na transcrição
+  (ex: "o SAP gera o relatório", "o Portal GEO-Escola atualiza o status").
+- Houver múltiplas tarefas automáticas pertencentes ao mesmo sistema nomeado.
+- O sistema tiver responsabilidade organizacional autônoma no processo
+  (ex: serviço externo, API de terceiro com identidade própria).
+
+**NÃO crie lane de sistema quando:**
+- A transcrição usar linguagem genérica: "o sistema executa automaticamente",
+  "é processado pelo sistema", "o sistema gera o documento".
+- Houver apenas um passo automático de finalização sem nome de sistema.
+- O sistema for apenas a plataforma/ferramenta de suporte ao processo.
+
+**O que fazer com tarefas automáticas sem sistema nomeado:**
+Modele como `serviceTask` com `lane: null`. O gerador atribuirá automaticamente
+a lane pelo contexto de fluxo — tipicamente a lane do ator que desencadeia
+a automação, que é a responsabilidade organizacional correta.
+
 ## Tipos de Tarefa — Regras de Inferência
 
 | Pista na transcrição                        | task_type           |
