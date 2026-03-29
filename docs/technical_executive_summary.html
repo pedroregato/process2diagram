@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Process2Diagram v3.3 — Resumo Técnico Executivo</title>
+  <title>Process2Diagram v3.5 — Resumo Técnico Executivo</title>
   <style>
     /* ── Reset & Base ── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -17,8 +17,9 @@
       --blue-050: #eff6ff;
       --indigo:   #4f46e5;
       --teal:     #0d9488;
-      --amber:    #d97706;
+      --cyan:     #0891b2;
       --rose:     #e11d48;
+      --amber:    #d97706;
       --green:    #16a34a;
       --gray-900: #111827;
       --gray-700: #374151;
@@ -120,6 +121,7 @@
     .hcard.amber  { background: #fffbeb; border-color: var(--amber); }
     .hcard.indigo { background: #eef2ff; border-color: var(--indigo); }
     .hcard.green  { background: #f0fdf4; border-color: var(--green); }
+    .hcard.rose   { background: #fff1f2; border-color: var(--rose); }
     .hcard h3 { font-size: 1rem; margin-bottom: .3rem; }
     .hcard p  { margin: 0; font-size: .9rem; }
 
@@ -149,7 +151,7 @@
     /* ── Agent cards ── */
     .agent-row {
       display: grid; gap: 1rem;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
     }
     .agent-card {
       background: var(--white); border-radius: var(--radius);
@@ -157,11 +159,13 @@
       padding: 1.1rem 1.25rem;
       border-top: 3px solid var(--blue-600);
     }
-    .agent-card.nlp   { border-top-color: var(--teal); }
-    .agent-card.bpmn  { border-top-color: var(--blue-600); }
-    .agent-card.min   { border-top-color: var(--indigo); }
-    .agent-card.req   { border-top-color: var(--green); }
-    .agent-card.orch  { border-top-color: var(--amber); }
+    .agent-card.quality { border-top-color: var(--rose); }
+    .agent-card.preproc { border-top-color: var(--cyan); }
+    .agent-card.nlp     { border-top-color: var(--teal); }
+    .agent-card.bpmn    { border-top-color: var(--blue-600); }
+    .agent-card.min     { border-top-color: var(--indigo); }
+    .agent-card.req     { border-top-color: var(--green); }
+    .agent-card.orch    { border-top-color: var(--amber); }
     .agent-card h3 { font-size: .95rem; margin-bottom: .4rem; }
     .agent-card p  { font-size: .83rem; margin: 0; color: var(--gray-500); }
     .agent-tag {
@@ -172,6 +176,8 @@
     .tag-nlp   { background: #ccfbf1; color: #0f766e; }
     .tag-llm   { background: #dbeafe; color: #1d4ed8; }
     .tag-orch  { background: #fef3c7; color: #92400e; }
+    .tag-rose  { background: #ffe4e6; color: #be123c; }
+    .tag-cyan  { background: #cffafe; color: #0e7490; }
 
     /* ── Roadmap ── */
     .roadmap { display: flex; flex-direction: column; gap: .85rem; }
@@ -226,10 +232,11 @@
     <h1>Process2Diagram</h1>
     <p class="hero-subtitle">
       Pipeline multi-agente de inteligência artificial que transforma transcrições de reuniões
-      em diagramas de processo BPMN 2.0 profissionais, prontos para uso corporativo.
+      em diagramas de processo BPMN 2.0 profissionais, atas estruturadas e levantamentos de
+      requisitos rastreáveis — com avaliação e curadoria integrada de qualidade ASR.
     </p>
     <div class="hero-meta">
-      <span>&#128196; Versão&nbsp;<strong>3.3</strong></span>
+      <span>&#128196; Versão&nbsp;<strong>3.5</strong></span>
       <span>&#128197; Março de 2026</span>
       <span>&#128099; Pedro Regato</span>
       <span>&#128279; github.com/pedroregato/process2diagram</span>
@@ -248,22 +255,28 @@
       <strong>Process2Diagram</strong> é uma plataforma web open-source que automatiza a criação de
       documentação de processos de negócio a partir de linguagem natural.
       O usuário cola ou faz upload de uma transcrição de reunião e, em segundos,
-      obtém um diagrama BPMN 2.0 interativo, um fluxograma Mermaid, um arquivo
-      Draw.io e uma ata de reunião estruturada — tudo pronto para distribuição.
+      obtém um diagrama BPMN 2.0 interativo, um fluxograma Mermaid e uma ata de reunião
+      estruturada — tudo pronto para distribuição.
     </p>
     <p>
       A solução elimina horas de trabalho manual em ferramentas de modelagem,
       reduz erros de interpretação e garante conformidade com o padrão
-      internacional OMG BPMN 2.0 (ISO/IEC 19510). Além do diagrama, o pipeline
-      extrai automaticamente <strong>ata de reunião</strong> com decisões e encaminhamentos,
-      e um <strong>levantamento de requisitos</strong> com rastreabilidade de autoria.
+      internacional OMG BPMN 2.0 (ISO/IEC 19510). Antes de acionar os agentes LLM,
+      o pipeline avalia automaticamente a <strong>qualidade da transcrição ASR</strong>,
+      aplica limpeza rule-based e oferece um painel de <strong>curadoria manual</strong>
+      — garantindo que artefatos fonéticos, fillers e ruído de fundo não contaminem as saídas.
     </p>
 
     <div class="card-grid mt-3">
       <div class="hcard blue">
-        <h3>&#9889; Processamento Inteligente</h3>
-        <p>Pipeline de IA com NLP + LLM especializado extrai automaticamente atores,
-           atividades, decisões e fluxos a partir de texto não estruturado.</p>
+        <h3>&#9889; Pipeline Multi-Agente</h3>
+        <p>6 agentes especializados em sequência: avaliação ASR → pré-processamento →
+           NLP → BPMN → Ata → Requisitos. KnowledgeHub centralizado como fonte única de verdade.</p>
+      </div>
+      <div class="hcard rose">
+        <h3>&#128270; Avaliação de Qualidade ASR</h3>
+        <p>Nota A–E por 6 critérios ponderados (WER, DER, coerência semântica…).
+           Detecção de inconsistências por LLM com highlight amarelo e tooltip explicativo.</p>
       </div>
       <div class="hcard teal">
         <h3>&#128196; BPMN 2.0 Nativo</h3>
@@ -325,6 +338,12 @@
             <td>JSON exportável + Markdown</td>
             <td>Campos UI, validações, regras de negócio, NFRs — com autoria rastreável</td>
           </tr>
+          <tr>
+            <td><strong>Relatório de Qualidade ASR</strong></td>
+            <td>JSON interno</td>
+            <td>Interface web (visualização inline)</td>
+            <td>Nota A–E, 6 critérios ponderados, inconsistências LLM com highlights</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -334,6 +353,7 @@
       <p class="mt-1 text-sm">
         <strong>Texto colado</strong> — transcrição direta na área de texto da interface.<br>
         <strong>Upload de arquivo</strong> — arquivos <code>.txt</code> com qualquer codificação UTF-8.<br>
+        <strong>Transcrição Microsoft Teams</strong> — formato nativo com speaker labels, timestamps e header de metadados parseados automaticamente pelo <code>TranscriptPreprocessor</code>.<br>
         <strong>Idioma</strong> — detecção automática (PT-BR nativo, suporte multilíngue via configuração de output).
       </p>
     </div>
@@ -344,16 +364,17 @@
   <!-- ── 3. Arquitetura ── -->
   <section class="section">
     <div class="section-label">03 — Arquitetura de Solução</div>
-    <h2>Pipeline Multi-Agente v3</h2>
+    <h2>Pipeline Multi-Agente v3.5</h2>
     <p>
-      A versão 3 adota uma arquitetura de <strong>agentes especializados</strong> com um
-      <em>KnowledgeHub</em> centralizado como fonte única de verdade. Cada agente lê
-      apenas o que precisa e escreve apenas no seu próprio namespace.
+      A versão 3.5 estende a arquitetura de <strong>agentes especializados</strong> com dois novos
+      componentes pré-pipeline: um agente de avaliação de qualidade ASR (Step 0) e um
+      pré-processador rule-based (Step 0.5). O <em>KnowledgeHub</em> centralizado é a
+      fonte única de verdade para todos os seis agentes.
     </p>
 
-    <!-- Pipeline diagram SVG -->
+    <!-- Pipeline diagram SVG — 2-row layout -->
     <div class="pipeline-wrap mt-2">
-      <svg viewBox="0 0 1100 560" width="1100" xmlns="http://www.w3.org/2000/svg"
+      <svg viewBox="0 0 1100 640" width="1100" xmlns="http://www.w3.org/2000/svg"
            font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
         <defs>
           <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
@@ -362,127 +383,171 @@
           <marker id="arr-blue" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
             <path d="M0,0 L0,6 L8,3 z" fill="#2563eb"/>
           </marker>
+          <marker id="arr-down" markerWidth="8" markerHeight="8" refX="3" refY="7" orient="auto">
+            <path d="M0,0 L6,0 L3,8 z" fill="#6b7280"/>
+          </marker>
           <filter id="shadow">
             <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity=".12"/>
           </filter>
         </defs>
 
-        <!-- Orchestrator at top -->
-        <rect x="30" y="50" width="1040" height="40" rx="8"
+        <!-- ── Orchestrator bar ── -->
+        <rect x="20" y="8" width="1060" height="38" rx="8"
               fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5"/>
-        <text x="550" y="67" text-anchor="middle" fill="#92400e" font-size="12" font-weight="700">
-          Orchestrator — NLPChunker &#8594; AgentBPMN &#8594; AgentMinutes &#8594; AgentRequirements
+        <text x="550" y="24" text-anchor="middle" fill="#92400e" font-size="11" font-weight="700">
+          Orchestrator
         </text>
-        <text x="550" y="82" text-anchor="middle" fill="#b45309" font-size="10">
-          Streamlit session_state  ·  progress_callback  ·  KnowledgeHub lifecycle  ·  migrate()
+        <text x="550" y="38" text-anchor="middle" fill="#b45309" font-size="10">
+          AgentTranscriptQuality &#8594; TranscriptPreprocessor &#8594; NLPChunker &#8594; AgentBPMN &#8594; AgentMinutes &#8594; AgentRequirements
         </text>
+
+        <!-- ══ ROW 1: Input → Quality → Preprocessor → NLPChunker ══ -->
 
         <!-- Input -->
-        <rect x="30" y="215" width="120" height="60" rx="8"
+        <rect x="20" y="190" width="90" height="55" rx="8"
               fill="#1e293b" filter="url(#shadow)"/>
-        <text x="90" y="241" text-anchor="middle" fill="white" font-size="12" font-weight="700">Transcrição</text>
-        <text x="90" y="259" text-anchor="middle" fill="#93c5fd" font-size="11">.txt / texto</text>
+        <text x="65" y="214" text-anchor="middle" fill="white" font-size="11" font-weight="700">Transcrição</text>
+        <text x="65" y="230" text-anchor="middle" fill="#93c5fd" font-size="10">.txt / Teams</text>
 
-        <!-- Arrow 1 -->
-        <line x1="150" y1="245" x2="185" y2="245" stroke="#6b7280" stroke-width="2" marker-end="url(#arr)"/>
+        <!-- Arrow Input → QualityAgent -->
+        <line x1="110" y1="218" x2="135" y2="218" stroke="#6b7280" stroke-width="2" marker-end="url(#arr)"/>
 
-        <!-- NLPChunker -->
-        <rect x="185" y="185" width="130" height="120" rx="10"
+        <!-- AgentTranscriptQuality (Step 0) -->
+        <rect x="135" y="155" width="145" height="135" rx="10"
+              fill="white" stroke="#e11d48" stroke-width="2" filter="url(#shadow)"/>
+        <rect x="135" y="155" width="145" height="30" rx="10" fill="#e11d48"/>
+        <rect x="135" y="173" width="145" height="12" rx="0" fill="#e11d48"/>
+        <text x="208" y="175" text-anchor="middle" fill="white" font-size="10" font-weight="700">AgentTranscriptQuality</text>
+        <text x="208" y="200" text-anchor="middle" fill="#374151" font-size="9" font-weight="700">Step 0 — LLM</text>
+        <text x="208" y="215" text-anchor="middle" fill="#374151" font-size="9">Artifact ratio census</text>
+        <text x="208" y="228" text-anchor="middle" fill="#374151" font-size="9">6 critérios + grade A–E</text>
+        <text x="208" y="241" text-anchor="middle" fill="#374151" font-size="9">InconsistencyItem[]</text>
+        <text x="208" y="256" text-anchor="middle" fill="#9ca3af" font-size="8.5" font-style="italic">skill_transcript_quality.md</text>
+        <text x="208" y="278" text-anchor="middle" fill="#6b7280" font-size="8.5">hub.transcript_quality</text>
+
+        <!-- Arrow Quality → Preprocessor -->
+        <line x1="280" y1="222" x2="305" y2="222" stroke="#6b7280" stroke-width="2" marker-end="url(#arr)"/>
+
+        <!-- TranscriptPreprocessor (Step 0.5) -->
+        <rect x="305" y="165" width="140" height="120" rx="10"
+              fill="white" stroke="#0891b2" stroke-width="2" filter="url(#shadow)"/>
+        <rect x="305" y="165" width="140" height="30" rx="10" fill="#0891b2"/>
+        <rect x="305" y="183" width="140" height="12" rx="0" fill="#0891b2"/>
+        <text x="375" y="184" text-anchor="middle" fill="white" font-size="10" font-weight="700">TranscriptPreprocessor</text>
+        <text x="375" y="210" text-anchor="middle" fill="#374151" font-size="9" font-weight="700">Step 0.5 — Rule-based</text>
+        <text x="375" y="224" text-anchor="middle" fill="#374151" font-size="9">Teams format parser</text>
+        <text x="375" y="237" text-anchor="middle" fill="#374151" font-size="9">Filler removal / [rep:]</text>
+        <text x="375" y="250" text-anchor="middle" fill="#374151" font-size="9">Artefatos marcados [?]</text>
+        <text x="375" y="264" text-anchor="middle" fill="#9ca3af" font-size="8.5" font-style="italic">sem LLM · hub.preprocessing</text>
+
+        <!-- Arrow Preprocessor → NLPChunker -->
+        <line x1="445" y1="225" x2="470" y2="225" stroke="#6b7280" stroke-width="2" marker-end="url(#arr)"/>
+
+        <!-- NLPChunker (Step 1) -->
+        <rect x="470" y="175" width="130" height="110" rx="10"
               fill="white" stroke="#0d9488" stroke-width="2" filter="url(#shadow)"/>
-        <rect x="185" y="185" width="130" height="32" rx="10" fill="#0d9488"/>
-        <rect x="185" y="205" width="130" height="12" rx="0" fill="#0d9488"/>
-        <text x="250" y="208" text-anchor="middle" fill="white" font-size="11" font-weight="700">NLPChunker</text>
-        <text x="250" y="232" text-anchor="middle" fill="#374151" font-size="10">spaCy NER</text>
-        <text x="250" y="247" text-anchor="middle" fill="#374151" font-size="10">Atores / Segmentos</text>
-        <text x="250" y="277" text-anchor="middle" fill="#6b7280" font-size="9" font-style="italic">sem LLM</text>
+        <rect x="470" y="175" width="130" height="30" rx="10" fill="#0d9488"/>
+        <rect x="470" y="193" width="130" height="12" rx="0" fill="#0d9488"/>
+        <text x="535" y="195" text-anchor="middle" fill="white" font-size="11" font-weight="700">NLPChunker</text>
+        <text x="535" y="220" text-anchor="middle" fill="#374151" font-size="9" font-weight="700">Step 1 — spaCy</text>
+        <text x="535" y="234" text-anchor="middle" fill="#374151" font-size="9">NER PT-BR</text>
+        <text x="535" y="247" text-anchor="middle" fill="#374151" font-size="9">Atores / Segmentos</text>
+        <text x="535" y="262" text-anchor="middle" fill="#9ca3af" font-size="8.5" font-style="italic">sem LLM · hub.nlp</text>
 
-        <!-- Arrow 2 -->
-        <line x1="315" y1="245" x2="350" y2="245" stroke="#6b7280" stroke-width="2" marker-end="url(#arr)"/>
-        <text x="332" y="236" text-anchor="middle" fill="#6b7280" font-size="9">hub.nlp</text>
+        <!-- ── CONNECTOR: bend from NLPChunker right → down → row 2 left ── -->
+        <polyline points="600,225 640,225 640,350 95,350 95,390"
+                  fill="none" stroke="#6b7280" stroke-width="2" marker-end="url(#arr)"/>
 
-        <!-- AgentBPMN -->
-        <rect x="350" y="165" width="145" height="160" rx="10"
+        <!-- ══ ROW 2: AgentBPMN → AgentMinutes → AgentRequirements → KnowledgeHub ══ -->
+
+        <!-- AgentBPMN (Step 2) -->
+        <rect x="20" y="390" width="145" height="145" rx="10"
               fill="white" stroke="#2563eb" stroke-width="2" filter="url(#shadow)"/>
-        <rect x="350" y="165" width="145" height="32" rx="10" fill="#2563eb"/>
-        <rect x="350" y="185" width="145" height="12" rx="0" fill="#2563eb"/>
-        <text x="422" y="188" text-anchor="middle" fill="white" font-size="11" font-weight="700">AgentBPMN</text>
-        <text x="422" y="214" text-anchor="middle" fill="#374151" font-size="10">Extração JSON</text>
-        <text x="422" y="229" text-anchor="middle" fill="#374151" font-size="10">Steps / Edges / Lanes</text>
-        <text x="422" y="244" text-anchor="middle" fill="#374151" font-size="10">_enforce_rules()</text>
-        <text x="422" y="259" text-anchor="middle" fill="#374151" font-size="10">BPMN 2.0 XML + Mermaid</text>
-        <text x="422" y="276" text-anchor="middle" fill="#6b7280" font-size="9" font-style="italic">LLM + skill_bpmn.md</text>
-        <text x="422" y="290" text-anchor="middle" fill="#6b7280" font-size="9" font-style="italic">&#8595; backward-flow routing</text>
+        <rect x="20" y="390" width="145" height="30" rx="10" fill="#2563eb"/>
+        <rect x="20" y="408" width="145" height="12" rx="0" fill="#2563eb"/>
+        <text x="92" y="410" text-anchor="middle" fill="white" font-size="11" font-weight="700">AgentBPMN</text>
+        <text x="92" y="436" text-anchor="middle" fill="#374151" font-size="9" font-weight="700">Step 2 — LLM</text>
+        <text x="92" y="450" text-anchor="middle" fill="#374151" font-size="9">Extração JSON</text>
+        <text x="92" y="463" text-anchor="middle" fill="#374151" font-size="9">Steps / Edges / Lanes</text>
+        <text x="92" y="476" text-anchor="middle" fill="#374151" font-size="9">_enforce_rules()</text>
+        <text x="92" y="489" text-anchor="middle" fill="#374151" font-size="9">BPMN 2.0 XML + Mermaid</text>
+        <text x="92" y="504" text-anchor="middle" fill="#9ca3af" font-size="8.5" font-style="italic">SKILL_BPMN.md</text>
+        <text x="92" y="516" text-anchor="middle" fill="#6b7280" font-size="8.5">hub.bpmn</text>
 
-        <!-- Arrow 3 -->
-        <line x1="495" y1="245" x2="530" y2="245" stroke="#6b7280" stroke-width="2" marker-end="url(#arr)"/>
-        <text x="512" y="236" text-anchor="middle" fill="#6b7280" font-size="9">hub.bpmn</text>
+        <!-- Arrow BPMN → Minutes -->
+        <line x1="165" y1="463" x2="190" y2="463" stroke="#6b7280" stroke-width="2" marker-end="url(#arr)"/>
 
-        <!-- AgentMinutes -->
-        <rect x="530" y="185" width="140" height="120" rx="10"
+        <!-- AgentMinutes (Step 3) -->
+        <rect x="190" y="405" width="140" height="115" rx="10"
               fill="white" stroke="#4f46e5" stroke-width="2" filter="url(#shadow)"/>
-        <rect x="530" y="185" width="140" height="32" rx="10" fill="#4f46e5"/>
-        <rect x="530" y="205" width="140" height="12" rx="0" fill="#4f46e5"/>
-        <text x="600" y="208" text-anchor="middle" fill="white" font-size="11" font-weight="700">AgentMinutes</text>
-        <text x="600" y="232" text-anchor="middle" fill="#374151" font-size="10">Decisões + Iniciais [MF]</text>
-        <text x="600" y="247" text-anchor="middle" fill="#374151" font-size="10">Action Items (raised_by)</text>
-        <text x="600" y="262" text-anchor="middle" fill="#374151" font-size="10">Participantes com siglas</text>
-        <text x="600" y="280" text-anchor="middle" fill="#6b7280" font-size="9" font-style="italic">LLM + skill_minutes.md</text>
+        <rect x="190" y="405" width="140" height="30" rx="10" fill="#4f46e5"/>
+        <rect x="190" y="423" width="140" height="12" rx="0" fill="#4f46e5"/>
+        <text x="260" y="424" text-anchor="middle" fill="white" font-size="11" font-weight="700">AgentMinutes</text>
+        <text x="260" y="450" text-anchor="middle" fill="#374151" font-size="9" font-weight="700">Step 3 — LLM</text>
+        <text x="260" y="464" text-anchor="middle" fill="#374151" font-size="9">Decisões + Iniciais [MF]</text>
+        <text x="260" y="477" text-anchor="middle" fill="#374151" font-size="9">Action Items (raised_by)</text>
+        <text x="260" y="491" text-anchor="middle" fill="#9ca3af" font-size="8.5" font-style="italic">SKILL_MINUTES.md</text>
+        <text x="260" y="503" text-anchor="middle" fill="#6b7280" font-size="8.5">hub.minutes</text>
 
-        <!-- Arrow 4 -->
-        <line x1="670" y1="245" x2="705" y2="245" stroke="#6b7280" stroke-width="2" marker-end="url(#arr)"/>
-        <text x="687" y="236" text-anchor="middle" fill="#6b7280" font-size="9">hub.minutes</text>
+        <!-- Arrow Minutes → Requirements -->
+        <line x1="330" y1="463" x2="355" y2="463" stroke="#6b7280" stroke-width="2" marker-end="url(#arr)"/>
 
-        <!-- AgentRequirements -->
-        <rect x="705" y="185" width="145" height="120" rx="10"
+        <!-- AgentRequirements (Step 4) -->
+        <rect x="355" y="405" width="150" height="115" rx="10"
               fill="white" stroke="#16a34a" stroke-width="2" filter="url(#shadow)"/>
-        <rect x="705" y="185" width="145" height="32" rx="10" fill="#16a34a"/>
-        <rect x="705" y="205" width="145" height="12" rx="0" fill="#16a34a"/>
-        <text x="777" y="208" text-anchor="middle" fill="white" font-size="11" font-weight="700">AgentRequirements</text>
-        <text x="777" y="232" text-anchor="middle" fill="#374151" font-size="10">ui_field / validation</text>
-        <text x="777" y="247" text-anchor="middle" fill="#374151" font-size="10">business_rule / functional</text>
-        <text x="777" y="262" text-anchor="middle" fill="#374151" font-size="10">Speaker attribution [PG]</text>
-        <text x="777" y="280" text-anchor="middle" fill="#6b7280" font-size="9" font-style="italic">LLM + skill_requirements.md</text>
+        <rect x="355" y="405" width="150" height="30" rx="10" fill="#16a34a"/>
+        <rect x="355" y="423" width="150" height="12" rx="0" fill="#16a34a"/>
+        <text x="430" y="424" text-anchor="middle" fill="white" font-size="11" font-weight="700">AgentRequirements</text>
+        <text x="430" y="450" text-anchor="middle" fill="#374151" font-size="9" font-weight="700">Step 4 — LLM</text>
+        <text x="430" y="464" text-anchor="middle" fill="#374151" font-size="9">IEEE 830 adaptado</text>
+        <text x="430" y="477" text-anchor="middle" fill="#374151" font-size="9">5 tipos + speaker attr.</text>
+        <text x="430" y="491" text-anchor="middle" fill="#9ca3af" font-size="8.5" font-style="italic">SKILL_REQUIREMENTS.md</text>
+        <text x="430" y="503" text-anchor="middle" fill="#6b7280" font-size="8.5">hub.requirements</text>
 
-        <!-- Arrow 5 -->
-        <line x1="850" y1="245" x2="885" y2="245" stroke="#6b7280" stroke-width="2" marker-end="url(#arr)"/>
-        <text x="867" y="236" text-anchor="middle" fill="#6b7280" font-size="9">hub.req</text>
+        <!-- Arrow Requirements → KnowledgeHub -->
+        <line x1="505" y1="463" x2="530" y2="463" stroke="#6b7280" stroke-width="2" marker-end="url(#arr)"/>
 
         <!-- KnowledgeHub -->
-        <rect x="885" y="175" width="155" height="160" rx="10"
+        <rect x="530" y="380" width="160" height="195" rx="10"
               fill="#1e293b" filter="url(#shadow)"/>
-        <text x="962" y="207" text-anchor="middle" fill="#93c5fd" font-size="11" font-weight="700">KnowledgeHub</text>
-        <line x1="895" y1="215" x2="1030" y2="215" stroke="#334155" stroke-width="1"/>
-        <text x="962" y="233" text-anchor="middle" fill="#cbd5e1" font-size="10">hub.nlp</text>
-        <text x="962" y="248" text-anchor="middle" fill="#cbd5e1" font-size="10">hub.bpmn</text>
-        <text x="962" y="263" text-anchor="middle" fill="#cbd5e1" font-size="10">hub.minutes</text>
-        <text x="962" y="278" text-anchor="middle" fill="#cbd5e1" font-size="10">hub.requirements</text>
-        <text x="962" y="293" text-anchor="middle" fill="#cbd5e1" font-size="10">hub.meta</text>
-        <text x="962" y="313" text-anchor="middle" fill="#64748b" font-size="9" font-style="italic">version + migrate()</text>
+        <text x="610" y="402" text-anchor="middle" fill="#93c5fd" font-size="11" font-weight="700">KnowledgeHub</text>
+        <line x1="540" y1="410" x2="680" y2="410" stroke="#334155" stroke-width="1"/>
+        <text x="610" y="426" text-anchor="middle" fill="#94a3b8" font-size="9">transcript_quality</text>
+        <text x="610" y="440" text-anchor="middle" fill="#94a3b8" font-size="9">preprocessing</text>
+        <text x="610" y="454" text-anchor="middle" fill="#cbd5e1" font-size="9">nlp</text>
+        <text x="610" y="468" text-anchor="middle" fill="#cbd5e1" font-size="9">bpmn</text>
+        <text x="610" y="482" text-anchor="middle" fill="#cbd5e1" font-size="9">minutes</text>
+        <text x="610" y="496" text-anchor="middle" fill="#cbd5e1" font-size="9">requirements</text>
+        <text x="610" y="510" text-anchor="middle" fill="#94a3b8" font-size="9">validation  ·  meta</text>
+        <line x1="540" y1="520" x2="680" y2="520" stroke="#334155" stroke-width="1"/>
+        <text x="610" y="536" text-anchor="middle" fill="#64748b" font-size="8.5" font-style="italic">version + migrate()</text>
+        <text x="610" y="549" text-anchor="middle" fill="#64748b" font-size="8.5" font-style="italic">st.session_state["hub"]</text>
+        <text x="610" y="563" text-anchor="middle" fill="#64748b" font-size="8.5" font-style="italic">to_json() / from_dict()</text>
 
         <!-- Generators box -->
-        <rect x="350" y="395" width="290" height="80" rx="10"
+        <rect x="710" y="415" width="260" height="80" rx="10"
               fill="white" stroke="#d1d5db" stroke-width="1.5" filter="url(#shadow)"/>
-        <text x="495" y="420" text-anchor="middle" fill="#374151" font-size="11" font-weight="700">Geradores de Diagrama</text>
-        <rect x="362" y="430" width="120" height="34" rx="6" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1"/>
-        <text x="422" y="449" text-anchor="middle" fill="#1d4ed8" font-size="10" font-weight="600">bpmn_generator</text>
-        <text x="422" y="461" text-anchor="middle" fill="#6b7280" font-size="9">BPMN 2.0 XML + DI</text>
-        <rect x="494" y="430" width="136" height="34" rx="6" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1"/>
-        <text x="562" y="449" text-anchor="middle" fill="#16a34a" font-size="10" font-weight="600">diagram_mermaid</text>
-        <text x="562" y="461" text-anchor="middle" fill="#6b7280" font-size="9">Mermaid flowchart</text>
+        <text x="840" y="440" text-anchor="middle" fill="#374151" font-size="11" font-weight="700">Geradores de Diagrama</text>
+        <rect x="722" y="450" width="112" height="34" rx="6" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1"/>
+        <text x="778" y="469" text-anchor="middle" fill="#1d4ed8" font-size="9" font-weight="600">bpmn_generator</text>
+        <text x="778" y="481" text-anchor="middle" fill="#6b7280" font-size="8.5">BPMN 2.0 XML + DI</text>
+        <rect x="844" y="450" width="118" height="34" rx="6" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1"/>
+        <text x="903" y="469" text-anchor="middle" fill="#16a34a" font-size="9" font-weight="600">diagram_mermaid</text>
+        <text x="903" y="481" text-anchor="middle" fill="#6b7280" font-size="8.5">Mermaid flowchart</text>
 
         <!-- Arrow from AgentBPMN down to generators -->
-        <line x1="422" y1="325" x2="422" y2="393" stroke="#2563eb" stroke-width="1.5"
+        <line x1="92" y1="535" x2="92" y2="560" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <line x1="92" y1="560" x2="840" y2="560" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <line x1="840" y1="560" x2="840" y2="497" stroke="#2563eb" stroke-width="1.5"
               stroke-dasharray="4,3" marker-end="url(#arr-blue)"/>
 
-        <!-- st.session_state label -->
-        <rect x="30" y="500" width="220" height="30" rx="6" fill="#f1f5f9" stroke="#e2e8f0"/>
-        <text x="140" y="520" text-anchor="middle" fill="#475569" font-size="10" font-weight="600">
-          st.session_state["hub"]
-        </text>
-        <line x1="962" y1="335" x2="962" y2="460" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="4,3"/>
-        <line x1="962" y1="460" x2="140" y2="460" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="4,3"/>
-        <line x1="140" y1="460" x2="140" y2="498" stroke="#6b7280" stroke-width="1.5"
-              stroke-dasharray="4,3" marker-end="url(#arr)"/>
+        <!-- Curadoria bypass note -->
+        <rect x="710" y="165" width="370" height="65" rx="8"
+              fill="#fffbeb" stroke="#fcd34d" stroke-width="1.2"/>
+        <text x="895" y="185" text-anchor="middle" fill="#92400e" font-size="10" font-weight="700">&#128199; Fluxo de Curadoria (opcional)</text>
+        <text x="895" y="200" text-anchor="middle" fill="#b45309" font-size="9">[&#129529; Pré-processar] — instantâneo, sem LLM</text>
+        <text x="895" y="214" text-anchor="middle" fill="#b45309" font-size="9">Painel: original | pré-processado (editável + destaques)</text>
+        <text x="895" y="228" text-anchor="middle" fill="#b45309" font-size="9">Orchestrator pula Step 0.5 se transcript_clean já curado</text>
       </svg>
     </div>
 
@@ -492,25 +557,35 @@
       <div class="agent-card orch">
         <span class="agent-tag tag-orch">Orquestrador</span>
         <h3>Orchestrator</h3>
-        <p>Sequencia NLP → BPMN → Minutes → Requirements. Gerencia progresso e ciclo de vida do KnowledgeHub.</p>
+        <p>Sequencia os 6 steps. Detecta curadoria prévia e pula preprocessing. Gerencia progresso e ciclo de vida do KnowledgeHub.</p>
+      </div>
+      <div class="agent-card quality">
+        <span class="agent-tag tag-rose">LLM · Step 0</span>
+        <h3>AgentTranscriptQuality</h3>
+        <p>Avalia qualidade ASR: census de artifact_ratio, 6 critérios ponderados (20/20/20/15/15/10%), grade A–E e lista de inconsistências detectadas.</p>
+      </div>
+      <div class="agent-card preproc">
+        <span class="agent-tag tag-cyan">Rule-based · Step 0.5</span>
+        <h3>TranscriptPreprocessor</h3>
+        <p>Sem LLM. Parseia formato Teams (speaker/timestamp), remove fillers PT/EN, colapsa repetições, marca artefatos com <code>[?]</code>.</p>
       </div>
       <div class="agent-card nlp">
-        <span class="agent-tag tag-nlp">Pré-processador</span>
+        <span class="agent-tag tag-nlp">spaCy · Step 1</span>
         <h3>NLPChunker</h3>
-        <p>spaCy NER em PT-BR. Extrai atores, segmenta parágrafos, detecta idioma. Sem chamada LLM.</p>
+        <p>spaCy NER em PT-BR. Extrai atores, segmenta parágrafos, detecta idioma. Lê <code>transcript_clean</code>. Sem chamada LLM.</p>
       </div>
       <div class="agent-card bpmn">
-        <span class="agent-tag tag-llm">LLM + Skill</span>
+        <span class="agent-tag tag-llm">LLM · Step 2</span>
         <h3>AgentBPMN</h3>
-        <p>Extrai steps, edges e swimlanes. Aplica <code>_enforce_rules()</code> pós-extração. Gera BPMN 2.0 XML e Mermaid.</p>
+        <p>Extrai steps, edges e swimlanes. Aplica <code>_enforce_rules()</code> pós-extração. Gera BPMN 2.0 XML e Mermaid via geradores.</p>
       </div>
       <div class="agent-card min">
-        <span class="agent-tag tag-llm">LLM + Skill</span>
+        <span class="agent-tag tag-llm">LLM · Step 3</span>
         <h3>AgentMinutes</h3>
         <p>Extrai agenda, decisões e action items com autoria por iniciais [MF, PG…]. Transcrição completa sem truncamento.</p>
       </div>
       <div class="agent-card req">
-        <span class="agent-tag tag-llm">LLM + Skill</span>
+        <span class="agent-tag tag-llm">LLM · Step 4</span>
         <h3>AgentRequirements</h3>
         <p>Levantamento IEEE 830 adaptado: campos UI, validações, regras de negócio, funcionais e NFRs — com citação rastreável por autor.</p>
       </div>
@@ -536,16 +611,19 @@
           Ordenação topológica → atribuição de colunas globais → cálculo de largura por coluna
           → posicionamento absoluto <code>(x, y, w, h)</code> por elemento.
           Altura de lane calculada dinamicamente pelo conteúdo real.
+          Elementos empilhados na mesma coluna distribuídos verticalmente com <code>V_GAP</code>.
         </p>
       </div>
       <div class="card">
         <h3>&#9898; Eliminação de Cruzamentos</h3>
         <p class="text-sm mt-1">
-          Algoritmo single-pass com 4 heurísticas:
-          <br><strong>H2</strong> — lane-span ≥ 2 com elementos em range
-          <br><strong>H3</strong> — flow forward de longo alcance (≥ 320 px)
-          <br><strong>H4</strong> — flows cross-lane retroativos (target_x &lt; source_x)
-          <br>Flows substituídos por pares <em>throw/catch Link Event</em>.
+          Loop iterativo (máx. 3 passes) com 4 heurísticas:<br>
+          <strong>H2</strong> — lane-span ≥ 2 com elementos em range<br>
+          <strong>H3</strong> — flow forward de longo alcance (≥ 320 px)<br>
+          <strong>H4</strong> — flows cross-lane retroativos (target_x &lt; source_x)<br>
+          Flows substituídos por pares <em>throw/catch Link Event</em>.
+          Coluna do throw fixada em <code>col[source]</code> para evitar cruzamentos com fluxos
+          cross-lane adjacentes.
         </p>
       </div>
       <div class="card">
@@ -575,10 +653,10 @@
           </tr>
         </thead>
         <tbody>
-          <tr><td><code>generate_bpmn_xml(bpmn)</code></td><td>Ponto de entrada público. Executa 4 passes: process XML, pools/lanes, layout, DI interchange.</td></tr>
+          <tr><td><code>generate_bpmn_xml(bpmn)</code></td><td>Ponto de entrada. Executa 4 passes: process XML, pools/lanes, layout, DI interchange. Loop de crossing elimination máx. 3 iterações.</td></tr>
           <tr><td><code>_assign_lanes(bpmn)</code></td><td>4-step: explicit IDs → name match → flow-context inference → fallback first lane.</td></tr>
-          <tr><td><code>_assign_columns(order, flows)</code></td><td>Topological sort + BFS de profundidade máxima de predecessores. Fix pós-processamento para lnk_catch.</td></tr>
-          <tr><td><code>_detect_crossings(flows, shapes)</code></td><td>H2 + H3 + H4. Retorna set de flow IDs a substituir por Link Events.</td></tr>
+          <tr><td><code>_assign_columns(order, flows)</code></td><td>Topological sort + BFS de profundidade máxima de predecessores. Fix pós-processamento para <code>lnk_catch</code> (col = col[target]) e <code>lnk_throw</code> (col = col[source]) após injeção de Link Events.</td></tr>
+          <tr><td><code>_detect_crossings(flows, shapes)</code></td><td>H2 + H3 + H4. Exclui flows com link events de candidatos. Retorna set de flow IDs a substituir.</td></tr>
           <tr><td><code>_apply_link_events(bpmn)</code></td><td>Substitui flows cruzados por pares throw/catch, registra em lanes e lane_assignment.</td></tr>
           <tr><td><code>_build_di(diagram, plane, shapes)</code></td><td>Emite BPMNShape + BPMNEdge com waypoints (normal / stacked / U-backward) e bounds de label.</td></tr>
           <tr><td><code>_enforce_rules(model)</code> <span class="pill pill-blue">agent_bpmn.py</span></td><td>Post-processing determinístico: R0 remove events LLM; R1 serviceTask lane=null; R1b infere lane; R2 redireciona loop.</td></tr>
@@ -661,6 +739,8 @@
       Dataclass Python que vive em <code>st.session_state["hub"]</code>.
       Cada agente lê apenas o seu input e escreve apenas no seu envelope.
       Um contador de versão garante rastreabilidade de cada mutação.
+      <code>KnowledgeHub.migrate(hub)</code> é o ponto único de compatibilidade retroativa —
+      toda vez que um campo é adicionado, uma guarda <code>hasattr</code> é acrescentada aqui.
     </p>
 
     <div class="card mt-2" style="background:#0f172a; border-color:#1e293b;">
@@ -668,25 +748,75 @@
                   font-family:'SFMono-Regular',Consolas,monospace;">
 <span style="color:#7dd3fc">@dataclass</span>
 <span style="color:#93c5fd">class</span> <span style="color:#fbbf24">KnowledgeHub</span>:
-    version:          <span style="color:#86efac">int</span>                  <span style="color:#64748b"># incrementado em cada .bump()</span>
-    transcript_raw:   <span style="color:#86efac">str</span>                  <span style="color:#64748b"># transcrição original do usuário</span>
-    transcript_clean: <span style="color:#86efac">str</span>                  <span style="color:#64748b"># texto normalizado pelo NLPChunker</span>
-    nlp:              <span style="color:#fbbf24">NLPEnvelope</span>          <span style="color:#64748b"># atores, segmentos, idioma detectado</span>
-    bpmn:             <span style="color:#fbbf24">BPMNModel</span>            <span style="color:#64748b"># steps, edges, lanes, bpmn_xml, mermaid</span>
-    minutes:          <span style="color:#fbbf24">MinutesModel</span>         <span style="color:#64748b"># agenda, decisões, action items, participantes</span>
-    requirements:     <span style="color:#fbbf24">RequirementsModel</span>    <span style="color:#64748b"># IEEE 830 reqs com speaker attribution</span>
-    validation:       <span style="color:#fbbf24">ValidationReport</span>     <span style="color:#64748b"># reservado para PC2 AgentValidator</span>
-    meta:             <span style="color:#fbbf24">SessionMetadata</span>      <span style="color:#64748b"># tokens, timing, provedor LLM</span>
+    version:            <span style="color:#86efac">int</span>                        <span style="color:#64748b"># incrementado em cada .bump()</span>
+    transcript_raw:     <span style="color:#86efac">str</span>                        <span style="color:#64748b"># transcrição original intocada</span>
+    transcript_clean:   <span style="color:#86efac">str</span>                        <span style="color:#64748b"># texto pré-processado / curado</span>
+    transcript_quality: <span style="color:#fbbf24">TranscriptQualityModel</span>     <span style="color:#64748b"># Step 0 — grade A–E, critérios, inconsistências</span>
+    preprocessing:      <span style="color:#fbbf24">PreprocessingModel</span>         <span style="color:#64748b"># Step 0.5 — fillers, artefatos, repetições</span>
+    nlp:                <span style="color:#fbbf24">NLPEnvelope</span>               <span style="color:#64748b"># Step 1 — atores, segmentos, idioma</span>
+    bpmn:               <span style="color:#fbbf24">BPMNModel</span>                  <span style="color:#64748b"># Step 2 — steps, edges, lanes, bpmn_xml, mermaid</span>
+    minutes:            <span style="color:#fbbf24">MinutesModel</span>               <span style="color:#64748b"># Step 3 — agenda, decisões, action items</span>
+    requirements:       <span style="color:#fbbf24">RequirementsModel</span>           <span style="color:#64748b"># Step 4 — IEEE 830 com speaker attribution</span>
+    validation:         <span style="color:#fbbf24">ValidationReport</span>           <span style="color:#64748b"># reservado PC2 — AgentValidator</span>
+    meta:               <span style="color:#fbbf24">SessionMetadata</span>            <span style="color:#64748b"># tokens, timing, provedor LLM</span>
 
     <span style="color:#7dd3fc">@classmethod</span>
     <span style="color:#93c5fd">def</span> <span style="color:#60a5fa">migrate</span>(cls, hub) -&gt; <span style="color:#fbbf24">KnowledgeHub</span>:
-        <span style="color:#64748b"># Ponto único para backward-compat ao adicionar campos</span>
+        <span style="color:#64748b"># v3.2: RequirementsModel  v3.3: raised_by/speaker  v3.4: TranscriptQualityModel</span>
+        <span style="color:#64748b"># v3.5: PreprocessingModel  v3.6: InconsistencyItem[]</span>
         ...</pre>
     </div>
 
+    <h3 class="mt-3">Principais Modelos de Dados</h3>
+    <div class="card-grid-3 mt-1">
+      <div class="card">
+        <h3>TranscriptQualityModel</h3>
+        <p class="text-sm mt-1">
+          <code>criteria: list[CriterionScore]</code> — 6 critérios score 0–100<br>
+          <code>overall_score: float</code> — média ponderada<br>
+          <code>grade: str</code> — A / B / C / D / E<br>
+          <code>overall_summary, recommendation: str</code><br>
+          <code>inconsistencies: list[InconsistencyItem]</code>
+        </p>
+      </div>
+      <div class="card">
+        <h3>PreprocessingModel</h3>
+        <p class="text-sm mt-1">
+          <code>fillers_removed: int</code><br>
+          <code>artifact_turns: int</code> — turnos marcados <code>[?]</code><br>
+          <code>repetitions_collapsed: int</code><br>
+          <code>metadata_issues: list[str]</code> — ex.: "Invalid Date"
+        </p>
+      </div>
+      <div class="card">
+        <h3>BPMNModel</h3>
+        <p class="text-sm mt-1">
+          <code>steps: list[BPMNStep]</code> — id, title, actor, task_type, lane<br>
+          <code>edges: list[BPMNEdge]</code> — source, target, label, condition<br>
+          <code>lanes: list[str]</code><br>
+          <code>bpmn_xml: str</code> — OMG BPMN 2.0 XML<br>
+          <code>mermaid: str</code>
+        </p>
+      </div>
+    </div>
+
+    <div class="mt-2 table-wrap">
+      <table>
+        <thead><tr><th>Critério ASR</th><th>Peso</th><th>O que mede</th></tr></thead>
+        <tbody>
+          <tr><td>Inteligibilidade Léxica</td><td>20 %</td><td>WER — palavras reconhecíveis e corretamente transcritas</td></tr>
+          <tr><td>Atribuição de Falantes</td><td>20 %</td><td>DER — consistência e precisão do speaker diarization</td></tr>
+          <tr><td>Coerência Semântica</td><td>20 %</td><td>Lógica contextual — frases fazem sentido em sequência</td></tr>
+          <tr><td>Completude do Conteúdo</td><td>15 %</td><td>Ausência de truncamentos, silêncio perdido, pensamentos incompletos</td></tr>
+          <tr><td>Vocabulário de Domínio</td><td>15 %</td><td>Termos técnicos e nomes próprios transcritos corretamente</td></tr>
+          <tr><td>Qualidade da Pontuação</td><td>10 %</td><td>Demarcação de sentenças; pontuação auxilia leitura</td></tr>
+        </tbody>
+      </table>
+    </div>
     <p class="mt-2 text-sm text-muted">
-      <strong>Regra de ouro:</strong> nunca instanciar um agente diretamente em <code>app.py</code> —
-      sempre via <code>Orchestrator.run(hub)</code>. Garante ordem de execução e integridade do estado.
+      <strong>Penalidade por artifact_ratio:</strong>
+      &lt;5% — sem penalidade · 5–15% — cap 80 · 15–25% — cap 65 · &gt;25% — cap 45.
+      Uma transcrição com &gt;15% de turnos de artefato não pode receber grau "boa qualidade".
     </p>
   </section>
 
@@ -729,21 +859,24 @@
           <tr><th>Caminho</th><th>Responsabilidade</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>app.py</code></td><td>Ponto de entrada Streamlit — UI, progress bar, tabs de resultado</td></tr>
-          <tr><td><code>core/knowledge_hub.py</code></td><td>KnowledgeHub e todos os dataclasses de estado</td></tr>
-          <tr><td><code>agents/orchestrator.py</code></td><td>Sequenciamento do pipeline PC1; aceita progress_callback</td></tr>
-          <tr><td><code>agents/base_agent.py</code></td><td>Classe abstrata — roteamento LLM, retry JSON, token tracking</td></tr>
-          <tr><td><code>agents/nlp_chunker.py</code></td><td>Pré-processador puro Python/spaCy — sem LLM</td></tr>
-          <tr><td><code>agents/agent_bpmn.py</code></td><td>Extração BPMN + <code>_enforce_rules()</code> + bridge para geradores</td></tr>
-          <tr><td><code>agents/agent_minutes.py</code></td><td>Extração de ata — transcrição completa, iniciais de participantes</td></tr>
-          <tr><td><code>agents/agent_requirements.py</code></td><td>Levantamento de requisitos IEEE 830 — 5 tipos, speaker attribution</td></tr>
-          <tr><td><code>modules/bpmn_generator.py</code></td><td>Gerador BPMN 2.0 XML — layout absoluto, crossing elimination, U-routing</td></tr>
-          <tr><td><code>modules/bpmn_viewer.py</code></td><td>Viewer interativo via bpmn-js 17 injetado inline</td></tr>
+          <tr><td><code>app.py</code></td><td>UI Streamlit — entrada, curadoria, botão pré-processar, tabs de resultado</td></tr>
+          <tr><td><code>core/knowledge_hub.py</code></td><td>KnowledgeHub e todos os dataclasses; <code>migrate()</code> para compatibilidade retroativa</td></tr>
+          <tr><td><code>agents/orchestrator.py</code></td><td>Sequencia os 6 steps; detecta curadoria prévia; aceita <code>progress_callback</code></td></tr>
+          <tr><td><code>agents/base_agent.py</code></td><td>Classe abstrata — roteamento LLM, retry JSON (3×), token tracking</td></tr>
+          <tr style="background:#fff1f2"><td><code>agents/agent_transcript_quality.py</code></td><td><strong>Step 0</strong> — Avaliação ASR: 6 critérios, grade A–E, artifact_ratio, InconsistencyItem[]</td></tr>
+          <tr style="background:#ecfeff"><td><code>modules/transcript_preprocessor.py</code></td><td><strong>Step 0.5</strong> — Limpeza rule-based: Teams parser, filler removal, colapso de repetições, marcação [?]</td></tr>
+          <tr><td><code>agents/nlp_chunker.py</code></td><td>Step 1 — spaCy NER PT-BR; lê <code>transcript_clean</code></td></tr>
+          <tr><td><code>agents/agent_bpmn.py</code></td><td>Step 2 — Extração BPMN + <code>_enforce_rules()</code> + bridge para geradores</td></tr>
+          <tr><td><code>agents/agent_minutes.py</code></td><td>Step 3 — Ata de reunião: transcrição completa, iniciais, <code>raised_by</code></td></tr>
+          <tr><td><code>agents/agent_requirements.py</code></td><td>Step 4 — Requisitos IEEE 830: 5 tipos, speaker attribution por citação</td></tr>
+          <tr><td><code>modules/bpmn_generator.py</code></td><td>Gerador BPMN 2.0 XML — layout absoluto, crossing elimination (3 passes), U-routing</td></tr>
+          <tr><td><code>modules/bpmn_viewer.py</code></td><td>Viewer interativo via bpmn-js 17 injetado inline (pan/zoom/fit)</td></tr>
           <tr><td><code>modules/config.py</code></td><td>Registro de provedores LLM — adicionar novos aqui</td></tr>
           <tr><td><code>modules/session_security.py</code></td><td>Gestão de chaves API — único ponto de acesso a credenciais</td></tr>
           <tr><td><code>skills/SKILL_BPMN.md</code></td><td>System prompt AgentBPMN — BPMN 2.0, lanes, autochecagem obrigatória</td></tr>
           <tr><td><code>skills/SKILL_MINUTES.md</code></td><td>System prompt AgentMinutes — ata, iniciais, volume de decisões</td></tr>
           <tr><td><code>skills/SKILL_REQUIREMENTS.md</code></td><td>System prompt AgentRequirements — IEEE 830, speaker attribution</td></tr>
+          <tr style="background:#fff1f2"><td><code>skills/skill_transcript_quality.md</code></td><td>System prompt AgentTranscriptQuality — protocolo 2 steps, penalidade artifact_ratio, output JSON</td></tr>
         </tbody>
       </table>
     </div>
@@ -753,7 +886,7 @@
 
   <!-- ── 9. Deploy ── -->
   <section class="section">
-    <div class="section-label">09 — Deploy & Operação</div>
+    <div class="section-label">09 — Deploy &amp; Operação</div>
     <h2>Ciclo de Deploy</h2>
 
     <div class="card-grid-3 mt-1">
@@ -791,24 +924,32 @@
     <div class="card-grid" style="grid-template-columns: 1fr 1fr; gap:2rem;">
 
       <div>
-        <h3 style="color:var(--green); margin-bottom:.75rem;">&#10003; PC1 — Concluído (v3.3)</h3>
+        <h3 style="color:var(--green); margin-bottom:.75rem;">&#10003; PC1 — Concluído (v3.5)</h3>
         <div class="roadmap">
           <div class="roadmap-item"><div class="roadmap-dot done"></div>
-            <div class="roadmap-text"><strong>Pipeline sequencial</strong> NLP → BPMN → Minutes → Requirements</div></div>
+            <div class="roadmap-text"><strong>Pipeline sequencial</strong> 6 steps: Quality → Preproc → NLP → BPMN → Minutes → Req</div></div>
           <div class="roadmap-item"><div class="roadmap-dot done"></div>
-            <div class="roadmap-text"><strong>BPMN 2.0 XML</strong> com layout absoluto, pools/lanes e Link Events</div></div>
+            <div class="roadmap-text"><strong>AgentTranscriptQuality</strong> — nota A–E, artifact_ratio census, 6 critérios ponderados</div></div>
           <div class="roadmap-item"><div class="roadmap-dot done"></div>
-            <div class="roadmap-text"><strong>Backward-flow routing</strong> — caminho em U abaixo dos elementos</div></div>
+            <div class="roadmap-text"><strong>TranscriptPreprocessor</strong> — Teams parser, filler removal, [rep:], marcação [?]</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot done"></div>
+            <div class="roadmap-text"><strong>Detecção de inconsistências LLM</strong> — highlights amarelos + tooltips no painel de curadoria</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot done"></div>
+            <div class="roadmap-text"><strong>Curadoria workflow</strong> — comparação original/pré-processado, edição livre, bypass de preprocessamento</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot done"></div>
+            <div class="roadmap-text"><strong>BPMN 2.0 XML</strong> com layout absoluto, pools/lanes, Link Events, crossing elimination (3 passes)</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot done"></div>
+            <div class="roadmap-text"><strong>Fix lnk_throw column</strong> — throw event em col[source] elimina cruzamentos com fluxos cross-lane adjacentes</div></div>
           <div class="roadmap-item"><div class="roadmap-dot done"></div>
             <div class="roadmap-text"><strong>_enforce_rules()</strong> — R0/R1/R1b/R2 contra erros recorrentes do LLM</div></div>
           <div class="roadmap-item"><div class="roadmap-dot done"></div>
-            <div class="roadmap-text"><strong>AgentRequirements</strong> — 5 tipos IEEE 830, speaker attribution</div></div>
+            <div class="roadmap-text"><strong>AgentRequirements</strong> — 5 tipos IEEE 830, speaker attribution por citação verbatim</div></div>
           <div class="roadmap-item"><div class="roadmap-dot done"></div>
-            <div class="roadmap-text"><strong>Minutes</strong> — transcrição completa + iniciais [MF, PG, NC, JL]</div></div>
+            <div class="roadmap-text"><strong>Minutes</strong> — transcrição completa sem truncamento + iniciais [MF, PG, NC, JL]</div></div>
           <div class="roadmap-item"><div class="roadmap-dot done"></div>
-            <div class="roadmap-text"><strong>KnowledgeHub.migrate()</strong> — evolução de schema sem quebrar sessões</div></div>
+            <div class="roadmap-text"><strong>KnowledgeHub.migrate()</strong> — evolução de schema sem quebrar sessões (v3.2–v3.6)</div></div>
           <div class="roadmap-item"><div class="roadmap-dot done"></div>
-            <div class="roadmap-text"><strong>Viewer interativo</strong> bpmn-js 17 inline · Multi-LLM 5 provedores</div></div>
+            <div class="roadmap-text"><strong>Viewer interativo</strong> bpmn-js 17 inline · Multi-LLM 5 provedores · Output language</div></div>
         </div>
       </div>
 
@@ -818,15 +959,15 @@
           <div class="roadmap-item"><div class="roadmap-dot plan"></div>
             <div class="roadmap-text"><strong>Execução paralela</strong> de agentes via <code>asyncio.gather()</code></div></div>
           <div class="roadmap-item"><div class="roadmap-dot plan"></div>
-            <div class="roadmap-text"><strong>AgentValidator</strong> — scoring de qualidade pós-geração</div></div>
+            <div class="roadmap-text"><strong>AgentValidator</strong> — scoring de qualidade pós-geração com roteamento condicional (LangGraph)</div></div>
           <div class="roadmap-item"><div class="roadmap-dot plan"></div>
             <div class="roadmap-text"><strong>AgentSBVR</strong> — regras de negócio em linguagem estruturada</div></div>
           <div class="roadmap-item"><div class="roadmap-dot plan"></div>
             <div class="roadmap-text"><strong>AgentBMM</strong> — modelagem de motivação de negócio</div></div>
           <div class="roadmap-item"><div class="roadmap-dot plan"></div>
-            <div class="roadmap-text"><strong>LangGraph</strong> — roteamento condicional em falhas de validação</div></div>
+            <div class="roadmap-text"><strong>Export PDF</strong> da ata de reunião</div></div>
           <div class="roadmap-item"><div class="roadmap-dot plan"></div>
-            <div class="roadmap-text"><strong>Suite de testes</strong> automatizados por cenário</div></div>
+            <div class="roadmap-text"><strong>Suite de testes</strong> automatizados por cenário (cenario-teste-001/002)</div></div>
         </div>
       </div>
 
@@ -1037,15 +1178,15 @@
 
     <!-- Veredicto -->
     <div class="hcard green mt-3">
-      <h3>&#9989; Veredicto: EXCELENTE — Pipeline Completo</h3>
+      <h3>&#9989; Veredicto: EXCELENTE — Pipeline Completo (v3.5)</h3>
       <p>
-        O pipeline v3.3 extraiu com fidelidade de <strong>100 %</strong> os passos, atores,
+        O pipeline v3.5 extraiu com fidelidade de <strong>100 %</strong> os passos, atores,
         gateways, lógica de retorno e mais de <strong>25 requisitos rastreáveis</strong>
-        a partir de uma reunião de 2h35. A ata retornou <strong>8 decisões e 7 action items</strong>
-        — impossível com a versão anterior que truncava a transcrição em 12 k caracteres.
-        Todos os 4 agentes (NLPChunker, AgentBPMN, AgentMinutes, AgentRequirements)
-        produziram saídas de qualidade corporativa sem nenhuma intervenção manual,
-        demonstrando maturidade do pipeline para uso em cenários de processo reais.
+        a partir de uma reunião de 2h35. A ata retornou <strong>8 decisões e 7 action items</strong>.
+        Todos os 7 componentes (AgentTranscriptQuality, TranscriptPreprocessor, NLPChunker,
+        AgentBPMN, AgentMinutes, AgentRequirements e KnowledgeHub) operaram em coerência
+        sem intervenção manual, demonstrando maturidade do pipeline para uso em cenários
+        de processo reais com transcrições ASR de qualidade variável.
       </p>
     </div>
 
@@ -1056,7 +1197,7 @@
 <!-- ═══════════════════════════  FOOTER  ═══════════════════════════ -->
 <footer class="page">
   <div>
-    <strong>Process2Diagram v3.3</strong> &nbsp;·&nbsp;
+    <strong>Process2Diagram v3.5</strong> &nbsp;·&nbsp;
     Pedro Regato &nbsp;·&nbsp;
     Março de 2026
   </div>

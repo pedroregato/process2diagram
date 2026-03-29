@@ -101,6 +101,7 @@ Antes de gerar o JSON, realize os seguintes passos:
 - **Exclusive (XOR):** `is_decision: true`. Exatamente 2 arestas de saída com labels claros ("Sim"/"Não", "Aprovado"/"Reprovado").
 - **Parallel (AND):** `is_decision: false`, `task_type: "parallelGateway"`. Use quando houver execução simultânea. **Todo AND aberto deve ser fechado por outro AND posteriormente.**
 - **Inclusive (OR):** `is_decision: true`, `task_type: "inclusiveGateway"`. Use quando "um, outro ou ambos" podem ocorrer.
+- **Sincronização:** Todo gateway de abertura (split) deve ser fechado por um gateway de sincronização (join) correspondente.
 
 ---
 
@@ -125,6 +126,7 @@ Antes de gerar o JSON, realize os seguintes passos:
 - **Labels de Gateway:** Toda aresta saindo de um `is_decision: true` DEVE ter `label` preenchido.
 - **Conectividade:** Todo elemento (exceto Start/End) deve ter ao menos uma entrada e uma saída.
 - **Caminhos completos:** Todo caminho deve terminar em um End Event.
+- **Sincronização de Gateways (Block-Structuring):** Todo gateway que divide o fluxo (split) deve ser sincronizado por um gateway correspondente que une o fluxo (join). Por exemplo, se de um gateway A saem 4 fluxos de sequência para uma atividade, a saída desta atividade deve ter 4 fluxos de sequência entrando em um gateway B para garantir a sincronização correta.
 
 ### 3. Message Flows (Colaboração)
 
