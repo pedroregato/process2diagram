@@ -184,9 +184,22 @@ class AgentBPMN(BaseAgent):
             # ── Pools / Lanes ─────────────────────────────────────────────────
             pools = []
             if model.lanes:
+                import unicodedata as _ud
+
+                def _ascii_id(s: str) -> str:
+                    """Normalize to ASCII for use as XML/bpmn-js element IDs.
+                    bpmn-js fails to match BPMNShape.bpmnElement when the ID
+                    contains non-ASCII characters (e.g. ã, ç, ê).
+                    The display name is kept unchanged; only the ID is sanitized.
+                    """
+                    nfkd = _ud.normalize("NFKD", s)
+                    return "".join(
+                        c for c in nfkd if _ud.category(c) != "Mn"
+                    ).lower().replace(" ", "_")
+
                 lane_objects = []
                 for lane_name in model.lanes:
-                    lane_id = "lane_" + lane_name.lower().replace(" ", "_")
+                    lane_id = "lane_" + _ascii_id(lane_name)
                     member_ids = [
                         s.id for s in model.steps
                         if s.lane and s.lane.lower() == lane_name.lower()
