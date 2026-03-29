@@ -539,6 +539,7 @@ if hub is not None:
                     prio = prio_colors.get(ai.priority, "⚪")
                     rows.append({
                         "Prioridade": prio,
+                        "Por": ai.raised_by or "—",
                         "Tarefa": ai.task,
                         "Responsável": ai.responsible,
                         "Prazo": ai.deadline or "—",
@@ -609,7 +610,8 @@ if hub is not None:
                         st.markdown(f"**Etapa do processo:** {r.process_step}")
                     st.markdown(f"**Descrição:** {r.description}")
                     if r.source_quote:
-                        st.markdown(f"> *\"{r.source_quote}\"*")
+                        speaker_tag = f"**[{r.speaker}]** " if r.speaker else ""
+                        st.markdown(f"> {speaker_tag}*\"{r.source_quote}\"*")
 
         tab_idx += 1
 

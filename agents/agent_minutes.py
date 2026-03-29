@@ -30,10 +30,9 @@ class AgentMinutes(BaseAgent):
         if hub.nlp.actors:
             actor_hint = f"\nParticipants identified by NLP: {', '.join(hub.nlp.actors)}"
 
-        # Limit transcript to ~12 000 chars to avoid truncated JSON responses.
-        transcript = hub.transcript_clean[:12_000]
-        if len(hub.transcript_clean) > 12_000:
-            transcript += "\n\n[transcript truncated — produce minutes from the portion above]"
+        # Pass full transcript — truncation to 12k was causing severe quality loss
+        # (only ~5% of a 2h meeting visible). DeepSeek context window supports ~80k chars.
+        transcript = hub.transcript_clean
 
         user = (
             f"Produce the structured meeting minutes from this transcript:{actor_hint}\n\n"
@@ -63,6 +62,7 @@ class AgentMinutes(BaseAgent):
                 responsible=ai.get("responsible", "A definir"),
                 deadline=ai.get("deadline") or None,
                 priority=ai.get("priority", "normal"),
+                raised_by=ai.get("raised_by") or None,
             )
             for ai in data.get("action_items", [])
         ]
@@ -132,14 +132,15 @@ class AgentMinutes(BaseAgent):
         if minutes.action_items:
             lines += ["## Encaminhamentos / Action Items", ""]
             lines += [
-                "| # | Tarefa | Responsável | Prazo | Prioridade |",
-                "|---|--------|-------------|-------|------------|",
+                "| # | Tarefa | Levantado por | Responsável | Prazo | Prioridade |",
+                "|---|--------|---------------|-------------|-------|------------|",
             ]
             priority_labels = {"high": "🔴 Alta", "normal": "🟡 Normal", "low": "🟢 Baixa"}
             for i, ai in enumerate(minutes.action_items, 1):
                 prio = priority_labels.get(ai.priority, ai.priority)
                 deadline = ai.deadline or "—"
-                lines.append(f"| {i} | {ai.task} | {ai.responsible} | {deadline} | {prio} |")
+                raised = f"**{ai.raised_by}**" if ai.raised_by else "—"
+                lines.append(f"| {i} | {ai.task} | {raised} | {ai.responsible} | {deadline} | {prio} |")
             lines.append("")
 
         # Next meeting

@@ -92,6 +92,7 @@ class ActionItem:
     responsible: str = "A definir"
     deadline: Optional[str] = None
     priority: str = "normal"      # high | normal | low
+    raised_by: Optional[str] = None  # initials of who raised this action (e.g. "MF")
 
 
 @dataclass
@@ -121,6 +122,7 @@ class RequirementItem:
     priority: str = "unspecified" # high | medium | low | unspecified
     process_step: Optional[str] = None
     source_quote: str = ""
+    speaker: Optional[str] = None  # initials of who said source_quote (e.g. "MF")
 
 
 @dataclass

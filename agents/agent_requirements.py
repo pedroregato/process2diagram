@@ -73,6 +73,7 @@ class AgentRequirements(BaseAgent):
                 priority=r.get("priority", "unspecified"),
                 process_step=r.get("process_step") or None,
                 source_quote=r.get("source_quote", ""),
+                speaker=r.get("speaker") or None,
             )
             for r in data.get("requirements", [])
         ]
@@ -136,7 +137,8 @@ class AgentRequirements(BaseAgent):
                 lines.append(r.description)
                 if r.source_quote:
                     lines.append("")
-                    lines.append(f"> *\"{r.source_quote}\"*")
+                    speaker_tag = f"**[{r.speaker}]** " if r.speaker else ""
+                    lines.append(f"> {speaker_tag}*\"{r.source_quote}\"*")
                 lines.append("")
 
         return "\n".join(lines)
