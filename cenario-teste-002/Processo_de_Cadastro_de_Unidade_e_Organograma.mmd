@@ -1,0 +1,33 @@
+flowchart LR
+    S01["Cadastrar unidade no sistema"]
+    S02{"Decidir se cadastra subunidades"}
+    S03["Cadastrar subunidades"]
+    S04["Enviar para validacao"]
+    S05{"Validar cadastro da unidade"}
+    S06["Solicitar ajustes no cadastro"]
+    S07["Aprovar cadastro da unidade"]
+    S08["Decidir acoes pos-validacao"]
+    S09["Adicionar organograma se aplicavel"]
+    S10["Criar catalogo tecnico"]
+    S11["Criar instrucao de trabalho"]
+    S12["Criar fluxo"]
+    S13["Classificar nivel de BI"]
+    S01 --> S02
+    S02 -->|sim| S03
+    S02 -->|nao| S04
+    S03 --> S04
+    S04 --> S05
+    S05 -->|nao| S06
+    S05 -->|sim| S07
+    S06 --> S01
+    S07 --> S08
+    S08 --> S09
+    S08 --> S10
+    S08 --> S11
+    S08 --> S12
+    S09 --> S13
+    S10 --> S13
+    S11 --> S13
+    S12 --> S13
+    style S02 fill:#fff3cd,stroke:#f59e0b
+    style S05 fill:#fff3cd,stroke:#f59e0b

@@ -11,7 +11,9 @@
       "Bash(git diff:*)",
       "Bash(git log:*)",
       "Bash(ls:*)",
-      "Bash(python -c:*)"
+      "Bash(python -c:*)",
+      "Bash(iconv -f cp1252 -t utf-8)",
+      "Bash(python -c \":*)"
     ]
   }
 }

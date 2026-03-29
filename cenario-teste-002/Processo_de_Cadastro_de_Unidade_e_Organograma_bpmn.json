@@ -1,0 +1,230 @@
+{
+  "name": "Processo de Cadastro de Unidade e Organograma",
+  "steps": [
+    {
+      "id": "S01",
+      "title": "Cadastrar unidade no sistema",
+      "description": "O usuário entra no sistema e cadastra uma nova unidade (ex: tesouraria, secretaria, compras) com código e nome. Para unidades sem número pré-existente, atribui-se um código sequencial (ex: 0101).",
+      "actor": "Equipe",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Equipe"
+    },
+    {
+      "id": "S02",
+      "title": "Decidir se cadastra subunidades",
+      "description": "Após cadastrar a unidade principal, o usuário decide se vai cadastrar unidades filhas (subunidades hierárquicas, como secretaria ou gerência sob uma diretoria). Se não houver, segue para validação.",
+      "actor": "Equipe",
+      "is_decision": true,
+      "task_type": "exclusiveGateway",
+      "lane": "Equipe"
+    },
+    {
+      "id": "S03",
+      "title": "Cadastrar subunidades",
+      "description": "O usuário cadastra as unidades filhas (subunidades) vinculadas à unidade principal, mantendo a estrutura hierárquica (ex: 9.3 Secretaria sob diretoria 9).",
+      "actor": "Equipe",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Equipe"
+    },
+    {
+      "id": "S04",
+      "title": "Enviar para validação",
+      "description": "O cadastro da unidade (com ou sem subunidades) é enviado para validação pela equipe gestora.",
+      "actor": "Equipe",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Equipe"
+    },
+    {
+      "id": "S05",
+      "title": "Validar cadastro da unidade",
+      "description": "A equipe gestora valida o cadastro da unidade. Pode aprovar, rejeitar ou solicitar ajustes.",
+      "actor": "Equipe Gestora",
+      "is_decision": true,
+      "task_type": "exclusiveGateway",
+      "lane": "Equipe Gestora"
+    },
+    {
+      "id": "S06",
+      "title": "Solicitar ajustes no cadastro",
+      "description": "Se houver erros no cadastro, a equipe gestora devolve para correção, solicitando ajustes (ex: código incorreto, nome impreciso).",
+      "actor": "Equipe Gestora",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Equipe Gestora"
+    },
+    {
+      "id": "S07",
+      "title": "Aprovar cadastro da unidade",
+      "description": "A equipe gestora aprova o cadastro da unidade, permitindo que prossiga para as próximas etapas (ex: adição de organograma, catálogo técnico).",
+      "actor": "Equipe Gestora",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Equipe Gestora"
+    },
+    {
+      "id": "S08",
+      "title": "Decidir ações pós-validação",
+      "description": "Após aprovação, o usuário decide quais ações realizar para a unidade: adicionar organograma, criar catálogo técnico, instrução de trabalho ou fluxo. Pode escolher uma ou mais opções.",
+      "actor": "Equipe",
+      "is_decision": false,
+      "task_type": "parallelGateway",
+      "lane": "Equipe"
+    },
+    {
+      "id": "S09",
+      "title": "Adicionar organograma (se aplicável)",
+      "description": "Para unidades que possuem organograma (ex: escolas), o usuário adiciona o documento (PDF, imagem) com data de referência. Para unidades sem organograma (ex: tesouraria), esta etapa é omitida.",
+      "actor": "Equipe",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Equipe"
+    },
+    {
+      "id": "S10",
+      "title": "Criar catálogo técnico",
+      "description": "O usuário cria catálogo técnico para a unidade, se necessário (ex: para escolas com processos).",
+      "actor": "Equipe",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Equipe"
+    },
+    {
+      "id": "S11",
+      "title": "Criar instrução de trabalho",
+      "description": "O usuário cria instrução de trabalho para a unidade, se necessário.",
+      "actor": "Equipe",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Equipe"
+    },
+    {
+      "id": "S12",
+      "title": "Criar fluxo",
+      "description": "O usuário cria fluxo para a unidade, se necessário.",
+      "actor": "Equipe",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Equipe"
+    },
+    {
+      "id": "S13",
+      "title": "Classificar nível de BI",
+      "description": "Para processos associados à unidade, o usuário classifica o nível de interesse do Business Intelligence (BI): estratégico (presidência/diretoria), tático (gerencial) ou operacional (equipes de trabalho). Esta etapa ocorre antes da aprovação final.",
+      "actor": "Equipe",
+      "is_decision": false,
+      "task_type": "businessRuleTask",
+      "lane": "Equipe"
+    }
+  ],
+  "edges": [
+    {
+      "source": "S01",
+      "target": "S02",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S02",
+      "target": "S03",
+      "label": "sim",
+      "condition": "Cadastrar subunidades"
+    },
+    {
+      "source": "S02",
+      "target": "S04",
+      "label": "não",
+      "condition": "Não cadastrar subunidades"
+    },
+    {
+      "source": "S03",
+      "target": "S04",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S04",
+      "target": "S05",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S05",
+      "target": "S06",
+      "label": "não",
+      "condition": "Rejeitar/solicitar ajustes"
+    },
+    {
+      "source": "S05",
+      "target": "S07",
+      "label": "sim",
+      "condition": "Aprovar"
+    },
+    {
+      "source": "S06",
+      "target": "S01",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S07",
+      "target": "S08",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S08",
+      "target": "S09",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S08",
+      "target": "S10",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S08",
+      "target": "S11",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S08",
+      "target": "S12",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S09",
+      "target": "S13",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S10",
+      "target": "S13",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S11",
+      "target": "S13",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S12",
+      "target": "S13",
+      "label": "",
+      "condition": ""
+    }
+  ],
+  "lanes": [
+    "Equipe",
+    "Equipe Gestora"
+  ]
+}
