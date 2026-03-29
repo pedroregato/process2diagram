@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Process2Diagram v3.1 — Resumo Técnico Executivo</title>
+  <style>
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue-900: #0f172a;
+      --blue-800: #1e293b;
+      --blue-700: #1d4ed8;
+      --blue-600: #2563eb;
+      --blue-500: #3b82f6;
+      --blue-100: #dbeafe;
+      --blue-050: #eff6ff;
+      --indigo:   #4f46e5;
+      --teal:     #0d9488;
+      --amber:    #d97706;
+      --rose:     #e11d48;
+      --green:    #16a34a;
+      --gray-900: #111827;
+      --gray-700: #374151;
+      --gray-500: #6b7280;
+      --gray-300: #d1d5db;
+      --gray-100: #f3f4f6;
+      --gray-050: #f9fafb;
+      --white:    #ffffff;
+      --radius:   10px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.10), 0 1px 2px rgba(0,0,0,.06);
+      --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.06);
+      --shadow-lg: 0 10px 15px rgba(0,0,0,.07), 0 4px 6px rgba(0,0,0,.05);
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+                   'Helvetica Neue', Arial, sans-serif;
+      font-size: 15px; line-height: 1.65;
+      color: var(--gray-700); background: var(--gray-050);
+    }
+
+    /* ── Typography ── */
+    h1 { font-size: 2.4rem; font-weight: 800; letter-spacing: -.03em; }
+    h2 { font-size: 1.55rem; font-weight: 700; letter-spacing: -.02em;
+         color: var(--gray-900); margin-bottom: 1rem; }
+    h3 { font-size: 1.1rem; font-weight: 700; color: var(--gray-900);
+         margin-bottom: .5rem; }
+    p  { margin-bottom: .85rem; }
+    a  { color: var(--blue-600); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: .85em; background: var(--gray-100);
+      padding: .15em .45em; border-radius: 4px; color: var(--indigo);
+    }
+
+    /* ── Layout ── */
+    .page { max-width: 1100px; margin: 0 auto; padding: 0 2rem 4rem; }
+
+    /* ── Hero ── */
+    .hero {
+      background: linear-gradient(135deg, var(--blue-900) 0%, #1e3a5f 55%, #0d3960 100%);
+      color: var(--white); padding: 3.5rem 0 3rem;
+      margin-bottom: 3rem;
+    }
+    .hero .page { display: flex; flex-direction: column; gap: .75rem; }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: .4rem;
+      background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2);
+      border-radius: 20px; padding: .3rem .9rem;
+      font-size: .78rem; font-weight: 600; letter-spacing: .04em;
+      text-transform: uppercase; color: #93c5fd; width: fit-content;
+    }
+    .hero h1 { color: var(--white); line-height: 1.15; }
+    .hero-subtitle {
+      font-size: 1.1rem; color: #93c5fd; max-width: 680px;
+      margin: 0; font-weight: 400;
+    }
+    .hero-meta {
+      display: flex; gap: 2rem; flex-wrap: wrap;
+      margin-top: 1rem; font-size: .85rem; color: #bfdbfe;
+    }
+    .hero-meta span { display: flex; align-items: center; gap: .4rem; }
+
+    /* ── Section wrapper ── */
+    .section { margin-bottom: 3rem; }
+    .section-label {
+      font-size: .72rem; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--blue-600);
+      margin-bottom: .4rem;
+    }
+    .divider {
+      height: 1px; background: var(--gray-300);
+      margin: 2.5rem 0;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--white); border-radius: var(--radius);
+      border: 1px solid var(--gray-300); box-shadow: var(--shadow-sm);
+      padding: 1.5rem;
+    }
+    .card-grid {
+      display: grid; gap: 1.25rem;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    }
+    .card-grid-3 {
+      display: grid; gap: 1.25rem;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    }
+
+    /* ── Highlight card ── */
+    .hcard {
+      border-radius: var(--radius); padding: 1.25rem 1.5rem;
+      border-left: 4px solid;
+    }
+    .hcard.blue   { background: #eff6ff; border-color: var(--blue-600); }
+    .hcard.teal   { background: #f0fdfa; border-color: var(--teal); }
+    .hcard.amber  { background: #fffbeb; border-color: var(--amber); }
+    .hcard.indigo { background: #eef2ff; border-color: var(--indigo); }
+    .hcard.green  { background: #f0fdf4; border-color: var(--green); }
+    .hcard h3 { font-size: 1rem; margin-bottom: .3rem; }
+    .hcard p  { margin: 0; font-size: .9rem; }
+
+    /* ── Tables ── */
+    .table-wrap { overflow-x: auto; border-radius: var(--radius);
+                  border: 1px solid var(--gray-300); }
+    table { width: 100%; border-collapse: collapse; }
+    thead tr { background: var(--blue-900); color: var(--white); }
+    thead th {
+      padding: .75rem 1rem; text-align: left;
+      font-size: .82rem; font-weight: 600; letter-spacing: .04em;
+    }
+    tbody tr:nth-child(even) { background: var(--gray-050); }
+    tbody tr:hover { background: var(--blue-050); }
+    tbody td { padding: .65rem 1rem; font-size: .88rem;
+               border-top: 1px solid var(--gray-100); }
+    td code { font-size: .80em; }
+
+    /* ── Pipeline SVG diagram ── */
+    .pipeline-wrap {
+      background: var(--white); border-radius: var(--radius);
+      border: 1px solid var(--gray-300); box-shadow: var(--shadow-md);
+      padding: 2rem 1.5rem; overflow-x: auto;
+    }
+    .pipeline-wrap svg { display: block; margin: 0 auto; max-width: 100%; }
+
+    /* ── Agent cards ── */
+    .agent-row {
+      display: grid; gap: 1rem;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    }
+    .agent-card {
+      background: var(--white); border-radius: var(--radius);
+      border: 1px solid var(--gray-300); box-shadow: var(--shadow-sm);
+      padding: 1.1rem 1.25rem;
+      border-top: 3px solid var(--blue-600);
+    }
+    .agent-card.nlp   { border-top-color: var(--teal); }
+    .agent-card.bpmn  { border-top-color: var(--blue-600); }
+    .agent-card.min   { border-top-color: var(--indigo); }
+    .agent-card.orch  { border-top-color: var(--amber); }
+    .agent-card h3 { font-size: .95rem; margin-bottom: .4rem; }
+    .agent-card p  { font-size: .83rem; margin: 0; color: var(--gray-500); }
+    .agent-tag {
+      display: inline-block; font-size: .7rem; font-weight: 700;
+      letter-spacing: .06em; text-transform: uppercase;
+      padding: .15rem .55rem; border-radius: 20px; margin-bottom: .5rem;
+    }
+    .tag-nlp   { background: #ccfbf1; color: #0f766e; }
+    .tag-llm   { background: #dbeafe; color: #1d4ed8; }
+    .tag-orch  { background: #fef3c7; color: #92400e; }
+
+    /* ── Roadmap ── */
+    .roadmap { display: flex; flex-direction: column; gap: .85rem; }
+    .roadmap-item {
+      display: flex; gap: 1rem; align-items: flex-start;
+    }
+    .roadmap-dot {
+      width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+      margin-top: .3rem;
+    }
+    .roadmap-dot.done { background: var(--green); }
+    .roadmap-dot.plan { background: var(--gray-300); border: 2px solid var(--gray-500); }
+    .roadmap-text { font-size: .9rem; }
+    .roadmap-text strong { color: var(--gray-900); }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--gray-300);
+      margin-top: 4rem; padding: 2rem 0;
+      font-size: .82rem; color: var(--gray-500);
+      display: flex; gap: 1rem; flex-wrap: wrap;
+      justify-content: space-between; align-items: center;
+    }
+
+    /* ── Utility ── */
+    .flex { display: flex; }
+    .gap-1 { gap: .5rem; }
+    .gap-2 { gap: 1rem; }
+    .mt-1  { margin-top: .5rem; }
+    .mt-2  { margin-top: 1rem; }
+    .mt-3  { margin-top: 1.5rem; }
+    .text-sm { font-size: .88rem; }
+    .text-xs { font-size: .78rem; }
+    .text-muted { color: var(--gray-500); }
+    .font-mono { font-family: 'SFMono-Regular', Consolas, monospace; }
+    .pill {
+      display: inline-block; padding: .2rem .65rem; border-radius: 20px;
+      font-size: .75rem; font-weight: 600;
+    }
+    .pill-blue   { background: var(--blue-100); color: var(--blue-700); }
+    .pill-green  { background: #dcfce7; color: var(--green); }
+    .pill-amber  { background: #fef3c7; color: var(--amber); }
+    .pill-gray   { background: var(--gray-100); color: var(--gray-700); }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════  HERO  ═══════════════════════════ -->
+<header class="hero">
+  <div class="page">
+    <span class="hero-badge">&#9679; Documento Técnico Executivo</span>
+    <h1>Process2Diagram</h1>
+    <p class="hero-subtitle">
+      Pipeline multi-agente de inteligência artificial que transforma transcrições de reuniões
+      em diagramas de processo BPMN 2.0 profissionais, prontos para uso corporativo.
+    </p>
+    <div class="hero-meta">
+      <span>&#128196; Versão&nbsp;<strong>3.1</strong></span>
+      <span>&#128197; Março de 2026</span>
+      <span>&#128099; Pedro Regato</span>
+      <span>&#128279; github.com/pedroregato/process2diagram</span>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════  BODY  ═══════════════════════════ -->
+<main class="page">
+
+  <!-- ── 1. Visão Executiva ── -->
+  <section class="section">
+    <div class="section-label">01 — Visão Executiva</div>
+    <h2>O que é o Process2Diagram?</h2>
+    <p>
+      <strong>Process2Diagram</strong> é uma plataforma web open-source que automatiza a criação de
+      documentação de processos de negócio a partir de linguagem natural.
+      O usuário cola ou faz upload de uma transcrição de reunião e, em segundos,
+      obtém um diagrama BPMN 2.0 interativo, um fluxograma Mermaid, um arquivo
+      Draw.io e uma ata de reunião estruturada — tudo pronto para distribuição.
+    </p>
+    <p>
+      A solução elimina horas de trabalho manual em ferramentas de modelagem,
+      reduz erros de interpretação e garante conformidade com o padrão
+      internacional OMG BPMN 2.0 (ISO/IEC 19510).
+    </p>
+
+    <div class="card-grid mt-3">
+      <div class="hcard blue">
+        <h3>&#9889; Processamento Inteligente</h3>
+        <p>Pipeline de IA com NLP + LLM especializado extrai automaticamente atores,
+           atividades, decisões e fluxos a partir de texto não estruturado.</p>
+      </div>
+      <div class="hcard teal">
+        <h3>&#128196; BPMN 2.0 Nativo</h3>
+        <p>XML gerado segue rigorosamente a especificação OMG. Compatível com
+           Camunda, Bizagi, draw.io e bpmn.io — sem retrabalho de importação.</p>
+      </div>
+      <div class="hcard amber">
+        <h3>&#128101; Multi-LLM</h3>
+        <p>Suporta DeepSeek, Claude (Anthropic), OpenAI, Groq e Gemini.
+           Troca de provedor em tempo real — adapta custo à necessidade.</p>
+      </div>
+      <div class="hcard indigo">
+        <h3>&#128274; Segurança por Design</h3>
+        <p>Chaves de API isoladas em memória de sessão Streamlit. Nunca
+           persistidas em disco, logs ou variáveis de ambiente.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ── 2. Formatos de Saída ── -->
+  <section class="section">
+    <div class="section-label">02 — Entradas e Saídas</div>
+    <h2>Formatos Suportados</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Formato de Saída</th>
+            <th>Padrão</th>
+            <th>Ferramentas Compatíveis</th>
+            <th>Caso de Uso</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>BPMN 2.0 XML</strong></td>
+            <td><code>OMG / ISO-IEC 19510</code></td>
+            <td>Camunda, Bizagi, draw.io, bpmn.io, Signavio</td>
+            <td>Documentação formal de processos, automação BPM</td>
+          </tr>
+          <tr>
+            <td><strong>Mermaid Flowchart</strong></td>
+            <td>—</td>
+            <td>GitHub Markdown, Notion, GitLab, mermaid.live</td>
+            <td>Documentação técnica inline, wikis</td>
+          </tr>
+          <tr>
+            <td><strong>Draw.io XML</strong></td>
+            <td>—</td>
+            <td>draw.io / diagrams.net, Confluence</td>
+            <td>Edição visual colaborativa</td>
+          </tr>
+          <tr>
+            <td><strong>Ata de Reunião</strong></td>
+            <td>Markdown estruturado</td>
+            <td>Qualquer editor Markdown, e-mail</td>
+            <td>Registro de decisões e action items</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mt-3 card">
+      <h3>Entrada Suportada</h3>
+      <p class="mt-1 text-sm">
+        <strong>Texto colado</strong> — transcrição direta na área de texto da interface.<br>
+        <strong>Upload de arquivo</strong> — arquivos <code>.txt</code> com qualquer codificação UTF-8.<br>
+        <strong>Idioma</strong> — detecção automática (PT-BR nativo, suporte multilíngue via configuração de output).
+      </p>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ── 3. Arquitetura ── -->
+  <section class="section">
+    <div class="section-label">03 — Arquitetura de Solução</div>
+    <h2>Pipeline Multi-Agente v3</h2>
+    <p>
+      A versão 3 adota uma arquitetura de <strong>agentes especializados</strong> com um
+      <em>KnowledgeHub</em> centralizado como fonte única de verdade. Cada agente lê
+      apenas o que precisa e escreve apenas no seu próprio namespace.
+    </p>
+
+    <!-- Pipeline diagram SVG -->
+    <div class="pipeline-wrap mt-2">
+      <svg viewBox="0 0 960 520" width="960" xmlns="http://www.w3.org/2000/svg"
+           font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+        <defs>
+          <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#6b7280"/>
+          </marker>
+          <marker id="arr-blue" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#2563eb"/>
+          </marker>
+          <filter id="shadow">
+            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity=".12"/>
+          </filter>
+        </defs>
+
+        <!-- Input -->
+        <rect x="30" y="200" width="130" height="60" rx="8"
+              fill="#1e293b" filter="url(#shadow)"/>
+        <text x="95" y="226" text-anchor="middle" fill="white" font-size="12" font-weight="700">Transcrição</text>
+        <text x="95" y="244" text-anchor="middle" fill="#93c5fd" font-size="11">.txt / texto</text>
+
+        <!-- Arrow 1 -->
+        <line x1="160" y1="230" x2="200" y2="230" stroke="#6b7280" stroke-width="2" marker-end="url(#arr)"/>
+
+        <!-- NLPChunker -->
+        <rect x="200" y="170" width="140" height="120" rx="10"
+              fill="white" stroke="#0d9488" stroke-width="2" filter="url(#shadow)"/>
+        <rect x="200" y="170" width="140" height="32" rx="10" fill="#0d9488"/>
+        <rect x="200" y="190" width="140" height="12" rx="0" fill="#0d9488"/>
+        <text x="270" y="193" text-anchor="middle" fill="white" font-size="11" font-weight="700">NLPChunker</text>
+        <text x="270" y="215" text-anchor="middle" fill="#374151" font-size="10">spaCy NER</text>
+        <text x="270" y="230" text-anchor="middle" fill="#374151" font-size="10">Detecção de Atores</text>
+        <text x="270" y="245" text-anchor="middle" fill="#374151" font-size="10">Segmentação</text>
+        <text x="270" y="262" text-anchor="middle" fill="#6b7280" font-size="9" font-style="italic">sem LLM</text>
+
+        <!-- Arrow 2 -->
+        <line x1="340" y1="230" x2="380" y2="230" stroke="#6b7280" stroke-width="2" marker-end="url(#arr)"/>
+        <text x="360" y="221" text-anchor="middle" fill="#6b7280" font-size="9">hub.nlp</text>
+
+        <!-- AgentBPMN -->
+        <rect x="380" y="150" width="150" height="160" rx="10"
+              fill="white" stroke="#2563eb" stroke-width="2" filter="url(#shadow)"/>
+        <rect x="380" y="150" width="150" height="32" rx="10" fill="#2563eb"/>
+        <rect x="380" y="170" width="150" height="12" rx="0" fill="#2563eb"/>
+        <text x="455" y="173" text-anchor="middle" fill="white" font-size="11" font-weight="700">AgentBPMN</text>
+        <text x="455" y="200" text-anchor="middle" fill="#374151" font-size="10">Extração JSON</text>
+        <text x="455" y="215" text-anchor="middle" fill="#374151" font-size="10">Steps / Edges</text>
+        <text x="455" y="230" text-anchor="middle" fill="#374151" font-size="10">Swimlanes</text>
+        <text x="455" y="245" text-anchor="middle" fill="#374151" font-size="10">BPMN 2.0 XML</text>
+        <text x="455" y="260" text-anchor="middle" fill="#374151" font-size="10">Mermaid / Draw.io</text>
+        <text x="455" y="278" text-anchor="middle" fill="#6b7280" font-size="9" font-style="italic">LLM + skill_bpmn.md</text>
+
+        <!-- Arrow 3 -->
+        <line x1="530" y1="230" x2="570" y2="230" stroke="#6b7280" stroke-width="2" marker-end="url(#arr)"/>
+        <text x="550" y="221" text-anchor="middle" fill="#6b7280" font-size="9">hub.bpmn</text>
+
+        <!-- AgentMinutes -->
+        <rect x="570" y="170" width="150" height="120" rx="10"
+              fill="white" stroke="#4f46e5" stroke-width="2" filter="url(#shadow)"/>
+        <rect x="570" y="170" width="150" height="32" rx="10" fill="#4f46e5"/>
+        <rect x="570" y="190" width="150" height="12" rx="0" fill="#4f46e5"/>
+        <text x="645" y="193" text-anchor="middle" fill="white" font-size="11" font-weight="700">AgentMinutes</text>
+        <text x="645" y="215" text-anchor="middle" fill="#374151" font-size="10">Agenda</text>
+        <text x="645" y="230" text-anchor="middle" fill="#374151" font-size="10">Decisões-Chave</text>
+        <text x="645" y="245" text-anchor="middle" fill="#374151" font-size="10">Action Items</text>
+        <text x="645" y="262" text-anchor="middle" fill="#6b7280" font-size="9" font-style="italic">LLM + skill_minutes.md</text>
+
+        <!-- Arrow 4 -->
+        <line x1="720" y1="230" x2="760" y2="230" stroke="#6b7280" stroke-width="2" marker-end="url(#arr)"/>
+        <text x="740" y="221" text-anchor="middle" fill="#6b7280" font-size="9">hub.minutes</text>
+
+        <!-- KnowledgeHub -->
+        <rect x="760" y="160" width="150" height="140" rx="10"
+              fill="#1e293b" filter="url(#shadow)"/>
+        <text x="835" y="192" text-anchor="middle" fill="#93c5fd" font-size="11" font-weight="700">KnowledgeHub</text>
+        <line x1="770" y1="200" x2="900" y2="200" stroke="#334155" stroke-width="1"/>
+        <text x="835" y="218" text-anchor="middle" fill="#cbd5e1" font-size="10">hub.nlp</text>
+        <text x="835" y="233" text-anchor="middle" fill="#cbd5e1" font-size="10">hub.bpmn</text>
+        <text x="835" y="248" text-anchor="middle" fill="#cbd5e1" font-size="10">hub.minutes</text>
+        <text x="835" y="263" text-anchor="middle" fill="#cbd5e1" font-size="10">hub.meta</text>
+        <text x="835" y="283" text-anchor="middle" fill="#64748b" font-size="9" font-style="italic">version counter</text>
+
+        <!-- Gerators box bottom area -->
+        <rect x="380" y="370" width="340" height="90" rx="10"
+              fill="white" stroke="#d1d5db" stroke-width="1.5" filter="url(#shadow)"/>
+        <text x="550" y="398" text-anchor="middle" fill="#374151" font-size="11" font-weight="700">Geradores de Diagrama</text>
+        <rect x="392" y="408" width="92" height="36" rx="6" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1"/>
+        <text x="438" y="427" text-anchor="middle" fill="#1d4ed8" font-size="10" font-weight="600">bpmn_generator</text>
+        <text x="438" y="440" text-anchor="middle" fill="#6b7280" font-size="9">BPMN 2.0 XML</text>
+        <rect x="496" y="408" width="80" height="36" rx="6" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1"/>
+        <text x="536" y="427" text-anchor="middle" fill="#16a34a" font-size="10" font-weight="600">diagram_mermaid</text>
+        <text x="536" y="440" text-anchor="middle" fill="#6b7280" font-size="9">Mermaid</text>
+        <rect x="588" y="408" width="80" height="36" rx="6" fill="#fef3c7" stroke="#fde68a" stroke-width="1"/>
+        <text x="628" y="427" text-anchor="middle" fill="#92400e" font-size="10" font-weight="600">diagram_drawio</text>
+        <text x="628" y="440" text-anchor="middle" fill="#6b7280" font-size="9">Draw.io XML</text>
+
+        <!-- Arrow from AgentBPMN down to generators -->
+        <line x1="455" y1="310" x2="455" y2="368" stroke="#2563eb" stroke-width="1.5"
+              stroke-dasharray="4,3" marker-end="url(#arr-blue)"/>
+
+        <!-- Orchestrator at top -->
+        <rect x="30" y="50" width="880" height="40" rx="8"
+              fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5"/>
+        <text x="470" y="67" text-anchor="middle" fill="#92400e" font-size="12" font-weight="700">
+          Orchestrator — coordena NLPChunker → AgentBPMN → AgentMinutes
+        </text>
+        <text x="470" y="82" text-anchor="middle" fill="#b45309" font-size="10">
+          Streamlit session_state  ·  progress_callback  ·  KnowledgeHub lifecycle
+        </text>
+
+        <!-- st.session_state label -->
+        <rect x="30" y="470" width="200" height="30" rx="6" fill="#f1f5f9" stroke="#e2e8f0"/>
+        <text x="130" y="490" text-anchor="middle" fill="#475569" font-size="10" font-weight="600">
+          st.session_state["hub"]
+        </text>
+        <line x1="835" y1="300" x2="835" y2="380" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <line x1="835" y1="380" x2="130" y2="380" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <line x1="130" y1="380" x2="130" y2="468" stroke="#6b7280" stroke-width="1.5"
+              stroke-dasharray="4,3" marker-end="url(#arr)"/>
+      </svg>
+    </div>
+
+    <!-- Agent cards -->
+    <h3 class="mt-3">Agentes do Pipeline</h3>
+    <div class="agent-row mt-1">
+      <div class="agent-card orch">
+        <span class="agent-tag tag-orch">Orquestrador</span>
+        <h3>Orchestrator</h3>
+        <p>Sequencia NLP → BPMN → Minutes. Gerencia progresso e ciclo de vida do KnowledgeHub.</p>
+      </div>
+      <div class="agent-card nlp">
+        <span class="agent-tag tag-nlp">Pré-processador</span>
+        <h3>NLPChunker</h3>
+        <p>spaCy NER em PT-BR. Extrai atores, segmenta parágrafos, detecta idioma. Sem chamada LLM.</p>
+      </div>
+      <div class="agent-card bpmn">
+        <span class="agent-tag tag-llm">LLM + Skill</span>
+        <h3>AgentBPMN</h3>
+        <p>Extrai steps, edges e swimlanes. Gera BPMN 2.0 XML, Mermaid e Draw.io via skill_bpmn.md.</p>
+      </div>
+      <div class="agent-card min">
+        <span class="agent-tag tag-llm">LLM + Skill</span>
+        <h3>AgentMinutes</h3>
+        <p>Extrai agenda, decisões-chave e action items. Produz ata em Markdown estruturado.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ── 4. BPMN Generator ── -->
+  <section class="section">
+    <div class="section-label">04 — Componente Crítico</div>
+    <h2>Gerador BPMN 2.0 (<code>bpmn_generator.py</code>)</h2>
+    <p>
+      Coração técnico da solução. Converte o modelo semântico extraído pelo AgentBPMN em XML
+      BPMN 2.0 válido com coordenadas absolutas e layout automático, pronto para importação
+      em qualquer ferramenta BPM-compatível.
+    </p>
+
+    <div class="card-grid-3 mt-2">
+      <div class="card">
+        <h3>&#128205; Layout por Colunas</h3>
+        <p class="text-sm mt-1">
+          Ordenação topológica → atribuição de colunas globais → cálculo de largura por coluna
+          → posicionamento absoluto <code>(x, y, w, h)</code> por elemento.
+          Altura de lane calculada dinamicamente pelo conteúdo real.
+        </p>
+      </div>
+      <div class="card">
+        <h3>&#9898; Eliminação de Cruzamentos</h3>
+        <p class="text-sm mt-1">
+          Algoritmo single-pass com 4 heurísticas:
+          <br><strong>H2</strong> — lane-span ≥ 2 com elementos em range
+          <br><strong>H3</strong> — flow forward de longo alcance (≥ 320 px)
+          <br><strong>H4</strong> — flows cross-lane retroativos (target_x &lt; source_x)
+          <br>Flows substituídos por pares <em>throw/catch Link Event</em>.
+        </p>
+      </div>
+      <div class="card">
+        <h3>&#128202; Waypoints Inteligentes</h3>
+        <p class="text-sm mt-1">
+          Detecção de sobreposição de faixas-x entre source e target.
+          Elementos empilhados na mesma coluna recebem waypoints verticais
+          (bottom-center → top-center), evitando invasão do perímetro do elemento destino.
+        </p>
+      </div>
+    </div>
+
+    <div class="mt-2 table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Função</th>
+            <th>Responsabilidade</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>generate_bpmn_xml(bpmn)</code></td><td>Ponto de entrada público. Executa 4 passes: process XML, pools/lanes, layout, DI interchange.</td></tr>
+          <tr><td><code>_assign_lanes(bpmn)</code></td><td>4-step: explicit IDs → name match → flow-context inference → fallback first lane.</td></tr>
+          <tr><td><code>_assign_columns(order, flows)</code></td><td>Topological sort + BFS de profundidade máxima de predecessores. Fix pós-processamento para lnk_catch.</td></tr>
+          <tr><td><code>_detect_crossings(flows, shapes)</code></td><td>H2 + H3 + H4. Retorna set de flow IDs a substituir por Link Events.</td></tr>
+          <tr><td><code>_apply_link_events(bpmn)</code></td><td>Substitui flows cruzados por pares throw/catch, registra em lanes e lane_assignment.</td></tr>
+          <tr><td><code>_build_di(diagram, plane, shapes)</code></td><td>Emite BPMNShape + BPMNEdge com waypoints, rótulos e bounds de label.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ── 5. LLM Providers ── -->
+  <section class="section">
+    <div class="section-label">05 — Provedores LLM</div>
+    <h2>Roteamento Multi-Provedor</h2>
+    <p>
+      O <code>BaseAgent._call_llm()</code> roteia chamadas com base no campo <code>client_type</code>
+      definido em <code>modules/config.py</code>. Adicionar um novo provedor requer apenas uma
+      entrada no dicionário <code>AVAILABLE_PROVIDERS</code>.
+    </p>
+
+    <div class="table-wrap mt-2">
+      <table>
+        <thead>
+          <tr>
+            <th>Provedor</th>
+            <th>Modelo Padrão</th>
+            <th>client_type</th>
+            <th>JSON Mode</th>
+            <th>Custo Indicativo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>DeepSeek</strong> <span class="pill pill-blue">Padrão</span></td>
+            <td><code>deepseek-chat</code></td>
+            <td><code>openai_compatible</code></td>
+            <td><span class="pill pill-green">Sim</span></td>
+            <td>$0,28 / $1,10 por 1M tokens</td>
+          </tr>
+          <tr>
+            <td><strong>Claude (Anthropic)</strong></td>
+            <td><code>claude-sonnet-4-6</code></td>
+            <td><code>anthropic</code></td>
+            <td><span class="pill pill-amber">Via prompt</span></td>
+            <td>$3,00 / $15,00 por 1M tokens</td>
+          </tr>
+          <tr>
+            <td><strong>OpenAI</strong></td>
+            <td><code>gpt-4o-mini</code></td>
+            <td><code>openai_compatible</code></td>
+            <td><span class="pill pill-green">Sim</span></td>
+            <td>$0,15 / $0,60 por 1M tokens</td>
+          </tr>
+          <tr>
+            <td><strong>Groq (Llama)</strong></td>
+            <td><code>llama-3.3-70b-versatile</code></td>
+            <td><code>openai_compatible</code></td>
+            <td><span class="pill pill-green">Sim</span></td>
+            <td>~$0,06 por 1M tokens</td>
+          </tr>
+          <tr>
+            <td><strong>Google Gemini</strong></td>
+            <td><code>gemini-2.0-flash</code></td>
+            <td><code>openai_compatible</code></td>
+            <td><span class="pill pill-green">Sim</span></td>
+            <td>Tier gratuito disponível</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ── 6. KnowledgeHub ── -->
+  <section class="section">
+    <div class="section-label">06 — Modelo de Dados</div>
+    <h2>KnowledgeHub — Fonte Única de Verdade</h2>
+    <p>
+      Dataclass Python que vive em <code>st.session_state["hub"]</code>.
+      Cada agente lê apenas o seu input e escreve apenas no seu envelope.
+      Um contador de versão garante rastreabilidade de cada mutação.
+    </p>
+
+    <div class="card mt-2" style="background:#0f172a; border-color:#1e293b;">
+      <pre style="color:#e2e8f0; font-size:.82rem; line-height:1.7; overflow-x:auto;
+                  font-family:'SFMono-Regular',Consolas,monospace;">
+<span style="color:#7dd3fc">@dataclass</span>
+<span style="color:#93c5fd">class</span> <span style="color:#fbbf24">KnowledgeHub</span>:
+    version:          <span style="color:#86efac">int</span>              <span style="color:#64748b"># incrementado em cada .bump()</span>
+    transcript_raw:   <span style="color:#86efac">str</span>              <span style="color:#64748b"># transcrição original do usuário</span>
+    transcript_clean: <span style="color:#86efac">str</span>              <span style="color:#64748b"># texto normalizado pelo NLPChunker</span>
+    nlp:              <span style="color:#fbbf24">NLPEnvelope</span>      <span style="color:#64748b"># atores, segmentos, idioma detectado</span>
+    bpmn:             <span style="color:#fbbf24">BPMNModel</span>        <span style="color:#64748b"># steps, edges, lanes, bpmn_xml, mermaid</span>
+    minutes:          <span style="color:#fbbf24">MinutesModel</span>     <span style="color:#64748b"># agenda, decisões, action items</span>
+    validation:       <span style="color:#fbbf24">ValidationReport</span> <span style="color:#64748b"># reservado para PC2 AgentValidator</span>
+    meta:             <span style="color:#fbbf24">SessionMetadata</span>  <span style="color:#64748b"># tokens, timing, provedor LLM</span></pre>
+    </div>
+
+    <p class="mt-2 text-sm text-muted">
+      <strong>Regra de ouro:</strong> nunca instanciar um agente diretamente em <code>app.py</code> —
+      sempre via <code>Orchestrator.run(hub)</code>. Garante ordem de execução e integridade do estado.
+    </p>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ── 7. Segurança ── -->
+  <section class="section">
+    <div class="section-label">07 — Segurança</div>
+    <h2>Modelo de Segurança Session-Only</h2>
+
+    <div class="card-grid">
+      <div class="hcard green">
+        <h3>&#128274; Isolamento de Credenciais</h3>
+        <p>Chaves de API armazenadas exclusivamente em <code>st.session_state</code>
+           (memória server-side por sessão). Descartadas ao fechar o browser.</p>
+      </div>
+      <div class="hcard teal">
+        <h3>&#128683; Zero Persistência</h3>
+        <p>Nenhuma chave é escrita em disco, banco de dados, log ou variável de ambiente.
+           <code>session_security.py</code> é o único ponto de acesso.</p>
+      </div>
+      <div class="hcard blue">
+        <h3>&#128260; Ponto Único de Acesso</h3>
+        <p><code>get_session_llm_client(provider)</code> retorna o cliente ao vivo ou
+           <code>None</code>. Toda a UI condiciona processamento à presença do cliente.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ── 8. Estrutura ── -->
+  <section class="section">
+    <div class="section-label">08 — Estrutura do Repositório</div>
+    <h2>Organização do Código</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Caminho</th><th>Responsabilidade</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>app.py</code></td><td>Ponto de entrada Streamlit — UI, progress bar, tabs de resultado</td></tr>
+          <tr><td><code>core/knowledge_hub.py</code></td><td>KnowledgeHub e todos os dataclasses de estado</td></tr>
+          <tr><td><code>agents/orchestrator.py</code></td><td>Sequenciamento do pipeline PC1; aceita progress_callback</td></tr>
+          <tr><td><code>agents/base_agent.py</code></td><td>Classe abstrata — roteamento LLM, retry JSON, token tracking</td></tr>
+          <tr><td><code>agents/nlp_chunker.py</code></td><td>Pré-processador puro Python/spaCy — sem LLM</td></tr>
+          <tr><td><code>agents/agent_bpmn.py</code></td><td>Extração BPMN + bridge para geradores de diagrama</td></tr>
+          <tr><td><code>agents/agent_minutes.py</code></td><td>Extração de ata de reunião</td></tr>
+          <tr><td><code>modules/bpmn_generator.py</code></td><td>Gerador BPMN 2.0 XML com layout absoluto e crossing elimination</td></tr>
+          <tr><td><code>modules/bpmn_viewer.py</code></td><td>Viewer interativo via bpmn-js 17 injetado inline</td></tr>
+          <tr><td><code>modules/config.py</code></td><td>Registro de provedores LLM — adicionar novos aqui</td></tr>
+          <tr><td><code>modules/session_security.py</code></td><td>Gestão de chaves API — único ponto de acesso a credenciais</td></tr>
+          <tr><td><code>skills/SKILL_BPMN.md</code></td><td>System prompt do AgentBPMN — regras BPMN 2.0, tipos, lanes</td></tr>
+          <tr><td><code>skills/SKILL_MINUTES.md</code></td><td>System prompt do AgentMinutes — estrutura de ata, action items</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ── 9. Deploy ── -->
+  <section class="section">
+    <div class="section-label">09 — Deploy & Operação</div>
+    <h2>Ciclo de Deploy</h2>
+
+    <div class="card-grid-3 mt-1">
+      <div class="card" style="text-align:center; padding:1.5rem 1rem;">
+        <div style="font-size:2rem; margin-bottom:.5rem;">&#9997;&#65039;</div>
+        <h3>1. Desenvolvimento Local</h3>
+        <p class="text-sm text-muted mt-1">PyCharm / Windows<br>Python 3.13<br><code>streamlit run app.py</code></p>
+      </div>
+      <div class="card" style="text-align:center; padding:1.5rem 1rem;">
+        <div style="font-size:2rem; margin-bottom:.5rem;">&#128640;</div>
+        <h3>2. Git Push</h3>
+        <p class="text-sm text-muted mt-1"><code>git push origin main</code><br>GitHub repo<br>pedroregato/process2diagram</p>
+      </div>
+      <div class="card" style="text-align:center; padding:1.5rem 1rem;">
+        <div style="font-size:2rem; margin-bottom:.5rem;">&#9728;&#65039;</div>
+        <h3>3. Auto-Deploy</h3>
+        <p class="text-sm text-muted mt-1">Streamlit Cloud detecta push<br>Rebuild automático<br>Zero downtime</p>
+      </div>
+    </div>
+
+    <div class="hcard amber mt-2">
+      <h3>&#9888;&#65039; Nota Operacional</h3>
+      <p>Nunca editar arquivos complexos diretamente no editor web do GitHub — pode corromper
+         a indentação. Sempre fazer push programático via terminal ou IDE.</p>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ── 10. Roadmap ── -->
+  <section class="section">
+    <div class="section-label">10 — Roadmap</div>
+    <h2>Evolução da Plataforma</h2>
+
+    <div class="card-grid" style="grid-template-columns: 1fr 1fr; gap:2rem;">
+
+      <div>
+        <h3 style="color:var(--green); margin-bottom:.75rem;">&#10003; PC1 — Concluído (v3.1)</h3>
+        <div class="roadmap">
+          <div class="roadmap-item"><div class="roadmap-dot done"></div>
+            <div class="roadmap-text"><strong>Pipeline sequencial</strong> NLP → BPMN → Minutes</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot done"></div>
+            <div class="roadmap-text"><strong>BPMN 2.0 XML</strong> com layout absoluto e pools/lanes</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot done"></div>
+            <div class="roadmap-text"><strong>Crossing elimination</strong> com Link Events (H2/H3/H4)</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot done"></div>
+            <div class="roadmap-text"><strong>Viewer interativo</strong> bpmn-js 17 inline</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot done"></div>
+            <div class="roadmap-text"><strong>Multi-LLM</strong> com 5 provedores configuráveis</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot done"></div>
+            <div class="roadmap-text"><strong>Mermaid + Draw.io</strong> como formatos alternativos</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot done"></div>
+            <div class="roadmap-text"><strong>SKILL_BPMN.md</strong> com regras OMG para lane de sistema</div></div>
+        </div>
+      </div>
+
+      <div>
+        <h3 style="color:var(--gray-500); margin-bottom:.75rem;">&#9711; PC2 — Planejado</h3>
+        <div class="roadmap">
+          <div class="roadmap-item"><div class="roadmap-dot plan"></div>
+            <div class="roadmap-text"><strong>Execução paralela</strong> de agentes via <code>asyncio.gather()</code></div></div>
+          <div class="roadmap-item"><div class="roadmap-dot plan"></div>
+            <div class="roadmap-text"><strong>AgentValidator</strong> — scoring de qualidade pós-geração</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot plan"></div>
+            <div class="roadmap-text"><strong>AgentSBVR</strong> — regras de negócio em linguagem estruturada</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot plan"></div>
+            <div class="roadmap-text"><strong>AgentBMM</strong> — modelagem de motivação de negócio</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot plan"></div>
+            <div class="roadmap-text"><strong>LangGraph</strong> — roteamento condicional em falhas de validação</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot plan"></div>
+            <div class="roadmap-text"><strong>Suite de testes</strong> automatizados por cenário</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot plan"></div>
+            <div class="roadmap-text"><strong>Layout vertical</strong> BPMN + melhorias de crossing avançadas</div></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<!-- ═══════════════════════════  FOOTER  ═══════════════════════════ -->
+<footer class="page">
+  <div>
+    <strong>Process2Diagram v3.1</strong> &nbsp;·&nbsp;
+    Pedro Regato &nbsp;·&nbsp;
+    Março de 2026
+  </div>
+  <div>
+    BPMN 2.0 / OMG ISO-IEC 19510 &nbsp;·&nbsp;
+    Streamlit Cloud &nbsp;·&nbsp;
+    Python 3.13
+  </div>
+</footer>
+
+</body>
+</html>
