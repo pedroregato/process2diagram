@@ -447,6 +447,12 @@ if hub is not None:
         hub.requirements = RequirementsModel()
     if hasattr(hub.bpmn, 'drawio_xml'):
         del hub.bpmn.__dict__['drawio_xml']
+    for ai in hub.minutes.action_items:
+        if not hasattr(ai, 'raised_by'):
+            ai.raised_by = None
+    for req in hub.requirements.requirements:
+        if not hasattr(req, 'speaker'):
+            req.speaker = None
 
     # ── Metrics banner ────────────────────────────────────────────────────────
     col_a, col_b, col_c, col_d = st.columns(4)
