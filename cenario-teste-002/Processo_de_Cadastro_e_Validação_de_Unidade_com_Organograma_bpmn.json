@@ -1,0 +1,137 @@
+{
+  "name": "Processo de Cadastro e Validação de Unidade com Organograma",
+  "steps": [
+    {
+      "id": "S01",
+      "title": "Cadastrar unidade no sistema",
+      "description": "O usuário inicia o cadastro de uma nova unidade (ex: tesouraria, secretaria, compras) no sistema, inserindo código e nome da unidade.",
+      "actor": "Equipe",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Equipe"
+    },
+    {
+      "id": "S02",
+      "title": "Decidir sobre unidades filhas",
+      "description": "Após cadastrar a unidade principal, o usuário decide se deseja cadastrar unidades filhas (subordinadas) ou enviar direto para validação.",
+      "actor": "Equipe",
+      "is_decision": true,
+      "task_type": "exclusiveGateway",
+      "lane": "Equipe"
+    },
+    {
+      "id": "S03",
+      "title": "Cadastrar unidades filhas",
+      "description": "Se o usuário optar por cadastrar unidades filhas, ele insere as subunidades (ex: Secretaria de Registros Acadêmicos, Gerência de Compras) vinculadas à unidade principal.",
+      "actor": "Equipe",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Equipe"
+    },
+    {
+      "id": "S04",
+      "title": "Enviar para validação",
+      "description": "O cadastro da unidade (com ou sem unidades filhas) é enviado para a atividade de validação pela equipe gestora.",
+      "actor": "Equipe",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Equipe"
+    },
+    {
+      "id": "S05",
+      "title": "Validar cadastro da unidade",
+      "description": "A equipe gestora valida o cadastro da unidade. Se houver erros, pode devolver para ajustes; se estiver correto, aprova e permite abertura de outras atividades.",
+      "actor": "Equipe Gestora",
+      "is_decision": true,
+      "task_type": "exclusiveGateway",
+      "lane": "Equipe Gestora"
+    },
+    {
+      "id": "S06",
+      "title": "Devolver para ajustes",
+      "description": "Se a validação identificar erros no cadastro, a equipe gestora devolve para a equipe que cadastrou corrigir as informações.",
+      "actor": "Equipe Gestora",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Equipe Gestora"
+    },
+    {
+      "id": "S07",
+      "title": "Abrir atividades relacionadas",
+      "description": "Após validação aprovada, o sistema permite abrir atividades como catálogo técnico (CT), instrução de trabalho (ITE), fluxo, ou outras, conforme necessidade da unidade.",
+      "actor": "Equipe",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Equipe"
+    },
+    {
+      "id": "S08",
+      "title": "Classificar nível de interesse BI",
+      "description": "Para processos que serão incluídos no Business Intelligence (BI), o usuário classifica o nível de interesse como estratégico (presidência/diretoria), tático (gerencial) ou operacional (equipes de trabalho).",
+      "actor": "Equipe",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Equipe"
+    }
+  ],
+  "edges": [
+    {
+      "source": "S01",
+      "target": "S02",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S02",
+      "target": "S03",
+      "label": "sim",
+      "condition": "cadastrar unidades filhas"
+    },
+    {
+      "source": "S02",
+      "target": "S04",
+      "label": "não",
+      "condition": "enviar direto para validação"
+    },
+    {
+      "source": "S03",
+      "target": "S04",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S04",
+      "target": "S05",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S05",
+      "target": "S06",
+      "label": "não",
+      "condition": "cadastro com erros"
+    },
+    {
+      "source": "S05",
+      "target": "S07",
+      "label": "sim",
+      "condition": "cadastro aprovado"
+    },
+    {
+      "source": "S06",
+      "target": "S01",
+      "label": "",
+      "condition": ""
+    },
+    {
+      "source": "S07",
+      "target": "S08",
+      "label": "",
+      "condition": ""
+    }
+  ],
+  "lanes": [
+    "Equipe",
+    "Equipe Gestora"
+  ]
+}

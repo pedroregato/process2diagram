@@ -134,6 +134,27 @@ class RequirementsModel:
     ready: bool = False
 
 
+# ── Transcript Quality Model ──────────────────────────────────────────────────
+
+@dataclass
+class CriterionScore:
+    criterion: str
+    score: int           # 0–100
+    weight: float        # 0.0–1.0 (informational; weighted average computed in agent)
+    justification: str = ""
+
+
+@dataclass
+class TranscriptQualityModel:
+    """Output of the TranscriptQuality Agent."""
+    criteria: list[CriterionScore] = field(default_factory=list)
+    overall_score: float = 0.0   # weighted average 0–100
+    grade: str = ""              # A / B / C / D / E
+    overall_summary: str = ""
+    recommendation: str = ""
+    ready: bool = False
+
+
 # ── Validation Report ─────────────────────────────────────────────────────────
 
 @dataclass
@@ -190,6 +211,7 @@ class KnowledgeHub:
     version: int = 0
     transcript_raw: str = ""
     transcript_clean: str = ""
+    transcript_quality: TranscriptQualityModel = field(default_factory=TranscriptQualityModel)
     nlp: NLPEnvelope = field(default_factory=NLPEnvelope)
     bpmn: BPMNModel = field(default_factory=BPMNModel)
     minutes: MinutesModel = field(default_factory=MinutesModel)
@@ -218,6 +240,10 @@ class KnowledgeHub:
             if not hasattr(obj, 'field'):
                 obj.field = <default>
         """
+        # ── v3.4: TranscriptQualityModel added to hub ─────────────────────────
+        if not hasattr(hub, 'transcript_quality'):
+            hub.transcript_quality = TranscriptQualityModel()
+
         # ── v3.2: RequirementsModel added to hub ──────────────────────────────
         if not hasattr(hub, 'requirements'):
             hub.requirements = RequirementsModel()
@@ -263,6 +289,7 @@ class KnowledgeHub:
     @property
     def status_summary(self) -> dict[str, bool]:
         return {
+            "transcript_quality": self.transcript_quality.ready,
             "nlp": self.nlp.ready,
             "bpmn": self.bpmn.ready,
             "minutes": self.minutes.ready,

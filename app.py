@@ -1,4 +1,4 @@
-## --- Process2Diagram v3.1 — Multi-Agent Architecture
+## --- Process2Diagram v3.4 — Multi-Agent Architecture
 ## --- Pedro Gentil
 
 import sys
@@ -62,6 +62,15 @@ st.markdown("""
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _grade_from_score(score: int) -> str:
+    if score >= 90: return "A"
+    if score >= 75: return "B"
+    if score >= 60: return "C"
+    if score >= 45: return "D"
+    return "E"
+
+
 def render_mermaid_block(mermaid_text: str, *, show_code: bool = True, key_suffix: str = "") -> None:
     """
     Renderiza Mermaid com pan/zoom/fit interativo, boa resolução,
@@ -239,7 +248,7 @@ with st.sidebar:
     _commit = _sp.run(["git", "rev-parse", "--short", "HEAD"],
                       capture_output=True, text=True).stdout.strip() or "unknown"
     st.markdown("## ⚙️ Process2Diagram")
-    st.markdown(f"*v3.1 — Multi-Agent* `{_commit}`")
+    st.markdown(f"*v3.4 — Multi-Agent* `{_commit}`")
     st.markdown("---")
 
     st.markdown("### 🤖 LLM Provider")
@@ -263,6 +272,7 @@ with st.sidebar:
     output_language = st.selectbox("Output language", ["Auto-detect", "Portuguese (BR)", "English"])
 
     st.markdown("### 🤖 Active Agents")
+    run_quality = st.checkbox("Agente Qualidade da Transcrição", value=True)
     run_bpmn = st.checkbox("Agente BPMN", value=True)
     run_minutes = st.checkbox("Agente Ata de Reunião", value=True)
     run_requirements = st.checkbox("Agente Requisitos", value=True)
@@ -389,7 +399,7 @@ if generate_btn:
         st.warning("Por favor, forneça uma transcrição com pelo menos algumas linhas.")
         st.stop()
 
-    if not run_bpmn and not run_minutes and not run_requirements:
+    if not run_quality and not run_bpmn and not run_minutes and not run_requirements:
         st.warning("Selecione ao menos um agente na barra lateral.")
         st.stop()
 
@@ -423,6 +433,7 @@ if generate_btn:
         hub = orchestrator.run(
             hub,
             output_language=output_language,
+            run_quality=run_quality,
             run_bpmn=run_bpmn,
             run_minutes=run_minutes,
             run_requirements=run_requirements,
@@ -455,6 +466,8 @@ if hub is not None:
 
     # ── Tabs ──────────────────────────────────────────────────────────────────
     tabs_to_show = []
+    if hub.transcript_quality.ready:
+        tabs_to_show += ["🔬 Qualidade da Transcrição"]
     if hub.bpmn.ready:
         tabs_to_show += ["📐 BPMN 2.0", "📊 Mermaid"]
 
@@ -471,6 +484,59 @@ if hub is not None:
 
     tabs = st.tabs(tabs_to_show)
     tab_idx = 0
+
+    # ── Tab: Qualidade da Transcrição ─────────────────────────────────────────
+    if hub.transcript_quality.ready:
+        with tabs[tab_idx]:
+            tq = hub.transcript_quality
+
+            # Grade badge colors
+            grade_colors = {"A": "#16a34a", "B": "#65a30d", "C": "#ca8a04",
+                            "D": "#ea580c", "E": "#dc2626"}
+            grade_color = grade_colors.get(tq.grade, "#64748b")
+
+            # Top-line score + grade
+            st.markdown(
+                f"<div style='display:flex;align-items:center;gap:1.5rem;margin-bottom:1rem'>"
+                f"<div style='font-size:3.5rem;font-weight:700;color:{grade_color};font-family:monospace'>"
+                f"{tq.grade}</div>"
+                f"<div><div style='font-size:1.8rem;font-weight:600;color:{grade_color}'>"
+                f"{tq.overall_score:.1f} / 100</div>"
+                f"<div style='color:#64748b;font-size:0.9rem'>Nota ponderada da transcrição</div>"
+                f"</div></div>",
+                unsafe_allow_html=True,
+            )
+
+            # Criteria breakdown
+            st.markdown("### Critérios de Avaliação")
+            for c in tq.criteria:
+                weight_pct = int(c.weight * 100)
+                bar_color = grade_colors.get(_grade_from_score(c.score), "#64748b")
+                with st.expander(
+                    f"**{c.criterion}** — {c.score}/100  (peso {weight_pct}%)",
+                    expanded=False,
+                ):
+                    st.progress(c.score / 100)
+                    st.markdown(c.justification)
+
+            st.divider()
+
+            if tq.overall_summary:
+                st.markdown("### Análise Geral")
+                st.markdown(tq.overall_summary)
+
+            if tq.recommendation:
+                grade_levels = {"A": "success", "B": "success", "C": "warning",
+                                "D": "warning", "E": "error"}
+                level = grade_levels.get(tq.grade, "info")
+                if level == "success":
+                    st.success(f"**Recomendação:** {tq.recommendation}")
+                elif level == "warning":
+                    st.warning(f"**Recomendação:** {tq.recommendation}")
+                else:
+                    st.error(f"**Recomendação:** {tq.recommendation}")
+
+        tab_idx += 1
 
     # ── Tab: BPMN 2.0 (bpmn-js viewer) ───────────────────────────────────────
     if hub.bpmn.ready:

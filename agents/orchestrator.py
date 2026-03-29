@@ -3,10 +3,11 @@
 # Orchestrator — PC1 implementation.
 #
 # PC1 pipeline (sequential for Streamlit compatibility):
-#   1. NLPChunker        → hub.nlp
-#   2. AgentBPMN         → hub.bpmn
-#   3. AgentMinutes      → hub.minutes
-#   4. AgentRequirements → hub.requirements
+#   0. AgentTranscriptQuality → hub.transcript_quality  (quality gate)
+#   1. NLPChunker             → hub.nlp
+#   2. AgentBPMN              → hub.bpmn
+#   3. AgentMinutes           → hub.minutes
+#   4. AgentRequirements      → hub.requirements
 #
 # PC2 upgrade path:
 #   - Replace sequential calls with asyncio.gather() for parallel execution
@@ -26,6 +27,7 @@ from agents.nlp_chunker import NLPChunker
 from agents.agent_bpmn import AgentBPMN
 from agents.agent_minutes import AgentMinutes
 from agents.agent_requirements import AgentRequirements
+from agents.agent_transcript_quality import AgentTranscriptQuality
 from core.knowledge_hub import KnowledgeHub
 
 
@@ -35,7 +37,7 @@ ProgressCallback = Callable[[str, str], None]   # (step_name, status) → None
 
 class Orchestrator:
     """
-    PC1 Orchestrator: NLP → BPMN + Minutes.
+    PC1 Orchestrator: TranscriptQuality → NLP → BPMN → Minutes → Requirements.
 
     Usage:
         hub = KnowledgeHub.new()
@@ -46,7 +48,7 @@ class Orchestrator:
     """
 
     # Agent execution plan for PC1
-    _PLAN = ["nlp", "bpmn", "minutes", "requirements"]
+    _PLAN = ["transcript_quality", "nlp", "bpmn", "minutes", "requirements"]
 
     def __init__(
         self,
@@ -59,6 +61,7 @@ class Orchestrator:
         self._progress = progress_callback or (lambda name, status: None)
 
         # Instantiate agents
+        self._agent_quality = AgentTranscriptQuality(client_info, provider_cfg)
         self._chunker = NLPChunker()
         self._agent_bpmn = AgentBPMN(client_info, provider_cfg)
         self._agent_minutes = AgentMinutes(client_info, provider_cfg)
@@ -70,6 +73,7 @@ class Orchestrator:
         self,
         hub: KnowledgeHub,
         output_language: str = "Auto-detect",
+        run_quality: bool = True,
         run_bpmn: bool = True,
         run_minutes: bool = True,
         run_requirements: bool = True,
@@ -80,6 +84,7 @@ class Orchestrator:
         Args:
             hub:               Initialized KnowledgeHub with transcript set.
             output_language:   Language preference for agent outputs.
+            run_quality:       Whether to run the Transcript Quality agent.
             run_bpmn:          Whether to run the BPMN agent.
             run_minutes:       Whether to run the Minutes agent.
             run_requirements:  Whether to run the Requirements agent.
@@ -89,6 +94,17 @@ class Orchestrator:
         """
         if not hub.transcript_raw:
             raise ValueError("KnowledgeHub has no transcript. Call hub.set_transcript() first.")
+
+        # ── Step 0: Transcript Quality Agent ─────────────────────────────────
+        if run_quality:
+            self._progress("Agente Qualidade", "running")
+            try:
+                hub = self._agent_quality.run(hub, output_language)
+                self._progress("Agente Qualidade", "done")
+            except Exception as exc:
+                self._progress("Agente Qualidade", f"error: {exc}")
+                # Quality failure is non-fatal — pipeline continues
+                hub.bump()
 
         # ── Step 1: NLP Chunker (no LLM) ─────────────────────────────────────
         self._progress("NLP / Chunker", "running")
