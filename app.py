@@ -535,7 +535,7 @@ if "pp_result" in st.session_state:
 st.divider()
 
 # ── Generate ──────────────────────────────────────────────────────────────────
-generate_btn = st.button("⚡ Processar Transcrição", type="primary", use_container_width=True)
+generate_btn = st.button("⚡ Iniciar Agentes Selecionados", type="primary", use_container_width=True)
 
 if generate_btn:
     st.session_state.pop("hub", None)   # limpa resultado anterior
