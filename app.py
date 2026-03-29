@@ -265,6 +265,7 @@ with st.sidebar:
     st.markdown("### 🤖 Active Agents")
     run_bpmn = st.checkbox("Agente BPMN", value=True)
     run_minutes = st.checkbox("Agente Ata de Reunião", value=True)
+    run_requirements = st.checkbox("Agente Requisitos", value=True)
 
     show_raw_json = st.checkbox("Show raw JSON", value=False)
     st.markdown("---")
@@ -388,7 +389,7 @@ if generate_btn:
         st.warning("Por favor, forneça uma transcrição com pelo menos algumas linhas.")
         st.stop()
 
-    if not run_bpmn and not run_minutes:
+    if not run_bpmn and not run_minutes and not run_requirements:
         st.warning("Selecione ao menos um agente na barra lateral.")
         st.stop()
 
@@ -424,6 +425,7 @@ if generate_btn:
             output_language=output_language,
             run_bpmn=run_bpmn,
             run_minutes=run_minutes,
+            run_requirements=run_requirements,
         )
     except Exception as e:
         st.error(f"Erro no pipeline: {e}")
