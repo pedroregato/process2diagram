@@ -139,8 +139,9 @@ Antes de gerar o JSON, realize os seguintes passos:
 
 ### 4. Tratamento de Ambiguidade
 
-Use `[AMBIGUIDADE: ...]` na `description` do passo afetado. Exemplo:
-```json
+Use `[AMBIGUIDADE: ...]` na `description` do passo afetado. (JSON — NUNCA use markdown) Exemplo:
+
+```
 "description": "Analisar o pedido. [AMBIGUIDADE: não ficou claro quem realiza esta análise – assumido como 'Analista de Crédito']"
 ```
 
