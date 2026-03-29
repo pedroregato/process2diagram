@@ -9,8 +9,59 @@
 
 from __future__ import annotations
 
+import re as _re
+
 from agents.base_agent import BaseAgent
 from core.knowledge_hub import KnowledgeHub, BPMNModel, BPMNStep, BPMNEdge
+
+
+def _infer_lane_name(generic_name: str, model: BPMNModel) -> str:
+    """
+    When the LLM uses a generic lane name (e.g. 'usuário'), try to infer a
+    better organizational name by scanning step descriptions and titles in
+    that lane for capitalized multi-word noun phrases.
+
+    Returns the best candidate found, or the original name if nothing better.
+    """
+    # Collect all text from steps assigned to this lane
+    texts = []
+    for step in model.steps:
+        if step.lane == generic_name:
+            texts.append(step.title)
+            texts.append(step.description)
+
+    combined = " ".join(texts)
+
+    # Patterns that suggest organizational units (capitalized sequences,
+    # Portuguese organizational keywords)
+    org_patterns = [
+        r'\b(Equipe\s+de\s+[A-ZÁÉÍÓÚÃÕ][a-záéíóúãõ]+(?:\s+[A-ZÁÉÍÓÚÃÕ][a-záéíóúãõ]+)*)\b',
+        r'\b(Gestores?\s+[A-ZÁÉÍÓÚÃÕ][a-záéíóúãõ]+(?:\s+[A-ZÁÉÍÓÚÃÕ][a-záéíóúãõ]+)*)\b',
+        r'\b([A-ZÁÉÍÓÚÃÕ][a-záéíóúãõ]+(?:\s+[A-ZÁÉÍÓÚÃÕ][a-záéíóúãõ]+){1,3})\b',
+    ]
+
+    _STOP_WORDS = {
+        "cadastrar", "cadastro", "enviar", "validar", "processar",
+        "organograma", "escola", "unidade", "após", "para", "com",
+        "início", "iniciar", "ajustar", "devolvido",
+    }
+
+    candidates: list[str] = []
+    for pattern in org_patterns:
+        for match in _re.finditer(pattern, combined):
+            phrase = match.group(1).strip()
+            words = phrase.lower().split()
+            if any(w in _STOP_WORDS for w in words):
+                continue
+            if 2 <= len(phrase.split()) <= 4:
+                candidates.append(phrase)
+
+    if candidates:
+        # Return most frequent candidate
+        from collections import Counter
+        return Counter(candidates).most_common(1)[0][0]
+
+    return generic_name
 
 
 class AgentBPMN(BaseAgent):
@@ -106,6 +157,31 @@ class AgentBPMN(BaseAgent):
                 e for e in model.edges
                 if e.source not in event_step_ids and e.target not in event_step_ids
             ]
+
+        # ── Rule 1b: generic lane names → infer from step descriptions ──────────
+        _GENERIC_LANE_NAMES = {
+            "usuário", "usuario", "user", "utilizador",
+            "validador", "validator", "revisor", "reviewer",
+            "sistema", "system", "automático", "automatic",
+            "ator", "actor", "papel", "role", "pessoa", "person",
+            "participante", "participant",
+        }
+        # Build a replacement map: generic_lane → best candidate from descriptions
+        lane_replacement: dict[str, str] = {}
+        for lane_name in list(model.lanes):
+            if lane_name.lower().strip() in _GENERIC_LANE_NAMES:
+                # Scan step descriptions and titles for capitalized organizational nouns
+                candidate = _infer_lane_name(lane_name, model)
+                if candidate and candidate != lane_name:
+                    lane_replacement[lane_name] = candidate
+
+        if lane_replacement:
+            model.lanes = [
+                lane_replacement.get(ln, ln) for ln in model.lanes
+            ]
+            for step in model.steps:
+                if step.lane in lane_replacement:
+                    step.lane = lane_replacement[step.lane]
 
         _GENERIC_ACTORS = {
             "sistema", "system", "automático", "automatic",

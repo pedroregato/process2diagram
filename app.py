@@ -508,7 +508,10 @@ if hub is not None:
             col2.markdown(f"**Local:** {m.location or '—'}")
 
             if m.participants:
-                st.markdown("**Participantes:** " + ", ".join(f"`{p}`" for p in m.participants))
+                st.markdown("**Participantes:**")
+                cols = st.columns(min(len(m.participants), 4))
+                for i, p in enumerate(m.participants):
+                    cols[i % 4].markdown(f"`{p}`")
 
             if m.agenda:
                 st.markdown("### 📌 Pauta")

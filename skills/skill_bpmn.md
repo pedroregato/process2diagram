@@ -101,6 +101,31 @@ a automação, que é a responsabilidade organizacional correta.
   visual de cima para baixo no diagrama. Coloque o ator principal que inicia
   o processo no topo, lanes de suporte/sistema no meio, e atores secundários
   abaixo. Uma boa ordenação minimiza cruzamentos visuais de sequence flows.
+- **Nomes de lane são unidades organizacionais, não papéis técnicos genéricos**:
+  use o nome funcional ou departamental do domínio de negócio
+  (ex: "Auditoria", "Gestores Validadores", "Equipe Jurídica", "TI").
+  NUNCA use nomes técnicos genéricos como "usuário", "validador", "sistema",
+  "ator" ou "pessoa" como nome de lane — esses são papéis, não unidades.
+
+## Regra do Loop de Retorno (Devolução para Correção)
+
+Quando um gateway de validação devolve o fluxo para correção, a edge de retorno
+**deve apontar para a etapa de trabalho onde o dado incorreto foi produzido**,
+não para o próprio gateway de validação.
+
+**ERRADO** (loop volta ao gateway — cria revalidação imediata sem permitir correção):
+```
+S03 → S04 → S05(gateway) --não--> S06(correção) --> S05  ← ERRADO
+```
+
+**CORRETO** (loop volta à etapa de trabalho para o usuário refazer):
+```
+S03 → S04 → S05(gateway) --não--> S06(correção) --> S03  ← CORRETO
+```
+
+Regra prática: a edge de saída do passo de correção deve ter como `target`
+o passo com `id` menor que o gateway, na mesma lane do ator que faz a correção,
+cujo output alimenta o gateway de validação.
 
 ## Formato de Saída (JSON — NUNCA use markdown)
 
@@ -135,6 +160,17 @@ a automação, que é a responsabilidade organizacional correta.
 6. **Títulos curtos**: máximo 6 palavras — aparecem dentro de nós de diagrama.
 7. **Sem invenção**: não adicione etapas que não estejam na transcrição.
 8. **Lane do End Event = lane do passo que o precede diretamente** (ver Regras Críticas de Lane).
-9. **Output language**: {output_language}
-10. **Retorne APENAS o JSON**. Nenhum texto, nenhum markdown.
+9. **serviceTask sem sistema nomeado**: `lane: null` obrigatório.
+10. **Loop de correção**: edge de retorno aponta para a etapa de trabalho, nunca para o gateway.
+11. **Nomes de lane**: unidades organizacionais do domínio — NUNCA use como nome de lane as palavras: "usuário", "usuario", "user", "validador", "validator", "sistema", "system", "ator", "actor", "papel", "role", "pessoa", "person". Se a transcrição não nomear explicitamente a unidade organizacional, use o cargo ou equipe mais específico mencionado (ex: "Equipe de Validação", "Gestores", "Diretoria").
+12. **Output language**: {output_language}
+13. **Retorne APENAS o JSON**. Nenhum texto, nenhum markdown.
+
+## Autochecagem Obrigatória (execute mentalmente antes de gerar o JSON)
+
+Antes de retornar o JSON, verifique:
+- [ ] Algum nome de lane é "usuário", "validador", "sistema" ou similar? → **SUBSTITUA** pelo nome organizacional da transcrição.
+- [ ] Algum step de correção faz loop de volta ao gateway? → **REDIRECIONE** para a etapa de trabalho anterior.
+- [ ] Algum serviceTask genérico tem lane definida? → **REMOVA** a lane (use null).
+- [ ] Algum step tem `task_type: "startEvent"` ou `"endEvent"`? → **REMOVA** — o gerador os cria automaticamente.
 

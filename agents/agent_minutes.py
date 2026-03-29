@@ -14,6 +14,14 @@ from datetime import datetime
 from agents.base_agent import BaseAgent
 from core.knowledge_hub import KnowledgeHub, MinutesModel, ActionItem
 
+_PREPOSITIONS = {"de", "da", "do", "das", "dos", "e", "a", "o", "em", "no", "na"}
+
+
+def _compute_initials(full_name: str) -> str:
+    """Returns initials from the first two significant words of a name."""
+    words = [w for w in full_name.split() if w.lower() not in _PREPOSITIONS]
+    return "".join(w[0].upper() for w in words[:2]) if len(words) >= 2 else ""
+
 
 class AgentMinutes(BaseAgent):
 
@@ -96,11 +104,19 @@ class AgentMinutes(BaseAgent):
             "",
         ]
 
-        # Participants
+        # Participants — format: "Nome Completo (XX)" already from LLM,
+        # or compute initials as fallback for legacy entries without them.
         if minutes.participants:
             lines += ["## Participantes", ""]
             for p in minutes.participants:
-                lines.append(f"- {p}")
+                # If initials already embedded by LLM (e.g. "João Luís (JL)"), use as-is
+                if "(" in p and ")" in p:
+                    lines.append(f"- {p}")
+                else:
+                    # Compute initials as fallback
+                    initials = _compute_initials(p)
+                    suffix = f" ({initials})" if initials else ""
+                    lines.append(f"- {p}{suffix}")
             lines.append("")
 
         # Agenda
