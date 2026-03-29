@@ -696,7 +696,7 @@
       {
         "id": "S01",
         "title": "Iniciar cadastro de organograma",
-        "description": "Usuário clica no botão 'Cadastro de estrutura e organograma de escola' para iniciar o fluxo. O sistema exibe uma tela para preenchimento de título (opcional) e confirmação.",
+        "description": "Usuário clica no botão 'Cadastro de estrutura e organograma de escola' na tela de login. Preenche título (opcional, mas recomendado para identificação), código da escola e nome da escola. Confirma para iniciar o fluxo.",
         "actor": "Auditoria",
         "is_decision": false,
         "task_type": "userTask",
@@ -704,8 +704,8 @@
       },
       {
         "id": "S02",
-        "title": "Preencher dados da escola",
-        "description": "Usuário preenche o formulário com código da escola, nome da escola, diretor responsável, e anexa arquivos obrigatórios (organograma em PDF e e-mail de aprovação). O sistema valida campos obrigatórios.",
+        "title": "Cadastrar escola (diretoria)",
+        "description": "Preencher formulário com código da escola, nome da escola, diretor responsável, indicar se possui catálogo mestre (sim, obrigatório para escola), e anexar arquivos: organograma em PDF e e-mail de aprovação (mínimo 2 arquivos). Salvar pode ser usado para pausar e retomar depois.",
         "actor": "Auditoria",
         "is_decision": false,
         "task_type": "userTask",
@@ -714,7 +714,7 @@
       {
         "id": "S03",
         "title": "Cadastrar unidades do organograma",
-        "description": "Usuário cadastra cada unidade (caixinha) do organograma, preenchendo tipo, código, nome, responsável, hierarquia (vinculação à unidade superior) e indica se possui catálogo técnico (sim/não). O sistema soma automaticamente o total de unidades e catálogos previstos.",
+        "description": "Incluir cada unidade (caixinha) do organograma: preencher tipo, código, nome, responsável, hierarquia (vincular à unidade superior), e indicar se possui catálogo técnico (sim/não). Pode salvar e retomar. O sistema soma automaticamente total de unidades e catálogos previstos.",
         "actor": "Auditoria",
         "is_decision": false,
         "task_type": "userTask",
@@ -723,7 +723,7 @@
       {
         "id": "S04",
         "title": "Enviar para validação",
-        "description": "Usuário conclui o cadastro das unidades e clica em 'Enviar para validação'. O fluxo é direcionado para a equipe de gestores validadores.",
+        "description": "Após cadastrar todas unidades, usuário clica em 'Enviar para validação' para passar o fluxo à equipe de validação.",
         "actor": "Auditoria",
         "is_decision": false,
         "task_type": "userTask",
@@ -732,25 +732,34 @@
       {
         "id": "S05",
         "title": "Validar cadastro do organograma",
-        "description": "Validador acessa a tarefa, visualiza o organograma anexado e os dados cadastrados, conferindo a consistência. Pode aceitar ou devolver para ajustes.",
+        "description": "Validador acessa a tarefa, visualiza o organograma anexado e os dados cadastrados, confere as informações. Decidir se aprova ou devolve para ajustes.",
         "actor": "Gestores Validadores",
         "is_decision": true,
-        "task_type": "businessRuleTask",
+        "task_type": "userTask",
         "lane": "Gestores Validadores"
       },
       {
         "id": "S06",
-        "title": "Ajustar cadastro (se necessário)",
-        "description": "Se devolvido, o usuário da auditoria corrige os pontos indicados nas observações do validador e reenvia para validação.",
-        "actor": "Auditoria",
+        "title": "Devolver para ajustes (correção)",
+        "description": "Se validador rejeitar, preencher observações com o que precisa ser corrigido e clicar em 'Devolver'. Fluxo retorna para a etapa de cadastro de unidades (S03) para o usuário corrigir.",
+        "actor": "Gestores Validadores",
         "is_decision": false,
         "task_type": "userTask",
-        "lane": "Auditoria"
+        "lane": "Gestores Validadores"
       },
       {
         "id": "S07",
-        "title": "Finalizar processo",
-        "description": "Validador aceita o cadastro. O sistema executa atividades automáticas de finalização (geração de documento, atualização de status) e encerra o fluxo.",
+        "title": "Aprovar cadastro (validar)",
+        "description": "Se validador aprovar, clicar em 'Validar cadastro'. O sistema executa automaticamente atividades de finalização e encerra o fluxo, gerando documento final.",
+        "actor": "Gestores Validadores",
+        "is_decision": false,
+        "task_type": "userTask",
+        "lane": "Gestores Validadores"
+      },
+      {
+        "id": "S08",
+        "title": "Finalizar processo (sistema)",
+        "description": "Sistema executa automaticamente: gera documento final, atualiza status para encerrado, e registra histórico. Processo concluído.",
         "actor": null,
         "is_decision": false,
         "task_type": "serviceTask",
@@ -784,19 +793,25 @@
       },
       {
         "source": "S05",
-        "target": "S07",
-        "label": "sim",
-        "condition": "Cadastro aprovado"
+        "target": "S06",
+        "label": "não",
+        "condition": "rejeitado"
       },
       {
         "source": "S05",
-        "target": "S06",
-        "label": "não",
-        "condition": "Cadastro devolvido para ajustes"
+        "target": "S07",
+        "label": "sim",
+        "condition": "aprovado"
       },
       {
         "source": "S06",
-        "target": "S04",
+        "target": "S03",
+        "label": "",
+        "condition": "corrigir"
+      },
+      {
+        "source": "S07",
+        "target": "S08",
         "label": "",
         "condition": ""
       }
@@ -805,12 +820,12 @@
       "Auditoria",
       "Gestores Validadores"
     ],
-    "bpmn_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" targetNamespace=\"http://process2diagram.io/bpmn\" id=\"definitions_1\" exporter=\"Process2Diagram\" exporterVersion=\"3.0\"><bpmn:process id=\"process_1\" name=\"Cadastro de Estrutura e Organograma de Escola\" isExecutable=\"false\" processType=\"None\"><bpmn:laneSet id=\"pool_1_lset\"><bpmn:lane id=\"lane_auditoria\" name=\"Auditoria\"><bpmn:flowNodeRef>S01</bpmn:flowNodeRef><bpmn:flowNodeRef>S02</bpmn:flowNodeRef><bpmn:flowNodeRef>S03</bpmn:flowNodeRef><bpmn:flowNodeRef>S04</bpmn:flowNodeRef><bpmn:flowNodeRef>S06</bpmn:flowNodeRef><bpmn:flowNodeRef>ev_start</bpmn:flowNodeRef></bpmn:lane><bpmn:lane id=\"lane_gestores_validadores\" name=\"Gestores Validadores\"><bpmn:flowNodeRef>S05</bpmn:flowNodeRef><bpmn:flowNodeRef>S07</bpmn:flowNodeRef><bpmn:flowNodeRef>ev_end</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet><bpmn:startEvent id=\"ev_start\" name=\"Início\" /><bpmn:userTask id=\"S01\" name=\"Iniciar cadastro de organograma\"><bpmn:documentation>Usuário clica no botão 'Cadastro de estrutura e organograma de escola' para iniciar o fluxo. O sistema exibe uma tela para preenchimento de título (opcional) e confirmação.</bpmn:documentation></bpmn:userTask><bpmn:userTask id=\"S02\" name=\"Preencher dados da escola\"><bpmn:documentation>Usuário preenche o formulário com código da escola, nome da escola, diretor responsável, e anexa arquivos obrigatórios (organograma em PDF e e-mail de aprovação). O sistema valida campos obrigatórios.</bpmn:documentation></bpmn:userTask><bpmn:userTask id=\"S03\" name=\"Cadastrar unidades do organograma\"><bpmn:documentation>Usuário cadastra cada unidade (caixinha) do organograma, preenchendo tipo, código, nome, responsável, hierarquia (vinculação à unidade superior) e indica se possui catálogo técnico (sim/não). O sistema soma automaticamente o total de unidades e catálogos previstos.</bpmn:documentation></bpmn:userTask><bpmn:userTask id=\"S04\" name=\"Enviar para validação\"><bpmn:documentation>Usuário conclui o cadastro das unidades e clica em 'Enviar para validação'. O fluxo é direcionado para a equipe de gestores validadores.</bpmn:documentation></bpmn:userTask><bpmn:exclusiveGateway id=\"S05\" name=\"Validar cadastro do organograma\"><bpmn:documentation>Validador acessa a tarefa, visualiza o organograma anexado e os dados cadastrados, conferindo a consistência. Pode aceitar ou devolver para ajustes.</bpmn:documentation></bpmn:exclusiveGateway><bpmn:userTask id=\"S06\" name=\"Ajustar cadastro (se necessário)\"><bpmn:documentation>Se devolvido, o usuário da auditoria corrige os pontos indicados nas observações do validador e reenvia para validação.</bpmn:documentation></bpmn:userTask><bpmn:serviceTask id=\"S07\" name=\"Finalizar processo\"><bpmn:documentation>Validador aceita o cadastro. O sistema executa atividades automáticas de finalização (geração de documento, atualização de status) e encerra o fluxo.</bpmn:documentation></bpmn:serviceTask><bpmn:endEvent id=\"ev_end\" name=\"Fim\" /><bpmn:sequenceFlow id=\"sf_start\" name=\"\" sourceRef=\"ev_start\" targetRef=\"S01\" /><bpmn:sequenceFlow id=\"sf_001\" name=\"\" sourceRef=\"S01\" targetRef=\"S02\" /><bpmn:sequenceFlow id=\"sf_002\" name=\"\" sourceRef=\"S02\" targetRef=\"S03\" /><bpmn:sequenceFlow id=\"sf_003\" name=\"\" sourceRef=\"S03\" targetRef=\"S04\" /><bpmn:sequenceFlow id=\"sf_004\" name=\"\" sourceRef=\"S04\" targetRef=\"S05\" /><bpmn:sequenceFlow id=\"sf_005\" name=\"sim\" sourceRef=\"S05\" targetRef=\"S07\"><bpmn:conditionExpression xsi:type=\"tFormalExpression\">Cadastro aprovado</bpmn:conditionExpression></bpmn:sequenceFlow><bpmn:sequenceFlow id=\"sf_006\" name=\"não\" sourceRef=\"S05\" targetRef=\"S06\"><bpmn:conditionExpression xsi:type=\"tFormalExpression\">Cadastro devolvido para ajustes</bpmn:conditionExpression></bpmn:sequenceFlow><bpmn:sequenceFlow id=\"sf_007\" name=\"\" sourceRef=\"S06\" targetRef=\"S04\" /><bpmn:sequenceFlow id=\"sf_end\" name=\"\" sourceRef=\"S07\" targetRef=\"ev_end\" /></bpmn:process><bpmn:collaboration id=\"collab_1\"><bpmn:participant id=\"pool_1\" name=\"Cadastro de Estrutura e Organograma de Escola\" processRef=\"process_1\" /></bpmn:collaboration><bpmndi:BPMNDiagram id=\"diagram_1\"><bpmndi:BPMNPlane id=\"plane_1\" bpmnElement=\"collab_1\"><bpmndi:BPMNShape id=\"pool_1_di\" bpmnElement=\"pool_1\" isHorizontal=\"true\"><dc:Bounds x=\"0\" y=\"0\" width=\"1642\" height=\"360\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"lane_auditoria_di\" bpmnElement=\"lane_auditoria\" isHorizontal=\"true\"><dc:Bounds x=\"100\" y=\"0\" width=\"1542\" height=\"180\" /><bpmndi:BPMNLabel><dc:Bounds x=\"110\" y=\"10\" width=\"80\" height=\"160\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"lane_gestores_validadores_di\" bpmnElement=\"lane_gestores_validadores\" isHorizontal=\"true\"><dc:Bounds x=\"100\" y=\"180\" width=\"1542\" height=\"180\" /><bpmndi:BPMNLabel><dc:Bounds x=\"110\" y=\"190\" width=\"80\" height=\"160\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"ev_start_di\" bpmnElement=\"ev_start\"><dc:Bounds x=\"280\" y=\"72\" width=\"36\" height=\"36\" /><bpmndi:BPMNLabel><dc:Bounds x=\"280\" y=\"50\" width=\"36\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"S01_di\" bpmnElement=\"S01\"><dc:Bounds x=\"386\" y=\"60\" width=\"120\" height=\"60\" /><bpmndi:BPMNLabel><dc:Bounds x=\"386\" y=\"122\" width=\"120\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"S02_di\" bpmnElement=\"S02\"><dc:Bounds x=\"576\" y=\"60\" width=\"120\" height=\"60\" /><bpmndi:BPMNLabel><dc:Bounds x=\"576\" y=\"122\" width=\"120\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"S03_di\" bpmnElement=\"S03\"><dc:Bounds x=\"766\" y=\"60\" width=\"120\" height=\"60\" /><bpmndi:BPMNLabel><dc:Bounds x=\"766\" y=\"122\" width=\"120\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"S04_di\" bpmnElement=\"S04\"><dc:Bounds x=\"956\" y=\"60\" width=\"120\" height=\"60\" /><bpmndi:BPMNLabel><dc:Bounds x=\"956\" y=\"122\" width=\"120\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"S05_di\" bpmnElement=\"S05\"><dc:Bounds x=\"1146\" y=\"245\" width=\"50\" height=\"50\" /><bpmndi:BPMNLabel><dc:Bounds x=\"1146\" y=\"297\" width=\"50\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"S06_di\" bpmnElement=\"S06\"><dc:Bounds x=\"1266\" y=\"60\" width=\"120\" height=\"60\" /><bpmndi:BPMNLabel><dc:Bounds x=\"1266\" y=\"122\" width=\"120\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"S07_di\" bpmnElement=\"S07\"><dc:Bounds x=\"1266\" y=\"240\" width=\"120\" height=\"60\" /><bpmndi:BPMNLabel><dc:Bounds x=\"1266\" y=\"302\" width=\"120\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"ev_end_di\" bpmnElement=\"ev_end\"><dc:Bounds x=\"1456\" y=\"252\" width=\"36\" height=\"36\" /><bpmndi:BPMNLabel><dc:Bounds x=\"1456\" y=\"230\" width=\"36\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNEdge id=\"sf_start_di\" bpmnElement=\"sf_start\"><di:waypoint x=\"316\" y=\"90\" /><di:waypoint x=\"386\" y=\"90\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"sf_001_di\" bpmnElement=\"sf_001\"><di:waypoint x=\"506\" y=\"90\" /><di:waypoint x=\"576\" y=\"90\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"sf_002_di\" bpmnElement=\"sf_002\"><di:waypoint x=\"696\" y=\"90\" /><di:waypoint x=\"766\" y=\"90\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"sf_003_di\" bpmnElement=\"sf_003\"><di:waypoint x=\"886\" y=\"90\" /><di:waypoint x=\"956\" y=\"90\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"sf_004_di\" bpmnElement=\"sf_004\"><di:waypoint x=\"1076\" y=\"90\" /><di:waypoint x=\"1146\" y=\"270\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"sf_005_di\" bpmnElement=\"sf_005\"><di:waypoint x=\"1196\" y=\"270\" /><di:waypoint x=\"1266\" y=\"270\" /><bpmndi:BPMNLabel><dc:Bounds x=\"1201\" y=\"254\" width=\"60\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"sf_006_di\" bpmnElement=\"sf_006\"><di:waypoint x=\"1196\" y=\"270\" /><di:waypoint x=\"1266\" y=\"90\" /><bpmndi:BPMNLabel><dc:Bounds x=\"1201\" y=\"164\" width=\"60\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"sf_007_di\" bpmnElement=\"sf_007\"><di:waypoint x=\"1386\" y=\"90\" /><di:waypoint x=\"956\" y=\"90\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"sf_end_di\" bpmnElement=\"sf_end\"><di:waypoint x=\"1386\" y=\"270\" /><di:waypoint x=\"1456\" y=\"270\" /></bpmndi:BPMNEdge></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>",
-    "mermaid": "flowchart TD\n    S01[\"Iniciar cadastro de organograma\"]\n    S02[\"Preencher dados da escola\"]\n    S03[\"Cadastrar unidades do organograma\"]\n    S04[\"Enviar para validação\"]\n    S05{\"Validar cadastro do organograma\"}\n    S06[\"Ajustar cadastro (se necessário)\"]\n    S07[\"Finalizar processo\"]\n    S01 --> S02\n    S02 --> S03\n    S03 --> S04\n    S04 --> S05\n    S05 -- sim --> S07\n    S05 -- não --> S06\n    S06 --> S04\n    style S05 fill:#fff3cd,stroke:#f59e0b",
+    "bpmn_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" targetNamespace=\"http://process2diagram.io/bpmn\" id=\"definitions_1\" exporter=\"Process2Diagram\" exporterVersion=\"3.0\"><bpmn:process id=\"process_1\" name=\"Cadastro de Estrutura e Organograma de Escola\" isExecutable=\"false\" processType=\"None\"><bpmn:laneSet id=\"pool_1_lset\"><bpmn:lane id=\"lane_auditoria\" name=\"Auditoria\"><bpmn:flowNodeRef>S01</bpmn:flowNodeRef><bpmn:flowNodeRef>S02</bpmn:flowNodeRef><bpmn:flowNodeRef>S03</bpmn:flowNodeRef><bpmn:flowNodeRef>S04</bpmn:flowNodeRef><bpmn:flowNodeRef>ev_start</bpmn:flowNodeRef><bpmn:flowNodeRef>lnk_catch_1</bpmn:flowNodeRef></bpmn:lane><bpmn:lane id=\"lane_gestores_validadores\" name=\"Gestores Validadores\"><bpmn:flowNodeRef>S05</bpmn:flowNodeRef><bpmn:flowNodeRef>S06</bpmn:flowNodeRef><bpmn:flowNodeRef>S07</bpmn:flowNodeRef><bpmn:flowNodeRef>S08</bpmn:flowNodeRef><bpmn:flowNodeRef>ev_end</bpmn:flowNodeRef><bpmn:flowNodeRef>lnk_throw_1</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet><bpmn:startEvent id=\"ev_start\" name=\"Início\" /><bpmn:userTask id=\"S01\" name=\"Iniciar cadastro de organograma\"><bpmn:documentation>Usuário clica no botão 'Cadastro de estrutura e organograma de escola' na tela de login. Preenche título (opcional, mas recomendado para identificação), código da escola e nome da escola. Confirma para iniciar o fluxo.</bpmn:documentation></bpmn:userTask><bpmn:userTask id=\"S02\" name=\"Cadastrar escola (diretoria)\"><bpmn:documentation>Preencher formulário com código da escola, nome da escola, diretor responsável, indicar se possui catálogo mestre (sim, obrigatório para escola), e anexar arquivos: organograma em PDF e e-mail de aprovação (mínimo 2 arquivos). Salvar pode ser usado para pausar e retomar depois.</bpmn:documentation></bpmn:userTask><bpmn:userTask id=\"S03\" name=\"Cadastrar unidades do organograma\"><bpmn:documentation>Incluir cada unidade (caixinha) do organograma: preencher tipo, código, nome, responsável, hierarquia (vincular à unidade superior), e indicar se possui catálogo técnico (sim/não). Pode salvar e retomar. O sistema soma automaticamente total de unidades e catálogos previstos.</bpmn:documentation></bpmn:userTask><bpmn:userTask id=\"S04\" name=\"Enviar para validação\"><bpmn:documentation>Após cadastrar todas unidades, usuário clica em 'Enviar para validação' para passar o fluxo à equipe de validação.</bpmn:documentation></bpmn:userTask><bpmn:exclusiveGateway id=\"S05\" name=\"Validar cadastro do organograma\"><bpmn:documentation>Validador acessa a tarefa, visualiza o organograma anexado e os dados cadastrados, confere as informações. Decidir se aprova ou devolve para ajustes.</bpmn:documentation></bpmn:exclusiveGateway><bpmn:userTask id=\"S06\" name=\"Devolver para ajustes (correção)\"><bpmn:documentation>Se validador rejeitar, preencher observações com o que precisa ser corrigido e clicar em 'Devolver'. Fluxo retorna para a etapa de cadastro de unidades (S03) para o usuário corrigir.</bpmn:documentation></bpmn:userTask><bpmn:userTask id=\"S07\" name=\"Aprovar cadastro (validar)\"><bpmn:documentation>Se validador aprovar, clicar em 'Validar cadastro'. O sistema executa automaticamente atividades de finalização e encerra o fluxo, gerando documento final.</bpmn:documentation></bpmn:userTask><bpmn:serviceTask id=\"S08\" name=\"Finalizar processo (sistema)\"><bpmn:documentation>Sistema executa automaticamente: gera documento final, atualiza status para encerrado, e registra histórico. Processo concluído.</bpmn:documentation></bpmn:serviceTask><bpmn:endEvent id=\"ev_end\" name=\"Fim\" /><bpmn:intermediateThrowEvent id=\"lnk_throw_1\" name=\"L1\"><bpmn:linkEventDefinition id=\"lnk_throw_1_def\" /></bpmn:intermediateThrowEvent><bpmn:intermediateCatchEvent id=\"lnk_catch_1\" name=\"L1\"><bpmn:linkEventDefinition id=\"lnk_catch_1_def\" /></bpmn:intermediateCatchEvent><bpmn:sequenceFlow id=\"sf_start\" name=\"\" sourceRef=\"ev_start\" targetRef=\"S01\" /><bpmn:sequenceFlow id=\"sf_001\" name=\"\" sourceRef=\"S01\" targetRef=\"S02\" /><bpmn:sequenceFlow id=\"sf_002\" name=\"\" sourceRef=\"S02\" targetRef=\"S03\" /><bpmn:sequenceFlow id=\"sf_003\" name=\"\" sourceRef=\"S03\" targetRef=\"S04\" /><bpmn:sequenceFlow id=\"sf_004\" name=\"\" sourceRef=\"S04\" targetRef=\"S05\" /><bpmn:sequenceFlow id=\"sf_005\" name=\"não\" sourceRef=\"S05\" targetRef=\"S06\"><bpmn:conditionExpression xsi:type=\"tFormalExpression\">rejeitado</bpmn:conditionExpression></bpmn:sequenceFlow><bpmn:sequenceFlow id=\"sf_006\" name=\"sim\" sourceRef=\"S05\" targetRef=\"S07\"><bpmn:conditionExpression xsi:type=\"tFormalExpression\">aprovado</bpmn:conditionExpression></bpmn:sequenceFlow><bpmn:sequenceFlow id=\"sf_007_a\" name=\"\" sourceRef=\"S06\" targetRef=\"lnk_throw_1\"><bpmn:conditionExpression xsi:type=\"tFormalExpression\">corrigir</bpmn:conditionExpression></bpmn:sequenceFlow><bpmn:sequenceFlow id=\"sf_007_b\" name=\"\" sourceRef=\"lnk_catch_1\" targetRef=\"S03\" /><bpmn:sequenceFlow id=\"sf_008\" name=\"\" sourceRef=\"S07\" targetRef=\"S08\" /><bpmn:sequenceFlow id=\"sf_end\" name=\"\" sourceRef=\"S08\" targetRef=\"ev_end\" /></bpmn:process><bpmn:collaboration id=\"collab_1\"><bpmn:participant id=\"pool_1\" name=\"Cadastro de Estrutura e Organograma de Escola\" processRef=\"process_1\" /></bpmn:collaboration><bpmndi:BPMNDiagram id=\"diagram_1\"><bpmndi:BPMNPlane id=\"plane_1\" bpmnElement=\"collab_1\"><bpmndi:BPMNShape id=\"pool_1_di\" bpmnElement=\"pool_1\" isHorizontal=\"true\"><dc:Bounds x=\"0\" y=\"0\" width=\"1832\" height=\"476\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"lane_auditoria_di\" bpmnElement=\"lane_auditoria\" isHorizontal=\"true\"><dc:Bounds x=\"100\" y=\"0\" width=\"1732\" height=\"226\" /><bpmndi:BPMNLabel><dc:Bounds x=\"110\" y=\"10\" width=\"80\" height=\"206\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"lane_gestores_validadores_di\" bpmnElement=\"lane_gestores_validadores\" isHorizontal=\"true\"><dc:Bounds x=\"100\" y=\"226\" width=\"1732\" height=\"250\" /><bpmndi:BPMNLabel><dc:Bounds x=\"110\" y=\"236\" width=\"80\" height=\"230\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"ev_start_di\" bpmnElement=\"ev_start\"><dc:Bounds x=\"280\" y=\"95\" width=\"36\" height=\"36\" /><bpmndi:BPMNLabel><dc:Bounds x=\"280\" y=\"73\" width=\"36\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"S01_di\" bpmnElement=\"S01\"><dc:Bounds x=\"386\" y=\"83\" width=\"120\" height=\"60\" /><bpmndi:BPMNLabel><dc:Bounds x=\"386\" y=\"145\" width=\"120\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"S02_di\" bpmnElement=\"S02\"><dc:Bounds x=\"576\" y=\"83\" width=\"120\" height=\"60\" /><bpmndi:BPMNLabel><dc:Bounds x=\"576\" y=\"145\" width=\"120\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"S03_di\" bpmnElement=\"S03\"><dc:Bounds x=\"766\" y=\"111\" width=\"120\" height=\"60\" /><bpmndi:BPMNLabel><dc:Bounds x=\"766\" y=\"173\" width=\"120\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"S04_di\" bpmnElement=\"S04\"><dc:Bounds x=\"956\" y=\"83\" width=\"120\" height=\"60\" /><bpmndi:BPMNLabel><dc:Bounds x=\"956\" y=\"145\" width=\"120\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"S05_di\" bpmnElement=\"S05\"><dc:Bounds x=\"1146\" y=\"326\" width=\"50\" height=\"50\" /><bpmndi:BPMNLabel><dc:Bounds x=\"1146\" y=\"378\" width=\"50\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"S06_di\" bpmnElement=\"S06\"><dc:Bounds x=\"1266\" y=\"281\" width=\"120\" height=\"60\" /><bpmndi:BPMNLabel><dc:Bounds x=\"1266\" y=\"343\" width=\"120\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"S07_di\" bpmnElement=\"S07\"><dc:Bounds x=\"1266\" y=\"361\" width=\"120\" height=\"60\" /><bpmndi:BPMNLabel><dc:Bounds x=\"1266\" y=\"423\" width=\"120\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"S08_di\" bpmnElement=\"S08\"><dc:Bounds x=\"1456\" y=\"349\" width=\"120\" height=\"60\" /><bpmndi:BPMNLabel><dc:Bounds x=\"1456\" y=\"411\" width=\"120\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"ev_end_di\" bpmnElement=\"ev_end\"><dc:Bounds x=\"1646\" y=\"333\" width=\"36\" height=\"36\" /><bpmndi:BPMNLabel><dc:Bounds x=\"1646\" y=\"311\" width=\"36\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"lnk_throw_1_di\" bpmnElement=\"lnk_throw_1\"><dc:Bounds x=\"1498\" y=\"293\" width=\"36\" height=\"36\" /><bpmndi:BPMNLabel><dc:Bounds x=\"1498\" y=\"271\" width=\"36\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"lnk_catch_1_di\" bpmnElement=\"lnk_catch_1\"><dc:Bounds x=\"808\" y=\"55\" width=\"36\" height=\"36\" /><bpmndi:BPMNLabel><dc:Bounds x=\"808\" y=\"33\" width=\"36\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNShape><bpmndi:BPMNEdge id=\"sf_start_di\" bpmnElement=\"sf_start\"><di:waypoint x=\"316\" y=\"113\" /><di:waypoint x=\"386\" y=\"113\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"sf_001_di\" bpmnElement=\"sf_001\"><di:waypoint x=\"506\" y=\"113\" /><di:waypoint x=\"576\" y=\"113\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"sf_002_di\" bpmnElement=\"sf_002\"><di:waypoint x=\"696\" y=\"113\" /><di:waypoint x=\"766\" y=\"141\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"sf_003_di\" bpmnElement=\"sf_003\"><di:waypoint x=\"886\" y=\"141\" /><di:waypoint x=\"956\" y=\"113\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"sf_004_di\" bpmnElement=\"sf_004\"><di:waypoint x=\"1076\" y=\"113\" /><di:waypoint x=\"1146\" y=\"351\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"sf_005_di\" bpmnElement=\"sf_005\"><di:waypoint x=\"1196\" y=\"351\" /><di:waypoint x=\"1266\" y=\"311\" /><bpmndi:BPMNLabel><dc:Bounds x=\"1201\" y=\"315\" width=\"60\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"sf_006_di\" bpmnElement=\"sf_006\"><di:waypoint x=\"1196\" y=\"351\" /><di:waypoint x=\"1266\" y=\"391\" /><bpmndi:BPMNLabel><dc:Bounds x=\"1201\" y=\"355\" width=\"60\" height=\"20\" /></bpmndi:BPMNLabel></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"sf_007_a_di\" bpmnElement=\"sf_007_a\"><di:waypoint x=\"1386\" y=\"311\" /><di:waypoint x=\"1498\" y=\"311\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"sf_007_b_di\" bpmnElement=\"sf_007_b\"><di:waypoint x=\"826\" y=\"91\" /><di:waypoint x=\"826\" y=\"111\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"sf_008_di\" bpmnElement=\"sf_008\"><di:waypoint x=\"1386\" y=\"391\" /><di:waypoint x=\"1456\" y=\"379\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"sf_end_di\" bpmnElement=\"sf_end\"><di:waypoint x=\"1576\" y=\"379\" /><di:waypoint x=\"1646\" y=\"351\" /></bpmndi:BPMNEdge></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>",
+    "mermaid": "flowchart TD\n    S01[\"Iniciar cadastro de organograma\"]\n    S02[\"Cadastrar escola (diretoria)\"]\n    S03[\"Cadastrar unidades do organograma\"]\n    S04[\"Enviar para validação\"]\n    S05{\"Validar cadastro do organograma\"}\n    S06[\"Devolver para ajustes (correção)\"]\n    S07[\"Aprovar cadastro (validar)\"]\n    S08[\"Finalizar processo (sistema)\"]\n    S01 --> S02\n    S02 --> S03\n    S03 --> S04\n    S04 --> S05\n    S05 -- não --> S06\n    S05 -- sim --> S07\n    S06 --> S03\n    S07 --> S08\n    style S05 fill:#fff3cd,stroke:#f59e0b",
     "ready": true
   },
   "minutes": {
-    "title": "Reunião de Demonstração do Sistema de Cadastro de Organograma",
+    "title": "Demonstração do Sistema - Cadastro de Organograma",
     "date": "6 de março de 2026",
     "location": "Remota — Teams",
     "participants": [
@@ -822,103 +837,88 @@
     "agenda": [
       "Demonstração do fluxo de cadastro de estrutura e organograma de escola",
       "Discussão sobre interface e campos do sistema",
-      "Definições de prioridades e prazos (SLA)",
-      "Validação e finalização do processo"
+      "Definições de configuração e prioridades"
     ],
     "summary": [
       {
         "topic": "Demonstração do fluxo de cadastro de organograma",
-        "content": "A reunião iniciou com uma demonstração prática do fluxo de cadastro de estrutura e organograma de escola no sistema. [NC] mostrou a tela inicial com opções para cadastro de escola ou unidade, explicando que o sistema segue um workflow orientado. [MF] levantou questões sobre a ordem das atividades, sugerindo que o cadastro de organograma deveria ser a primeira atividade (01) e não a segunda (02). Houve debate sobre a necessidade de um campo de título na tela de inicialização, com [MF] argumentando que não queria preencher informações duas vezes, enquanto [PG] e [JL] explicaram que o título ajuda na gestão de múltiplos fluxos. Ficou acordado que o título seria obrigatório para facilitar a identificação."
+        "content": "[NC] conduziu uma demonstração passo a passo do cadastro de estrutura e organograma de escola no sistema. Mostrou a tela inicial com opção para cadastro de escola ou unidade, preenchimento de título (campo livre para identificação do fluxo), e entrada de dados como código da escola, nome, diretor, e anexo de arquivos (organograma em PDF e e-mail de aprovação). [MF] levantou preocupações sobre duplicação de informações (título vs. código/nome) e clareza da interface. [JL] e [PG] explicaram que o título auxilia na gestão de múltiplos fluxos, mas pode ser ignorado se não for necessário. Foi demonstrado o cadastro de unidades inferiores (como vice-diretoria), com campos para tipo, código, nome, responsável, hierarquia, e indicação se possui catálogo técnico. [MF] questionou a necessidade do campo 'objetivo' e a limitação de escolha única na hierarquia; [NC] e [PG] concordaram em remover 'objetivo' e avaliar a possibilidade de múltiplas hierarquias no futuro."
       },
       {
-        "topic": "Interface e campos do sistema",
-        "content": "[MF] expressou preocupação com a quantidade de campos e botões na tela (como salvar, comentário, editar), argumentando que poderiam confundir os usuários. [NC] e [JL] explicaram que esses recursos são padrão do sistema e úteis para funcionalidades como salvar e retomar depois, ou adicionar comentários no histórico. [MF] sugeriu simplificações, como remover o campo 'objetivo' das unidades que não possuem catálogo técnico, e renomear 'documentação' para 'catálogo técnico' para maior clareza. [NC] concordou em ajustar a nomenclatura e remover campos desnecessários. Também foi discutida a hierarquia no cadastro de unidades, com [MF] questionando se seria possível vincular uma unidade a mais de uma superior, mas [PG] e [NC] explicaram que, para organogramas, a vinculação é única."
+        "topic": "Discussão sobre interface e campos do sistema",
+        "content": "[MF] expressou confusão com a interface, incluindo botões como 'salvar', 'comentário', 'editar', e colunas na lista de tarefas (ex.: TR, SW, SLA). [NC] explicou que 'salvar' permite pausar e retomar o trabalho, 'comentário' é opcional para notas, e 'editar' permite ajustar o título. [PG] e [JL] destacaram que muitos campos (ex.: identificador do processo, colunas TR, SW) são preenchidos automaticamente pelo sistema para gestão interna e não requerem ação do usuário. [MF] insistiu na necessidade de entender cada campo para treinamento da equipe. Houve debate sobre a tela de listagem de tarefas, onde [MF] pediu clareza na identificação de pendências e prioridades. [PG] sugeriu que prioridades poderiam ser gerenciadas via portal de analytics, com opção de reatribuição manual."
       },
       {
-        "topic": "Prioridades e prazos (SLA)",
-        "content": "[MF] perguntou sobre a gestão de prioridades das tarefas na lista de atividades, destacando a necessidade de poder reordenar as pendências diariamente para direcionar o trabalho da equipe. [PG] e [NC] explicaram que o sistema tem uma coluna de prioridade (PR) que pode ser configurada, e que essa funcionalidade poderia ser expandida no portal para permitir que [MF] ajustasse as prioridades conforme necessário. Sobre prazos, [NC] mostrou como o SLA (Acordo de Nível de Serviço) funciona, com indicadores de tempo para cada atividade. [MF] definiu que, para o cadastro de organograma, o SLA total será de 10 dias úteis, com prazos específicos por atividade a serem definidos posteriormente com a equipe."
+        "topic": "Definições de configuração e prioridades",
+        "content": "[MF] solicitou definições para SLA (acordo de nível de serviço) e prioridades no sistema. [NC] explicou que SLA requer definição de prazos para cada atividade (ex.: 5 dias para cadastro, 5 para validação) e pode ser ajustado posteriormente. [MF] concordou em definir prazos totais (ex.: 10 dias para o fluxo de organograma). Sobre prioridades, [MF] destacou a necessidade de atribuir prioridades dinâmicas às tarefas da equipe (ex.: validação vs. cadastro). [PG] propôs uma funcionalidade no portal para que [MF] possa reordenar prioridades e realocar tarefas entre membros da equipe. [NC] mencionou que o sistema pode distribuir tarefas automaticamente com base na carga de trabalho, mas [MF] preferiu controle manual via portal."
       },
       {
-        "topic": "Validação e finalização do processo",
-        "content": "[NC] demonstrou a atividade de validação, que segue o cadastro das unidades. Foi discutido como a validação será direcionada—inicialmente para uma equipe, com opção de [MF] escolher o validador específico ou o sistema distribuir automaticamente. [MF] preferiu ter controle sobre a designação. Na tela de validação, há opções para 'validar cadastro' (aprovar) ou 'devolver para ajustes' (rejeitar com observações). [MF] ressaltou que, ao devolver, o campo de observação deve ser obrigatório para comunicar os ajustes necessários. Após a validação, o processo é finalizado, gerando um documento com histórico e arquivos anexados. [NC] mostrou que processos finalizados aparecem com status 'encerrado' na lista."
+        "topic": "Validação e encerramento do fluxo",
+        "content": "[NC] demonstrou a atividade de validação, que cai em uma equipe de gestores. Mostrou opções para 'validar cadastro' (aceitar) ou 'devolver para ajustes' (com campo de observação obrigatório). [MF] enfatizou que, para organogramas, a validação geralmente é direta, sem necessidade de devolução. Após a validação, o fluxo é encerrado, gerando um documento final com histórico. [MF] perguntou sobre visualização do organograma após o cadastro; [NC] indicou que isso será acessível via consultas no sistema. [PG] comprometeu-se a fornecer as visões necessárias."
       }
     ],
     "decisions": [
-      "[MF] Ficou definido que o título no início do fluxo é obrigatório para facilitar a identificação das demandas.",
-      "[MF] Decidido que o campo 'objetivo' será removido do cadastro de unidades, pois não se aplica a unidades sem catálogo técnico.",
-      "[MF] Acordado que o campo 'documentação' será renomeado para 'catálogo técnico' para maior clareza.",
-      "[MF] Estabelecido que o SLA total para o cadastro de organograma será de 10 dias úteis, com prazos por atividade a serem definidos.",
-      "[MF] Definido que, na validação, o campo de observação será obrigatório quando a tarefa for devolvida para ajustes.",
-      "[MF] Concordado que a prioridade das tarefas poderá ser ajustada por [MF] no portal, para gestão da equipe.",
-      "[NC] Decidido que o botão 'cadastrar unidades inferiores' será renomeado para 'cadastrar unidades' (removendo 'inferiores').",
-      "[PG] Ficou acordado que o processo de organograma de escola terá identificador 01, e o de unidade 02, para separação lógica."
+      "[MF] Ficou definido que o catálogo mestre é obrigatório apenas para a diretoria principal (primeira caixinha) no cadastro de escola.",
+      "[NC] Concordou em alterar o nome do botão de 'cadastrar unidades inferiores' para 'cadastrar unidades', removendo 'inferiores'.",
+      "[NC] Concordou em trocar o campo 'documentação' para 'catálogo técnico' na tela de cadastro de unidades, para maior clareza.",
+      "[JL] Decidiu remover o campo 'objetivo' da tela de cadastro de unidades, pois não é necessário no contexto de organograma.",
+      "[PG] Acordou que a prioridade das tarefas será gerenciável via portal, permitindo que [MF] atribua e ajuste prioridades numericamente para a equipe.",
+      "[NC] Confirmou que o SLA (acordo de nível de serviço) será configurável, com prazos totais definidos para o fluxo (ex.: 10 dias para cadastro de organograma).",
+      "[MF] Decidiu que, na validação de organograma, o validador deve ter a opção de 'aceitar' diretamente, sem obrigatoriedade de preencher campos adicionais, a menos que devolva para ajustes.",
+      "[PG] Comprometeu-se a revisar a numeração dos processos (ex.: alterar 'Audit 001.02' para 'Audit 001.01' para escola, se desejado), conforme solicitação de [MF]."
     ],
     "action_items": [
       {
-        "task": "Ajustar a nomenclatura do campo 'documentação' para 'catálogo técnico' no cadastro de unidades.",
-        "responsible": "Natasha Cristine Costa",
+        "task": "Revisar e ajustar a numeração dos processos (ex.: Audit 001.01 para escola, 001.02 para unidade) conforme discussão.",
+        "responsible": "NC",
         "deadline": null,
         "priority": "normal",
         "raised_by": "MF"
       },
       {
-        "task": "Remover o campo 'objetivo' do formulário de cadastro de unidades.",
-        "responsible": "Natasha Cristine Costa",
-        "deadline": null,
-        "priority": "normal",
-        "raised_by": "MF"
-      },
-      {
-        "task": "Renomear o botão 'cadastrar unidades inferiores' para 'cadastrar unidades'.",
-        "responsible": "Natasha Cristine Costa",
-        "deadline": null,
-        "priority": "normal",
-        "raised_by": "MF"
-      },
-      {
-        "task": "Configurar o campo de título como obrigatório na tela de inicialização do fluxo.",
-        "responsible": "Natasha Cristine Costa",
-        "deadline": null,
-        "priority": "normal",
-        "raised_by": "MF"
-      },
-      {
-        "task": "Definir os prazos específicos (SLA) por atividade no processo de cadastro de organograma, com base no total de 10 dias úteis.",
-        "responsible": "Maria de Fátima Duarte Moura",
+        "task": "Desenvolver funcionalidade no portal para gerenciamento de prioridades das tarefas, permitindo reordenação numérica e realocação entre membros da equipe.",
+        "responsible": "PG",
         "deadline": null,
         "priority": "high",
         "raised_by": "MF"
       },
       {
-        "task": "Desenvolver funcionalidade no portal para [MF] ajustar prioridades das tarefas da equipe.",
-        "responsible": "Pedro Gentil Regato de Oliveira Soares",
+        "task": "Configurar SLA (acordo de nível de serviço) para o fluxo de cadastro de organograma, com prazos totais definidos (ex.: 10 dias).",
+        "responsible": "NC",
         "deadline": null,
         "priority": "normal",
         "raised_by": "MF"
       },
       {
-        "task": "Preparar a migração dos organogramas legados (ex: direito Rio) para o sistema.",
-        "responsible": "Pedro Gentil Regato de Oliveira Soares",
-        "deadline": null,
+        "task": "Preparar e disponibilizar o legado de organogramas (ex.: Direito Rio) para migração e demonstração.",
+        "responsible": "PG",
+        "deadline": "Próxima semana",
         "priority": "high",
         "raised_by": "MF"
       },
       {
-        "task": "Revisar e finalizar o checklist de organograma com a equipe.",
-        "responsible": "Maria de Fátima Duarte Moura",
+        "task": "Fornecer manual ou documentação detalhada explicando cada campo da interface (ex.: colunas TR, SW, SLA) para treinamento da equipe.",
+        "responsible": "NC",
         "deadline": null,
         "priority": "normal",
         "raised_by": "MF"
       },
       {
-        "task": "Fornecer treinamento e manual detalhado sobre o uso do sistema, incluindo explicação de todas as colunas e símbolos na interface.",
-        "responsible": "Natasha Cristine Costa",
+        "task": "Avaliar e implementar, se viável, a possibilidade de seleção múltipla na hierarquia de unidades durante o cadastro do organograma.",
+        "responsible": "NC",
         "deadline": null,
-        "priority": "high",
+        "priority": "low",
+        "raised_by": "MF"
+      },
+      {
+        "task": "Revisar o check-list de organograma com a equipe e ajustar conforme necessário.",
+        "responsible": "MF",
+        "deadline": "Próxima reunião",
+        "priority": "normal",
         "raised_by": "MF"
       }
     ],
-    "next_meeting": null,
+    "next_meeting": "Terça-feira, 10:00 às 12:00",
     "ready": true
   },
   "requirements": {
@@ -937,20 +937,53 @@
       },
       {
         "id": "REQ02",
-        "title": "Código e nome da escola",
-        "description": "O sistema deve ter campos para código da escola e nome da escola no formulário de cadastro de organograma.",
+        "title": "Campo código da escola",
+        "description": "O sistema deve ter um campo para inserir o código da escola durante o cadastro do organograma.",
         "type": "ui_field",
         "actor": "usuário",
         "priority": "high",
         "process_step": "cadastro da escola",
-        "source_quote": "O Pedro falou para mim o seguinte, você tem que cadastrar o código da escola e o nome da escola.",
+        "source_quote": "Você tem que cadastrar o código da escola e o nome da escola.",
         "speaker": "MF"
       },
       {
         "id": "REQ03",
-        "title": "Diretor da escola obrigatório",
-        "description": "O sistema deve exigir a seleção do diretor da escola no cadastro da primeira unidade (diretoria).",
+        "title": "Campo nome da escola",
+        "description": "O sistema deve ter um campo para inserir o nome da escola durante o cadastro do organograma.",
+        "type": "ui_field",
+        "actor": "usuário",
+        "priority": "high",
+        "process_step": "cadastro da escola",
+        "source_quote": "Você tem que cadastrar o código da escola e o nome da escola.",
+        "speaker": "MF"
+      },
+      {
+        "id": "REQ04",
+        "title": "Código da escola único",
+        "description": "O sistema deve validar que o código da escola inserido não esteja já cadastrado, impedindo duplicidades.",
         "type": "validation",
+        "actor": "sistema",
+        "priority": "high",
+        "process_step": "cadastro da escola",
+        "source_quote": "Tem que botar outro número, 28 já tem cadastrado isso.",
+        "speaker": "NC"
+      },
+      {
+        "id": "REQ05",
+        "title": "Botão salvar e continuar depois",
+        "description": "O sistema deve permitir salvar o progresso do cadastro e retomar posteriormente, sem perder os dados preenchidos.",
+        "type": "functional",
+        "actor": "usuário",
+        "priority": "high",
+        "process_step": "cadastro da escola",
+        "source_quote": "Porque você pode entrar aqui e colocar aqui o 16 escola ABC teste e salvar, fechar essa tela e vir aqui e terminar mais tarde.",
+        "speaker": "NC"
+      },
+      {
+        "id": "REQ06",
+        "title": "Campo diretor da escola",
+        "description": "O sistema deve ter um campo para selecionar ou inserir o diretor responsável pela escola no cadastro do organograma.",
+        "type": "ui_field",
         "actor": "usuário",
         "priority": "high",
         "process_step": "cadastro da escola",
@@ -958,10 +991,10 @@
         "speaker": "NC"
       },
       {
-        "id": "REQ04",
-        "title": "Catálogo mestre obrigatório para escola",
-        "description": "No cadastro da primeira unidade (diretoria) de uma escola, o sistema deve exigir a indicação de que possui catálogo mestre.",
-        "type": "validation",
+        "id": "REQ07",
+        "title": "Campo catálogo mestre obrigatório",
+        "description": "O sistema deve ter um campo obrigatório para indicar se a escola possui catálogo mestre, com opções sim/não.",
+        "type": "ui_field",
         "actor": "usuário",
         "priority": "high",
         "process_step": "cadastro da escola",
@@ -969,31 +1002,86 @@
         "speaker": "NC"
       },
       {
-        "id": "REQ05",
-        "title": "Anexo de organograma e aprovação",
-        "description": "O sistema deve permitir o anexo de arquivos, incluindo pelo menos o organograma (ex: PDF) e o e-mail de aprovação, com validação de mínimo de 2 arquivos.",
+        "id": "REQ08",
+        "title": "Anexar arquivos do organograma",
+        "description": "O sistema deve permitir anexar arquivos (ex: PDF, imagem) do organograma durante o cadastro, com suporte a múltiplos arquivos.",
         "type": "functional",
         "actor": "usuário",
+        "priority": "high",
+        "process_step": "cadastro da escola",
+        "source_quote": "Você vai colocar ele aqui, a gente está dentro do sistema que ele não existe aqui ainda, certo? Se eu clicar aqui em aqui inserir arquivos, certo?",
+        "speaker": "NC"
+      },
+      {
+        "id": "REQ09",
+        "title": "Validação mínimo dois arquivos",
+        "description": "O sistema deve validar que pelo menos dois arquivos sejam anexados: o organograma e a aprovação.",
+        "type": "validation",
+        "actor": "sistema",
         "priority": "high",
         "process_step": "cadastro da escola",
         "source_quote": "No mínimo, 2. No mínimo, 2. No mínimo, 2.",
         "speaker": "NC"
       },
       {
-        "id": "REQ06",
-        "title": "Cadastro de unidades com tipo, código, nome",
-        "description": "O sistema deve ter campos para tipo, código, nome e responsável no cadastro de cada unidade do organograma.",
+        "id": "REQ10",
+        "title": "Botão cadastrar unidades",
+        "description": "O sistema deve ter um botão para avançar para a etapa de cadastro das unidades inferiores da escola, após concluir o cadastro inicial.",
+        "type": "ui_field",
+        "actor": "usuário",
+        "priority": "high",
+        "process_step": "cadastro da escola",
+        "source_quote": "Você vai clicar aqui, cadastrar unidades inferiores, que eu estou entrando dentro do organograma, eu vou fazer as outras coisas que estão lá dentro do organograma.",
+        "speaker": "NC"
+      },
+      {
+        "id": "REQ11",
+        "title": "Campo tipo da unidade",
+        "description": "O sistema deve ter um campo para especificar o tipo da unidade (ex: vice-diretoria, assessoria) durante o cadastro de unidades.",
         "type": "ui_field",
         "actor": "usuário",
         "priority": "high",
         "process_step": "cadastro de unidades",
-        "source_quote": "Tipo da Trindade perfeito, código da Trindade, nome da Trindade perfeito, perfeito, maravilha, perfeito, responsa, já estou vendo.",
+        "source_quote": "Tenho aqui o tipo, então vamos dizer que eles estão, eu estou na direção, vou cadastrar aqui a primeira vice-diretoria.",
+        "speaker": "NC"
+      },
+      {
+        "id": "REQ12",
+        "title": "Campo código da unidade",
+        "description": "O sistema deve ter um campo para inserir um código único para cada unidade cadastrada no organograma.",
+        "type": "ui_field",
+        "actor": "usuário",
+        "priority": "high",
+        "process_step": "cadastro de unidades",
+        "source_quote": "Tipo da Trindade perfeito, código da Trindade, nome da Trindade perfeito.",
         "speaker": "MF"
       },
       {
-        "id": "REQ07",
-        "title": "Hierarquia de unidades",
-        "description": "O sistema deve permitir vincular cada unidade a sua unidade superior no organograma, com seleção a partir de uma lista das unidades já cadastradas.",
+        "id": "REQ13",
+        "title": "Campo nome da unidade",
+        "description": "O sistema deve ter um campo para inserir o nome descritivo de cada unidade cadastrada no organograma.",
+        "type": "ui_field",
+        "actor": "usuário",
+        "priority": "high",
+        "process_step": "cadastro de unidades",
+        "source_quote": "Tipo da Trindade perfeito, código da Trindade, nome da Trindade perfeito.",
+        "speaker": "MF"
+      },
+      {
+        "id": "REQ14",
+        "title": "Campo responsável da unidade",
+        "description": "O sistema deve ter um campo para selecionar ou inserir o responsável por cada unidade cadastrada.",
+        "type": "ui_field",
+        "actor": "usuário",
+        "priority": "high",
+        "process_step": "cadastro de unidades",
+        "source_quote": "responsa, já estou vendo, ? E hierarquia novo da Trindade Perfeito.",
+        "speaker": "MF"
+      },
+      {
+        "id": "REQ15",
+        "title": "Campo hierarquia da unidade",
+        "description": "O sistema deve ter um campo para vincular cada unidade à sua unidade superior no organograma, permitindo selecionar entre as unidades já cadastradas.",
         "type": "ui_field",
         "actor": "usuário",
         "priority": "high",
@@ -1002,106 +1090,117 @@
         "speaker": "NC"
       },
       {
-        "id": "REQ08",
-        "title": "Indicação de catálogo técnico por unidade",
-        "description": "O sistema deve permitir indicar se cada unidade possui catálogo técnico (sim/não), com campo renomeado de 'documentação' para 'catálogo técnico'.",
+        "id": "REQ16",
+        "title": "Campo possui catálogo técnico",
+        "description": "O sistema deve ter um campo para indicar se a unidade possui catálogo técnico, com opções sim/não, substituindo a opção genérica 'documentação'.",
         "type": "ui_field",
         "actor": "usuário",
-        "priority": "medium",
+        "priority": "high",
         "process_step": "cadastro de unidades",
-        "source_quote": "Esta unidade possui documentação. Por que ainda a documentação já não entra o catálogo bonitinho?",
+        "source_quote": "Se você aqui no sistema só quer documentar, se vai ter catálogo técnico, a pergunta tem que ser objetiva, tem catálogo técnico?",
         "speaker": "MF"
       },
       {
-        "id": "REQ09",
-        "title": "Contagem automática de unidades e catálogos",
-        "description": "O sistema deve calcular e exibir automaticamente o total de unidades cadastradas e o total de catálogos técnicos previstos (baseado nas respostas 'sim'), sem necessidade de preenchimento manual.",
+        "id": "REQ17",
+        "title": "Soma automática catálogos previstos",
+        "description": "O sistema deve calcular automaticamente o total de catálogos técnicos previstos com base nas unidades marcadas com 'sim' no campo possui catálogo técnico.",
         "type": "functional",
         "actor": "sistema",
-        "priority": "medium",
+        "priority": "high",
         "process_step": "cadastro de unidades",
         "source_quote": "Conforme você fizer aqui e você colocar sim e não, eu somo aqui ou eu só somo no total de unidades que essa escola tem?",
         "speaker": "NC"
       },
       {
-        "id": "REQ10",
-        "title": "Salvar e continuar depois",
-        "description": "O sistema deve permitir salvar o progresso do cadastro e retomá-lo posteriormente a partir da tela 'Minhas tarefas'.",
+        "id": "REQ18",
+        "title": "Edição de unidades cadastradas",
+        "description": "O sistema deve permitir editar as informações das unidades já cadastradas antes de finalizar a etapa, com alterações refletidas automaticamente.",
+        "type": "functional",
+        "actor": "usuário",
+        "priority": "medium",
+        "process_step": "cadastro de unidades",
+        "source_quote": "Você pode alterar, por exemplo, você viu que digitou errado? Você pode vim aqui e voltar.",
+        "speaker": "NC"
+      },
+      {
+        "id": "REQ19",
+        "title": "Validação por equipe",
+        "description": "O sistema deve direcionar o organograma cadastrado para uma equipe de validação, onde um membro pode assumir a tarefa.",
+        "type": "business_rule",
+        "actor": "sistema",
+        "priority": "high",
+        "process_step": "validação",
+        "source_quote": "Nós combinamos que essa atividade de validação ela cairia numa equipe.",
+        "speaker": "NC"
+      },
+      {
+        "id": "REQ20",
+        "title": "Opção devolver com observação",
+        "description": "O sistema deve exigir que uma observação seja preenchida obrigatoriamente ao devolver o cadastro para ajustes na validação.",
+        "type": "validation",
+        "actor": "usuário",
+        "priority": "high",
+        "process_step": "validação",
+        "source_quote": "Quando eu clicar na opção voltar, eu tenho que ter aquele campo XPTO que observação campo que você tem que dizer como obrigatório.",
+        "speaker": "MF"
+      },
+      {
+        "id": "REQ21",
+        "title": "Visualização do organograma anexado",
+        "description": "O sistema deve permitir visualizar os arquivos do organograma anexados durante a validação, para conferência.",
         "type": "functional",
         "actor": "usuário",
         "priority": "high",
-        "process_step": null,
-        "source_quote": "Você pode entrar aqui e colocar aqui o 16 escola ABC teste e salvar, fechar essa tela e vir aqui e terminar mais tarde.",
-        "speaker": "NC"
-      },
-      {
-        "id": "REQ11",
-        "title": "Validação com opção de devolver",
-        "description": "O sistema deve permitir que o validador devolva o cadastro para ajustes, com campo obrigatório de observações para justificar a devolução.",
-        "type": "functional",
-        "actor": "validador",
-        "priority": "high",
         "process_step": "validação",
-        "source_quote": "Se você botar aqui observação e devolver para ajuste, se você clicar aqui em devolver, devolvendo para a atividade anterior, para que eles façam essa correção, você tem que colocar aqui o que você quer que eles corrijam.",
-        "speaker": "NC"
+        "source_quote": "Os organogramas são acessáveis, acessíveis através da dessa tela aqui do organograma. Olha aqui, só clicar.",
+        "speaker": "PG"
       },
       {
-        "id": "REQ12",
-        "title": "Visualização do organograma anexado",
-        "description": "O sistema deve permitir visualizar o organograma anexado (ex: PDF) durante a validação para conferência.",
-        "type": "functional",
-        "actor": "validador",
-        "priority": "high",
-        "process_step": "validação",
-        "source_quote": "Clica agora no organogram e você já cadastrou, clica aqui e mostra agora o cadastro desse organogram.",
-        "speaker": "MF"
-      },
-      {
-        "id": "REQ13",
+        "id": "REQ22",
         "title": "SLA configurável por processo",
         "description": "O sistema deve permitir configurar acordos de nível de serviço (SLA) com prazos para a execução do processo de cadastro de organograma.",
         "type": "non_functional",
-        "actor": "área",
+        "actor": "administrador",
         "priority": "medium",
         "process_step": null,
-        "source_quote": "Pra pra gente definir o SLA, eu preciso o quê? Eu preciso definir qual a duração de cada uma dessas atividades aqui e qual o tempo máximo que esse processo pode ser deve ser executado.",
+        "source_quote": "Pra pra gente definir OSLA, eu preciso o quê? Eu preciso definir qual a duração de cada uma dessas atividades aqui e qual o tempo máximo que esse processo pode ser deve ser executado.",
         "speaker": "NC"
       },
       {
-        "id": "REQ14",
-        "title": "Prioridade manual via portal",
-        "description": "O sistema deve oferecer um portal onde a gestora possa definir e alterar manualmente a prioridade das tarefas pendentes da equipe.",
+        "id": "REQ23",
+        "title": "Prioridade manual no portal",
+        "description": "O sistema deve oferecer um portal onde o gestor possa definir e alterar manualmente a prioridade das tarefas pendentes da equipe.",
         "type": "functional",
-        "actor": "gestora",
+        "actor": "gestor",
         "priority": "medium",
         "process_step": null,
-        "source_quote": "A prioridade, ela vai ter e ter essa prioridade, cada vai ter a sua prioridade diariamente, que eu posso ir lá e mudar.",
-        "speaker": "MF"
+        "source_quote": "A gente vai ver isso com o João, porque essa questão de prioridade ela também não estava no escopo, mas como o João falou ali, a gente vai ver se consegue botar isso para vocês no portal.",
+        "speaker": "NC"
       },
       {
-        "id": "REQ15",
-        "title": "Identificador único de processo",
-        "description": "O sistema deve gerar automaticamente um identificador único para cada fluxo (workflow) de cadastro de organograma.",
-        "type": "non_functional",
+        "id": "REQ24",
+        "title": "Identificador único do processo",
+        "description": "O sistema deve gerar automaticamente um identificador único para cada instância do fluxo de cadastro de organograma.",
+        "type": "functional",
         "actor": "sistema",
-        "priority": "medium",
+        "priority": "high",
         "process_step": null,
         "source_quote": "Cada desses aqui uma demanda. Cada linha dessa uma demanda diferente.",
         "speaker": "NC"
       },
       {
-        "id": "REQ16",
-        "title": "Botão de cancelar em formulários",
-        "description": "O sistema deve incluir um botão de cancelar em formulários para fechar sem salvar, posicionado distante dos botões de salvar para evitar acionamento acidental.",
-        "type": "ui_field",
-        "actor": "usuário",
-        "priority": "low",
+        "id": "REQ25",
+        "title": "Histórico de execução",
+        "description": "O sistema deve manter um histórico detalhado de todas as atividades executadas no fluxo, incluindo quem executou e quando.",
+        "type": "non_functional",
+        "actor": "sistema",
+        "priority": "medium",
         "process_step": null,
-        "source_quote": "Cancelar somente feche. Quer dizer o seguinte, feche sem salvar, não salva não, porque eu não quero essa informação.",
-        "speaker": "PG"
+        "source_quote": "Você vai ter também o histórico para ter o controle e saber exatamente a mente, o que foi feito, quem executou, como executou?",
+        "speaker": "NC"
       }
     ],
-    "markdown": "# Especificação de Requisitos — Cadastro de Estrutura e Organograma de Escola\n\n**Total de requisitos:** 16\n\n## Resumo por Tipo\n\n| Tipo | Quantidade |\n|------|-----------|\n| 🖥️  Campo de tela | 5 |\n| ✅  Validação | 3 |\n| ⚙️  Funcional | 6 |\n| 📊  Não-funcional | 2 |\n\n## 🖥️  Campo de tela\n\n### REQ02 — Código e nome da escola\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro da escola\n\nO sistema deve ter campos para código da escola e nome da escola no formulário de cadastro de organograma.\n\n> **[MF]** *\"O Pedro falou para mim o seguinte, você tem que cadastrar o código da escola e o nome da escola.\"*\n\n### REQ06 — Cadastro de unidades com tipo, código, nome\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro de unidades\n\nO sistema deve ter campos para tipo, código, nome e responsável no cadastro de cada unidade do organograma.\n\n> **[MF]** *\"Tipo da Trindade perfeito, código da Trindade, nome da Trindade perfeito, perfeito, maravilha, perfeito, responsa, já estou vendo.\"*\n\n### REQ07 — Hierarquia de unidades\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro de unidades\n\nO sistema deve permitir vincular cada unidade a sua unidade superior no organograma, com seleção a partir de uma lista das unidades já cadastradas.\n\n> **[NC]** *\"Vincular a hierarquia, certo? Aqui eu vou botar a diretoria, que o primeiro certo.\"*\n\n### REQ08 — Indicação de catálogo técnico por unidade\n\n**Prioridade:** 🟡 Média\n  **Ator:** usuário\n  **Etapa do processo:** cadastro de unidades\n\nO sistema deve permitir indicar se cada unidade possui catálogo técnico (sim/não), com campo renomeado de 'documentação' para 'catálogo técnico'.\n\n> **[MF]** *\"Esta unidade possui documentação. Por que ainda a documentação já não entra o catálogo bonitinho?\"*\n\n### REQ16 — Botão de cancelar em formulários\n\n**Prioridade:** 🟢 Baixa\n  **Ator:** usuário\n\nO sistema deve incluir um botão de cancelar em formulários para fechar sem salvar, posicionado distante dos botões de salvar para evitar acionamento acidental.\n\n> **[PG]** *\"Cancelar somente feche. Quer dizer o seguinte, feche sem salvar, não salva não, porque eu não quero essa informação.\"*\n\n## ✅  Validação\n\n### REQ01 — Título do fluxo obrigatório\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** inicialização do fluxo\n\nO sistema deve exigir que o usuário preencha um título ao iniciar um fluxo de cadastro de organograma, para facilitar a identificação e gestão de múltiplos fluxos pendentes.\n\n> **[PG]** *\"Se você não colocar o título no dia seguinte, você não vai achar nada, porque não vai estar nada na sua atividade.\"*\n\n### REQ03 — Diretor da escola obrigatório\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro da escola\n\nO sistema deve exigir a seleção do diretor da escola no cadastro da primeira unidade (diretoria).\n\n> **[NC]** *\"Você vai selecionar o diretor da escola, certo? Quem o responsável? Quem o diretor?\"*\n\n### REQ04 — Catálogo mestre obrigatório para escola\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro da escola\n\nNo cadastro da primeira unidade (diretoria) de uma escola, o sistema deve exigir a indicação de que possui catálogo mestre.\n\n> **[NC]** *\"Catálogo possui catálogo mestre? Sim, obrigatório quando a gente está fazendo o cadastro de escola.\"*\n\n## ⚙️  Funcional\n\n### REQ05 — Anexo de organograma e aprovação\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro da escola\n\nO sistema deve permitir o anexo de arquivos, incluindo pelo menos o organograma (ex: PDF) e o e-mail de aprovação, com validação de mínimo de 2 arquivos.\n\n> **[NC]** *\"No mínimo, 2. No mínimo, 2. No mínimo, 2.\"*\n\n### REQ10 — Salvar e continuar depois\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n\nO sistema deve permitir salvar o progresso do cadastro e retomá-lo posteriormente a partir da tela 'Minhas tarefas'.\n\n> **[NC]** *\"Você pode entrar aqui e colocar aqui o 16 escola ABC teste e salvar, fechar essa tela e vir aqui e terminar mais tarde.\"*\n\n### REQ11 — Validação com opção de devolver\n\n**Prioridade:** 🔴 Alta\n  **Ator:** validador\n  **Etapa do processo:** validação\n\nO sistema deve permitir que o validador devolva o cadastro para ajustes, com campo obrigatório de observações para justificar a devolução.\n\n> **[NC]** *\"Se você botar aqui observação e devolver para ajuste, se você clicar aqui em devolver, devolvendo para a atividade anterior, para que eles façam essa correção, você tem que colocar aqui o que você quer que eles corrijam.\"*\n\n### REQ12 — Visualização do organograma anexado\n\n**Prioridade:** 🔴 Alta\n  **Ator:** validador\n  **Etapa do processo:** validação\n\nO sistema deve permitir visualizar o organograma anexado (ex: PDF) durante a validação para conferência.\n\n> **[MF]** *\"Clica agora no organogram e você já cadastrou, clica aqui e mostra agora o cadastro desse organogram.\"*\n\n### REQ09 — Contagem automática de unidades e catálogos\n\n**Prioridade:** 🟡 Média\n  **Ator:** sistema\n  **Etapa do processo:** cadastro de unidades\n\nO sistema deve calcular e exibir automaticamente o total de unidades cadastradas e o total de catálogos técnicos previstos (baseado nas respostas 'sim'), sem necessidade de preenchimento manual.\n\n> **[NC]** *\"Conforme você fizer aqui e você colocar sim e não, eu somo aqui ou eu só somo no total de unidades que essa escola tem?\"*\n\n### REQ14 — Prioridade manual via portal\n\n**Prioridade:** 🟡 Média\n  **Ator:** gestora\n\nO sistema deve oferecer um portal onde a gestora possa definir e alterar manualmente a prioridade das tarefas pendentes da equipe.\n\n> **[MF]** *\"A prioridade, ela vai ter e ter essa prioridade, cada vai ter a sua prioridade diariamente, que eu posso ir lá e mudar.\"*\n\n## 📊  Não-funcional\n\n### REQ13 — SLA configurável por processo\n\n**Prioridade:** 🟡 Média\n  **Ator:** área\n\nO sistema deve permitir configurar acordos de nível de serviço (SLA) com prazos para a execução do processo de cadastro de organograma.\n\n> **[NC]** *\"Pra pra gente definir o SLA, eu preciso o quê? Eu preciso definir qual a duração de cada uma dessas atividades aqui e qual o tempo máximo que esse processo pode ser deve ser executado.\"*\n\n### REQ15 — Identificador único de processo\n\n**Prioridade:** 🟡 Média\n  **Ator:** sistema\n\nO sistema deve gerar automaticamente um identificador único para cada fluxo (workflow) de cadastro de organograma.\n\n> **[NC]** *\"Cada desses aqui uma demanda. Cada linha dessa uma demanda diferente.\"*\n",
+    "markdown": "# Especificação de Requisitos — Cadastro de Estrutura e Organograma de Escola\n\n**Total de requisitos:** 25\n\n## Resumo por Tipo\n\n| Tipo | Quantidade |\n|------|-----------|\n| 🖥️  Campo de tela | 11 |\n| ✅  Validação | 4 |\n| 📋  Regra de negócio | 1 |\n| ⚙️  Funcional | 7 |\n| 📊  Não-funcional | 2 |\n\n## 🖥️  Campo de tela\n\n### REQ02 — Campo código da escola\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro da escola\n\nO sistema deve ter um campo para inserir o código da escola durante o cadastro do organograma.\n\n> **[MF]** *\"Você tem que cadastrar o código da escola e o nome da escola.\"*\n\n### REQ03 — Campo nome da escola\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro da escola\n\nO sistema deve ter um campo para inserir o nome da escola durante o cadastro do organograma.\n\n> **[MF]** *\"Você tem que cadastrar o código da escola e o nome da escola.\"*\n\n### REQ06 — Campo diretor da escola\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro da escola\n\nO sistema deve ter um campo para selecionar ou inserir o diretor responsável pela escola no cadastro do organograma.\n\n> **[NC]** *\"Você vai selecionar o diretor da escola, certo? Quem o responsável? Quem o diretor?\"*\n\n### REQ07 — Campo catálogo mestre obrigatório\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro da escola\n\nO sistema deve ter um campo obrigatório para indicar se a escola possui catálogo mestre, com opções sim/não.\n\n> **[NC]** *\"Catálogo possui catálogo mestre? Sim, obrigatório quando a gente está fazendo o cadastro de escola.\"*\n\n### REQ10 — Botão cadastrar unidades\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro da escola\n\nO sistema deve ter um botão para avançar para a etapa de cadastro das unidades inferiores da escola, após concluir o cadastro inicial.\n\n> **[NC]** *\"Você vai clicar aqui, cadastrar unidades inferiores, que eu estou entrando dentro do organograma, eu vou fazer as outras coisas que estão lá dentro do organograma.\"*\n\n### REQ11 — Campo tipo da unidade\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro de unidades\n\nO sistema deve ter um campo para especificar o tipo da unidade (ex: vice-diretoria, assessoria) durante o cadastro de unidades.\n\n> **[NC]** *\"Tenho aqui o tipo, então vamos dizer que eles estão, eu estou na direção, vou cadastrar aqui a primeira vice-diretoria.\"*\n\n### REQ12 — Campo código da unidade\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro de unidades\n\nO sistema deve ter um campo para inserir um código único para cada unidade cadastrada no organograma.\n\n> **[MF]** *\"Tipo da Trindade perfeito, código da Trindade, nome da Trindade perfeito.\"*\n\n### REQ13 — Campo nome da unidade\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro de unidades\n\nO sistema deve ter um campo para inserir o nome descritivo de cada unidade cadastrada no organograma.\n\n> **[MF]** *\"Tipo da Trindade perfeito, código da Trindade, nome da Trindade perfeito.\"*\n\n### REQ14 — Campo responsável da unidade\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro de unidades\n\nO sistema deve ter um campo para selecionar ou inserir o responsável por cada unidade cadastrada.\n\n> **[MF]** *\"responsa, já estou vendo, ? E hierarquia novo da Trindade Perfeito.\"*\n\n### REQ15 — Campo hierarquia da unidade\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro de unidades\n\nO sistema deve ter um campo para vincular cada unidade à sua unidade superior no organograma, permitindo selecionar entre as unidades já cadastradas.\n\n> **[NC]** *\"Vincular a hierarquia, certo? Aqui eu vou botar a diretoria, que o primeiro certo.\"*\n\n### REQ16 — Campo possui catálogo técnico\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro de unidades\n\nO sistema deve ter um campo para indicar se a unidade possui catálogo técnico, com opções sim/não, substituindo a opção genérica 'documentação'.\n\n> **[MF]** *\"Se você aqui no sistema só quer documentar, se vai ter catálogo técnico, a pergunta tem que ser objetiva, tem catálogo técnico?\"*\n\n## ✅  Validação\n\n### REQ01 — Título do fluxo obrigatório\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** inicialização do fluxo\n\nO sistema deve exigir que o usuário preencha um título ao iniciar um fluxo de cadastro de organograma, para facilitar a identificação e gestão de múltiplos fluxos pendentes.\n\n> **[PG]** *\"Se você não colocar o título no dia seguinte, você não vai achar nada, porque não vai estar nada na sua atividade.\"*\n\n### REQ04 — Código da escola único\n\n**Prioridade:** 🔴 Alta\n  **Ator:** sistema\n  **Etapa do processo:** cadastro da escola\n\nO sistema deve validar que o código da escola inserido não esteja já cadastrado, impedindo duplicidades.\n\n> **[NC]** *\"Tem que botar outro número, 28 já tem cadastrado isso.\"*\n\n### REQ09 — Validação mínimo dois arquivos\n\n**Prioridade:** 🔴 Alta\n  **Ator:** sistema\n  **Etapa do processo:** cadastro da escola\n\nO sistema deve validar que pelo menos dois arquivos sejam anexados: o organograma e a aprovação.\n\n> **[NC]** *\"No mínimo, 2. No mínimo, 2. No mínimo, 2.\"*\n\n### REQ20 — Opção devolver com observação\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** validação\n\nO sistema deve exigir que uma observação seja preenchida obrigatoriamente ao devolver o cadastro para ajustes na validação.\n\n> **[MF]** *\"Quando eu clicar na opção voltar, eu tenho que ter aquele campo XPTO que observação campo que você tem que dizer como obrigatório.\"*\n\n## 📋  Regra de negócio\n\n### REQ19 — Validação por equipe\n\n**Prioridade:** 🔴 Alta\n  **Ator:** sistema\n  **Etapa do processo:** validação\n\nO sistema deve direcionar o organograma cadastrado para uma equipe de validação, onde um membro pode assumir a tarefa.\n\n> **[NC]** *\"Nós combinamos que essa atividade de validação ela cairia numa equipe.\"*\n\n## ⚙️  Funcional\n\n### REQ05 — Botão salvar e continuar depois\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro da escola\n\nO sistema deve permitir salvar o progresso do cadastro e retomar posteriormente, sem perder os dados preenchidos.\n\n> **[NC]** *\"Porque você pode entrar aqui e colocar aqui o 16 escola ABC teste e salvar, fechar essa tela e vir aqui e terminar mais tarde.\"*\n\n### REQ08 — Anexar arquivos do organograma\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** cadastro da escola\n\nO sistema deve permitir anexar arquivos (ex: PDF, imagem) do organograma durante o cadastro, com suporte a múltiplos arquivos.\n\n> **[NC]** *\"Você vai colocar ele aqui, a gente está dentro do sistema que ele não existe aqui ainda, certo? Se eu clicar aqui em aqui inserir arquivos, certo?\"*\n\n### REQ17 — Soma automática catálogos previstos\n\n**Prioridade:** 🔴 Alta\n  **Ator:** sistema\n  **Etapa do processo:** cadastro de unidades\n\nO sistema deve calcular automaticamente o total de catálogos técnicos previstos com base nas unidades marcadas com 'sim' no campo possui catálogo técnico.\n\n> **[NC]** *\"Conforme você fizer aqui e você colocar sim e não, eu somo aqui ou eu só somo no total de unidades que essa escola tem?\"*\n\n### REQ21 — Visualização do organograma anexado\n\n**Prioridade:** 🔴 Alta\n  **Ator:** usuário\n  **Etapa do processo:** validação\n\nO sistema deve permitir visualizar os arquivos do organograma anexados durante a validação, para conferência.\n\n> **[PG]** *\"Os organogramas são acessáveis, acessíveis através da dessa tela aqui do organograma. Olha aqui, só clicar.\"*\n\n### REQ24 — Identificador único do processo\n\n**Prioridade:** 🔴 Alta\n  **Ator:** sistema\n\nO sistema deve gerar automaticamente um identificador único para cada instância do fluxo de cadastro de organograma.\n\n> **[NC]** *\"Cada desses aqui uma demanda. Cada linha dessa uma demanda diferente.\"*\n\n### REQ18 — Edição de unidades cadastradas\n\n**Prioridade:** 🟡 Média\n  **Ator:** usuário\n  **Etapa do processo:** cadastro de unidades\n\nO sistema deve permitir editar as informações das unidades já cadastradas antes de finalizar a etapa, com alterações refletidas automaticamente.\n\n> **[NC]** *\"Você pode alterar, por exemplo, você viu que digitou errado? Você pode vim aqui e voltar.\"*\n\n### REQ23 — Prioridade manual no portal\n\n**Prioridade:** 🟡 Média\n  **Ator:** gestor\n\nO sistema deve oferecer um portal onde o gestor possa definir e alterar manualmente a prioridade das tarefas pendentes da equipe.\n\n> **[NC]** *\"A gente vai ver isso com o João, porque essa questão de prioridade ela também não estava no escopo, mas como o João falou ali, a gente vai ver se consegue botar isso para vocês no portal.\"*\n\n## 📊  Não-funcional\n\n### REQ22 — SLA configurável por processo\n\n**Prioridade:** 🟡 Média\n  **Ator:** administrador\n\nO sistema deve permitir configurar acordos de nível de serviço (SLA) com prazos para a execução do processo de cadastro de organograma.\n\n> **[NC]** *\"Pra pra gente definir OSLA, eu preciso o quê? Eu preciso definir qual a duração de cada uma dessas atividades aqui e qual o tempo máximo que esse processo pode ser deve ser executado.\"*\n\n### REQ25 — Histórico de execução\n\n**Prioridade:** 🟡 Média\n  **Ator:** sistema\n\nO sistema deve manter um histórico detalhado de todas as atividades executadas no fluxo, incluindo quem executou e quando.\n\n> **[NC]** *\"Você vai ter também o histórico para ter o controle e saber exatamente a mente, o que foi feito, quem executou, como executou?\"*\n",
     "ready": true
   },
   "validation": {
@@ -1110,8 +1209,8 @@
     "ready": false
   },
   "meta": {
-    "session_id": "d7d43db9-06ea-4c4b-b555-91738d378c1a",
-    "created_at": "2026-03-29T02:20:17.334486+00:00",
+    "session_id": "4035d9d0-fb0e-491e-9761-2e085a1af6ae",
+    "created_at": "2026-03-29T02:43:06.122604+00:00",
     "llm_provider": "DeepSeek API Key",
     "llm_model": "deepseek-chat",
     "agents_run": [
@@ -1119,7 +1218,7 @@
       "minutes",
       "requirements"
     ],
-    "total_tokens_used": 216971,
-    "processing_time_ms": 163704
+    "total_tokens_used": 218303,
+    "processing_time_ms": 174648
   }
 }

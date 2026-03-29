@@ -1,66 +1,128 @@
 # Especificação de Requisitos — Cadastro de Estrutura e Organograma de Escola
 
-**Total de requisitos:** 16
+**Total de requisitos:** 25
 
 ## Resumo por Tipo
 
 | Tipo | Quantidade |
 |------|-----------|
-| 🖥️  Campo de tela | 5 |
-| ✅  Validação | 3 |
-| ⚙️  Funcional | 6 |
+| 🖥️  Campo de tela | 11 |
+| ✅  Validação | 4 |
+| 📋  Regra de negócio | 1 |
+| ⚙️  Funcional | 7 |
 | 📊  Não-funcional | 2 |
 
 ## 🖥️  Campo de tela
 
-### REQ02 — Código e nome da escola
+### REQ02 — Campo código da escola
 
 **Prioridade:** 🔴 Alta
   **Ator:** usuário
   **Etapa do processo:** cadastro da escola
 
-O sistema deve ter campos para código da escola e nome da escola no formulário de cadastro de organograma.
+O sistema deve ter um campo para inserir o código da escola durante o cadastro do organograma.
 
-> **[MF]** *"O Pedro falou para mim o seguinte, você tem que cadastrar o código da escola e o nome da escola."*
+> **[MF]** *"Você tem que cadastrar o código da escola e o nome da escola."*
 
-### REQ06 — Cadastro de unidades com tipo, código, nome
+### REQ03 — Campo nome da escola
+
+**Prioridade:** 🔴 Alta
+  **Ator:** usuário
+  **Etapa do processo:** cadastro da escola
+
+O sistema deve ter um campo para inserir o nome da escola durante o cadastro do organograma.
+
+> **[MF]** *"Você tem que cadastrar o código da escola e o nome da escola."*
+
+### REQ06 — Campo diretor da escola
+
+**Prioridade:** 🔴 Alta
+  **Ator:** usuário
+  **Etapa do processo:** cadastro da escola
+
+O sistema deve ter um campo para selecionar ou inserir o diretor responsável pela escola no cadastro do organograma.
+
+> **[NC]** *"Você vai selecionar o diretor da escola, certo? Quem o responsável? Quem o diretor?"*
+
+### REQ07 — Campo catálogo mestre obrigatório
+
+**Prioridade:** 🔴 Alta
+  **Ator:** usuário
+  **Etapa do processo:** cadastro da escola
+
+O sistema deve ter um campo obrigatório para indicar se a escola possui catálogo mestre, com opções sim/não.
+
+> **[NC]** *"Catálogo possui catálogo mestre? Sim, obrigatório quando a gente está fazendo o cadastro de escola."*
+
+### REQ10 — Botão cadastrar unidades
+
+**Prioridade:** 🔴 Alta
+  **Ator:** usuário
+  **Etapa do processo:** cadastro da escola
+
+O sistema deve ter um botão para avançar para a etapa de cadastro das unidades inferiores da escola, após concluir o cadastro inicial.
+
+> **[NC]** *"Você vai clicar aqui, cadastrar unidades inferiores, que eu estou entrando dentro do organograma, eu vou fazer as outras coisas que estão lá dentro do organograma."*
+
+### REQ11 — Campo tipo da unidade
 
 **Prioridade:** 🔴 Alta
   **Ator:** usuário
   **Etapa do processo:** cadastro de unidades
 
-O sistema deve ter campos para tipo, código, nome e responsável no cadastro de cada unidade do organograma.
+O sistema deve ter um campo para especificar o tipo da unidade (ex: vice-diretoria, assessoria) durante o cadastro de unidades.
 
-> **[MF]** *"Tipo da Trindade perfeito, código da Trindade, nome da Trindade perfeito, perfeito, maravilha, perfeito, responsa, já estou vendo."*
+> **[NC]** *"Tenho aqui o tipo, então vamos dizer que eles estão, eu estou na direção, vou cadastrar aqui a primeira vice-diretoria."*
 
-### REQ07 — Hierarquia de unidades
+### REQ12 — Campo código da unidade
 
 **Prioridade:** 🔴 Alta
   **Ator:** usuário
   **Etapa do processo:** cadastro de unidades
 
-O sistema deve permitir vincular cada unidade a sua unidade superior no organograma, com seleção a partir de uma lista das unidades já cadastradas.
+O sistema deve ter um campo para inserir um código único para cada unidade cadastrada no organograma.
+
+> **[MF]** *"Tipo da Trindade perfeito, código da Trindade, nome da Trindade perfeito."*
+
+### REQ13 — Campo nome da unidade
+
+**Prioridade:** 🔴 Alta
+  **Ator:** usuário
+  **Etapa do processo:** cadastro de unidades
+
+O sistema deve ter um campo para inserir o nome descritivo de cada unidade cadastrada no organograma.
+
+> **[MF]** *"Tipo da Trindade perfeito, código da Trindade, nome da Trindade perfeito."*
+
+### REQ14 — Campo responsável da unidade
+
+**Prioridade:** 🔴 Alta
+  **Ator:** usuário
+  **Etapa do processo:** cadastro de unidades
+
+O sistema deve ter um campo para selecionar ou inserir o responsável por cada unidade cadastrada.
+
+> **[MF]** *"responsa, já estou vendo, ? E hierarquia novo da Trindade Perfeito."*
+
+### REQ15 — Campo hierarquia da unidade
+
+**Prioridade:** 🔴 Alta
+  **Ator:** usuário
+  **Etapa do processo:** cadastro de unidades
+
+O sistema deve ter um campo para vincular cada unidade à sua unidade superior no organograma, permitindo selecionar entre as unidades já cadastradas.
 
 > **[NC]** *"Vincular a hierarquia, certo? Aqui eu vou botar a diretoria, que o primeiro certo."*
 
-### REQ08 — Indicação de catálogo técnico por unidade
+### REQ16 — Campo possui catálogo técnico
 
-**Prioridade:** 🟡 Média
+**Prioridade:** 🔴 Alta
   **Ator:** usuário
   **Etapa do processo:** cadastro de unidades
 
-O sistema deve permitir indicar se cada unidade possui catálogo técnico (sim/não), com campo renomeado de 'documentação' para 'catálogo técnico'.
+O sistema deve ter um campo para indicar se a unidade possui catálogo técnico, com opções sim/não, substituindo a opção genérica 'documentação'.
 
-> **[MF]** *"Esta unidade possui documentação. Por que ainda a documentação já não entra o catálogo bonitinho?"*
-
-### REQ16 — Botão de cancelar em formulários
-
-**Prioridade:** 🟢 Baixa
-  **Ator:** usuário
-
-O sistema deve incluir um botão de cancelar em formulários para fechar sem salvar, posicionado distante dos botões de salvar para evitar acionamento acidental.
-
-> **[PG]** *"Cancelar somente feche. Quer dizer o seguinte, feche sem salvar, não salva não, porque eu não quero essa informação."*
+> **[MF]** *"Se você aqui no sistema só quer documentar, se vai ter catálogo técnico, a pergunta tem que ser objetiva, tem catálogo técnico?"*
 
 ## ✅  Validação
 
@@ -74,102 +136,134 @@ O sistema deve exigir que o usuário preencha um título ao iniciar um fluxo de 
 
 > **[PG]** *"Se você não colocar o título no dia seguinte, você não vai achar nada, porque não vai estar nada na sua atividade."*
 
-### REQ03 — Diretor da escola obrigatório
+### REQ04 — Código da escola único
 
 **Prioridade:** 🔴 Alta
-  **Ator:** usuário
+  **Ator:** sistema
   **Etapa do processo:** cadastro da escola
 
-O sistema deve exigir a seleção do diretor da escola no cadastro da primeira unidade (diretoria).
+O sistema deve validar que o código da escola inserido não esteja já cadastrado, impedindo duplicidades.
 
-> **[NC]** *"Você vai selecionar o diretor da escola, certo? Quem o responsável? Quem o diretor?"*
+> **[NC]** *"Tem que botar outro número, 28 já tem cadastrado isso."*
 
-### REQ04 — Catálogo mestre obrigatório para escola
+### REQ09 — Validação mínimo dois arquivos
 
 **Prioridade:** 🔴 Alta
-  **Ator:** usuário
+  **Ator:** sistema
   **Etapa do processo:** cadastro da escola
 
-No cadastro da primeira unidade (diretoria) de uma escola, o sistema deve exigir a indicação de que possui catálogo mestre.
-
-> **[NC]** *"Catálogo possui catálogo mestre? Sim, obrigatório quando a gente está fazendo o cadastro de escola."*
-
-## ⚙️  Funcional
-
-### REQ05 — Anexo de organograma e aprovação
-
-**Prioridade:** 🔴 Alta
-  **Ator:** usuário
-  **Etapa do processo:** cadastro da escola
-
-O sistema deve permitir o anexo de arquivos, incluindo pelo menos o organograma (ex: PDF) e o e-mail de aprovação, com validação de mínimo de 2 arquivos.
+O sistema deve validar que pelo menos dois arquivos sejam anexados: o organograma e a aprovação.
 
 > **[NC]** *"No mínimo, 2. No mínimo, 2. No mínimo, 2."*
 
-### REQ10 — Salvar e continuar depois
+### REQ20 — Opção devolver com observação
 
 **Prioridade:** 🔴 Alta
   **Ator:** usuário
-
-O sistema deve permitir salvar o progresso do cadastro e retomá-lo posteriormente a partir da tela 'Minhas tarefas'.
-
-> **[NC]** *"Você pode entrar aqui e colocar aqui o 16 escola ABC teste e salvar, fechar essa tela e vir aqui e terminar mais tarde."*
-
-### REQ11 — Validação com opção de devolver
-
-**Prioridade:** 🔴 Alta
-  **Ator:** validador
   **Etapa do processo:** validação
 
-O sistema deve permitir que o validador devolva o cadastro para ajustes, com campo obrigatório de observações para justificar a devolução.
+O sistema deve exigir que uma observação seja preenchida obrigatoriamente ao devolver o cadastro para ajustes na validação.
 
-> **[NC]** *"Se você botar aqui observação e devolver para ajuste, se você clicar aqui em devolver, devolvendo para a atividade anterior, para que eles façam essa correção, você tem que colocar aqui o que você quer que eles corrijam."*
+> **[MF]** *"Quando eu clicar na opção voltar, eu tenho que ter aquele campo XPTO que observação campo que você tem que dizer como obrigatório."*
 
-### REQ12 — Visualização do organograma anexado
+## 📋  Regra de negócio
+
+### REQ19 — Validação por equipe
 
 **Prioridade:** 🔴 Alta
-  **Ator:** validador
+  **Ator:** sistema
   **Etapa do processo:** validação
 
-O sistema deve permitir visualizar o organograma anexado (ex: PDF) durante a validação para conferência.
+O sistema deve direcionar o organograma cadastrado para uma equipe de validação, onde um membro pode assumir a tarefa.
 
-> **[MF]** *"Clica agora no organogram e você já cadastrou, clica aqui e mostra agora o cadastro desse organogram."*
+> **[NC]** *"Nós combinamos que essa atividade de validação ela cairia numa equipe."*
 
-### REQ09 — Contagem automática de unidades e catálogos
+## ⚙️  Funcional
 
-**Prioridade:** 🟡 Média
+### REQ05 — Botão salvar e continuar depois
+
+**Prioridade:** 🔴 Alta
+  **Ator:** usuário
+  **Etapa do processo:** cadastro da escola
+
+O sistema deve permitir salvar o progresso do cadastro e retomar posteriormente, sem perder os dados preenchidos.
+
+> **[NC]** *"Porque você pode entrar aqui e colocar aqui o 16 escola ABC teste e salvar, fechar essa tela e vir aqui e terminar mais tarde."*
+
+### REQ08 — Anexar arquivos do organograma
+
+**Prioridade:** 🔴 Alta
+  **Ator:** usuário
+  **Etapa do processo:** cadastro da escola
+
+O sistema deve permitir anexar arquivos (ex: PDF, imagem) do organograma durante o cadastro, com suporte a múltiplos arquivos.
+
+> **[NC]** *"Você vai colocar ele aqui, a gente está dentro do sistema que ele não existe aqui ainda, certo? Se eu clicar aqui em aqui inserir arquivos, certo?"*
+
+### REQ17 — Soma automática catálogos previstos
+
+**Prioridade:** 🔴 Alta
   **Ator:** sistema
   **Etapa do processo:** cadastro de unidades
 
-O sistema deve calcular e exibir automaticamente o total de unidades cadastradas e o total de catálogos técnicos previstos (baseado nas respostas 'sim'), sem necessidade de preenchimento manual.
+O sistema deve calcular automaticamente o total de catálogos técnicos previstos com base nas unidades marcadas com 'sim' no campo possui catálogo técnico.
 
 > **[NC]** *"Conforme você fizer aqui e você colocar sim e não, eu somo aqui ou eu só somo no total de unidades que essa escola tem?"*
 
-### REQ14 — Prioridade manual via portal
+### REQ21 — Visualização do organograma anexado
+
+**Prioridade:** 🔴 Alta
+  **Ator:** usuário
+  **Etapa do processo:** validação
+
+O sistema deve permitir visualizar os arquivos do organograma anexados durante a validação, para conferência.
+
+> **[PG]** *"Os organogramas são acessáveis, acessíveis através da dessa tela aqui do organograma. Olha aqui, só clicar."*
+
+### REQ24 — Identificador único do processo
+
+**Prioridade:** 🔴 Alta
+  **Ator:** sistema
+
+O sistema deve gerar automaticamente um identificador único para cada instância do fluxo de cadastro de organograma.
+
+> **[NC]** *"Cada desses aqui uma demanda. Cada linha dessa uma demanda diferente."*
+
+### REQ18 — Edição de unidades cadastradas
 
 **Prioridade:** 🟡 Média
-  **Ator:** gestora
+  **Ator:** usuário
+  **Etapa do processo:** cadastro de unidades
 
-O sistema deve oferecer um portal onde a gestora possa definir e alterar manualmente a prioridade das tarefas pendentes da equipe.
+O sistema deve permitir editar as informações das unidades já cadastradas antes de finalizar a etapa, com alterações refletidas automaticamente.
 
-> **[MF]** *"A prioridade, ela vai ter e ter essa prioridade, cada vai ter a sua prioridade diariamente, que eu posso ir lá e mudar."*
+> **[NC]** *"Você pode alterar, por exemplo, você viu que digitou errado? Você pode vim aqui e voltar."*
+
+### REQ23 — Prioridade manual no portal
+
+**Prioridade:** 🟡 Média
+  **Ator:** gestor
+
+O sistema deve oferecer um portal onde o gestor possa definir e alterar manualmente a prioridade das tarefas pendentes da equipe.
+
+> **[NC]** *"A gente vai ver isso com o João, porque essa questão de prioridade ela também não estava no escopo, mas como o João falou ali, a gente vai ver se consegue botar isso para vocês no portal."*
 
 ## 📊  Não-funcional
 
-### REQ13 — SLA configurável por processo
+### REQ22 — SLA configurável por processo
 
 **Prioridade:** 🟡 Média
-  **Ator:** área
+  **Ator:** administrador
 
 O sistema deve permitir configurar acordos de nível de serviço (SLA) com prazos para a execução do processo de cadastro de organograma.
 
-> **[NC]** *"Pra pra gente definir o SLA, eu preciso o quê? Eu preciso definir qual a duração de cada uma dessas atividades aqui e qual o tempo máximo que esse processo pode ser deve ser executado."*
+> **[NC]** *"Pra pra gente definir OSLA, eu preciso o quê? Eu preciso definir qual a duração de cada uma dessas atividades aqui e qual o tempo máximo que esse processo pode ser deve ser executado."*
 
-### REQ15 — Identificador único de processo
+### REQ25 — Histórico de execução
 
 **Prioridade:** 🟡 Média
   **Ator:** sistema
 
-O sistema deve gerar automaticamente um identificador único para cada fluxo (workflow) de cadastro de organograma.
+O sistema deve manter um histórico detalhado de todas as atividades executadas no fluxo, incluindo quem executou e quando.
 
-> **[NC]** *"Cada desses aqui uma demanda. Cada linha dessa uma demanda diferente."*
+> **[NC]** *"Você vai ter também o histórico para ter o controle e saber exatamente a mente, o que foi feito, quem executou, como executou?"*

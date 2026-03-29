@@ -7,7 +7,7 @@
 **Process2Diagram** converts meeting transcriptions into professional process diagrams using a multi-LLM pipeline.
 
 - **Input:** raw text transcript (paste or `.txt` upload)
-- **Outputs:** BPMN 2.0 XML, Mermaid flowchart, Draw.io XML, and meeting minutes (Markdown)
+- **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown), and requirements analysis (JSON/Markdown)
 - **Deploy:** Streamlit Cloud — auto-deploy on push to `main` branch (`github.com/pedroregato/process2diagram`)
 - **Dev environment:** PyCharm on Windows; Python 3.13
 
@@ -43,10 +43,11 @@ process2diagram/
 │
 ├── agents/
 │   ├── base_agent.py         # Abstract base — LLM routing, JSON retry, token tracking
-│   ├── orchestrator.py       # Sequences NLP → BPMN → Minutes; accepts progress_callback
+│   ├── orchestrator.py       # Sequences NLP → BPMN → Minutes → Requirements; accepts progress_callback
 │   ├── nlp_chunker.py        # Pure Python/spaCy preprocessor — no LLM
-│   ├── agent_bpmn.py         # BPMN extraction + calls diagram generators
-│   └── agent_minutes.py      # Meeting minutes extraction
+│   ├── agent_bpmn.py         # BPMN extraction + _enforce_rules() post-processing + generators
+│   ├── agent_minutes.py      # Meeting minutes extraction (full transcript, initials convention)
+│   └── agent_requirements.py # Requirements extraction (IEEE 830 adapted; speaker attribution)
 │
 ├── modules/
 │   ├── config.py             # LLM provider registry — add new providers here
@@ -54,7 +55,6 @@ process2diagram/
 │   ├── bpmn_generator.py     # OMG BPMN 2.0 XML generator (absolute coordinates layout)
 │   ├── bpmn_viewer.py        # BPMN viewer component (bpmn-js 17 injected inline)
 │   ├── diagram_mermaid.py    # Mermaid flowchart generator
-│   ├── diagram_drawio.py     # Draw.io XML generator
 │   ├── diagram_bpmn.py       # Legacy BPMN generator (kept for compatibility)
 │   ├── extract_llm.py        # Legacy LLM adapter (used by app.py v1 flow)
 │   ├── extract_heuristic.py  # Heuristic extractor (no-LLM fallback)
@@ -64,7 +64,8 @@ process2diagram/
 │
 ├── skills/
 │   ├── SKILL_BPMN.md         # System prompt for AgentBPMN
-│   └── SKILL_MINUTES.md      # System prompt for AgentMinutes
+│   ├── SKILL_MINUTES.md      # System prompt for AgentMinutes
+│   └── SKILL_REQUIREMENTS.md # System prompt for AgentRequirements
 │
 ├── requirements.txt          # streamlit, anthropic, openai (pinned versions)
 └── CLAUDE.md                 # This file
@@ -86,11 +87,18 @@ Transcript (user input)
   NLPChunker              ← no LLM; spaCy NER, segmentation, actor detection
         │  hub.nlp.ready = True
         ▼
-   AgentBPMN              ← LLM; extracts steps/edges/lanes → BPMN XML, Mermaid, Draw.io
+   AgentBPMN              ← LLM; extracts steps/edges/lanes → BPMN XML, Mermaid
+        │  _enforce_rules() post-processes: generic lanes, service-task lanes,
+        │  correction-loop redirect, redundant event steps
         │  hub.bpmn.ready = True
         ▼
-  AgentMinutes            ← LLM; extracts decisions, action items, agenda
+  AgentMinutes            ← LLM; full transcript; initials convention (MF, PG…)
+        │  extracts decisions, action items (raised_by), participants with initials
         │  hub.minutes.ready = True
+        ▼
+ AgentRequirements        ← LLM; IEEE 830 adapted; speaker attribution per requirement
+        │  extracts ui_field, validation, business_rule, functional, non_functional
+        │  hub.requirements.ready = True
         ▼
    KnowledgeHub           ← fully populated; stored in st.session_state["hub"]
 ```
@@ -102,15 +110,18 @@ A pure Python dataclass living in `st.session_state["hub"]`. Each agent reads on
 ```python
 @dataclass
 class KnowledgeHub:
-    version: int                 # bumped on every .bump() call
+    version: int                   # bumped on every .bump() call
     transcript_raw: str
     transcript_clean: str
-    nlp: NLPEnvelope             # written by NLPChunker
-    bpmn: BPMNModel              # written by AgentBPMN
-    minutes: MinutesModel        # written by AgentMinutes
-    validation: ValidationReport # reserved for PC2 AgentValidator
-    meta: SessionMetadata        # tokens, timing, provider info
+    nlp: NLPEnvelope               # written by NLPChunker
+    bpmn: BPMNModel                # written by AgentBPMN
+    minutes: MinutesModel          # written by AgentMinutes
+    requirements: RequirementsModel # written by AgentRequirements
+    validation: ValidationReport   # reserved for PC2 AgentValidator
+    meta: SessionMetadata          # tokens, timing, provider info
 ```
+
+**Schema evolution:** `KnowledgeHub.migrate(hub)` is the single point for backward-compatibility fixes when fields are added. Always add new field guards here instead of scattered `hasattr` checks in `app.py`.
 
 **Golden rule:** never instantiate an agent directly from `app.py`. Always go through `Orchestrator`.
 
@@ -169,13 +180,27 @@ Configured in `modules/config.py → AVAILABLE_PROVIDERS`:
 
 ### Lane-crossing elimination algorithm
 
-`bpmn_generator.py` runs a single-pass algorithm (`MAX_ITERATIONS=1`):
+`bpmn_generator.py` runs a single-pass algorithm:
 
 1. **Column layout** — assigns concrete `(x, y, w, h)` positions to all elements
-2. **Lane-spanning detection** — flags flows whose source and target are separated by **≥ 2 lane boundaries** (i.e., they skip at least one intermediate lane). Adjacent-lane flows (span = 1) are intentionally left as direct arrows — bpmn-js routes them natively, and using Link Events for them causes layout distortion (the catch event ends up at column 0).
-3. **Link Event injection** — replaces each flagged flow with throw/catch Intermediate Link Events placed in the source/target lanes respectively.
+2. **Lane-spanning detection** — flags flows whose source and target are separated by **≥ 2 lane boundaries**. Adjacent-lane flows (span = 1) are intentionally left as direct arrows — bpmn-js routes them natively.
+3. **Link Event injection** — replaces each flagged flow with throw/catch Intermediate Link Events.
 
-> **Why no geometric intersection heuristic?** Crossing arrows between adjacent lanes are normal and expected in 2-lane BPMN processes (e.g., a validation loop). Replacing them with Link Events breaks column assignment: the catch event has no incoming flows, so it lands at column 0 (start of the diagram), displacing its successor as well.
+### Waypoint routing
+
+`_build_di` emits waypoints for every sequence flow:
+- **Normal flow** (forward, no overlap): right-centre → left-centre (2 points)
+- **Stacked elements** (same column, x-ranges overlap): bottom-centre → top-centre (2 points)
+- **Backward flow** (source column > target column, same lane): U-path with 4 waypoints below elements: `source_right → source_below → target_below → target_left`. The horizontal segment is routed 25 px below the tallest element in the path, within the empty lower portion of the lane.
+
+### Post-extraction rule enforcement (`_enforce_rules`)
+
+Applied in `agent_bpmn.py` after LLM extraction, before generators. Mutates the model in-place:
+
+- **Rule 0** — removes steps the LLM declared as `startEvent`/`endEvent` (generator adds these)
+- **Rule 1** — `serviceTask` with unnamed system actor → `lane = None` (OMG §7.4)
+- **Rule 1b** — generic lane names (`usuário`, `validador`, `sistema`…) → scans step descriptions for capitalized organizational noun phrases; replaces with the most frequent candidate
+- **Rule 2** — correction loop pointing back to gateway → redirected to the upstream work step that feeds the gateway
 
 ### Rules the LLM must follow (enforced by `SKILL_BPMN.md`)
 
@@ -184,6 +209,7 @@ Configured in `modules/config.py → AVAILABLE_PROVIDERS`:
 - System lanes must not receive Start/End Events.
 - Lane ordering: primary initiating actor at the top.
 - End Event inherits the lane of its direct predecessor (Rule 8).
+- Lane names must be organizational units, never generic roles (`usuário`, `sistema`, etc.).
 
 ---
 
@@ -328,14 +354,23 @@ API keys are stored exclusively in `st.session_state` (server-side, per-session 
 
 ---
 
-## Roadmap — PC2
+## Roadmap
 
+### PC1 — Concluído (v3.3)
+- [x] Pipeline sequencial NLP → BPMN → Minutes → Requirements
+- [x] BPMN 2.0 XML com layout absoluto, pools/lanes, Link Events
+- [x] `_enforce_rules()` — defesa programática contra erros LLM de lane/gateway
+- [x] Backward-flow U-routing em `_build_di` — sem invasão visual de elementos
+- [x] `AgentRequirements` — 5 tipos IEEE 830, speaker attribution por citação
+- [x] Minutes com transcrição completa + iniciais de participantes
+- [x] `KnowledgeHub.migrate()` para evolução de schema sem quebrar sessões
+
+### PC2 — Planejado
 - [ ] Parallel agent execution with `asyncio.gather()` in the Orchestrator
 - [ ] `AgentValidator` post-generation quality scoring
 - [ ] `AgentSBVR` and `AgentBMM` for semantic business modeling
 - [ ] LangGraph integration for conditional re-routing on validation failures
-- [ ] BPMN vertical layout + sequence flow crossing elimination improvements
-- [ ] Cleaner positioning standards in `bpmn_generator.py`
+- [ ] Suite de testes automatizados por cenário
 
 ---
 
