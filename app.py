@@ -439,6 +439,10 @@ if generate_btn:
 # Desta forma, download buttons, tab switches e outros widgets não apagam a UI
 hub = st.session_state.get("hub")
 if hub is not None:
+    # Migra hubs serializados de versões anteriores que não tinham todos os campos
+    if not hasattr(hub, 'requirements'):
+        from core.knowledge_hub import RequirementsModel
+        hub.requirements = RequirementsModel()
 
     # ── Metrics banner ────────────────────────────────────────────────────────
     col_a, col_b, col_c, col_d = st.columns(4)
