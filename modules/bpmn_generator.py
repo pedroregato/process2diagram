@@ -615,6 +615,19 @@ def _compute_layout(bpmn, lane_assignment):
             if f.source.startswith("lnk_catch_") and f.target in col_of:
                 col_of[f.source] = col_of[f.target]
 
+        # Fix lnk_throw_N columns: _assign_columns places the throw event at
+        # col[source]+1 (its natural topological depth).  That +1 column is often
+        # shared by cross-lane forward flows (e.g. S07→S08 in the same column),
+        # whose diagonal waypoints then geometrically intersect the short
+        # source→throw flow.  Placing the throw event at col[source] instead
+        # makes the source→throw flow a short vertical arrow within the same
+        # column, which lies to the left of the cross-lane diagonal and never
+        # intersects it.  Nothing else depends on lnk_throw_N as a predecessor
+        # in the sequence flows, so this reassignment is always safe.
+        for f in bpmn.flows:
+            if f.target.startswith("lnk_throw_") and f.source in col_of:
+                col_of[f.target] = col_of[f.source]
+
         # ── Step 2: compute the width of each column (widest element in it) ───
         col_widths = {}
         for eid in order:
@@ -1154,7 +1167,7 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
     # catch elements — e.g. S01→S02 crossing catch flows added in pass 1.
     # _detect_crossings already excludes flows involving link events, so
     # the second pass only ever flags original flows — no explosion risk.
-    MAX_ITERATIONS = 2
+    MAX_ITERATIONS = 3
     for _iteration in range(MAX_ITERATIONS):
         if not _apply_link_events(bpmn, lane_assignment, shapes):
             break   # converged — no new crossings
