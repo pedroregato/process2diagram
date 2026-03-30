@@ -3,7 +3,7 @@ agent: bpmn
 iniciativa: Pedro Regato
 project: process2diagram
 spec: BPMN 2.0 (OMG — ISO/IEC 19510)
-version: 5.0
+version: 6.0
 ---
 
 # BPMN Agent — Instruções de Execução
@@ -63,6 +63,8 @@ Regras de eventos:
 | Regra de negócio / classificação | `businessRuleTask` |
 | Script ou transformação interna | `scriptTask` |
 | Ação física sem suporte de sistema | `manualTask` |
+| Envio de mensagem para outro participante (pool) | `sendTask` |
+| Recebimento de mensagem de outro participante (pool) | `receiveTask` |
 
 Regra de `serviceTask`:
 - Se o sistema **não é nomeado** na transcrição (ex: "o sistema processa automaticamente"),
@@ -74,38 +76,56 @@ Regra de `serviceTask`:
 
 **Tipos e mapeamento:**
 
-| Tipo | task_type | is_decision |
-|---|---|---|
-| Decisão exclusiva — apenas um caminho | `exclusiveGateway` | `true` |
-| Paralelo — todos os caminhos simultâneos | `parallelGateway` | `false` |
-| Inclusivo — um ou mais caminhos | `inclusiveGateway` | `false` |
+| Tipo | task_type | is_decision | Quando usar |
+|---|---|---|---|
+| Decisão exclusiva — apenas um caminho segue | `exclusiveGateway` | `true` | "Se aprovado… senão…" |
+| Paralelo — todos os caminhos simultaneamente | `parallelGateway` | `false` | "Execute A, B e C em paralelo" |
+| Inclusivo — um ou mais caminhos | `inclusiveGateway` | `false` | "Execute todos que se aplicarem" |
+| Baseado em evento — aguarda o primeiro evento | `eventBasedGateway` | `false` | "Aguarda resposta ou tempo esgota" |
+| Condição complexa — combinação AND/OR/XOR | `complexGateway` | `false` | Lógica híbrida explícita na transcrição |
 
-**Regra de Sincronização:**
+**Regra de Sincronização (Split ↔ Join):**
 
-Todo gateway de **split** (N saídas) deve ter um gateway de **join** do mesmo tipo
-que recebe exatamente essas N entradas — exceto nas exceções abaixo.
+Cada gateway de **split** abre N caminhos sobre um bloco de atividades.
+Um gateway de **join** do mesmo tipo deve fechar esses N caminhos **do outro lado
+do bloco de atividades** — nunca imediatamente após o split.
 
-| Tipo | Sincronização | Observação |
+```
+                 ┌── Tarefa A ──┐
+[split] ────────►├── Tarefa B ──┤────────► [join] → Continuar
+                 └── Tarefa C ──┘
+    N saídas do split         N entradas no join
+```
+
+| Tipo | Sincronização | Regra |
 |---|---|---|
 | `parallelGateway` (AND) | **Obrigatória** | Todas as N ramificações DEVEM convergir no AND-join. Sem exceção. |
 | `inclusiveGateway` (OR) | **Obrigatória** | Todas as N ramificações DEVEM convergir no OR-join. |
-| `exclusiveGateway` (XOR) | **Recomendada** | Os caminhos podem convergir implicitamente num único nó sem gateway de join. Use join XOR apenas quando precisar de controle explícito de fluxo. |
+| `exclusiveGateway` (XOR) | **Recomendada** | Convergência pode ser implícita (sem join XOR). Use join XOR apenas para controle de fluxo explícito. |
+| `eventBasedGateway` | **Não aplicável** | Cada saída é um evento distinto (timer, mensagem…); não usa join simétrico. |
+| `complexGateway` | **Obrigatória** | Mesmo padrão do tipo que a condição complexa emular (AND/OR). |
 
 **Exceção válida para qualquer tipo:** uma ramificação pode ir diretamente para
 `endEvent` ou `errorEndEvent` sem passar pelo join, quando representa encerramento
 imediato (ex: rejeição definitiva, erro crítico).
 
-**Exemplo AND correto:**
+**Exemplo AND correto (join após as atividades, não após o split):**
 ```
-[AND split] → Tarefa A ──┐
-             → Tarefa B ──┤→ [AND join] → Continuar
-             → Tarefa C ──┘
+[AND split] ──► Tarefa A ──┐
+             ──► Tarefa B ──┤──► [AND join] ──► Continuar
+             ──► Tarefa C ──┘
 ```
 
 **Exemplo XOR válido sem join explícito:**
 ```
 [XOR] → sim → Aprovar → Finalizar
       → não → Rejeitar → Fim
+```
+
+**Exemplo eventBasedGateway (timer-fork):**
+```
+[eventBasedGateway] → [intermediateMessageCatchEvent] → Processar resposta
+                    → [intermediateTimerCatchEvent]   → Escalar por prazo
 ```
 
 ### Passo 5 — Regra de Loop de Correção
@@ -124,7 +144,7 @@ Antes de gerar o JSON, confirme:
 
 - [ ] Todo nó tem ao menos uma entrada e uma saída (exceto start/end)
 - [ ] Todo caminho termina em um end event
-- [ ] Todo AND/OR split tem seu join correspondente
+- [ ] Todo AND/OR/complexGateway split tem seu join correspondente do outro lado das atividades
 - [ ] Toda aresta saindo de `is_decision: true` tem `label` preenchido
 - [ ] Nenhuma lane tem nome genérico
 - [ ] `actor` é `null` em todos os start/end events
