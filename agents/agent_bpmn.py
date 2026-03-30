@@ -497,9 +497,12 @@ class AgentBPMN(BaseAgent):
         if model.steps:
             source_ids = {e.source for e in model.edges}
             terminal = [s for s in model.steps if s.id not in source_ids]
-            sf_end_src = terminal[-1].id if terminal else model.steps[-1].id
-            flows.append(SequenceFlow(id="sf_end", source=sf_end_src,
-                                      target="ev_end"))
+            if not terminal:
+                terminal = [model.steps[-1]]
+            for _j, _term in enumerate(terminal):
+                _fid = "sf_end" if _j == 0 else f"sf_end_{_j}"
+                flows.append(SequenceFlow(id=_fid, source=_term.id,
+                                          target="ev_end"))
 
         pools = []
         if model.lanes:
@@ -782,15 +785,16 @@ def _build_pool_flows(pm: BPMNPoolData, prefix: str, elements: list,
                 condition=edge.condition or "",
             ))
 
-    # Connect last non-end-event step → synthetic ev_end
+    # Connect ALL terminal (leaf) steps → synthetic ev_end
     if not has_end:
         source_ids = {e.source for e in pm.edges}
         terminal   = [s for s in steps if s.id not in source_ids
                       and s.task_type not in _END_TYPES]
-        if terminal:
+        for _j, _term in enumerate(terminal):
+            _fid = prefix + ("sf_end" if _j == 0 else f"sf_end_{_j}")
             flows.append(SequenceFlow(
-                id=prefix + "sf_end",
-                source=prefix + terminal[-1].id,
+                id=_fid,
+                source=prefix + _term.id,
                 target=prefix + "ev_end",
             ))
 

@@ -755,6 +755,42 @@ def _compute_layout(bpmn, lane_assignment):
                 hx, hy, hw, hh = host
                 shapes[el.id] = (hx + hw - EV_W // 2, hy + hh - EV_H // 2, EV_W, EV_H)
 
+    # ── Step 7: reposition lnk_throw events to avoid passing through stacked elements ──
+    # When a lnk_throw event ends up in the same column as its source, the
+    # vertical flow source_bottom → throw_top may cross other elements stacked
+    # in that column.  Fix: move the throw event to just right of the source
+    # (in the inter-column gap) so the routing becomes a short horizontal hop.
+    if bpmn.pools:
+        _la_inner = _assign_lanes(bpmn)
+        for f in bpmn.flows:
+            if not f.target.startswith("lnk_throw_"):
+                continue
+            src_id   = f.source
+            throw_id = f.target
+            if src_id not in shapes or throw_id not in shapes:
+                continue
+            sx, sy, sw, sh = shapes[src_id]
+            tx, ty, tw, th = shapes[throw_id]
+            # Only relevant when they x-overlap (same column → vertical routing)
+            if not ((sx < tx + tw) and (sx + sw > tx)):
+                continue
+            # Check whether any element sits between source_bottom and throw_top
+            src_bottom = sy + sh
+            throw_top  = ty
+            src_lid    = _la_inner.get(src_id)
+            blocked    = any(
+                oid not in (src_id, throw_id)
+                and _la_inner.get(oid) == src_lid
+                and (ox < tx + tw) and (ox + ow > tx)   # x-overlaps throw
+                and oy < throw_top and (oy + oh) > src_bottom
+                for oid, (ox, oy, ow, oh) in shapes.items()
+            )
+            if blocked:
+                # Reposition throw to the right of source at source's y level
+                new_x = sx + sw + H_GAP // 4
+                new_y = sy + (sh - th) // 2
+                shapes[throw_id] = (int(new_x), int(new_y), tw, th)
+
     return shapes, pool_shapes
 
 
