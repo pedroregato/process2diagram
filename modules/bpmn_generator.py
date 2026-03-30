@@ -846,11 +846,31 @@ def _route_waypoints(sx, sy, sw, sh, tx, ty, tw, th,
             (tx,      ty + th / 2),
         ]
 
-    # ── Forward cross-lane: L-shape ───────────────────────────────────────────
-    # Horizontal leg stays in the source-lane strip (free of target-lane
-    # elements); vertical leg runs at target's left edge (in the column gap).
+    # ── Forward cross-lane ────────────────────────────────────────────────────
+    # Short jump (adjacent columns): L-shape — horizontal at source y, then
+    # vertical at target x.  Works cleanly when no elements block the horizontal.
+    #
+    # Long jump (> one column-slot): routing at source y risks piercing elements
+    # that sit at that y in intermediate columns.  Use a 4-point lane-boundary
+    # path instead: rise/fall to the shared boundary, cross horizontally there
+    # (above/below all elements), then continue to the target.
+    min_skip_px = TASK_W + H_GAP + 10   # ≈ one column + gap
     if is_cross:
         mid_y = sy + sh / 2
+        if (tx - (sx + sw)) > min_skip_px and src_lid in lane_bounds:
+            src_top, src_bottom = lane_bounds[src_lid]
+            tgt_top = lane_bounds.get(tgt_lid, (ty, ty + th))[0]
+            # boundary_y sits just inside the source lane, near the shared edge
+            if src_top > tgt_top:          # source is the lower lane
+                boundary_y = src_top + 10
+            else:                          # source is the upper lane
+                boundary_y = src_bottom - 10
+            return [
+                (sx + sw, mid_y),
+                (sx + sw, boundary_y),
+                (tx,      boundary_y),
+                (tx,      ty + th / 2),
+            ]
         return [
             (sx + sw, mid_y),
             (tx,      mid_y),
@@ -859,15 +879,23 @@ def _route_waypoints(sx, sy, sw, sh, tx, ty, tw, th,
 
     # ── Same-lane forward skip ────────────────────────────────────────────────
     # If target is more than one column-slot away, a straight line would pass
-    # through intermediate elements at the same y.  Route above them instead.
-    min_skip_px = TASK_W + H_GAP + 10   # ≈ one column + gap
+    # through intermediate elements at the same y.
+    #
+    # Routing direction depends on which lane we are in:
+    # • Topmost lane (lane_top ≈ 0): detour via lane top (+10) — free space
+    #   above elements, away from the inter-lane boundary.
+    # • Lower lanes: detour via lane bottom (−10) — avoids conflicting with
+    #   cross-lane vertical flows that rise through the upper portion of the lane.
     if (tx - (sx + sw)) > min_skip_px and src_lid and src_lid in lane_bounds:
-        lane_top, _ = lane_bounds[src_lid]
-        top_y = lane_top + 10
+        lane_top, lane_bottom = lane_bounds[src_lid]
+        if lane_top < 10:                  # topmost lane
+            route_y = lane_top + 10
+        else:                              # lower lane — use bottom margin
+            route_y = lane_bottom - 10
         return [
             (sx + sw, sy + sh / 2),
-            (sx + sw, top_y),
-            (tx,      top_y),
+            (sx + sw, route_y),
+            (tx,      route_y),
             (tx,      ty + th / 2),
         ]
 
