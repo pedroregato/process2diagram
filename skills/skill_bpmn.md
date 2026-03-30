@@ -2,115 +2,178 @@
 agent: bpmn
 iniciativa: Pedro Regato
 project: process2diagram
-spec: BPMN 2.0 (OMG --- ISO/IEC 19510)
-version: 4
+spec: BPMN 2.0 (OMG — ISO/IEC 19510)
+version: 4.1
 ---
 
-# BPMN Agent Specification (Optimized for LLM Execution)
+# BPMN Agent — Instruções de Execução
 
-## Objective
+## Objetivo
 
-Transform unstructured process descriptions into **valid, executable
-BPMN 2.0 JSON models**.
+Transformar descrições de processos em **modelos JSON BPMN 2.0 válidos e executáveis**.
 
-------------------------------------------------------------------------
+---
 
-## Execution Model (Deterministic)
+## Passo a Passo (execute nesta ordem)
 
-### Step 1 --- Identify Participants
+### Passo 1 — Identificar Participantes
 
--   Extract independent entities → Pools
--   Internal roles → Lanes
--   If only one entity → no pools, use flat structure
+- Entidades organizacionais independentes → **Pools** separados
+- Papéis internos dentro de um mesmo participante → **Lanes**
+- **Se houver apenas um participante:** use o formato flat (`steps`, `edges`, `lanes`) — sem `pools`
+- **Se houver dois ou mais participantes independentes:** use o formato `pools` com `message_flows`
 
-### Step 2 --- Identify Events
+### Passo 2 — Identificar Eventos
 
-Map triggers: - Default → noneStartEvent - Message → startMessageEvent -
-Time → startTimerEvent
+| Situação | task_type |
+|---|---|
+| Início sem gatilho | `noneStartEvent` |
+| Início por mensagem externa | `startMessageEvent` |
+| Início por horário/tempo | `startTimerEvent` |
+| Fim normal | `noneEndEvent` |
+| Fim enviando mensagem | `endMessageEvent` |
+| Fim por erro crítico | `errorEndEvent` |
+| Espera por tempo | `intermediateTimerCatchEvent` |
+| Espera por mensagem | `intermediateMessageCatchEvent` |
+| Envio de mensagem (sem encerrar) | `intermediateMessageThrowEvent` |
 
-End: - Default → noneEndEvent - Message → endMessageEvent - Error →
-errorEndEvent
+### Passo 3 — Identificar Tarefas
 
-### Step 3 --- Identify Tasks
+| Verbo/Contexto | task_type |
+|---|---|
+| Ação humana | `userTask` |
+| Sistema / API automático | `serviceTask` |
+| Regra de negócio | `businessRuleTask` |
+| Script interno | `scriptTask` |
+| Ação manual sem sistema | `manualTask` |
 
-Map verbs: - Human → userTask - System/API → serviceTask - Rule →
-businessRuleTask - Internal → scriptTask - Manual → manualTask
+### Passo 4 — Identificar Gateways e Sincronizá-los
 
-### Step 4 --- Identify Decisions
+**Tipos:**
+- Decisão exclusiva (um caminho) → `exclusiveGateway`, `is_decision: true`
+- Paralelo (todos os caminhos) → `parallelGateway`, `is_decision: false`
+- Inclusivo (um ou mais caminhos) → `inclusiveGateway`, `is_decision: false`
 
--   XOR → exclusive
--   AND → parallel (must close)
--   OR → inclusive
+**Regra de Sincronização (obrigatória):**
 
-### Step 5 --- Validate Flow
+Todo gateway de divisão (*split*) — que possui **N saídas** — deve ter um gateway de junção (*join*) correspondente do **mesmo tipo** que recebe **exatamente essas N entradas**.
 
--   No dead-ends
--   All paths reach end
--   Gateways properly closed
+```
+[Gateway Split] → atividade A ──┐
+                → atividade B ──┤→ [Gateway Join]
+                → atividade C ──┘
+```
 
-------------------------------------------------------------------------
+Regras específicas por tipo:
 
-## Hard Constraints (Strict)
+| Tipo | Comportamento | Sincronização exigida |
+|---|---|---|
+| `parallelGateway` (AND) | Todos os caminhos executam em paralelo | **Obrigatória** — todas as N ramificações DEVEM convergir no join |
+| `exclusiveGateway` (XOR) | Apenas um caminho executa | **Obrigatória** — todas as N ramificações devem convergir num join XOR (exceto se uma ramificação termina em `errorEndEvent`) |
+| `inclusiveGateway` (OR) | Um ou mais caminhos executam | **Obrigatória** — todas as N ramificações devem convergir num join OR |
 
--   Every node must have input/output (except start/end)
--   Gateways must be balanced (split/join)
--   Decision edges MUST have labels
--   No generic lane names
--   Message flows only between pools
+**Exceção válida:** Uma ramificação pode ir diretamente para um `endEvent` ou `errorEndEvent` sem passar pelo join, se representar encerramento imediato do processo (ex: rejeição definitiva, erro crítico).
 
-------------------------------------------------------------------------
+**Exemplo correto (parallelGateway):**
+```
+S03[Aprovar] → S04{AND split} → S05[Tarefa A] → S07{AND join} → S08[Continuar]
+                              → S06[Tarefa B] ↗
+```
 
-## Output Contract (STRICT JSON ONLY)
+**Exemplo incorreto (gateway sem join):**
+```
+S03[Aprovar] → S04{AND split} → S05[Tarefa A] → S08[Continuar]  ← ERRADO
+                              → S06[Tarefa B] → S08[Continuar]  ← ERRADO (sem join)
+```
 
-``` json
+### Passo 5 — Validar o Fluxo
+
+- Todo nó tem entrada e saída (exceto start/end events)
+- Todo caminho chega a um end event
+- Todo gateway split tem seu join correspondente (ver Passo 4)
+- Labels obrigatórios em toda aresta saindo de `is_decision: true`
+- Nomes de lane são unidades organizacionais reais, nunca genéricos ("usuário", "sistema", "ator")
+- Message flows **apenas** entre pools distintos — nunca dentro do mesmo pool
+
+---
+
+## Regra de Loop de Correção
+
+Quando houver devolução para correção: o fluxo de retorno deve apontar para a **tarefa que originou o erro**, nunca para o gateway de decisão.
+
+```
+[Gateway] → [Correção] → [Tarefa Original]   ← CORRETO
+[Gateway] → [Correção] → [Gateway]           ← ERRADO
+```
+
+---
+
+## Formato de Saída
+
+### Processo único (1 participante) — formato flat
+
+```json
 {
-  "name": "Process Name",
-  "pools": [],
-  "message_flows": []
+  "name": "Nome do Processo",
+  "steps": [
+    {
+      "id": "S01",
+      "title": "Verbo + Substantivo (máx 6 palavras)",
+      "description": "Descrição detalhada com regras de negócio.",
+      "actor": "Cargo ou null",
+      "is_decision": false,
+      "task_type": "userTask",
+      "lane": "Unidade Organizacional ou null"
+    }
+  ],
+  "edges": [
+    { "source": "S01", "target": "S02", "label": "condição se houver", "condition": "" }
+  ],
+  "lanes": ["Lane A", "Lane B"]
 }
 ```
 
-------------------------------------------------------------------------
+### Colaboração (2+ participantes) — formato pools
 
-## LLM Optimization Improvements
+```json
+{
+  "name": "Nome do Processo",
+  "pools": [
+    {
+      "id": "pool_1",
+      "name": "Nome do Participante",
+      "process": {
+        "steps": [
+          {
+            "id": "S01",
+            "title": "Verbo + Substantivo",
+            "description": "Descrição.",
+            "actor": "Cargo ou null",
+            "is_decision": false,
+            "task_type": "userTask",
+            "lane": "Lane ou null"
+          }
+        ],
+        "edges": [
+          { "source": "S01", "target": "S02", "label": "", "condition": "" }
+        ],
+        "lanes": ["Lane A"]
+      }
+    }
+  ],
+  "message_flows": [
+    {
+      "id": "mf_1",
+      "name": "Nome da mensagem",
+      "source": { "pool": "pool_1", "step": "S03" },
+      "target": { "pool": "pool_2", "step": "S01" }
+    }
+  ]
+}
+```
 
-### 1. Reduced verbosity
+---
 
-Original prompt had redundancy → removed
+## Instrução Final
 
-### 2. Deterministic sections
-
-Explicit execution order reduces hallucination
-
-### 3. Constraint isolation
-
-Critical rules separated → easier validation
-
-### 4. Token efficiency
-
-\~40--60% shorter → better for inference cost
-
-### 5. Parsing-friendly
-
-Consistent headings + no ambiguity
-
-------------------------------------------------------------------------
-
-## Known Limitations
-
--   Ambiguous actors → must annotate
--   Implicit loops may be missed
--   Complex OR gateways need manual review
-
-------------------------------------------------------------------------
-
-## Recommended Usage
-
-Use this agent with: - Temperature ≤ 0.3 - JSON schema validation
-post-process - Optional retry loop on invalid output
-
-------------------------------------------------------------------------
-
-## Final Instruction
-
-Return ONLY valid JSON. No explanations.
+Retorne **APENAS o JSON válido**. Sem texto antes ou depois. Sem markdown fora do bloco. Sem explicações.

@@ -150,7 +150,11 @@ class AgentBPMN(BaseAgent):
     @staticmethod
     def _build_model(data: dict) -> BPMNModel:
         """Dispatch to flat or multi-pool builder based on JSON structure."""
-        if "pools" in data:
+        if not isinstance(data, dict):
+            return BPMNModel(name="Process")
+        pools_val = data.get("pools")
+        # Use multi-pool only when "pools" is a non-empty list of dicts
+        if isinstance(pools_val, list) and pools_val and isinstance(pools_val[0], dict):
             return AgentBPMN._build_model_multi(data)
         return AgentBPMN._build_model_flat(data)
 
@@ -202,6 +206,8 @@ class AgentBPMN(BaseAgent):
         all_lanes:  list[str] = []
 
         for i, pool_data in enumerate(data.get("pools", [])):
+            if not isinstance(pool_data, dict):
+                continue   # skip malformed pool entries
             prefix   = f"p{i + 1}_"
             pool_id  = pool_data.get("id", f"pool_{i + 1}")
             pool_name = pool_data.get("name", f"Pool {i + 1}")
