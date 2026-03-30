@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Process2Diagram v3.5 — Resumo Técnico Executivo</title>
+  <title>Process2Diagram v3.7 — Resumo Técnico Executivo</title>
   <style>
     /* ── Reset & Base ── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -236,7 +236,7 @@
       requisitos rastreáveis — com avaliação e curadoria integrada de qualidade ASR.
     </p>
     <div class="hero-meta">
-      <span>&#128196; Versão&nbsp;<strong>3.5</strong></span>
+      <span>&#128196; Versão&nbsp;<strong>3.7</strong></span>
       <span>&#128197; Março de 2026</span>
       <span>&#128099; Pedro Regato</span>
       <span>&#128279; github.com/pedroregato/process2diagram</span>
@@ -364,12 +364,14 @@
   <!-- ── 3. Arquitetura ── -->
   <section class="section">
     <div class="section-label">03 — Arquitetura de Solução</div>
-    <h2>Pipeline Multi-Agente v3.5</h2>
+    <h2>Pipeline Multi-Agente v3.7</h2>
     <p>
-      A versão 3.5 estende a arquitetura de <strong>agentes especializados</strong> com dois novos
+      A versão 3.7 consolida a arquitetura de <strong>agentes especializados</strong> com dois novos
       componentes pré-pipeline: um agente de avaliação de qualidade ASR (Step 0) e um
       pré-processador rule-based (Step 0.5). O <em>KnowledgeHub</em> centralizado é a
-      fonte única de verdade para todos os seis agentes.
+      fonte única de verdade para todos os seis agentes. Nesta versão, o gerador BPMN recebeu
+      roteamento de waypoints totalmente reescrito (<code>_route_waypoints</code>) e o prompt
+      do AgentBPMN foi atualizado para v6.0 com taxonomia completa de gateways e tarefas.
     </p>
 
     <!-- Pipeline diagram SVG — 2-row layout -->
@@ -629,10 +631,12 @@
       <div class="card">
         <h3>&#128202; Waypoints Inteligentes</h3>
         <p class="text-sm mt-1">
-          3 modos em <code>_build_di</code>:<br>
-          <strong>Normal</strong> — right-centre → left-centre (2 waypoints).<br>
-          <strong>Empilhado</strong> — mesma coluna, sobreposição X: bottom-centre → top-centre.<br>
-          <strong>Backward</strong> — source à direita do target: caminho em U (4 waypoints) 25 px abaixo dos elementos, evitando invasão visual.
+          5 estratégias em <code>_route_waypoints()</code> (helper centralizado, v3.7):<br>
+          <strong>Empilhado</strong> — sobreposição X, mesma coluna: bottom-centre → top-centre.<br>
+          <strong>Backward same-lane</strong> — caminho em U (4 pts) em <code>lane_bottom − 10 px</code>.<br>
+          <strong>Cross-lane L-shape</strong> — saída horizontal da source + descida vertical na borda do target (3 pts).<br>
+          <strong>Same-lane skip</strong> — detour pelo topo da lane em <code>lane_top + 10 px</code> (4 pts) quando target está &gt;1 coluna à frente na mesma lane.<br>
+          <strong>Normal</strong> — right-centre → left-centre (2 pts).
         </p>
       </div>
       <div class="card">
@@ -658,10 +662,50 @@
           <tr><td><code>_assign_columns(order, flows)</code></td><td>Topological sort + BFS de profundidade máxima de predecessores. Fix pós-processamento para <code>lnk_catch</code> (col = col[target]) e <code>lnk_throw</code> (col = col[source]) após injeção de Link Events.</td></tr>
           <tr><td><code>_detect_crossings(flows, shapes)</code></td><td>H2 + H3 + H4. Exclui flows com link events de candidatos. Retorna set de flow IDs a substituir.</td></tr>
           <tr><td><code>_apply_link_events(bpmn)</code></td><td>Substitui flows cruzados por pares throw/catch, registra em lanes e lane_assignment.</td></tr>
-          <tr><td><code>_build_di(diagram, plane, shapes)</code></td><td>Emite BPMNShape + BPMNEdge com waypoints (normal / stacked / U-backward) e bounds de label.</td></tr>
-          <tr><td><code>_enforce_rules(model)</code> <span class="pill pill-blue">agent_bpmn.py</span></td><td>Post-processing determinístico: R0 remove events LLM; R1 serviceTask lane=null; R1b infere lane; R2 redireciona loop.</td></tr>
+          <tr><td><code>_route_waypoints(sx,sy,sw,sh, tx,ty,tw,th, src_lid, tgt_lid, lane_bounds)</code></td><td>Helper centralizado (v3.7) — determina a estratégia de roteamento (stacked / backward / cross-lane L / same-lane skip / normal) e retorna lista de pontos (x,y). Usado por <code>_build_di</code> e <code>_generate_bpmn_xml_multi</code>.</td></tr>
+          <tr><td><code>_label_pos(wps)</code></td><td>Posiciona o rótulo da aresta no ponto médio do segmento mais longo da polilinha — evita sobreposição com elementos.</td></tr>
+          <tr><td><code>_compute_layout · Step 7</code></td><td>Pós-posicionamento: reposiciona <code>lnk_throw_N</code> para à direita da source (gap horizontal) quando detecta elemento empilhado bloqueando a rota vertical direta.</td></tr>
+          <tr><td><code>_build_di(diagram, plane, shapes)</code></td><td>Emite BPMNShape + BPMNEdge delegando roteamento a <code>_route_waypoints</code> e posicionamento de label a <code>_label_pos</code>.</td></tr>
+          <tr><td><code>_enforce_rules(model)</code> <span class="pill pill-blue">agent_bpmn.py</span></td><td>Post-processing determinístico: R0 remove events LLM; R1 serviceTask lane=null; R1b infere lane; R2 redireciona loop. Multi-terminal End: todos os nós folha conectados a <code>ev_end</code> (não apenas o último).</td></tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- skill_bpmn v6.0 -->
+    <h3 class="mt-3">SKILL_BPMN.md v6.0 — Taxonomia Completa de Elementos BPMN</h3>
+    <div class="card-grid mt-1">
+      <div class="card">
+        <h3>&#128196; Tipos de Tarefa</h3>
+        <p class="text-sm mt-1">
+          <code>userTask</code> · <code>serviceTask</code> · <code>businessRuleTask</code> · <code>scriptTask</code> · <code>manualTask</code><br>
+          <strong>v6.0</strong>: <code>sendTask</code> — envio de mensagem a outro pool<br>
+          <strong>v6.0</strong>: <code>receiveTask</code> — recebimento de mensagem de outro pool
+        </p>
+      </div>
+      <div class="card">
+        <h3>&#9670; Tipos de Gateway</h3>
+        <p class="text-sm mt-1">
+          <code>exclusiveGateway</code> (XOR) · <code>parallelGateway</code> (AND) · <code>inclusiveGateway</code> (OR)<br>
+          <strong>v6.0</strong>: <code>eventBasedGateway</code> — aguarda primeiro evento (timer ou mensagem)<br>
+          <strong>v6.0</strong>: <code>complexGateway</code> — lógica híbrida AND/OR/XOR explícita
+        </p>
+      </div>
+      <div class="card">
+        <h3>&#128260; Regra Split ↔ Join</h3>
+        <p class="text-sm mt-1">
+          AND/OR/complexGateway: o join deve fechar as ramificações do <em>outro lado do bloco de atividades</em> — nunca imediatamente após o split.<br>
+          <code>[split] → atividades → [join] → continuar</code><br>
+          XOR: join implícito aceito. eventBased: sem join simétrico.
+        </p>
+      </div>
+      <div class="card">
+        <h3>&#128279; Compatibilidade Confirmada</h3>
+        <p class="text-sm mt-1">
+          BPMN 2.0 XML gerado validado em <strong>demo.bpmn.io</strong> — importação direta sem erros.<br>
+          Compatível com: Camunda, Bizagi, draw.io, bpmn.io, Signavio.<br>
+          Cenários testados: cenario-teste-001 e cenario-teste-002 (multi-lane, loops, multi-terminal).
+        </p>
+      </div>
     </div>
   </section>
 
@@ -763,7 +807,7 @@
     <span style="color:#7dd3fc">@classmethod</span>
     <span style="color:#93c5fd">def</span> <span style="color:#60a5fa">migrate</span>(cls, hub) -&gt; <span style="color:#fbbf24">KnowledgeHub</span>:
         <span style="color:#64748b"># v3.2: RequirementsModel  v3.3: raised_by/speaker  v3.4: TranscriptQualityModel</span>
-        <span style="color:#64748b"># v3.5: PreprocessingModel  v3.6: InconsistencyItem[]</span>
+        <span style="color:#64748b"># v3.5: PreprocessingModel  v3.6: InconsistencyItem[]  v3.7: lnk_throw Step-7, multi-terminal End</span>
         ...</pre>
     </div>
 
@@ -869,11 +913,11 @@
           <tr><td><code>agents/agent_bpmn.py</code></td><td>Step 2 — Extração BPMN + <code>_enforce_rules()</code> + bridge para geradores</td></tr>
           <tr><td><code>agents/agent_minutes.py</code></td><td>Step 3 — Ata de reunião: transcrição completa, iniciais, <code>raised_by</code></td></tr>
           <tr><td><code>agents/agent_requirements.py</code></td><td>Step 4 — Requisitos IEEE 830: 5 tipos, speaker attribution por citação</td></tr>
-          <tr><td><code>modules/bpmn_generator.py</code></td><td>Gerador BPMN 2.0 XML — layout absoluto, crossing elimination (3 passes), U-routing</td></tr>
+          <tr><td><code>modules/bpmn_generator.py</code></td><td>Gerador BPMN 2.0 XML — layout absoluto, crossing elimination (3 passes), <code>_route_waypoints</code> (5 estratégias), <code>_label_pos</code>, Step 7 reposicionamento lnk_throw, multi-terminal End event</td></tr>
           <tr><td><code>modules/bpmn_viewer.py</code></td><td>Viewer interativo via bpmn-js 17 injetado inline (pan/zoom/fit)</td></tr>
           <tr><td><code>modules/config.py</code></td><td>Registro de provedores LLM — adicionar novos aqui</td></tr>
           <tr><td><code>modules/session_security.py</code></td><td>Gestão de chaves API — único ponto de acesso a credenciais</td></tr>
-          <tr><td><code>skills/SKILL_BPMN.md</code></td><td>System prompt AgentBPMN — BPMN 2.0, lanes, autochecagem obrigatória</td></tr>
+          <tr><td><code>skills/skill_bpmn.md</code></td><td>System prompt AgentBPMN v6.0 — taxonomia completa (sendTask, receiveTask, eventBasedGateway, complexGateway), regra split↔join, autochecagem obrigatória</td></tr>
           <tr><td><code>skills/SKILL_MINUTES.md</code></td><td>System prompt AgentMinutes — ata, iniciais, volume de decisões</td></tr>
           <tr><td><code>skills/SKILL_REQUIREMENTS.md</code></td><td>System prompt AgentRequirements — IEEE 830, speaker attribution</td></tr>
           <tr style="background:#fff1f2"><td><code>skills/skill_transcript_quality.md</code></td><td>System prompt AgentTranscriptQuality — protocolo 2 steps, penalidade artifact_ratio, output JSON</td></tr>
@@ -924,7 +968,7 @@
     <div class="card-grid" style="grid-template-columns: 1fr 1fr; gap:2rem;">
 
       <div>
-        <h3 style="color:var(--green); margin-bottom:.75rem;">&#10003; PC1 — Concluído (v3.5)</h3>
+        <h3 style="color:var(--green); margin-bottom:.75rem;">&#10003; PC1 — Concluído (v3.7)</h3>
         <div class="roadmap">
           <div class="roadmap-item"><div class="roadmap-dot done"></div>
             <div class="roadmap-text"><strong>Pipeline sequencial</strong> 6 steps: Quality → Preproc → NLP → BPMN → Minutes → Req</div></div>
@@ -947,9 +991,19 @@
           <div class="roadmap-item"><div class="roadmap-dot done"></div>
             <div class="roadmap-text"><strong>Minutes</strong> — transcrição completa sem truncamento + iniciais [MF, PG, NC, JL]</div></div>
           <div class="roadmap-item"><div class="roadmap-dot done"></div>
-            <div class="roadmap-text"><strong>KnowledgeHub.migrate()</strong> — evolução de schema sem quebrar sessões (v3.2–v3.6)</div></div>
+            <div class="roadmap-text"><strong>KnowledgeHub.migrate()</strong> — evolução de schema sem quebrar sessões (v3.2–v3.7)</div></div>
           <div class="roadmap-item"><div class="roadmap-dot done"></div>
             <div class="roadmap-text"><strong>Viewer interativo</strong> bpmn-js 17 inline · Multi-LLM 5 provedores · Output language</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot done"></div>
+            <div class="roadmap-text"><strong>SKILL_BPMN v6.0</strong> — sendTask, receiveTask, eventBasedGateway, complexGateway, regra split↔join corrigida</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot done"></div>
+            <div class="roadmap-text"><strong>_route_waypoints()</strong> helper centralizado — 5 estratégias: stacked / backward / cross-lane L-shape / same-lane skip / normal</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot done"></div>
+            <div class="roadmap-text"><strong>Step 7 lnk_throw reposicionamento</strong> — throw event movido para gap horizontal quando elemento empilhado bloqueia rota vertical</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot done"></div>
+            <div class="roadmap-text"><strong>Multi-terminal End event</strong> — todos os nós folha ligados a ev_end (não apenas o último)</div></div>
+          <div class="roadmap-item"><div class="roadmap-dot done"></div>
+            <div class="roadmap-text"><strong>Validação demo.bpmn.io</strong> — BPMN gerado importado sem erros; zero cruzamentos visuais confirmados</div></div>
         </div>
       </div>
 
@@ -1178,15 +1232,16 @@
 
     <!-- Veredicto -->
     <div class="hcard green mt-3">
-      <h3>&#9989; Veredicto: EXCELENTE — Pipeline Completo (v3.5)</h3>
+      <h3>&#9989; Veredicto: EXCELENTE — Pipeline Completo (v3.7)</h3>
       <p>
-        O pipeline v3.5 extraiu com fidelidade de <strong>100 %</strong> os passos, atores,
+        O pipeline v3.7 extraiu com fidelidade de <strong>100 %</strong> os passos, atores,
         gateways, lógica de retorno e mais de <strong>25 requisitos rastreáveis</strong>
         a partir de uma reunião de 2h35. A ata retornou <strong>8 decisões e 7 action items</strong>.
-        Todos os 7 componentes (AgentTranscriptQuality, TranscriptPreprocessor, NLPChunker,
-        AgentBPMN, AgentMinutes, AgentRequirements e KnowledgeHub) operaram em coerência
-        sem intervenção manual, demonstrando maturidade do pipeline para uso em cenários
-        de processo reais com transcrições ASR de qualidade variável.
+        Todos os 7 componentes operaram em coerência sem intervenção manual. O gerador BPMN v3.7
+        produz diagramas com <strong>zero cruzamentos de fluxo</strong>, validados com importação
+        direta em <strong>demo.bpmn.io</strong>. O SKILL_BPMN v6.0 cobre agora a taxonomia
+        completa do OMG BPMN 2.0, incluindo <code>eventBasedGateway</code>, <code>complexGateway</code>,
+        <code>sendTask</code> e <code>receiveTask</code>, com regra de sincronização split↔join corrigida.
       </p>
     </div>
 
@@ -1197,7 +1252,7 @@
 <!-- ═══════════════════════════  FOOTER  ═══════════════════════════ -->
 <footer class="page">
   <div>
-    <strong>Process2Diagram v3.5</strong> &nbsp;·&nbsp;
+    <strong>Process2Diagram v3.7</strong> &nbsp;·&nbsp;
     Pedro Regato &nbsp;·&nbsp;
     Março de 2026
   </div>

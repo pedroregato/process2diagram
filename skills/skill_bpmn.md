@@ -3,7 +3,7 @@ agent: bpmn
 iniciativa: Pedro Regato
 project: process2diagram
 spec: BPMN 2.0 (OMG — ISO/IEC 19510)
-version: 6.0
+version: 6.1
 ---
 
 # BPMN Agent — Instruções de Execução
@@ -54,6 +54,14 @@ Regras de eventos:
 - O Start Event herda a lane do primeiro passo do processo.
 - O End Event herda a lane do último passo que leva ao encerramento.
 
+**Regra de nomenclatura de eventos (obrigatória):**
+- O `title` do Start Event deve descrever o **gatilho real** do processo — o que dispara o início.
+  - ✓ "Solicitação de cadastro recebida" · "Reunião de planejamento agendada" · "Pedido aprovado pelo cliente"
+  - ✗ "Início" · "Start" · "Começo do processo"
+- O `title` do End Event deve descrever o **estado de negócio alcançado** — o que foi concluído.
+  - ✓ "Organograma validado e publicado" · "Migração concluída e homologada" · "Cadastro rejeitado definitivamente"
+  - ✗ "Fim" · "End" · "Processo encerrado"
+
 ### Passo 3 — Identificar Tarefas
 
 | Verbo / Contexto | task_type |
@@ -65,6 +73,12 @@ Regras de eventos:
 | Ação física sem suporte de sistema | `manualTask` |
 | Envio de mensagem para outro participante (pool) | `sendTask` |
 | Recebimento de mensagem de outro participante (pool) | `receiveTask` |
+
+Regra de `manualTask`:
+- Use quando a ação é **física e offline**, sem nenhum suporte de sistema ou ferramenta digital.
+- Exemplos: "preencher planilha Excel fora do sistema", "assinar documento impresso",
+  "revisar impressão", "ligar para o cliente", "coletar assinatura presencialmente".
+- Se houver qualquer tela, formulário ou ferramenta digital envolvida → use `userTask`.
 
 Regra de `serviceTask`:
 - Se o sistema **não é nomeado** na transcrição (ex: "o sistema processa automaticamente"),
@@ -109,12 +123,25 @@ do bloco de atividades** — nunca imediatamente após o split.
 `endEvent` ou `errorEndEvent` sem passar pelo join, quando representa encerramento
 imediato (ex: rejeição definitiva, erro crítico).
 
+**Detecção de padrão AND na transcrição — sinais obrigatórios:**
+
+Palavras e expressões que indicam execução paralela:
+> "ao mesmo tempo", "em paralelo", "simultaneamente", "enquanto isso",
+> "concomitantemente", "ambos devem ser feitos antes de", "as duas equipes trabalham juntas",
+> "pode ser feito em paralelo", "não precisa esperar um pelo outro"
+
+Quando identificar qualquer desses padrões → use `parallelGateway` split + join obrigatório.
+
 **Exemplo AND correto (join após as atividades, não após o split):**
 ```
-[AND split] ──► Tarefa A ──┐
-             ──► Tarefa B ──┤──► [AND join] ──► Continuar
-             ──► Tarefa C ──┘
+                              ┌──► Definir formatos de anexo ──┐
+[AND split] ─────────────────►│                                ├──► [AND join] ──► Continuar
+                              └──► Classificar níveis de BI   ─┘
 ```
+
+*Transcrição que gerou este exemplo:*
+> "Ao mesmo tempo, a equipe de TI pode definir os formatos de anexo enquanto a equipe de
+> negócio classifica os níveis de BI — as duas coisas não precisam esperar uma pela outra."
 
 **Exemplo XOR válido sem join explícito:**
 ```
@@ -148,7 +175,11 @@ Antes de gerar o JSON, confirme:
 - [ ] Toda aresta saindo de `is_decision: true` tem `label` preenchido
 - [ ] Nenhuma lane tem nome genérico
 - [ ] `actor` é `null` em todos os start/end events
+- [ ] Start Event tem `title` descrevendo o **gatilho real** (não "Início" / "Start")
+- [ ] End Event tem `title` descrevendo o **estado de negócio alcançado** (não "Fim" / "End")
 - [ ] `serviceTask` sem sistema nomeado tem `lane: null`
+- [ ] Ações físicas offline sem sistema usam `manualTask` (não `userTask`)
+- [ ] Padrões "ao mesmo tempo / em paralelo / simultaneamente" foram modelados com `parallelGateway`
 - [ ] IDs de steps são sequenciais S01, S02, S03... sem lacunas
 - [ ] Situações ambíguas estão registradas com `[AMBIGUIDADE: ...]`
 - [ ] Message flows existem apenas entre pools distintos
