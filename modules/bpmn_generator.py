@@ -766,6 +766,97 @@ def _wp(edge, x, y):
     wp.set("y", str(int(y)))
 
 
+def _route_waypoints(sx, sy, sw, sh, tx, ty, tw, th,
+                     src_lid, tgt_lid, lane_bounds):
+    """
+    Compute the waypoint list for a sequence flow.
+
+    Strategy matrix
+    ───────────────
+    x_overlap + source above target  → vertical down  (bottom-centre → top-centre)
+    x_overlap + source below target  → vertical up    (top-centre → bottom-centre)
+    backward  same-lane              → U-path in lane bottom margin
+    backward  cross-lane             → U-path below both elements
+    forward   cross-lane             → L-shape: horizontal at source y, vertical at target x
+    forward   same-lane skip         → top-of-lane detour (avoids intermediate elements)
+    default   (adjacent, same lane)  → right-centre → left-centre
+    """
+    x_overlap   = (sx < tx + tw) and (sx + sw > tx)
+    is_backward = (not x_overlap) and (sx > tx)
+    is_cross    = bool(src_lid and tgt_lid and src_lid != tgt_lid)
+
+    # ── Vertically stacked in same column ─────────────────────────────────────
+    if x_overlap and (sy + sh) <= ty:
+        return [(sx + sw / 2, sy + sh), (tx + tw / 2, ty)]
+
+    if x_overlap and sy >= (ty + th):
+        return [(sx + sw / 2, sy), (tx + tw / 2, ty + th)]
+
+    # ── Backward flows ────────────────────────────────────────────────────────
+    if is_backward:
+        if not is_cross and src_lid and src_lid in lane_bounds:
+            # Same-lane backward: U-path in the bottom margin of the lane.
+            # V_PAD=55 guarantees clear space below the element row.
+            _, lane_bottom = lane_bounds[src_lid]
+            route_y = lane_bottom - 10
+        else:
+            # Cross-lane backward (should have been caught by link-event pass,
+            # but keep a safe fallback).
+            route_y = max(sy + sh, ty + th) + 25
+        return [
+            (sx + sw, sy + sh / 2),
+            (sx + sw, route_y),
+            (tx,      route_y),
+            (tx,      ty + th / 2),
+        ]
+
+    # ── Forward cross-lane: L-shape ───────────────────────────────────────────
+    # Horizontal leg stays in the source-lane strip (free of target-lane
+    # elements); vertical leg runs at target's left edge (in the column gap).
+    if is_cross:
+        mid_y = sy + sh / 2
+        return [
+            (sx + sw, mid_y),
+            (tx,      mid_y),
+            (tx,      ty + th / 2),
+        ]
+
+    # ── Same-lane forward skip ────────────────────────────────────────────────
+    # If target is more than one column-slot away, a straight line would pass
+    # through intermediate elements at the same y.  Route above them instead.
+    min_skip_px = TASK_W + H_GAP + 10   # ≈ one column + gap
+    if (tx - (sx + sw)) > min_skip_px and src_lid and src_lid in lane_bounds:
+        lane_top, _ = lane_bounds[src_lid]
+        top_y = lane_top + 10
+        return [
+            (sx + sw, sy + sh / 2),
+            (sx + sw, top_y),
+            (tx,      top_y),
+            (tx,      ty + th / 2),
+        ]
+
+    # ── Default: adjacent columns, straight line ──────────────────────────────
+    return [(sx + sw, sy + sh / 2), (tx, ty + th / 2)]
+
+
+def _label_pos(wps):
+    """
+    Return (x, y) for a BPMNLabel Bounds origin, placed at the midpoint of the
+    longest segment in the waypoint list.
+    """
+    if len(wps) < 2:
+        return (int(wps[0][0]) - 30 if wps else 0, 0)
+    best_len, best_mid = 0, wps[0]
+    for i in range(len(wps) - 1):
+        x1, y1 = wps[i]
+        x2, y2 = wps[i + 1]
+        seg_len = abs(x2 - x1) + abs(y2 - y1)
+        if seg_len > best_len:
+            best_len = seg_len
+            best_mid = ((x1 + x2) / 2, (y1 + y2) / 2)
+    return (int(best_mid[0]) - 30, int(best_mid[1]) - 16)
+
+
 def _valid(coords):
     try:
         return all(
@@ -818,6 +909,15 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         lb.set("x", str(int(x))); lb.set("y", str(int(lbl_y)))
         lb.set("width", str(int(w))); lb.set("height", "20")
 
+    # ── Lane bounds for smart routing ─────────────────────────────────────────
+    _la = _assign_lanes(bpmn)
+    _lb: dict = {}   # {lane_id: (y_top, y_bottom)}
+    if bpmn.pools:
+        for _lane in bpmn.pools[0].lanes:
+            if _lane.id in pool_shapes:
+                _lx, _ly, _lw, _lh = pool_shapes[_lane.id]
+                _lb[_lane.id] = (_ly, _ly + _lh)
+
     for flow in bpmn.flows:
         src = shapes.get(flow.source)
         tgt = shapes.get(flow.target)
@@ -828,46 +928,16 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         sx, sy, sw, sh = src
         tx, ty, tw, th = tgt
 
-        # When source and target x-ranges overlap they are stacked vertically
-        # in the same column. Using right→left waypoints draws a diagonal that
-        # clips through the target rectangle. Use vertical waypoints instead.
-        x_overlap = (sx < tx + tw) and (sx + sw > tx)
-        is_backward = (not x_overlap) and (sx > tx)
-        if x_overlap and (sy + sh) <= ty:
-            # source is directly above target: bottom-centre → top-centre
-            _wp(edge, sx + sw / 2, sy + sh)
-            _wp(edge, tx + tw / 2, ty)
-        elif x_overlap and sy >= (ty + th):
-            # source is directly below target: top-centre → bottom-centre
-            _wp(edge, sx + sw / 2, sy)
-            _wp(edge, tx + tw / 2, ty + th)
-        elif is_backward:
-            # Backward flow (source column > target column).
-            # A straight right→left line would cut through intermediate elements.
-            # Route via a U-shaped path below both elements:
-            #   source right-centre → below source → travel left → below target
-            #   → target left-centre
-            route_y = max(sy + sh, ty + th) + 25
-            _wp(edge, sx + sw, sy + sh / 2)   # source right-centre
-            _wp(edge, sx + sw, route_y)         # drop below source
-            _wp(edge, tx,      route_y)         # travel left below elements
-            _wp(edge, tx,      ty + th / 2)     # arrive at target left-centre
-        else:
-            _wp(edge, sx + sw, sy + sh / 2)   # source right-centre
-            _wp(edge, tx,      ty + th / 2)   # target left-centre
+        wps = _route_waypoints(sx, sy, sw, sh, tx, ty, tw, th,
+                               _la.get(flow.source), _la.get(flow.target), _lb)
+        for wx, wy in wps:
+            _wp(edge, wx, wy)
 
         if flow.name:
-            if is_backward:
-                # Label sits on the horizontal bottom segment, centred between source and target
-                route_y = max(sy + sh, ty + th) + 25
-                mid_x = int((sx + sw + tx) / 2) - 30
-                mid_y = int(route_y) + 4
-            else:
-                mid_x = int((sx + sw + tx) / 2) - 30
-                mid_y = int((sy + sh / 2 + ty + th / 2) / 2) - 16
+            lx, ly = _label_pos(wps)
             lbl = _sub(edge, DI + "BPMNLabel")
             _sub(lbl, DC + "Bounds", {
-                "x": str(mid_x), "y": str(mid_y),
+                "x": str(lx), "y": str(ly),
                 "width": "60", "height": "20",
             })
 
@@ -1306,7 +1376,19 @@ def _generate_bpmn_xml_multi(bpmn: BpmnProcess) -> str:
         lb.set("x", str(int(x))); lb.set("y", str(int(lbl_y)))
         lb.set("width", str(int(w))); lb.set("height", "20")
 
-    # Sequence flow edges (per pool — reuse _build_di waypoint logic)
+    # ── Lane bounds for smart routing (multi-pool) ────────────────────────────
+    _all_la: dict = {}
+    for la in lane_assignments:
+        _all_la.update(la)
+    _all_lb: dict = {}   # {lane_id: (y_top, y_bottom)} with y_offset applied
+    real_lane_ids_set = {lane.id for pool in bpmn.pools for lane in pool.lanes
+                         if not lane.id.endswith(_SYN_LANE_SUFFIX)}
+    for lid in real_lane_ids_set:
+        if lid in all_pool_shapes:
+            _lx, _ly, _lw, _lh = all_pool_shapes[lid]
+            _all_lb[lid] = (_ly, _ly + _lh)
+
+    # Sequence flow edges (per pool)
     all_flows = [f for pool in bpmn.pools for f in pool.flows]
     for flow in all_flows:
         src = all_shapes.get(flow.source)
@@ -1317,34 +1399,18 @@ def _generate_bpmn_xml_multi(bpmn: BpmnProcess) -> str:
                     {"id": flow.id + "_di", "bpmnElement": flow.id})
         sx, sy, sw, sh = src
         tx, ty, tw, th = tgt
-        x_overlap   = (sx < tx + tw) and (sx + sw > tx)
-        is_backward = (not x_overlap) and (sx > tx)
-        if x_overlap and (sy + sh) <= ty:
-            _wp(edge, sx + sw / 2, sy + sh)
-            _wp(edge, tx + tw / 2, ty)
-        elif x_overlap and sy >= (ty + th):
-            _wp(edge, sx + sw / 2, sy)
-            _wp(edge, tx + tw / 2, ty + th)
-        elif is_backward:
-            route_y = max(sy + sh, ty + th) + 25
-            _wp(edge, sx + sw,  sy + sh / 2)
-            _wp(edge, sx + sw,  route_y)
-            _wp(edge, tx,       route_y)
-            _wp(edge, tx,       ty + th / 2)
-        else:
-            _wp(edge, sx + sw, sy + sh / 2)
-            _wp(edge, tx,      ty + th / 2)
+
+        wps = _route_waypoints(sx, sy, sw, sh, tx, ty, tw, th,
+                               _all_la.get(flow.source), _all_la.get(flow.target),
+                               _all_lb)
+        for wx, wy in wps:
+            _wp(edge, wx, wy)
+
         if flow.name:
-            if is_backward:
-                route_y = max(sy + sh, ty + th) + 25
-                mid_x = int((sx + sw + tx) / 2) - 30
-                mid_y = int(route_y) + 4
-            else:
-                mid_x = int((sx + sw + tx) / 2) - 30
-                mid_y = int((sy + sh / 2 + ty + th / 2) / 2) - 16
+            lx, ly = _label_pos(wps)
             lbl = _sub(edge, DI + "BPMNLabel")
             _sub(lbl, DC + "Bounds", {
-                "x": str(mid_x), "y": str(mid_y),
+                "x": str(lx), "y": str(ly),
                 "width": "60", "height": "20",
             })
 
