@@ -97,6 +97,8 @@ def _type_badge(t_key: str) -> str:
     )
 
 
+_CHEVRON_SVG = '<svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>'
+
 def _section_card(icon: str, title: str, body: str, sec_id: str = "") -> str:
     id_attr = f' id="{sec_id}"' if sec_id else ""
     return f"""
@@ -104,6 +106,7 @@ def _section_card(icon: str, title: str, body: str, sec_id: str = "") -> str:
   <div class="card-header">
     <div class="section-icon">{icon}</div>
     <h2 class="section-title">{_e(title)}</h2>
+    <div class="chevron">{_CHEVRON_SVG}</div>
   </div>
   <div class="card-body">{body}</div>
 </section>"""
@@ -398,6 +401,29 @@ ol.items li::before{
   font-size:11px;color:var(--muted);margin-top:8px;font-style:italic
 }
 
+/* ── Interactive: Collapsible sections ── */
+.card-header{cursor:pointer;user-select:none}
+.card-header:hover .section-title{color:var(--accent)}
+.chevron{
+  margin-left:auto;width:28px;height:28px;border-radius:50%;
+  background:var(--light);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;transition:transform .3s cubic-bezier(.4,0,.2,1),background .2s
+}
+.chevron svg{width:14px;height:14px;stroke:var(--muted);fill:none;stroke-width:2;
+  transition:stroke .2s}
+.card.collapsed .chevron{transform:rotate(-90deg)}
+.card.collapsed .chevron svg{stroke:var(--accent)}
+.card.collapsed .card-body{display:none}
+.expand-all-btn{
+  font-size:12px;padding:6px 14px;border-radius:7px;
+  border:1px solid var(--border);background:var(--white);
+  color:var(--blue);cursor:pointer;font-weight:500;
+  transition:all .15s;display:flex;align-items:center;gap:6px;
+  font-family:inherit;margin:20px 24px 0;
+}
+.expand-all-btn:hover{background:var(--navy);color:#fff;border-color:var(--navy)}
+
 /* ── Interactive: Requirements ── */
 .req-toolbar{
   background:var(--light);border:1px solid var(--border);
@@ -623,6 +649,29 @@ sections.forEach(s => ioSb.observe(s));
   });
 
   updateCount();
+})();
+
+// ── Collapsible section cards ─────────────────────────────────────────────
+(function() {
+  const cards = document.querySelectorAll('.card');
+
+  cards.forEach(card => {
+    card.querySelector('.card-header').addEventListener('click', () => {
+      card.classList.toggle('collapsed');
+    });
+  });
+
+  const expandBtn = document.getElementById('expandAllBtn');
+  let allExpanded = true;
+  if (expandBtn) {
+    expandBtn.addEventListener('click', () => {
+      allExpanded = !allExpanded;
+      cards.forEach(c => c.classList.toggle('collapsed', !allExpanded));
+      expandBtn.innerHTML = allExpanded
+        ? `<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2"><polyline points="7 13 12 18 17 13"/><polyline points="7 6 12 11 17 6"/></svg> Expandir todas as seções`
+        : `<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2"><polyline points="7 11 12 6 17 11"/><polyline points="7 18 12 13 17 18"/></svg> Retrair todas as seções`;
+    });
+  }
 })();
 
 // ── Requirements — Type & Priority Filters ────────────────────────────────
@@ -1209,6 +1258,12 @@ def generate_executive_html(hub, narrative) -> str:
 {_hero(hub, narrative)}
 {_participants_strip(hub)}
 {_stats_bar(hub)}
+<button class="expand-all-btn" id="expandAllBtn">
+  <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2">
+    <polyline points="7 13 12 18 17 13"/><polyline points="7 6 12 11 17 6"/>
+  </svg>
+  Expandir todas as seções
+</button>
 <div class="content">
 {sections}
 {_next_meeting(hub)}
