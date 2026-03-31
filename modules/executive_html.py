@@ -398,6 +398,25 @@ ol.items li::before{
   font-size:11px;color:var(--muted);margin-top:8px;font-style:italic
 }
 
+/* ── Interactive: Requirements ── */
+.req-toolbar{
+  background:var(--light);border:1px solid var(--border);
+  border-radius:10px;padding:14px 16px;margin-bottom:4px;
+  display:flex;flex-direction:column;gap:10px
+}
+.req-toolbar-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.req-filter-btn{
+  font-size:11px;padding:4px 11px;border-radius:100px;
+  border:1px solid var(--border);background:var(--white);
+  color:var(--muted);cursor:pointer;font-weight:500;
+  transition:all .15s;font-family:inherit
+}
+.req-filter-btn:hover{border-color:var(--req-color,var(--accent));color:var(--req-color,var(--accent))}
+.req-filter-btn.active{
+  background:var(--req-color,var(--navy));
+  color:#fff;border-color:var(--req-color,var(--navy))
+}
+
 /* ── Interactive: Action Items ── */
 .ai-toolbar{
   display:flex;align-items:center;justify-content:space-between;
@@ -604,6 +623,45 @@ sections.forEach(s => ioSb.observe(s));
   });
 
   updateCount();
+})();
+
+// ── Requirements — Type & Priority Filters ────────────────────────────────
+(function() {
+  let activeType = 'all', activePrio = 'all';
+
+  function updateReqs() {
+    const rows = document.querySelectorAll('#req-tbody tr[data-req-type]');
+    let vis = 0;
+    rows.forEach(r => {
+      const show =
+        (activeType === 'all' || r.dataset.reqType === activeType) &&
+        (activePrio === 'all' || r.dataset.reqPrio === activePrio);
+      r.style.display = show ? '' : 'none';
+      if (show) vis++;
+    });
+    const el = document.getElementById('req-visible');
+    if (el) el.textContent = vis;
+  }
+
+  document.querySelectorAll('.req-filter-btn[data-req-filter-type]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.req-filter-btn[data-req-filter-type]')
+        .forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeType = btn.dataset.reqFilterType;
+      updateReqs();
+    });
+  });
+
+  document.querySelectorAll('.req-filter-btn[data-req-filter-prio]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.req-filter-btn[data-req-filter-prio]')
+        .forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activePrio = btn.dataset.reqFilterPrio;
+      updateReqs();
+    });
+  });
 })();
 """
 
@@ -932,7 +990,9 @@ def _section_requirements(hub) -> str:
 
     from collections import Counter
     type_counts = Counter(r.type for r in reqs)
+    prio_counts = Counter(r.priority for r in reqs)
 
+    # Distribution bars
     bars = []
     for t_key in _TYPE_LABEL:
         cnt = type_counts.get(t_key, 0)
@@ -947,10 +1007,48 @@ def _section_requirements(hub) -> str:
             f'<div class="bar-count">{cnt}</div></div>'
         )
 
+    # Type filter buttons (only types that exist)
+    type_filters = '<button class="req-filter-btn active" data-req-filter-type="all">Todos os tipos</button>'
+    for t_key in _TYPE_LABEL:
+        if type_counts.get(t_key, 0) == 0:
+            continue
+        color = _TYPE_COLOR.get(t_key, "#8496B0")
+        type_filters += (
+            f'<button class="req-filter-btn" data-req-filter-type="{_e(t_key)}" '
+            f'style="--req-color:{color}">{_e(_TYPE_LABEL[t_key])}</button>'
+        )
+
+    # Priority filter buttons
+    prio_filters = '<button class="req-filter-btn active" data-req-filter-prio="all">Todas</button>'
+    for p_key, p_label in [("high","Alta"),("medium","Média"),("low","Baixa"),("unspecified","N/D")]:
+        if prio_counts.get(p_key, 0) == 0:
+            continue
+        color = _PRIO_COLOR.get(p_key, "#8496B0")
+        prio_filters += (
+            f'<button class="req-filter-btn" data-req-filter-prio="{_e(p_key)}" '
+            f'style="--req-color:{color}">{_e(p_label)}</button>'
+        )
+
+    toolbar = f"""
+<div class="req-toolbar">
+  <div class="req-toolbar-row">
+    <span class="col-label" style="margin:0;white-space:nowrap">Tipo:</span>
+    <div class="filter-group">{type_filters}</div>
+  </div>
+  <div class="req-toolbar-row">
+    <span class="col-label" style="margin:0;white-space:nowrap">Prioridade:</span>
+    <div class="filter-group">{prio_filters}</div>
+  </div>
+  <div class="ai-count" style="margin-top:4px">
+    <span id="req-visible">{total}</span> de {total} requisitos
+  </div>
+</div>"""
+
+    # Rows with data attributes
     req_rows = []
     for r in sorted(reqs, key=lambda x: (x.type, {"high": 0, "medium": 1, "low": 2}.get(x.priority, 3))):
         req_rows.append(
-            f"<tr>"
+            f'<tr data-req-type="{_e(r.type)}" data-req-prio="{_e(r.priority)}">'
             f"<td><span style='font-family:JetBrains Mono,monospace;font-size:11px;"
             f"background:var(--light);padding:2px 7px;border-radius:4px'>{_e(r.id)}</span></td>"
             f"<td>{_type_badge(r.type)}</td>"
@@ -968,10 +1066,12 @@ def _section_requirements(hub) -> str:
   <span style="font-weight:600;color:var(--amber)">{high_count} alta prioridade</span>
 </div>
 <div style="margin-bottom:22px">{"".join(bars)}</div>
+{toolbar}
+<div style="overflow-x:auto;margin-top:14px">
 <table>
   <thead><tr><th>ID</th><th>Tipo</th><th>Prioridade</th><th>Título</th><th>Ator</th></tr></thead>
-  <tbody>{"".join(req_rows)}</tbody>
-</table>"""
+  <tbody id="req-tbody">{"".join(req_rows)}</tbody>
+</table></div>"""
     return _section_card("📋", "Especificação de Requisitos", body, "sec-reqs")
 
 
