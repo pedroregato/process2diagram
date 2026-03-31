@@ -212,9 +212,25 @@ class ValidationIssue:
 
 
 @dataclass
+class BPMNValidationScore:
+    """Score for a single BPMN candidate produced by AgentValidator."""
+    granularity: float = 0.0   # 0–10
+    task_type:   float = 0.0   # 0–10
+    gateways:    float = 0.0   # 0–10
+    weighted:    float = 0.0   # weighted composite 0–10
+    n_tasks:     int   = 0
+    n_gateways:  int   = 0
+    transcript_words: int = 0
+    run_index:   int   = 0     # 1-based index of the run that produced this score
+
+
+@dataclass
 class ValidationReport:
-    score: int = 100    # 0–100
+    score: int = 100    # 0–100 (legacy)
     issues: list[ValidationIssue] = field(default_factory=list)
+    bpmn_score: BPMNValidationScore = field(default_factory=BPMNValidationScore)
+    bpmn_candidates: list[BPMNValidationScore] = field(default_factory=list)
+    n_bpmn_runs: int = 1
     ready: bool = False
 
     @property
@@ -310,6 +326,14 @@ class KnowledgeHub:
             hub.bpmn.pool_models = []
         if not hasattr(hub.bpmn, 'message_flows_data'):
             hub.bpmn.message_flows_data = []
+
+        # ── v3.8: BPMNValidationScore fields added to ValidationReport ──────────
+        if not hasattr(hub.validation, 'bpmn_score'):
+            hub.validation.bpmn_score = BPMNValidationScore()
+        if not hasattr(hub.validation, 'bpmn_candidates'):
+            hub.validation.bpmn_candidates = []
+        if not hasattr(hub.validation, 'n_bpmn_runs'):
+            hub.validation.n_bpmn_runs = 1
 
         # ── v3.2: drawio_xml removed from BPMNModel ───────────────────────────
         if hasattr(hub.bpmn, 'drawio_xml'):

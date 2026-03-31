@@ -23,12 +23,15 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
+import copy
+
 from agents.nlp_chunker import NLPChunker
 from agents.agent_bpmn import AgentBPMN
 from agents.agent_minutes import AgentMinutes
 from agents.agent_requirements import AgentRequirements
 from agents.agent_transcript_quality import AgentTranscriptQuality
-from core.knowledge_hub import KnowledgeHub, PreprocessingModel
+from agents.agent_validator import AgentValidator
+from core.knowledge_hub import KnowledgeHub, BPMNModel, PreprocessingModel
 from modules.transcript_preprocessor import preprocess
 
 
@@ -67,6 +70,7 @@ class Orchestrator:
         self._agent_bpmn = AgentBPMN(client_info, provider_cfg)
         self._agent_minutes = AgentMinutes(client_info, provider_cfg)
         self._agent_requirements = AgentRequirements(client_info, provider_cfg)
+        self._validator = AgentValidator()
 
     # ── Main entry point ──────────────────────────────────────────────────────
 
@@ -78,6 +82,8 @@ class Orchestrator:
         run_bpmn: bool = True,
         run_minutes: bool = True,
         run_requirements: bool = True,
+        n_bpmn_runs: int = 1,
+        bpmn_weights: Optional[dict] = None,
     ) -> KnowledgeHub:
         """
         Execute PC1 pipeline.
@@ -146,12 +152,40 @@ class Orchestrator:
             hub.transcript_clean = hub.transcript_raw
             hub.bump()
 
-        # ── Step 2: BPMN Agent ────────────────────────────────────────────────
+        # ── Step 2: BPMN Agent (single or multi-run with validation) ─────────
         if run_bpmn:
-            self._progress("Agente BPMN", "running")
+            weights = bpmn_weights or {"granularity": 5, "task_type": 5, "gateways": 5}
+            n = max(1, n_bpmn_runs)
             try:
-                hub = self._agent_bpmn.run(hub, output_language)
-                self._progress("Agente BPMN", "done")
+                if n == 1:
+                    self._progress("Agente BPMN", "running")
+                    hub = self._agent_bpmn.run(hub, output_language)
+                    self._progress("Agente BPMN", "done")
+                else:
+                    candidates = []
+                    for i in range(n):
+                        self._progress("Agente BPMN", f"rodada {i + 1}/{n}…")
+                        hub_c = copy.copy(hub)
+                        hub_c.bpmn = BPMNModel()
+                        hub_c = self._agent_bpmn.run(hub_c, output_language)
+                        score = self._validator.score(
+                            hub_c.bpmn, hub_c.transcript_clean, weights
+                        )
+                        score.run_index = i + 1
+                        candidates.append((score, hub_c.bpmn))
+
+                    best_score, best_bpmn = max(candidates, key=lambda x: x[0].weighted)
+                    hub.bpmn = best_bpmn
+                    hub.validation.bpmn_score = best_score
+                    hub.validation.bpmn_candidates = [c[0] for c in candidates]
+                    hub.validation.n_bpmn_runs = n
+                    hub.validation.ready = True
+                    hub.bump()
+                    self._progress(
+                        "Agente BPMN",
+                        f"done — rodada {best_score.run_index}/{n} selecionada "
+                        f"(score {best_score.weighted:.1f}/10)",
+                    )
             except Exception as exc:
                 self._progress("Agente BPMN", f"error: {exc}")
                 raise RuntimeError(f"BPMN Agent failed: {exc}") from exc

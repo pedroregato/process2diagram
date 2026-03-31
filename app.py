@@ -368,6 +368,23 @@ with st.sidebar:
     st.markdown("### 🤖 Active Agents")
     run_quality = st.checkbox("Agente Qualidade da Transcrição", value=True)
     run_bpmn = st.checkbox("Agente BPMN", value=True)
+
+    # ── Multi-run BPMN validator ───────────────────────────────────────────
+    n_bpmn_runs = 1
+    bpmn_weights = {"granularity": 5, "task_type": 5, "gateways": 5}
+    if run_bpmn:
+        n_bpmn_runs = st.select_slider(
+            "Rodadas BPMN", options=[1, 3, 5], value=1,
+            help="Executa o Agente BPMN N vezes e seleciona o melhor resultado.",
+        )
+        if n_bpmn_runs > 1:
+            st.caption("Pesos para seleção do melhor resultado (0 = ignorar):")
+            bpmn_weights = {
+                "granularity": st.slider("Granularidade", 0, 10, 5, key="w_gran"),
+                "task_type":   st.slider("Task type",     0, 10, 5, key="w_type"),
+                "gateways":    st.slider("Gateways",      0, 10, 8, key="w_gw"),
+            }
+
     run_minutes = st.checkbox("Agente Ata de Reunião", value=True)
     run_requirements = st.checkbox("Agente Requisitos", value=True)
 
@@ -587,6 +604,8 @@ if generate_btn:
             run_bpmn=run_bpmn,
             run_minutes=run_minutes,
             run_requirements=run_requirements,
+            n_bpmn_runs=n_bpmn_runs,
+            bpmn_weights=bpmn_weights,
         )
     except Exception as e:
         st.error(f"Erro no pipeline: {e}")
@@ -624,6 +643,8 @@ if hub is not None:
         tabs_to_show += ["🔬 Qualidade da Transcrição"]
     if hub.bpmn.ready:
         tabs_to_show += ["📐 BPMN 2.0", "📊 Mermaid"]
+        if hub.validation.ready and hub.validation.n_bpmn_runs > 1:
+            tabs_to_show += ["🏆 Validação BPMN"]
 
     if hub.bpmn.lanes:
         st.markdown(f"**Swimlanes:** {', '.join(f'`{l}`' for l in hub.bpmn.lanes)}")
@@ -794,6 +815,35 @@ if hub is not None:
             render_mermaid_block(hub.bpmn.mermaid, show_code=True, key_suffix="mermaid_tab")
 
         tab_idx += 1
+
+        # ── Tab: Validação BPMN (multi-run) ──────────────────────────────────
+        if hub.validation.ready and hub.validation.n_bpmn_runs > 1:
+            with tabs[tab_idx]:
+                val = hub.validation
+                st.markdown(f"### Seleção entre {val.n_bpmn_runs} rodadas")
+                best = val.bpmn_score
+
+                # Ranking table
+                rows = []
+                for c in sorted(val.bpmn_candidates, key=lambda x: x.weighted, reverse=True):
+                    rows.append({
+                        "Rodada":        f"{'⭐ ' if c.run_index == best.run_index else ''}{c.run_index}",
+                        "Granularidade": f"{c.granularity:.1f}",
+                        "Task type":     f"{c.task_type:.1f}",
+                        "Gateways":      f"{c.gateways:.1f}",
+                        "Score final":   f"{c.weighted:.2f}",
+                        "Atividades":    c.n_tasks,
+                        "Gateways #":    c.n_gateways,
+                    })
+                st.dataframe(rows, use_container_width=True)
+
+                st.caption(
+                    f"Rodada **{best.run_index}** selecionada · "
+                    f"Score {best.weighted:.2f}/10 · "
+                    f"{best.n_tasks} atividades · {best.transcript_words} palavras na transcrição"
+                )
+
+            tab_idx += 1
 
     # ── Tab: Ata de Reunião ───────────────────────────────────────────────────
     if hub.minutes.ready:
