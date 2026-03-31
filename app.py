@@ -842,7 +842,7 @@ if hub is not None:
                         st.markdown(f"> {speaker_tag}*\"{r.source_quote}\"*")
 
             # ── Mind Map ──────────────────────────────────────────────────
-            if req.mindmap:
+            if getattr(req, 'mindmap', ''):
                 st.markdown("---")
                 st.markdown("### 🗺️ Mind Map dos Requisitos")
                 render_mermaid_block(req.mindmap, show_code=True, key_suffix="req_mindmap", height=520)

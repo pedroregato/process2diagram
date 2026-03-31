@@ -304,6 +304,10 @@ class KnowledgeHub:
             if not hasattr(obj, 'field'):
                 obj.field = <default>
         """
+        # ── v3.4: TranscriptQualityModel added to hub ─────────────────────────
+        if not hasattr(hub, 'transcript_quality'):
+            hub.transcript_quality = TranscriptQualityModel()
+
         # ── v3.5: PreprocessingModel added to hub ─────────────────────────────
         if not hasattr(hub, 'preprocessing'):
             hub.preprocessing = PreprocessingModel()
@@ -311,10 +315,6 @@ class KnowledgeHub:
         # ── v3.6: InconsistencyItem list added to TranscriptQualityModel ─────────
         if not hasattr(hub.transcript_quality, 'inconsistencies'):
             hub.transcript_quality.inconsistencies = []
-
-        # ── v3.4: TranscriptQualityModel added to hub ─────────────────────────
-        if not hasattr(hub, 'transcript_quality'):
-            hub.transcript_quality = TranscriptQualityModel()
 
         # ── v3.2: RequirementsModel added to hub ──────────────────────────────
         if not hasattr(hub, 'requirements'):
