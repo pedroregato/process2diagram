@@ -845,11 +845,9 @@ if hub is not None:
             if req.requirements:
                 st.markdown("---")
                 st.markdown("### 🗺️ Mind Map dos Requisitos")
-                from modules.requirements_mindmap import build_mindmap_tree
-                from modules.mindmap_interactive import render_interactive_mindmap
+                from modules.mindmap_interactive import render_mindmap_from_requirements
                 session_title = getattr(req, 'session_title', '') or req.name
-                tree = build_mindmap_tree(req, session_title)
-                render_interactive_mindmap(tree, height=540)
+                render_mindmap_from_requirements(req, session_title=session_title, height=540)
                 if getattr(req, 'mindmap', ''):
                     with st.expander("📝 Código Mermaid (mindmap)", expanded=False):
                         st.code(req.mindmap, language="text")

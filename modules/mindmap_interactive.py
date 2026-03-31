@@ -13,6 +13,45 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict
+
+_TYPE_LABELS = {
+    "ui_field":       "Campo de Tela",
+    "validation":     "Validacao",
+    "business_rule":  "Regra de Negocio",
+    "functional":     "Funcional",
+    "non_functional": "Nao Funcional",
+}
+
+
+def build_mindmap_tree(model, session_title: str = "") -> dict:
+    """Build hierarchical dict for the interactive mindmap renderer."""
+    title = session_title or getattr(model, "session_title", "") or getattr(model, "name", "") or "Requisitos"
+    root: dict = {"kind": "root", "id": "root", "label": title, "children": []}
+    grouped: dict = defaultdict(list)
+    for r in model.requirements:
+        grouped[r.type].append(r)
+    for t_key, t_label in _TYPE_LABELS.items():
+        items = grouped.get(t_key, [])
+        if not items:
+            continue
+        root["children"].append({
+            "kind": "type",
+            "id": f"type_{t_key}",
+            "label": t_label,
+            "colorKey": t_key,
+            "children": [
+                {"kind": "req", "id": r.id, "title": r.title, "priority": r.priority}
+                for r in items
+            ],
+        })
+    return root
+
+
+def render_mindmap_from_requirements(model, *, session_title: str = "", height: int = 620) -> None:
+    """Build tree and render — single call from app.py / pages/Diagramas.py."""
+    tree = build_mindmap_tree(model, session_title)
+    render_interactive_mindmap(tree, height=height)
 
 
 def render_interactive_mindmap(tree: dict, *, height: int = 620) -> None:

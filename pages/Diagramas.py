@@ -106,16 +106,14 @@ if "📊 Mermaid" in tab_labels:
 # ── Mind Map dos Requisitos ───────────────────────────────────────────────────
 if "🗺️ Mind Map" in tab_labels:
     with tabs[tab_idx]:
-        from modules.requirements_mindmap import build_mindmap_tree
-        from modules.mindmap_interactive import render_interactive_mindmap
+        from modules.mindmap_interactive import render_mindmap_from_requirements
         req = hub.requirements
         st.caption(
             f"**{len(req.requirements)}** requisitos agrupados por tipo · "
             "Clique nos grupos para expandir/retrair · Scroll: zoom · Drag: mover"
         )
         session_title = getattr(req, 'session_title', '') or req.name
-        tree = build_mindmap_tree(req, session_title)
-        render_interactive_mindmap(tree, height=840)
+        render_mindmap_from_requirements(req, session_title=session_title, height=840)
         if getattr(req, 'mindmap', ''):
             with st.expander("📝 Código Mermaid (mindmap)", expanded=False):
                 st.code(req.mindmap, language="text")
