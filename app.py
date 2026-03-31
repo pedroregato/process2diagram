@@ -509,10 +509,13 @@ if generate_btn:
 hub = st.session_state.get("hub")
 if hub is not None:
     hub = KnowledgeHub.migrate(hub)
-    # Belt-and-suspenders: ensure transcript_quality always exists regardless of cache
+    # Belt-and-suspenders: ensure new fields exist regardless of .pyc cache
     if not hasattr(hub, 'transcript_quality'):
         from core.knowledge_hub import TranscriptQualityModel
         hub.transcript_quality = TranscriptQualityModel()
+    if not hasattr(hub, 'synthesizer'):
+        from core.knowledge_hub import SynthesizerModel
+        hub.synthesizer = SynthesizerModel()
 
     # ── Metrics banner ────────────────────────────────────────────────────────
     col_a, col_b, col_c, col_d = st.columns(4)
