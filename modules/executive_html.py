@@ -443,6 +443,48 @@ ol.items li::before{
   color:#fff;border-color:var(--req-color,var(--navy))
 }
 
+/* ── Interactive: Comments ── */
+.cmt-toggle{
+  display:inline-flex;align-items:center;gap:5px;
+  margin-top:10px;font-size:12px;color:var(--muted);
+  background:none;border:none;cursor:pointer;padding:3px 0;
+  transition:color .15s;font-family:inherit
+}
+.cmt-toggle:hover{color:var(--accent)}
+.cmt-count-badge{
+  background:var(--accent);color:#fff;
+  font-family:'JetBrains Mono',monospace;font-size:10px;
+  padding:1px 6px;border-radius:100px
+}
+.cmt-panel{
+  display:none;margin-top:10px;padding:12px 14px;
+  background:var(--light);border:1px solid var(--border);
+  border-radius:10px
+}
+.cmt-panel.open{display:block}
+.cmt-bubble{
+  background:var(--white);border:1px solid var(--border);
+  border-radius:10px;padding:9px 12px;
+  font-size:13px;color:var(--text);line-height:1.55;margin-bottom:8px
+}
+.cmt-meta{
+  font-size:10px;color:var(--muted);margin-bottom:4px;
+  font-family:'JetBrains Mono',monospace
+}
+.cmt-row{display:flex;gap:8px;margin-top:10px;align-items:flex-end}
+.cmt-input{
+  flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;
+  font-size:13px;font-family:inherit;color:var(--text);
+  outline:none;resize:none;transition:border-color .15s;min-height:38px;line-height:1.5
+}
+.cmt-input:focus{border-color:var(--accent)}
+.cmt-submit{
+  padding:8px 14px;background:var(--navy);color:#fff;
+  border:none;border-radius:8px;font-size:12px;font-weight:500;
+  cursor:pointer;transition:background .15s;font-family:inherit;white-space:nowrap
+}
+.cmt-submit:hover{background:var(--blue)}
+
 /* ── Interactive: Action Items ── */
 .ai-toolbar{
   display:flex;align-items:center;justify-content:space-between;
@@ -710,6 +752,68 @@ sections.forEach(s => ioSb.observe(s));
       activePrio = btn.dataset.reqFilterPrio;
       updateReqs();
     });
+  });
+})();
+
+// ── Action Items — Comments ───────────────────────────────────────────────
+(function() {
+  const SESSION  = window.P2D_SESSION || 'default';
+  const LS_KEY   = 'p2d_cmt_' + SESSION;
+
+  let allComments = {};
+  try { allComments = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(_) {}
+
+  function saveComments() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(allComments)); } catch(_) {}
+  }
+
+  function renderComments(idx) {
+    const list  = document.getElementById('cmt-list-' + idx);
+    const badge = document.getElementById('cmt-badge-' + idx);
+    if (!list) return;
+    const cmts = allComments[idx] || [];
+    list.innerHTML = cmts.map(c =>
+      `<div class="cmt-bubble">
+        <div class="cmt-meta">${c.ts}</div>
+        ${c.text.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}
+      </div>`
+    ).join('');
+    if (badge) {
+      badge.textContent = cmts.length;
+      badge.style.display = cmts.length ? 'inline' : 'none';
+    }
+  }
+
+  // Render persisted comments on load
+  document.querySelectorAll('[id^="cmt-panel-"]').forEach(panel => {
+    const idx = panel.id.replace('cmt-panel-', '');
+    renderComments(idx);
+  });
+
+  // Toggle panel
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.cmt-toggle');
+    if (btn) {
+      const idx   = btn.dataset.cmtIdx;
+      const panel = document.getElementById('cmt-panel-' + idx);
+      if (panel) panel.classList.toggle('open');
+      return;
+    }
+
+    // Submit comment
+    const sub = e.target.closest('[data-cmt-submit]');
+    if (sub) {
+      const idx   = sub.dataset.cmtSubmit;
+      const input = document.getElementById('cmt-input-' + idx);
+      const text  = input ? input.value.trim() : '';
+      if (!text) return;
+      if (!allComments[idx]) allComments[idx] = [];
+      const now = new Date().toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' });
+      allComments[idx].push({ ts: now, text });
+      saveComments();
+      renderComments(idx);
+      if (input) input.value = '';
+    }
   });
 })();
 """
@@ -1002,6 +1106,20 @@ def _section_minutes(hub) -> str:
                 f'display:inline-block;flex-shrink:0"></span>Aberto</span>'
             )
             prio_badge = _status_pill(ai.priority)
+            cmt_cell = (
+                f'<td style="white-space:nowrap">'
+                f'<button class="cmt-toggle" data-cmt-idx="{idx}">'
+                f'💬 <span class="cmt-count-badge" id="cmt-badge-{idx}" '
+                f'style="display:none">0</span>'
+                f'</button>'
+                f'<div class="cmt-panel" id="cmt-panel-{idx}">'
+                f'<div id="cmt-list-{idx}"></div>'
+                f'<div class="cmt-row">'
+                f'<textarea class="cmt-input" id="cmt-input-{idx}" '
+                f'placeholder="Adicionar comentário…" rows="1"></textarea>'
+                f'<button class="cmt-submit" data-cmt-submit="{idx}">Enviar</button>'
+                f'</div></div></td>'
+            )
             ai_rows.append(
                 f'<tr data-ai-idx="{idx}" data-ai-status="open">'
                 f"<td>{pill}</td>"
@@ -1011,6 +1129,7 @@ def _section_minutes(hub) -> str:
                 f"<td>{_e(ai.task)}</td>"
                 f"<td><strong>{_e(ai.responsible)}</strong></td>"
                 f"<td style='color:var(--muted);font-size:12px'>{_e(ai.deadline or '—')}</td>"
+                f"{cmt_cell}"
                 f"</tr>"
             )
         ai_table = (
@@ -1019,7 +1138,7 @@ def _section_minutes(hub) -> str:
             f'<div style="overflow-x:auto"><table>'
             f'<thead><tr>'
             f'<th>Status</th><th>Prioridade</th><th>Por</th>'
-            f'<th>Tarefa</th><th>Responsável</th><th>Prazo</th>'
+            f'<th>Tarefa</th><th>Responsável</th><th>Prazo</th><th>💬</th>'
             f'</tr></thead>'
             f'<tbody>{"".join(ai_rows)}</tbody>'
             f'</table></div>'
