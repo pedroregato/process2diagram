@@ -9,7 +9,10 @@
 
 from __future__ import annotations
 
+import base64
 import html as _html
+import re as _re
+import urllib.request
 from datetime import datetime
 
 
@@ -394,6 +397,77 @@ def _section_quality(hub) -> str:
     return _section("🔬", "Qualidade da Transcrição", "#64748b", body)
 
 
+def _section_bpmn_diagram(hub) -> str:
+    """Embed the interactive BPMN viewer via <iframe srcdoc>."""
+    if not hub.bpmn.ready or not hub.bpmn.bpmn_xml:
+        return ""
+    try:
+        from modules.bpmn_viewer import preview_from_xml
+        viewer_html = preview_from_xml(hub.bpmn.bpmn_xml)
+        # srcdoc attribute value must be HTML-escaped
+        srcdoc_val = _html.escape(viewer_html, quote=True)
+        body = (
+            f'<div style="border-radius:8px;overflow:hidden;border:1px solid var(--border)">'
+            f'<iframe srcdoc="{srcdoc_val}" '
+            f'style="width:100%;height:540px;border:none;display:block" '
+            f'title="Diagrama BPMN 2.0" loading="lazy"></iframe></div>'
+            f'<p style="font-size:11px;color:var(--muted);margin-top:8px">'
+            f'Arraste para mover &nbsp;·&nbsp; Scroll para zoom &nbsp;·&nbsp; '
+            f'Tecla <kbd>0</kbd> para ajustar tela &nbsp;·&nbsp; '
+            f'<em>Requer conexão com internet (bpmn-js via CDN).</em></p>'
+        )
+        return _section("📐", "Diagrama BPMN 2.0", "#7c3aed", body)
+    except Exception:
+        return ""
+
+
+def _fetch_mermaid_svg(mermaid_code: str) -> str | None:
+    """Fetch SVG from mermaid.ink server-side and return as inline-ready string."""
+    try:
+        p = base64.urlsafe_b64encode(mermaid_code.encode("utf-8")).decode("ascii")
+        url = f"https://mermaid.ink/svg/{p}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Process2Diagram/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            svg = resp.read().decode("utf-8")
+        if not svg or "<svg" not in svg.lower():
+            return None
+        # Normalize dimensions for responsive embed
+        tag_m = _re.search(r"<svg[^>]*>", svg)
+        if tag_m:
+            tag = tag_m.group(0)
+            w_m = _re.search(r'width="([\d.]+)"', tag)
+            h_m = _re.search(r'height="([\d.]+)"', tag)
+            has_vb = "viewBox" in tag or "viewbox" in tag
+            new_tag = tag
+            if w_m and h_m and not has_vb:
+                new_tag = new_tag.replace(
+                    "<svg", f'<svg viewBox="0 0 {w_m.group(1)} {h_m.group(1)}"', 1
+                )
+            new_tag = _re.sub(r'\s*width="[^"]*"', "", new_tag)
+            new_tag = _re.sub(r'\s*height="[^"]*"', "", new_tag)
+            new_tag = new_tag.replace("<svg", '<svg width="100%" height="auto"', 1)
+            svg = svg.replace(tag_m.group(0), new_tag, 1)
+        return svg
+    except Exception:
+        return None
+
+
+def _section_mermaid_diagram(hub) -> str:
+    """Embed Mermaid flowchart as an inline SVG (fetched server-side)."""
+    if not hub.bpmn.ready or not hub.bpmn.mermaid:
+        return ""
+    svg = _fetch_mermaid_svg(hub.bpmn.mermaid)
+    if not svg:
+        return ""
+    body = (
+        f'<div style="overflow:auto;max-height:560px;border:1px solid var(--border);'
+        f'border-radius:8px;padding:12px;background:#fafafa">{svg}</div>'
+        f'<p style="font-size:11px;color:var(--muted);margin-top:8px">'
+        f'Fluxograma gerado via <em>mermaid.ink</em> &nbsp;·&nbsp; SVG embutido no documento.</p>'
+    )
+    return _section("📊", "Fluxograma do Processo", "#0891b2", body)
+
+
 def _section_insights(narrative) -> str:
     insights = narrative.key_insights or []
     recs = narrative.recommendations or []
@@ -457,6 +531,8 @@ def generate_executive_html(hub, narrative) -> str:
     sections = "\n".join(filter(None, [
         _section_summary(narrative),
         _section_process(hub, narrative),
+        _section_bpmn_diagram(hub),
+        _section_mermaid_diagram(hub),
         _section_minutes(hub),
         _section_requirements(hub),
         _section_quality(hub),
