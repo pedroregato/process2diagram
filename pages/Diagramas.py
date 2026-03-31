@@ -22,8 +22,6 @@ if str(root_dir) not in sys.path:
 from core.knowledge_hub import KnowledgeHub
 from modules.bpmn_viewer import preview_from_xml
 from modules.mermaid_renderer import render_mermaid_block
-from modules.mindmap_interactive import render_interactive_mindmap
-from modules.requirements_mindmap import build_mindmap_tree
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -108,6 +106,8 @@ if "📊 Mermaid" in tab_labels:
 # ── Mind Map dos Requisitos ───────────────────────────────────────────────────
 if "🗺️ Mind Map" in tab_labels:
     with tabs[tab_idx]:
+        from modules.requirements_mindmap import build_mindmap_tree
+        from modules.mindmap_interactive import render_interactive_mindmap
         req = hub.requirements
         st.caption(
             f"**{len(req.requirements)}** requisitos agrupados por tipo · "
