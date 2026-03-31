@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from agents.base_agent import BaseAgent
 from core.knowledge_hub import KnowledgeHub, RequirementsModel, RequirementItem
+from modules.requirements_mindmap import generate_requirements_mindmap
 
 
 # Emoji badge per requirement type — used in Markdown output
@@ -54,6 +55,7 @@ class AgentRequirements(BaseAgent):
 
         hub.requirements = self._build_model(data)
         hub.requirements.markdown = self._generate_markdown(hub.requirements)
+        hub.requirements.mindmap = generate_requirements_mindmap(hub.requirements)
         hub.requirements.ready = True
         hub.mark_agent_run(self.name)
         hub.bump()

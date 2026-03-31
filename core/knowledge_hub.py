@@ -156,6 +156,7 @@ class RequirementsModel:
     name: str = ""
     requirements: list[RequirementItem] = field(default_factory=list)
     markdown: str = ""
+    mindmap: str = ""      # Mermaid mindmap source
     ready: bool = False
 
 
@@ -326,6 +327,10 @@ class KnowledgeHub:
             hub.bpmn.pool_models = []
         if not hasattr(hub.bpmn, 'message_flows_data'):
             hub.bpmn.message_flows_data = []
+
+        # ── v3.8: mindmap added to RequirementsModel ─────────────────────────────
+        if not hasattr(hub.requirements, 'mindmap'):
+            hub.requirements.mindmap = ""
 
         # ── v3.8: BPMNValidationScore fields added to ValidationReport ──────────
         if not hasattr(hub.validation, 'bpmn_score'):
