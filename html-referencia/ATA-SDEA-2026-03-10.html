@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ATA-SDEA-2026-03-10 · FGV/DTI</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy:   #0B1E3D;
+    --blue:   #1A4B8C;
+    --accent: #2E7FD9;
+    --gold:   #C9A84C;
+    --light:  #F4F7FB;
+    --muted:  #8496B0;
+    --border: #D5E3F5;
+    --white:  #FFFFFF;
+    --text:   #1C2A3A;
+    --green:  #1A7F5A;
+    --amber:  #C97B1A;
+    --purple: #6B3FA0;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--light); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+
+  /* ── SIDEBAR ── */
+  #sidebar {
+    position: fixed; top: 0; left: 0; width: 260px; height: 100vh;
+    background: var(--navy); padding: 36px 0 24px;
+    display: flex; flex-direction: column; z-index: 100;
+    transform: translateX(0); transition: transform .35s cubic-bezier(.4,0,.2,1);
+  }
+  #sidebar.collapsed { transform: translateX(-260px); }
+  .sidebar-logo { padding: 0 24px 20px; border-bottom: 1px solid rgba(255,255,255,.08); }
+  .sidebar-logo span { display: block; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .15em; color: var(--gold); text-transform: uppercase; margin-bottom: 4px; }
+  .sidebar-logo strong { display: block; font-family: 'DM Serif Display', serif; font-size: 18px; color: #fff; line-height: 1.2; }
+  .nav-label { padding: 18px 24px 6px; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+  .nav-list { list-style: none; flex: 1; overflow-y: auto; }
+  .nav-list a { display: flex; align-items: center; gap: 10px; padding: 9px 24px; font-size: 13px; color: rgba(255,255,255,.65); text-decoration: none; border-left: 3px solid transparent; transition: all .2s; cursor: pointer; }
+  .nav-list a:hover, .nav-list a.active { color: #fff; background: rgba(255,255,255,.06); border-left-color: var(--gold); }
+  .nav-list a .nav-num { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--gold); min-width: 20px; }
+  .sidebar-footer { padding: 14px 20px 0; border-top: 1px solid rgba(255,255,255,.08); font-size: 11px; color: var(--muted); line-height: 1.5; }
+  .sidebar-footer strong { color: rgba(255,255,255,.5); display: block; }
+
+  /* ── TOGGLE ── */
+  #toggle-btn { position: fixed; top: 20px; left: 20px; z-index: 200; width: 38px; height: 38px; background: var(--navy); border: none; border-radius: 8px; cursor: pointer; display: none; align-items: center; justify-content: center; transition: background .2s; }
+  #toggle-btn:hover { background: var(--blue); }
+  #toggle-btn svg { width: 18px; height: 18px; stroke: #fff; fill: none; stroke-width: 2; }
+
+  /* ── MAIN ── */
+  #main { margin-left: 260px; min-height: 100vh; transition: margin-left .35s cubic-bezier(.4,0,.2,1); }
+  #main.expanded { margin-left: 0; }
+
+  /* ── HERO ── */
+  .hero { background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 100%); padding: 56px 56px 44px; position: relative; overflow: hidden; }
+  .hero::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse 60% 80% at 90% 20%, rgba(46,127,217,.25) 0%, transparent 70%), radial-gradient(ellipse 40% 60% at 10% 90%, rgba(201,168,76,.1) 0%, transparent 60%); pointer-events: none; }
+  .hero-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .badge { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: .1em; padding: 4px 10px; border-radius: 4px; background: rgba(255,255,255,.1); color: rgba(255,255,255,.75); border: 1px solid rgba(255,255,255,.15); }
+  .badge.gold { background: rgba(201,168,76,.15); color: var(--gold); border-color: rgba(201,168,76,.3); }
+  .hero h1 { font-family: 'DM Serif Display', serif; font-size: clamp(26px,3.5vw,42px); color: #fff; line-height: 1.15; margin-bottom: 10px; }
+  .hero-sub { font-size: 14px; color: rgba(255,255,255,.6); margin-bottom: 32px; }
+  .hero-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 12px; max-width: 700px; }
+  .info-card { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 14px 16px; backdrop-filter: blur(6px); }
+  .info-card.editable:hover { background: rgba(255,255,255,.13); border-color: rgba(255,255,255,.3); }
+  .info-card .ic-label { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); margin-bottom: 5px; }
+  .info-card .ic-value { font-size: 14px; font-weight: 500; color: #fff; line-height: 1.3; }
+
+  /* ── PARTICIPANTS ── */
+  .participants-strip { background: var(--white); border-bottom: 1px solid var(--border); padding: 18px 56px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .strip-label { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .participant-chip { display: flex; align-items: center; gap: 8px; background: var(--light); border: 1px solid var(--border); border-radius: 100px; padding: 5px 12px 5px 6px; font-size: 13px; color: var(--text); }
+  .participant-chip .avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--navy); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: #fff; flex-shrink: 0; }
+  .participant-chip .chip-area { font-size: 11px; color: var(--muted); }
+
+  /* ── CONTENT ── */
+  .content { padding: 48px 56px; max-width: 960px; }
+
+  /* ── SECTION ── */
+  .section { margin-bottom: 64px; opacity: 0; transform: translateY(20px); transition: opacity .5s ease, transform .5s ease; }
+  .section.visible { opacity: 1; transform: translateY(0); }
+  .section-header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; padding-bottom: 14px; border-bottom: 2px solid var(--border); }
+  .section-icon { width: 38px; height: 38px; border-radius: 10px; background: var(--navy); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .section-title { font-family: 'DM Serif Display', serif; font-size: 22px; color: var(--navy); }
+
+  /* ── TOPIC CARDS ── */
+  .topic-card { background: var(--white); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 16px; overflow: hidden; transition: box-shadow .2s, border-color .2s; }
+  .topic-card:hover { box-shadow: 0 4px 24px rgba(11,30,61,.08); border-color: #b8cde8; }
+  .topic-header { display: flex; align-items: center; gap: 14px; padding: 16px 20px; cursor: pointer; user-select: none; }
+  .topic-num { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500; color: #fff; background: var(--accent); padding: 3px 8px; border-radius: 5px; flex-shrink: 0; }
+  .topic-title { font-size: 14px; font-weight: 600; color: var(--navy); flex: 1; line-height: 1.4; }
+  .topic-chevron { width: 20px; height: 20px; border-radius: 50%; background: var(--light); display: flex; align-items: center; justify-content: center; transition: transform .25s, background .2s; flex-shrink: 0; }
+  .topic-chevron svg { width: 12px; height: 12px; stroke: var(--muted); fill: none; stroke-width: 2.5; }
+  .topic-card.open .topic-chevron { transform: rotate(180deg); background: var(--accent); }
+  .topic-card.open .topic-chevron svg { stroke: #fff; }
+  .topic-body { max-height: 0; overflow: hidden; transition: max-height .35s cubic-bezier(.4,0,.2,1); }
+  .topic-body-inner { padding: 0 20px 20px; border-top: 1px solid var(--border); }
+  .topic-body ul { list-style: none; margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .topic-body li { display: flex; gap: 10px; font-size: 13.5px; line-height: 1.65; color: #3A4F65; }
+  .topic-body li::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; margin-top: 8px; }
+
+  /* ── COMMENTS ── */
+  .comments-area { margin-top: 18px; border-top: 1px dashed var(--border); padding-top: 14px; }
+  .comments-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+  .comment-item { display: flex; gap: 10px; align-items: flex-start; }
+  .comment-bubble {
+    flex: 1; background: #f0f6ff; border: 1px solid #cfe0f5;
+    border-radius: 10px; padding: 9px 12px; font-size: 13px;
+    color: var(--text); line-height: 1.55; position: relative;
+  }
+  .comment-bubble .comment-meta { font-size: 10px; color: var(--muted); margin-bottom: 4px; letter-spacing: .03em; }
+  .comment-bubble .comment-text { word-break: break-word; }
+  .comment-del { background: none; border: none; cursor: pointer; color: #ccc; font-size: 13px; padding: 2px 5px; border-radius: 5px; transition: color .15s, background .15s; flex-shrink: 0; margin-top: 2px; }
+  .comment-del:hover { color: #c05; background: #fef0f0; }
+  .comment-input-row { display: flex; gap: 8px; align-items: flex-end; }
+  .comment-input {
+    flex: 1; padding: 8px 12px; border: 1px solid var(--border);
+    border-radius: 8px; font-size: 13px; font-family: inherit;
+    color: var(--text); outline: none; resize: none;
+    transition: border-color .15s; line-height: 1.5; min-height: 38px;
+  }
+  .comment-input:focus { border-color: var(--accent); }
+  .comment-submit {
+    padding: 8px 14px; background: var(--navy); color: #fff;
+    border: none; border-radius: 8px; font-size: 12px; font-weight: 500;
+    cursor: pointer; transition: background .15s; white-space: nowrap; flex-shrink: 0;
+  }
+  .comment-submit:hover { background: var(--blue); }
+  .comment-toggle {
+    display: inline-flex; align-items: center; gap: 5px;
+    margin-top: 12px; font-size: 12px; color: var(--muted);
+    background: none; border: none; cursor: pointer; padding: 3px 0;
+    transition: color .15s;
+  }
+  .comment-toggle:hover { color: var(--accent); }
+  .comment-toggle .cmt-count {
+    background: var(--accent); color: #fff;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    padding: 1px 6px; border-radius: 100px;
+  }
+
+  /* ── PENDING TABLE ── */
+  .pending-table-wrap { background: var(--white); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .pending-toolbar { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  .pending-toolbar-title { font-size: 13px; font-weight: 600; color: var(--navy); display: flex; align-items: center; gap: 8px; }
+  .count-badge { font-family: 'JetBrains Mono', monospace; font-size: 10px; background: var(--accent); color: #fff; padding: 2px 7px; border-radius: 100px; }
+  .filter-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-btn { font-size: 11px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; transition: all .15s; }
+  .filter-btn:hover, .filter-btn.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .reset-btn { font-size: 11px; padding: 4px 10px; border-radius: 6px; border: 1px solid #fcc; background: transparent; color: #c05; cursor: pointer; transition: all .15s; }
+  .reset-btn:hover { background: #fef0f0; }
+  .del-btn { background: none; border: none; cursor: pointer; padding: 4px 6px; border-radius: 6px; color: #ccc; font-size: 15px; line-height: 1; transition: color .15s, background .15s; }
+  .del-btn:hover { color: #c05; background: #fef0f0; }
+  .pend-cmt-btn { background: none; border: 1px solid var(--border); cursor: pointer; padding: 3px 8px; border-radius: 6px; font-size: 13px; color: var(--muted); transition: all .15s; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+  .pend-cmt-btn:hover { background: #eef4fc; color: var(--accent); border-color: var(--accent); }
+  .pend-cmt-badge { font-family: 'JetBrains Mono', monospace; font-size: 10px; background: var(--accent); color: #fff; padding: 1px 5px; border-radius: 100px; }
+  .pend-cmt-row td { padding: 0 !important; }
+  .pend-cmt-panel { background: #f6faff; border-top: 1px solid var(--border); padding: 14px 20px 16px; }
+
+  table.pending-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.pending-table thead { background: #f0f4fa; }
+  table.pending-table th { padding: 10px 16px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+  table.pending-table td { padding: 12px 16px; vertical-align: middle; border-top: 1px solid var(--border); color: var(--text); line-height: 1.55; }
+  table.pending-table tbody tr { transition: background .15s; }
+  table.pending-table tbody tr:hover { background: #f8fafd; }
+  .item-num { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500; color: var(--accent); white-space: nowrap; }
+
+  /* ── STATUS / RESP PILLS ── */
+  .status-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 100px; white-space: nowrap; }
+  .status-pill .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+  .status-pill.open    { background: #FEF3E2; color: var(--amber);  border: 1px solid #F5D9A0; }
+  .status-pill.done    { background: #E3F5ED; color: var(--green);  border: 1px solid #9FD9BC; }
+  .status-pill.delayed { background: #F0E8FA; color: var(--purple); border: 1px solid #C9A8E8; }
+  .resp-pill { display: inline-block; font-size: 11px; padding: 3px 8px; border-radius: 4px; background: #EEF4FC; color: var(--blue); border: 1px solid #C8DBEE; }
+
+  /* ── EDIT TRIGGER ── */
+  .edit-trigger { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; border-radius: 6px; padding: 2px 4px; margin: -2px -4px; transition: background .15s; }
+  .edit-trigger:hover { background: #eef4fc; }
+  .pencil { opacity: 0; font-size: 11px; transition: opacity .15s; }
+  .edit-trigger:hover .pencil { opacity: 1; }
+
+  /* ── EDIT POPUP ── */
+  .edit-popup { display: none; position: fixed; z-index: 999; background: var(--white); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(11,30,61,.15); padding: 10px; min-width: 200px; }
+  .edit-popup.show { display: block; }
+  .edit-popup-title { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 4px 8px 8px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+  .edit-popup-option { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; cursor: pointer; font-size: 13px; color: var(--text); transition: background .12s; }
+  .edit-popup-option:hover { background: var(--light); }
+  .opt-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .edit-popup-input { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px; font-family: inherit; color: var(--text); outline: none; margin-top: 6px; transition: border-color .15s; }
+  .edit-popup-input:focus { border-color: var(--accent); }
+  .edit-popup-save { width: 100%; margin-top: 6px; padding: 7px; background: var(--navy); color: #fff; border: none; border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer; transition: background .15s; }
+  .edit-popup-save:hover { background: var(--blue); }
+
+  /* ── TOAST ── */
+  #toast { position: fixed; bottom: 80px; right: 28px; z-index: 9999; background: var(--navy); color: #fff; font-size: 13px; padding: 10px 18px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,.2); opacity: 0; transform: translateY(10px); transition: opacity .25s, transform .25s; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateY(0); }
+
+  /* ── NEXT MEETING ── */
+  .next-meeting { background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 100%); border-radius: 16px; padding: 28px 32px; display: flex; align-items: center; gap: 24px; position: relative; overflow: hidden; }
+  .next-meeting::before { content: ''; position: absolute; right: -30px; top: -30px; width: 160px; height: 160px; border-radius: 50%; background: rgba(255,255,255,.04); pointer-events: none; }
+  .nm-icon { font-size: 36px; flex-shrink: 0; }
+  .nm-label { font-size: 11px; letter-spacing: .15em; text-transform: uppercase; color: var(--gold); margin-bottom: 5px; }
+  .nm-date { font-family: 'DM Serif Display', serif; font-size: 22px; color: #fff; margin-bottom: 4px; }
+  .nm-detail { font-size: 13px; color: rgba(255,255,255,.6); }
+
+  /* ── FOOTER ── */
+  .page-footer { border-top: 1px solid var(--border); padding: 20px 56px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--muted); }
+  .page-footer strong { color: var(--navy); }
+
+  /* ── EXPAND ALL ── */
+  .expand-all-btn { font-size: 12px; padding: 6px 14px; border-radius: 7px; border: 1px solid var(--border); background: var(--white); color: var(--blue); cursor: pointer; font-weight: 500; transition: all .15s; display: flex; align-items: center; gap: 6px; }
+  .expand-all-btn:hover { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .expand-all-btn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+  /* ── SCROLL TOP ── */
+  #scrollTop { position: fixed; bottom: 28px; right: 28px; width: 40px; height: 40px; border-radius: 10px; background: var(--navy); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 300; }
+  #scrollTop.show { opacity: 1; pointer-events: all; }
+  #scrollTop svg { width: 16px; height: 16px; stroke: #fff; fill: none; stroke-width: 2.5; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 820px) {
+    #sidebar { transform: translateX(-260px); }
+    #sidebar.open { transform: translateX(0); }
+    #toggle-btn { display: flex; }
+    #main { margin-left: 0 !important; }
+    .hero, .participants-strip, .content, .page-footer { padding-left: 24px; padding-right: 24px; }
+    .hero { padding-top: 60px; }
+    .hero-cards { grid-template-columns: repeat(2,1fr); }
+    .prazo-head, .prazo-col { display: none; }
+  }
+  #overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 99; }
+  #overlay.show { display: block; }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav id="sidebar">
+  <div class="sidebar-logo">
+    <span>FGV / DTI / SOLCORP</span>
+    <strong>SDEA · Auditoria</strong>
+  </div>
+  <p class="nav-label">Navegação</p>
+  <ul class="nav-list">
+    <li><a href="#sec-info"><span class="nav-num">—</span>Identificação</a></li>
+    <li><a href="#sec-pontos"><span class="nav-num">—</span>Pontos Abordados</a></li>
+    <li><a href="#sec-pendencias"><span class="nav-num">—</span>Pendências</a></li>
+    <li><a href="#sec-proxima"><span class="nav-num">—</span>Próxima Reunião</a></li>
+  </ul>
+  <div class="sidebar-footer">
+    <strong>ATA-SDEA-2026-03-10</strong>
+    10 de março de 2026<br>Rio de Janeiro
+  </div>
+</nav>
+
+<div id="overlay"></div>
+<button id="toggle-btn" aria-label="Menu">
+  <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+</button>
+
+<!-- MAIN -->
+<div id="main">
+
+  <header class="hero" id="sec-info">
+    <div class="hero-meta">
+      <span class="badge gold">ATA-SDEA-2026-03-10</span>
+      <span class="badge">10/03/2026</span>
+      <span class="badge">Teams · Online</span>
+    </div>
+    <h1>Reunião de Validação dos Fluxos<br>de Organograma — Ajustes e Legado</h1>
+    <p class="hero-sub">Sistema de Documentação Eletrônica — Auditoria · SDEA</p>
+    <div class="hero-cards">
+      <div class="info-card"><div class="ic-label">Projeto</div><div class="ic-value">SDEA — Sist. Docum. Eletrônica</div></div>
+      <div class="info-card"><div class="ic-label">Data</div><div class="ic-value">10 de março de 2026</div></div>
+      <div class="info-card" id="card-inicio" style="cursor:pointer;" title="Clique para editar horário">
+        <div class="ic-label">Início</div>
+        <div class="ic-value" id="inicio-value">—</div>
+      </div>
+      <div class="info-card"><div class="ic-label">Local</div><div class="ic-value">Reunião Online (Teams)</div></div>
+    </div>
+  </header>
+
+  <div class="participants-strip">
+    <span class="strip-label">Participantes</span>
+    <div class="participant-chip"><div class="avatar">MF</div><div><div>Maria de Fátima Duarte Moura</div><div class="chip-area">Auditoria Interna</div></div></div>
+    <div class="participant-chip"><div class="avatar">JL</div><div><div>João Luís F. Chaves</div><div class="chip-area">DTI / SOLCORP</div></div></div>
+    <div class="participant-chip"><div class="avatar">NC</div><div><div>Natasha Cristine Costa</div><div class="chip-area">DTI / SOLCORP</div></div></div>
+    <div class="participant-chip"><div class="avatar">PG</div><div><div>Pedro Gentil R. O. Soares</div><div class="chip-area">DTI / SOLCORP</div></div></div>
+  </div>
+
+  <div class="content">
+
+    <!-- PONTOS ABORDADOS -->
+    <div class="section" id="sec-pontos">
+      <div class="section-header">
+        <div class="section-icon">📋</div>
+        <h2 class="section-title">Pontos Abordados</h2>
+        <button class="expand-all-btn" id="expandAllBtn">
+          <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>Expandir todos
+        </button>
+      </div>
+      <div id="topics-container">
+        <div class="topic-card" data-topic="1"><div class="topic-header"><span class="topic-num">01</span><span class="topic-title">Revisão dos Pontos em Aberto da Ata Anterior</span><div class="topic-chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div></div><div class="topic-body"><div class="topic-body-inner"><ul><li>MF questionou o registro das alterações acordadas na reunião anterior, preocupada de que pontos discutidos mas não formalizados ficassem sem tratamento.</li><li>João Luís esclareceu que a ata registra exclusivamente o que foi falado durante a reunião. Requisitos ou observações levantadas fora do momento da reunião serão tratados em outro documento de controle interno da DTI.</li><li>Natasha reforçou que o check list de organograma apresentado por MF não havia sido discutido na reunião anterior, razão pela qual não constava da ata.</li><li>Acordado que MF pode apresentar pontos na reunião para que sejam incorporados à ata corrente; o que não couber na ata será registrado no backlog de requisitos do projeto.</li></ul></div></div></div>
+
+        <div class="topic-card" data-topic="2"><div class="topic-header"><span class="topic-num">02</span><span class="topic-title">Data e Versão do Documento de Organograma no SE-SUITE</span><div class="topic-chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div></div><div class="topic-body"><div class="topic-body-inner"><ul><li>MF apontou que, durante a demonstração, não havia ficado claro onde registrar a data e a versão do organograma físico recebido por e-mail.</li><li>Natasha demonstrou ao vivo que o sistema possui um campo editável "Data do Documento" (distinto da "Data de Criação", gerada automaticamente). O usuário pode informar qualquer data, inclusive retroativa (ex.: janeiro de 2018 para um organograma histórico).</li><li>João Luís confirmou: a data do sistema (criação) e a data do documento são dois campos independentes; o usuário tem total liberdade para preencher a data real do organograma.</li><li>MF aceitou o esclarecimento e confirmou compreensão após a demonstração em tela.</li></ul></div></div></div>
+
+        <div class="topic-card" data-topic="3"><div class="topic-header"><span class="topic-num">03</span><span class="topic-title">Organização dos Arquivos Eletrônicos por Escola</span><div class="topic-chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div></div><div class="topic-body"><div class="topic-body-inner"><ul><li>MF teve dúvida sobre como localizar, dentro do sistema, os arquivos (organograma + e-mail de aprovação) referentes a uma escola específica quando existirem muitas escolas cadastradas.</li><li>Natasha explicou que na tela de Arquivos Eletrônicos o usuário seleciona a categoria "Organograma" e visualiza uma lista de registros; ao clicar em um registro (ex.: "Escola ABC"), todos os arquivos vinculados àquela escola ficam agrupados naquele documento eletrônico.</li><li>João Luís reforçou o conceito: cada escola possui seu próprio "pacote" de documentos, estruturado por escola/unidade. Não há arquivos misturados.</li><li>MF confirmou entendimento após demonstração prática.</li></ul></div></div></div>
+
+        <div class="topic-card" data-topic="4"><div class="topic-header"><span class="topic-num">04</span><span class="topic-title">Legado de Organograma — Regra de Negócio e Proposta de Fluxo</span><div class="topic-chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div></div><div class="topic-body"><div class="topic-body-inner"><ul><li>Pedro apresentou o fluxo de "Cadastro de Legado de Estrutura e Organograma" desenhado no SE-SUITE, propondo que ele seja instanciado automaticamente pelo programa de migração quando, ao varrer a pasta de legado, for encontrada uma escola sem a subpasta "org" preenchida.</li><li>MF esclareceu que todas as escolas terão organograma na pasta antes da data de corte, tornando o fluxo de instanciação automática desnecessário para o cenário de organograma. O fluxo de legado de organograma foi, portanto, descartado para esse escopo.</li><li>Pedro confirmou: se a pasta "org" estiver completa em todas as escolas no momento da migração, o fluxo específico de legado de organograma não precisa ser instanciado. A estrutura (escola + unidades) será migrada diretamente.</li><li>Ficou acordado que o fluxo de legado de organograma é removido do mapa de processos atual.</li></ul></div></div></div>
+
+        <div class="topic-card" data-topic="5"><div class="topic-header"><span class="topic-num">05</span><span class="topic-title">Arquivo TXT com Datas e Versões do Legado de Organograma</span><div class="topic-chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div></div><div class="topic-body"><div class="topic-body-inner"><ul><li>Como os organogramas de legado registram somente mês/ano (sem data completa) e podem ter versões distintas (vigente e obsoleto), Pedro propôs que MF coloque um arquivo TXT dentro de cada pasta "org" do legado contendo data (mês/ano) e versão de cada organograma.</li><li>O programa de migração lerá esse arquivo TXT para preencher corretamente os metadados de data e versão no SE-SUITE, sem necessidade de intervenção manual posterior.</li><li>MF concordou com o mecanismo e solicitou que Pedro envie o layout do arquivo TXT para que ela possa preenchê-lo.</li><li>Pedro comprometeu-se a enviar o layout do TXT (campos: versão e data do organograma) o quanto antes. MF iniciará o preenchimento e o upload dos organogramas assim que receber o modelo.</li></ul></div></div></div>
+
+        <div class="topic-card" data-topic="6"><div class="topic-header"><span class="topic-num">06</span><span class="topic-title">Fluxo de Cadastro de Unidade — Rotas e Liberdade de Roteamento</span><div class="topic-chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div></div><div class="topic-body"><div class="topic-body-inner"><ul><li>Natasha apresentou o fluxo de "Estrutura e Organograma de Unidade", que difere do de escola por não exigir obrigatoriamente o organograma.</li><li>MF destacou que uma unidade pode ter combinações variadas de documentos: catálogo técnico, IT (instrução de trabalho), fluxo de processo, catálogo mestre — e que cada combinação deve ser possível sem forçar a passagem por etapas desnecessárias.</li><li>Pedro confirmou a necessidade de adicionar rotas adicionais ao fluxo de unidade, dando ao usuário a liberdade de rotear para catálogo técnico, IT, fluxo ou encerrar o cadastro após registrar apenas a estrutura.</li><li>Acordado que Pedro e Natasha revisarão o fluxo de unidade para incluir as rotas de roteamento necessárias, a ser apresentado na próxima reunião.</li></ul></div></div></div>
+
+        <div class="topic-card" data-topic="7"><div class="topic-header"><span class="topic-num">07</span><span class="topic-title">Portal Home do SE-SUITE — Customização para a Auditoria</span><div class="topic-chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div></div><div class="topic-body"><div class="topic-body-inner"><ul><li>MF demonstrou o portal de processos da FGV no SharePoint/Teams, onde há links para os sistemas de cada área, e solicitou que o SDEA apareça de forma destacada nesse portal.</li><li>Pedro explicou que o SE-SUITE possui um "Portal Home" customizável: ao acessar o sistema, o usuário pode ver uma tela de boas-vindas com imagem, nome do projeto e indicadores relevantes.</li><li>Acordado que DTI verificará com a equipe responsável pelo portal Teams/SharePoint a inclusão de um link direto para o SE-SUITE da Auditoria, e criará uma Home Page personalizada dentro do SE-SUITE.</li><li>MF solicitou que a identidade visual da Home seja discutida — possivelmente com foto da equipe ou imagem representativa da Auditoria Interna.</li></ul></div></div></div>
+
+        <div class="topic-card" data-topic="8"><div class="topic-header"><span class="topic-num">08</span><span class="topic-title">Condução das Reuniões — Alinhamento de Expectativas</span><div class="topic-chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div></div><div class="topic-body"><div class="topic-body-inner"><ul><li>João Luís reforçou que as reuniões têm objetivo específico e devem avançar nos pontos planejados; revisitar demonstrações já realizadas consome tempo e impede o progresso do projeto.</li><li>Proposta de dinâmica: dúvidas pontuais durante a reunião são tiradas na hora; demandas de ajuste que não foram citadas na reunião entram em lista de requisitos (não na ata), e a DTI se compromete a implementar.</li><li>MF concordou com a proposta e registrou satisfação com a dinâmica mais objetiva.</li></ul></div></div></div>
+      </div>
+    </div>
+
+    <!-- PENDÊNCIAS -->
+    <div class="section" id="sec-pendencias">
+      <div class="section-header">
+        <div class="section-icon">⚡</div>
+        <h2 class="section-title">Pendências e Próximas Ações</h2>
+      </div>
+      <div class="pending-table-wrap">
+        <div class="pending-toolbar">
+          <div class="pending-toolbar-title">
+            Itens registrados <span class="count-badge" id="visibleCount">15</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <div class="filter-btns">
+              <button class="filter-btn active" data-filter="all">Todos</button>
+              <button class="filter-btn" data-filter="open">Abertos</button>
+              <button class="filter-btn" data-filter="delayed">Adiados</button>
+              <button class="filter-btn" data-filter="done">Concluídos</button>
+            </div>
+            <button class="reset-btn" id="resetBtn">↺ Resetar</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="pending-table" id="pendingTable">
+            <thead>
+              <tr>
+                <th>#</th><th>Descrição</th><th>Responsável</th>
+                <th class="prazo-head">Prazo</th><th>Status</th><th>💬</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="pendingTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRÓXIMA REUNIÃO -->
+    <div class="section" id="sec-proxima">
+      <div class="section-header">
+        <div class="section-icon">📅</div>
+        <h2 class="section-title">Próxima Reunião</h2>
+      </div>
+      <div class="next-meeting">
+        <div class="nm-icon">🗓️</div>
+        <div>
+          <div class="nm-label">Agendamento a confirmar</div>
+          <div class="nm-date">Próxima terça-feira · 17 de março de 2026</div>
+          <div class="nm-detail">Das 10h às 12h · Fluxo de Cadastro de Unidade + Revisão de Pendências</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer class="page-footer">
+    <div><strong>Rio de Janeiro, 10 de março de 2026</strong></div>
+    <div style="text-align:right;font-style:italic;">Documento produzido pela <strong>Equipe de Soluções Corporativas — FGV/DTI/SOLCORP</strong></div>
+  </footer>
+</div>
+
+<button id="scrollTop"><svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg></button>
+<div class="edit-popup" id="editPopup"></div>
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════
+// DATA & PERSISTENCE
+// ═══════════════════════════════════════
+const STORAGE_KEY = 'sdea_ata_2026_03_10_v1';
+const STORAGE_KEY_META = 'sdea_ata_2026_03_10_meta';
+
+function loadMeta() {
+  try { const r = localStorage.getItem(STORAGE_KEY_META); if (r) return JSON.parse(r); } catch(e) {}
+  return { inicio: '16h36' };
+}
+function saveMeta(m) { try { localStorage.setItem(STORAGE_KEY_META, JSON.stringify(m)); } catch(e) {} }
+let meta = loadMeta();
+
+const ORIGINAL = [
+  { id:1,  desc:'Ajustar numeração dos processos: organograma de escola como <strong>001.01</strong> e unidade como <strong>001.02</strong>.',                                                              resp:'DTI / Natasha',   prazo:'Próxima reunião',      status:'open' },
+  { id:2,  desc:'Implementar mecanismo para que o cadastrador indique o validador da demanda.',                                                                                                             resp:'DTI / Pedro',     prazo:'A definir',            status:'open' },
+  { id:3,  desc:'Desenvolver funcionalidade de gestão de prioridades por executor no portal (Analytics), com coluna numérica editável.',                                                                   resp:'DTI / Pedro',     prazo:'A definir',            status:'open' },
+  { id:4,  desc:'Definir e apresentar à Auditoria os símbolos (SW) disponíveis no sistema para identificação das atividades.',                                                                            resp:'DTI / Natasha',   prazo:'Próxima reunião',      status:'open' },
+  { id:5,  desc:'Configurar SLAs do fluxo de organograma (~5 dias úteis cadastro + validação ≈ 10 dias úteis total). MF confirmará com Deise e Alexandre.',                                               resp:'Auditoria / DTI', prazo:'Próxima reunião',      status:'open' },
+  { id:6,  desc:'Elaborar documentação/manual explicando cada campo e coluna das telas de tarefas e do portal.',                                                                                          resp:'DTI / Natasha',   prazo:'A definir',            status:'open' },
+  { id:7,  desc:'Demonstrar o fluxo de alteração de cadastro de organograma (para revisões pós-validação).',                                                                                              resp:'DTI',             prazo:'Próxima reunião',      status:'open' },
+  { id:8,  desc:'Pedro enviar o layout do arquivo TXT (campos: versão e data do organograma) para que MF preencha os metadados do legado de organograma.',                                               resp:'DTI / Pedro',     prazo:'Breve',               status:'open' },
+  { id:9,  desc:'MF elaborar e entregar o check list de organograma para validação do sistema.',                                                                                                          resp:'Auditoria (MF)',  prazo:'Próxima reunião',      status:'open' },
+  { id:10, desc:'MF inserir todos os organogramas (vigentes e obsoletos) nas pastas de legado após receber o layout do TXT de Pedro.',                                                                    resp:'Auditoria (MF)',  prazo:'Após receber layout',  status:'open' },
+  { id:11, desc:'DTI revisar o fluxo de Cadastro de Unidade para incluir rotas adicionais: catálogo técnico, IT, fluxo de processo e encerramento sem documentos — a ser apresentado na próxima reunião.',resp:'DTI / Pedro e Natasha', prazo:'Próxima reunião', status:'open' },
+  { id:12, desc:'DTI verificar inclusão de link para o SE-SUITE no portal Teams/SharePoint da Auditoria e criar Home Page personalizada dentro do SE-SUITE.',                                             resp:'DTI',             prazo:'A definir',            status:'open' },
+  { id:13, desc:'Remover do mapa de processos o fluxo de Legado de Organograma (descartado — pastas estarão completas antes da migração).',                                                               resp:'DTI / Pedro',     prazo:'Imediato',             status:'done' },
+  { id:14, desc:'Renomear campo "documentação" para "catálogo técnico" na tela de cadastro de unidades.',                                                                                                 resp:'DTI / Natasha',   prazo:'—',                    status:'done' },
+  { id:15, desc:'Remover campo "objetivo" da tela de cadastro de unidades.',                                                                                                                              resp:'DTI / Natasha',   prazo:'—',                    status:'done' },
+];
+
+const STATUS_META = {
+  open:    { label:'Aberta',    cls:'open',    color:'#C97B1A' },
+  delayed: { label:'Adiado',    cls:'delayed', color:'#6B3FA0' },
+  done:    { label:'Concluída', cls:'done',    color:'#1A7F5A' },
+};
+
+function loadData() {
+  try { const r = localStorage.getItem(STORAGE_KEY); if (r) return JSON.parse(r); } catch(e) {}
+  return JSON.parse(JSON.stringify(ORIGINAL));
+}
+function saveData(d) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); } catch(e) {} }
+
+let items = loadData();
+let currentFilter = 'all';
+
+// ═══════════════════════════════════════
+// PENDING COMMENTS HELPERS
+// ═══════════════════════════════════════
+function pendCmtCount(id) {
+  return (comments[`pend_${id}`] || []).length;
+}
+
+function renderPendComments(id) {
+  const list = document.getElementById(`pend-cmt-list-${id}`);
+  if (!list) return;
+  const key = `pend_${id}`;
+  const cmts = comments[key] || [];
+  list.innerHTML = cmts.map(c => `
+    <div class="comment-item">
+      <div class="comment-bubble">
+        <div class="comment-meta">💬 ${c.date}</div>
+        <div class="comment-text">${escHtml(c.text)}</div>
+      </div>
+      <button class="comment-del" data-key="${key}" data-cid="${c.id}" title="Excluir">✕</button>
+    </div>`).join('');
+  list.querySelectorAll('.comment-del').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      comments[btn.dataset.key] = (comments[btn.dataset.key] || []).filter(c => c.id !== btn.dataset.cid);
+      saveComments(comments);
+      renderPendComments(id);
+    });
+  });
+}
+
+// ═══════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════
+function renderTable() {
+  const tbody = document.getElementById('pendingTbody');
+  tbody.innerHTML = '';
+  let visible = 0;
+  items.forEach(item => {
+    if (currentFilter !== 'all' && item.status !== currentFilter) return;
+    visible++;
+    const sm = STATUS_META[item.status] || STATUS_META.open;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="item-num">${String(item.id).padStart(2,'0')}</td>
+      <td>${item.desc}</td>
+      <td>
+        <span class="edit-trigger" data-id="${item.id}" data-field="resp" title="Editar responsável">
+          <span class="resp-pill">${item.resp}</span>
+          <span class="pencil">✏️</span>
+        </span>
+      </td>
+      <td class="prazo-col">
+        <span class="edit-trigger" data-id="${item.id}" data-field="prazo" title="Editar prazo">
+          <span class="prazo-text">${item.prazo}</span>
+          <span class="pencil">✏️</span>
+        </span>
+      </td>
+      <td>
+        <span class="edit-trigger" data-id="${item.id}" data-field="status" title="Alterar status">
+          <span class="status-pill ${sm.cls}"><span class="dot"></span>${sm.label}</span>
+          <span class="pencil">✏️</span>
+        </span>
+      </td>
+      <td>
+        <button class="pend-cmt-btn" data-id="${item.id}" title="Comentários">
+          💬${pendCmtCount(item.id) ? `<span class="pend-cmt-badge">${pendCmtCount(item.id)}</span>` : ''}
+        </button>
+      </td>
+      <td><button class="del-btn" data-id="${item.id}" title="Excluir item">✕</button></td>`;
+    tbody.appendChild(tr);
+
+    // comment sub-row
+    const cmtRow = document.createElement('tr');
+    cmtRow.className = 'pend-cmt-row';
+    cmtRow.id = `pend-cmt-row-${item.id}`;
+    cmtRow.style.display = 'none';
+    cmtRow.innerHTML = `<td colspan="8" style="padding:0;">
+      <div class="pend-cmt-panel" id="pend-cmt-panel-${item.id}">
+        <div class="comments-list" id="pend-cmt-list-${item.id}"></div>
+        <div class="comment-input-row">
+          <textarea class="comment-input" id="pend-cmt-inp-${item.id}" placeholder="Adicionar comentário…" rows="1"></textarea>
+          <button class="comment-submit" id="pend-cmt-save-${item.id}">Enviar</button>
+        </div>
+      </div>
+    </td>`;
+    tbody.appendChild(tr);
+    tbody.appendChild(cmtRow);
+  });
+  document.getElementById('visibleCount').textContent = visible;
+  bindTriggers();
+  document.querySelectorAll('.del-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = parseInt(btn.dataset.id);
+      const item = items.find(i => i.id === id);
+      if (!item) return;
+      if (!confirm(`Excluir item ${String(id).padStart(2,'0')}?\n"${item.desc.replace(/<[^>]+>/g,'')}"`.slice(0,120) + '…')) return;
+      items = items.filter(i => i.id !== id);
+      saveData(items);
+      renderTable();
+      applyFilter(currentFilter);
+      toast('🗑 Item excluído');
+    });
+  });
+
+  // bind pending comment buttons
+  document.querySelectorAll('.pend-cmt-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const row = document.getElementById(`pend-cmt-row-${id}`);
+      const isOpen = row.style.display !== 'none';
+      row.style.display = isOpen ? 'none' : 'table-row';
+      if (!isOpen) {
+        renderPendComments(id);
+        setTimeout(() => document.getElementById(`pend-cmt-inp-${id}`)?.focus(), 50);
+      }
+    });
+  });
+
+  // wire submit + auto-grow for each comment panel
+  items.forEach(item => {
+    const id = String(item.id);
+    renderPendComments(id);
+    const ta = document.getElementById(`pend-cmt-inp-${id}`);
+    const saveBtn = document.getElementById(`pend-cmt-save-${id}`);
+    if (!ta || !saveBtn) return;
+    ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; });
+    const doSubmit = () => {
+      const text = ta.value.trim();
+      if (!text) return;
+      const key = `pend_${id}`;
+      if (!comments[key]) comments[key] = [];
+      comments[key].push({
+        id: Date.now().toString(), text,
+        date: new Date().toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
+      });
+      saveComments(comments);
+      ta.value = ''; ta.style.height = 'auto';
+      renderPendComments(id);
+      renderTable();
+      applyFilter(currentFilter);
+      toast('💬 Comentário salvo');
+    };
+    saveBtn.addEventListener('click', doSubmit);
+    ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSubmit(); } });
+  });
+}
+
+// ═══════════════════════════════════════
+// POPUP
+// ═══════════════════════════════════════
+const popup = document.getElementById('editPopup');
+let activeCtx = null;
+
+function place(el) {
+  const r = el.getBoundingClientRect();
+  const w = 210;
+  let left = r.left, top = r.bottom + 6;
+  if (left + w > window.innerWidth - 12) left = window.innerWidth - w - 12;
+  popup.style.left = left + 'px';
+  popup.style.top  = top  + 'px';
+}
+
+function openPopup(trigger) {
+  const id    = parseInt(trigger.dataset.id);
+  const field = trigger.dataset.field;
+  activeCtx = { id, field };
+
+  if (field === 'status') {
+    const opts = Object.entries(STATUS_META).map(([k,m]) =>
+      `<div class="edit-popup-option" data-value="${k}"><span class="opt-dot" style="background:${m.color}"></span>${m.label}</div>`
+    ).join('');
+    popup.innerHTML = `<div class="edit-popup-title">Alterar status</div>${opts}`;
+    popup.querySelectorAll('.edit-popup-option').forEach(o =>
+      o.addEventListener('click', () => { apply(id, 'status', o.dataset.value); close(); })
+    );
+  } else if (field === 'prazo') {
+    const cur = items.find(i => i.id === id)?.prazo || '';
+    const suggestions = ['Próxima reunião','A definir','—','Urgente'];
+    const opts = suggestions.map(s =>
+      `<div class="edit-popup-option" data-value="${s}"><span class="opt-dot" style="background:var(--muted)"></span>${s}</div>`
+    ).join('');
+    popup.innerHTML = `
+      <div class="edit-popup-title">Prazo</div>
+      ${opts}
+      <input class="edit-popup-input" id="pInp" type="text" placeholder="Ex: 20/03/2026" value="${cur}">
+      <button class="edit-popup-save" id="pSave">Salvar</button>`;
+    popup.querySelectorAll('.edit-popup-option').forEach(o =>
+      o.addEventListener('click', () => { document.getElementById('pInp').value = o.dataset.value; })
+    );
+    document.getElementById('pSave').addEventListener('click', () => {
+      const v = document.getElementById('pInp').value.trim();
+      if (v) { apply(id, 'prazo', v); close(); }
+    });
+    document.getElementById('pInp').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('pSave').click();
+      if (e.key === 'Escape') close();
+    });
+    setTimeout(() => document.getElementById('pInp')?.focus(), 40);
+  } else {
+    const cur = items.find(i => i.id === id)?.resp || '';
+    const suggestions = ['DTI / Natasha','DTI / Pedro','DTI / João Luís','DTI','Auditoria (MF)','Auditoria / DTI'];
+    const opts = suggestions.map(s =>
+      `<div class="edit-popup-option" data-value="${s}"><span class="opt-dot" style="background:#2E7FD9"></span>${s}</div>`
+    ).join('');
+    popup.innerHTML = `
+      <div class="edit-popup-title">Responsável</div>
+      ${opts}
+      <input class="edit-popup-input" id="rInp" type="text" placeholder="Outro nome…" value="${cur}">
+      <button class="edit-popup-save" id="rSave">Salvar</button>`;
+    popup.querySelectorAll('.edit-popup-option').forEach(o =>
+      o.addEventListener('click', () => { document.getElementById('rInp').value = o.dataset.value; })
+    );
+    document.getElementById('rSave').addEventListener('click', () => {
+      const v = document.getElementById('rInp').value.trim();
+      if (v) { apply(id, 'resp', v); close(); }
+    });
+    document.getElementById('rInp').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('rSave').click();
+      if (e.key === 'Escape') close();
+    });
+    setTimeout(() => document.getElementById('rInp')?.focus(), 40);
+  }
+
+  place(trigger);
+  popup.classList.add('show');
+}
+
+function close() { popup.classList.remove('show'); activeCtx = null; }
+
+document.addEventListener('click', e => {
+  if (!popup.contains(e.target) && !e.target.closest('.edit-trigger') && !e.target.closest('#card-inicio')) close();
+});
+window.addEventListener('scroll', () => { if (activeCtx) close(); }, { passive: true });
+
+function bindTriggers() {
+  document.querySelectorAll('.edit-trigger').forEach(t => {
+    t.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = parseInt(t.dataset.id), field = t.dataset.field;
+      if (popup.classList.contains('show') && activeCtx?.id === id && activeCtx?.field === field) { close(); return; }
+      openPopup(t);
+    });
+  });
+}
+
+function apply(id, field, value) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  item[field] = value;
+  saveData(items);
+  renderTable();
+  applyFilter(currentFilter);
+  toast(field === 'status' ? '✓ Status atualizado' : field === 'prazo' ? '✓ Prazo atualizado' : '✓ Responsável atualizado');
+}
+
+// ═══════════════════════════════════════
+// FILTER
+// ═══════════════════════════════════════
+function applyFilter(f) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === f));
+  renderTable();
+}
+document.querySelectorAll('.filter-btn').forEach(b => b.addEventListener('click', () => applyFilter(b.dataset.filter)));
+
+// ═══════════════════════════════════════
+// RESET
+// ═══════════════════════════════════════
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (!confirm('Restaurar dados originais? Alterações salvas serão perdidas.')) return;
+  items = JSON.parse(JSON.stringify(ORIGINAL));
+  saveData(items);
+  renderTable();
+  toast('↺ Dados restaurados');
+});
+
+// ═══════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════
+let toastTimer;
+const toastEl = document.getElementById('toast');
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2200);
+}
+
+// ═══════════════════════════════════════
+// SIDEBAR
+// ═══════════════════════════════════════
+const sidebar = document.getElementById('sidebar');
+const mainEl  = document.getElementById('main');
+const overlay = document.getElementById('overlay');
+const toggleBtn = document.getElementById('toggle-btn');
+let isDesktop = window.innerWidth > 820;
+
+function toggleSidebar() {
+  if (isDesktop) { sidebar.classList.toggle('collapsed'); mainEl.classList.toggle('expanded'); }
+  else { sidebar.classList.toggle('open'); overlay.classList.toggle('show'); }
+}
+toggleBtn.addEventListener('click', toggleSidebar);
+overlay.addEventListener('click', toggleSidebar);
+window.addEventListener('resize', () => {
+  isDesktop = window.innerWidth > 820;
+  if (isDesktop) { sidebar.classList.remove('open'); overlay.classList.remove('show'); }
+});
+
+// ═══════════════════════════════════════
+// COMMENTS
+// ═══════════════════════════════════════
+const STORAGE_KEY_COMMENTS = 'sdea_ata_2026_03_06_comments';
+
+function loadComments() {
+  try { const r = localStorage.getItem(STORAGE_KEY_COMMENTS); if (r) return JSON.parse(r); } catch(e) {}
+  return {};
+}
+function saveComments(c) { try { localStorage.setItem(STORAGE_KEY_COMMENTS, JSON.stringify(c)); } catch(e) {} }
+
+let comments = loadComments(); // { "1": [{id, text, date}], "2": [...] }
+
+function renderComments(topicId) {
+  const list = document.getElementById(`cmt-list-${topicId}`);
+  const toggle = document.getElementById(`cmt-toggle-${topicId}`);
+  if (!list) return;
+  const items = comments[topicId] || [];
+  list.innerHTML = items.map(c => `
+    <div class="comment-item" data-cid="${c.id}">
+      <div class="comment-bubble">
+        <div class="comment-meta">💬 ${c.date}</div>
+        <div class="comment-text">${escHtml(c.text)}</div>
+      </div>
+      <button class="comment-del" data-topic="${topicId}" data-cid="${c.id}" title="Excluir comentário">✕</button>
+    </div>`).join('');
+
+  // bind delete buttons
+  list.querySelectorAll('.comment-del').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const tid = btn.dataset.topic, cid = btn.dataset.cid;
+      comments[tid] = (comments[tid] || []).filter(c => c.id !== cid);
+      saveComments(comments);
+      renderComments(tid);
+      updateToggleLabel(tid);
+    });
+  });
+
+  // update accordion height
+  const card = list.closest('.topic-card');
+  if (card && card.classList.contains('open')) {
+    const body = card.querySelector('.topic-body');
+    body.style.maxHeight = body.scrollHeight + 'px';
+  }
+
+  if (toggle) updateToggleLabel(topicId);
+}
+
+function updateToggleLabel(topicId) {
+  const toggle = document.getElementById(`cmt-toggle-${topicId}`);
+  if (!toggle) return;
+  const count = (comments[topicId] || []).length;
+  const area = document.getElementById(`cmt-area-${topicId}`);
+  const isOpen = area && !area.hidden;
+  toggle.innerHTML = isOpen
+    ? `<svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.5"><polyline points="18 15 12 9 6 15"/></svg> Ocultar comentários${count ? ` <span class="cmt-count">${count}</span>` : ''}`
+    : `<svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Comentários${count ? ` <span class="cmt-count">${count}</span>` : ''}`;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+function initTopicComments() {
+  document.querySelectorAll('.topic-card').forEach(card => {
+    const topicId = card.dataset.topic;
+    const bodyInner = card.querySelector('.topic-body-inner');
+    if (!bodyInner || document.getElementById(`cmt-area-${topicId}`)) return;
+
+    // Toggle button inside header
+    const header = card.querySelector('.topic-header');
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'comment-toggle';
+    toggleBtn.id = `cmt-toggle-${topicId}`;
+    toggleBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const area = document.getElementById(`cmt-area-${topicId}`);
+      area.hidden = !area.hidden;
+      updateToggleLabel(topicId);
+      // ensure card is open
+      if (!card.classList.contains('open')) {
+        card.classList.add('open');
+        card.querySelector('.topic-body').style.maxHeight = card.querySelector('.topic-body').scrollHeight + 'px';
+      }
+      // recalc height
+      setTimeout(() => {
+        const body = card.querySelector('.topic-body');
+        body.style.maxHeight = body.scrollHeight + 'px';
+      }, 10);
+    });
+    header.insertBefore(toggleBtn, header.querySelector('.topic-chevron'));
+
+    // Comment area inside body
+    const area = document.createElement('div');
+    area.className = 'comments-area';
+    area.id = `cmt-area-${topicId}`;
+    area.hidden = true;
+    area.innerHTML = `
+      <div class="comments-list" id="cmt-list-${topicId}"></div>
+      <div class="comment-input-row">
+        <textarea class="comment-input" id="cmt-inp-${topicId}" placeholder="Adicionar comentário…" rows="1"></textarea>
+        <button class="comment-submit" id="cmt-save-${topicId}">Enviar</button>
+      </div>`;
+    bodyInner.appendChild(area);
+
+    // Auto-grow textarea
+    const ta = area.querySelector(`#cmt-inp-${topicId}`);
+    ta.addEventListener('input', () => {
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
+      const body = card.querySelector('.topic-body');
+      body.style.maxHeight = body.scrollHeight + 'px';
+    });
+
+    // Submit
+    const saveBtn = area.querySelector(`#cmt-save-${topicId}`);
+    const doSubmit = () => {
+      const text = ta.value.trim();
+      if (!text) return;
+      if (!comments[topicId]) comments[topicId] = [];
+      comments[topicId].push({
+        id: Date.now().toString(),
+        text,
+        date: new Date().toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
+      });
+      saveComments(comments);
+      ta.value = '';
+      ta.style.height = 'auto';
+      renderComments(topicId);
+      toast('💬 Comentário salvo');
+    };
+    saveBtn.addEventListener('click', doSubmit);
+    ta.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSubmit(); }
+    });
+
+    renderComments(topicId);
+    updateToggleLabel(topicId);
+  });
+}
+
+// ═══════════════════════════════════════
+// ACCORDION
+// ═══════════════════════════════════════
+document.querySelectorAll('.topic-card').forEach(card => {
+  card.querySelector('.topic-header').addEventListener('click', () => {
+    const body = card.querySelector('.topic-body');
+    const open = card.classList.toggle('open');
+    body.style.maxHeight = open ? body.scrollHeight + 'px' : '0';
+  });
+});
+
+let allExpanded = false;
+document.getElementById('expandAllBtn').addEventListener('click', function() {
+  allExpanded = !allExpanded;
+  document.querySelectorAll('.topic-card').forEach(card => {
+    const body = card.querySelector('.topic-body');
+    if (allExpanded) { card.classList.add('open'); body.style.maxHeight = body.scrollHeight + 'px'; }
+    else { card.classList.remove('open'); body.style.maxHeight = '0'; }
+  });
+  this.innerHTML = allExpanded
+    ? `<svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2"><polyline points="18 15 12 9 6 15"/></svg> Recolher todos`
+    : `<svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2"><polyline points="6 9 12 15 18 9"/></svg> Expandir todos`;
+});
+
+// ═══════════════════════════════════════
+// NAV + SCROLL
+// ═══════════════════════════════════════
+const scrollBtn = document.getElementById('scrollTop');
+window.addEventListener('scroll', () => scrollBtn.classList.toggle('show', window.scrollY > 400));
+scrollBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+const navLinks = document.querySelectorAll('.nav-list a');
+const secIds = ['sec-info','sec-pontos','sec-pendencias','sec-proxima'];
+function updateNav() {
+  let cur = '';
+  secIds.forEach(id => { const el = document.getElementById(id); if (el && el.getBoundingClientRect().top <= 120) cur = id; });
+  navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+}
+window.addEventListener('scroll', updateNav, { passive: true });
+updateNav();
+
+// ═══════════════════════════════════════
+// SECTION REVEAL + STAGGER
+// ═══════════════════════════════════════
+const sectionObserver = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.07 });
+document.querySelectorAll('.section').forEach(s => sectionObserver.observe(s));
+
+document.querySelectorAll('.topic-card').forEach((card, i) => {
+  card.style.cssText += `opacity:0;transform:translateY(16px);transition:opacity .4s ease ${i*.05}s,transform .4s ease ${i*.05}s`;
+  setTimeout(() => { card.style.opacity=''; card.style.transform=''; }, 100 + i * 50);
+});
+
+// ═══════════════════════════════════════
+// HORÁRIO DE INÍCIO
+// ═══════════════════════════════════════
+const cardInicio = document.getElementById('card-inicio');
+const inicioValue = document.getElementById('inicio-value');
+cardInicio.classList.add('editable');
+
+function renderInicio() {
+  inicioValue.textContent = meta.inicio || '—';
+}
+
+cardInicio.addEventListener('click', () => {
+  const r = cardInicio.getBoundingClientRect();
+  const w = 210;
+  let left = r.left, top = r.bottom + 8;
+  if (left + w > window.innerWidth - 12) left = window.innerWidth - w - 12;
+  popup.style.left = left + 'px';
+  popup.style.top  = top  + 'px';
+  activeCtx = { field: 'inicio' };
+
+  popup.innerHTML = `
+    <div class="edit-popup-title">Horário de início</div>
+    <input class="edit-popup-input" id="hInp" type="text" placeholder="Ex: 10h00" value="${meta.inicio || ''}">
+    <button class="edit-popup-save" id="hSave">Salvar</button>`;
+  document.getElementById('hSave').addEventListener('click', () => {
+    const v = document.getElementById('hInp').value.trim();
+    if (v) { meta.inicio = v; saveMeta(meta); renderInicio(); close(); toast('✓ Horário atualizado'); }
+  });
+  document.getElementById('hInp').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('hSave').click();
+    if (e.key === 'Escape') close();
+  });
+  popup.classList.add('show');
+  setTimeout(() => document.getElementById('hInp')?.focus(), 40);
+});
+
+// ═══════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════
+renderTable();
+renderInicio();
+initTopicComments();
+</script>
+</body>
+</html>
