@@ -19,8 +19,10 @@ from modules.config import AVAILABLE_PROVIDERS
 from modules.ingest import load_transcript
 
 # ── v3 Multi-agent imports ────────────────────────────────────────────────────
-from core.knowledge_hub import KnowledgeHub
+from core.knowledge_hub import KnowledgeHub, BPMNModel
 from agents.orchestrator import Orchestrator
+from agents.agent_bpmn import AgentBPMN
+from agents.agent_validator import AgentValidator
 from agents.agent_minutes import AgentMinutes
 from agents.agent_mermaid import generate_mermaid
 
@@ -597,16 +599,67 @@ if generate_btn:
             provider_cfg=provider_cfg,
             progress_callback=update_progress,
         )
-        hub = orchestrator.run(
-            hub,
-            output_language=output_language,
-            run_quality=run_quality,
-            run_bpmn=run_bpmn,
-            run_minutes=run_minutes,
-            run_requirements=run_requirements,
-            n_bpmn_runs=n_bpmn_runs,
-            bpmn_weights=bpmn_weights,
-        )
+
+        # ── Multi-run BPMN: run N times, score, pick best ─────────────────
+        if run_bpmn and n_bpmn_runs > 1:
+            import copy as _copy
+            _validator = AgentValidator()
+            _agent_bpmn = AgentBPMN(client_info, provider_cfg)
+
+            # Step 0-1 via orchestrator (Quality + NLP), skip BPMN for now
+            hub = orchestrator.run(
+                hub,
+                output_language=output_language,
+                run_quality=run_quality,
+                run_bpmn=False,          # BPMN handled below
+                run_minutes=False,
+                run_requirements=False,
+            )
+
+            candidates = []
+            for i in range(n_bpmn_runs):
+                update_progress("Agente BPMN", f"rodada {i + 1}/{n_bpmn_runs}…")
+                hub_c = _copy.copy(hub)
+                hub_c.bpmn = BPMNModel()
+                hub_c = _agent_bpmn.run(hub_c, output_language)
+                score = _validator.score(hub_c.bpmn, hub_c.transcript_clean, bpmn_weights)
+                score.run_index = i + 1
+                candidates.append((score, hub_c.bpmn))
+
+            best_score, best_bpmn = max(candidates, key=lambda x: x[0].weighted)
+            hub.bpmn = best_bpmn
+            hub.validation.bpmn_score = best_score
+            hub.validation.bpmn_candidates = [c[0] for c in candidates]
+            hub.validation.n_bpmn_runs = n_bpmn_runs
+            hub.validation.ready = True
+            hub.bump()
+            update_progress(
+                "Agente BPMN",
+                f"done — rodada {best_score.run_index}/{n_bpmn_runs} selecionada "
+                f"(score {best_score.weighted:.1f}/10)",
+            )
+
+            # Finish pipeline (Minutes + Requirements) with the winning hub
+            hub = orchestrator.run(
+                hub,
+                output_language=output_language,
+                run_quality=False,
+                run_bpmn=False,
+                run_minutes=run_minutes,
+                run_requirements=run_requirements,
+            )
+
+        else:
+            # Single-run (default) — original flow unchanged
+            hub = orchestrator.run(
+                hub,
+                output_language=output_language,
+                run_quality=run_quality,
+                run_bpmn=run_bpmn,
+                run_minutes=run_minutes,
+                run_requirements=run_requirements,
+            )
+
     except Exception as e:
         st.error(f"Erro no pipeline: {e}")
         st.stop()
