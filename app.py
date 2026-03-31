@@ -1019,3 +1019,22 @@ if hub is not None:
             file_name="knowledge_hub.json",
             mime="application/json",
         )
+
+        # ── Skills (system prompts) ────────────────────────────────────────────
+        st.divider()
+        st.markdown("### 🧠 Skills — System Prompts dos Agentes")
+        _SKILLS = [
+            ("🔬 Qualidade da Transcrição", "skills/skill_transcript_quality.md"),
+            ("📐 BPMN",                     "skills/skill_bpmn.md"),
+            ("📋 Ata de Reunião",            "skills/SKILL_MINUTES.md"),
+            ("📝 Requisitos",               "skills/SKILL_REQUIREMENTS.md"),
+            ("📄 Sintetizador",             "skills/SKILL_SYNTHESIZER.md"),
+        ]
+        for skill_label, skill_file in _SKILLS:
+            skill_path = Path(root_dir) / skill_file
+            if skill_path.exists():
+                with st.expander(skill_label, expanded=False):
+                    st.markdown(skill_path.read_text(encoding="utf-8"))
+            else:
+                with st.expander(f"{skill_label} ⚠️ arquivo não encontrado", expanded=False):
+                    st.caption(f"`{skill_file}` não encontrado.")
