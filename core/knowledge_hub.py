@@ -154,6 +154,7 @@ class RequirementItem:
 class RequirementsModel:
     """Output of the Requirements Agent."""
     name: str = ""
+    session_title: str = ""   # Meeting title for mindmap root (LLM or from MinutesModel)
     requirements: list[RequirementItem] = field(default_factory=list)
     markdown: str = ""
     mindmap: str = ""      # Mermaid mindmap source
@@ -331,6 +332,10 @@ class KnowledgeHub:
         # ── v3.8: mindmap added to RequirementsModel ─────────────────────────────
         if not hasattr(hub.requirements, 'mindmap'):
             hub.requirements.mindmap = ""
+
+        # ── v3.9: session_title added to RequirementsModel ───────────────────────
+        if not hasattr(hub.requirements, 'session_title'):
+            hub.requirements.session_title = ""
 
         # ── v3.8: BPMNValidationScore fields added to ValidationReport ──────────
         if not hasattr(hub.validation, 'bpmn_score'):

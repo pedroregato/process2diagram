@@ -38,6 +38,47 @@ def _safe(text: str, max_len: int = 45) -> str:
     return text[:max_len]
 
 
+def build_mindmap_tree(model, session_title: str = "") -> dict:
+    """
+    Build a hierarchical dict for the interactive mindmap renderer.
+
+    Structure:
+        root (kind='root')
+          └── type group (kind='type', colorKey=<type_key>)
+                └── requirement (kind='req', id, title, priority)
+    """
+    title = session_title or getattr(model, 'session_title', '') or model.name or "Requisitos"
+
+    root: dict = {"kind": "root", "id": "root", "label": title, "children": []}
+
+    grouped: dict = defaultdict(list)
+    for r in model.requirements:
+        grouped[r.type].append(r)
+
+    for t_key, t_label in _TYPE_LABELS.items():
+        items = grouped.get(t_key, [])
+        if not items:
+            continue
+        type_node: dict = {
+            "kind": "type",
+            "id": f"type_{t_key}",
+            "label": t_label,
+            "colorKey": t_key,
+            "children": [
+                {
+                    "kind": "req",
+                    "id": r.id,
+                    "title": r.title,
+                    "priority": r.priority,
+                }
+                for r in items
+            ],
+        }
+        root["children"].append(type_node)
+
+    return root
+
+
 def generate_requirements_mindmap(model) -> str:
     """
     Generate a Mermaid mindmap string from a RequirementsModel.

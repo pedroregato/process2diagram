@@ -22,6 +22,8 @@ if str(root_dir) not in sys.path:
 from core.knowledge_hub import KnowledgeHub
 from modules.bpmn_viewer import preview_from_xml
 from modules.mermaid_renderer import render_mermaid_block
+from modules.mindmap_interactive import render_interactive_mindmap
+from modules.requirements_mindmap import build_mindmap_tree
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -65,7 +67,7 @@ if hub.bpmn.ready and hub.bpmn.bpmn_xml:
     tab_labels.append("📐 BPMN 2.0")
 if hub.bpmn.ready and hub.bpmn.mermaid:
     tab_labels.append("📊 Mermaid")
-if hub.requirements.ready and hub.requirements.mindmap:
+if hub.requirements.ready and hub.requirements.requirements:
     tab_labels.append("🗺️ Mind Map")
 
 if not tab_labels:
@@ -106,14 +108,15 @@ if "📊 Mermaid" in tab_labels:
 # ── Mind Map dos Requisitos ───────────────────────────────────────────────────
 if "🗺️ Mind Map" in tab_labels:
     with tabs[tab_idx]:
+        req = hub.requirements
         st.caption(
-            f"Mind Map de **{len(hub.requirements.requirements)}** requisitos "
-            f"agrupados por tipo · Scroll: zoom · Drag: mover"
+            f"**{len(req.requirements)}** requisitos agrupados por tipo · "
+            "Clique nos grupos para expandir/retrair · Scroll: zoom · Drag: mover"
         )
-        render_mermaid_block(
-            hub.requirements.mindmap,
-            show_code=True,
-            key_suffix="diag_mindmap",
-            height=820,
-        )
+        session_title = getattr(req, 'session_title', '') or req.name
+        tree = build_mindmap_tree(req, session_title)
+        render_interactive_mindmap(tree, height=840)
+        if getattr(req, 'mindmap', ''):
+            with st.expander("📝 Código Mermaid (mindmap)", expanded=False):
+                st.code(req.mindmap, language="text")
     tab_idx += 1

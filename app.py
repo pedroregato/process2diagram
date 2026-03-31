@@ -29,6 +29,8 @@ from agents.agent_mermaid import generate_mermaid
 # ── BPMN viewer (presentation layer — separated from generator) ──────────────
 from modules.bpmn_viewer import preview_from_xml
 from modules.mermaid_renderer import render_mermaid_block
+from modules.mindmap_interactive import render_interactive_mindmap
+from modules.requirements_mindmap import build_mindmap_tree
 
 #  ── Outras funcionalidades ──────────────
 from modules.bpmn_diagnostics import render_bpmn_diagnostics
@@ -842,10 +844,15 @@ if hub is not None:
                         st.markdown(f"> {speaker_tag}*\"{r.source_quote}\"*")
 
             # ── Mind Map ──────────────────────────────────────────────────
-            if getattr(req, 'mindmap', ''):
+            if req.requirements:
                 st.markdown("---")
                 st.markdown("### 🗺️ Mind Map dos Requisitos")
-                render_mermaid_block(req.mindmap, show_code=True, key_suffix="req_mindmap", height=520)
+                session_title = getattr(req, 'session_title', '') or req.name
+                tree = build_mindmap_tree(req, session_title)
+                render_interactive_mindmap(tree, height=540)
+                if getattr(req, 'mindmap', ''):
+                    with st.expander("📝 Código Mermaid (mindmap)", expanded=False):
+                        st.code(req.mindmap, language="text")
 
         tab_idx += 1
 

@@ -54,6 +54,17 @@ class AgentRequirements(BaseAgent):
         data = self._call_with_retry(system, user, hub)
 
         hub.requirements = self._build_model(data)
+
+        # ── Session title: prefer minutes title, fall back to LLM-generated ──
+        minutes_title = getattr(hub.minutes, 'title', '').strip()
+        minutes_date  = getattr(hub.minutes, 'date',  '').strip()
+        if minutes_title:
+            hub.requirements.session_title = (
+                f"{minutes_title} — {minutes_date}" if minutes_date else minutes_title
+            )
+        else:
+            hub.requirements.session_title = data.get("session_title", "").strip()
+
         hub.requirements.markdown = self._generate_markdown(hub.requirements)
         hub.requirements.mindmap = generate_requirements_mindmap(hub.requirements)
         hub.requirements.ready = True

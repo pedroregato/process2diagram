@@ -73,9 +73,15 @@ Você **não inventa** requisitos. Se algo não está na transcrição — expl�
 
 10. **Retorne APENAS o JSON.** Nenhum texto, nenhum markdown, nenhum bloco de código.
 
+11. **session_title:** Crie um título criativo e conciso (máximo 8 palavras) que descreva
+    o tema central da reunião. Use linguagem de negócio, não técnica. Inclua o tipo de
+    processo ou decisão principal. Ex: "Definição do Processo de Cadastro de Unidades
+    Escolares" ou "Revisão das Regras de Validação do Organograma".
+
 ## Formato de Saída (JSON)
 
 {
+  "session_title": "<título criativo da reunião — máximo 8 palavras>",
   "name": "<nome do processo>",
   "requirements": [
     {
