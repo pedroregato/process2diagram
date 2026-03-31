@@ -398,9 +398,62 @@ ol.items li::before{
   font-size:11px;color:var(--muted);margin-top:8px;font-style:italic
 }
 
+/* ── Interactive: Action Items ── */
+.ai-toolbar{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:14px;flex-wrap:wrap;gap:8px
+}
+.ai-count{
+  font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)
+}
+.filter-group{display:flex;gap:4px;flex-wrap:wrap}
+.filter-btn{
+  font-size:12px;padding:5px 13px;border-radius:7px;
+  border:1px solid var(--border);background:var(--white);
+  color:var(--muted);cursor:pointer;font-weight:500;
+  transition:all .15s;font-family:inherit
+}
+.filter-btn:hover{background:var(--light);color:var(--text)}
+.filter-btn.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.ai-pill{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:11px;font-weight:500;padding:4px 10px;border-radius:100px;
+  border:1px solid;cursor:pointer;white-space:nowrap;
+  transition:opacity .15s,transform .1s;user-select:none
+}
+.ai-pill:hover{opacity:.82;transform:scale(.97)}
+/* Status popup */
+#ai-popup{
+  display:none;position:fixed;z-index:600;
+  background:var(--white);border:1px solid var(--border);border-radius:12px;
+  box-shadow:0 8px 32px rgba(11,30,61,.16);padding:8px;min-width:170px
+}
+#ai-popup-title{
+  font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);padding:4px 8px 8px;
+  border-bottom:1px solid var(--border);margin-bottom:6px
+}
+.pop-opt{
+  display:flex;align-items:center;gap:9px;padding:7px 10px;
+  border-radius:8px;cursor:pointer;font-size:13px;color:var(--text);
+  transition:background .12s
+}
+.pop-opt:hover{background:var(--light)}
+.pop-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+/* Toast */
+#ai-toast{
+  position:fixed;bottom:80px;right:28px;z-index:9999;
+  background:var(--navy);color:#fff;font-size:13px;
+  padding:10px 18px;border-radius:10px;
+  box-shadow:0 4px 16px rgba(0,0,0,.2);
+  opacity:0;transform:translateY(10px);
+  transition:opacity .25s,transform .25s;pointer-events:none
+}
+#ai-toast.show{opacity:1;transform:translateY(0)}
+
 /* ── Print ── */
 @media print{
-  #sidebar,#scrollTop{display:none!important}
+  #sidebar,#scrollTop,#ai-popup,#ai-toast{display:none!important}
   #main{margin-left:0!important}
   body{background:#fff;font-size:11pt}
   .card{break-inside:avoid;box-shadow:none;opacity:1!important;transform:none!important}
@@ -452,6 +505,106 @@ const ioSb = new IntersectionObserver(entries => {
   });
 }, { rootMargin: '-30% 0px -60% 0px' });
 sections.forEach(s => ioSb.observe(s));
+
+// ── Action Items — Status Management ──────────────────────────────────────
+(function() {
+  const SESSION = window.P2D_SESSION || 'default';
+  const LS_KEY  = 'p2d_ai_' + SESSION;
+
+  const STATUS = {
+    open:    { label: 'Aberto',    color: '#C97B1A', bg: '#FEF3E2', border: '#F5D9A0' },
+    done:    { label: 'Concluído', color: '#1A7F5A', bg: '#E3F5ED', border: '#9FD9BC' },
+    delayed: { label: 'Adiado',    color: '#6B3FA0', bg: '#F0E8FA', border: '#C9A8E8' },
+  };
+
+  // Load persisted statuses
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(_) {}
+
+  function applyStatus(row, status) {
+    const pill = row.querySelector('.ai-pill');
+    if (!pill) return;
+    const cfg = STATUS[status] || STATUS.open;
+    pill.innerHTML =
+      `<span style="width:5px;height:5px;border-radius:50%;background:${cfg.color};`+
+      `display:inline-block;flex-shrink:0"></span>${cfg.label}`;
+    pill.style.cssText += `;background:${cfg.bg};color:${cfg.color};border-color:${cfg.border}`;
+    row.dataset.aiStatus = status;
+  }
+
+  // Apply saved on load
+  document.querySelectorAll('tr[data-ai-idx]').forEach(row => {
+    const s = saved[row.dataset.aiIdx];
+    if (s) applyStatus(row, s);
+  });
+
+  // Popup & toast
+  const popup = document.getElementById('ai-popup');
+  const toast = document.getElementById('ai-toast');
+  let activeRow = null, toastTimer;
+
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 2600);
+  }
+
+  function updateCount() {
+    const rows   = document.querySelectorAll('tr[data-ai-idx]');
+    const active = document.querySelector('.filter-btn.active');
+    const filter = active ? active.dataset.filter : 'all';
+    let vis = 0;
+    rows.forEach(r => {
+      const show = filter === 'all' || r.dataset.aiStatus === filter;
+      r.style.display = show ? '' : 'none';
+      if (show) vis++;
+    });
+    const el = document.getElementById('ai-visible');
+    if (el) el.textContent = vis;
+  }
+
+  // Open popup on pill click
+  document.addEventListener('click', e => {
+    const pill = e.target.closest('.ai-pill');
+    if (pill) {
+      e.stopPropagation();
+      activeRow = pill.closest('tr[data-ai-idx]');
+      const r = pill.getBoundingClientRect();
+      popup.style.top  = (r.bottom + 6 + window.scrollY) + 'px';
+      popup.style.left = Math.min(r.left, window.innerWidth - 190) + 'px';
+      popup.style.display = 'block';
+      return;
+    }
+    if (!popup.contains(e.target)) popup.style.display = 'none';
+  });
+
+  // Select option
+  popup.querySelectorAll('.pop-opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      if (!activeRow) return;
+      const status = opt.dataset.status;
+      const idx    = activeRow.dataset.aiIdx;
+      applyStatus(activeRow, status);
+      saved[idx] = status;
+      try { localStorage.setItem(LS_KEY, JSON.stringify(saved)); } catch(_) {}
+      popup.style.display = 'none';
+      updateCount();
+      showToast('✓ Status: ' + STATUS[status].label);
+    });
+  });
+
+  // Filter buttons
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      updateCount();
+    });
+  });
+
+  updateCount();
+})();
 """
 
 
@@ -719,26 +872,50 @@ def _section_minutes(hub) -> str:
             f'<ol class="items" style="margin-bottom:24px">{dec_items}</ol>'
         )
 
-    ai_rows = []
-    for ai in m.action_items:
-        pill  = _status_pill(ai.priority)
-        raised = _e(ai.raised_by or "—")
-        ai_rows.append(
-            f"<tr>"
-            f"<td>{pill}</td>"
-            f"<td style='font-family:JetBrains Mono,monospace;font-size:11px'>{raised}</td>"
-            f"<td>{_e(ai.task)}</td>"
-            f"<td><strong>{_e(ai.responsible)}</strong></td>"
-            f"<td style='color:var(--muted);font-size:12px'>{_e(ai.deadline or '—')}</td>"
-            f"</tr>"
-        )
     ai_table = ""
-    if ai_rows:
+    if m.action_items:
+        n = len(m.action_items)
+        toolbar = (
+            f'<div class="ai-toolbar">'
+            f'<span class="ai-count"><span id="ai-visible">{n}</span> de {n} itens</span>'
+            f'<div class="filter-group">'
+            f'<button class="filter-btn active" data-filter="all">Todos</button>'
+            f'<button class="filter-btn" data-filter="open">Abertos</button>'
+            f'<button class="filter-btn" data-filter="done">Concluídos</button>'
+            f'<button class="filter-btn" data-filter="delayed">Adiados</button>'
+            f'</div></div>'
+        )
+        ai_rows = []
+        for idx, ai in enumerate(m.action_items):
+            # Default visual: open (amber)
+            pill = (
+                f'<span class="ai-pill" title="Clique para alterar status" '
+                f'style="background:#FEF3E2;color:#C97B1A;border-color:#F5D9A0">'
+                f'<span style="width:5px;height:5px;border-radius:50%;background:#C97B1A;'
+                f'display:inline-block;flex-shrink:0"></span>Aberto</span>'
+            )
+            prio_badge = _status_pill(ai.priority)
+            ai_rows.append(
+                f'<tr data-ai-idx="{idx}" data-ai-status="open">'
+                f"<td>{pill}</td>"
+                f"<td>{prio_badge}</td>"
+                f"<td style='font-family:JetBrains Mono,monospace;font-size:11px'>"
+                f"{_e(ai.raised_by or '—')}</td>"
+                f"<td>{_e(ai.task)}</td>"
+                f"<td><strong>{_e(ai.responsible)}</strong></td>"
+                f"<td style='color:var(--muted);font-size:12px'>{_e(ai.deadline or '—')}</td>"
+                f"</tr>"
+            )
         ai_table = (
-            f'<div class="col-label" style="margin-bottom:8px">Action Items ({len(m.action_items)})</div>'
-            f'<table><thead><tr>'
-            f'<th>Prioridade</th><th>Por</th><th>Tarefa</th><th>Responsável</th><th>Prazo</th>'
-            f'</tr></thead><tbody>{"".join(ai_rows)}</tbody></table>'
+            f'<div class="col-label" style="margin-bottom:10px">Action Items ({n})</div>'
+            f'{toolbar}'
+            f'<div style="overflow-x:auto"><table>'
+            f'<thead><tr>'
+            f'<th>Status</th><th>Prioridade</th><th>Por</th>'
+            f'<th>Tarefa</th><th>Responsável</th><th>Prazo</th>'
+            f'</tr></thead>'
+            f'<tbody>{"".join(ai_rows)}</tbody>'
+            f'</table></div>'
         )
 
     body = dec_html + ai_table
@@ -905,6 +1082,7 @@ def generate_executive_html(hub, narrative) -> str:
         or hub.bpmn.name
         or "Relatório Executivo"
     )
+    session_id = _e(getattr(hub.meta, "session_id", "default")[:16])
 
     sections = "\n".join(filter(None, [
         _section_summary(narrative),
@@ -938,6 +1116,23 @@ def generate_executive_html(hub, narrative) -> str:
 </div>
 </div>
 <button id="scrollTop" title="Voltar ao topo">↑</button>
+
+<!-- Status popup (action items) -->
+<div id="ai-popup">
+  <div id="ai-popup-title">Alterar status</div>
+  <div class="pop-opt" data-status="open">
+    <span class="pop-dot" style="background:#C97B1A"></span>Aberto
+  </div>
+  <div class="pop-opt" data-status="done">
+    <span class="pop-dot" style="background:#1A7F5A"></span>Concluído
+  </div>
+  <div class="pop-opt" data-status="delayed">
+    <span class="pop-dot" style="background:#6B3FA0"></span>Adiado
+  </div>
+</div>
+<div id="ai-toast"></div>
+
+<script>window.P2D_SESSION = '{session_id}';</script>
 <script>{_JS}</script>
 </body>
 </html>"""
