@@ -514,8 +514,20 @@ if hub is not None:
         from core.knowledge_hub import TranscriptQualityModel
         hub.transcript_quality = TranscriptQualityModel()
     if not hasattr(hub, 'synthesizer'):
-        from core.knowledge_hub import SynthesizerModel
-        hub.synthesizer = SynthesizerModel()
+        try:
+            from core.knowledge_hub import SynthesizerModel
+            hub.synthesizer = SynthesizerModel()
+        except ImportError:
+            from dataclasses import dataclass, field as _field
+            @dataclass
+            class _SM:
+                executive_summary: str = ""
+                process_narrative: str = ""
+                key_insights: list = _field(default_factory=list)
+                recommendations: list = _field(default_factory=list)
+                html: str = ""
+                ready: bool = False
+            hub.synthesizer = _SM()
 
     # ── Metrics banner ────────────────────────────────────────────────────────
     col_a, col_b, col_c, col_d = st.columns(4)
