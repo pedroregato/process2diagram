@@ -203,6 +203,19 @@ class TranscriptQualityModel:
     ready: bool = False
 
 
+# ── Synthesizer Model ─────────────────────────────────────────────────────────
+
+@dataclass
+class SynthesizerModel:
+    """Output of the AgentSynthesizer — executive narrative + HTML report."""
+    executive_summary: str = ""
+    process_narrative: str = ""
+    key_insights: list = field(default_factory=list)
+    recommendations: list = field(default_factory=list)
+    html: str = ""
+    ready: bool = False
+
+
 # ── Validation Report ─────────────────────────────────────────────────────────
 
 @dataclass
@@ -282,6 +295,7 @@ class KnowledgeHub:
     minutes: MinutesModel = field(default_factory=MinutesModel)
     requirements: RequirementsModel = field(default_factory=RequirementsModel)
     validation: ValidationReport = field(default_factory=ValidationReport)
+    synthesizer: SynthesizerModel = field(default_factory=SynthesizerModel)
     meta: SessionMetadata = field(default_factory=SessionMetadata)
 
     # ── Factory ──────────────────────────────────────────────────────────────
@@ -354,6 +368,10 @@ class KnowledgeHub:
             if not hasattr(ai, 'raised_by'):
                 ai.raised_by = None
 
+        # ── v3.10: SynthesizerModel added to hub ─────────────────────────────────
+        if not hasattr(hub, 'synthesizer'):
+            hub.synthesizer = SynthesizerModel()
+
         # ── v3.3: RequirementItem.speaker ─────────────────────────────────────
         for req in hub.requirements.requirements:
             if not hasattr(req, 'speaker'):
@@ -393,6 +411,7 @@ class KnowledgeHub:
             "minutes": self.minutes.ready,
             "requirements": self.requirements.ready,
             "validation": self.validation.ready,
+            "synthesizer": self.synthesizer.ready,
         }
 
     # ── Serialization ─────────────────────────────────────────────────────────

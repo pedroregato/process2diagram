@@ -27,6 +27,7 @@ from agents.nlp_chunker import NLPChunker
 from agents.agent_bpmn import AgentBPMN
 from agents.agent_minutes import AgentMinutes
 from agents.agent_requirements import AgentRequirements
+from agents.agent_synthesizer import AgentSynthesizer
 from agents.agent_transcript_quality import AgentTranscriptQuality
 from core.knowledge_hub import KnowledgeHub, PreprocessingModel
 from modules.transcript_preprocessor import preprocess
@@ -49,7 +50,7 @@ class Orchestrator:
     """
 
     # Agent execution plan for PC1
-    _PLAN = ["transcript_quality", "preprocessing", "nlp", "bpmn", "minutes", "requirements"]
+    _PLAN = ["transcript_quality", "preprocessing", "nlp", "bpmn", "minutes", "requirements", "synthesizer"]
 
     def __init__(
         self,
@@ -67,6 +68,7 @@ class Orchestrator:
         self._agent_bpmn = AgentBPMN(client_info, provider_cfg)
         self._agent_minutes = AgentMinutes(client_info, provider_cfg)
         self._agent_requirements = AgentRequirements(client_info, provider_cfg)
+        self._agent_synthesizer = AgentSynthesizer(client_info, provider_cfg)
 
     # ── Main entry point ──────────────────────────────────────────────────────
 
@@ -78,6 +80,7 @@ class Orchestrator:
         run_bpmn: bool = True,
         run_minutes: bool = True,
         run_requirements: bool = True,
+        run_synthesizer: bool = False,
     ) -> KnowledgeHub:
         """
         Execute PC1 pipeline.
@@ -89,6 +92,7 @@ class Orchestrator:
             run_bpmn:          Whether to run the BPMN agent.
             run_minutes:       Whether to run the Minutes agent.
             run_requirements:  Whether to run the Requirements agent.
+            run_synthesizer:   Whether to run the Synthesizer agent (executive HTML report).
 
         Returns:
             Populated KnowledgeHub.
@@ -175,6 +179,17 @@ class Orchestrator:
             except Exception as exc:
                 self._progress("Agente Requisitos", f"error: {exc}")
                 raise RuntimeError(f"Requirements Agent failed: {exc}") from exc
+
+        # ── Step 5: Synthesizer Agent ─────────────────────────────────────────
+        if run_synthesizer:
+            self._progress("Agente Sintetizador", "running")
+            try:
+                hub = self._agent_synthesizer.run(hub, output_language)
+                self._progress("Agente Sintetizador", "done")
+            except Exception as exc:
+                self._progress("Agente Sintetizador", f"error: {exc}")
+                # Non-fatal — pipeline already produced all other artifacts
+                hub.bump()
 
         return hub
 

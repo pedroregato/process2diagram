@@ -219,6 +219,8 @@ with st.sidebar:
 
     run_minutes = st.checkbox("Agente Ata de Reunião", value=True)
     run_requirements = st.checkbox("Agente Requisitos", value=True)
+    run_synthesizer = st.checkbox("Agente Sintetizador (Relatório HTML)", value=False,
+                                  help="Gera um documento executivo HTML com síntese de todos os artefatos.")
 
     show_raw_json = st.checkbox("Show raw JSON", value=False)
     st.markdown("---")
@@ -469,7 +471,7 @@ if generate_btn:
                 f"(score {best_score.weighted:.1f}/10)",
             )
 
-            # Finish pipeline (Minutes + Requirements) with the winning hub
+            # Finish pipeline (Minutes + Requirements + Synthesizer) with the winning hub
             hub = orchestrator.run(
                 hub,
                 output_language=output_language,
@@ -477,6 +479,7 @@ if generate_btn:
                 run_bpmn=False,
                 run_minutes=run_minutes,
                 run_requirements=run_requirements,
+                run_synthesizer=run_synthesizer,
             )
 
         else:
@@ -488,6 +491,7 @@ if generate_btn:
                 run_bpmn=run_bpmn,
                 run_minutes=run_minutes,
                 run_requirements=run_requirements,
+                run_synthesizer=run_synthesizer,
             )
 
     except Exception as e:
@@ -538,6 +542,8 @@ if hub is not None:
         tabs_to_show += ["📋 Ata de Reunião"]
     if hub.requirements.ready:
         tabs_to_show += ["📝 Requisitos"]
+    if hub.synthesizer.ready:
+        tabs_to_show += ["📄 Relatório Executivo"]
     tabs_to_show += ["🔧 Exportar", "🔍 Knowledge Hub"]
 
     tabs = st.tabs(tabs_to_show)
@@ -854,6 +860,25 @@ if hub is not None:
 
         tab_idx += 1
 
+    # ── Tab: Relatório Executivo ───────────────────────────────────────────────
+    if hub.synthesizer.ready:
+        with tabs[tab_idx]:
+            syn = hub.synthesizer
+            st.caption(
+                "Documento executivo gerado pelo Agente Sintetizador · "
+                "Clique em ⬇️ para baixar o HTML completo."
+            )
+            st.download_button(
+                "⬇️ Baixar Relatório Executivo (.html)",
+                data=syn.html,
+                file_name="relatorio_executivo.html",
+                mime="text/html",
+                use_container_width=True,
+            )
+            st.divider()
+            components.html(syn.html, height=900, scrolling=True)
+        tab_idx += 1
+
     # ── Tab: Exportar ─────────────────────────────────────────────────────────
     with tabs[tab_idx]:
         st.markdown("### ⬇️ Downloads")
@@ -943,6 +968,16 @@ if hub is not None:
                     mime="application/json",
                     use_container_width=True,
                 )
+
+        if hub.synthesizer.ready:
+            st.markdown("**Relatório Executivo**")
+            st.download_button(
+                "⬇️ Relatório Executivo .html",
+                data=hub.synthesizer.html,
+                file_name="relatorio_executivo.html",
+                mime="text/html",
+                use_container_width=True,
+            )
 
     tab_idx += 1
 
