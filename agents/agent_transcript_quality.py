@@ -18,7 +18,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
-
+import re
 from agents.base_agent import BaseAgent
 from core.knowledge_hub import KnowledgeHub, TranscriptQualityModel, CriterionScore, InconsistencyItem
 
@@ -46,6 +46,24 @@ def _grade(score: float) -> str:
         return "D"
     return "E"
 
+_GRADE_LABELS = {
+    "A": "Excelente",
+    "B": "Boa",
+    "C": "Satisfatória",
+    "D": "Pobre",
+    "E": "Inadequada",
+}
+
+def _fix_grade_refs(text: str, grade: str) -> str:
+    """Replace any grade letter/label in LLM narrative with the programmatically computed grade."""
+    label = _GRADE_LABELS.get(grade, grade)
+    for wrong_grade, wrong_label in _GRADE_LABELS.items():
+        if wrong_grade == grade:
+            continue
+        text = re.sub(rf"\bNota\s+{wrong_grade}\b", f"Nota {grade}", text)
+        text = text.replace(f"'{wrong_label}'", f"'{label}'")
+        text = text.replace(f'"{wrong_label}"', f'"{label}"')
+    return text
 
 class AgentTranscriptQuality(BaseAgent):
 
@@ -110,6 +128,7 @@ class AgentTranscriptQuality(BaseAgent):
             weighted_sum += score * weight
 
         overall = round(weighted_sum, 1)
+        computed_grade = _grade(overall)
 
         # Parse inconsistencies (LLM-detected background noise / semantic artifacts)
         inconsistencies: list[InconsistencyItem] = []
@@ -122,11 +141,16 @@ class AgentTranscriptQuality(BaseAgent):
                     reason=item.get("reason", ""),
                 ))
 
+        # Sanitize LLM narrative
+        overall_summary = _fix_grade_refs(data.get("overall_summary", ""), computed_grade)
+        recommendation  = _fix_grade_refs(data.get("recommendation", ""), computed_grade)
+
         return TranscriptQualityModel(
             criteria=criteria_scores,
             overall_score=overall,
-            grade=_grade(overall),
-            overall_summary=data.get("overall_summary", ""),
-            recommendation=data.get("recommendation", ""),
+            grade=computed_grade,
+            overall_summary=overall_summary,
+            recommendation=recommendation,
             inconsistencies=inconsistencies,
         )
+        
