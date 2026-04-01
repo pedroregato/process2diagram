@@ -231,10 +231,12 @@ class BaseAgent(ABC):
     # ── Skill loading ─────────────────────────────────────────────────────────
 
     def _load_skill(self) -> str:
-        """Load SKILL.md content. Returns empty string if not found."""
+        """Load SKILL.md content. Resolves path relative to project root."""
         if not self.skill_path:
             return ""
-        path = Path(self.skill_path)
+        # Use absolute path so this works regardless of CWD (local or Streamlit Cloud)
+        project_root = Path(__file__).parent.parent
+        path = project_root / self.skill_path
         if path.exists():
             return path.read_text(encoding="utf-8")
         return ""

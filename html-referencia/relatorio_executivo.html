@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Relatório Executivo — Reunião</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root{
+  --navy:#0B1E3D; --blue:#1A4B8C; --accent:#2E7FD9; --gold:#C9A84C;
+  --light:#F4F7FB; --muted:#8496B0; --border:#D5E3F5; --white:#FFFFFF;
+  --text:#1C2A3A; --green:#1A7F5A; --amber:#C97B1A; --purple:#6B3FA0;
+  --sidebar-w:220px;
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:var(--light);color:var(--text);line-height:1.6;font-size:14px}
+
+/* ── Sidebar ── */
+#sidebar{
+  position:fixed;top:0;left:0;bottom:0;width:var(--sidebar-w);
+  background:var(--navy);overflow-y:auto;z-index:200;padding:28px 0 28px;
+}
+.sb-brand{
+  display:flex;align-items:center;gap:8px;
+  padding:0 20px 24px;border-bottom:1px solid rgba(255,255,255,.08);
+  margin-bottom:20px;
+}
+.sb-brand-icon{
+  width:30px;height:30px;border-radius:8px;background:var(--accent);
+  display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0
+}
+.sb-brand-text{font-size:12px;font-weight:600;color:rgba(255,255,255,.9);line-height:1.3}
+.sb-brand-sub{font-size:10px;color:rgba(255,255,255,.4);font-weight:400}
+
+.sb-section{padding:0 12px;margin-bottom:4px}
+.sb-label{
+  font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+  color:rgba(255,255,255,.3);padding:0 8px;margin-bottom:6px;display:block
+}
+.sb-link{
+  display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;
+  text-decoration:none;color:rgba(255,255,255,.6);font-size:12.5px;
+  transition:all .15s;margin-bottom:2px
+}
+.sb-link:hover{background:rgba(255,255,255,.07);color:rgba(255,255,255,.95)}
+.sb-link .sb-ic{font-size:14px;flex-shrink:0}
+.sb-link.active{background:rgba(46,127,217,.2);color:#93c5fd}
+
+/* ── Main ── */
+#main{margin-left:var(--sidebar-w)}
+
+/* ── Hero ── */
+.hero{
+  background:linear-gradient(135deg,var(--navy) 0%,var(--blue) 100%);
+  position:relative;overflow:hidden;padding:52px 56px 44px;
+}
+.hero::before{
+  content:'';position:absolute;top:-80px;right:-80px;
+  width:360px;height:360px;border-radius:50%;
+  background:radial-gradient(circle,rgba(46,127,217,.28) 0%,transparent 70%)
+}
+.hero::after{
+  content:'';position:absolute;bottom:-60px;left:-60px;
+  width:240px;height:240px;border-radius:50%;
+  background:radial-gradient(circle,rgba(201,168,76,.13) 0%,transparent 70%)
+}
+.hero-badges{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;position:relative;z-index:1}
+.hero-badge{
+  font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;
+  padding:4px 12px;border-radius:5px;
+  background:rgba(255,255,255,.1);color:rgba(255,255,255,.75);
+  border:1px solid rgba(255,255,255,.15)
+}
+.hero-badge.gold{
+  background:rgba(201,168,76,.18);color:var(--gold);border-color:rgba(201,168,76,.35)
+}
+.hero h1{
+  font-family:'DM Serif Display',Georgia,serif;
+  font-size:clamp(24px,3.2vw,38px);font-weight:400;letter-spacing:-.01em;
+  color:#fff;line-height:1.2;margin-bottom:10px;position:relative;z-index:1
+}
+.hero-sub{
+  font-size:14px;color:rgba(255,255,255,.55);margin-bottom:32px;
+  position:relative;z-index:1
+}
+.hero-cards{
+  display:flex;flex-wrap:wrap;gap:12px;position:relative;z-index:1
+}
+.hero-card{
+  background:rgba(255,255,255,.07);backdrop-filter:blur(6px);
+  border:1px solid rgba(255,255,255,.12);border-radius:10px;
+  padding:12px 18px;min-width:140px
+}
+.hero-card-label{
+  font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+  color:rgba(255,255,255,.4);margin-bottom:4px
+}
+.hero-card-value{font-size:13px;font-weight:500;color:rgba(255,255,255,.9)}
+
+/* ── Participants strip ── */
+.participants-strip{
+  background:var(--white);padding:16px 56px;display:flex;
+  align-items:center;flex-wrap:wrap;gap:8px;
+  border-bottom:2px solid var(--border);
+}
+.strip-label{
+  font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);font-weight:600;margin-right:4px;white-space:nowrap
+}
+.p-chip{
+  display:inline-flex;align-items:center;gap:7px;
+  background:var(--light);border:1px solid var(--border);
+  border-radius:100px;padding:4px 12px 4px 5px;
+  font-size:12.5px;color:var(--text)
+}
+.p-avatar{
+  width:24px;height:24px;border-radius:50%;background:var(--navy);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px;font-weight:500;color:#fff;flex-shrink:0
+}
+
+/* ── Stats bar ── */
+.stats-bar{
+  display:flex;gap:0;background:var(--white);
+  border-bottom:1px solid var(--border);
+}
+.stat{
+  flex:1;text-align:center;padding:18px 12px;
+  border-right:1px solid var(--border)
+}
+.stat:last-child{border-right:none}
+.stat-val{
+  font-family:'DM Serif Display',serif;font-size:28px;color:var(--navy);line-height:1
+}
+.stat-lbl{
+  font-size:10px;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--muted);margin-top:4px
+}
+
+/* ── Content ── */
+.content{max-width:960px;margin:0 auto;padding:0 0 60px}
+
+/* ── Section cards ── */
+.card{
+  background:var(--white);margin:24px 24px 0;border-radius:14px;
+  border:1px solid var(--border);
+  box-shadow:0 1px 3px rgba(11,30,61,.05);
+  opacity:0;transform:translateY(16px);
+  transition:opacity .5s ease,transform .5s ease,box-shadow .2s
+}
+.card.visible{opacity:1;transform:translateY(0)}
+.card:hover{box-shadow:0 4px 24px rgba(11,30,61,.08)}
+.card-header{
+  padding:20px 28px;display:flex;align-items:center;gap:14px;
+  border-bottom:2px solid var(--border)
+}
+.section-icon{
+  width:38px;height:38px;border-radius:10px;background:var(--navy);
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;flex-shrink:0
+}
+.section-title{
+  font-family:'DM Serif Display',serif;
+  font-size:20px;font-weight:400;color:var(--navy)
+}
+.card-body{padding:24px 28px}
+.card-body p{margin-bottom:12px;color:var(--text);font-size:13.5px;line-height:1.65}
+.card-body p:last-child{margin-bottom:0}
+
+/* ── Tables ── */
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead{background:var(--light)}
+th{
+  padding:10px 16px;text-align:left;font-size:11px;font-weight:600;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--muted);white-space:nowrap
+}
+td{
+  padding:11px 16px;border-top:1px solid var(--border);
+  vertical-align:middle;color:var(--text);line-height:1.55
+}
+tbody tr{transition:background .15s}
+tbody tr:hover td{background:#f8fafd}
+
+/* ── Chips / badges ── */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{
+  background:var(--light);border:1px solid var(--border);
+  border-radius:6px;padding:4px 10px;font-size:12px;color:var(--text)
+}
+
+/* ── Two-column ── */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.col-label{
+  font-size:10px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--muted);margin-bottom:10px
+}
+
+/* ── Numbered list ── */
+ol.items{counter-reset:item;padding:0;list-style:none}
+ol.items li{
+  position:relative;padding:10px 14px 10px 46px;
+  border-top:1px solid var(--border);
+  font-size:13.5px;color:var(--text);line-height:1.6;counter-increment:item
+}
+ol.items li:first-child{border-top:none}
+ol.items li::before{
+  content:counter(item,'0'counter(item));
+  position:absolute;left:14px;top:50%;transform:translateY(-50%);
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:500;
+  background:var(--accent);color:#fff;
+  padding:2px 6px;border-radius:5px;line-height:1.4
+}
+
+/* ── Progress bars ── */
+.bar-wrap{display:flex;align-items:center;gap:10px;margin:6px 0}
+.bar-label{width:140px;font-size:12px;color:var(--text);flex-shrink:0}
+.bar-track{flex:1;height:7px;background:var(--border);border-radius:4px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;transition:width .6s ease}
+.bar-count{
+  font-family:'JetBrains Mono',monospace;font-size:11px;
+  color:var(--muted);min-width:26px;text-align:right
+}
+
+/* ── Quality block ── */
+.quality-grid{display:flex;gap:20px;align-items:flex-start}
+.grade-badge{
+  font-family:'DM Serif Display',serif;font-size:52px;font-weight:400;
+  line-height:1;padding:10px 22px;border-radius:14px;flex-shrink:0
+}
+.crit-bar{margin:7px 0}
+.crit-name{font-size:12px;color:var(--muted);margin-bottom:3px}
+.crit-track{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.crit-fill{height:100%;background:var(--accent);border-radius:3px}
+
+/* ── Next meeting card ── */
+.next-meeting{
+  background:linear-gradient(135deg,var(--navy) 0%,var(--blue) 100%);
+  border-radius:14px;padding:28px 32px;
+  display:flex;align-items:center;gap:24px;
+  position:relative;overflow:hidden;margin:24px 24px 0
+}
+.next-meeting::before{
+  content:'';position:absolute;right:-40px;top:-40px;
+  width:180px;height:180px;border-radius:50%;
+  background:rgba(255,255,255,.04);pointer-events:none
+}
+.nm-icon{font-size:38px;flex-shrink:0}
+.nm-label{
+  font-size:10px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--gold);margin-bottom:6px
+}
+.nm-date{
+  font-family:'DM Serif Display',serif;font-size:22px;color:#fff;margin-bottom:4px
+}
+.nm-detail{font-size:13px;color:rgba(255,255,255,.55)}
+
+/* ── Scroll to top ── */
+#scrollTop{
+  position:fixed;bottom:28px;right:28px;
+  width:40px;height:40px;border-radius:10px;
+  background:var(--navy);border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;color:#fff;
+  opacity:0;pointer-events:none;transition:opacity .25s;z-index:300
+}
+#scrollTop.show{opacity:1;pointer-events:all}
+#scrollTop:hover{background:var(--blue)}
+
+/* ── Footer ── */
+.page-footer{
+  margin:36px 24px 0;padding:20px 28px;background:var(--white);
+  border-top:2px solid var(--border);border-radius:14px;
+  display:flex;justify-content:space-between;align-items:center;
+  flex-wrap:wrap;gap:8px
+}
+.footer-brand{
+  font-family:'DM Serif Display',serif;font-size:16px;color:var(--navy)
+}
+.footer-meta{font-size:12px;color:var(--muted)}
+
+/* ── Diagram containers ── */
+.diagram-wrap{
+  border:1px solid var(--border);border-radius:10px;overflow:hidden
+}
+.diagram-caption{
+  font-size:11px;color:var(--muted);margin-top:8px;font-style:italic
+}
+
+/* ── Interactive: Collapsible sections ── */
+.card-header{cursor:pointer;user-select:none}
+.card-header:hover .section-title{color:var(--accent)}
+.chevron{
+  margin-left:auto;width:28px;height:28px;border-radius:50%;
+  background:var(--light);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;transition:transform .3s cubic-bezier(.4,0,.2,1),background .2s
+}
+.chevron svg{width:14px;height:14px;stroke:var(--muted);fill:none;stroke-width:2;
+  transition:stroke .2s}
+.card.collapsed .chevron{transform:rotate(-90deg)}
+.card.collapsed .chevron svg{stroke:var(--accent)}
+.card.collapsed .card-body{display:none}
+.expand-all-btn{
+  font-size:12px;padding:6px 14px;border-radius:7px;
+  border:1px solid var(--border);background:var(--white);
+  color:var(--blue);cursor:pointer;font-weight:500;
+  transition:all .15s;display:flex;align-items:center;gap:6px;
+  font-family:inherit;margin:20px 24px 0;
+}
+.expand-all-btn:hover{background:var(--navy);color:#fff;border-color:var(--navy)}
+
+/* ── Interactive: Requirements ── */
+.req-toolbar{
+  background:var(--light);border:1px solid var(--border);
+  border-radius:10px;padding:14px 16px;margin-bottom:4px;
+  display:flex;flex-direction:column;gap:10px
+}
+.req-toolbar-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.req-filter-btn{
+  font-size:11px;padding:4px 11px;border-radius:100px;
+  border:1px solid var(--border);background:var(--white);
+  color:var(--muted);cursor:pointer;font-weight:500;
+  transition:all .15s;font-family:inherit
+}
+.req-filter-btn:hover{border-color:var(--req-color,var(--accent));color:var(--req-color,var(--accent))}
+.req-filter-btn.active{
+  background:var(--req-color,var(--navy));
+  color:#fff;border-color:var(--req-color,var(--navy))
+}
+
+/* ── Interactive: Comments ── */
+.cmt-toggle{
+  display:inline-flex;align-items:center;gap:5px;
+  margin-top:10px;font-size:12px;color:var(--muted);
+  background:none;border:none;cursor:pointer;padding:3px 0;
+  transition:color .15s;font-family:inherit
+}
+.cmt-toggle:hover{color:var(--accent)}
+.cmt-count-badge{
+  background:var(--accent);color:#fff;
+  font-family:'JetBrains Mono',monospace;font-size:10px;
+  padding:1px 6px;border-radius:100px
+}
+.cmt-panel{
+  display:none;margin-top:10px;padding:12px 14px;
+  background:var(--light);border:1px solid var(--border);
+  border-radius:10px
+}
+.cmt-panel.open{display:block}
+.cmt-bubble{
+  background:var(--white);border:1px solid var(--border);
+  border-radius:10px;padding:9px 12px;
+  font-size:13px;color:var(--text);line-height:1.55;margin-bottom:8px
+}
+.cmt-meta{
+  font-size:10px;color:var(--muted);margin-bottom:4px;
+  font-family:'JetBrains Mono',monospace
+}
+.cmt-row{display:flex;gap:8px;margin-top:10px;align-items:flex-end}
+.cmt-input{
+  flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;
+  font-size:13px;font-family:inherit;color:var(--text);
+  outline:none;resize:none;transition:border-color .15s;min-height:38px;line-height:1.5
+}
+.cmt-input:focus{border-color:var(--accent)}
+.cmt-submit{
+  padding:8px 14px;background:var(--navy);color:#fff;
+  border:none;border-radius:8px;font-size:12px;font-weight:500;
+  cursor:pointer;transition:background .15s;font-family:inherit;white-space:nowrap
+}
+.cmt-submit:hover{background:var(--blue)}
+
+/* ── Interactive: Action Items ── */
+.ai-toolbar{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:14px;flex-wrap:wrap;gap:8px
+}
+.ai-count{
+  font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)
+}
+.filter-group{display:flex;gap:4px;flex-wrap:wrap}
+.filter-btn{
+  font-size:12px;padding:5px 13px;border-radius:7px;
+  border:1px solid var(--border);background:var(--white);
+  color:var(--muted);cursor:pointer;font-weight:500;
+  transition:all .15s;font-family:inherit
+}
+.filter-btn:hover{background:var(--light);color:var(--text)}
+.filter-btn.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.ai-pill{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:11px;font-weight:500;padding:4px 10px;border-radius:100px;
+  border:1px solid;cursor:pointer;white-space:nowrap;
+  transition:opacity .15s,transform .1s;user-select:none
+}
+.ai-pill:hover{opacity:.82;transform:scale(.97)}
+/* Status popup */
+#ai-popup{
+  display:none;position:fixed;z-index:600;
+  background:var(--white);border:1px solid var(--border);border-radius:12px;
+  box-shadow:0 8px 32px rgba(11,30,61,.16);padding:8px;min-width:170px
+}
+#ai-popup-title{
+  font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);padding:4px 8px 8px;
+  border-bottom:1px solid var(--border);margin-bottom:6px
+}
+.pop-opt{
+  display:flex;align-items:center;gap:9px;padding:7px 10px;
+  border-radius:8px;cursor:pointer;font-size:13px;color:var(--text);
+  transition:background .12s
+}
+.pop-opt:hover{background:var(--light)}
+.pop-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+/* Toast */
+#ai-toast{
+  position:fixed;bottom:80px;right:28px;z-index:9999;
+  background:var(--navy);color:#fff;font-size:13px;
+  padding:10px 18px;border-radius:10px;
+  box-shadow:0 4px 16px rgba(0,0,0,.2);
+  opacity:0;transform:translateY(10px);
+  transition:opacity .25s,transform .25s;pointer-events:none
+}
+#ai-toast.show{opacity:1;transform:translateY(0)}
+
+/* ── Print ── */
+@media print{
+  #sidebar,#scrollTop,#ai-popup,#ai-toast{display:none!important}
+  #main{margin-left:0!important}
+  body{background:#fff;font-size:11pt}
+  .card{break-inside:avoid;box-shadow:none;opacity:1!important;transform:none!important}
+  .hero{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .next-meeting{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+
+/* ── Responsive ── */
+@media(max-width:820px){
+  #sidebar{display:none}
+  #main{margin-left:0}
+  .hero{padding:36px 24px 32px}
+  .participants-strip{padding:14px 24px}
+  .stats-bar .stat-val{font-size:22px}
+  .two-col{grid-template-columns:1fr}
+  .content{padding:0 0 40px}
+  .card,.next-meeting,.page-footer{margin-left:12px;margin-right:12px}
+}
+</style>
+</head>
+<body>
+
+<nav id="sidebar">
+  <div class="sb-brand">
+    <div class="sb-brand-icon">⚙</div>
+    <div>
+      <div class="sb-brand-text">Process2Diagram</div>
+      <div class="sb-brand-sub">Relatório Executivo</div>
+    </div>
+  </div>
+  <div class="sb-section">
+    <span class="sb-label">Navegação</span>
+    <a class="sb-link" data-target="sec-summary" href="javascript:void(0)"><span class="sb-ic">📋</span>Sumário Executivo</a>
+<a class="sb-link" data-target="sec-process" href="javascript:void(0)"><span class="sb-ic">⚙️</span>Visão do Processo</a>
+<a class="sb-link" data-target="sec-bpmn" href="javascript:void(0)"><span class="sb-ic">📐</span>Diagrama BPMN</a>
+<a class="sb-link" data-target="sec-mermaid" href="javascript:void(0)"><span class="sb-ic">📊</span>Fluxograma</a>
+<a class="sb-link" data-target="sec-minutes" href="javascript:void(0)"><span class="sb-ic">📝</span>Ata de Reunião</a>
+<a class="sb-link" data-target="sec-reqs" href="javascript:void(0)"><span class="sb-ic">📋</span>Requisitos</a>
+<a class="sb-link" data-target="sec-quality" href="javascript:void(0)"><span class="sb-ic">🔬</span>Qualidade</a>
+<a class="sb-link" data-target="sec-insights" href="javascript:void(0)"><span class="sb-ic">💡</span>Insights</a>
+  </div>
+</nav>
+<div id="main">
+
+<header class="hero">
+  <div class="hero-badges"><span class="hero-badge gold">Relatório Executivo</span><span class="hero-badge">01/04/2026</span><span class="hero-badge" style="background:#FDE8D822;color:#C05621;border-color:#C0562144">Qualidade D · 57/100</span></div>
+  <h1>Reunião</h1>
+  <p class="hero-sub">Process2Diagram &mdash; Análise automatizada por agentes LLM</p>
+  <div class="hero-cards"><div class="hero-card"><div class="hero-card-label">Processo</div><div class="hero-card-value">Cadastro e Validação de Unidade com Organograma</div></div><div class="hero-card"><div class="hero-card-label">Requisitos</div><div class="hero-card-value">15</div></div><div class="hero-card"><div class="hero-card-label">Gerado por</div><div class="hero-card-value">DeepSeek API Key</div></div><div class="hero-card"><div class="hero-card-label">Data</div><div class="hero-card-value">01/04/2026 às 00:54</div></div></div>
+</header>
+
+<div class="stats-bar"><div class="stat"><div class="stat-val">10</div><div class="stat-lbl">Etapas BPMN</div></div><div class="stat"><div class="stat-val">2</div><div class="stat-lbl">Decisões</div></div><div class="stat"><div class="stat-val">0</div><div class="stat-lbl">Action Items</div></div><div class="stat"><div class="stat-val">15</div><div class="stat-lbl">Requisitos</div></div><div class="stat"><div class="stat-val">5</div><div class="stat-lbl">Alta Prioridade</div></div></div>
+<button class="expand-all-btn" id="expandAllBtn">
+  <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2">
+    <polyline points="7 13 12 18 17 13"/><polyline points="7 6 12 11 17 6"/>
+  </svg>
+  Expandir todas as seções
+</button>
+<div class="content">
+
+<section class="section card" id="sec-summary">
+  <div class="card-header">
+    <div class="section-icon">📋</div>
+    <h2 class="section-title">Sumário Executivo</h2>
+    <div class="chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div>
+  </div>
+  <div class="card-body"><p>A reunião teve como objetivo discutir o processo de &#x27;Cadastro e Validação de Unidade com Organograma&#x27;, um fluxo crítico para a gestão organizacional. O processo envolve duas equipes principais: a Equipe operacional, responsável pelo cadastro inicial e configuração hierárquica, e a Equipe Gestora, encarregada da validação e aprovação final. As principais decisões incluíram a definição de regras de negócio, como a obrigatoriedade do código da unidade e a data de corte para migração, além da priorização de requisitos funcionais e de interface.</p><p>O estado do projeto está em fase de definição de requisitos, com 15 itens identificados, sendo 5 de alta prioridade. A transcrição da reunião apresentou qualidade baixa (score 57/100), com artefatos e ruídos que limitam a análise detalhada, exigindo correção manual para uso confiável. Apesar disso, a estrutura do processo e os requisitos-chave foram extraídos, permitindo uma visão geral do fluxo e das necessidades do sistema.</p><p>O processo foi mapeado com 10 tarefas e 2 pontos de decisão, destacando a importância da validação gerencial e da gestão de organogramas. As discussões focaram em aspectos como migração via planilha Excel, histórico de organogramas e classificação de nível de interesse, indicando um projeto complexo com múltiplas dependências técnicas e de negócio.</p></div>
+</section>
+
+<section class="section card" id="sec-process">
+  <div class="card-header">
+    <div class="section-icon">⚙️</div>
+    <h2 class="section-title">Visão do Processo</h2>
+    <div class="chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div>
+  </div>
+  <div class="card-body">
+<div style="margin-bottom:20px"><p>O processo inicia com a Equipe cadastrando uma unidade no sistema, incluindo informações obrigatórias como o código. Em seguida, uma decisão é tomada para verificar se a unidade possui um organograma; caso afirmativo, a Equipe procede ao cadastro das unidades filhas para estabelecer a hierarquia. Após essa etapa, o cadastro é enviado para validação pela Equipe Gestora.</p><p>A Equipe Gestora então valida o cadastro da unidade, seguido por uma decisão sobre a ação pós-validação. Se necessário, ajustes são solicitados à Equipe, que os realiza antes do reenvio. Uma vez aprovado, a Equipe Gestora finaliza a aprovação do cadastro. Paralelamente, a Equipe cria o organograma da unidade e classifica o nível de interesse do processo, completando o fluxo com a integração de dados e estrutura organizacional.</p></div>
+<div class="col-label" style="margin-bottom:8px">Swimlanes</div><div class="chips" style="margin-bottom:20px"><span class="chip">Equipe</span><span class="chip">Equipe Gestora</span></div>
+<div class="col-label" style="margin-bottom:8px">
+  10 etapas &nbsp;&middot;&nbsp; 2 gateways de decisão
+</div>
+<table>
+  <thead><tr><th>ID</th><th>Etapa</th><th>Lane</th><th>Tipo</th></tr></thead>
+  <tbody><tr><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>S01</span></td><td>Cadastrar unidade no sistema</td><td>Equipe</td><td><span style='font-size:11px;color:var(--muted)'>Usuário</span></td></tr><tr><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>S02</span></td><td>Decidir se unidade tem organograma <span style="font-family:JetBrains Mono,monospace;font-size:10px;background:#6B3FA022;color:#6B3FA0;padding:1px 6px;border-radius:4px">GW</span></td><td>Equipe</td><td><span style='font-size:11px;color:var(--muted)'>Usuário</span></td></tr><tr><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>S03</span></td><td>Cadastrar unidades filhas (hierarquia)</td><td>Equipe</td><td><span style='font-size:11px;color:var(--muted)'>Usuário</span></td></tr><tr><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>S04</span></td><td>Enviar para validação</td><td>Equipe</td><td><span style='font-size:11px;color:var(--muted)'>Usuário</span></td></tr><tr><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>S05</span></td><td>Validar cadastro da unidade</td><td>Equipe Gestora</td><td><span style='font-size:11px;color:var(--muted)'>Usuário</span></td></tr><tr><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>S06</span></td><td>Decidir ação pós-validação <span style="font-family:JetBrains Mono,monospace;font-size:10px;background:#6B3FA022;color:#6B3FA0;padding:1px 6px;border-radius:4px">GW</span></td><td>Equipe Gestora</td><td><span style='font-size:11px;color:var(--muted)'>Usuário</span></td></tr><tr><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>S07</span></td><td>Solicitar ajustes no cadastro</td><td>Equipe Gestora</td><td><span style='font-size:11px;color:var(--muted)'>Usuário</span></td></tr><tr><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>S08</span></td><td>Aprovar cadastro da unidade</td><td>Equipe Gestora</td><td><span style='font-size:11px;color:var(--muted)'>Usuário</span></td></tr><tr><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>S09</span></td><td>Criar organograma da unidade</td><td>Equipe</td><td><span style='font-size:11px;color:var(--muted)'>Usuário</span></td></tr><tr><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>S10</span></td><td>Classificar nível de BI do processo</td><td>Equipe</td><td><span style='font-size:11px;color:var(--muted)'>Regra</span></td></tr></tbody>
+</table></div>
+</section>
+
+<section class="section card" id="sec-bpmn">
+  <div class="card-header">
+    <div class="section-icon">📐</div>
+    <h2 class="section-title">Diagrama BPMN 2.0</h2>
+    <div class="chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div>
+  </div>
+  <div class="card-body"><div class="diagram-wrap"><iframe srcdoc="&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;meta charset=&quot;UTF-8&quot;&gt;
+  &lt;style&gt;
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body, html { width:100%; height:100%; overflow:hidden; background:#f8fafc; user-select:none; }
+
+    /* Manual pan/zoom wrapper — bpmn-js renders inside, we transform the wrapper */
+    #viewport {
+      position: absolute; top:0; left:0;
+      transform-origin: 0 0;
+      cursor: grab;
+    }
+    #viewport.grabbing { cursor: grabbing; }
+
+    /* bpmn-js container — large canvas, content is clipped by body overflow:hidden */
+    #bpmn-container {
+      position: relative;
+      width: 4000px;
+      height: 3000px;
+    }
+
+    /* Suppress bpmn-js built-in overlays that interfere with our pan */
+    .djs-overlay-container { pointer-events: none !important; }
+
+    #toolbar {
+      position: fixed; top: 8px; right: 8px;
+      display: flex; align-items: center; gap: 4px;
+      z-index: 100;
+    }
+    .tb-btn {
+      width:32px; height:32px; border:1px solid #cbd5e1; background:#fff;
+      border-radius:6px; cursor:pointer; font-size:14px;
+      display:flex; align-items:center; justify-content:center;
+      color:#475569; transition: all 0.15s;
+    }
+    .tb-btn:hover { background:#f1f5f9; border-color:#94a3b8; }
+    #zoom-label { color:#94a3b8; font-size:11px; font-family:monospace; min-width:40px; text-align:center; }
+
+    #loading {
+      position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+      background:white; padding:12px 24px; border-radius:8px;
+      box-shadow:0 2px 8px rgba(0,0,0,0.1); color:#64748b; z-index:200;
+    }
+    #err {
+      display:none; position:fixed; top:16px; left:50%; transform:translateX(-50%);
+      background:white; border:1px solid #fca5a5; border-radius:8px;
+      padding:16px 24px; max-width:600px; font-family:monospace; font-size:12px;
+      color:#dc2626; box-shadow:0 4px 24px rgba(0,0,0,0.15); z-index:300;
+    }
+  &lt;/style&gt;
+  &lt;link rel=&quot;stylesheet&quot; href=&quot;https://unpkg.com/bpmn-js@17/dist/assets/bpmn-js.css&quot;&gt;
+  &lt;link rel=&quot;stylesheet&quot; href=&quot;https://unpkg.com/bpmn-js@17/dist/assets/diagram-js.css&quot;&gt;
+  &lt;link rel=&quot;stylesheet&quot; href=&quot;https://unpkg.com/bpmn-js@17/dist/assets/bpmn-font/css/bpmn-embedded.css&quot;&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;div id=&quot;loading&quot;&gt;Carregando diagrama...&lt;/div&gt;
+&lt;div id=&quot;viewport&quot;&gt;
+  &lt;div id=&quot;bpmn-container&quot;&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div id=&quot;toolbar&quot;&gt;
+  &lt;button class=&quot;tb-btn&quot; id=&quot;btn-in&quot;    title=&quot;Zoom in&quot;&gt;&amp;#43;&lt;/button&gt;
+  &lt;button class=&quot;tb-btn&quot; id=&quot;btn-out&quot;   title=&quot;Zoom out&quot;&gt;&amp;#8722;&lt;/button&gt;
+  &lt;button class=&quot;tb-btn&quot; id=&quot;btn-fit&quot;   title=&quot;Fit to screen&quot;&gt;&amp;#8865;&lt;/button&gt;
+  &lt;button class=&quot;tb-btn&quot; id=&quot;btn-reset&quot; title=&quot;Reset view&quot;&gt;&amp;#8634;&lt;/button&gt;
+&lt;/div&gt;
+&lt;div id=&quot;zoom-label&quot; style=&quot;position:fixed;bottom:8px;left:8px;z-index:100;font-size:11px;color:#94a3b8;pointer-events:none&quot;&gt;100% | Scroll: zoom | Drag: mover&lt;/div&gt;
+&lt;div id=&quot;err&quot;&gt;&lt;/div&gt;
+
+&lt;script src=&quot;https://unpkg.com/bpmn-js@17/dist/bpmn-viewer.development.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(function() {
+  const xml     = `&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;bpmn:definitions xmlns:bpmn=&quot;http://www.omg.org/spec/BPMN/20100524/MODEL&quot; xmlns:bpmndi=&quot;http://www.omg.org/spec/BPMN/20100524/DI&quot; xmlns:dc=&quot;http://www.omg.org/spec/DD/20100524/DC&quot; xmlns:di=&quot;http://www.omg.org/spec/DD/20100524/DI&quot; xmlns=&quot;http://www.omg.org/spec/BPMN/20100524/MODEL&quot; xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; targetNamespace=&quot;http://process2diagram.io/bpmn&quot; id=&quot;definitions_1&quot; exporter=&quot;Process2Diagram&quot; exporterVersion=&quot;3.0&quot;&gt;&lt;bpmn:process id=&quot;process_1&quot; name=&quot;Cadastro e Validação de Unidade com Organograma&quot; isExecutable=&quot;false&quot; processType=&quot;None&quot;&gt;&lt;bpmn:laneSet id=&quot;pool_1_lset&quot;&gt;&lt;bpmn:lane id=&quot;lane_equipe&quot; name=&quot;Equipe&quot;&gt;&lt;bpmn:flowNodeRef&gt;S01&lt;/bpmn:flowNodeRef&gt;&lt;bpmn:flowNodeRef&gt;S02&lt;/bpmn:flowNodeRef&gt;&lt;bpmn:flowNodeRef&gt;S03&lt;/bpmn:flowNodeRef&gt;&lt;bpmn:flowNodeRef&gt;S04&lt;/bpmn:flowNodeRef&gt;&lt;bpmn:flowNodeRef&gt;S09&lt;/bpmn:flowNodeRef&gt;&lt;bpmn:flowNodeRef&gt;S10&lt;/bpmn:flowNodeRef&gt;&lt;bpmn:flowNodeRef&gt;ev_start&lt;/bpmn:flowNodeRef&gt;&lt;bpmn:flowNodeRef&gt;lnk_catch_1&lt;/bpmn:flowNodeRef&gt;&lt;bpmn:flowNodeRef&gt;lnk_throw_2&lt;/bpmn:flowNodeRef&gt;&lt;/bpmn:lane&gt;&lt;bpmn:lane id=&quot;lane_equipe_gestora&quot; name=&quot;Equipe Gestora&quot;&gt;&lt;bpmn:flowNodeRef&gt;S05&lt;/bpmn:flowNodeRef&gt;&lt;bpmn:flowNodeRef&gt;S06&lt;/bpmn:flowNodeRef&gt;&lt;bpmn:flowNodeRef&gt;S07&lt;/bpmn:flowNodeRef&gt;&lt;bpmn:flowNodeRef&gt;S08&lt;/bpmn:flowNodeRef&gt;&lt;bpmn:flowNodeRef&gt;ev_end&lt;/bpmn:flowNodeRef&gt;&lt;bpmn:flowNodeRef&gt;lnk_throw_1&lt;/bpmn:flowNodeRef&gt;&lt;bpmn:flowNodeRef&gt;lnk_catch_2&lt;/bpmn:flowNodeRef&gt;&lt;/bpmn:lane&gt;&lt;/bpmn:laneSet&gt;&lt;bpmn:startEvent id=&quot;ev_start&quot; name=&quot;Início&quot; /&gt;&lt;bpmn:userTask id=&quot;S01&quot; name=&quot;Cadastrar unidade no sistema&quot;&gt;&lt;bpmn:documentation&gt;Equipe cadastra nova unidade (ex: tesouraria, secretaria) com código e nome. [AMBIGUIDADE: não ficou claro quem executa — assumido como &#x27;Equipe&#x27; baseado em contexto]&lt;/bpmn:documentation&gt;&lt;/bpmn:userTask&gt;&lt;bpmn:exclusiveGateway id=&quot;S02&quot; name=&quot;Decidir se unidade tem organograma&quot;&gt;&lt;bpmn:documentation&gt;Equipe decide se a unidade cadastrada terá organograma (ex: escolas têm, unidades operacionais como tesouraria não).&lt;/bpmn:documentation&gt;&lt;/bpmn:exclusiveGateway&gt;&lt;bpmn:userTask id=&quot;S03&quot; name=&quot;Cadastrar unidades filhas (hierarquia)&quot;&gt;&lt;bpmn:documentation&gt;Equipe cadastra unidades subordinadas (ex: secretaria e compras sob diretoria de operações). Opcional, não obrigatório.&lt;/bpmn:documentation&gt;&lt;/bpmn:userTask&gt;&lt;bpmn:userTask id=&quot;S04&quot; name=&quot;Enviar para validação&quot;&gt;&lt;bpmn:documentation&gt;Equipe envia cadastro da unidade para validação pela equipe gestora.&lt;/bpmn:documentation&gt;&lt;/bpmn:userTask&gt;&lt;bpmn:userTask id=&quot;S05&quot; name=&quot;Validar cadastro da unidade&quot;&gt;&lt;bpmn:documentation&gt;Equipe gestora valida o cadastro da unidade. Pode aprovar, devolver para ajustes ou rotear para criação de outros artefatos (CT, IT, fluxo, BI).&lt;/bpmn:documentation&gt;&lt;/bpmn:userTask&gt;&lt;bpmn:exclusiveGateway id=&quot;S06&quot; name=&quot;Decidir ação pós-validação&quot;&gt;&lt;bpmn:documentation&gt;Equipe gestora decide o próximo passo após validação: ajustes, criação de artefatos ou aprovação.&lt;/bpmn:documentation&gt;&lt;/bpmn:exclusiveGateway&gt;&lt;bpmn:userTask id=&quot;S07&quot; name=&quot;Solicitar ajustes no cadastro&quot;&gt;&lt;bpmn:documentation&gt;Equipe gestora devolve cadastro com indicação de erros para correção pela equipe.&lt;/bpmn:documentation&gt;&lt;/bpmn:userTask&gt;&lt;bpmn:userTask id=&quot;S08&quot; name=&quot;Aprovar cadastro da unidade&quot;&gt;&lt;bpmn:documentation&gt;Equipe gestora aprova o cadastro validado da unidade.&lt;/bpmn:documentation&gt;&lt;/bpmn:userTask&gt;&lt;bpmn:userTask id=&quot;S09&quot; name=&quot;Criar organograma da unidade&quot;&gt;&lt;bpmn:documentation&gt;Equipe cria organograma para a unidade (aplicável apenas se decisão em S02 for &#x27;sim&#x27;). Inclui upload de arquivos (PDF, Word, Excel, imagens) e preenchimento de dados como data de referência.&lt;/bpmn:documentation&gt;&lt;/bpmn:userTask&gt;&lt;bpmn:businessRuleTask id=&quot;S10&quot; name=&quot;Classificar nível de BI do processo&quot;&gt;&lt;bpmn:documentation&gt;Equipe classifica o processo associado à unidade quanto ao nível de Business Intelligence: estratégico (presidente/diretoria), tático (gerencial) ou operacional (equipes). [AMBIGUIDADE: transcrição indica que isso será definido posteriormente com Deise; modelado como tarefa para capturar requisito]&lt;/bpmn:documentation&gt;&lt;/bpmn:businessRuleTask&gt;&lt;bpmn:endEvent id=&quot;ev_end&quot; name=&quot;Fim&quot; /&gt;&lt;bpmn:intermediateThrowEvent id=&quot;lnk_throw_1&quot; name=&quot;L1&quot;&gt;&lt;bpmn:linkEventDefinition id=&quot;lnk_throw_1_def&quot; /&gt;&lt;/bpmn:intermediateThrowEvent&gt;&lt;bpmn:intermediateCatchEvent id=&quot;lnk_catch_1&quot; name=&quot;L1&quot;&gt;&lt;bpmn:linkEventDefinition id=&quot;lnk_catch_1_def&quot; /&gt;&lt;/bpmn:intermediateCatchEvent&gt;&lt;bpmn:intermediateThrowEvent id=&quot;lnk_throw_2&quot; name=&quot;L2&quot;&gt;&lt;bpmn:linkEventDefinition id=&quot;lnk_throw_2_def&quot; /&gt;&lt;/bpmn:intermediateThrowEvent&gt;&lt;bpmn:intermediateCatchEvent id=&quot;lnk_catch_2&quot; name=&quot;L2&quot;&gt;&lt;bpmn:linkEventDefinition id=&quot;lnk_catch_2_def&quot; /&gt;&lt;/bpmn:intermediateCatchEvent&gt;&lt;bpmn:sequenceFlow id=&quot;sf_start&quot; name=&quot;&quot; sourceRef=&quot;ev_start&quot; targetRef=&quot;S01&quot; /&gt;&lt;bpmn:sequenceFlow id=&quot;sf_001&quot; name=&quot;&quot; sourceRef=&quot;S01&quot; targetRef=&quot;S02&quot; /&gt;&lt;bpmn:sequenceFlow id=&quot;sf_002&quot; name=&quot;não tem organograma&quot; sourceRef=&quot;S02&quot; targetRef=&quot;S03&quot; /&gt;&lt;bpmn:sequenceFlow id=&quot;sf_003&quot; name=&quot;tem organograma&quot; sourceRef=&quot;S02&quot; targetRef=&quot;S09&quot; /&gt;&lt;bpmn:sequenceFlow id=&quot;sf_004&quot; name=&quot;&quot; sourceRef=&quot;S03&quot; targetRef=&quot;S04&quot; /&gt;&lt;bpmn:sequenceFlow id=&quot;sf_005&quot; name=&quot;&quot; sourceRef=&quot;S09&quot; targetRef=&quot;S04&quot; /&gt;&lt;bpmn:sequenceFlow id=&quot;sf_006&quot; name=&quot;&quot; sourceRef=&quot;S04&quot; targetRef=&quot;S05&quot; /&gt;&lt;bpmn:sequenceFlow id=&quot;sf_007&quot; name=&quot;&quot; sourceRef=&quot;S05&quot; targetRef=&quot;S06&quot; /&gt;&lt;bpmn:sequenceFlow id=&quot;sf_008&quot; name=&quot;com erros&quot; sourceRef=&quot;S06&quot; targetRef=&quot;S07&quot; /&gt;&lt;bpmn:sequenceFlow id=&quot;sf_009&quot; name=&quot;aprovado&quot; sourceRef=&quot;S06&quot; targetRef=&quot;S10&quot; /&gt;&lt;bpmn:sequenceFlow id=&quot;sf_010_a&quot; name=&quot;&quot; sourceRef=&quot;S07&quot; targetRef=&quot;lnk_throw_1&quot; /&gt;&lt;bpmn:sequenceFlow id=&quot;sf_010_b&quot; name=&quot;&quot; sourceRef=&quot;lnk_catch_1&quot; targetRef=&quot;S01&quot; /&gt;&lt;bpmn:sequenceFlow id=&quot;sf_011_a&quot; name=&quot;&quot; sourceRef=&quot;S10&quot; targetRef=&quot;lnk_throw_2&quot; /&gt;&lt;bpmn:sequenceFlow id=&quot;sf_011_b&quot; name=&quot;&quot; sourceRef=&quot;lnk_catch_2&quot; targetRef=&quot;S08&quot; /&gt;&lt;bpmn:sequenceFlow id=&quot;sf_end&quot; name=&quot;&quot; sourceRef=&quot;S08&quot; targetRef=&quot;ev_end&quot; /&gt;&lt;/bpmn:process&gt;&lt;bpmn:collaboration id=&quot;collab_1&quot;&gt;&lt;bpmn:participant id=&quot;pool_1&quot; name=&quot;Cadastro e Validação de Unidade com Organograma&quot; processRef=&quot;process_1&quot; /&gt;&lt;/bpmn:collaboration&gt;&lt;bpmndi:BPMNDiagram id=&quot;diagram_1&quot;&gt;&lt;bpmndi:BPMNPlane id=&quot;plane_1&quot; bpmnElement=&quot;collab_1&quot;&gt;&lt;bpmndi:BPMNShape id=&quot;pool_1_di&quot; bpmnElement=&quot;pool_1&quot; isHorizontal=&quot;true&quot;&gt;&lt;dc:Bounds x=&quot;0&quot; y=&quot;0&quot; width=&quot;1656&quot; height=&quot;476&quot; /&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNShape id=&quot;lane_equipe_di&quot; bpmnElement=&quot;lane_equipe&quot; isHorizontal=&quot;true&quot;&gt;&lt;dc:Bounds x=&quot;100&quot; y=&quot;0&quot; width=&quot;1556&quot; height=&quot;250&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;110&quot; y=&quot;10&quot; width=&quot;80&quot; height=&quot;230&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNShape id=&quot;lane_equipe_gestora_di&quot; bpmnElement=&quot;lane_equipe_gestora&quot; isHorizontal=&quot;true&quot;&gt;&lt;dc:Bounds x=&quot;100&quot; y=&quot;250&quot; width=&quot;1556&quot; height=&quot;226&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;110&quot; y=&quot;260&quot; width=&quot;80&quot; height=&quot;206&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNShape id=&quot;ev_start_di&quot; bpmnElement=&quot;ev_start&quot;&gt;&lt;dc:Bounds x=&quot;280&quot; y=&quot;107&quot; width=&quot;36&quot; height=&quot;36&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;280&quot; y=&quot;85&quot; width=&quot;36&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNShape id=&quot;S01_di&quot; bpmnElement=&quot;S01&quot;&gt;&lt;dc:Bounds x=&quot;386&quot; y=&quot;123&quot; width=&quot;120&quot; height=&quot;60&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;386&quot; y=&quot;185&quot; width=&quot;120&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNShape id=&quot;S02_di&quot; bpmnElement=&quot;S02&quot;&gt;&lt;dc:Bounds x=&quot;576&quot; y=&quot;100&quot; width=&quot;50&quot; height=&quot;50&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;576&quot; y=&quot;152&quot; width=&quot;50&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNShape id=&quot;S03_di&quot; bpmnElement=&quot;S03&quot;&gt;&lt;dc:Bounds x=&quot;696&quot; y=&quot;55&quot; width=&quot;120&quot; height=&quot;60&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;696&quot; y=&quot;117&quot; width=&quot;120&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNShape id=&quot;S04_di&quot; bpmnElement=&quot;S04&quot;&gt;&lt;dc:Bounds x=&quot;886&quot; y=&quot;95&quot; width=&quot;120&quot; height=&quot;60&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;886&quot; y=&quot;157&quot; width=&quot;120&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNShape id=&quot;S05_di&quot; bpmnElement=&quot;S05&quot;&gt;&lt;dc:Bounds x=&quot;1076&quot; y=&quot;333&quot; width=&quot;120&quot; height=&quot;60&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;1076&quot; y=&quot;395&quot; width=&quot;120&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNShape id=&quot;S06_di&quot; bpmnElement=&quot;S06&quot;&gt;&lt;dc:Bounds x=&quot;1266&quot; y=&quot;338&quot; width=&quot;50&quot; height=&quot;50&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;1266&quot; y=&quot;390&quot; width=&quot;50&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNShape id=&quot;S07_di&quot; bpmnElement=&quot;S07&quot;&gt;&lt;dc:Bounds x=&quot;1386&quot; y=&quot;305&quot; width=&quot;120&quot; height=&quot;60&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;1386&quot; y=&quot;367&quot; width=&quot;120&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNShape id=&quot;S08_di&quot; bpmnElement=&quot;S08&quot;&gt;&lt;dc:Bounds x=&quot;386&quot; y=&quot;361&quot; width=&quot;120&quot; height=&quot;60&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;386&quot; y=&quot;423&quot; width=&quot;120&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNShape id=&quot;S09_di&quot; bpmnElement=&quot;S09&quot;&gt;&lt;dc:Bounds x=&quot;696&quot; y=&quot;135&quot; width=&quot;120&quot; height=&quot;60&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;696&quot; y=&quot;197&quot; width=&quot;120&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNShape id=&quot;S10_di&quot; bpmnElement=&quot;S10&quot;&gt;&lt;dc:Bounds x=&quot;1386&quot; y=&quot;67&quot; width=&quot;120&quot; height=&quot;60&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;1386&quot; y=&quot;129&quot; width=&quot;120&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNShape id=&quot;ev_end_di&quot; bpmnElement=&quot;ev_end&quot;&gt;&lt;dc:Bounds x=&quot;583&quot; y=&quot;345&quot; width=&quot;36&quot; height=&quot;36&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;583&quot; y=&quot;323&quot; width=&quot;36&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNShape id=&quot;lnk_throw_1_di&quot; bpmnElement=&quot;lnk_throw_1&quot;&gt;&lt;dc:Bounds x=&quot;1428&quot; y=&quot;385&quot; width=&quot;36&quot; height=&quot;36&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;1428&quot; y=&quot;363&quot; width=&quot;36&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNShape id=&quot;lnk_catch_1_di&quot; bpmnElement=&quot;lnk_catch_1&quot;&gt;&lt;dc:Bounds x=&quot;428&quot; y=&quot;67&quot; width=&quot;36&quot; height=&quot;36&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;428&quot; y=&quot;45&quot; width=&quot;36&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNShape id=&quot;lnk_throw_2_di&quot; bpmnElement=&quot;lnk_throw_2&quot;&gt;&lt;dc:Bounds x=&quot;1428&quot; y=&quot;147&quot; width=&quot;36&quot; height=&quot;36&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;1428&quot; y=&quot;125&quot; width=&quot;36&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNShape id=&quot;lnk_catch_2_di&quot; bpmnElement=&quot;lnk_catch_2&quot;&gt;&lt;dc:Bounds x=&quot;428&quot; y=&quot;305&quot; width=&quot;36&quot; height=&quot;36&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;428&quot; y=&quot;283&quot; width=&quot;36&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNShape&gt;&lt;bpmndi:BPMNEdge id=&quot;sf_start_di&quot; bpmnElement=&quot;sf_start&quot;&gt;&lt;di:waypoint x=&quot;316&quot; y=&quot;125&quot; /&gt;&lt;di:waypoint x=&quot;386&quot; y=&quot;153&quot; /&gt;&lt;/bpmndi:BPMNEdge&gt;&lt;bpmndi:BPMNEdge id=&quot;sf_001_di&quot; bpmnElement=&quot;sf_001&quot;&gt;&lt;di:waypoint x=&quot;506&quot; y=&quot;153&quot; /&gt;&lt;di:waypoint x=&quot;576&quot; y=&quot;125&quot; /&gt;&lt;/bpmndi:BPMNEdge&gt;&lt;bpmndi:BPMNEdge id=&quot;sf_002_di&quot; bpmnElement=&quot;sf_002&quot;&gt;&lt;di:waypoint x=&quot;626&quot; y=&quot;125&quot; /&gt;&lt;di:waypoint x=&quot;696&quot; y=&quot;85&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;631&quot; y=&quot;89&quot; width=&quot;60&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNEdge&gt;&lt;bpmndi:BPMNEdge id=&quot;sf_003_di&quot; bpmnElement=&quot;sf_003&quot;&gt;&lt;di:waypoint x=&quot;626&quot; y=&quot;125&quot; /&gt;&lt;di:waypoint x=&quot;696&quot; y=&quot;165&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;631&quot; y=&quot;129&quot; width=&quot;60&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNEdge&gt;&lt;bpmndi:BPMNEdge id=&quot;sf_004_di&quot; bpmnElement=&quot;sf_004&quot;&gt;&lt;di:waypoint x=&quot;816&quot; y=&quot;85&quot; /&gt;&lt;di:waypoint x=&quot;886&quot; y=&quot;125&quot; /&gt;&lt;/bpmndi:BPMNEdge&gt;&lt;bpmndi:BPMNEdge id=&quot;sf_005_di&quot; bpmnElement=&quot;sf_005&quot;&gt;&lt;di:waypoint x=&quot;816&quot; y=&quot;165&quot; /&gt;&lt;di:waypoint x=&quot;886&quot; y=&quot;125&quot; /&gt;&lt;/bpmndi:BPMNEdge&gt;&lt;bpmndi:BPMNEdge id=&quot;sf_006_di&quot; bpmnElement=&quot;sf_006&quot;&gt;&lt;di:waypoint x=&quot;1006&quot; y=&quot;125&quot; /&gt;&lt;di:waypoint x=&quot;1076&quot; y=&quot;125&quot; /&gt;&lt;di:waypoint x=&quot;1076&quot; y=&quot;363&quot; /&gt;&lt;/bpmndi:BPMNEdge&gt;&lt;bpmndi:BPMNEdge id=&quot;sf_007_di&quot; bpmnElement=&quot;sf_007&quot;&gt;&lt;di:waypoint x=&quot;1196&quot; y=&quot;363&quot; /&gt;&lt;di:waypoint x=&quot;1266&quot; y=&quot;363&quot; /&gt;&lt;/bpmndi:BPMNEdge&gt;&lt;bpmndi:BPMNEdge id=&quot;sf_008_di&quot; bpmnElement=&quot;sf_008&quot;&gt;&lt;di:waypoint x=&quot;1316&quot; y=&quot;363&quot; /&gt;&lt;di:waypoint x=&quot;1386&quot; y=&quot;335&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;1321&quot; y=&quot;333&quot; width=&quot;60&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNEdge&gt;&lt;bpmndi:BPMNEdge id=&quot;sf_009_di&quot; bpmnElement=&quot;sf_009&quot;&gt;&lt;di:waypoint x=&quot;1316&quot; y=&quot;363&quot; /&gt;&lt;di:waypoint x=&quot;1386&quot; y=&quot;363&quot; /&gt;&lt;di:waypoint x=&quot;1386&quot; y=&quot;97&quot; /&gt;&lt;bpmndi:BPMNLabel&gt;&lt;dc:Bounds x=&quot;1356&quot; y=&quot;214&quot; width=&quot;60&quot; height=&quot;20&quot; /&gt;&lt;/bpmndi:BPMNLabel&gt;&lt;/bpmndi:BPMNEdge&gt;&lt;bpmndi:BPMNEdge id=&quot;sf_010_a_di&quot; bpmnElement=&quot;sf_010_a&quot;&gt;&lt;di:waypoint x=&quot;1446&quot; y=&quot;365&quot; /&gt;&lt;di:waypoint x=&quot;1446&quot; y=&quot;385&quot; /&gt;&lt;/bpmndi:BPMNEdge&gt;&lt;bpmndi:BPMNEdge id=&quot;sf_010_b_di&quot; bpmnElement=&quot;sf_010_b&quot;&gt;&lt;di:waypoint x=&quot;446&quot; y=&quot;103&quot; /&gt;&lt;di:waypoint x=&quot;446&quot; y=&quot;123&quot; /&gt;&lt;/bpmndi:BPMNEdge&gt;&lt;bpmndi:BPMNEdge id=&quot;sf_011_a_di&quot; bpmnElement=&quot;sf_011_a&quot;&gt;&lt;di:waypoint x=&quot;1446&quot; y=&quot;127&quot; /&gt;&lt;di:waypoint x=&quot;1446&quot; y=&quot;147&quot; /&gt;&lt;/bpmndi:BPMNEdge&gt;&lt;bpmndi:BPMNEdge id=&quot;sf_011_b_di&quot; bpmnElement=&quot;sf_011_b&quot;&gt;&lt;di:waypoint x=&quot;446&quot; y=&quot;341&quot; /&gt;&lt;di:waypoint x=&quot;446&quot; y=&quot;361&quot; /&gt;&lt;/bpmndi:BPMNEdge&gt;&lt;bpmndi:BPMNEdge id=&quot;sf_end_di&quot; bpmnElement=&quot;sf_end&quot;&gt;&lt;di:waypoint x=&quot;506&quot; y=&quot;391&quot; /&gt;&lt;di:waypoint x=&quot;583&quot; y=&quot;363&quot; /&gt;&lt;/bpmndi:BPMNEdge&gt;&lt;/bpmndi:BPMNPlane&gt;&lt;/bpmndi:BPMNDiagram&gt;&lt;/bpmn:definitions&gt;`;
+  const errDiv  = document.getElementById(&#x27;err&#x27;);
+  const loading = document.getElementById(&#x27;loading&#x27;);
+  const vp      = document.getElementById(&#x27;viewport&#x27;);
+  const zoomLbl = document.getElementById(&#x27;zoom-label&#x27;);
+
+  // ── Pan/zoom state ──────────────────────────────────────────────────────
+  let scale = 1, tx = 0, ty = 0;
+  let dragging = false, startX, startY, startTx, startTy;
+  let lastDist = null, touchTx, touchTy;
+
+  function apply() {
+    vp.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`;
+    zoomLbl.textContent = Math.round(scale * 100) + &#x27;% | Scroll: zoom | Drag: mover&#x27;;
+  }
+
+  function clamp(s) { return Math.min(Math.max(s, 0.05), 8); }
+
+  function zoomTo(ns, cx, cy) {
+    const r = ns / scale;
+    tx = cx - r * (cx - tx);
+    ty = cy - r * (cy - ty);
+    scale = clamp(ns);
+    apply();
+  }
+
+  function fitToScreen() {
+    const svg = document.querySelector(&#x27;#bpmn-container svg&#x27;);
+    if (!svg) return;
+    const vb = svg.viewBox &amp;&amp; svg.viewBox.baseVal;
+    let sw, sh;
+    if (vb &amp;&amp; vb.width &gt; 10 &amp;&amp; vb.height &gt; 10) {
+      sw = vb.width; sh = vb.height;
+    } else {
+      sw = parseFloat(svg.getAttribute(&#x27;width&#x27;))  || 800;
+      sh = parseFloat(svg.getAttribute(&#x27;height&#x27;)) || 600;
+    }
+    if (!sw || !sh || sw &lt; 10) return;
+    const W = window.innerWidth, H = window.innerHeight - 60;
+    const ns = clamp(Math.min((W - 40) / sw, (H - 40) / sh));
+    if (!isFinite(ns) || ns &lt;= 0) return;
+    scale = ns;
+    tx = (W - sw * scale) / 2;
+    ty = Math.max(10, (H - sh * scale) / 2);
+    apply();
+  }
+
+  function fitWhenReady(n) {
+    const svg = document.querySelector(&#x27;#bpmn-container svg&#x27;);
+    const vb  = svg &amp;&amp; svg.viewBox &amp;&amp; svg.viewBox.baseVal;
+    if (vb &amp;&amp; vb.width &gt; 10) { fitToScreen(); }
+    else if (n &gt; 0) { setTimeout(() =&gt; fitWhenReady(n - 1), 200); }
+  }
+
+  // Watch for SVG insertion and auto-fit as soon as it&#x27;s ready
+  const observer = new MutationObserver(() =&gt; {
+    const svg = document.querySelector(&#x27;#bpmn-container svg&#x27;);
+    if (svg) {
+      observer.disconnect();
+      // Wait for bpmn-js to finish laying out elements
+      let attempts = 0;
+      const checkAndFit = () =&gt; {
+        const vb = svg.viewBox &amp;&amp; svg.viewBox.baseVal;
+        if (vb &amp;&amp; vb.width &gt; 10 &amp;&amp; vb.height &gt; 10) {
+          fitToScreen();
+        } else if (attempts &lt; 20) {
+          attempts++;
+          setTimeout(checkAndFit, 150);
+        }
+      };
+      setTimeout(checkAndFit, 100);
+    }
+  });
+  observer.observe(document.getElementById(&#x27;bpmn-container&#x27;), { childList: true, subtree: true });
+
+  // ── Mouse pan ───────────────────────────────────────────────────────────
+  vp.addEventListener(&#x27;mousedown&#x27;, e =&gt; {
+    if (e.button !== 0) return;
+    dragging = true; startX = e.clientX; startY = e.clientY;
+    startTx = tx; startTy = ty;
+    vp.classList.add(&#x27;grabbing&#x27;);
+    e.preventDefault();
+  });
+  window.addEventListener(&#x27;mousemove&#x27;, e =&gt; {
+    if (!dragging) return;
+    tx = startTx + e.clientX - startX;
+    ty = startTy + e.clientY - startY;
+    apply();
+  });
+  window.addEventListener(&#x27;mouseup&#x27;, () =&gt; {
+    dragging = false; vp.classList.remove(&#x27;grabbing&#x27;);
+  });
+
+  // ── Wheel zoom ──────────────────────────────────────────────────────────
+  window.addEventListener(&#x27;wheel&#x27;, e =&gt; {
+    e.preventDefault();
+    zoomTo(scale * (e.deltaY &gt; 0 ? 0.9 : 1.1), e.clientX, e.clientY);
+  }, { passive: false });
+
+  // ── Touch ───────────────────────────────────────────────────────────────
+  vp.addEventListener(&#x27;touchstart&#x27;, e =&gt; {
+    if (e.touches.length === 1) {
+      startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+      touchTx = tx; touchTy = ty;
+    }
+    if (e.touches.length === 2) {
+      lastDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+    }
+  }, { passive: true });
+
+  vp.addEventListener(&#x27;touchmove&#x27;, e =&gt; {
+    if (e.touches.length === 1) {
+      tx = touchTx + e.touches[0].clientX - startX;
+      ty = touchTy + e.touches[0].clientY - startY;
+      apply();
+    }
+    if (e.touches.length === 2) {
+      const d  = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      if (lastDist) zoomTo(scale * d / lastDist, mx, my);
+      lastDist = d;
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  vp.addEventListener(&#x27;touchend&#x27;, () =&gt; { lastDist = null; });
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────
+  window.addEventListener(&#x27;keydown&#x27;, e =&gt; {
+    const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+    if (e.key === &#x27;+&#x27; || e.key === &#x27;=&#x27;) zoomTo(scale * 1.15, cx, cy);
+    if (e.key === &#x27;-&#x27;)                  zoomTo(scale * 0.87, cx, cy);
+    if (e.key === &#x27;0&#x27;)                  fitToScreen();
+    if (e.key === &#x27;r&#x27; || e.key === &#x27;R&#x27;) { scale=1; tx=0; ty=0; apply(); }
+  });
+
+  // ── Toolbar buttons ─────────────────────────────────────────────────────
+  const cx = () =&gt; window.innerWidth / 2, cy = () =&gt; window.innerHeight / 2;
+  document.getElementById(&#x27;btn-in&#x27;).onclick    = () =&gt; zoomTo(scale * 1.2, cx(), cy());
+  document.getElementById(&#x27;btn-out&#x27;).onclick   = () =&gt; zoomTo(scale * 0.8, cx(), cy());
+  document.getElementById(&#x27;btn-fit&#x27;).onclick   = fitToScreen;
+  document.getElementById(&#x27;btn-reset&#x27;).onclick = () =&gt; { scale=1; tx=0; ty=0; apply(); };
+
+  // ── Mount bpmn-js — disable its own scroll/keyboard (we own those) ──────
+  const viewer = new BpmnJS({
+    container: &#x27;#bpmn-container&#x27;,
+    keyboard: { bindTo: null },
+  });
+
+  viewer.importXML(xml)
+    .then(() =&gt; {
+      loading.style.display = &#x27;none&#x27;;
+      try { viewer.get(&#x27;zoomScroll&#x27;)._enabled = false; } catch(_) {}
+      setTimeout(() =&gt; fitWhenReady(10), 400);
+    })
+    .catch(err =&gt; {
+      loading.style.display = &#x27;none&#x27;;
+      errDiv.style.display  = &#x27;block&#x27;;
+      errDiv.innerHTML = &#x27;&lt;b&gt;BPMN render error:&lt;/b&gt;&lt;br&gt;&#x27; + err.message;
+    });
+})();
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;" style="width:100%;height:540px;border:none;display:block" title="Diagrama BPMN 2.0" loading="lazy"></iframe></div><p class="diagram-caption">Arraste para mover &nbsp;&middot;&nbsp; Scroll para zoom &nbsp;&middot;&nbsp; Tecla <kbd>0</kbd> para ajustar &nbsp;&middot;&nbsp; <em>Requer internet para carregar bpmn-js via CDN.</em></p></div>
+</section>
+
+<section class="section card" id="sec-mermaid">
+  <div class="card-header">
+    <div class="section-icon">📊</div>
+    <h2 class="section-title">Fluxograma do Processo</h2>
+    <div class="chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div>
+  </div>
+  <div class="card-body"><div class="diagram-wrap" style="padding:16px;background:#fafbfc;overflow:auto;max-height:560px"><svg width="100%" height="auto" id="mermaid-svg" xmlns="http://www.w3.org/2000/svg" class="flowchart" style="max-width: 727.71875px;" viewBox="0 0 727.71875 1358.109375" role="graphics-document document" aria-roledescription="flowchart-v2" xmlns:xlink="http://www.w3.org/1999/xlink"><style xmlns="http://www.w3.org/1999/xhtml">@import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css");</style><style>#mermaid-svg{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;fill:#333;}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#mermaid-svg .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#mermaid-svg .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#mermaid-svg .error-icon{fill:#552222;}#mermaid-svg .error-text{fill:#552222;stroke:#552222;}#mermaid-svg .edge-thickness-normal{stroke-width:1px;}#mermaid-svg .edge-thickness-thick{stroke-width:3.5px;}#mermaid-svg .edge-pattern-solid{stroke-dasharray:0;}#mermaid-svg .edge-thickness-invisible{stroke-width:0;fill:none;}#mermaid-svg .edge-pattern-dashed{stroke-dasharray:3;}#mermaid-svg .edge-pattern-dotted{stroke-dasharray:2;}#mermaid-svg .marker{fill:#333333;stroke:#333333;}#mermaid-svg .marker.cross{stroke:#333333;}#mermaid-svg svg{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;}#mermaid-svg p{margin:0;}#mermaid-svg .label{font-family:"trebuchet ms",verdana,arial,sans-serif;color:#333;}#mermaid-svg .cluster-label text{fill:#333;}#mermaid-svg .cluster-label span{color:#333;}#mermaid-svg .cluster-label span p{background-color:transparent;}#mermaid-svg .label text,#mermaid-svg span{fill:#333;color:#333;}#mermaid-svg .node rect,#mermaid-svg .node circle,#mermaid-svg .node ellipse,#mermaid-svg .node polygon,#mermaid-svg .node path{fill:#ECECFF;stroke:#9370DB;stroke-width:1px;}#mermaid-svg .rough-node .label text,#mermaid-svg .node .label text,#mermaid-svg .image-shape .label,#mermaid-svg .icon-shape .label{text-anchor:middle;}#mermaid-svg .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#mermaid-svg .rough-node .label,#mermaid-svg .node .label,#mermaid-svg .image-shape .label,#mermaid-svg .icon-shape .label{text-align:center;}#mermaid-svg .node.clickable{cursor:pointer;}#mermaid-svg .root .anchor path{fill:#333333!important;stroke-width:0;stroke:#333333;}#mermaid-svg .arrowheadPath{fill:#333333;}#mermaid-svg .edgePath .path{stroke:#333333;stroke-width:2.0px;}#mermaid-svg .flowchart-link{stroke:#333333;fill:none;}#mermaid-svg .edgeLabel{background-color:rgba(232,232,232, 0.8);text-align:center;}#mermaid-svg .edgeLabel p{background-color:rgba(232,232,232, 0.8);}#mermaid-svg .edgeLabel rect{opacity:0.5;background-color:rgba(232,232,232, 0.8);fill:rgba(232,232,232, 0.8);}#mermaid-svg .labelBkg{background-color:rgba(232, 232, 232, 0.5);}#mermaid-svg .cluster rect{fill:#ffffde;stroke:#aaaa33;stroke-width:1px;}#mermaid-svg .cluster text{fill:#333;}#mermaid-svg .cluster span{color:#333;}#mermaid-svg div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:12px;background:hsl(80, 100%, 96.2745098039%);border:1px solid #aaaa33;border-radius:2px;pointer-events:none;z-index:100;}#mermaid-svg .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#333;}#mermaid-svg rect.text{fill:none;stroke-width:0;}#mermaid-svg .icon-shape,#mermaid-svg .image-shape{background-color:rgba(232,232,232, 0.8);text-align:center;}#mermaid-svg .icon-shape p,#mermaid-svg .image-shape p{background-color:rgba(232,232,232, 0.8);padding:2px;}#mermaid-svg .icon-shape rect,#mermaid-svg .image-shape rect{opacity:0.5;background-color:rgba(232,232,232, 0.8);fill:rgba(232,232,232, 0.8);}#mermaid-svg .label-icon{display:inline-block;height:1em;overflow:visible;vertical-align:-0.125em;}#mermaid-svg .node .label-icon path{fill:currentColor;stroke:revert;stroke-width:revert;}#mermaid-svg :root{--mermaid-font-family:"trebuchet ms",verdana,arial,sans-serif;}</style><g><marker id="mermaid-svg_flowchart-v2-pointEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="mermaid-svg_flowchart-v2-pointStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="4.5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 5 L 10 10 L 10 0 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="mermaid-svg_flowchart-v2-circleEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="11" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="mermaid-svg_flowchart-v2-circleStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-1" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="mermaid-svg_flowchart-v2-crossEnd" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="12" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"/></marker><marker id="mermaid-svg_flowchart-v2-crossStart" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="-1" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"/></marker><g class="root"><g class="clusters"/><g class="edgePaths"><path d="M400.734,86L406.398,90.167C412.063,94.333,423.391,102.667,429.055,110.333C434.719,118,434.719,125,434.719,128.5L434.719,132" id="L_S01_S02_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_S01_S02_0" data-points="W3sieCI6NDAwLjczNDM3NSwieSI6ODZ9LHsieCI6NDM0LjcxODc1LCJ5IjoxMTF9LHsieCI6NDM0LjcxODc1LCJ5IjoxMzZ9XQ==" marker-end="url(#mermaid-svg_flowchart-v2-pointEnd)"/><path d="M499.809,348.909L514.794,365.924C529.779,382.94,559.749,416.97,574.734,439.485C589.719,462,589.719,473,589.719,478.5L589.719,484" id="L_S02_S03_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_S02_S03_0" data-points="W3sieCI6NDk5LjgwOTM4NDQ0MTA4NzYsInkiOjM0OC45MDkzNjU1NTg5MTI0fSx7IngiOjU4OS43MTg3NSwieSI6NDUxfSx7IngiOjU4OS43MTg3NSwieSI6NDg4fV0=" marker-end="url(#mermaid-svg_flowchart-v2-pointEnd)"/><path d="M369.628,348.909L354.643,365.924C339.658,382.94,309.689,416.97,294.704,439.485C279.719,462,279.719,473,279.719,478.5L279.719,484" id="L_S02_S09_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_S02_S09_0" data-points="W3sieCI6MzY5LjYyODExNTU1ODkxMjQsInkiOjM0OC45MDkzNjU1NTg5MTI0fSx7IngiOjI3OS43MTg3NSwieSI6NDUxfSx7IngiOjI3OS43MTg3NSwieSI6NDg4fV0=" marker-end="url(#mermaid-svg_flowchart-v2-pointEnd)"/><path d="M589.719,566L589.719,570.167C589.719,574.333,589.719,582.667,577.931,590.788C566.143,598.909,542.567,606.819,530.78,610.773L518.992,614.728" id="L_S03_S04_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_S03_S04_0" data-points="W3sieCI6NTg5LjcxODc1LCJ5Ijo1NjZ9LHsieCI6NTg5LjcxODc1LCJ5Ijo1OTF9LHsieCI6NTE1LjE5OTUxOTIzMDc2OTMsInkiOjYxNn1d" marker-end="url(#mermaid-svg_flowchart-v2-pointEnd)"/><path d="M279.719,566L279.719,570.167C279.719,574.333,279.719,582.667,291.507,590.788C303.294,598.909,326.87,606.819,338.658,610.773L350.446,614.728" id="L_S09_S04_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_S09_S04_0" data-points="W3sieCI6Mjc5LjcxODc1LCJ5Ijo1NjZ9LHsieCI6Mjc5LjcxODc1LCJ5Ijo1OTF9LHsieCI6MzU0LjIzNzk4MDc2OTIzMDgsInkiOjYxNn1d" marker-end="url(#mermaid-svg_flowchart-v2-pointEnd)"/><path d="M434.719,670L434.719,674.167C434.719,678.333,434.719,686.667,434.719,694.333C434.719,702,434.719,709,434.719,712.5L434.719,716" id="L_S04_S05_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_S04_S05_0" data-points="W3sieCI6NDM0LjcxODc1LCJ5Ijo2NzB9LHsieCI6NDM0LjcxODc1LCJ5Ijo2OTV9LHsieCI6NDM0LjcxODc1LCJ5Ijo3MjB9XQ==" marker-end="url(#mermaid-svg_flowchart-v2-pointEnd)"/><path d="M434.719,774L434.719,778.167C434.719,782.333,434.719,790.667,434.719,798.333C434.719,806,434.719,813,434.719,816.5L434.719,820" id="L_S05_S06_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_S05_S06_0" data-points="W3sieCI6NDM0LjcxODc1LCJ5Ijo3NzR9LHsieCI6NDM0LjcxODc1LCJ5Ijo3OTl9LHsieCI6NDM0LjcxODc1LCJ5Ijo4MjR9XQ==" marker-end="url(#mermaid-svg_flowchart-v2-pointEnd)"/><path d="M364.928,1000.318L341.606,1018.117C318.285,1035.915,271.643,1071.512,241.764,1095.039C211.886,1118.566,198.771,1130.022,192.214,1135.75L185.657,1141.478" id="L_S06_S07_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_S06_S07_0" data-points="W3sieCI6MzY0LjkyNzcwMzMwMjI3NTQ2LCJ5IjoxMDAwLjMxODMyODMwMjI3NTV9LHsieCI6MjI1LCJ5IjoxMTA3LjEwOTM3NX0seyJ4IjoxODIuNjQ0NzM2ODQyMTA1MjYsInkiOjExNDQuMTA5Mzc1fV0=" marker-end="url(#mermaid-svg_flowchart-v2-pointEnd)"/><path d="M471.41,1033.418L476.629,1045.7C481.847,1057.982,492.283,1082.545,497.501,1100.327C502.719,1118.109,502.719,1129.109,502.719,1134.609L502.719,1140.109" id="L_S06_S10_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_S06_S10_0" data-points="W3sieCI6NDcxLjQxMDQ3MDA1MDcwMDU1LCJ5IjoxMDMzLjQxNzY1NDk0OTI5OTV9LHsieCI6NTAyLjcxODc1LCJ5IjoxMTA3LjEwOTM3NX0seyJ4Ijo1MDIuNzE4NzUsInkiOjExNDQuMTA5Mzc1fV0=" marker-end="url(#mermaid-svg_flowchart-v2-pointEnd)"/><path d="M123.744,1144.109L121.49,1137.943C119.235,1131.776,114.727,1119.443,112.473,1086.6C110.219,1053.758,110.219,1000.406,110.219,949.055C110.219,897.703,110.219,848.352,110.219,815.009C110.219,781.667,110.219,764.333,110.219,747C110.219,729.667,110.219,712.333,110.219,695C110.219,677.667,110.219,660.333,110.219,643C110.219,625.667,110.219,608.333,110.219,589C110.219,569.667,110.219,548.333,110.219,525C110.219,501.667,110.219,476.333,110.219,434.333C110.219,392.333,110.219,333.667,110.219,277C110.219,220.333,110.219,165.667,127.492,133.679C144.765,101.691,179.311,92.382,196.584,87.727L213.857,83.072" id="L_S07_S01_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_S07_S01_0" data-points="W3sieCI6MTIzLjc0MzgzMjIzNjg0MjExLCJ5IjoxMTQ0LjEwOTM3NX0seyJ4IjoxMTAuMjE4NzUsInkiOjExMDcuMTA5Mzc1fSx7IngiOjExMC4yMTg3NSwieSI6OTQ3LjA1NDY4NzV9LHsieCI6MTEwLjIxODc1LCJ5Ijo3OTl9LHsieCI6MTEwLjIxODc1LCJ5Ijo3NDd9LHsieCI6MTEwLjIxODc1LCJ5Ijo2OTV9LHsieCI6MTEwLjIxODc1LCJ5Ijo2NDN9LHsieCI6MTEwLjIxODc1LCJ5Ijo1OTF9LHsieCI6MTEwLjIxODc1LCJ5Ijo1Mjd9LHsieCI6MTEwLjIxODc1LCJ5Ijo0NTF9LHsieCI6MTEwLjIxODc1LCJ5IjoyNzV9LHsieCI6MTEwLjIxODc1LCJ5IjoxMTF9LHsieCI6MjE3LjcxODc1LCJ5Ijo4Mi4wMzE1Nzg5NDczNjg0Mn1d" marker-end="url(#mermaid-svg_flowchart-v2-pointEnd)"/><path d="M502.719,1222.109L502.719,1226.276C502.719,1230.443,502.719,1238.776,502.719,1246.443C502.719,1254.109,502.719,1261.109,502.719,1264.609L502.719,1268.109" id="L_S10_S08_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_S10_S08_0" data-points="W3sieCI6NTAyLjcxODc1LCJ5IjoxMjIyLjEwOTM3NX0seyJ4Ijo1MDIuNzE4NzUsInkiOjEyNDcuMTA5Mzc1fSx7IngiOjUwMi43MTg3NSwieSI6MTI3Mi4xMDkzNzV9XQ==" marker-end="url(#mermaid-svg_flowchart-v2-pointEnd)"/></g><g class="edgeLabels"><g class="edgeLabel"><g class="label" data-id="L_S01_S02_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(589.71875, 451)"><g class="label" data-id="L_S02_S03_0" transform="translate(-78.71875, -12)"><foreignObject width="157.4375" height="24"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>não tem organograma</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(279.71875, 451)"><g class="label" data-id="L_S02_S09_0" transform="translate(-63.1484375, -12)"><foreignObject width="126.296875" height="24"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>tem organograma</p></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_S03_S04_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_S09_S04_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_S04_S05_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_S05_S06_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(272.61003, 1070.774)"><g class="label" data-id="L_S06_S07_0" transform="translate(-35.5625, -12)"><foreignObject width="71.125" height="24"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>com erros</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(502.71875, 1107.109375)"><g class="label" data-id="L_S06_S10_0" transform="translate(-33.359375, -12)"><foreignObject width="66.71875" height="24"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>aprovado</p></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_S07_S01_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_S10_S08_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g></g><g class="nodes"><g class="node default  " id="flowchart-S01-0" transform="translate(347.71875, 47)"><rect class="basic label-container" style="" x="-130" y="-39" width="260" height="78"/><g class="label" style="" transform="translate(-100, -24)"><rect/><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>Cadastrar unidade no sistema</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-S02-1" transform="translate(434.71875, 275)"><polygon points="139,0 278,-139 139,-278 0,-139" class="label-container" transform="translate(-138.5, 139)" style="fill:#fff3cd !important;stroke:#f59e0b !important"/><g class="label" style="" transform="translate(-100, -24)"><rect/><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>Decidir se unidade tem organograma</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-S03-2" transform="translate(589.71875, 527)"><rect class="basic label-container" style="" x="-130" y="-39" width="260" height="78"/><g class="label" style="" transform="translate(-100, -24)"><rect/><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>Cadastrar unidades filhas (hierarquia)</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-S04-3" transform="translate(434.71875, 643)"><rect class="basic label-container" style="" x="-106.9375" y="-27" width="213.875" height="54"/><g class="label" style="" transform="translate(-76.9375, -12)"><rect/><foreignObject width="153.875" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Enviar para validação</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-S05-4" transform="translate(434.71875, 747)"><rect class="basic label-container" style="" x="-129.03125" y="-27" width="258.0625" height="54"/><g class="label" style="" transform="translate(-99.03125, -12)"><rect/><foreignObject width="198.0625" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Validar cadastro da unidade</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-S06-5" transform="translate(434.71875, 947.0546875)"><polygon points="123.0546875,0 246.109375,-123.0546875 123.0546875,-246.109375 0,-123.0546875" class="label-container" transform="translate(-122.5546875, 123.0546875)" style="fill:#fff3cd !important;stroke:#f59e0b !important"/><g class="label" style="" transform="translate(-96.0546875, -12)"><rect/><foreignObject width="192.109375" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Decidir ação pós-validação</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-S07-6" transform="translate(138, 1183.109375)"><rect class="basic label-container" style="" x="-130" y="-39" width="260" height="78"/><g class="label" style="" transform="translate(-100, -24)"><rect/><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>Solicitar ajustes no cadastro</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-S08-7" transform="translate(502.71875, 1311.109375)"><rect class="basic label-container" style="" x="-130" y="-39" width="260" height="78"/><g class="label" style="" transform="translate(-100, -24)"><rect/><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>Aprovar cadastro da unidade</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-S09-8" transform="translate(279.71875, 527)"><rect class="basic label-container" style="" x="-130" y="-39" width="260" height="78"/><g class="label" style="" transform="translate(-100, -24)"><rect/><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>Criar organograma da unidade</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-S10-9" transform="translate(502.71875, 1183.109375)"><rect class="basic label-container" style="" x="-130" y="-39" width="260" height="78"/><g class="label" style="" transform="translate(-100, -24)"><rect/><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>Classificar nível de BI do processo</p></span></div></foreignObject></g></g></g></g></g></svg></div><p class="diagram-caption">Fluxograma gerado via mermaid.ink &nbsp;&middot;&nbsp; SVG embutido &mdash; funciona sem internet.</p></div>
+</section>
+
+<section class="section card" id="sec-minutes">
+  <div class="card-header">
+    <div class="section-icon">📝</div>
+    <h2 class="section-title">Ata de Reunião</h2>
+    <div class="chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div>
+  </div>
+  <div class="card-body"><p><em>Sem decisões ou action items registrados.</em></p></div>
+</section>
+
+<section class="section card" id="sec-reqs">
+  <div class="card-header">
+    <div class="section-icon">📋</div>
+    <h2 class="section-title">Especificação de Requisitos</h2>
+    <div class="chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div>
+  </div>
+  <div class="card-body">
+<div style="margin-bottom:16px">
+  <span style="font-family:'DM Serif Display',serif;font-size:32px;color:var(--navy)">15</span>
+  <span style="color:var(--muted);margin-left:6px;font-size:13px">requisitos &nbsp;&middot;&nbsp;</span>
+  <span style="font-weight:600;color:var(--amber)">5 alta prioridade</span>
+</div>
+<div style="margin-bottom:22px"><div class="bar-wrap"><div class="bar-label">Campo de Tela</div><div class="bar-track"><div class="bar-fill" style="width:33%;background:#2E7FD9"></div></div><div class="bar-count">5</div></div><div class="bar-wrap"><div class="bar-label">Validação</div><div class="bar-track"><div class="bar-fill" style="width:6%;background:#0891b2"></div></div><div class="bar-count">1</div></div><div class="bar-wrap"><div class="bar-label">Regra de Negócio</div><div class="bar-track"><div class="bar-fill" style="width:13%;background:#6B3FA0"></div></div><div class="bar-count">2</div></div><div class="bar-wrap"><div class="bar-label">Funcional</div><div class="bar-track"><div class="bar-fill" style="width:40%;background:#1A7F5A"></div></div><div class="bar-count">6</div></div><div class="bar-wrap"><div class="bar-label">Não Funcional</div><div class="bar-track"><div class="bar-fill" style="width:6%;background:#C97B1A"></div></div><div class="bar-count">1</div></div></div>
+
+<div class="req-toolbar">
+  <div class="req-toolbar-row">
+    <span class="col-label" style="margin:0;white-space:nowrap">Tipo:</span>
+    <div class="filter-group"><button class="req-filter-btn active" data-req-filter-type="all">Todos os tipos</button><button class="req-filter-btn" data-req-filter-type="ui_field" style="--req-color:#2E7FD9">Campo de Tela</button><button class="req-filter-btn" data-req-filter-type="validation" style="--req-color:#0891b2">Validação</button><button class="req-filter-btn" data-req-filter-type="business_rule" style="--req-color:#6B3FA0">Regra de Negócio</button><button class="req-filter-btn" data-req-filter-type="functional" style="--req-color:#1A7F5A">Funcional</button><button class="req-filter-btn" data-req-filter-type="non_functional" style="--req-color:#C97B1A">Não Funcional</button></div>
+  </div>
+  <div class="req-toolbar-row">
+    <span class="col-label" style="margin:0;white-space:nowrap">Prioridade:</span>
+    <div class="filter-group"><button class="req-filter-btn active" data-req-filter-prio="all">Todas</button><button class="req-filter-btn" data-req-filter-prio="high" style="--req-color:#C97B1A">Alta</button><button class="req-filter-btn" data-req-filter-prio="medium" style="--req-color:#2E7FD9">Média</button><button class="req-filter-btn" data-req-filter-prio="low" style="--req-color:#1A7F5A">Baixa</button></div>
+  </div>
+  <div class="ai-count" style="margin-top:4px">
+    <span id="req-visible">15</span> de 15 requisitos
+  </div>
+</div>
+<div style="overflow-x:auto;margin-top:14px">
+<table>
+  <thead><tr><th>ID</th><th>Tipo</th><th>Prioridade</th><th>Título</th><th>Ator</th></tr></thead>
+  <tbody id="req-tbody"><tr data-req-type="business_rule" data-req-prio="high"><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>REQ08</span></td><td><span style="display:inline-block;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#F0E8FA;color:#6B3FA0;border:1px solid #6B3FA033">Regra de Negócio</span></td><td><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#FEF3E2;color:#C97B1A;border:1px solid #F5D9A0;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:#C97B1A;flex-shrink:0;display:inline-block"></span>Alta</span></td><td>Data de corte para migração</td><td style='font-size:12px;color:var(--muted)'>—</td></tr><tr data-req-type="business_rule" data-req-prio="high"><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>REQ14</span></td><td><span style="display:inline-block;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#F0E8FA;color:#6B3FA0;border:1px solid #6B3FA033">Regra de Negócio</span></td><td><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#FEF3E2;color:#C97B1A;border:1px solid #F5D9A0;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:#C97B1A;flex-shrink:0;display:inline-block"></span>Alta</span></td><td>Estrutura hierárquica de unidades</td><td style='font-size:12px;color:var(--muted)'>—</td></tr><tr data-req-type="functional" data-req-prio="high"><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>REQ06</span></td><td><span style="display:inline-block;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#E3F5ED;color:#1A7F5A;border:1px solid #1A7F5A33">Funcional</span></td><td><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#FEF3E2;color:#C97B1A;border:1px solid #F5D9A0;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:#C97B1A;flex-shrink:0;display:inline-block"></span>Alta</span></td><td>Planilha Excel para migração</td><td style='font-size:12px;color:var(--muted)'>sistema</td></tr><tr data-req-type="functional" data-req-prio="medium"><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>REQ04</span></td><td><span style="display:inline-block;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#E3F5ED;color:#1A7F5A;border:1px solid #1A7F5A33">Funcional</span></td><td><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#EEF4FC;color:#2E7FD9;border:1px solid #C8DBEE;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:#2E7FD9;flex-shrink:0;display:inline-block"></span>Média</span></td><td>Histórico de organogramas</td><td style='font-size:12px;color:var(--muted)'>sistema</td></tr><tr data-req-type="functional" data-req-prio="medium"><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>REQ10</span></td><td><span style="display:inline-block;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#E3F5ED;color:#1A7F5A;border:1px solid #1A7F5A33">Funcional</span></td><td><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#EEF4FC;color:#2E7FD9;border:1px solid #C8DBEE;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:#2E7FD9;flex-shrink:0;display:inline-block"></span>Média</span></td><td>Rotas após cadastro de unidade</td><td style='font-size:12px;color:var(--muted)'>sistema</td></tr><tr data-req-type="functional" data-req-prio="medium"><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>REQ11</span></td><td><span style="display:inline-block;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#E3F5ED;color:#1A7F5A;border:1px solid #1A7F5A33">Funcional</span></td><td><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#EEF4FC;color:#2E7FD9;border:1px solid #C8DBEE;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:#2E7FD9;flex-shrink:0;display:inline-block"></span>Média</span></td><td>Atividade de validação como hub</td><td style='font-size:12px;color:var(--muted)'>sistema</td></tr><tr data-req-type="functional" data-req-prio="medium"><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>REQ12</span></td><td><span style="display:inline-block;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#E3F5ED;color:#1A7F5A;border:1px solid #1A7F5A33">Funcional</span></td><td><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#EEF4FC;color:#2E7FD9;border:1px solid #C8DBEE;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:#2E7FD9;flex-shrink:0;display:inline-block"></span>Média</span></td><td>Devolução para ajustes na validação</td><td style='font-size:12px;color:var(--muted)'>sistema</td></tr><tr data-req-type="functional" data-req-prio="low"><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>REQ13</span></td><td><span style="display:inline-block;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#E3F5ED;color:#1A7F5A;border:1px solid #1A7F5A33">Funcional</span></td><td><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#E3F5ED;color:#1A7F5A;border:1px solid #9FD9BC;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:#1A7F5A;flex-shrink:0;display:inline-block"></span>Baixa</span></td><td>Suporte a arquivos visualizáveis</td><td style='font-size:12px;color:var(--muted)'>sistema</td></tr><tr data-req-type="non_functional" data-req-prio="high"><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>REQ15</span></td><td><span style="display:inline-block;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#FEF3E2;color:#C97B1A;border:1px solid #C97B1A33">Não Funcional</span></td><td><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#FEF3E2;color:#C97B1A;border:1px solid #F5D9A0;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:#C97B1A;flex-shrink:0;display:inline-block"></span>Alta</span></td><td>Entrega completa do sistema até prazo</td><td style='font-size:12px;color:var(--muted)'>—</td></tr><tr data-req-type="ui_field" data-req-prio="medium"><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>REQ02</span></td><td><span style="display:inline-block;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#EEF4FC;color:#2E7FD9;border:1px solid #2E7FD933">Campo de Tela</span></td><td><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#EEF4FC;color:#2E7FD9;border:1px solid #C8DBEE;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:#2E7FD9;flex-shrink:0;display:inline-block"></span>Média</span></td><td>Campo &#x27;tem organograma&#x27;</td><td style='font-size:12px;color:var(--muted)'>sistema</td></tr><tr data-req-type="ui_field" data-req-prio="medium"><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>REQ03</span></td><td><span style="display:inline-block;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#EEF4FC;color:#2E7FD9;border:1px solid #2E7FD933">Campo de Tela</span></td><td><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#EEF4FC;color:#2E7FD9;border:1px solid #C8DBEE;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:#2E7FD9;flex-shrink:0;display:inline-block"></span>Média</span></td><td>Data de referência do organograma</td><td style='font-size:12px;color:var(--muted)'>sistema</td></tr><tr data-req-type="ui_field" data-req-prio="medium"><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>REQ07</span></td><td><span style="display:inline-block;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#EEF4FC;color:#2E7FD9;border:1px solid #2E7FD933">Campo de Tela</span></td><td><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#EEF4FC;color:#2E7FD9;border:1px solid #C8DBEE;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:#2E7FD9;flex-shrink:0;display:inline-block"></span>Média</span></td><td>Quantidade de processos por escola</td><td style='font-size:12px;color:var(--muted)'>sistema</td></tr><tr data-req-type="ui_field" data-req-prio="medium"><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>REQ09</span></td><td><span style="display:inline-block;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#EEF4FC;color:#2E7FD9;border:1px solid #2E7FD933">Campo de Tela</span></td><td><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#EEF4FC;color:#2E7FD9;border:1px solid #C8DBEE;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:#2E7FD9;flex-shrink:0;display:inline-block"></span>Média</span></td><td>Classificação de nível de interesse</td><td style='font-size:12px;color:var(--muted)'>sistema</td></tr><tr data-req-type="ui_field" data-req-prio="low"><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>REQ05</span></td><td><span style="display:inline-block;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#EEF4FC;color:#2E7FD9;border:1px solid #2E7FD933">Campo de Tela</span></td><td><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#E3F5ED;color:#1A7F5A;border:1px solid #9FD9BC;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:#1A7F5A;flex-shrink:0;display:inline-block"></span>Baixa</span></td><td>Coluna &#x27;atual&#x27; para organograma</td><td style='font-size:12px;color:var(--muted)'>sistema</td></tr><tr data-req-type="validation" data-req-prio="high"><td><span style='font-family:JetBrains Mono,monospace;font-size:11px;background:var(--light);padding:2px 7px;border-radius:4px'>REQ01</span></td><td><span style="display:inline-block;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#E0F5FA;color:#0891b2;border:1px solid #0891b233">Validação</span></td><td><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px;background:#FEF3E2;color:#C97B1A;border:1px solid #F5D9A0;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:#C97B1A;flex-shrink:0;display:inline-block"></span>Alta</span></td><td>Código obrigatório para unidade</td><td style='font-size:12px;color:var(--muted)'>sistema</td></tr></tbody>
+</table></div></div>
+</section>
+
+<section class="section card" id="sec-quality">
+  <div class="card-header">
+    <div class="section-icon">🔬</div>
+    <h2 class="section-title">Qualidade da Transcrição</h2>
+    <div class="chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div>
+  </div>
+  <div class="card-body">
+<div class="quality-grid">
+  <div class="grade-badge" style="background:#FDE8D8;color:#C05621">D</div>
+  <div style="flex:1">
+    <div style="font-size:24px;font-weight:600;color:#C05621;margin-bottom:2px">
+      57.0 <span style="font-size:14px;color:var(--muted)">/ 100</span>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
+      Nota ponderada da transcrição ASR
+    </div>
+    <div class="crit-bar"><div class="crit-name">Inteligibilidade Léxica &mdash; <span style="font-family:JetBrains Mono,monospace;font-size:11px">45/100</span></div><div class="crit-track"><div class="crit-fill" style="width:45%"></div></div></div><div class="crit-bar"><div class="crit-name">Atribuição de Falantes &mdash; <span style="font-family:JetBrains Mono,monospace;font-size:11px">80/100</span></div><div class="crit-track"><div class="crit-fill" style="width:80%"></div></div></div><div class="crit-bar"><div class="crit-name">Coerência Semântica &mdash; <span style="font-family:JetBrains Mono,monospace;font-size:11px">50/100</span></div><div class="crit-track"><div class="crit-fill" style="width:50%"></div></div></div><div class="crit-bar"><div class="crit-name">Completude do Conteúdo &mdash; <span style="font-family:JetBrains Mono,monospace;font-size:11px">60/100</span></div><div class="crit-track"><div class="crit-fill" style="width:60%"></div></div></div><div class="crit-bar"><div class="crit-name">Vocabulário de Domínio &mdash; <span style="font-family:JetBrains Mono,monospace;font-size:11px">40/100</span></div><div class="crit-track"><div class="crit-fill" style="width:40%"></div></div></div><div class="crit-bar"><div class="crit-name">Qualidade da Pontuação &mdash; <span style="font-family:JetBrains Mono,monospace;font-size:11px">70/100</span></div><div class="crit-track"><div class="crit-fill" style="width:70%"></div></div></div>
+    <div style="margin-top:12px;font-size:13px;color:var(--text)">A transcrição é classificada como D (Poor). Recomenda-se correção manual significativa antes de qualquer uso sério. Priorize a revisão e remoção dos turnos artefatuais listados em &#x27;inconsistências&#x27;, a correção de termos de domínio (ex: &#x27;randalograma&#x27; para &#x27;organograma&#x27;) e a verificação de trechos truncados. Para futuras gravações, considere usar uma ferramenta ASR diferente ou melhorar as condições de captura de áudio para reduzir ruído de fundo.</div>
+  </div>
+</div></div>
+</section>
+
+<section class="section card" id="sec-insights">
+  <div class="card-header">
+    <div class="section-icon">💡</div>
+    <h2 class="section-title">Insights e Recomendações</h2>
+    <div class="chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div>
+  </div>
+  <div class="card-body">
+<div class="two-col">
+  <div>
+    <div class="col-label" style="margin-bottom:10px">Insights Identificados</div>
+    <ol class="items"><li>A transcrição de baixa qualidade (score 57/100) limita a análise detalhada, exigindo correção manual para garantir precisão nas decisões futuras.</li><li>O processo depende criticamente da validação gerencial, com dois gateways que podem criar gargalos se não forem otimizados.</li><li>Requisitos de alta prioridade, como código obrigatório e data de corte para migração, indicam riscos de conformidade e prazos apertados.</li><li>A necessidade de migração via planilha Excel e histórico de organogramas sugere complexidade na integração de dados legados.</li><li>A classificação de nível de interesse do processo adiciona uma camada de análise que pode impactar a priorização de recursos.</li></ol>
+  </div>
+  <div>
+    <div class="col-label" style="margin-bottom:10px">Recomendações Prioritárias</div>
+    <ol class="items"><li>Corrigir manualmente a transcrição da reunião para remover artefatos e erros, garantindo uma base confiável para próximas etapas do projeto.</li><li>Validar e documentar formalmente os 5 requisitos de alta prioridade, como código obrigatório e data de corte, para mitigar riscos de não conformidade.</li><li>Otimizar os gateways de decisão no processo BPMN, especialmente na validação gerencial, para reduzir tempos de ciclo e evitar atrasos.</li><li>Desenvolver um plano de migração detalhado para a planilha Excel, incluindo testes de integração para garantir a precisão dos dados.</li><li>Estabelecer um cronograma claro para a criação e revisão de organogramas, alinhando com as datas de referência e requisitos de histórico.</li></ol>
+  </div>
+</div></div>
+</section>
+
+
+<div class="page-footer">
+  <div>
+    <div class="footer-brand">⚙ Process2Diagram</div>
+    <div class="footer-meta">Relatório gerado automaticamente por agentes LLM</div>
+  </div>
+  <div style="text-align:right">
+    <div class="footer-meta">Sessão <code style="font-family:JetBrains Mono,monospace">8fbffc1f</code></div>
+    <div class="footer-meta">01/04/2026 às 00:54</div>
+  </div>
+</div>
+</div>
+</div>
+<button id="scrollTop" title="Voltar ao topo">↑</button>
+
+<!-- Status popup (action items) -->
+<div id="ai-popup">
+  <div id="ai-popup-title">Alterar status</div>
+  <div class="pop-opt" data-status="open">
+    <span class="pop-dot" style="background:#C97B1A"></span>Aberto
+  </div>
+  <div class="pop-opt" data-status="done">
+    <span class="pop-dot" style="background:#1A7F5A"></span>Concluído
+  </div>
+  <div class="pop-opt" data-status="delayed">
+    <span class="pop-dot" style="background:#6B3FA0"></span>Adiado
+  </div>
+</div>
+<div id="ai-toast"></div>
+
+<script>window.P2D_SESSION = '8fbffc1f-72df-47';</script>
+<script>
+// ── Intersection Observer — fade-in sections ──────────────────────────────
+const io = new IntersectionObserver(
+  entries => entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible'); }),
+  { threshold: 0.06 }
+);
+document.querySelectorAll('.card').forEach(el => io.observe(el));
+
+// ── Scroll to top ─────────────────────────────────────────────────────────
+const scrollBtn = document.getElementById('scrollTop');
+window.addEventListener('scroll', () => {
+  scrollBtn.classList.toggle('show', window.scrollY > 400);
+}, { passive: true });
+scrollBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+// ── Sidebar nav — JS scroll (avoid href="#" navigating parent frame) ──────
+const sbLinks = document.querySelectorAll('.sb-link[data-target]');
+sbLinks.forEach(link => {
+  link.addEventListener('click', e => {
+    e.preventDefault();
+    const target = document.getElementById(link.dataset.target);
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+});
+
+// ── Sidebar active link on scroll ─────────────────────────────────────────
+const sections = document.querySelectorAll('section.card[id]');
+const ioSb = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      sbLinks.forEach(l => l.classList.remove('active'));
+      const match = document.querySelector(`.sb-link[data-target="${e.target.id}"]`);
+      if (match) match.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px' });
+sections.forEach(s => ioSb.observe(s));
+
+// ── Action Items — Status Management ──────────────────────────────────────
+(function() {
+  const SESSION = window.P2D_SESSION || 'default';
+  const LS_KEY  = 'p2d_ai_' + SESSION;
+
+  const STATUS = {
+    open:    { label: 'Aberto',    color: '#C97B1A', bg: '#FEF3E2', border: '#F5D9A0' },
+    done:    { label: 'Concluído', color: '#1A7F5A', bg: '#E3F5ED', border: '#9FD9BC' },
+    delayed: { label: 'Adiado',    color: '#6B3FA0', bg: '#F0E8FA', border: '#C9A8E8' },
+  };
+
+  // Load persisted statuses
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(_) {}
+
+  function applyStatus(row, status) {
+    const pill = row.querySelector('.ai-pill');
+    if (!pill) return;
+    const cfg = STATUS[status] || STATUS.open;
+    pill.innerHTML =
+      `<span style="width:5px;height:5px;border-radius:50%;background:${cfg.color};`+
+      `display:inline-block;flex-shrink:0"></span>${cfg.label}`;
+    pill.style.cssText += `;background:${cfg.bg};color:${cfg.color};border-color:${cfg.border}`;
+    row.dataset.aiStatus = status;
+  }
+
+  // Apply saved on load
+  document.querySelectorAll('tr[data-ai-idx]').forEach(row => {
+    const s = saved[row.dataset.aiIdx];
+    if (s) applyStatus(row, s);
+  });
+
+  // Popup & toast
+  const popup = document.getElementById('ai-popup');
+  const toast = document.getElementById('ai-toast');
+  let activeRow = null, toastTimer;
+
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 2600);
+  }
+
+  function updateCount() {
+    const rows   = document.querySelectorAll('tr[data-ai-idx]');
+    const active = document.querySelector('.filter-btn.active');
+    const filter = active ? active.dataset.filter : 'all';
+    let vis = 0;
+    rows.forEach(r => {
+      const show = filter === 'all' || r.dataset.aiStatus === filter;
+      r.style.display = show ? '' : 'none';
+      if (show) vis++;
+    });
+    const el = document.getElementById('ai-visible');
+    if (el) el.textContent = vis;
+  }
+
+  // Open popup on pill click
+  document.addEventListener('click', e => {
+    const pill = e.target.closest('.ai-pill');
+    if (pill) {
+      e.stopPropagation();
+      activeRow = pill.closest('tr[data-ai-idx]');
+      const r = pill.getBoundingClientRect();
+      popup.style.top  = (r.bottom + 6 + window.scrollY) + 'px';
+      popup.style.left = Math.min(r.left, window.innerWidth - 190) + 'px';
+      popup.style.display = 'block';
+      return;
+    }
+    if (!popup.contains(e.target)) popup.style.display = 'none';
+  });
+
+  // Select option
+  popup.querySelectorAll('.pop-opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      if (!activeRow) return;
+      const status = opt.dataset.status;
+      const idx    = activeRow.dataset.aiIdx;
+      applyStatus(activeRow, status);
+      saved[idx] = status;
+      try { localStorage.setItem(LS_KEY, JSON.stringify(saved)); } catch(_) {}
+      popup.style.display = 'none';
+      updateCount();
+      showToast('✓ Status: ' + STATUS[status].label);
+    });
+  });
+
+  // Filter buttons
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      updateCount();
+    });
+  });
+
+  updateCount();
+})();
+
+// ── Collapsible section cards ─────────────────────────────────────────────
+(function() {
+  const cards = document.querySelectorAll('.card');
+
+  cards.forEach(card => {
+    card.querySelector('.card-header').addEventListener('click', () => {
+      card.classList.toggle('collapsed');
+    });
+  });
+
+  const expandBtn = document.getElementById('expandAllBtn');
+  let allExpanded = true;
+  if (expandBtn) {
+    expandBtn.addEventListener('click', () => {
+      allExpanded = !allExpanded;
+      cards.forEach(c => c.classList.toggle('collapsed', !allExpanded));
+      expandBtn.innerHTML = allExpanded
+        ? `<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2"><polyline points="7 13 12 18 17 13"/><polyline points="7 6 12 11 17 6"/></svg> Expandir todas as seções`
+        : `<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2"><polyline points="7 11 12 6 17 11"/><polyline points="7 18 12 13 17 18"/></svg> Retrair todas as seções`;
+    });
+  }
+})();
+
+// ── Requirements — Type & Priority Filters ────────────────────────────────
+(function() {
+  let activeType = 'all', activePrio = 'all';
+
+  function updateReqs() {
+    const rows = document.querySelectorAll('#req-tbody tr[data-req-type]');
+    let vis = 0;
+    rows.forEach(r => {
+      const show =
+        (activeType === 'all' || r.dataset.reqType === activeType) &&
+        (activePrio === 'all' || r.dataset.reqPrio === activePrio);
+      r.style.display = show ? '' : 'none';
+      if (show) vis++;
+    });
+    const el = document.getElementById('req-visible');
+    if (el) el.textContent = vis;
+  }
+
+  document.querySelectorAll('.req-filter-btn[data-req-filter-type]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.req-filter-btn[data-req-filter-type]')
+        .forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeType = btn.dataset.reqFilterType;
+      updateReqs();
+    });
+  });
+
+  document.querySelectorAll('.req-filter-btn[data-req-filter-prio]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.req-filter-btn[data-req-filter-prio]')
+        .forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activePrio = btn.dataset.reqFilterPrio;
+      updateReqs();
+    });
+  });
+})();
+
+// ── Action Items — Comments ───────────────────────────────────────────────
+(function() {
+  const SESSION  = window.P2D_SESSION || 'default';
+  const LS_KEY   = 'p2d_cmt_' + SESSION;
+
+  let allComments = {};
+  try { allComments = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(_) {}
+
+  function saveComments() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(allComments)); } catch(_) {}
+  }
+
+  function renderComments(idx) {
+    const list  = document.getElementById('cmt-list-' + idx);
+    const badge = document.getElementById('cmt-badge-' + idx);
+    if (!list) return;
+    const cmts = allComments[idx] || [];
+    list.innerHTML = cmts.map(c =>
+      `<div class="cmt-bubble">
+        <div class="cmt-meta">${c.ts}</div>
+        ${c.text.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/
+/g,'<br>')}
+      </div>`
+    ).join('');
+    if (badge) {
+      badge.textContent = cmts.length;
+      badge.style.display = cmts.length ? 'inline' : 'none';
+    }
+  }
+
+  // Render persisted comments on load
+  document.querySelectorAll('[id^="cmt-panel-"]').forEach(panel => {
+    const idx = panel.id.replace('cmt-panel-', '');
+    renderComments(idx);
+  });
+
+  // Toggle panel
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.cmt-toggle');
+    if (btn) {
+      const idx   = btn.dataset.cmtIdx;
+      const panel = document.getElementById('cmt-panel-' + idx);
+      if (panel) panel.classList.toggle('open');
+      return;
+    }
+
+    // Submit comment
+    const sub = e.target.closest('[data-cmt-submit]');
+    if (sub) {
+      const idx   = sub.dataset.cmtSubmit;
+      const input = document.getElementById('cmt-input-' + idx);
+      const text  = input ? input.value.trim() : '';
+      if (!text) return;
+      if (!allComments[idx]) allComments[idx] = [];
+      const now = new Date().toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' });
+      allComments[idx].push({ ts: now, text });
+      saveComments();
+      renderComments(idx);
+      if (input) input.value = '';
+    }
+  });
+})();
+</script>
+</body>
+</html>

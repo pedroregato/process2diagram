@@ -280,8 +280,8 @@ with st.expander("🛠️ Diagnóstico — Arquivos de Skill em Runtime", expand
     import re as _re
 
     _SKILL_FILES = {
-        "skill_bpmn.md": "skills/skill_bpmn.md",
-        "skill_minutes.md": "skills/skill_minutes.md",
+        "skill_bpmn.md":     "skills/skill_bpmn.md",
+        "SKILL_MINUTES.md":  "skills/SKILL_MINUTES.md",
     }
     _SUSPICIOUS = [
         "cache_resource", "reruns", "KnowledgeHub", "st.cache",
@@ -289,7 +289,7 @@ with st.expander("🛠️ Diagnóstico — Arquivos de Skill em Runtime", expand
     ]
 
     for fname, rel_path in _SKILL_FILES.items():
-        p = Path(rel_path)
+        p = root_dir / rel_path  # absolute path — avoids CWD / case-sensitivity issues
         st.markdown(f"#### 📄 `{rel_path}`")
 
         if not p.exists():
