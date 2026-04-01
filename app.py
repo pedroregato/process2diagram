@@ -281,7 +281,7 @@ with st.expander("🛠️ Diagnóstico — Arquivos de Skill em Runtime", expand
 
     _SKILL_FILES = {
         "skill_bpmn.md":     "skills/skill_bpmn.md",
-        "SKILL_MINUTES.md":  "skills/SKILL_MINUTES.md",
+        "skill_minutes.md":  "skills/skill_minutes.md",
     }
     _SUSPICIOUS = [
         "cache_resource", "reruns", "KnowledgeHub", "st.cache",
@@ -1055,7 +1055,7 @@ if hub is not None:
         _SKILLS = [
             ("🔬 Qualidade da Transcrição", "skills/skill_transcript_quality.md"),
             ("📐 BPMN",                     "skills/skill_bpmn.md"),
-            ("📋 Ata de Reunião",            "skills/SKILL_MINUTES.md"),
+            ("📋 Ata de Reunião",            "skills/skill_minutes.md"),
             ("📝 Requisitos",               "skills/SKILL_REQUIREMENTS.md"),
             ("📄 Sintetizador",             "skills/SKILL_SYNTHESIZER.md"),
         ]

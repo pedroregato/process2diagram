@@ -26,7 +26,7 @@ def _compute_initials(full_name: str) -> str:
 class AgentMinutes(BaseAgent):
 
     name = "minutes"
-    skill_path = "skills/SKILL_MINUTES.md"
+    skill_path = "skills/skill_minutes.md"
 
     # ── Prompt ────────────────────────────────────────────────────────────────
 
