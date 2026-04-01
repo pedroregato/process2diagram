@@ -17,6 +17,7 @@ AVAILABLE_PROVIDERS: dict = {
         "cost_hint": "$0.28 / $0.42 per 1M tokens",
         "supports_json_mode": True,
         "supports_system_prompt": True,
+        "max_tokens": 8192,
     },
 
     "Claude (Anthropic)": {
@@ -29,6 +30,7 @@ AVAILABLE_PROVIDERS: dict = {
         "cost_hint": "$3 / $15 per 1M tokens",
         "supports_json_mode": False,               # use prompt-based JSON enforcement
         "supports_system_prompt": True,
+        "max_tokens": 8192,
     },
 
     "OpenAI": {
@@ -41,6 +43,7 @@ AVAILABLE_PROVIDERS: dict = {
         "cost_hint": "$0.15 / $0.60 per 1M tokens (4o-mini)",
         "supports_json_mode": True,
         "supports_system_prompt": True,
+        "max_tokens": 8192,
     },
 
     "Groq (Llama)": {
@@ -53,6 +56,7 @@ AVAILABLE_PROVIDERS: dict = {
         "cost_hint": "~$0.06 / $0.06 per 1M tokens",
         "supports_json_mode": True,
         "supports_system_prompt": True,
+        "max_tokens": 8192,
     },
 
     "Google Gemini": {
@@ -65,6 +69,7 @@ AVAILABLE_PROVIDERS: dict = {
         "cost_hint": "Free tier available",
         "supports_json_mode": True,
         "supports_system_prompt": True,
+        "max_tokens": 8192,
     },
 
 }
