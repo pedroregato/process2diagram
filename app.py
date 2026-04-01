@@ -753,6 +753,58 @@ if hub is not None:
     if hub.minutes.ready:
         with tabs[tab_idx]:
             m = hub.minutes
+
+            # ── Export buttons — topo da aba ──────────────────────────────────
+            _md_content = AgentMinutes.to_markdown(m)
+            _exp_col1, _exp_col2, _exp_col3 = st.columns(3)
+            with _exp_col1:
+                st.download_button(
+                    "⬇️ Exportar .md",
+                    data=_md_content.encode("utf-8"),
+                    file_name="ata_reuniao.md",
+                    mime="text/markdown",
+                    use_container_width=True,
+                    key="ata_tab_md",
+                )
+            with _exp_col2:
+                try:
+                    from modules.minutes_exporter import to_docx as _to_docx
+                    _docx_bytes = _to_docx(m)
+                    st.download_button(
+                        "⬇️ Exportar .docx",
+                        data=_docx_bytes,
+                        file_name="ata_reuniao.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        use_container_width=True,
+                        key="ata_tab_docx",
+                    )
+                except Exception as _docx_err:
+                    st.caption(f"Word indisponível: {_docx_err}")
+            with _exp_col3:
+                try:
+                    from modules.minutes_exporter import to_pdf as _to_pdf
+                    _pdf_bytes = _to_pdf(m)
+                    st.download_button(
+                        "⬇️ Exportar .pdf",
+                        data=_pdf_bytes,
+                        file_name="ata_reuniao.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key="ata_tab_pdf",
+                    )
+                except Exception as _pdf_err:
+                    st.caption(f"PDF indisponível: {_pdf_err}")
+
+            st.markdown("---")
+
+            # ── Conteúdo da ata ───────────────────────────────────────────────
+            _has_content = any([m.participants, m.agenda, m.summary, m.decisions, m.action_items])
+            if not _has_content:
+                st.warning(
+                    "A ata foi gerada mas não contém conteúdo extraído. "
+                    "Verifique se a transcrição tem pelo menos um participante, pauta ou decisão identificável."
+                )
+
             st.markdown(f"## {m.title}")
             col1, col2 = st.columns(2)
             col1.markdown(f"**Data:** {m.date or '—'}")

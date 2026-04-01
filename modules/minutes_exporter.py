@@ -215,6 +215,34 @@ def to_docx(minutes: "MinutesModel") -> bytes:
 
 # ── PDF ───────────────────────────────────────────────────────────────────────
 
+# fpdf2 core fonts (Helvetica) are limited to Latin-1 (ISO 8859-1).
+# This helper replaces common non-Latin-1 characters with safe equivalents
+# before passing text to fpdf cells/multi_cell calls.
+_PDF_CHAR_MAP = {
+    "\u2014": "-",    # em dash
+    "\u2013": "-",    # en dash
+    "\u2012": "-",    # figure dash
+    "\u2010": "-",    # hyphen
+    "\u2022": "*",    # bullet
+    "\u2023": ">",    # triangular bullet
+    "\u2192": "->",   # right arrow
+    "\u2190": "<-",   # left arrow
+    "\u2026": "...",  # horizontal ellipsis
+    "\u201c": '"',    # left double quotation mark
+    "\u201d": '"',    # right double quotation mark
+    "\u2018": "'",    # left single quotation mark
+    "\u2019": "'",    # right single quotation mark
+    "\u00b7": "*",    # middle dot
+}
+
+
+def _p(text: str) -> str:
+    """Sanitize text for fpdf2 Latin-1 core fonts."""
+    for src, dst in _PDF_CHAR_MAP.items():
+        text = text.replace(src, dst)
+    return text.encode("latin-1", errors="replace").decode("latin-1")
+
+
 def to_pdf(minutes: "MinutesModel") -> bytes:
     """Generate a PDF from MinutesModel using fpdf2. Returns raw bytes."""
     from fpdf import FPDF
@@ -228,7 +256,7 @@ def to_pdf(minutes: "MinutesModel") -> bytes:
             self.set_font("Helvetica", "I", 8)
             self.set_text_color(100, 116, 139)
             self.cell(0, 8,
-                f"Process2Diagram — {_now()}    |    Página {self.page_no()}",
+                _p(f"Process2Diagram  {_now()}  |  Pagina {self.page_no()}"),
                 align="C")
 
     pdf = _PDF(orientation="P", unit="mm", format="A4")
@@ -250,7 +278,7 @@ def to_pdf(minutes: "MinutesModel") -> bytes:
     pdf.set_xy(20, 22)
     pdf.set_font("Helvetica", "B", 16)
     set_white()
-    title_text = minutes.title or "Ata de Reunião"
+    title_text = _p(minutes.title or "Ata de Reuniao")
     pdf.multi_cell(W, 8, title_text, align="C")
 
     # Metadata strip
@@ -262,9 +290,9 @@ def to_pdf(minutes: "MinutesModel") -> bytes:
     set_muted()
     meta_parts = []
     if minutes.date:
-        meta_parts.append(f"Data: {minutes.date}")
+        meta_parts.append(f"Data: {_p(minutes.date)}")
     if minutes.location:
-        meta_parts.append(f"Local: {minutes.location}")
+        meta_parts.append(f"Local: {_p(minutes.location)}")
     meta_parts.append(f"Gerado em: {_now()}")
     pdf.cell(W, 6, "   |   ".join(meta_parts), align="C")
     pdf.ln(12)
@@ -273,7 +301,7 @@ def to_pdf(minutes: "MinutesModel") -> bytes:
         pdf.set_fill_color(46, 127, 217)
         pdf.set_font("Helvetica", "B", 9)
         set_white()
-        pdf.cell(W, 7, f"  {title.upper()}", fill=True, ln=True)
+        pdf.cell(W, 7, _p(f"  {title.upper()}"), fill=True, ln=True)
         pdf.ln(2)
         set_body()
         pdf.set_font("Helvetica", "", 10)
@@ -282,14 +310,14 @@ def to_pdf(minutes: "MinutesModel") -> bytes:
         pdf.set_font("Helvetica", "", 10)
         set_body()
         pdf.set_x(24)
-        pdf.cell(4, 5, "\u2022")
+        pdf.cell(4, 5, "-")
         pdf.set_x(28)
-        pdf.multi_cell(W - 8, 5, text)
+        pdf.multi_cell(W - 8, 5, _p(text))
 
     def body_text(text: str) -> None:
         pdf.set_font("Helvetica", "", 10)
         set_body()
-        pdf.multi_cell(W, 5, text)
+        pdf.multi_cell(W, 5, _p(text))
         pdf.ln(1)
 
     # ── Participants ──────────────────────────────────────────────────────────
@@ -305,7 +333,7 @@ def to_pdf(minutes: "MinutesModel") -> bytes:
             pdf.set_x(x_start)
             pdf.set_font("Helvetica", "", 10)
             set_body()
-            pdf.cell(col_w, 5, f"\u2022  {p[:55]}")
+            pdf.cell(col_w, 5, _p(f"*  {p[:55]}"))
             if i % 2 == 1 or i == len(minutes.participants) - 1:
                 pdf.ln(5)
         pdf.ln(4)
@@ -319,19 +347,19 @@ def to_pdf(minutes: "MinutesModel") -> bytes:
             pdf.set_x(24)
             pdf.cell(6, 5, f"{i}.")
             pdf.set_x(30)
-            pdf.multi_cell(W - 10, 5, item)
+            pdf.multi_cell(W - 10, 5, _p(item))
         pdf.ln(4)
 
     # ── Summary ───────────────────────────────────────────────────────────────
     if minutes.summary:
-        section_header("Resumo da Reunião")
+        section_header("Resumo da Reuniao")
         for block in minutes.summary:
             topic   = block.get("topic", "")
             content = block.get("content", "")
             if topic:
                 pdf.set_font("Helvetica", "B", 10)
                 set_navy()
-                pdf.multi_cell(W, 5, topic)
+                pdf.multi_cell(W, 5, _p(topic))
                 pdf.ln(1)
             if content:
                 body_text(content)
@@ -339,7 +367,7 @@ def to_pdf(minutes: "MinutesModel") -> bytes:
 
     # ── Decisions ─────────────────────────────────────────────────────────────
     if minutes.decisions:
-        section_header(f"Decisões Tomadas ({len(minutes.decisions)})")
+        section_header(f"Decisoes Tomadas ({len(minutes.decisions)})")
         for d in minutes.decisions:
             bullet(d)
         pdf.ln(4)
@@ -348,7 +376,7 @@ def to_pdf(minutes: "MinutesModel") -> bytes:
     if minutes.action_items:
         section_header(f"Encaminhamentos / Action Items ({len(minutes.action_items)})")
         col_widths = [22, W - 22 - 38 - 24 - 22, 38, 24, 22]
-        headers    = ["Prior.", "Tarefa", "Responsável", "Prazo", "Por"]
+        headers    = ["Prior.", "Tarefa", "Responsavel", "Prazo", "Por"]
 
         # Table header
         pdf.set_fill_color(11, 30, 61)
@@ -371,14 +399,14 @@ def to_pdf(minutes: "MinutesModel") -> bytes:
             pdf.set_font("Helvetica", "", 9)
             r, g, b = prio_colors.get(ai.priority, (100, 116, 139))
             pdf.set_text_color(r, g, b)
-            pdf.cell(col_widths[0], 6, f" {_prio_label(ai.priority)}", fill=fill, border=0)
+            pdf.cell(col_widths[0], 6, _p(f" {_prio_label(ai.priority)}"), fill=fill, border=0)
             set_body()
             # Task may be long — truncate for table
-            task = ai.task if len(ai.task) <= 60 else ai.task[:57] + "…"
-            pdf.cell(col_widths[1], 6, f" {task}", fill=fill, border=0)
-            pdf.cell(col_widths[2], 6, f" {ai.responsible[:20]}", fill=fill, border=0)
-            pdf.cell(col_widths[3], 6, f" {ai.deadline or '—'}", fill=fill, border=0)
-            pdf.cell(col_widths[4], 6, f" {ai.raised_by or '—'}", fill=fill, border=0)
+            task = ai.task if len(ai.task) <= 60 else ai.task[:57] + "..."
+            pdf.cell(col_widths[1], 6, _p(f" {task}"), fill=fill, border=0)
+            pdf.cell(col_widths[2], 6, _p(f" {ai.responsible[:20]}"), fill=fill, border=0)
+            pdf.cell(col_widths[3], 6, _p(f" {ai.deadline or '-'}"), fill=fill, border=0)
+            pdf.cell(col_widths[4], 6, _p(f" {ai.raised_by or '-'}"), fill=fill, border=0)
             pdf.ln()
 
         # Bottom border
@@ -388,10 +416,10 @@ def to_pdf(minutes: "MinutesModel") -> bytes:
 
     # ── Next meeting ──────────────────────────────────────────────────────────
     if minutes.next_meeting:
-        section_header("Próxima Reunião")
+        section_header("Proxima Reuniao")
         pdf.set_font("Helvetica", "B", 11)
         set_navy()
-        pdf.cell(W, 7, minutes.next_meeting, ln=True)
+        pdf.cell(W, 7, _p(minutes.next_meeting), ln=True)
         pdf.ln(3)
 
     return bytes(pdf.output())
