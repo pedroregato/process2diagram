@@ -951,12 +951,41 @@ if hub is not None:
         if hub.minutes.ready:
             st.markdown("**Ata de Reunião**")
             md_content = AgentMinutes.to_markdown(hub.minutes)
-            st.download_button(
-                "⬇️ Ata .md",
-                data=md_content,
-                file_name="ata_reuniao.md",
-                mime="text/markdown",
-            )
+            col_ata1, col_ata2, col_ata3 = st.columns(3)
+            with col_ata1:
+                st.download_button(
+                    "⬇️ Ata .md",
+                    data=md_content,
+                    file_name="ata_reuniao.md",
+                    mime="text/markdown",
+                    use_container_width=True,
+                )
+            with col_ata2:
+                try:
+                    from modules.minutes_exporter import to_docx
+                    docx_bytes = to_docx(hub.minutes)
+                    st.download_button(
+                        "⬇️ Ata .docx",
+                        data=docx_bytes,
+                        file_name="ata_reuniao.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        use_container_width=True,
+                    )
+                except Exception as _e:
+                    st.caption(f"Word indisponível: {_e}")
+            with col_ata3:
+                try:
+                    from modules.minutes_exporter import to_pdf
+                    pdf_bytes = to_pdf(hub.minutes)
+                    st.download_button(
+                        "⬇️ Ata .pdf",
+                        data=pdf_bytes,
+                        file_name="ata_reuniao.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                    )
+                except Exception as _e:
+                    st.caption(f"PDF indisponível: {_e}")
 
         if hub.requirements.ready:
             st.markdown("**Requisitos**")
