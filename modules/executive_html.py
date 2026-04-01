@@ -579,14 +579,23 @@ window.addEventListener('scroll', () => {
 }, { passive: true });
 scrollBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
 
+// ── Sidebar nav — JS scroll (avoid href="#" navigating parent frame) ──────
+const sbLinks = document.querySelectorAll('.sb-link[data-target]');
+sbLinks.forEach(link => {
+  link.addEventListener('click', e => {
+    e.preventDefault();
+    const target = document.getElementById(link.dataset.target);
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+});
+
 // ── Sidebar active link on scroll ─────────────────────────────────────────
 const sections = document.querySelectorAll('section.card[id]');
-const sbLinks  = document.querySelectorAll('.sb-link[href^="#"]');
 const ioSb = new IntersectionObserver(entries => {
   entries.forEach(e => {
     if (e.isIntersecting) {
       sbLinks.forEach(l => l.classList.remove('active'));
-      const match = document.querySelector(`.sb-link[href="#${e.target.id}"]`);
+      const match = document.querySelector(`.sb-link[data-target="${e.target.id}"]`);
       if (match) match.classList.add('active');
     }
   });
@@ -839,7 +848,8 @@ def _sidebar(hub, narrative) -> str:
     links.append(('💡', 'Insights', 'sec-insights'))
 
     items = "\n".join(
-        f'<a class="sb-link" href="#{sid}"><span class="sb-ic">{ic}</span>{_e(label)}</a>'
+        f'<a class="sb-link" data-target="{sid}" href="javascript:void(0)">'
+        f'<span class="sb-ic">{ic}</span>{_e(label)}</a>'
         for ic, label, sid in links
     )
     process_name = (getattr(hub.minutes, "title", "") or hub.bpmn.name or "Relatório")

@@ -394,7 +394,7 @@ if generate_btn:
         st.warning("Por favor, forneça uma transcrição com pelo menos algumas linhas.")
         st.stop()
 
-    if not run_quality and not run_bpmn and not run_minutes and not run_requirements:
+    if not run_quality and not run_bpmn and not run_minutes and not run_requirements and not run_synthesizer:
         st.warning("Selecione ao menos um agente na barra lateral.")
         st.stop()
 
