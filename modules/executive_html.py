@@ -260,9 +260,12 @@ body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-seri
   background:var(--white);margin:24px 24px 0;border-radius:14px;
   border:1px solid var(--border);
   box-shadow:0 1px 3px rgba(11,30,61,.05);
-  opacity:0;transform:translateY(16px);
-  transition:opacity .5s ease,transform .5s ease,box-shadow .2s
+  opacity:1;transform:none;
+  transition:box-shadow .2s
 }
+/* Animation: added via JS only when IntersectionObserver is supported */
+.card.will-animate{opacity:0;transform:translateY(16px);
+  transition:opacity .5s ease,transform .5s ease,box-shadow .2s}
 .card.visible{opacity:1;transform:translateY(0)}
 .card:hover{box-shadow:0 4px 24px rgba(11,30,61,.08)}
 .card-header{
@@ -565,12 +568,30 @@ ol.items li::before{
 # ── JavaScript ────────────────────────────────────────────────────────────────
 
 _JS = """
-// ── Intersection Observer — fade-in sections ──────────────────────────────
-const io = new IntersectionObserver(
-  entries => entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible'); }),
-  { threshold: 0.06 }
-);
-document.querySelectorAll('.card').forEach(el => io.observe(el));
+// ── Intersection Observer — fade-in sections (progressive enhancement) ────
+// Cards are visible by default; animation applied only when IO is available.
+if ('IntersectionObserver' in window) {
+  const cards = document.querySelectorAll('.card');
+  // Only animate if not inside a constrained iframe (check clientHeight)
+  const canAnimate = document.documentElement.clientHeight > 300;
+  if (canAnimate) {
+    cards.forEach(el => el.classList.add('will-animate'));
+    const io = new IntersectionObserver(
+      entries => entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible');
+          e.target.classList.remove('will-animate');
+        }
+      }),
+      { threshold: 0.04 }
+    );
+    cards.forEach(el => io.observe(el));
+    // Fallback: force-show all after 1.2s in case IO never fires (e.g. inside iframe)
+    setTimeout(() => {
+      cards.forEach(el => { el.classList.add('visible'); el.classList.remove('will-animate'); });
+    }, 1200);
+  }
+}
 
 // ── Scroll to top ─────────────────────────────────────────────────────────
 const scrollBtn = document.getElementById('scrollTop');
@@ -1362,7 +1383,7 @@ def generate_executive_html(hub, narrative) -> str:
     )
     session_id = _e(getattr(hub.meta, "session_id", "default")[:16])
 
-    sections = "\n".join(filter(None, [
+    built = list(filter(None, [
         _section_summary(narrative),
         _section_process(hub, narrative),
         _section_bpmn_diagram(hub),
@@ -1372,6 +1393,18 @@ def generate_executive_html(hub, narrative) -> str:
         _section_quality(hub),
         _section_insights(narrative),
     ]))
+
+    # If nothing was built (Synthesizer ran solo on empty hub), show a placeholder
+    if not built:
+        built = [_section_card(
+            "ℹ️",
+            "Dados insuficientes",
+            "<p>O Sintetizador foi executado, mas nenhum outro agente produziu dados "
+            "(BPMN, Ata, Requisitos). Execute o pipeline completo para gerar o relatório.</p>",
+            "sec-empty",
+        )]
+
+    sections = "\n".join(built)
 
     return f"""<!DOCTYPE html>
 <html lang="pt-BR">
