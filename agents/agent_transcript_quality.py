@@ -100,57 +100,58 @@ class AgentTranscriptQuality(BaseAgent):
 
     # ── Model building ────────────────────────────────────────────────────────
 
-    @classmethod
-    def _build_model(cls, data: dict) -> TranscriptQualityModel:
-        # Build a lookup from criterion name → score + justification
-        llm_criteria: dict[str, dict] = {
-            c["criterion"]: c
-            for c in data.get("criteria", [])
-            if isinstance(c, dict) and "criterion" in c
-        }
+@classmethod
+def _build_model(cls, data: dict) -> TranscriptQualityModel:
+    # Build a lookup from criterion name → score + justification
+    llm_criteria: dict[str, dict] = {
+        c["criterion"]: c
+        for c in data.get("criteria", [])
+        if isinstance(c, dict) and "criterion" in c
+    }
 
-        criteria_scores: list[CriterionScore] = []
-        weighted_sum = 0.0
+    criteria_scores: list[CriterionScore] = []
+    weighted_sum = 0.0
 
-        for criterion_name, weight in _CRITERIA_WEIGHTS:
-            entry = llm_criteria.get(criterion_name, {})
-            raw_score = entry.get("score", 0)
-            # Clamp to [0, 100] and cast to int
-            score = max(0, min(100, int(raw_score)))
-            justification = entry.get("justification", "")
+    for criterion_name, weight in _CRITERIA_WEIGHTS:
+        entry = llm_criteria.get(criterion_name, {})
+        raw_score = entry.get("score", 0)
+        # Clamp to [0, 100] and cast to int
+        score = max(0, min(100, int(raw_score)))
+        justification = entry.get("justification", "")
 
-            criteria_scores.append(CriterionScore(
-                criterion=criterion_name,
-                score=score,
-                weight=weight,
-                justification=justification,
+        criteria_scores.append(CriterionScore(
+            criterion=criterion_name,
+            score=score,
+            weight=weight,
+            justification=justification,
+        ))
+        weighted_sum += score * weight
+
+    overall = round(weighted_sum, 1)
+    computed_grade = _grade(overall)
+
+    # Parse inconsistencies (LLM-detected background noise / semantic artifacts)
+    inconsistencies: list[InconsistencyItem] = []
+    for item in data.get("inconsistencies", []):
+        if isinstance(item, dict) and "text" in item:
+            inconsistencies.append(InconsistencyItem(
+                speaker=item.get("speaker", ""),
+                timestamp=item.get("timestamp", ""),
+                text=item.get("text", ""),
+                reason=item.get("reason", ""),
             ))
-            weighted_sum += score * weight
 
-        overall = round(weighted_sum, 1)
-        computed_grade = _grade(overall)
+    # Sanitize LLM narrative: replace any grade letter/label that doesn't
+    # match the programmatically computed grade.
+    overall_summary = _fix_grade_refs(data.get("overall_summary", ""), computed_grade)
+    recommendation  = _fix_grade_refs(data.get("recommendation", ""), computed_grade)
 
-        # Parse inconsistencies (LLM-detected background noise / semantic artifacts)
-        inconsistencies: list[InconsistencyItem] = []
-        for item in data.get("inconsistencies", []):
-            if isinstance(item, dict) and "text" in item:
-                inconsistencies.append(InconsistencyItem(
-                    speaker=item.get("speaker", ""),
-                    timestamp=item.get("timestamp", ""),
-                    text=item.get("text", ""),
-                    reason=item.get("reason", ""),
-                ))
-
-        # Sanitize LLM narrative
-        overall_summary = _fix_grade_refs(data.get("overall_summary", ""), computed_grade)
-        recommendation  = _fix_grade_refs(data.get("recommendation", ""), computed_grade)
-
-        return TranscriptQualityModel(
-            criteria=criteria_scores,
-            overall_score=overall,
-            grade=computed_grade,
-            overall_summary=overall_summary,
-            recommendation=recommendation,
-            inconsistencies=inconsistencies,
-        )
+    return TranscriptQualityModel(
+        criteria=criteria_scores,
+        overall_score=overall,
+        grade=computed_grade,
+        overall_summary=overall_summary,
+        recommendation=recommendation,
+        inconsistencies=inconsistencies,
+    )
         
