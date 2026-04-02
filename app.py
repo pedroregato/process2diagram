@@ -1,4 +1,4 @@
-## --- Process2Diagram v4.5 — Re‑runnable Agents + Custom Prefix/Suffix ---
+## --- Process2Diagram v4.5 — Re‑runnable Agents + Custom Prefix/Suffix + Curadoria ---
 ## --- UI by Manus, core logic fixed and extended ---
 
 import sys
@@ -42,7 +42,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Enhanced CSS (Modern SaaS Look with Maximum Contrast) ─────────────────────
+# ── Enhanced CSS (Modern SaaS Look) ─────────────────────────────────────────
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -65,7 +65,6 @@ st.markdown("""
         color: var(--text-main);
     }
 
-    /* Sidebar Styling - Maximum Contrast Refinement */
     section[data-testid="stSidebar"] {
         background-color: var(--sidebar-bg);
         border-right: 1px solid #1e293b;
@@ -111,15 +110,8 @@ st.markdown("""
     section[data-testid="stSidebar"] .stMarkdown small {
         color: #94a3b8 !important;
         font-size: 0.8rem !important;
-        display: block;
-        margin-top: 0.5rem;
-    }
-    
-    section[data-testid="stSidebar"] div[data-testid="stCaptionContainer"] {
-        color: #cbd5e1 !important;
     }
 
-    /* Main Title & Header */
     .main-header {
         padding: 1.5rem 0 2rem 0;
         border-bottom: 1px solid var(--border);
@@ -140,55 +132,30 @@ st.markdown("""
         font-weight: 400;
     }
 
-    /* Cards & Containers */
-    .stMetric {
-        background: var(--card-bg);
-        padding: 1.25rem;
-        border-radius: 12px;
-        border: 1px solid var(--border);
-        box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
-    }
-    
-    .custom-card {
-        background: var(--card-bg);
-        padding: 1.5rem;
-        border-radius: 12px;
-        border: 1px solid var(--border);
-        margin-bottom: 1rem;
-    }
-
-    /* Tabs Styling */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: transparent;
     }
     .stTabs [data-baseweb="tab"] {
         height: 45px;
-        white-space: pre-wrap;
         background-color: #f1f5f9;
         border-radius: 8px 8px 0 0;
-        gap: 1px;
         padding: 10px 20px;
         font-weight: 500;
         color: var(--text-muted);
-        border: 1px solid transparent;
     }
     .stTabs [aria-selected="true"] {
         background-color: var(--card-bg) !important;
         color: var(--primary) !important;
-        border: 1px solid var(--border) !important;
         border-bottom: 2px solid var(--primary) !important;
     }
 
-    /* Code & Text Areas */
     .stTextArea textarea {
         font-family: 'JetBrains Mono', monospace !important;
         font-size: 0.9rem !important;
         border-radius: 8px !important;
-        border: 1px solid var(--border) !important;
     }
     
-    /* Buttons */
     .stButton button {
         border-radius: 8px !important;
         font-weight: 500 !important;
@@ -200,7 +167,6 @@ st.markdown("""
         transform: translateY(-1px);
     }
 
-    /* Badges */
     .badge {
         display: inline-block;
         padding: 0.25rem 0.75rem;
@@ -208,7 +174,6 @@ st.markdown("""
         font-size: 0.75rem;
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.025em;
     }
     .badge-blue { background: #dbeafe; color: #1e40af; }
     .badge-green { background: #dcfce7; color: #166534; }
@@ -231,7 +196,7 @@ def _render_highlighted_transcript(clean_text: str, inconsistencies: list, key: 
         components.html(
             f"<div style='height:400px;overflow-y:scroll;font-family:\"JetBrains Mono\",monospace;"
             f"font-size:0.85rem;line-height:1.6;padding:1.5rem;"
-            f"border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;color:#334155'>"
+            f"border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc'>"
             f"{_html.escape(clean_text).replace(chr(10), '<br>')}</div>",
             height=420,
         )
@@ -269,7 +234,7 @@ def _render_highlighted_transcript(clean_text: str, inconsistencies: list, key: 
     components.html(
         f"<div style='height:400px;overflow-y:scroll;font-family:\"JetBrains Mono\",monospace;"
         f"font-size:0.85rem;line-height:1.6;padding:1.5rem;"
-        f"border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;color:#334155'>"
+        f"border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc'>"
         f"{body}</div>",
         height=420,
     )
@@ -300,8 +265,7 @@ def _copy_button(text: str, key: str, label: str = "📋 Copy to Clipboard") -> 
           }})()"
           style="padding:8px 16px;border:1px solid #cbd5e1;border-radius:8px;
                  background:#ffffff;cursor:pointer;font-size:0.85rem;
-                 font-family:'Inter',sans-serif;font-weight:500;color:#475569;
-                 transition:all 0.2s ease;display:flex;align-items:center;gap:8px">
+                 font-family:'Inter',sans-serif;font-weight:500;color:#475569;">
           {label}
         </button>
         """,
@@ -309,7 +273,6 @@ def _copy_button(text: str, key: str, label: str = "📋 Copy to Clipboard") -> 
     )
 
 def _make_filename(base_name: str, ext: str, prefix: str, suffix: str) -> str:
-    """Generate filename: {prefix}{base_name}{suffix}.{ext}"""
     safe_base = base_name.replace(" ", "_")
     return f"{prefix}{safe_base}{suffix}.{ext.lstrip('.')}"
 
@@ -322,12 +285,11 @@ with st.sidebar:
     st.markdown(f"""
     <div style='padding: 1rem 0;'>
         <h2 style='margin:0; font-size:1.5rem; color: #ffffff;'>⚡ Process2Diagram</h2>
-        <p style='color:#cbd5e1; font-size:0.85rem; margin-top:0.2rem;'>Build {_commit} — Multi-Agent</p>
+        <p style='color:#cbd5e1; font-size:0.85rem;'>Build {_commit} — Multi-Agent</p>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown("---")
-
     st.markdown("### 🤖 LLM Engine")
     provider_names = list(AVAILABLE_PROVIDERS.keys())
     selected_provider = st.selectbox(
@@ -336,7 +298,6 @@ with st.sidebar:
         index=provider_names.index("DeepSeek") if "DeepSeek" in provider_names else 0,
         key="selected_provider",
     )
-
     provider_cfg = AVAILABLE_PROVIDERS[selected_provider]
     
     col_s1, col_s2 = st.columns(2)
@@ -359,44 +320,26 @@ with st.sidebar:
     _lang_map = {"Auto-detect": "Auto-detect", "Portuguese (BR)": "Portuguese (BR)", "English": "English"}
     output_language = _lang_map.get(output_language, output_language)
 
-    # ── Prefix / Suffix fields ───────────────────────────────────────────────
+    # Prefix / Suffix
     col_pref, col_suf = st.columns(2)
     with col_pref:
-        prefix_input = st.text_input(
-            "Prefix (max 10 chars)",
-            value="P2D_",
-            max_chars=11,
-            help="Used at the beginning of every downloaded file. Leave empty to use 'P2D_'."
-        )
+        prefix_input = st.text_input("Prefix (max 11 chars)", value="P2D_", max_chars=11,
+                                     help="Leave empty to use 'P2D_'")
     with col_suf:
-        suffix_input = st.text_input(
-            "Suffix (max 10 chars)",
-            value="",
-            max_chars=11,
-            help="Used at the end of every downloaded file (before extension). Leave empty to use current date (YYYY-MM-DD)."
-        )
-    
-    # Compute final prefix/suffix for this session
-    prefix = prefix_input.strip()
-    if not prefix:
-        prefix = "P2D_"
-    
-    suffix = suffix_input.strip()
-    if not suffix:
-        suffix = date.today().isoformat()  # YYYY-MM-DD
+        suffix_input = st.text_input("Suffix (max 11 chars)", value="", max_chars=11,
+                                     help="Leave empty to use current date (YYYY-MM-DD)")
+    prefix = prefix_input.strip() if prefix_input.strip() else "P2D_"
+    suffix = suffix_input.strip() if suffix_input.strip() else date.today().isoformat()
 
     st.markdown("### 🤖 Active Agents")
     run_quality = st.checkbox("Quality Inspector", value=True)
     run_bpmn = st.checkbox("BPMN Architect", value=True)
 
-    # Multi-run BPMN settings (same as original)
     n_bpmn_runs = 1
     bpmn_weights = {"granularity": 5, "task_type": 5, "gateways": 5}
     if run_bpmn:
-        n_bpmn_runs = st.select_slider(
-            "Optimization Passes", options=[1, 3, 5], value=1,
-            help="Runs the BPMN Agent N times and selects the best result.",
-        )
+        n_bpmn_runs = st.select_slider("Optimization Passes", options=[1, 3, 5], value=1,
+                                       help="Runs BPMN N times and selects best result.")
         if n_bpmn_runs > 1:
             with st.expander("Selection Weights"):
                 bpmn_weights = {
@@ -417,12 +360,10 @@ with st.sidebar:
     if show_dev_tools:
         show_raw_json = st.checkbox("Show Raw JSON", value=False)
 
-    # ── Re-run Agents Section (only appears after hub exists) ────────────────
+    # Re-run agents section
     if "hub" in st.session_state:
         st.markdown("---")
         st.markdown("### 🔄 Re‑run Agents")
-        st.caption("Run an agent again on the current transcript without re‑processing everything.")
-        
         col_r1, col_r2 = st.columns(2)
         with col_r1:
             if st.button("🔬 Quality", use_container_width=True, key="rerun_quality"):
@@ -441,7 +382,6 @@ with st.sidebar:
             if st.button("📄 Report", use_container_width=True, key="rerun_synthesizer"):
                 st.session_state["rerun_agent"] = "synthesizer"
                 st.rerun()
-        st.caption("⚠️ Re‑running overwrites the previous output for that agent.")
 
 
 # ── Main area ─────────────────────────────────────────────────────────────────
@@ -452,81 +392,124 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Check API key
 if not get_session_llm_client(selected_provider):
     st.warning("👈 **Action Required:** Please enter your API key in the sidebar to unlock the agents.")
     st.stop()
 
-# ── Input Section ─────────────────────────────────────────────────────────────
+# ── Input Section with session state sync ─────────────────────────────────────
+if "transcript_text" not in st.session_state:
+    st.session_state.transcript_text = ""
+
 with st.container():
     st.markdown("### 📥 Input Transcript")
     transcript_text = st.text_area(
         "Paste your meeting transcript here",
-        placeholder="Speaker 1: Hello, let's discuss the onboarding process...\nSpeaker 2: Sure, first we need to...",
+        value=st.session_state.transcript_text,
+        placeholder="Speaker 1: Hello, let's discuss...",
         height=250,
-        label_visibility="collapsed"
+        label_visibility="collapsed",
+        key="transcript_input_area"
     )
+    st.session_state.transcript_text = transcript_text
 
     col_btn1, col_btn2, _ = st.columns([1, 1, 2])
     with col_btn1:
         uploaded_file = st.file_uploader("Or upload a file", type=["txt", "docx", "pdf"], label_visibility="collapsed")
     
     if uploaded_file:
-        transcript_text = load_transcript(uploaded_file)
+        file_content = load_transcript(uploaded_file)
+        st.session_state.transcript_text = file_content
+        st.rerun()
+
+    # ── Pré-processamento e curadoria manual (como no app.py original) ─────────
+    if st.button("🧹 Pré‑processar Transcrição (sem LLM)", use_container_width=True):
+        if not st.session_state.transcript_text.strip():
+            st.warning("Cole ou carregue uma transcrição primeiro.")
+        else:
+            from modules.transcript_preprocessor import preprocess as _preprocess
+            pp_result = _preprocess(st.session_state.transcript_text)
+            st.session_state["pp_result"] = pp_result
+            st.session_state["curated_clean"] = pp_result.clean_text
+            st.success("Pré‑processamento concluído! Revise abaixo.")
+
+    if "pp_result" in st.session_state:
+        pp = st.session_state["pp_result"]
+        st.markdown("#### 🧹 Curadoria da Transcrição")
+        stats_html = f"""
+        <div style='display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.6rem'>
+            <span style='background:#f1f5f9;padding:3px 10px;border-radius:20px'>
+                <b>{pp.fillers_removed}</b> fillers removidos
+            </span>
+            <span style='background:#fef9c3;padding:3px 10px;border-radius:20px'>
+                <b>{pp.artifact_turns}</b> artefatos <code>[?]</code>
+            </span>
+            <span style='background:#f1f5f9;padding:3px 10px;border-radius:20px'>
+                <b>{pp.repetitions_collapsed}</b> repetições colapsadas
+            </span>
+        </div>
+        """
+        st.markdown(stats_html, unsafe_allow_html=True)
+        for issue in pp.metadata_issues:
+            st.warning(f"⚠️ {issue}")
+        st.caption("Revise o texto pré‑processado abaixo. Itens com `[?]` são artefatos suspeitos. Edite à vontade.")
+        
+        col_orig, col_clean = st.columns(2)
+        with col_orig:
+            st.markdown("**Original (somente leitura)**")
+            st.text_area("orig", value=st.session_state.transcript_text, height=300,
+                         disabled=True, label_visibility="collapsed", key="ta_orig_pre")
+        with col_clean:
+            st.markdown("**Pré‑processada — edite aqui**")
+            curated = st.text_area("clean", value=st.session_state.get("curated_clean", pp.clean_text),
+                                   height=300, label_visibility="collapsed", key="ta_curated")
+            st.session_state["curated_clean"] = curated
+        
+        if st.button("✅ Usar texto curado no pipeline", use_container_width=True):
+            st.session_state.transcript_text = st.session_state["curated_clean"]
+            st.success("Texto curado definido como transcrição principal. Agora clique em 'Generate Insights'.")
 
     with col_btn2:
         start_process = st.button("🚀 Generate Insights", type="primary", use_container_width=True)
 
 
-# ── Processing Logic (ORIGINAL ORCHESTRATOR.RUN) ──────────────────────────────
-if start_process and transcript_text:
+# ── Processing Logic (Orchestrator.run) ───────────────────────────────────────
+if start_process and st.session_state.transcript_text.strip():
     if not run_quality and not run_bpmn and not run_minutes and not run_requirements and not run_synthesizer:
         st.warning("Please select at least one agent in the sidebar.")
         st.stop()
 
     client_info = get_session_llm_client(selected_provider)
-
-    # Initialize KnowledgeHub (original pattern)
     hub = KnowledgeHub.new()
-    hub.set_transcript(transcript_text)
+    raw_text = st.session_state.transcript_text
+    hub.set_transcript(raw_text)
+    # Se o usuário usou o texto curado, ele já está em transcript_text
+    # O Orchestrator detectará se transcript_clean é diferente e pulará o preprocess
+    curated = st.session_state.get("curated_clean", "").strip()
+    if curated and curated != raw_text:
+        hub.transcript_clean = curated
+
     hub.meta.llm_provider = selected_provider
 
-    # Progress display
     progress_placeholder = st.empty()
     agent_status: dict[str, str] = {}
 
     def update_progress(step_name: str, status: str):
         agent_status[step_name] = status
         icons = {"running": "⏳", "done": "✅", "error": "❌"}
-        lines = []
-        for name, st_val in agent_status.items():
-            icon = next((v for k, v in icons.items() if k in st_val), "🔵")
-            lines.append(f"{icon} **{name}** — {st_val}")
+        lines = [f"{icons.get(st_val.split()[0] if st_val else 'running', '🔵')} **{name}** — {st_val}" 
+                 for name, st_val in agent_status.items()]
         progress_placeholder.markdown("  \n".join(lines))
 
     try:
-        orchestrator = Orchestrator(
-            client_info=client_info,
-            provider_cfg=provider_cfg,
-            progress_callback=update_progress,
-        )
+        orchestrator = Orchestrator(client_info, provider_cfg, progress_callback=update_progress)
 
-        # Multi-run BPMN logic (copied from original)
         if run_bpmn and n_bpmn_runs > 1:
             import copy as _copy
             _validator = AgentValidator()
             _agent_bpmn = AgentBPMN(client_info, provider_cfg)
 
-            # Run orchestrator for quality + NLP only, skip BPMN for now
-            hub = orchestrator.run(
-                hub,
-                output_language=output_language,
-                run_quality=run_quality,
-                run_bpmn=False,
-                run_minutes=False,
-                run_requirements=False,
-                run_synthesizer=False,
-            )
+            hub = orchestrator.run(hub, output_language, run_quality=run_quality,
+                                   run_bpmn=False, run_minutes=False, run_requirements=False, run_synthesizer=False)
 
             candidates = []
             for i in range(n_bpmn_runs):
@@ -545,65 +528,42 @@ if start_process and transcript_text:
             hub.validation.n_bpmn_runs = n_bpmn_runs
             hub.validation.ready = True
             hub.bump()
-            update_progress(
-                "BPMN Agent",
-                f"done — pass {best_score.run_index}/{n_bpmn_runs} selected "
-                f"(score {best_score.weighted:.1f}/10)",
-            )
+            update_progress("BPMN Agent", f"done — pass {best_score.run_index}/{n_bpmn_runs} selected (score {best_score.weighted:.1f}/10)")
 
-            # Run remaining agents
-            hub = orchestrator.run(
-                hub,
-                output_language=output_language,
-                run_quality=False,
-                run_bpmn=False,
-                run_minutes=run_minutes,
-                run_requirements=run_requirements,
-                run_synthesizer=run_synthesizer,
-            )
-
+            hub = orchestrator.run(hub, output_language, run_quality=False, run_bpmn=False,
+                                   run_minutes=run_minutes, run_requirements=run_requirements, run_synthesizer=run_synthesizer)
         else:
-            # Single-run (original flow)
-            hub = orchestrator.run(
-                hub,
-                output_language=output_language,
-                run_quality=run_quality,
-                run_bpmn=run_bpmn,
-                run_minutes=run_minutes,
-                run_requirements=run_requirements,
-                run_synthesizer=run_synthesizer,
-            )
+            hub = orchestrator.run(hub, output_language,
+                                   run_quality=run_quality, run_bpmn=run_bpmn,
+                                   run_minutes=run_minutes, run_requirements=run_requirements,
+                                   run_synthesizer=run_synthesizer)
 
     except Exception as e:
         st.error(f"Pipeline error: {e}")
         st.stop()
 
-    # Summary of completion
     _done = [n for n, s in agent_status.items() if "done" in s]
     _errors = [n for n, s in agent_status.items() if "error" in s]
     _summary_parts = [f"✅ {len(_done)} agent(s) completed"]
     if _errors:
-        _summary_parts.append(f"⚠️ {len(_errors)} with errors: {', '.join(_errors)}")
+        _summary_parts.append(f"⚠️ {len(_errors)} errors: {', '.join(_errors)}")
     _summary_parts.append(f"🔢 {hub.meta.total_tokens_used:,} tokens")
     _summary_parts.append(f"⏱️ {hub.meta.processing_time_ms // 1000}s")
     progress_placeholder.success("  ·  ".join(_summary_parts))
 
-    # Store hub in session state
     st.session_state["hub"] = hub
     st.session_state["output_language"] = output_language
     st.rerun()
 
 
-# ── HANDLE RE-RUN AGENT (triggered from sidebar) ──────────────────────────────
+# ── Handle re-run agent ───────────────────────────────────────────────────────
 if "rerun_agent" in st.session_state:
     agent_to_rerun = st.session_state.pop("rerun_agent")
     hub = st.session_state.get("hub")
-    
     if hub is None:
         st.error("No existing session found. Please run the full pipeline first.")
         st.stop()
     
-    # Rebuild client_info from current sidebar (avoids stale session)
     client_info = get_session_llm_client(selected_provider)
     if client_info is None:
         st.error("API key not found. Please enter your API key in the sidebar.")
@@ -637,10 +597,6 @@ if "rerun_agent" in st.session_state:
                 agent = AgentSynthesizer(client_info, provider_cfg)
                 hub = agent.run(hub, output_language)
                 st.success("✅ Synthesizer agent re‑run complete.")
-            else:
-                st.warning(f"Unknown agent: {agent_to_rerun}")
-
-            # Update session state
             st.session_state["hub"] = hub
             st.rerun()
         except Exception as e:
@@ -648,10 +604,9 @@ if "rerun_agent" in st.session_state:
             st.stop()
 
 
-# ── Results Display (preserves all UI improvements) ───────────────────────────
+# ── Results Display ───────────────────────────────────────────────────────────
 if "hub" in st.session_state:
     hub = st.session_state["hub"]
-    # Ensure migration and missing fields (as in original)
     hub = KnowledgeHub.migrate(hub)
     if not hasattr(hub, 'transcript_quality'):
         from core.knowledge_hub import TranscriptQualityModel
@@ -682,7 +637,7 @@ if "hub" in st.session_state:
     if hub.minutes.ready:
         col_d.metric("Action Items", len(hub.minutes.action_items))
 
-    # Build tabs list
+    # Build tabs
     tabs_to_show = []
     if hub.transcript_quality.ready:
         tabs_to_show.append("🔬 Quality")
@@ -709,107 +664,76 @@ if "hub" in st.session_state:
         with tabs[tab_idx]:
             tq = hub.transcript_quality
             pp = getattr(hub, 'preprocessing', None)
-            
             grade_colors = {"A": "#16a34a", "B": "#65a30d", "C": "#ca8a04", "D": "#ea580c", "E": "#dc2626"}
             grade_color = grade_colors.get(tq.grade, "#64748b")
-
             col_q1, col_q2 = st.columns([1, 3])
             with col_q1:
                 st.markdown(f"""
                 <div style='text-align:center; padding:2rem; background:{grade_color}10; border-radius:16px; border:2px solid {grade_color}'>
-                    <div style='font-size:4rem; font-weight:800; color:{grade_color}; line-height:1;'>{tq.grade}</div>
-                    <div style='font-size:1.2rem; font-weight:600; color:{grade_color}; margin-top:0.5rem;'>{tq.overall_score:.1f}/100</div>
-                    <div style='color:var(--text-muted); font-size:0.8rem; margin-top:0.5rem;'>Weighted Score</div>
+                    <div style='font-size:4rem; font-weight:800; color:{grade_color};'>{tq.grade}</div>
+                    <div style='font-size:1.2rem; font-weight:600; color:{grade_color};'>{tq.overall_score:.1f}/100</div>
                 </div>
                 """, unsafe_allow_html=True)
-            
             with col_q2:
                 st.markdown("### Evaluation Criteria")
                 for c in tq.criteria:
                     with st.expander(f"**{c.criterion}** — {c.score}/100"):
                         st.progress(c.score / 100)
                         st.markdown(c.justification)
-
             st.markdown("---")
-            
             col_sum, col_rec = st.columns(2)
             with col_sum:
-                st.markdown("### 📝 General Analysis")
                 st.info(tq.overall_summary)
             with col_rec:
-                st.markdown("### 💡 Recommendation")
-                if tq.grade in ["A", "B"]:
+                if tq.grade in ["A","B"]:
                     st.success(tq.recommendation)
-                elif tq.grade in ["C", "D"]:
+                elif tq.grade in ["C","D"]:
                     st.warning(tq.recommendation)
                 else:
                     st.error(tq.recommendation)
-
             if tq.inconsistencies:
                 st.markdown(f"### 🔍 AI‑Detected Inconsistencies  `{len(tq.inconsistencies)}`")
                 for inc in tq.inconsistencies:
-                    label = f"**{inc.speaker}** `{inc.timestamp}` — *{inc.text}*"
-                    with st.expander(label, expanded=False):
+                    with st.expander(f"**{inc.speaker}** `{inc.timestamp}` — *{inc.text}*"):
                         st.markdown(f"**Reason:** {inc.reason}")
-
             if pp and pp.ready:
                 st.markdown("### 🧹 Automated Pre-processing")
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Fillers Removed", pp.fillers_removed)
                 c2.metric("Artifacts Flagged", pp.artifact_turns)
                 c3.metric("Repetitions Collapsed", pp.repetitions_collapsed)
-
                 col_raw, col_clean = st.columns(2)
                 with col_raw:
                     st.markdown("**Original Transcript**")
                     st.text_area("raw", hub.transcript_raw, height=400, disabled=True, label_visibility="collapsed", key="ta_raw")
                     _copy_button(hub.transcript_raw, key="tab_orig")
-                    st.download_button(
-                        "⬇️ Download Original (.txt)",
-                        data=hub.transcript_raw,
-                        file_name=_make_filename("transcricao_original", "txt", prefix, suffix),
-                        key="dl_raw",
-                    )
+                    st.download_button("⬇️ Download Original (.txt)", data=hub.transcript_raw,
+                                       file_name=_make_filename("transcricao_original", "txt", prefix, suffix), key="dl_raw")
                 with col_clean:
                     st.markdown("**Cleaned Transcript** (Hover for issues)")
                     _render_highlighted_transcript(hub.transcript_clean, tq.inconsistencies, key="hl_quality")
                     _copy_button(hub.transcript_clean, key="tab_clean")
-                    st.download_button(
-                        "⬇️ Download Cleaned (.txt)",
-                        data=hub.transcript_clean,
-                        file_name=_make_filename("transcricao_preprocessada", "txt", prefix, suffix),
-                        key="dl_clean",
-                    )
+                    st.download_button("⬇️ Download Cleaned (.txt)", data=hub.transcript_clean,
+                                       file_name=_make_filename("transcricao_preprocessada", "txt", prefix, suffix), key="dl_clean")
         tab_idx += 1
 
     # ── Tab: BPMN 2.0 ─────────────────────────────────────────────────────────
     if hub.bpmn.ready:
         with tabs[tab_idx]:
-            st.markdown("""
-            <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;'>
-                <h3 style='margin:0;'>📐 BPMN Process Model</h3>
-                <span class='badge badge-blue'>Interactive Viewer</span>
-            </div>
-            """, unsafe_allow_html=True)
-            
+            st.markdown("<h3>📐 BPMN Process Model</h3><span class='badge badge-blue'>Interactive Viewer</span>", unsafe_allow_html=True)
             if hub.bpmn.bpmn_xml:
                 bpmn_html = preview_from_xml(hub.bpmn.bpmn_xml)
                 components.html(bpmn_html, height=800, scrolling=False)
-                
                 if hub.bpmn.lanes:
                     st.markdown("**Identified Roles:** " + " ".join([f"<span class='badge badge-green'>{l}</span>" for l in hub.bpmn.lanes]), unsafe_allow_html=True)
             else:
                 st.warning("BPMN XML not available. Showing Mermaid fallback.")
                 render_mermaid_block(hub.bpmn.mermaid, show_code=False, key_suffix="bpmn_fallback")
         tab_idx += 1
-
-        # ── Tab: Mermaid ──────────────────────────────────────────────────────
         with tabs[tab_idx]:
             st.markdown("### 📊 Mermaid Flowchart")
             render_mermaid_block(hub.bpmn.mermaid, show_code=True, key_suffix="mermaid_tab")
         tab_idx += 1
-
-        # ── Tab: BPMN Validation (multi-run) ───────────────────────────────────
         if hub.validation.ready and hub.validation.n_bpmn_runs > 1:
             with tabs[tab_idx]:
                 val = hub.validation
@@ -818,13 +742,13 @@ if "hub" in st.session_state:
                 rows = []
                 for c in sorted(val.bpmn_candidates, key=lambda x: x.weighted, reverse=True):
                     rows.append({
-                        "Pass":        f"{'⭐ ' if c.run_index == best.run_index else ''}{c.run_index}",
+                        "Pass": f"{'⭐ ' if c.run_index == best.run_index else ''}{c.run_index}",
                         "Granularity": f"{c.granularity:.1f}",
-                        "Task Type":   f"{c.task_type:.1f}",
-                        "Gateways":    f"{c.gateways:.1f}",
+                        "Task Type": f"{c.task_type:.1f}",
+                        "Gateways": f"{c.gateways:.1f}",
                         "Final Score": f"{c.weighted:.2f}",
-                        "Activities":  c.n_tasks,
-                        "Gateways #":  c.n_gateways,
+                        "Activities": c.n_tasks,
+                        "Gateways #": c.n_gateways,
                     })
                 st.dataframe(rows, use_container_width=True)
                 st.caption(f"Pass **{best.run_index}** selected · Score {best.weighted:.2f}/10")
@@ -835,27 +759,21 @@ if "hub" in st.session_state:
         with tabs[tab_idx]:
             m = hub.minutes
             st.markdown(f"## {m.title}")
-            
             col_m1, col_m2, col_m3 = st.columns(3)
             col_m1.markdown(f"**📅 Date:** {m.date or 'N/A'}")
             col_m2.markdown(f"**📍 Location:** {m.location or 'N/A'}")
             col_m3.markdown(f"**👥 Participants:** {len(m.participants)}")
-
             st.markdown("### 📌 Agenda")
             for i, item in enumerate(m.agenda, 1):
                 st.markdown(f"{i}. {item}")
-
             st.markdown("### 📝 Summary")
             for block in m.summary:
-                with st.container():
-                    st.markdown(f"**{block.get('topic', '')}**")
-                    st.markdown(block.get("content", ""))
-
+                st.markdown(f"**{block.get('topic', '')}**")
+                st.markdown(block.get("content", ""))
             if m.decisions:
                 st.markdown("### ✅ Key Decisions")
                 for d in m.decisions:
                     st.markdown(f"- {d}")
-
             if m.action_items:
                 st.markdown("### 🎯 Action Items")
                 prio_map = {"high": "🔴 High", "normal": "🟡 Normal", "low": "🟢 Low"}
@@ -868,111 +786,69 @@ if "hub" in st.session_state:
                         "Deadline": ai.deadline or "—"
                     })
                 st.dataframe(rows, use_container_width=True)
-            
-            # ── Export buttons for Minutes (MD, DOCX, PDF) ────────────────────
             st.markdown("---")
             st.markdown("### 📎 Export Minutes")
-            col_exp1, col_exp2, col_exp3 = st.columns(3)
-            
-            # Markdown
             md_content = AgentMinutes.to_markdown(m)
+            col_exp1, col_exp2, col_exp3 = st.columns(3)
             with col_exp1:
-                st.download_button(
-                    "⬇️ Download .md",
-                    data=md_content,
-                    file_name=_make_filename("minutes", "md", prefix, suffix),
-                    use_container_width=True,
-                    key="dl_minutes_tab_md",
-                )
-            
-            # DOCX
+                st.download_button("⬇️ .md", data=md_content,
+                                   file_name=_make_filename("minutes", "md", prefix, suffix),
+                                   use_container_width=True, key="dl_minutes_md")
             with col_exp2:
                 try:
                     from modules.minutes_exporter import to_docx
                     docx_bytes = to_docx(m)
-                    st.download_button(
-                        "⬇️ Download .docx",
-                        data=docx_bytes,
-                        file_name=_make_filename("minutes", "docx", prefix, suffix),
-                        use_container_width=True,
-                        key="dl_minutes_tab_docx",
-                    )
-                except ImportError as e:
-                    st.caption("⚠️ DOCX export not available (python-docx missing)")
+                    st.download_button("⬇️ .docx", data=docx_bytes,
+                                       file_name=_make_filename("minutes", "docx", prefix, suffix),
+                                       use_container_width=True, key="dl_minutes_docx")
                 except Exception as e:
-                    st.caption(f"⚠️ DOCX error: {e}")
-            
-            # PDF
+                    st.caption(f"DOCX unavailable: {e}")
             with col_exp3:
                 try:
                     from modules.minutes_exporter import to_pdf
                     pdf_bytes = to_pdf(m)
-                    st.download_button(
-                        "⬇️ Download .pdf",
-                        data=pdf_bytes,
-                        file_name=_make_filename("minutes", "pdf", prefix, suffix),
-                        use_container_width=True,
-                        key="dl_minutes_tab_pdf",
-                    )
-                except ImportError as e:
-                    st.caption("⚠️ PDF export not available (reportlab missing)")
+                    st.download_button("⬇️ .pdf", data=pdf_bytes,
+                                       file_name=_make_filename("minutes", "pdf", prefix, suffix),
+                                       use_container_width=True, key="dl_minutes_pdf")
                 except Exception as e:
-                    st.caption(f"⚠️ PDF error: {e}")
+                    st.caption(f"PDF unavailable: {e}")
         tab_idx += 1
 
     # ── Tab: Requirements ─────────────────────────────────────────────────────
     if hub.requirements.ready:
         with tabs[tab_idx]:
             req = hub.requirements
-            type_labels = {
-                "ui_field":       "🖥️ UI Field",
-                "validation":     "✅ Validation",
-                "business_rule":  "📋 Business Rule",
-                "functional":     "⚙️ Functional",
-                "non_functional": "📊 Non-functional",
-            }
-            priority_colors = {"high": "🔴", "medium": "🟡", "low": "🟢", "unspecified": "⚪"}
-            
-            c1, c2, c3 = st.columns(3)
+            type_labels = {"ui_field":"🖥️ UI Field","validation":"✅ Validation","business_rule":"📋 Business Rule",
+                           "functional":"⚙️ Functional","non_functional":"📊 Non-functional"}
+            priority_colors = {"high":"🔴","medium":"🟡","low":"🟢","unspecified":"⚪"}
+            c1,c2,c3 = st.columns(3)
             c1.metric("Total Requirements", len(req.requirements))
-            c2.metric("High Priority", sum(1 for r in req.requirements if r.priority == "high"))
+            c2.metric("High Priority", sum(1 for r in req.requirements if r.priority=="high"))
             c3.metric("Distinct Types", len(set(r.type for r in req.requirements)))
-
-            # Filter by type
-            selected_type = st.selectbox(
-                "Filter by type",
-                ["All"] + list(type_labels.values()),
-                key="req_type_filter",
-            )
-            type_reverse = {v: k for k, v in type_labels.items()}
-            
+            selected_type = st.selectbox("Filter by type", ["All"]+list(type_labels.values()), key="req_type_filter")
+            type_reverse = {v:k for k,v in type_labels.items()}
             rows = []
             for r in req.requirements:
-                if selected_type != "All" and r.type != type_reverse.get(selected_type):
-                    continue
+                if selected_type!="All" and r.type!=type_reverse.get(selected_type): continue
                 rows.append({
                     "ID": r.id,
                     "Type": type_labels.get(r.type, r.type),
-                    "Priority": priority_colors.get(r.priority, "⚪"),
+                    "Priority": priority_colors.get(r.priority,"⚪"),
                     "Title": r.title,
                     "Process Step": r.process_step or "—",
                     "Actor": r.actor or "—",
                 })
             if rows:
                 st.dataframe(rows, use_container_width=True)
-
             st.markdown("---")
             st.markdown("### Detailed View")
             for r in req.requirements:
-                if selected_type != "All" and r.type != type_reverse.get(selected_type):
-                    continue
-                with st.expander(f"{r.id} — {r.title}  {priority_colors.get(r.priority, '')}"):
+                if selected_type!="All" and r.type!=type_reverse.get(selected_type): continue
+                with st.expander(f"{r.id} — {r.title}  {priority_colors.get(r.priority,'')}"):
                     st.markdown(f"**Type:** {type_labels.get(r.type, r.type)}")
-                    st.markdown(f"**Priority:** {priority_colors.get(r.priority, '⚪')} {r.priority}")
-                    if r.actor:
-                        st.markdown(f"**Actor:** {r.actor}")
-                    if r.process_step:
-                        st.markdown(f"**Process step:** {r.process_step}")
+                    st.markdown(f"**Priority:** {priority_colors.get(r.priority,'⚪')} {r.priority}")
+                    if r.actor: st.markdown(f"**Actor:** {r.actor}")
+                    if r.process_step: st.markdown(f"**Process step:** {r.process_step}")
                     st.markdown(f"**Description:** {r.description}")
                     if r.source_quote:
                         speaker_tag = f"**[{r.speaker}]** " if r.speaker else ""
@@ -985,13 +861,9 @@ if "hub" in st.session_state:
             syn = hub.synthesizer
             st.markdown("### 📄 Executive Report")
             st.caption("AI-generated executive summary of all artifacts.")
-            st.download_button(
-                "⬇️ Download Executive Report (.html)",
-                data=syn.html,
-                file_name=_make_filename("executive_report", "html", prefix, suffix),
-                use_container_width=True,
-                key="dl_report_tab",
-            )
+            st.download_button("⬇️ Download Report (.html)", data=syn.html,
+                               file_name=_make_filename("executive_report", "html", prefix, suffix),
+                               use_container_width=True, key="dl_report_tab")
             st.divider()
             components.html(syn.html, height=800, scrolling=True)
         tab_idx += 1
@@ -999,107 +871,62 @@ if "hub" in st.session_state:
     # ── Tab: Export ───────────────────────────────────────────────────────────
     with tabs[tab_idx]:
         st.markdown("### 📦 Export Assets")
-        
         if hub.bpmn.ready:
             st.markdown("**Process Models**")
             col1, col2 = st.columns(2)
             with col1:
                 if hub.bpmn.bpmn_xml:
-                    st.download_button(
-                        "⬇️ Download .bpmn",
-                        data=hub.bpmn.bpmn_xml,
-                        file_name=_make_filename("process", "bpmn", prefix, suffix),
-                        use_container_width=True,
-                        key="dl_bpmn",
-                    )
+                    st.download_button("⬇️ .bpmn", data=hub.bpmn.bpmn_xml,
+                                       file_name=_make_filename("process", "bpmn", prefix, suffix),
+                                       use_container_width=True, key="dl_bpmn")
             with col2:
                 mermaid_content = generate_mermaid(hub.bpmn)
-                st.download_button(
-                    "⬇️ Download .mermaid",
-                    data=mermaid_content,
-                    file_name=_make_filename("process", "mmd", prefix, suffix),
-                    use_container_width=True,
-                    key="dl_mermaid",
-                )
+                st.download_button("⬇️ .mermaid", data=mermaid_content,
+                                   file_name=_make_filename("process", "mmd", prefix, suffix),
+                                   use_container_width=True, key="dl_mermaid")
             st.markdown("---")
-        
         if hub.minutes.ready:
             st.markdown("**Meeting Minutes**")
-            col_md, col_docx, col_pdf = st.columns(3)
             md_content = AgentMinutes.to_markdown(hub.minutes)
-            
+            col_md, col_docx, col_pdf = st.columns(3)
             with col_md:
-                st.download_button(
-                    "⬇️ .md",
-                    data=md_content,
-                    file_name=_make_filename("minutes", "md", prefix, suffix),
-                    use_container_width=True,
-                    key="dl_minutes_md",
-                )
-            
+                st.download_button("⬇️ .md", data=md_content,
+                                   file_name=_make_filename("minutes", "md", prefix, suffix),
+                                   use_container_width=True, key="dl_minutes_md_export")
             with col_docx:
                 try:
                     from modules.minutes_exporter import to_docx
-                    docx_bytes = to_docx(hub.minutes)
-                    st.download_button(
-                        "⬇️ .docx",
-                        data=docx_bytes,
-                        file_name=_make_filename("minutes", "docx", prefix, suffix),
-                        use_container_width=True,
-                        key="dl_minutes_docx",
-                    )
+                    st.download_button("⬇️ .docx", data=to_docx(hub.minutes),
+                                       file_name=_make_filename("minutes", "docx", prefix, suffix),
+                                       use_container_width=True, key="dl_minutes_docx_export")
                 except Exception as e:
                     st.caption(f"DOCX unavailable: {e}")
-            
             with col_pdf:
                 try:
                     from modules.minutes_exporter import to_pdf
-                    pdf_bytes = to_pdf(hub.minutes)
-                    st.download_button(
-                        "⬇️ .pdf",
-                        data=pdf_bytes,
-                        file_name=_make_filename("minutes", "pdf", prefix, suffix),
-                        use_container_width=True,
-                        key="dl_minutes_pdf",
-                    )
+                    st.download_button("⬇️ .pdf", data=to_pdf(hub.minutes),
+                                       file_name=_make_filename("minutes", "pdf", prefix, suffix),
+                                       use_container_width=True, key="dl_minutes_pdf_export")
                 except Exception as e:
                     st.caption(f"PDF unavailable: {e}")
-            
             st.markdown("---")
-        
         if hub.requirements.ready:
             st.markdown("**Requirements**")
-            st.download_button(
-                "⬇️ Download Requirements (.md)",
-                data=hub.requirements.markdown,
-                file_name=_make_filename("requirements", "md", prefix, suffix),
-                use_container_width=True,
-                key="dl_req_md",
-            )
-            req_json = json.dumps(
-                {"name": hub.requirements.name,
-                 "requirements": [r.__dict__ for r in hub.requirements.requirements]},
-                ensure_ascii=False, indent=2
-            )
-            st.download_button(
-                "⬇️ Download Requirements (.json)",
-                data=req_json,
-                file_name=_make_filename("requirements", "json", prefix, suffix),
-                use_container_width=True,
-                key="dl_req_json",
-            )
+            st.download_button("⬇️ Requirements (.md)", data=hub.requirements.markdown,
+                               file_name=_make_filename("requirements", "md", prefix, suffix),
+                               use_container_width=True, key="dl_req_md")
+            req_json = json.dumps({"name": hub.requirements.name,
+                                   "requirements": [r.__dict__ for r in hub.requirements.requirements]},
+                                  ensure_ascii=False, indent=2)
+            st.download_button("⬇️ Requirements (.json)", data=req_json,
+                               file_name=_make_filename("requirements", "json", prefix, suffix),
+                               use_container_width=True, key="dl_req_json")
             st.markdown("---")
-        
         if hub.synthesizer.ready:
             st.markdown("**Executive Report**")
-            st.download_button(
-                "⬇️ Download Report (.html)",
-                data=hub.synthesizer.html,
-                file_name=_make_filename("executive_report", "html", prefix, suffix),
-                use_container_width=True,
-                key="dl_report_export",
-            )
-    
+            st.download_button("⬇️ Report (.html)", data=hub.synthesizer.html,
+                               file_name=_make_filename("executive_report", "html", prefix, suffix),
+                               use_container_width=True, key="dl_report_export")
     tab_idx += 1
 
     # ── Tab: Knowledge Hub (developer mode) ───────────────────────────────────
@@ -1114,12 +941,8 @@ if "hub" in st.session_state:
             st.markdown(f"**NLP Segments:** {len(hub.nlp.segments)} — **Actors:** {', '.join(hub.nlp.actors) or '—'} — **Language:** `{hub.nlp.language_detected}`")
             if show_raw_json:
                 st.json(hub.to_dict())
-            st.download_button(
-                "⬇️ Download Knowledge Hub (.json)",
-                data=hub.to_json(),
-                file_name=_make_filename("knowledge_hub", "json", prefix, suffix),
-                key="dl_hub_json",
-            )
+            st.download_button("⬇️ Download Knowledge Hub (.json)", data=hub.to_json(),
+                               file_name=_make_filename("knowledge_hub", "json", prefix, suffix), key="dl_hub_json")
         tab_idx += 1
 
 
