@@ -454,7 +454,7 @@ if start_process and st.session_state.transcript_text.strip():
         st.stop()
 
 
-# ── RE‑RUN AGENT HANDLER (sem rerun explícito) ────────────────────────────────
+# ── RE‑RUN AGENT HANDLER (com invalidação do relatório ao mudar BPMN) ─────────
 if "rerun_agent" in st.session_state:
     agent_to_rerun = st.session_state.pop("rerun_agent")
     hub = st.session_state.get("hub")
@@ -475,6 +475,23 @@ if "rerun_agent" in st.session_state:
             elif agent_to_rerun == "bpmn":
                 agent = AgentBPMN(client_info, st.session_state.provider_cfg)
                 hub = agent.run(hub, output_language)
+                # Invalida o relatório existente porque o BPMN mudou
+                try:
+                    from core.knowledge_hub import SynthesizerModel
+                    hub.synthesizer = SynthesizerModel()
+                except ImportError:
+                    from dataclasses import dataclass, field
+                    @dataclass
+                    class _SM:
+                        executive_summary: str = ""
+                        process_narrative: str = ""
+                        key_insights: list = field(default_factory=list)
+                        recommendations: list = field(default_factory=list)
+                        html: str = ""
+                        ready: bool = False
+                    hub.synthesizer = _SM()
+                hub.synthesizer.ready = False
+                st.info("ℹ️ Relatório executivo foi invalidado devido à mudança no BPMN. Reexecute o Report para gerar um novo.")
             elif agent_to_rerun == "minutes":
                 agent = AgentMinutes(client_info, st.session_state.provider_cfg)
                 hub = agent.run(hub, output_language)
@@ -490,7 +507,6 @@ if "rerun_agent" in st.session_state:
             st.success(f"✅ {agent_to_rerun.capitalize()} agent re-run complete.")
         except Exception as e:
             st.error(f"Error re‑running {agent_to_rerun}: {e}")
-
 
 # ── RESULTS DISPLAY (fora do bloco de processamento) ──────────────────────────
 if "hub" in st.session_state:
