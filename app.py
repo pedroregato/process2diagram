@@ -1,4 +1,4 @@
-## --- Process2Diagram v4.6 — Final (upload limpa estado, reexecução invalida relatório) ---
+## --- Process2Diagram v4.6 — Final (session_state inicializado corretamente) ---
 
 import sys
 from pathlib import Path
@@ -40,6 +40,42 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# INICIALIZAÇÃO OBRIGATÓRIA DO SESSION_STATE (APÓS set_page_config)
+# ═══════════════════════════════════════════════════════════════════════════════
+if "selected_provider" not in st.session_state:
+    st.session_state.selected_provider = "DeepSeek"
+if "provider_cfg" not in st.session_state:
+    st.session_state.provider_cfg = AVAILABLE_PROVIDERS.get(st.session_state.selected_provider, {})
+if "output_language" not in st.session_state:
+    st.session_state.output_language = "Auto-detect"
+if "prefix" not in st.session_state:
+    st.session_state.prefix = "P2D_"
+if "suffix" not in st.session_state:
+    st.session_state.suffix = date.today().isoformat()
+if "run_quality" not in st.session_state:
+    st.session_state.run_quality = True
+if "run_bpmn" not in st.session_state:
+    st.session_state.run_bpmn = True
+if "run_minutes" not in st.session_state:
+    st.session_state.run_minutes = True
+if "run_requirements" not in st.session_state:
+    st.session_state.run_requirements = True
+if "run_synthesizer" not in st.session_state:
+    st.session_state.run_synthesizer = False
+if "n_bpmn_runs" not in st.session_state:
+    st.session_state.n_bpmn_runs = 1
+if "bpmn_weights" not in st.session_state:
+    st.session_state.bpmn_weights = {"granularity": 5, "task_type": 5, "gateways": 5}
+if "show_dev_tools" not in st.session_state:
+    st.session_state.show_dev_tools = False
+if "show_raw_json" not in st.session_state:
+    st.session_state.show_raw_json = False
+if "transcript_text" not in st.session_state:
+    st.session_state.transcript_text = ""
+
 
 # ── Enhanced CSS (moderno, legível) ──────────────────────────────────────────
 st.markdown("""
@@ -164,39 +200,6 @@ def _copy_button(text: str, key: str, label: str = "📋 Copy to Clipboard") -> 
 def _make_filename(base_name: str, ext: str, prefix: str, suffix: str) -> str:
     safe_base = base_name.replace(" ", "_")
     return f"{prefix}{safe_base}{suffix}.{ext.lstrip('.')}"
-
-
-# ── INICIALIZA SESSION STATE COM VALORES PADRÃO ───────────────────────────────
-if "selected_provider" not in st.session_state:
-    st.session_state.selected_provider = "DeepSeek"
-if "provider_cfg" not in st.session_state:
-    st.session_state.provider_cfg = AVAILABLE_PROVIDERS.get(st.session_state.selected_provider, {})
-if "output_language" not in st.session_state:
-    st.session_state.output_language = "Auto-detect"
-if "prefix" not in st.session_state:
-    st.session_state.prefix = "P2D_"
-if "suffix" not in st.session_state:
-    st.session_state.suffix = date.today().isoformat()
-if "run_quality" not in st.session_state:
-    st.session_state.run_quality = True
-if "run_bpmn" not in st.session_state:
-    st.session_state.run_bpmn = True
-if "run_minutes" not in st.session_state:
-    st.session_state.run_minutes = True
-if "run_requirements" not in st.session_state:
-    st.session_state.run_requirements = True
-if "run_synthesizer" not in st.session_state:
-    st.session_state.run_synthesizer = False
-if "n_bpmn_runs" not in st.session_state:
-    st.session_state.n_bpmn_runs = 1
-if "bpmn_weights" not in st.session_state:
-    st.session_state.bpmn_weights = {"granularity": 5, "task_type": 5, "gateways": 5}
-if "show_dev_tools" not in st.session_state:
-    st.session_state.show_dev_tools = False
-if "show_raw_json" not in st.session_state:
-    st.session_state.show_raw_json = False
-if "transcript_text" not in st.session_state:
-    st.session_state.transcript_text = ""
 
 
 # ── SIDEBAR (atualiza session_state) ──────────────────────────────────────────
