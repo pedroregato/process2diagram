@@ -1,4 +1,4 @@
-## --- Process2Diagram v4.6 — Corrigido (session_state, progresso, resultados) ---
+## --- Process2Diagram v4.6 — Final (upload limpa estado, reexecução invalida relatório) ---
 
 import sys
 from pathlib import Path
@@ -41,7 +41,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Enhanced CSS (mesmo do anterior, omitido por brevidade) ───────────────────
+# ── Enhanced CSS (moderno, legível) ──────────────────────────────────────────
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -284,7 +284,7 @@ if not get_session_llm_client(st.session_state.selected_provider):
     st.warning("👈 **Action Required:** Please enter your API key in the sidebar to unlock the agents.")
     st.stop()
 
-# ── INPUT SECTION (com curadoria) ────────────────────────────────────────────
+# ── INPUT SECTION (com curadoria e reset no upload) ───────────────────────────
 def update_transcript():
     st.session_state.transcript_text = st.session_state.transcript_input
 
@@ -300,10 +300,18 @@ with st.container():
     )
     col_up, col_btn = st.columns([1, 1])
     with col_up:
-        uploaded = st.file_uploader("Or upload a file", type=["txt","docx","pdf"], label_visibility="collapsed")
-        if uploaded:
-            st.session_state.transcript_text = load_transcript(uploaded)
-            # Força atualização do text_area na próxima execução (sem rerun explícito)
+        uploaded_file = st.file_uploader("Or upload a file", type=["txt","docx","pdf"], label_visibility="collapsed")
+        if uploaded_file:
+            # Carrega conteúdo do novo arquivo
+            file_content = load_transcript(uploaded_file)
+            # Substitui a transcrição
+            st.session_state.transcript_text = file_content
+            # Remove dados antigos de pré-processamento e curadoria
+            st.session_state.pop("pp_result", None)
+            st.session_state.pop("curated_clean", None)
+            # Remove hub antigo para evitar exibição de resultados desatualizados
+            st.session_state.pop("hub", None)
+            # O Streamlit rerun automaticamente após a interação
     with col_btn:
         preproc = st.button("🧹 Pré‑processar Transcrição (sem LLM)", use_container_width=True)
         if preproc and st.session_state.transcript_text.strip():
@@ -454,7 +462,7 @@ if start_process and st.session_state.transcript_text.strip():
         st.stop()
 
 
-# ── RE‑RUN AGENT HANDLER (com invalidação do relatório ao mudar BPMN) ─────────
+# ── RE‑RUN AGENT HANDLER (invalida relatório quando BPMN muda) ────────────────
 if "rerun_agent" in st.session_state:
     agent_to_rerun = st.session_state.pop("rerun_agent")
     hub = st.session_state.get("hub")
@@ -491,7 +499,7 @@ if "rerun_agent" in st.session_state:
                         ready: bool = False
                     hub.synthesizer = _SM()
                 hub.synthesizer.ready = False
-                st.info("ℹ️ Relatório executivo foi invalidado devido à mudança no BPMN. Reexecute o Report para gerar um novo.")
+                st.info("ℹ️ Executive report invalidated due to BPMN change. Re-run Report to generate a new one.")
             elif agent_to_rerun == "minutes":
                 agent = AgentMinutes(client_info, st.session_state.provider_cfg)
                 hub = agent.run(hub, output_language)
@@ -508,6 +516,7 @@ if "rerun_agent" in st.session_state:
         except Exception as e:
             st.error(f"Error re‑running {agent_to_rerun}: {e}")
 
+
 # ── RESULTS DISPLAY (fora do bloco de processamento) ──────────────────────────
 if "hub" in st.session_state:
     hub = st.session_state["hub"]
@@ -521,13 +530,13 @@ if "hub" in st.session_state:
             from core.knowledge_hub import SynthesizerModel
             hub.synthesizer = SynthesizerModel()
         except ImportError:
-            from dataclasses import dataclass, field as _field
+            from dataclasses import dataclass, field
             @dataclass
             class _SM:
                 executive_summary: str = ""
                 process_narrative: str = ""
-                key_insights: list = _field(default_factory=list)
-                recommendations: list = _field(default_factory=list)
+                key_insights: list = field(default_factory=list)
+                recommendations: list = field(default_factory=list)
                 html: str = ""
                 ready: bool = False
             hub.synthesizer = _SM()
@@ -541,8 +550,8 @@ if "hub" in st.session_state:
         hub.synthesizer.ready if hasattr(hub, 'synthesizer') else False,
     ])
     if not any_ready:
-        st.error("Nenhum agente gerou saída. Verifique o log de erros e a chave API.")
-        st.json({"agents_executados": hub.meta.agents_run, "tokens": hub.meta.total_tokens_used})
+        st.error("No agent produced output. Check API key and logs.")
+        st.json({"agents_run": hub.meta.agents_run, "tokens": hub.meta.total_tokens_used})
         st.stop()
 
     # Métricas rápidas
