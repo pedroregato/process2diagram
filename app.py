@@ -1,4 +1,4 @@
-## --- Process2Diagram v4.0 — Enhanced Multi-Agent UI
+## --- Process2Diagram v4.1 — Refined Multi-Agent UI
 ## --- Improved by Manus
 
 import sys
@@ -56,6 +56,8 @@ st.markdown("""
         --text-main: #1e293b;
         --text-muted: #64748b;
         --border: #e2e8f0;
+        --sidebar-bg: #1e293b; /* Slightly lighter than before for better contrast */
+        --sidebar-text: #f1f5f9;
     }
 
     html, body, [class*="css"] { 
@@ -63,15 +65,23 @@ st.markdown("""
         color: var(--text-main);
     }
 
-    /* Sidebar Styling */
+    /* Sidebar Styling - Refined for better contrast and harmony */
     section[data-testid="stSidebar"] {
-        background-color: #0f172a;
-        border-right: 1px solid #1e293b;
+        background-color: var(--sidebar-bg);
+        border-right: 1px solid #334155;
     }
     section[data-testid="stSidebar"] .stMarkdown, 
     section[data-testid="stSidebar"] .stText,
-    section[data-testid="stSidebar"] label {
-        color: #f1f5f9 !important;
+    section[data-testid="stSidebar"] label,
+    section[data-testid="stSidebar"] .stSelectbox div,
+    section[data-testid="stSidebar"] .stCheckbox label {
+        color: var(--sidebar-text) !important;
+    }
+    
+    /* Sidebar Input Fields Contrast */
+    section[data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] {
+        background-color: #334155 !important;
+        border-radius: 8px;
     }
     
     /* Main Title & Header */
@@ -270,11 +280,11 @@ def _copy_button(text: str, key: str, label: str = "📋 Copy to Clipboard") -> 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     _commit = _sp.run(["git", "rev-parse", "--short", "HEAD"],
-                      capture_output=True, text=True).stdout.strip() or "v4.0"
+                      capture_output=True, text=True).stdout.strip() or "v4.1"
     
     st.markdown(f"""
     <div style='padding: 1rem 0;'>
-        <h2 style='margin:0; font-size:1.5rem;'>⚡ Process2Diagram</h2>
+        <h2 style='margin:0; font-size:1.5rem; color: #f1f5f9;'>⚡ Process2Diagram</h2>
         <p style='color:#94a3b8; font-size:0.8rem; margin-top:0.2rem;'>Build {_commit} — Multi-Agent</p>
     </div>
     """, unsafe_allow_html=True)
@@ -418,11 +428,13 @@ if "hub" in st.session_state:
     tabs_to_show.append("📦 Export")
     
     tabs = st.tabs(tabs_to_show)
-    tab_idx = 0
+    
+    # Create a mapping of tab names to their indices to avoid confusion
+    tab_map = {name: i for i, name in enumerate(tabs_to_show)}
 
     # ── Tab: Quality ──────────────────────────────────────────────────────────
-    if hub.transcript_quality.ready:
-        with tabs[tab_idx]:
+    if "🔬 Quality" in tab_map:
+        with tabs[tab_map["🔬 Quality"]]:
             tq = hub.transcript_quality
             pp = getattr(hub, 'preprocessing', None)
             
@@ -472,13 +484,12 @@ if "hub" in st.session_state:
                     _copy_button(hub.transcript_raw, key="tab_orig")
                 with col_clean:
                     st.markdown("**Cleaned Transcript** (Hover for issues)")
-                    _render_highlighted_transcript(hub.transcript_clean, tq.inconsistencies, key=f"hl_{tab_idx}")
+                    _render_highlighted_transcript(hub.transcript_clean, tq.inconsistencies, key="hl_quality")
                     _copy_button(hub.transcript_clean, key="tab_clean")
-        tab_idx += 1
 
     # ── Tab: BPMN 2.0 ─────────────────────────────────────────────────────────
-    if hub.bpmn.ready:
-        with tabs[tab_idx]:
+    if "📐 BPMN 2.0" in tab_map:
+        with tabs[tab_map["📐 BPMN 2.0"]]:
             st.markdown("""
             <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;'>
                 <h3 style='margin:0;'>📐 BPMN Process Model</h3>
@@ -495,17 +506,16 @@ if "hub" in st.session_state:
             else:
                 st.warning("BPMN XML not available. Showing Mermaid fallback.")
                 render_mermaid_block(hub.bpmn.mermaid, show_code=False, key_suffix="bpmn_fallback")
-        tab_idx += 1
 
-        # ── Tab: Mermaid ──────────────────────────────────────────────────────
-        with tabs[tab_idx]:
+    # ── Tab: Mermaid ──────────────────────────────────────────────────────
+    if "📊 Mermaid" in tab_map:
+        with tabs[tab_map["📊 Mermaid"]]:
             st.markdown("### 📊 Mermaid Flowchart")
             render_mermaid_block(hub.bpmn.mermaid, show_code=True, key_suffix="mermaid_tab")
-        tab_idx += 1
 
     # ── Tab: Minutes ──────────────────────────────────────────────────────────
-    if hub.minutes.ready:
-        with tabs[tab_idx]:
+    if "📋 Minutes" in tab_map:
+        with tabs[tab_map["📋 Minutes"]]:
             m = hub.minutes
             st.markdown(f"## {m.title}")
             
@@ -541,11 +551,10 @@ if "hub" in st.session_state:
                         "Deadline": ai.deadline or "—"
                     })
                 st.table(rows)
-        tab_idx += 1
 
     # ── Tab: Requirements ─────────────────────────────────────────────────────
-    if hub.requirements.ready:
-        with tabs[tab_idx]:
+    if "📝 Requirements" in tab_map:
+        with tabs[tab_map["📝 Requirements"]]:
             req = hub.requirements
             st.markdown("### 📝 System Requirements")
             
@@ -560,34 +569,43 @@ if "hub" in st.session_state:
                     st.markdown(f"**Description:** {r.description}")
                     if r.source_quote:
                         st.markdown(f"> *\"{r.source_quote}\"* — **{r.speaker or 'Unknown'}**")
-        tab_idx += 1
+
+    # ── Tab: Executive Report ─────────────────────────────────────────────────
+    if "📄 Executive Report" in tab_map:
+        with tabs[tab_map["📄 Executive Report"]]:
+            syn = hub.synthesizer
+            st.markdown("### 📄 Executive Report")
+            st.caption("AI-generated executive summary of all artifacts.")
+            st.divider()
+            components.html(syn.html, height=800, scrolling=True)
 
     # ── Tab: Export ───────────────────────────────────────────────────────────
-    with tabs[tab_idx]:
-        st.markdown("### 📦 Export Assets")
-        
-        col_ex1, col_ex2 = st.columns(2)
-        
-        with col_ex1:
-            st.markdown("#### 📐 Process Models")
-            if hub.bpmn.ready:
-                st.download_button("⬇️ Download .bpmn", hub.bpmn.bpmn_xml, file_name="process.bpmn", use_container_width=True)
-                st.download_button("⬇️ Download .mermaid", hub.bpmn.mermaid, file_name="process.mmd", use_container_width=True)
-        
-        with col_ex2:
-            st.markdown("#### 📋 Documentation")
-            if hub.minutes.ready:
-                from agents.agent_minutes import AgentMinutes
-                md_minutes = AgentMinutes.to_markdown(hub.minutes)
-                st.download_button("⬇️ Download Minutes (.md)", md_minutes, file_name="minutes.md", use_container_width=True)
+    if "📦 Export" in tab_map:
+        with tabs[tab_map["📦 Export"]]:
+            st.markdown("### 📦 Export Assets")
             
-            if hub.synthesizer.ready:
-                st.download_button("⬇️ Download Executive Report (.html)", hub.synthesizer.html, file_name="report.html", use_container_width=True)
+            col_ex1, col_ex2 = st.columns(2)
+            
+            with col_ex1:
+                st.markdown("#### 📐 Process Models")
+                if hub.bpmn.ready:
+                    st.download_button("⬇️ Download .bpmn", hub.bpmn.bpmn_xml, file_name="process.bpmn", use_container_width=True, key="dl_bpmn")
+                    st.download_button("⬇️ Download .mermaid", hub.bpmn.mermaid, file_name="process.mmd", use_container_width=True, key="dl_mermaid")
+            
+            with col_ex2:
+                st.markdown("#### 📋 Documentation")
+                if hub.minutes.ready:
+                    from agents.agent_minutes import AgentMinutes
+                    md_minutes = AgentMinutes.to_markdown(hub.minutes)
+                    st.download_button("⬇️ Download Minutes (.md)", md_minutes, file_name="minutes.md", use_container_width=True, key="dl_minutes")
+                
+                if hub.synthesizer.ready:
+                    st.download_button("⬇️ Download Executive Report (.html)", hub.synthesizer.html, file_name="report.html", use_container_width=True, key="dl_report")
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown("""
 <div style='text-align:center; color:var(--text-muted); font-size:0.8rem; padding:1rem;'>
-    Process2Diagram v4.0 • Powered by Multi-Agent AI Architecture • 2024
+    Process2Diagram v4.1 • Powered by Multi-Agent AI Architecture • 2024
 </div>
 """, unsafe_allow_html=True)
