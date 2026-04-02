@@ -237,15 +237,45 @@ function drawN(S,n){
 function redraw(){
   const S=document.getElementById('mm');S.innerHTML='';
   const root_th=th(TREE);
-  lay(TREE,30,root_th/2+20);
+  lay(TREE, 50, root_th/2+40);   // ← margem esquerda 50, topo 40
   const nodes=allV(TREE);
-  const maxX=Math.max(...nodes.map(n=>n.lx+nwh(n)[0]/2))+24;
-  const maxY=Math.max(...nodes.map(n=>n.ly+nwh(n)[1]/2))+24;
+  const maxX=Math.max(...nodes.map(n=>n.lx+nwh(n)[0]/2))+40;  // padding extra
+  const maxY=Math.max(...nodes.map(n=>n.ly+nwh(n)[1]/2))+40;
   S.setAttribute('width',maxX);S.setAttribute('height',maxY);
   S.setAttribute('viewBox',`0 0 ${maxX} ${maxY}`);
   drawN(S,TREE);
 }
 
+/* ── Pan/zoom ── */
+var sc=1,px=0,py=0,drag=false,sx=0,sy=0;
+const MIN=0.08,MAX=6;
+const cont=document.getElementById('container');
+const vp=document.getElementById('vp');
+
+function ap(){
+  vp.style.transform=`translate(${px}px,${py}px) scale(${sc})`;
+  const h=document.getElementById('hint');
+  if(h)h.textContent=Math.round(sc*100)+'% | Scroll: zoom | Drag: mover | Clique nos grupos para expandir/retrair';
+}
+window.zoomIn=()=>{sc=Math.min(sc*1.25,MAX);ap();};
+window.zoomOut=()=>{sc=Math.max(sc/1.25,MIN);ap();};
+window.resetView=()=>{sc=1;px=0;py=0;ap();};
+window.fitToScreen=function(){
+  const S=document.getElementById('mm');
+  const w=parseFloat(S.getAttribute('width')||800);
+  const h=parseFloat(S.getAttribute('height')||600);
+  const cW=cont.clientWidth,cH=cont.clientHeight;
+  const padding=40;  // margem desejada
+  sc=Math.min((cW-padding)/w,(cH-padding)/h,2)*0.92;
+  px=(cW-w*sc)/2;
+  py=(cH-h*sc)/2;
+  ap();
+};
+window.expandAll=()=>{Object.keys(CL).forEach(k=>delete CL[k]);redraw();setTimeout(fitToScreen,50);};
+window.collapseAll=()=>{
+  (TREE.children||[]).forEach(c=>{if(c.kind==='type')CL[c.id]=true;});
+  redraw();setTimeout(fitToScreen,50);
+};
 /* ── Pan/zoom ── */
 var sc=1,px=0,py=0,drag=false,sx=0,sy=0;
 const MIN=0.08,MAX=6;
