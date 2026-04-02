@@ -1,5 +1,5 @@
-## --- Process2Diagram v4.4 — Robust Multi-Agent UI
-## --- Improved by Manus
+## --- Process2Diagram v4.4 — Robust Multi-Agent UI (Fixed) ---
+## --- Original UI improvements by Manus, processing logic corrected ---
 
 import sys
 from pathlib import Path
@@ -27,11 +27,9 @@ from agents.agent_validator import AgentValidator
 from agents.agent_minutes import AgentMinutes
 from agents.agent_mermaid import generate_mermaid
 
-# ── BPMN viewer (presentation layer — separated from generator) ──────────────
+# ── BPMN viewer ──────────────────────────────────────────────────────────────
 from modules.bpmn_viewer import preview_from_xml
 from modules.mermaid_renderer import render_mermaid_block
-
-#  ── Outras funcionalidades ──────────────
 from modules.bpmn_diagnostics import render_bpmn_diagnostics
 
 
@@ -219,15 +217,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
+# ── Helpers (copied from original, adapted) ───────────────────────────────────
 def _grade_from_score(score: int) -> str:
     if score >= 90: return "A"
     if score >= 75: return "B"
     if score >= 60: return "C"
     if score >= 45: return "D"
     return "E"
-
 
 def _render_highlighted_transcript(clean_text: str, inconsistencies: list, key: str) -> None:
     import html as _html
@@ -277,7 +273,6 @@ def _render_highlighted_transcript(clean_text: str, inconsistencies: list, key: 
         f"{body}</div>",
         height=420,
     )
-
 
 def _copy_button(text: str, key: str, label: str = "📋 Copy to Clipboard") -> None:
     import json as _json
@@ -356,11 +351,17 @@ with st.sidebar:
         ["Auto-detect", "Portuguese (BR)", "English"],
         key="output_language_select",
     )
+    # Map to expected values by agents
+    _lang_map = {"Auto-detect": "Auto-detect", "Portuguese (BR)": "Portuguese (BR)", "English": "English"}
+    output_language = _lang_map.get(output_language, output_language)
 
     st.markdown("### 🤖 Active Agents")
     run_quality = st.checkbox("Quality Inspector", value=True)
     run_bpmn = st.checkbox("BPMN Architect", value=True)
 
+    # Multi-run BPMN settings (same as original)
+    n_bpmn_runs = 1
+    bpmn_weights = {"granularity": 5, "task_type": 5, "gateways": 5}
     if run_bpmn:
         n_bpmn_runs = st.select_slider(
             "Optimization Passes", options=[1, 3, 5], value=1,
@@ -373,8 +374,6 @@ with st.sidebar:
                     "task_type":   st.slider("Task Type", 0, 10, 5, key="w_type"),
                     "gateways":    st.slider("Gateways", 0, 10, 8, key="w_gw"),
                 }
-        else:
-            bpmn_weights = {"granularity": 5, "task_type": 5, "gateways": 5}
 
     run_minutes = st.checkbox("Meeting Minutes", value=True)
     run_requirements = st.checkbox("Requirements", value=True)
@@ -388,6 +387,7 @@ with st.sidebar:
     if show_dev_tools:
         show_raw_json = st.checkbox("Show Raw JSON", value=False)
 
+
 # ── Main area ─────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="main-header">
@@ -396,6 +396,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# Check API key
 if not get_session_llm_client(selected_provider):
     st.warning("👈 **Action Required:** Please enter your API key in the sidebar to unlock the agents.")
     st.stop()
@@ -420,233 +421,460 @@ with st.container():
     with col_btn2:
         start_process = st.button("🚀 Generate Insights", type="primary", use_container_width=True)
 
-# ── Processing Logic ──────────────────────────────────────────────────────────
-if start_process and transcript_text:
-    # Initialize KnowledgeHub and Orchestrator
-    hub = KnowledgeHub(transcript_text)
-    orchestrator = Orchestrator(hub, selected_provider)
-    
-    # Ensure the hub is stored in session state before running agents
-    st.session_state.hub = hub
-    
-    with st.status("🤖 Agents are working...", expanded=True) as status:
-        try:
-            if run_quality:
-                status.write("🔍 Quality Inspector: Analyzing transcript...")
-                orchestrator.run_quality_inspector()
-            
-            if run_bpmn:
-                status.write(f"📐 BPMN Architect: Generating process model ({n_bpmn_runs} passes)...")
-                orchestrator.run_bpmn_architect(n_runs=n_bpmn_runs, weights=bpmn_weights)
-                
-            if run_minutes:
-                status.write("📋 Minutes Agent: Drafting meeting summary...")
-                orchestrator.run_minutes_agent()
-                
-            if run_requirements:
-                status.write("📝 Requirements Agent: Extracting specifications...")
-                orchestrator.run_requirements_agent()
-                
-            if run_synthesizer:
-                status.write("📄 Synthesizer: Creating executive report...")
-                orchestrator.run_synthesizer()
-                
-            status.update(label="✅ Analysis Complete!", state="complete", expanded=False)
-        except Exception as e:
-            status.update(label=f"❌ Error: {str(e)}", state="error", expanded=True)
-            st.error(f"An error occurred during processing: {str(e)}")
-            st.stop()
 
-# ── Results Display ───────────────────────────────────────────────────────────
+# ── Processing Logic (CORRECTED using original Orchestrator.run) ──────────────
+if start_process and transcript_text:
+    if not run_quality and not run_bpmn and not run_minutes and not run_requirements and not run_synthesizer:
+        st.warning("Please select at least one agent in the sidebar.")
+        st.stop()
+
+    client_info = get_session_llm_client(selected_provider)
+
+    # Initialize KnowledgeHub (original pattern)
+    hub = KnowledgeHub.new()
+    hub.set_transcript(transcript_text)
+    hub.meta.llm_provider = selected_provider
+
+    # Progress display (simple, but keeps the original style)
+    progress_placeholder = st.empty()
+    agent_status: dict[str, str] = {}
+
+    def update_progress(step_name: str, status: str):
+        agent_status[step_name] = status
+        icons = {"running": "⏳", "done": "✅", "error": "❌"}
+        lines = []
+        for name, st_val in agent_status.items():
+            icon = next((v for k, v in icons.items() if k in st_val), "🔵")
+            lines.append(f"{icon} **{name}** — {st_val}")
+        progress_placeholder.markdown("  \n".join(lines))
+
+    try:
+        orchestrator = Orchestrator(
+            client_info=client_info,
+            provider_cfg=provider_cfg,
+            progress_callback=update_progress,
+        )
+
+        # ── Multi-run BPMN logic (copied from original) ─────────────────
+        if run_bpmn and n_bpmn_runs > 1:
+            import copy as _copy
+            _validator = AgentValidator()
+            _agent_bpmn = AgentBPMN(client_info, provider_cfg)
+
+            # Run orchestrator for quality + NLP only, skip BPMN for now
+            hub = orchestrator.run(
+                hub,
+                output_language=output_language,
+                run_quality=run_quality,
+                run_bpmn=False,
+                run_minutes=False,
+                run_requirements=False,
+                run_synthesizer=False,
+            )
+
+            candidates = []
+            for i in range(n_bpmn_runs):
+                update_progress("BPMN Agent", f"pass {i+1}/{n_bpmn_runs}…")
+                hub_c = _copy.copy(hub)
+                hub_c.bpmn = BPMNModel()
+                hub_c = _agent_bpmn.run(hub_c, output_language)
+                score = _validator.score(hub_c.bpmn, hub_c.transcript_clean, bpmn_weights)
+                score.run_index = i + 1
+                candidates.append((score, hub_c.bpmn))
+
+            best_score, best_bpmn = max(candidates, key=lambda x: x[0].weighted)
+            hub.bpmn = best_bpmn
+            hub.validation.bpmn_score = best_score
+            hub.validation.bpmn_candidates = [c[0] for c in candidates]
+            hub.validation.n_bpmn_runs = n_bpmn_runs
+            hub.validation.ready = True
+            hub.bump()
+            update_progress(
+                "BPMN Agent",
+                f"done — pass {best_score.run_index}/{n_bpmn_runs} selected "
+                f"(score {best_score.weighted:.1f}/10)",
+            )
+
+            # Run remaining agents (minutes, requirements, synthesizer)
+            hub = orchestrator.run(
+                hub,
+                output_language=output_language,
+                run_quality=False,
+                run_bpmn=False,
+                run_minutes=run_minutes,
+                run_requirements=run_requirements,
+                run_synthesizer=run_synthesizer,
+            )
+
+        else:
+            # Single-run (original flow)
+            hub = orchestrator.run(
+                hub,
+                output_language=output_language,
+                run_quality=run_quality,
+                run_bpmn=run_bpmn,
+                run_minutes=run_minutes,
+                run_requirements=run_requirements,
+                run_synthesizer=run_synthesizer,
+            )
+
+    except Exception as e:
+        st.error(f"Pipeline error: {e}")
+        st.stop()
+
+    # Summary of completion
+    _done = [n for n, s in agent_status.items() if "done" in s]
+    _errors = [n for n, s in agent_status.items() if "error" in s]
+    _summary_parts = [f"✅ {len(_done)} agent(s) completed"]
+    if _errors:
+        _summary_parts.append(f"⚠️ {len(_errors)} with errors: {', '.join(_errors)}")
+    _summary_parts.append(f"🔢 {hub.meta.total_tokens_used:,} tokens")
+    _summary_parts.append(f"⏱️ {hub.meta.processing_time_ms // 1000}s")
+    progress_placeholder.success("  ·  ".join(_summary_parts))
+
+    # Store hub in session state for later rendering
+    st.session_state["hub"] = hub
+
+
+# ── Results Display (preserves all UI improvements) ───────────────────────────
 if "hub" in st.session_state:
     hub = st.session_state.hub
-    
+    # Ensure migration and missing fields (as in original)
+    hub = KnowledgeHub.migrate(hub)
+    if not hasattr(hub, 'transcript_quality'):
+        from core.knowledge_hub import TranscriptQualityModel
+        hub.transcript_quality = TranscriptQualityModel()
+    if not hasattr(hub, 'synthesizer'):
+        try:
+            from core.knowledge_hub import SynthesizerModel
+            hub.synthesizer = SynthesizerModel()
+        except ImportError:
+            from dataclasses import dataclass, field as _field
+            @dataclass
+            class _SM:
+                executive_summary: str = ""
+                process_narrative: str = ""
+                key_insights: list = _field(default_factory=list)
+                recommendations: list = _field(default_factory=list)
+                html: str = ""
+                ready: bool = False
+            hub.synthesizer = _SM()
+
+    # Metrics banner (original style)
+    col_a, col_b, col_c, col_d = st.columns(4)
+    if hub.bpmn.ready:
+        col_a.metric("BPMN Steps", len(hub.bpmn.steps))
+        col_b.metric("Connections", len(hub.bpmn.edges))
+        actors = list(set(s.actor for s in hub.bpmn.steps if s.actor))
+        col_c.metric("Actors", len(actors))
+    if hub.minutes.ready:
+        col_d.metric("Action Items", len(hub.minutes.action_items))
+
+    # Build tabs list
     tabs_to_show = []
-    if hub.transcript_quality.ready: tabs_to_show.append("🔬 Quality")
-    if hub.bpmn.ready: 
+    if hub.transcript_quality.ready:
+        tabs_to_show.append("🔬 Quality")
+    if hub.bpmn.ready:
         tabs_to_show.append("📐 BPMN 2.0")
         tabs_to_show.append("📊 Mermaid")
-    if hub.minutes.ready: tabs_to_show.append("📋 Minutes")
-    if hub.requirements.ready: tabs_to_show.append("📝 Requirements")
-    if hub.synthesizer.ready: tabs_to_show.append("📄 Executive Report")
+        if hub.validation.ready and hub.validation.n_bpmn_runs > 1:
+            tabs_to_show.append("🏆 BPMN Validation")
+    if hub.minutes.ready:
+        tabs_to_show.append("📋 Minutes")
+    if hub.requirements.ready:
+        tabs_to_show.append("📝 Requirements")
+    if hub.synthesizer.ready:
+        tabs_to_show.append("📄 Executive Report")
     tabs_to_show.append("📦 Export")
-    
-    if tabs_to_show:
-        tabs = st.tabs(tabs_to_show)
-        tab_map = {name: i for i, name in enumerate(tabs_to_show)}
+    if show_dev_tools:
+        tabs_to_show.append("🔍 Knowledge Hub")
 
-        # ── Tab: Quality ──────────────────────────────────────────────────────────
-        if "🔬 Quality" in tab_map:
-            with tabs[tab_map["🔬 Quality"]]:
-                tq = hub.transcript_quality
-                pp = getattr(hub, 'preprocessing', None)
-                
-                grade_colors = {"A": "#16a34a", "B": "#65a30d", "C": "#ca8a04", "D": "#ea580c", "E": "#dc2626"}
-                grade_color = grade_colors.get(tq.grade, "#64748b")
+    tabs = st.tabs(tabs_to_show)
+    tab_idx = 0
 
-                col_q1, col_q2 = st.columns([1, 3])
-                with col_q1:
-                    st.markdown(f"""
-                    <div style='text-align:center; padding:2rem; background:{grade_color}10; border-radius:16px; border:2px solid {grade_color}'>
-                        <div style='font-size:4rem; font-weight:800; color:{grade_color}; line-height:1;'>{tq.grade}</div>
-                        <div style='font-size:1.2rem; font-weight:600; color:{grade_color}; margin-top:0.5rem;'>{tq.overall_score:.1f}/100</div>
-                        <div style='color:var(--text-muted); font-size:0.8rem; margin-top:0.5rem;'>Weighted Score</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                with col_q2:
-                    st.markdown("### Evaluation Criteria")
-                    for c in tq.criteria:
-                        with st.expander(f"**{c.criterion}** — {c.score}/100"):
-                            st.progress(c.score / 100)
-                            st.markdown(c.justification)
+    # ── Tab: Quality ──────────────────────────────────────────────────────────
+    if hub.transcript_quality.ready:
+        with tabs[tab_idx]:
+            tq = hub.transcript_quality
+            pp = getattr(hub, 'preprocessing', None)
+            
+            grade_colors = {"A": "#16a34a", "B": "#65a30d", "C": "#ca8a04", "D": "#ea580c", "E": "#dc2626"}
+            grade_color = grade_colors.get(tq.grade, "#64748b")
 
-                st.markdown("---")
-                
-                col_sum, col_rec = st.columns(2)
-                with col_sum:
-                    st.markdown("### 📝 General Analysis")
-                    st.info(tq.overall_summary)
-                with col_rec:
-                    st.markdown("### 💡 Recommendation")
-                    if tq.grade in ["A", "B"]: st.success(tq.recommendation)
-                    elif tq.grade in ["C", "D"]: st.warning(tq.recommendation)
-                    else: st.error(tq.recommendation)
-
-                if pp and pp.ready:
-                    st.markdown("### 🧹 Automated Pre-processing")
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric("Fillers Removed", pp.fillers_removed)
-                    c2.metric("Artifacts Flagged", pp.artifact_turns)
-                    c3.metric("Repetitions Collapsed", pp.repetitions_collapsed)
-
-                    col_raw, col_clean = st.columns(2)
-                    with col_raw:
-                        st.markdown("**Original Transcript**")
-                        st.text_area("raw", hub.transcript_raw, height=400, disabled=True, label_visibility="collapsed", key="ta_raw")
-                        _copy_button(hub.transcript_raw, key="tab_orig")
-                    with col_clean:
-                        st.markdown("**Cleaned Transcript** (Hover for issues)")
-                        _render_highlighted_transcript(hub.transcript_clean, tq.inconsistencies, key="hl_quality")
-                        _copy_button(hub.transcript_clean, key="tab_clean")
-
-        # ── Tab: BPMN 2.0 ─────────────────────────────────────────────────────────
-        if "📐 BPMN 2.0" in tab_map:
-            with tabs[tab_map["📐 BPMN 2.0"]]:
-                st.markdown("""
-                <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;'>
-                    <h3 style='margin:0;'>📐 BPMN Process Model</h3>
-                    <span class='badge badge-blue'>Interactive Viewer</span>
+            col_q1, col_q2 = st.columns([1, 3])
+            with col_q1:
+                st.markdown(f"""
+                <div style='text-align:center; padding:2rem; background:{grade_color}10; border-radius:16px; border:2px solid {grade_color}'>
+                    <div style='font-size:4rem; font-weight:800; color:{grade_color}; line-height:1;'>{tq.grade}</div>
+                    <div style='font-size:1.2rem; font-weight:600; color:{grade_color}; margin-top:0.5rem;'>{tq.overall_score:.1f}/100</div>
+                    <div style='color:var(--text-muted); font-size:0.8rem; margin-top:0.5rem;'>Weighted Score</div>
                 </div>
                 """, unsafe_allow_html=True)
-                
-                if hub.bpmn.bpmn_xml:
-                    bpmn_html = preview_from_xml(hub.bpmn.bpmn_xml)
-                    components.html(bpmn_html, height=800, scrolling=False)
-                    
-                    if hub.bpmn.lanes:
-                        st.markdown("**Identified Roles:** " + " ".join([f"<span class='badge badge-green'>{l}</span>" for l in hub.bpmn.lanes]), unsafe_allow_html=True)
+            
+            with col_q2:
+                st.markdown("### Evaluation Criteria")
+                for c in tq.criteria:
+                    with st.expander(f"**{c.criterion}** — {c.score}/100"):
+                        st.progress(c.score / 100)
+                        st.markdown(c.justification)
+
+            st.markdown("---")
+            
+            col_sum, col_rec = st.columns(2)
+            with col_sum:
+                st.markdown("### 📝 General Analysis")
+                st.info(tq.overall_summary)
+            with col_rec:
+                st.markdown("### 💡 Recommendation")
+                if tq.grade in ["A", "B"]:
+                    st.success(tq.recommendation)
+                elif tq.grade in ["C", "D"]:
+                    st.warning(tq.recommendation)
                 else:
-                    st.warning("BPMN XML not available. Showing Mermaid fallback.")
-                    render_mermaid_block(hub.bpmn.mermaid, show_code=False, key_suffix="bpmn_fallback")
+                    st.error(tq.recommendation)
+
+            if tq.inconsistencies:
+                st.markdown(f"### 🔍 AI‑Detected Inconsistencies  `{len(tq.inconsistencies)}`")
+                for inc in tq.inconsistencies:
+                    label = f"**{inc.speaker}** `{inc.timestamp}` — *{inc.text}*"
+                    with st.expander(label, expanded=False):
+                        st.markdown(f"**Reason:** {inc.reason}")
+
+            if pp and pp.ready:
+                st.markdown("### 🧹 Automated Pre-processing")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Fillers Removed", pp.fillers_removed)
+                c2.metric("Artifacts Flagged", pp.artifact_turns)
+                c3.metric("Repetitions Collapsed", pp.repetitions_collapsed)
+
+                col_raw, col_clean = st.columns(2)
+                with col_raw:
+                    st.markdown("**Original Transcript**")
+                    st.text_area("raw", hub.transcript_raw, height=400, disabled=True, label_visibility="collapsed", key="ta_raw")
+                    _copy_button(hub.transcript_raw, key="tab_orig")
+                with col_clean:
+                    st.markdown("**Cleaned Transcript** (Hover for issues)")
+                    _render_highlighted_transcript(hub.transcript_clean, tq.inconsistencies, key="hl_quality")
+                    _copy_button(hub.transcript_clean, key="tab_clean")
+        tab_idx += 1
+
+    # ── Tab: BPMN 2.0 ─────────────────────────────────────────────────────────
+    if hub.bpmn.ready:
+        with tabs[tab_idx]:
+            st.markdown("""
+            <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;'>
+                <h3 style='margin:0;'>📐 BPMN Process Model</h3>
+                <span class='badge badge-blue'>Interactive Viewer</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if hub.bpmn.bpmn_xml:
+                bpmn_html = preview_from_xml(hub.bpmn.bpmn_xml)
+                components.html(bpmn_html, height=800, scrolling=False)
+                
+                if hub.bpmn.lanes:
+                    st.markdown("**Identified Roles:** " + " ".join([f"<span class='badge badge-green'>{l}</span>" for l in hub.bpmn.lanes]), unsafe_allow_html=True)
+            else:
+                st.warning("BPMN XML not available. Showing Mermaid fallback.")
+                render_mermaid_block(hub.bpmn.mermaid, show_code=False, key_suffix="bpmn_fallback")
+        tab_idx += 1
 
         # ── Tab: Mermaid ──────────────────────────────────────────────────────
-        if "📊 Mermaid" in tab_map:
-            with tabs[tab_map["📊 Mermaid"]]:
-                st.markdown("### 📊 Mermaid Flowchart")
-                render_mermaid_block(hub.bpmn.mermaid, show_code=True, key_suffix="mermaid_tab")
+        with tabs[tab_idx]:
+            st.markdown("### 📊 Mermaid Flowchart")
+            render_mermaid_block(hub.bpmn.mermaid, show_code=True, key_suffix="mermaid_tab")
+        tab_idx += 1
 
-        # ── Tab: Minutes ──────────────────────────────────────────────────────────
-        if "📋 Minutes" in tab_map:
-            with tabs[tab_map["📋 Minutes"]]:
-                m = hub.minutes
-                st.markdown(f"## {m.title}")
-                
-                col_m1, col_m2, col_m3 = st.columns(3)
-                col_m1.markdown(f"**📅 Date:** {m.date or 'N/A'}")
-                col_m2.markdown(f"**📍 Location:** {m.location or 'N/A'}")
-                col_m3.markdown(f"**👥 Participants:** {len(m.participants)}")
+        # ── Tab: BPMN Validation (multi-run) ───────────────────────────────────
+        if hub.validation.ready and hub.validation.n_bpmn_runs > 1:
+            with tabs[tab_idx]:
+                val = hub.validation
+                st.markdown(f"### Selection among {val.n_bpmn_runs} passes")
+                best = val.bpmn_score
+                rows = []
+                for c in sorted(val.bpmn_candidates, key=lambda x: x.weighted, reverse=True):
+                    rows.append({
+                        "Pass":        f"{'⭐ ' if c.run_index == best.run_index else ''}{c.run_index}",
+                        "Granularity": f"{c.granularity:.1f}",
+                        "Task Type":   f"{c.task_type:.1f}",
+                        "Gateways":    f"{c.gateways:.1f}",
+                        "Final Score": f"{c.weighted:.2f}",
+                        "Activities":  c.n_tasks,
+                        "Gateways #":  c.n_gateways,
+                    })
+                st.dataframe(rows, use_container_width=True)
+                st.caption(f"Pass **{best.run_index}** selected · Score {best.weighted:.2f}/10")
+            tab_idx += 1
 
-                st.markdown("### 📌 Agenda")
-                for i, item in enumerate(m.agenda, 1):
-                    st.markdown(f"{i}. {item}")
+    # ── Tab: Minutes ──────────────────────────────────────────────────────────
+    if hub.minutes.ready:
+        with tabs[tab_idx]:
+            m = hub.minutes
+            st.markdown(f"## {m.title}")
+            
+            col_m1, col_m2, col_m3 = st.columns(3)
+            col_m1.markdown(f"**📅 Date:** {m.date or 'N/A'}")
+            col_m2.markdown(f"**📍 Location:** {m.location or 'N/A'}")
+            col_m3.markdown(f"**👥 Participants:** {len(m.participants)}")
 
-                st.markdown("### 📝 Summary")
-                for block in m.summary:
-                    with st.container():
-                        st.markdown(f"**{block.get('topic', '')}**")
-                        st.markdown(block.get("content", ""))
+            st.markdown("### 📌 Agenda")
+            for i, item in enumerate(m.agenda, 1):
+                st.markdown(f"{i}. {item}")
 
-                if m.decisions:
-                    st.markdown("### ✅ Key Decisions")
-                    for d in m.decisions:
-                        st.markdown(f"- {d}")
+            st.markdown("### 📝 Summary")
+            for block in m.summary:
+                with st.container():
+                    st.markdown(f"**{block.get('topic', '')}**")
+                    st.markdown(block.get("content", ""))
 
-                if m.action_items:
-                    st.markdown("### 🎯 Action Items")
-                    prio_map = {"high": "🔴 High", "normal": "🟡 Normal", "low": "🟢 Low"}
-                    rows = []
-                    for ai in m.action_items:
-                        rows.append({
-                            "Priority": prio_map.get(ai.priority, "⚪"),
-                            "Task": ai.task,
-                            "Owner": ai.responsible,
-                            "Deadline": ai.deadline or "—"
-                        })
-                    st.table(rows)
+            if m.decisions:
+                st.markdown("### ✅ Key Decisions")
+                for d in m.decisions:
+                    st.markdown(f"- {d}")
 
-        # ── Tab: Requirements ─────────────────────────────────────────────────────
-        if "📝 Requirements" in tab_map:
-            with tabs[tab_map["📝 Requirements"]]:
-                req = hub.requirements
-                st.markdown("### 📝 System Requirements")
-                
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Total Requirements", len(req.requirements))
-                c2.metric("High Priority", sum(1 for r in req.requirements if r.priority == "high"))
-                c3.metric("Distinct Types", len(set(r.type for r in req.requirements)))
+            if m.action_items:
+                st.markdown("### 🎯 Action Items")
+                prio_map = {"high": "🔴 High", "normal": "🟡 Normal", "low": "🟢 Low"}
+                rows = []
+                for ai in m.action_items:
+                    rows.append({
+                        "Priority": prio_map.get(ai.priority, "⚪"),
+                        "Task": ai.task,
+                        "Owner": ai.responsible,
+                        "Deadline": ai.deadline or "—"
+                    })
+                st.dataframe(rows, use_container_width=True)
+        tab_idx += 1
 
-                for r in req.requirements:
-                    with st.expander(f"**{r.id}** — {r.title}"):
-                        st.markdown(f"**Type:** `{r.type}` | **Priority:** `{r.priority}`")
-                        st.markdown(f"**Description:** {r.description}")
-                        if r.source_quote:
-                            st.markdown(f"> *\"{r.source_quote}\"* — **{r.speaker or 'Unknown'}**")
+    # ── Tab: Requirements ─────────────────────────────────────────────────────
+    if hub.requirements.ready:
+        with tabs[tab_idx]:
+            req = hub.requirements
+            type_labels = {
+                "ui_field":       "🖥️ UI Field",
+                "validation":     "✅ Validation",
+                "business_rule":  "📋 Business Rule",
+                "functional":     "⚙️ Functional",
+                "non_functional": "📊 Non-functional",
+            }
+            priority_colors = {"high": "🔴", "medium": "🟡", "low": "🟢", "unspecified": "⚪"}
+            
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Total Requirements", len(req.requirements))
+            c2.metric("High Priority", sum(1 for r in req.requirements if r.priority == "high"))
+            c3.metric("Distinct Types", len(set(r.type for r in req.requirements)))
 
-        # ── Tab: Executive Report ─────────────────────────────────────────────────
-        if "📄 Executive Report" in tab_map:
-            with tabs[tab_map["📄 Executive Report"]]:
-                if hub.synthesizer.ready:
-                    syn = hub.synthesizer
-                    st.markdown("### 📄 Executive Report")
-                    st.caption("AI-generated executive summary of all artifacts.")
-                    st.divider()
-                    components.html(syn.html, height=800, scrolling=True)
-                else:
-                    st.info("Executive Report agent was not selected or failed to generate.")
+            # Filter by type
+            selected_type = st.selectbox(
+                "Filter by type",
+                ["All"] + list(type_labels.values()),
+                key="req_type_filter",
+            )
+            type_reverse = {v: k for k, v in type_labels.items()}
+            
+            rows = []
+            for r in req.requirements:
+                if selected_type != "All" and r.type != type_reverse.get(selected_type):
+                    continue
+                rows.append({
+                    "ID": r.id,
+                    "Type": type_labels.get(r.type, r.type),
+                    "Priority": priority_colors.get(r.priority, "⚪"),
+                    "Title": r.title,
+                    "Process Step": r.process_step or "—",
+                    "Actor": r.actor or "—",
+                })
+            if rows:
+                st.dataframe(rows, use_container_width=True)
 
-        # ── Tab: Export ───────────────────────────────────────────────────────────
-        if "📦 Export" in tab_map:
-            with tabs[tab_map["📦 Export"]]:
-                st.markdown("### 📦 Export Assets")
-                
-                col_ex1, col_ex2 = st.columns(2)
-                
-                with col_ex1:
-                    st.markdown("#### 📐 Process Models")
-                    if hub.bpmn.ready:
-                        st.download_button("⬇️ Download .bpmn", hub.bpmn.bpmn_xml, file_name="process.bpmn", use_container_width=True, key="dl_bpmn")
-                        st.download_button("⬇️ Download .mermaid", hub.bpmn.mermaid, file_name="process.mmd", use_container_width=True, key="dl_mermaid")
-                
-                with col_ex2:
-                    st.markdown("#### 📋 Documentation")
-                    if hub.minutes.ready:
-                        from agents.agent_minutes import AgentMinutes
-                        md_minutes = AgentMinutes.to_markdown(hub.minutes)
-                        st.download_button("⬇️ Download Minutes (.md)", md_minutes, file_name="minutes.md", use_container_width=True, key="dl_minutes")
-                    
-                    if hub.synthesizer.ready:
-                        st.download_button("⬇️ Download Executive Report (.html)", hub.synthesizer.html, file_name="report.html", use_container_width=True, key="dl_report")
+            st.markdown("---")
+            st.markdown("### Detailed View")
+            for r in req.requirements:
+                if selected_type != "All" and r.type != type_reverse.get(selected_type):
+                    continue
+                with st.expander(f"{r.id} — {r.title}  {priority_colors.get(r.priority, '')}"):
+                    st.markdown(f"**Type:** {type_labels.get(r.type, r.type)}")
+                    st.markdown(f"**Priority:** {priority_colors.get(r.priority, '⚪')} {r.priority}")
+                    if r.actor:
+                        st.markdown(f"**Actor:** {r.actor}")
+                    if r.process_step:
+                        st.markdown(f"**Process step:** {r.process_step}")
+                    st.markdown(f"**Description:** {r.description}")
+                    if r.source_quote:
+                        speaker_tag = f"**[{r.speaker}]** " if r.speaker else ""
+                        st.markdown(f"> {speaker_tag}*\"{r.source_quote}\"*")
+        tab_idx += 1
+
+    # ── Tab: Executive Report ─────────────────────────────────────────────────
+    if hub.synthesizer.ready:
+        with tabs[tab_idx]:
+            syn = hub.synthesizer
+            st.markdown("### 📄 Executive Report")
+            st.caption("AI-generated executive summary of all artifacts.")
+            st.download_button(
+                "⬇️ Download Executive Report (.html)",
+                data=syn.html,
+                file_name="executive_report.html",
+                mime="text/html",
+                use_container_width=True,
+            )
+            st.divider()
+            components.html(syn.html, height=800, scrolling=True)
+        tab_idx += 1
+
+    # ── Tab: Export ───────────────────────────────────────────────────────────
+    with tabs[tab_idx]:
+        st.markdown("### 📦 Export Assets")
+        
+        if hub.bpmn.ready:
+            st.markdown("**Process Models**")
+            col1, col2 = st.columns(2)
+            with col1:
+                if hub.bpmn.bpmn_xml:
+                    st.download_button("⬇️ Download .bpmn", hub.bpmn.bpmn_xml, file_name="process.bpmn", use_container_width=True, key="dl_bpmn")
+            with col2:
+                mermaid_content = generate_mermaid(hub.bpmn)
+                st.download_button("⬇️ Download .mermaid", mermaid_content, file_name="process.mmd", use_container_width=True, key="dl_mermaid")
+            st.markdown("---")
+        
+        if hub.minutes.ready:
+            st.markdown("**Meeting Minutes**")
+            md_content = AgentMinutes.to_markdown(hub.minutes)
+            st.download_button("⬇️ Download Minutes (.md)", md_content, file_name="minutes.md", use_container_width=True, key="dl_minutes")
+            st.markdown("---")
+        
+        if hub.requirements.ready:
+            st.markdown("**Requirements**")
+            st.download_button("⬇️ Download Requirements (.md)", hub.requirements.markdown, file_name="requirements.md", use_container_width=True, key="dl_req_md")
+            req_json = json.dumps(
+                {"name": hub.requirements.name,
+                 "requirements": [r.__dict__ for r in hub.requirements.requirements]},
+                ensure_ascii=False, indent=2
+            )
+            st.download_button("⬇️ Download Requirements (.json)", req_json, file_name="requirements.json", use_container_width=True, key="dl_req_json")
+            st.markdown("---")
+        
+        if hub.synthesizer.ready:
+            st.markdown("**Executive Report**")
+            st.download_button("⬇️ Download Report (.html)", hub.synthesizer.html, file_name="executive_report.html", use_container_width=True, key="dl_report")
+    
+    tab_idx += 1
+
+    # ── Tab: Knowledge Hub (developer mode) ───────────────────────────────────
+    if show_dev_tools:
+        with tabs[tab_idx]:
+            st.markdown("### 🔍 Knowledge Hub — Session State")
+            col_meta1, col_meta2, col_meta3 = st.columns(3)
+            col_meta1.metric("Hub Version", hub.version)
+            col_meta2.metric("Tokens Used", hub.meta.total_tokens_used)
+            col_meta3.metric("Agents Executed", len(hub.meta.agents_run))
+            st.markdown(f"**Provider:** `{hub.meta.llm_provider}` — **Model:** `{hub.meta.llm_model}`")
+            st.markdown(f"**NLP Segments:** {len(hub.nlp.segments)} — **Actors:** {', '.join(hub.nlp.actors) or '—'} — **Language:** `{hub.nlp.language_detected}`")
+            if show_raw_json:
+                st.json(hub.to_dict())
+            st.download_button("⬇️ Download Knowledge Hub (.json)", hub.to_json(), file_name="knowledge_hub.json", mime="application/json")
+        tab_idx += 1
+
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("---")
