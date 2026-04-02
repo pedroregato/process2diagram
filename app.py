@@ -1,4 +1,4 @@
-## --- Process2Diagram v4.2 — High Contrast Multi-Agent UI
+## --- Process2Diagram v4.3 — Maximum Legibility Multi-Agent UI
 ## --- Improved by Manus
 
 import sys
@@ -43,7 +43,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Enhanced CSS (Modern SaaS Look with High Contrast) ────────────────────────
+# ── Enhanced CSS (Modern SaaS Look with Maximum Contrast) ─────────────────────
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -66,40 +66,66 @@ st.markdown("""
         color: var(--text-main);
     }
 
-    /* Sidebar Styling - High Contrast Refinement */
+    /* Sidebar Styling - Maximum Contrast Refinement */
     section[data-testid="stSidebar"] {
         background-color: var(--sidebar-bg);
         border-right: 1px solid #1e293b;
     }
     
-    /* Sidebar Headings & Labels */
+    /* Force Sidebar Headings & Labels to be visible */
     section[data-testid="stSidebar"] h1, 
     section[data-testid="stSidebar"] h2, 
-    section[data-testid="stSidebar"] h3 {
+    section[data-testid="stSidebar"] h3,
+    section[data-testid="stSidebar"] .stMarkdown p,
+    section[data-testid="stSidebar"] .stText p {
         color: var(--sidebar-text) !important;
     }
     
-    section[data-testid="stSidebar"] label p {
-        color: var(--sidebar-label) !important;
-        font-weight: 500 !important;
+    /* Target specific labels like "app" and "Diagrams" if they are in markdown */
+    section[data-testid="stSidebar"] .stMarkdown strong,
+    section[data-testid="stSidebar"] .stMarkdown em {
+        color: #ffffff !important;
     }
 
-    /* Sidebar Selectbox Contrast Fix */
+    /* Sidebar Input Labels (Provider, Language, etc.) */
+    section[data-testid="stSidebar"] label p {
+        color: #cbd5e1 !important; /* Lighter gray for better visibility */
+        font-weight: 600 !important;
+        font-size: 0.9rem !important;
+    }
+
+    /* Sidebar Selectbox Contrast Fix - White background, Dark text */
     section[data-testid="stSidebar"] div[data-baseweb="select"] > div {
         background-color: #ffffff !important;
-        color: #1e293b !important; /* Dark text on white background */
         border-radius: 8px;
     }
     
-    /* Ensure selected value is dark */
-    section[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[role="button"] {
-        color: #1e293b !important;
+    /* Ensure the text inside the selectbox is dark and bold */
+    section[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[role="button"],
+    section[data-testid="stSidebar"] div[data-testid="stSelectbox"] span {
+        color: #0f172a !important;
+        font-weight: 500 !important;
     }
 
     /* Sidebar Checkbox Label Contrast Fix */
     section[data-testid="stSidebar"] .stCheckbox label span {
-        color: var(--sidebar-text) !important;
-        font-weight: 400 !important;
+        color: #f8fafc !important;
+        font-weight: 500 !important;
+    }
+
+    /* Sidebar Caption / Small Text (Security Warning) */
+    section[data-testid="stSidebar"] .stCaption,
+    section[data-testid="stSidebar"] caption,
+    section[data-testid="stSidebar"] .stMarkdown small {
+        color: #94a3b8 !important; /* Visible gray */
+        font-size: 0.8rem !important;
+        display: block;
+        margin-top: 0.5rem;
+    }
+    
+    /* Force specific caption text color */
+    section[data-testid="stSidebar"] div[data-testid="stCaptionContainer"] {
+        color: #cbd5e1 !important;
     }
 
     /* Main Title & Header */
@@ -298,12 +324,12 @@ def _copy_button(text: str, key: str, label: str = "📋 Copy to Clipboard") -> 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     _commit = _sp.run(["git", "rev-parse", "--short", "HEAD"],
-                      capture_output=True, text=True).stdout.strip() or "v4.2"
+                      capture_output=True, text=True).stdout.strip() or "v4.3"
     
     st.markdown(f"""
     <div style='padding: 1rem 0;'>
-        <h2 style='margin:0; font-size:1.5rem; color: #f8fafc;'>⚡ Process2Diagram</h2>
-        <p style='color:#94a3b8; font-size:0.8rem; margin-top:0.2rem;'>Build {_commit} — Multi-Agent</p>
+        <h2 style='margin:0; font-size:1.5rem; color: #ffffff;'>⚡ Process2Diagram</h2>
+        <p style='color:#cbd5e1; font-size:0.85rem; margin-top:0.2rem;'>Build {_commit} — Multi-Agent</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -622,6 +648,6 @@ if "hub" in st.session_state:
 st.markdown("---")
 st.markdown("""
 <div style='text-align:center; color:var(--text-muted); font-size:0.8rem; padding:1rem;'>
-    Process2Diagram v4.2 • Powered by Multi-Agent AI Architecture • 2024
+    Process2Diagram v4.3 • Powered by Multi-Agent AI Architecture • 2024
 </div>
 """, unsafe_allow_html=True)
