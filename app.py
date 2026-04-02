@@ -565,17 +565,25 @@ if start_process and transcript_text:
 
 
 # ── HANDLE RE-RUN AGENT (triggered from sidebar) ──────────────────────────────
+# ── HANDLE RE-RUN AGENT (triggered from sidebar) ──────────────────────────────
 if "rerun_agent" in st.session_state:
     agent_to_rerun = st.session_state.pop("rerun_agent")
     hub = st.session_state.get("hub")
-    client_info = st.session_state.get("client_info")
-    provider_cfg = st.session_state.get("provider_cfg")
-    output_language = st.session_state.get("output_language", "Auto-detect")
-
-    if hub is None or client_info is None:
+    
+    # Se o hub não existir, não há o que fazer
+    if hub is None:
         st.error("No existing session found. Please run the full pipeline first.")
         st.stop()
-
+    
+    # Reconstrói o client_info a partir da sidebar (garante que a chave de API ainda está lá)
+    client_info = get_session_llm_client(selected_provider)
+    if client_info is None:
+        st.error("API key not found. Please enter your API key in the sidebar.")
+        st.stop()
+    
+    provider_cfg = AVAILABLE_PROVIDERS[selected_provider]
+    output_language = st.session_state.get("output_language", "Auto-detect")
+    
     with st.spinner(f"Re‑running {agent_to_rerun} agent..."):
         try:
             if agent_to_rerun == "quality":
@@ -604,8 +612,12 @@ if "rerun_agent" in st.session_state:
             else:
                 st.warning(f"Unknown agent: {agent_to_rerun}")
 
-            # Update session state
+            # Atualiza o hub no session_state
             st.session_state["hub"] = hub
+            # Opcional: atualiza também os metadados para refletores futuros
+            st.session_state["client_info"] = client_info
+            st.session_state["provider_cfg"] = provider_cfg
+            st.session_state["output_language"] = output_language
             st.rerun()
         except Exception as e:
             st.error(f"Error re‑running {agent_to_rerun}: {e}")
