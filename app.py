@@ -1,4 +1,4 @@
-## --- Process2Diagram v4.6 — Final (session_state inicializado corretamente) ---
+## --- Process2Diagram v4.6 — Final (indentação corrigida, mindmap incluso) ---
 
 import sys
 from pathlib import Path
@@ -739,87 +739,85 @@ if "hub" in st.session_state:
                     st.caption(f"PDF unavailable: {e}")
         tab_idx += 1
 
-# ── Tab: Requirements ─────────────────────────────────────────────────────
+    # ── Tab: Requirements (com Mind Map interativo) ───────────────────────────
     if hub.requirements.ready:
-    with tabs[tab_idx]:
-        req = hub.requirements
-        
-        # Verifica se há requisitos
-        if not req.requirements:
-            st.warning("Nenhum requisito foi extraído da transcrição. Verifique se o texto contém descrições de funcionalidades, regras ou campos.")
-        else:
-            # Métricas
-            type_labels = {"ui_field":"🖥️ UI Field","validation":"✅ Validation","business_rule":"📋 Business Rule",
-                           "functional":"⚙️ Functional","non_functional":"📊 Non-functional"}
-            priority_colors = {"high":"🔴","medium":"🟡","low":"🟢","unspecified":"⚪"}
-            c1,c2,c3 = st.columns(3)
-            c1.metric("Total Requirements", len(req.requirements))
-            c2.metric("High Priority", sum(1 for r in req.requirements if r.priority=="high"))
-            c3.metric("Distinct Types", len(set(r.type for r in req.requirements)))
-
-            # Filtro por tipo
-            selected_type = st.selectbox("Filter by type", ["All"]+list(type_labels.values()), key="req_type_filter")
-            type_reverse = {v:k for k,v in type_labels.items()}
+        with tabs[tab_idx]:
+            req = hub.requirements
             
-            # Tabela de requisitos
-            rows = []
-            for r in req.requirements:
-                if selected_type!="All" and r.type!=type_reverse.get(selected_type):
-                    continue
-                rows.append({
-                    "ID": r.id,
-                    "Type": type_labels.get(r.type, r.type),
-                    "Priority": priority_colors.get(r.priority,"⚪"),
-                    "Title": r.title,
-                    "Process Step": r.process_step or "—",
-                    "Actor": r.actor or "—",
-                })
-            if rows:
-                st.dataframe(rows, use_container_width=True)
+            if not req.requirements:
+                st.warning("Nenhum requisito foi extraído da transcrição. Verifique se o texto contém descrições de funcionalidades, regras ou campos.")
+            else:
+                # Métricas
+                type_labels = {"ui_field":"🖥️ UI Field","validation":"✅ Validation","business_rule":"📋 Business Rule",
+                               "functional":"⚙️ Functional","non_functional":"📊 Non-functional"}
+                priority_colors = {"high":"🔴","medium":"🟡","low":"🟢","unspecified":"⚪"}
+                c1,c2,c3 = st.columns(3)
+                c1.metric("Total Requirements", len(req.requirements))
+                c2.metric("High Priority", sum(1 for r in req.requirements if r.priority=="high"))
+                c3.metric("Distinct Types", len(set(r.type for r in req.requirements)))
 
-            # Detalhamento expansível
-            st.markdown("---")
-            st.markdown("### Detailed View")
-            for r in req.requirements:
-                if selected_type!="All" and r.type!=type_reverse.get(selected_type):
-                    continue
-                with st.expander(f"{r.id} — {r.title}  {priority_colors.get(r.priority,'')}"):
-                    st.markdown(f"**Type:** {type_labels.get(r.type, r.type)}")
-                    st.markdown(f"**Priority:** {priority_colors.get(r.priority,'⚪')} {r.priority}")
-                    if r.actor:
-                        st.markdown(f"**Actor:** {r.actor}")
-                    if r.process_step:
-                        st.markdown(f"**Process step:** {r.process_step}")
-                    st.markdown(f"**Description:** {r.description}")
-                    if r.source_quote:
-                        speaker_tag = f"**[{r.speaker}]** " if r.speaker else ""
-                        st.markdown(f"> {speaker_tag}*\"{r.source_quote}\"*")
+                # Filtro por tipo
+                selected_type = st.selectbox("Filter by type", ["All"]+list(type_labels.values()), key="req_type_filter")
+                type_reverse = {v:k for k,v in type_labels.items()}
+                
+                # Tabela de requisitos
+                rows = []
+                for r in req.requirements:
+                    if selected_type!="All" and r.type!=type_reverse.get(selected_type):
+                        continue
+                    rows.append({
+                        "ID": r.id,
+                        "Type": type_labels.get(r.type, r.type),
+                        "Priority": priority_colors.get(r.priority,"⚪"),
+                        "Title": r.title,
+                        "Process Step": r.process_step or "—",
+                        "Actor": r.actor or "—",
+                    })
+                if rows:
+                    st.dataframe(rows, use_container_width=True)
 
-            # ── MIND MAP (INTERATIVO) ─────────────────────────────────────
-            st.markdown("---")
-            st.markdown("### 🗺️ Mind Map dos Requisitos")
-            
-            # Tenta usar o módulo interativo (fallback para Mermaid se falhar)
-            try:
-                from modules.mindmap_interactive import render_mindmap_from_requirements
-                session_title = getattr(req, 'session_title', '') or req.name
-                render_mindmap_from_requirements(req, session_title=session_title, height=540)
-            except Exception as e:
-                st.warning(f"Não foi possível renderizar o mindmap interativo: {e}")
-                # Fallback: exibir código Mermaid
-                from modules.requirements_mindmap import generate_requirements_mindmap
-                mindmap_code = generate_requirements_mindmap(req)
-                if mindmap_code:
-                    st.code(mindmap_code, language="mermaid")
-                else:
-                    st.info("Mind map não disponível (sem dados suficientes).")
+                # Detalhamento expansível
+                st.markdown("---")
+                st.markdown("### Detailed View")
+                for r in req.requirements:
+                    if selected_type!="All" and r.type!=type_reverse.get(selected_type):
+                        continue
+                    with st.expander(f"{r.id} — {r.title}  {priority_colors.get(r.priority,'')}"):
+                        st.markdown(f"**Type:** {type_labels.get(r.type, r.type)}")
+                        st.markdown(f"**Priority:** {priority_colors.get(r.priority,'⚪')} {r.priority}")
+                        if r.actor:
+                            st.markdown(f"**Actor:** {r.actor}")
+                        if r.process_step:
+                            st.markdown(f"**Process step:** {r.process_step}")
+                        st.markdown(f"**Description:** {r.description}")
+                        if r.source_quote:
+                            speaker_tag = f"**[{r.speaker}]** " if r.speaker else ""
+                            st.markdown(f"> {speaker_tag}*\"{r.source_quote}\"*")
 
-            # Exibe o código Mermaid (se existir no modelo) como expansível
-            if hasattr(req, 'mindmap') and req.mindmap:
-                with st.expander("📝 Código Mermaid (mindmap)", expanded=False):
-                    st.code(req.mindmap, language="text")
-    tab_idx += 1
-    
+                # ── MIND MAP (INTERATIVO) ─────────────────────────────────────
+                st.markdown("---")
+                st.markdown("### 🗺️ Mind Map dos Requisitos")
+                
+                try:
+                    from modules.mindmap_interactive import render_mindmap_from_requirements
+                    session_title = getattr(req, 'session_title', '') or req.name
+                    render_mindmap_from_requirements(req, session_title=session_title, height=540)
+                except Exception as e:
+                    st.warning(f"Não foi possível renderizar o mindmap interativo: {e}")
+                    # Fallback: exibir código Mermaid
+                    from modules.requirements_mindmap import generate_requirements_mindmap
+                    mindmap_code = generate_requirements_mindmap(req)
+                    if mindmap_code:
+                        st.code(mindmap_code, language="mermaid")
+                    else:
+                        st.info("Mind map não disponível (sem dados suficientes).")
+
+                # Exibe o código Mermaid (se existir no modelo) como expansível
+                if hasattr(req, 'mindmap') and req.mindmap:
+                    with st.expander("📝 Código Mermaid (mindmap)", expanded=False):
+                        st.code(req.mindmap, language="text")
+        tab_idx += 1
+
     # ── Tab: Executive Report ─────────────────────────────────────────────────
     if hub.synthesizer.ready:
         with tabs[tab_idx]:
