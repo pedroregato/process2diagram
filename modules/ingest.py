@@ -5,7 +5,7 @@ from pathlib import Path
 def load_transcript(uploaded_file) -> str:
     """
     Load transcript from uploaded file (supports .txt, .docx, .pdf).
-    Returns the extracted text as a string.
+    For .docx, extracts text from paragraphs and tables.
     """
     filename = uploaded_file.name.lower()
     
@@ -14,7 +14,6 @@ def load_transcript(uploaded_file) -> str:
         try:
             return uploaded_file.read().decode('utf-8')
         except UnicodeDecodeError:
-            # fallback to latin-1 (common for Windows exports)
             uploaded_file.seek(0)
             return uploaded_file.read().decode('latin-1')
     
@@ -24,19 +23,27 @@ def load_transcript(uploaded_file) -> str:
             import docx
             doc = docx.Document(uploaded_file)
             full_text = []
+            # Paragraphs
             for para in doc.paragraphs:
-                full_text.append(para.text)
+                if para.text.strip():
+                    full_text.append(para.text)
+            # Tables
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for para in cell.paragraphs:
+                            if para.text.strip():
+                                full_text.append(para.text)
             return '\n'.join(full_text)
         except ImportError:
             raise ImportError("python-docx is required for .docx files. Install with: pip install python-docx")
         except Exception as e:
             raise RuntimeError(f"Failed to parse .docx file: {e}")
     
-    # --- .pdf: use pypdf (or PyPDF2) ---
+    # --- .pdf: use pypdf or PyPDF2 ---
     elif filename.endswith('.pdf'):
         try:
             from pypdf import PdfReader
-            # If pypdf not available, try PyPDF2
         except ImportError:
             try:
                 from PyPDF2 import PdfReader
