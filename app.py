@@ -1,5 +1,5 @@
-## --- Process2Diagram v4.4 — Robust Multi-Agent UI (Fixed) ---
-## --- Original UI improvements by Manus, processing logic corrected ---
+## --- Process2Diagram v4.5 — Re‑runnable Agents + Robust UI ---
+## --- UI by Manus, core logic fixed and extended ---
 
 import sys
 from pathlib import Path
@@ -70,7 +70,6 @@ st.markdown("""
         border-right: 1px solid #1e293b;
     }
     
-    /* Force Sidebar Headings & Labels to be visible */
     section[data-testid="stSidebar"] h1, 
     section[data-testid="stSidebar"] h2, 
     section[data-testid="stSidebar"] h3,
@@ -312,7 +311,7 @@ def _copy_button(text: str, key: str, label: str = "📋 Copy to Clipboard") -> 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     _commit = _sp.run(["git", "rev-parse", "--short", "HEAD"],
-                      capture_output=True, text=True).stdout.strip() or "v4.4"
+                      capture_output=True, text=True).stdout.strip() or "v4.5"
     
     st.markdown(f"""
     <div style='padding: 1rem 0;'>
@@ -351,7 +350,6 @@ with st.sidebar:
         ["Auto-detect", "Portuguese (BR)", "English"],
         key="output_language_select",
     )
-    # Map to expected values by agents
     _lang_map = {"Auto-detect": "Auto-detect", "Portuguese (BR)": "Portuguese (BR)", "English": "English"}
     output_language = _lang_map.get(output_language, output_language)
 
@@ -386,6 +384,32 @@ with st.sidebar:
     show_raw_json = False
     if show_dev_tools:
         show_raw_json = st.checkbox("Show Raw JSON", value=False)
+
+    # ── NEW: Re-run Agents Section (only appears after hub exists) ──────────
+    if "hub" in st.session_state:
+        st.markdown("---")
+        st.markdown("### 🔄 Re‑run Agents")
+        st.caption("Run an agent again on the current transcript without re‑processing everything.")
+        
+        col_r1, col_r2 = st.columns(2)
+        with col_r1:
+            if st.button("🔬 Quality", use_container_width=True, key="rerun_quality"):
+                st.session_state["rerun_agent"] = "quality"
+                st.rerun()
+            if st.button("📐 BPMN", use_container_width=True, key="rerun_bpmn"):
+                st.session_state["rerun_agent"] = "bpmn"
+                st.rerun()
+            if st.button("📋 Minutes", use_container_width=True, key="rerun_minutes"):
+                st.session_state["rerun_agent"] = "minutes"
+                st.rerun()
+        with col_r2:
+            if st.button("📝 Requirements", use_container_width=True, key="rerun_requirements"):
+                st.session_state["rerun_agent"] = "requirements"
+                st.rerun()
+            if st.button("📄 Report", use_container_width=True, key="rerun_synthesizer"):
+                st.session_state["rerun_agent"] = "synthesizer"
+                st.rerun()
+        st.caption("⚠️ Re‑running overwrites the previous output for that agent.")
 
 
 # ── Main area ─────────────────────────────────────────────────────────────────
@@ -422,7 +446,7 @@ with st.container():
         start_process = st.button("🚀 Generate Insights", type="primary", use_container_width=True)
 
 
-# ── Processing Logic (CORRECTED using original Orchestrator.run) ──────────────
+# ── Processing Logic (ORIGINAL ORCHESTRATOR.RUN) ──────────────────────────────
 if start_process and transcript_text:
     if not run_quality and not run_bpmn and not run_minutes and not run_requirements and not run_synthesizer:
         st.warning("Please select at least one agent in the sidebar.")
@@ -435,7 +459,7 @@ if start_process and transcript_text:
     hub.set_transcript(transcript_text)
     hub.meta.llm_provider = selected_provider
 
-    # Progress display (simple, but keeps the original style)
+    # Progress display
     progress_placeholder = st.empty()
     agent_status: dict[str, str] = {}
 
@@ -455,7 +479,7 @@ if start_process and transcript_text:
             progress_callback=update_progress,
         )
 
-        # ── Multi-run BPMN logic (copied from original) ─────────────────
+        # Multi-run BPMN logic (copied from original)
         if run_bpmn and n_bpmn_runs > 1:
             import copy as _copy
             _validator = AgentValidator()
@@ -495,7 +519,7 @@ if start_process and transcript_text:
                 f"(score {best_score.weighted:.1f}/10)",
             )
 
-            # Run remaining agents (minutes, requirements, synthesizer)
+            # Run remaining agents
             hub = orchestrator.run(
                 hub,
                 output_language=output_language,
@@ -532,13 +556,65 @@ if start_process and transcript_text:
     _summary_parts.append(f"⏱️ {hub.meta.processing_time_ms // 1000}s")
     progress_placeholder.success("  ·  ".join(_summary_parts))
 
-    # Store hub in session state for later rendering
+    # Store hub in session state
     st.session_state["hub"] = hub
+    st.session_state["provider_cfg"] = provider_cfg
+    st.session_state["client_info"] = client_info
+    st.session_state["output_language"] = output_language
+    st.rerun()
+
+
+# ── HANDLE RE-RUN AGENT (triggered from sidebar) ──────────────────────────────
+if "rerun_agent" in st.session_state:
+    agent_to_rerun = st.session_state.pop("rerun_agent")
+    hub = st.session_state.get("hub")
+    client_info = st.session_state.get("client_info")
+    provider_cfg = st.session_state.get("provider_cfg")
+    output_language = st.session_state.get("output_language", "Auto-detect")
+
+    if hub is None or client_info is None:
+        st.error("No existing session found. Please run the full pipeline first.")
+        st.stop()
+
+    with st.spinner(f"Re‑running {agent_to_rerun} agent..."):
+        try:
+            if agent_to_rerun == "quality":
+                from agents.agent_transcript_quality import AgentTranscriptQuality
+                agent = AgentTranscriptQuality(client_info, provider_cfg)
+                hub = agent.run(hub, output_language)
+                st.success("✅ Quality agent re‑run complete.")
+            elif agent_to_rerun == "bpmn":
+                agent = AgentBPMN(client_info, provider_cfg)
+                hub = agent.run(hub, output_language)
+                st.success("✅ BPMN agent re‑run complete.")
+            elif agent_to_rerun == "minutes":
+                agent = AgentMinutes(client_info, provider_cfg)
+                hub = agent.run(hub, output_language)
+                st.success("✅ Minutes agent re‑run complete.")
+            elif agent_to_rerun == "requirements":
+                from agents.agent_requirements import AgentRequirements
+                agent = AgentRequirements(client_info, provider_cfg)
+                hub = agent.run(hub, output_language)
+                st.success("✅ Requirements agent re‑run complete.")
+            elif agent_to_rerun == "synthesizer":
+                from agents.agent_synthesizer import AgentSynthesizer
+                agent = AgentSynthesizer(client_info, provider_cfg)
+                hub = agent.run(hub, output_language)
+                st.success("✅ Synthesizer agent re‑run complete.")
+            else:
+                st.warning(f"Unknown agent: {agent_to_rerun}")
+
+            # Update session state
+            st.session_state["hub"] = hub
+            st.rerun()
+        except Exception as e:
+            st.error(f"Error re‑running {agent_to_rerun}: {e}")
+            st.stop()
 
 
 # ── Results Display (preserves all UI improvements) ───────────────────────────
 if "hub" in st.session_state:
-    hub = st.session_state.hub
+    hub = st.session_state["hub"]
     # Ensure migration and missing fields (as in original)
     hub = KnowledgeHub.migrate(hub)
     if not hasattr(hub, 'transcript_quality'):
@@ -560,7 +636,7 @@ if "hub" in st.session_state:
                 ready: bool = False
             hub.synthesizer = _SM()
 
-    # Metrics banner (original style)
+    # Metrics banner
     col_a, col_b, col_c, col_d = st.columns(4)
     if hub.bpmn.ready:
         col_a.metric("BPMN Steps", len(hub.bpmn.steps))
@@ -880,6 +956,6 @@ if "hub" in st.session_state:
 st.markdown("---")
 st.markdown("""
 <div style='text-align:center; color:var(--text-muted); font-size:0.8rem; padding:1rem;'>
-    Process2Diagram v4.4 • Powered by Multi-Agent AI Architecture • 2024
+    Process2Diagram v4.5 • Powered by Multi-Agent AI Architecture • 2024
 </div>
 """, unsafe_allow_html=True)
