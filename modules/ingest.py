@@ -1,15 +1,10 @@
-# modules/ingest.py
+# modules/ingest.py (versão completa para .txt, .docx, .pdf)
 import io
 from pathlib import Path
 
 def load_transcript(uploaded_file) -> str:
-    """
-    Load transcript from uploaded file (supports .txt, .docx, .pdf).
-    For .docx, extracts text from paragraphs and tables.
-    """
     filename = uploaded_file.name.lower()
     
-    # --- .txt: plain text with UTF-8 fallback ---
     if filename.endswith('.txt'):
         try:
             return uploaded_file.read().decode('utf-8')
@@ -17,30 +12,36 @@ def load_transcript(uploaded_file) -> str:
             uploaded_file.seek(0)
             return uploaded_file.read().decode('latin-1')
     
-    # --- .docx: use python-docx ---
     elif filename.endswith('.docx'):
         try:
             import docx
             doc = docx.Document(uploaded_file)
             full_text = []
-            # Paragraphs
+            # Parágrafos
             for para in doc.paragraphs:
                 if para.text.strip():
                     full_text.append(para.text)
-            # Tables
+            # Tabelas
             for table in doc.tables:
                 for row in table.rows:
                     for cell in row.cells:
                         for para in cell.paragraphs:
                             if para.text.strip():
                                 full_text.append(para.text)
+            # Cabeçalhos e rodapés (opcional)
+            for section in doc.sections:
+                for para in section.header.paragraphs:
+                    if para.text.strip():
+                        full_text.append(para.text)
+                for para in section.footer.paragraphs:
+                    if para.text.strip():
+                        full_text.append(para.text)
             return '\n'.join(full_text)
         except ImportError:
-            raise ImportError("python-docx is required for .docx files. Install with: pip install python-docx")
+            raise ImportError("python-docx is required. Install: pip install python-docx")
         except Exception as e:
-            raise RuntimeError(f"Failed to parse .docx file: {e}")
+            raise RuntimeError(f"Failed to parse .docx: {e}")
     
-    # --- .pdf: use pypdf or PyPDF2 ---
     elif filename.endswith('.pdf'):
         try:
             from pypdf import PdfReader
@@ -48,18 +49,10 @@ def load_transcript(uploaded_file) -> str:
             try:
                 from PyPDF2 import PdfReader
             except ImportError:
-                raise ImportError("pypdf or PyPDF2 is required for .pdf files. Install with: pip install pypdf")
-        
-        try:
-            reader = PdfReader(uploaded_file)
-            full_text = []
-            for page in reader.pages:
-                text = page.extract_text()
-                if text:
-                    full_text.append(text)
-            return '\n'.join(full_text)
-        except Exception as e:
-            raise RuntimeError(f"Failed to parse .pdf file: {e}")
+                raise ImportError("pypdf or PyPDF2 required. Install: pip install pypdf")
+        reader = PdfReader(uploaded_file)
+        text = '\n'.join(page.extract_text() or '' for page in reader.pages)
+        return text
     
     else:
-        raise ValueError(f"Unsupported file type: {filename}. Please upload .txt, .docx, or .pdf.")
+        raise ValueError(f"Unsupported file type: {filename}")
