@@ -1,4 +1,4 @@
-## --- Process2Diagram v4.1 — Refined Multi-Agent UI
+## --- Process2Diagram v4.2 — High Contrast Multi-Agent UI
 ## --- Improved by Manus
 
 import sys
@@ -43,7 +43,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Enhanced CSS (Modern SaaS Look) ───────────────────────────────────────────
+# ── Enhanced CSS (Modern SaaS Look with High Contrast) ────────────────────────
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -56,8 +56,9 @@ st.markdown("""
         --text-main: #1e293b;
         --text-muted: #64748b;
         --border: #e2e8f0;
-        --sidebar-bg: #1e293b; /* Slightly lighter than before for better contrast */
-        --sidebar-text: #f1f5f9;
+        --sidebar-bg: #0f172a;
+        --sidebar-text: #f8fafc;
+        --sidebar-label: #94a3b8;
     }
 
     html, body, [class*="css"] { 
@@ -65,25 +66,42 @@ st.markdown("""
         color: var(--text-main);
     }
 
-    /* Sidebar Styling - Refined for better contrast and harmony */
+    /* Sidebar Styling - High Contrast Refinement */
     section[data-testid="stSidebar"] {
         background-color: var(--sidebar-bg);
-        border-right: 1px solid #334155;
+        border-right: 1px solid #1e293b;
     }
-    section[data-testid="stSidebar"] .stMarkdown, 
-    section[data-testid="stSidebar"] .stText,
-    section[data-testid="stSidebar"] label,
-    section[data-testid="stSidebar"] .stSelectbox div,
-    section[data-testid="stSidebar"] .stCheckbox label {
+    
+    /* Sidebar Headings & Labels */
+    section[data-testid="stSidebar"] h1, 
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] h3 {
         color: var(--sidebar-text) !important;
     }
     
-    /* Sidebar Input Fields Contrast */
-    section[data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] {
-        background-color: #334155 !important;
+    section[data-testid="stSidebar"] label p {
+        color: var(--sidebar-label) !important;
+        font-weight: 500 !important;
+    }
+
+    /* Sidebar Selectbox Contrast Fix */
+    section[data-testid="stSidebar"] div[data-baseweb="select"] > div {
+        background-color: #ffffff !important;
+        color: #1e293b !important; /* Dark text on white background */
         border-radius: 8px;
     }
     
+    /* Ensure selected value is dark */
+    section[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[role="button"] {
+        color: #1e293b !important;
+    }
+
+    /* Sidebar Checkbox Label Contrast Fix */
+    section[data-testid="stSidebar"] .stCheckbox label span {
+        color: var(--sidebar-text) !important;
+        font-weight: 400 !important;
+    }
+
     /* Main Title & Header */
     .main-header {
         padding: 1.5rem 0 2rem 0;
@@ -280,11 +298,11 @@ def _copy_button(text: str, key: str, label: str = "📋 Copy to Clipboard") -> 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     _commit = _sp.run(["git", "rev-parse", "--short", "HEAD"],
-                      capture_output=True, text=True).stdout.strip() or "v4.1"
+                      capture_output=True, text=True).stdout.strip() or "v4.2"
     
     st.markdown(f"""
     <div style='padding: 1rem 0;'>
-        <h2 style='margin:0; font-size:1.5rem; color: #f1f5f9;'>⚡ Process2Diagram</h2>
+        <h2 style='margin:0; font-size:1.5rem; color: #f8fafc;'>⚡ Process2Diagram</h2>
         <p style='color:#94a3b8; font-size:0.8rem; margin-top:0.2rem;'>Build {_commit} — Multi-Agent</p>
     </div>
     """, unsafe_allow_html=True)
@@ -428,8 +446,6 @@ if "hub" in st.session_state:
     tabs_to_show.append("📦 Export")
     
     tabs = st.tabs(tabs_to_show)
-    
-    # Create a mapping of tab names to their indices to avoid confusion
     tab_map = {name: i for i, name in enumerate(tabs_to_show)}
 
     # ── Tab: Quality ──────────────────────────────────────────────────────────
@@ -606,6 +622,6 @@ if "hub" in st.session_state:
 st.markdown("---")
 st.markdown("""
 <div style='text-align:center; color:var(--text-muted); font-size:0.8rem; padding:1rem;'>
-    Process2Diagram v4.1 • Powered by Multi-Agent AI Architecture • 2024
+    Process2Diagram v4.2 • Powered by Multi-Agent AI Architecture • 2024
 </div>
 """, unsafe_allow_html=True)
