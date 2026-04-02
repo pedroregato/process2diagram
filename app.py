@@ -1,10 +1,11 @@
-## --- Process2Diagram v4.5 — Re‑runnable Agents + Robust UI ---
+## --- Process2Diagram v4.5 — Re‑runnable Agents + Custom Prefix/Suffix ---
 ## --- UI by Manus, core logic fixed and extended ---
 
 import sys
 from pathlib import Path
 import json
 import subprocess as _sp
+from datetime import date
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -216,7 +217,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ── Helpers (copied from original, adapted) ───────────────────────────────────
+# ── Helper functions ──────────────────────────────────────────────────────────
 def _grade_from_score(score: int) -> str:
     if score >= 90: return "A"
     if score >= 75: return "B"
@@ -307,6 +308,11 @@ def _copy_button(text: str, key: str, label: str = "📋 Copy to Clipboard") -> 
         height=45,
     )
 
+def _make_filename(base_name: str, ext: str, prefix: str, suffix: str) -> str:
+    """Generate filename: {prefix}{base_name}{suffix}.{ext}"""
+    safe_base = base_name.replace(" ", "_")
+    return f"{prefix}{safe_base}{suffix}.{ext.lstrip('.')}"
+
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -353,6 +359,32 @@ with st.sidebar:
     _lang_map = {"Auto-detect": "Auto-detect", "Portuguese (BR)": "Portuguese (BR)", "English": "English"}
     output_language = _lang_map.get(output_language, output_language)
 
+    # ── Prefix / Suffix fields ───────────────────────────────────────────────
+    col_pref, col_suf = st.columns(2)
+    with col_pref:
+        prefix_input = st.text_input(
+            "Prefix (max 10 chars)",
+            value="P2D_",
+            max_chars=10,
+            help="Used at the beginning of every downloaded file. Leave empty to use 'P2D_'."
+        )
+    with col_suf:
+        suffix_input = st.text_input(
+            "Suffix (max 10 chars)",
+            value="",
+            max_chars=10,
+            help="Used at the end of every downloaded file (before extension). Leave empty to use current date (YYYY-MM-DD)."
+        )
+    
+    # Compute final prefix/suffix for this session
+    prefix = prefix_input.strip()
+    if not prefix:
+        prefix = "P2D_"
+    
+    suffix = suffix_input.strip()
+    if not suffix:
+        suffix = date.today().isoformat()  # YYYY-MM-DD
+
     st.markdown("### 🤖 Active Agents")
     run_quality = st.checkbox("Quality Inspector", value=True)
     run_bpmn = st.checkbox("BPMN Architect", value=True)
@@ -385,7 +417,7 @@ with st.sidebar:
     if show_dev_tools:
         show_raw_json = st.checkbox("Show Raw JSON", value=False)
 
-    # ── NEW: Re-run Agents Section (only appears after hub exists) ──────────
+    # ── Re-run Agents Section (only appears after hub exists) ────────────────
     if "hub" in st.session_state:
         st.markdown("---")
         st.markdown("### 🔄 Re‑run Agents")
@@ -558,24 +590,20 @@ if start_process and transcript_text:
 
     # Store hub in session state
     st.session_state["hub"] = hub
-    st.session_state["provider_cfg"] = provider_cfg
-    st.session_state["client_info"] = client_info
     st.session_state["output_language"] = output_language
     st.rerun()
 
 
 # ── HANDLE RE-RUN AGENT (triggered from sidebar) ──────────────────────────────
-# ── HANDLE RE-RUN AGENT (triggered from sidebar) ──────────────────────────────
 if "rerun_agent" in st.session_state:
     agent_to_rerun = st.session_state.pop("rerun_agent")
     hub = st.session_state.get("hub")
     
-    # Se o hub não existir, não há o que fazer
     if hub is None:
         st.error("No existing session found. Please run the full pipeline first.")
         st.stop()
     
-    # Reconstrói o client_info a partir da sidebar (garante que a chave de API ainda está lá)
+    # Rebuild client_info from current sidebar (avoids stale session)
     client_info = get_session_llm_client(selected_provider)
     if client_info is None:
         st.error("API key not found. Please enter your API key in the sidebar.")
@@ -612,12 +640,8 @@ if "rerun_agent" in st.session_state:
             else:
                 st.warning(f"Unknown agent: {agent_to_rerun}")
 
-            # Atualiza o hub no session_state
+            # Update session state
             st.session_state["hub"] = hub
-            # Opcional: atualiza também os metadados para refletores futuros
-            st.session_state["client_info"] = client_info
-            st.session_state["provider_cfg"] = provider_cfg
-            st.session_state["output_language"] = output_language
             st.rerun()
         except Exception as e:
             st.error(f"Error re‑running {agent_to_rerun}: {e}")
@@ -740,10 +764,22 @@ if "hub" in st.session_state:
                     st.markdown("**Original Transcript**")
                     st.text_area("raw", hub.transcript_raw, height=400, disabled=True, label_visibility="collapsed", key="ta_raw")
                     _copy_button(hub.transcript_raw, key="tab_orig")
+                    st.download_button(
+                        "⬇️ Download Original (.txt)",
+                        data=hub.transcript_raw,
+                        file_name=_make_filename("transcricao_original", "txt", prefix, suffix),
+                        key="dl_raw",
+                    )
                 with col_clean:
                     st.markdown("**Cleaned Transcript** (Hover for issues)")
                     _render_highlighted_transcript(hub.transcript_clean, tq.inconsistencies, key="hl_quality")
                     _copy_button(hub.transcript_clean, key="tab_clean")
+                    st.download_button(
+                        "⬇️ Download Cleaned (.txt)",
+                        data=hub.transcript_clean,
+                        file_name=_make_filename("transcricao_preprocessada", "txt", prefix, suffix),
+                        key="dl_clean",
+                    )
         tab_idx += 1
 
     # ── Tab: BPMN 2.0 ─────────────────────────────────────────────────────────
@@ -832,6 +868,16 @@ if "hub" in st.session_state:
                         "Deadline": ai.deadline or "—"
                     })
                 st.dataframe(rows, use_container_width=True)
+            
+            # Download buttons inside Minutes tab
+            md_content = AgentMinutes.to_markdown(m)
+            st.download_button(
+                "⬇️ Download Minutes (.md)",
+                data=md_content,
+                file_name=_make_filename("minutes", "md", prefix, suffix),
+                use_container_width=True,
+                key="dl_minutes_tab",
+            )
         tab_idx += 1
 
     # ── Tab: Requirements ─────────────────────────────────────────────────────
@@ -902,9 +948,9 @@ if "hub" in st.session_state:
             st.download_button(
                 "⬇️ Download Executive Report (.html)",
                 data=syn.html,
-                file_name="executive_report.html",
-                mime="text/html",
+                file_name=_make_filename("executive_report", "html", prefix, suffix),
                 use_container_width=True,
+                key="dl_report_tab",
             )
             st.divider()
             components.html(syn.html, height=800, scrolling=True)
@@ -919,32 +965,68 @@ if "hub" in st.session_state:
             col1, col2 = st.columns(2)
             with col1:
                 if hub.bpmn.bpmn_xml:
-                    st.download_button("⬇️ Download .bpmn", hub.bpmn.bpmn_xml, file_name="process.bpmn", use_container_width=True, key="dl_bpmn")
+                    st.download_button(
+                        "⬇️ Download .bpmn",
+                        data=hub.bpmn.bpmn_xml,
+                        file_name=_make_filename("process", "bpmn", prefix, suffix),
+                        use_container_width=True,
+                        key="dl_bpmn",
+                    )
             with col2:
                 mermaid_content = generate_mermaid(hub.bpmn)
-                st.download_button("⬇️ Download .mermaid", mermaid_content, file_name="process.mmd", use_container_width=True, key="dl_mermaid")
+                st.download_button(
+                    "⬇️ Download .mermaid",
+                    data=mermaid_content,
+                    file_name=_make_filename("process", "mmd", prefix, suffix),
+                    use_container_width=True,
+                    key="dl_mermaid",
+                )
             st.markdown("---")
         
         if hub.minutes.ready:
             st.markdown("**Meeting Minutes**")
             md_content = AgentMinutes.to_markdown(hub.minutes)
-            st.download_button("⬇️ Download Minutes (.md)", md_content, file_name="minutes.md", use_container_width=True, key="dl_minutes")
+            st.download_button(
+                "⬇️ Download Minutes (.md)",
+                data=md_content,
+                file_name=_make_filename("minutes", "md", prefix, suffix),
+                use_container_width=True,
+                key="dl_minutes",
+            )
             st.markdown("---")
         
         if hub.requirements.ready:
             st.markdown("**Requirements**")
-            st.download_button("⬇️ Download Requirements (.md)", hub.requirements.markdown, file_name="requirements.md", use_container_width=True, key="dl_req_md")
+            st.download_button(
+                "⬇️ Download Requirements (.md)",
+                data=hub.requirements.markdown,
+                file_name=_make_filename("requirements", "md", prefix, suffix),
+                use_container_width=True,
+                key="dl_req_md",
+            )
             req_json = json.dumps(
                 {"name": hub.requirements.name,
                  "requirements": [r.__dict__ for r in hub.requirements.requirements]},
                 ensure_ascii=False, indent=2
             )
-            st.download_button("⬇️ Download Requirements (.json)", req_json, file_name="requirements.json", use_container_width=True, key="dl_req_json")
+            st.download_button(
+                "⬇️ Download Requirements (.json)",
+                data=req_json,
+                file_name=_make_filename("requirements", "json", prefix, suffix),
+                use_container_width=True,
+                key="dl_req_json",
+            )
             st.markdown("---")
         
         if hub.synthesizer.ready:
             st.markdown("**Executive Report**")
-            st.download_button("⬇️ Download Report (.html)", hub.synthesizer.html, file_name="executive_report.html", use_container_width=True, key="dl_report")
+            st.download_button(
+                "⬇️ Download Report (.html)",
+                data=hub.synthesizer.html,
+                file_name=_make_filename("executive_report", "html", prefix, suffix),
+                use_container_width=True,
+                key="dl_report_export",
+            )
     
     tab_idx += 1
 
@@ -960,7 +1042,12 @@ if "hub" in st.session_state:
             st.markdown(f"**NLP Segments:** {len(hub.nlp.segments)} — **Actors:** {', '.join(hub.nlp.actors) or '—'} — **Language:** `{hub.nlp.language_detected}`")
             if show_raw_json:
                 st.json(hub.to_dict())
-            st.download_button("⬇️ Download Knowledge Hub (.json)", hub.to_json(), file_name="knowledge_hub.json", mime="application/json")
+            st.download_button(
+                "⬇️ Download Knowledge Hub (.json)",
+                data=hub.to_json(),
+                file_name=_make_filename("knowledge_hub", "json", prefix, suffix),
+                key="dl_hub_json",
+            )
         tab_idx += 1
 
 
