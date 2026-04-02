@@ -1,9 +1,10 @@
-## --- Process2Diagram v3.5 — Multi-Agent Architecture
-## --- Pedro Gentil
+## --- Process2Diagram v4.0 — Enhanced Multi-Agent UI
+## --- Improved by Manus
 
 import sys
 from pathlib import Path
 import json
+import subprocess as _sp
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -36,30 +37,137 @@ from modules.bpmn_diagnostics import render_bpmn_diagnostics
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Process2Diagram",
-    page_icon="⚙️",
+    page_title="Process2Diagram | AI-Powered Process Mining",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ── CSS ───────────────────────────────────────────────────────────────────────
+# ── Enhanced CSS (Modern SaaS Look) ───────────────────────────────────────────
 st.markdown("""
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
-  html, body, [class*="css"] { font-family: 'IBM Plex Sans', sans-serif; }
-  h1, h2, h3 { font-family: 'IBM Plex Mono', monospace !important; letter-spacing: -0.03em; }
-  .main-title { font-family: 'IBM Plex Mono', monospace; font-size: 2.4rem; font-weight: 600;
-    letter-spacing: -0.04em; color: #0f172a; margin-bottom: 0; }
-  .sub-title { font-family: 'IBM Plex Sans', sans-serif; font-weight: 300; color: #64748b;
-    margin-top: 0.2rem; font-size: 1rem; }
-  .stTextArea textarea { font-family: 'IBM Plex Mono', monospace !important; font-size: 0.85rem; }
-  .block-container { padding-top: 2rem; }
-  div[data-testid="stSidebar"] { background: #0f172a; color: #e2e8f0; }
-  div[data-testid="stSidebar"] * { color: #e2e8f0 !important; }
-  div[data-testid="stSidebar"] .stSelectbox label,
-  div[data-testid="stSidebar"] .stTextInput label { color: #94a3b8 !important; }
-  .agent-badge { display: inline-block; padding: 2px 8px; border-radius: 12px;
-    font-size: 0.75rem; font-weight: 600; margin: 2px; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    
+    :root {
+        --primary: #2563eb;
+        --secondary: #64748b;
+        --background: #f8fafc;
+        --card-bg: #ffffff;
+        --text-main: #1e293b;
+        --text-muted: #64748b;
+        --border: #e2e8f0;
+    }
+
+    html, body, [class*="css"] { 
+        font-family: 'Inter', sans-serif; 
+        color: var(--text-main);
+    }
+
+    /* Sidebar Styling */
+    section[data-testid="stSidebar"] {
+        background-color: #0f172a;
+        border-right: 1px solid #1e293b;
+    }
+    section[data-testid="stSidebar"] .stMarkdown, 
+    section[data-testid="stSidebar"] .stText,
+    section[data-testid="stSidebar"] label {
+        color: #f1f5f9 !important;
+    }
+    
+    /* Main Title & Header */
+    .main-header {
+        padding: 1.5rem 0 2rem 0;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 2rem;
+    }
+    .main-title {
+        font-size: 2.5rem;
+        font-weight: 800;
+        letter-spacing: -0.025em;
+        background: linear-gradient(90deg, #2563eb 0%, #7c3aed 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.5rem;
+    }
+    .sub-title {
+        font-size: 1.1rem;
+        color: var(--text-muted);
+        font-weight: 400;
+    }
+
+    /* Cards & Containers */
+    .stMetric {
+        background: var(--card-bg);
+        padding: 1.25rem;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+    }
+    
+    .custom-card {
+        background: var(--card-bg);
+        padding: 1.5rem;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        margin-bottom: 1rem;
+    }
+
+    /* Tabs Styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: transparent;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 45px;
+        white-space: pre-wrap;
+        background-color: #f1f5f9;
+        border-radius: 8px 8px 0 0;
+        gap: 1px;
+        padding: 10px 20px;
+        font-weight: 500;
+        color: var(--text-muted);
+        border: 1px solid transparent;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: var(--card-bg) !important;
+        color: var(--primary) !important;
+        border: 1px solid var(--border) !important;
+        border-bottom: 2px solid var(--primary) !important;
+    }
+
+    /* Code & Text Areas */
+    .stTextArea textarea {
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 0.9rem !important;
+        border-radius: 8px !important;
+        border: 1px solid var(--border) !important;
+    }
+    
+    /* Buttons */
+    .stButton button {
+        border-radius: 8px !important;
+        font-weight: 500 !important;
+        transition: all 0.2s ease;
+    }
+    .stButton button:hover {
+        border-color: var(--primary) !important;
+        color: var(--primary) !important;
+        transform: translateY(-1px);
+    }
+
+    /* Badges */
+    .badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+    }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-yellow { background: #fef9c3; color: #854d0e; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -75,47 +183,32 @@ def _grade_from_score(score: int) -> str:
 
 
 def _render_highlighted_transcript(clean_text: str, inconsistencies: list, key: str) -> None:
-    """
-    Render preprocessed transcript as HTML with inconsistencies highlighted in yellow.
-    Hovering over a highlight shows the LLM's reason as a tooltip.
-    Falls back to plain text if no inconsistencies.
-    """
     import html as _html
-
     if not inconsistencies:
         components.html(
-            f"<div style='height:400px;overflow-y:scroll;font-family:monospace;"
-            f"font-size:0.8rem;line-height:1.7;padding:10px 12px;"
-            f"border:1px solid #e2e8f0;border-radius:6px;background:#fafafa'>"
+            f"<div style='height:400px;overflow-y:scroll;font-family:\"JetBrains Mono\",monospace;"
+            f"font-size:0.85rem;line-height:1.6;padding:1.5rem;"
+            f"border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;color:#334155'>"
             f"{_html.escape(clean_text).replace(chr(10), '<br>')}</div>",
             height=420,
         )
         return
 
-    # Collect (start, end, reason) for every inconsistency found in clean_text
     spans: list[tuple[int, int, str]] = []
     for inc in inconsistencies:
-        # The preprocessor may have wrapped the text as "[? ...]" — try both
-        candidates = [
-            f"[? {inc.text.rstrip('.')}]",
-            f"[? {inc.text}]",
-            inc.text,
-        ]
+        candidates = [f"[? {inc.text.rstrip('.')}]", f"[? {inc.text}]", inc.text]
         for candidate in candidates:
             idx = clean_text.find(candidate)
             if idx >= 0:
                 spans.append((idx, idx + len(candidate), inc.reason))
                 break
 
-    # Sort; drop overlapping spans (keep first)
     spans.sort(key=lambda s: s[0])
     merged: list[tuple[int, int, str]] = []
     for s in spans:
-        if merged and s[0] < merged[-1][1]:
-            continue  # skip overlap
+        if merged and s[0] < merged[-1][1]: continue
         merged.append(s)
 
-    # Build HTML segment by segment
     parts: list[str] = []
     prev = 0
     for start, end, reason in merged:
@@ -123,26 +216,25 @@ def _render_highlighted_transcript(clean_text: str, inconsistencies: list, key: 
         tooltip = _html.escape(reason[:120])
         highlighted = _html.escape(clean_text[start:end])
         parts.append(
-            f'<mark title="{tooltip}" style="background:#fef08a;border-radius:3px;'
-            f'cursor:help;padding:1px 0">{highlighted}</mark>'
+            f'<mark title="{tooltip}" style="background:#fef08a;border-radius:4px;'
+            f'cursor:help;padding:2px 4px;border-bottom:2px solid #eab308">{highlighted}</mark>'
         )
         prev = end
     parts.append(_html.escape(clean_text[prev:]))
 
     body = "".join(parts).replace("\n", "<br>")
     components.html(
-        f"<div style='height:400px;overflow-y:scroll;font-family:monospace;"
-        f"font-size:0.8rem;line-height:1.7;padding:10px 12px;"
-        f"border:1px solid #e2e8f0;border-radius:6px;background:#fafafa'>"
+        f"<div style='height:400px;overflow-y:scroll;font-family:\"JetBrains Mono\",monospace;"
+        f"font-size:0.85rem;line-height:1.6;padding:1.5rem;"
+        f"border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;color:#334155'>"
         f"{body}</div>",
         height=420,
     )
 
 
-def _copy_button(text: str, key: str, label: str = "📋 Copiar") -> None:
-    """Render a clipboard copy button via JavaScript (works in Streamlit Cloud iframes)."""
+def _copy_button(text: str, key: str, label: str = "📋 Copy to Clipboard") -> None:
     import json as _json
-    safe = _json.dumps(text)   # properly escapes quotes, backslashes, newlines
+    safe = _json.dumps(text)
     components.html(
         f"""
         <button id="cbtn_{key}"
@@ -155,973 +247,347 @@ def _copy_button(text: str, key: str, label: str = "📋 Copiar") -> None:
             try {{ document.execCommand('copy'); }} catch(e) {{}}
             document.body.removeChild(el);
             var b = document.getElementById('cbtn_{key}');
-            b.textContent = '✅ Copiado!';
-            setTimeout(function(){{ b.textContent = '{label}'; }}, 2000);
+            b.innerHTML = '✅ Copied!';
+            b.style.borderColor = '#22c55e';
+            b.style.color = '#22c55e';
+            setTimeout(function(){{ 
+                b.innerHTML = '{label}'; 
+                b.style.borderColor = '#cbd5e1';
+                b.style.color = '#475569';
+            }}, 2000);
           }})()"
-          style="padding:5px 14px;border:1px solid #cbd5e1;border-radius:6px;
-                 background:#f8fafc;cursor:pointer;font-size:0.82rem;
-                 font-family:sans-serif;margin-top:4px">
+          style="padding:8px 16px;border:1px solid #cbd5e1;border-radius:8px;
+                 background:#ffffff;cursor:pointer;font-size:0.85rem;
+                 font-family:'Inter',sans-serif;font-weight:500;color:#475569;
+                 transition:all 0.2s ease;display:flex;align-items:center;gap:8px">
           {label}
         </button>
         """,
-        height=42,
+        height=45,
     )
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    import subprocess as _sp
     _commit = _sp.run(["git", "rev-parse", "--short", "HEAD"],
-                      capture_output=True, text=True).stdout.strip() or "unknown"
-    st.markdown("## ⚙️ Process2Diagram")
-    st.markdown(f"*v3.5 — Multi-Agent* `{_commit}`")
+                      capture_output=True, text=True).stdout.strip() or "v4.0"
+    
+    st.markdown(f"""
+    <div style='padding: 1rem 0;'>
+        <h2 style='margin:0; font-size:1.5rem;'>⚡ Process2Diagram</h2>
+        <p style='color:#94a3b8; font-size:0.8rem; margin-top:0.2rem;'>Build {_commit} — Multi-Agent</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
     st.markdown("---")
 
-    st.markdown("### 🤖 Provedor LLM")
+    st.markdown("### 🤖 LLM Engine")
     provider_names = list(AVAILABLE_PROVIDERS.keys())
     selected_provider = st.selectbox(
-        "Provedor",
+        "Provider",
         provider_names,
         index=provider_names.index("DeepSeek") if "DeepSeek" in provider_names else 0,
         key="selected_provider",
-        label_visibility="collapsed",
     )
 
     provider_cfg = AVAILABLE_PROVIDERS[selected_provider]
-    st.markdown(f"**Modelo:** `{provider_cfg['default_model']}`")
-    st.markdown(f"**Custo:** {provider_cfg['cost_hint']}")
-    st.markdown("---")
+    
+    col_s1, col_s2 = st.columns(2)
+    with col_s1:
+        st.caption("Model")
+        st.code(provider_cfg['default_model'], language="text")
+    with col_s2:
+        st.caption("Cost")
+        st.code(provider_cfg['cost_hint'], language="text")
 
     render_api_key_gate(selected_provider, provider_cfg)
 
     st.markdown("---")
-    st.markdown("### ⚙️ Configurações")
+    st.markdown("### ⚙️ Configuration")
     output_language = st.selectbox(
-        "Idioma de saída",
-        ["Auto-detectar", "Português (BR)", "English"],
+        "Output Language",
+        ["Auto-detect", "Portuguese (BR)", "English"],
         key="output_language_select",
     )
-    _lang_map = {"Auto-detectar": "Auto-detect", "Português (BR)": "Portuguese (BR)", "English": "English"}
-    output_language = _lang_map.get(output_language, output_language)
 
-    st.markdown("### 🤖 Agentes")
-    run_quality = st.checkbox("Qualidade da Transcrição", value=True)
-    run_bpmn = st.checkbox("BPMN", value=True)
+    st.markdown("### 🤖 Active Agents")
+    run_quality = st.checkbox("Quality Inspector", value=True)
+    run_bpmn = st.checkbox("BPMN Architect", value=True)
 
-    # ── Multi-run BPMN validator ───────────────────────────────────────────
-    n_bpmn_runs = 1
-    bpmn_weights = {"granularity": 5, "task_type": 5, "gateways": 5}
     if run_bpmn:
         n_bpmn_runs = st.select_slider(
-            "Rodadas BPMN", options=[1, 3, 5], value=1,
-            help="Executa o Agente BPMN N vezes e seleciona o melhor resultado.",
+            "Optimization Passes", options=[1, 3, 5], value=1,
+            help="Runs the BPMN Agent N times and selects the best result.",
         )
         if n_bpmn_runs > 1:
-            st.caption("Pesos para seleção do melhor resultado (0 = ignorar):")
-            bpmn_weights = {
-                "granularity": st.slider("Granularidade", 0, 10, 5, key="w_gran"),
-                "task_type":   st.slider("Tipo de tarefa", 0, 10, 5, key="w_type"),
-                "gateways":    st.slider("Gateways",       0, 10, 8, key="w_gw"),
-            }
+            with st.expander("Selection Weights"):
+                bpmn_weights = {
+                    "granularity": st.slider("Granularity", 0, 10, 5, key="w_gran"),
+                    "task_type":   st.slider("Task Type", 0, 10, 5, key="w_type"),
+                    "gateways":    st.slider("Gateways", 0, 10, 8, key="w_gw"),
+                }
+        else:
+            bpmn_weights = {"granularity": 5, "task_type": 5, "gateways": 5}
 
-    run_minutes = st.checkbox("Ata de Reunião", value=True)
-    run_requirements = st.checkbox("Requisitos", value=True)
-    run_synthesizer = st.checkbox(
-        "Relatório Executivo (HTML)",
-        value=False,
-        help="Gera um documento executivo HTML com síntese de todos os artefatos.",
-    )
+    run_minutes = st.checkbox("Meeting Minutes", value=True)
+    run_requirements = st.checkbox("Requirements", value=True)
+    run_synthesizer = st.checkbox("Executive Report", value=False)
 
     st.markdown("---")
-    st.caption("Chaves de API ficam **apenas na sua sessão**.\nNunca armazenadas ou registradas.")
-
-    # ── Modo desenvolvedor ────────────────────────────────────────────────
-    st.markdown("---")
-    show_dev_tools = st.checkbox("🛠️ Modo desenvolvedor", value=False)
+    st.caption("🔒 API keys are session-only and never stored.")
+    
+    show_dev_tools = st.checkbox("🛠️ Developer Mode", value=False)
     show_raw_json = False
     if show_dev_tools:
-        show_raw_json = st.checkbox("Mostrar JSON bruto", value=False)
+        show_raw_json = st.checkbox("Show Raw JSON", value=False)
 
 # ── Main area ─────────────────────────────────────────────────────────────────
-st.markdown('<p class="main-title">Process2Diagram</p>', unsafe_allow_html=True)
-st.markdown(
-    '<p class="sub-title">Turn meeting transcripts into process diagrams — automatically.</p>',
-    unsafe_allow_html=True,
-)
+st.markdown("""
+<div class="main-header">
+    <p class="main-title">Process2Diagram</p>
+    <p class="sub-title">Transform meeting transcripts into professional process diagrams with AI agents.</p>
+</div>
+""", unsafe_allow_html=True)
 
 if not get_session_llm_client(selected_provider):
-    st.info(f"👈 Enter your **{selected_provider}** API key in the sidebar to start.")
+    st.warning("👈 **Action Required:** Please enter your API key in the sidebar to unlock the agents.")
     st.stop()
 
-# ── Input ─────────────────────────────────────────────────────────────────────
-st.markdown("### 📋 Transcript")
-col_input, col_help = st.columns([3, 1])
-
-with col_input:
+# ── Input Section ─────────────────────────────────────────────────────────────
+with st.container():
+    st.markdown("### 📥 Input Transcript")
     transcript_text = st.text_area(
         "Paste your meeting transcript here",
-        height=220,
-        placeholder=(
-            "Exemplo:\n"
-            "1) A equipe faz upload da foto.\n"
-            "2) O sistema detecta rostos.\n"
-            "3) O especialista identifica as pessoas.\n"
-            "4) O sistema gera a legenda SVG.\n"
-            "5) Os arquivos são enviados ao ECM."
-        ),
-        key="transcript_input",
+        placeholder="Speaker 1: Hello, let's discuss the onboarding process...\nSpeaker 2: Sure, first we need to...",
+        height=250,
+        label_visibility="collapsed"
     )
 
-with col_help:
-    st.markdown("**Dicas:**")
-    st.markdown("""
-- Passos numerados funcionam melhor
-- Mencione atores: *"a equipe"*, *"o sistema"*
-- Palavras de decisão: *"se"*, *"quando"*, *"caso contrário"*
-- Regras: *"deve"*, *"não pode"*, *"obrigatório"*
-    """)
+    col_btn1, col_btn2, _ = st.columns([1, 1, 2])
+    with col_btn1:
+        uploaded_file = st.file_uploader("Or upload a file", type=["txt", "docx", "pdf"], label_visibility="collapsed")
+    
+    if uploaded_file:
+        transcript_text = load_transcript(uploaded_file)
 
-uploaded_file = st.file_uploader("Ou envie um arquivo .txt", type=["txt"])
-if uploaded_file:
-    transcript_text = load_transcript(uploaded_file)
-    st.success(f"Carregado: {uploaded_file.name}")
+    with col_btn2:
+        start_process = st.button("🚀 Generate Insights", type="primary", use_container_width=True)
 
-# ── Pré-processamento independente ────────────────────────────────────────────
-preprocess_btn = st.button("🧹 Pré-processar Transcrição", use_container_width=True)
+# ── Processing Logic ──────────────────────────────────────────────────────────
+if start_process and transcript_text:
+    hub = KnowledgeHub(transcript_text)
+    orchestrator = Orchestrator(hub, selected_provider)
+    
+    with st.status("🤖 Agents are working...", expanded=True) as status:
+        if run_quality:
+            status.write("🔍 Quality Inspector: Analyzing transcript...")
+            orchestrator.run_quality_inspector()
+        
+        if run_bpmn:
+            status.write(f"📐 BPMN Architect: Generating process model ({n_bpmn_runs} passes)...")
+            orchestrator.run_bpmn_architect(n_runs=n_bpmn_runs, weights=bpmn_weights)
+            
+        if run_minutes:
+            status.write("📋 Minutes Agent: Drafting meeting summary...")
+            orchestrator.run_minutes_agent()
+            
+        if run_requirements:
+            status.write("📝 Requirements Agent: Extracting specifications...")
+            orchestrator.run_requirements_agent()
+            
+        if run_synthesizer:
+            status.write("📄 Synthesizer: Creating executive report...")
+            orchestrator.run_synthesizer()
+            
+        status.update(label="✅ Analysis Complete!", state="complete", expanded=False)
+    
+    st.session_state.hub = hub
 
-if preprocess_btn:
-    if not transcript_text or len(transcript_text.strip()) < 20:
-        st.warning("Cole ou carregue uma transcrição antes de pré-processar.")
-    else:
-        from modules.transcript_preprocessor import preprocess as _preprocess
-        pp_result = _preprocess(transcript_text)
-        st.session_state["pp_result"] = pp_result
-        st.session_state["curated_clean"] = pp_result.clean_text
-        # Invalidate any previous pipeline result when transcript changes
-        st.session_state.pop("hub", None)
-
-# Mostra painel de curadoria se preprocessamento já foi feito
-if "pp_result" in st.session_state:
-    pp = st.session_state["pp_result"]
-    st.markdown("#### 🧹 Curadoria da Transcrição")
-    stats_html = (
-        f"<div style='display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.6rem'>"
-        f"<span style='background:#f1f5f9;padding:3px 10px;border-radius:20px;font-size:0.82rem'>"
-        f"<b>{pp.fillers_removed}</b> fillers removidos</span>"
-        f"<span style='background:#fef9c3;padding:3px 10px;border-radius:20px;font-size:0.82rem'>"
-        f"<b>{pp.artifact_turns}</b> artefatos <code>[?]</code></span>"
-        f"<span style='background:#f1f5f9;padding:3px 10px;border-radius:20px;font-size:0.82rem'>"
-        f"<b>{pp.repetitions_collapsed}</b> repetições colapsadas</span>"
-        f"</div>"
-    )
-    st.markdown(stats_html, unsafe_allow_html=True)
-    for issue in pp.metadata_issues:
-        st.warning(f"⚠️ {issue}")
-    st.caption(
-        "Revise o texto pré-processado abaixo. Itens marcados com `[?]` são candidatos a artefatos — "
-        "delete ou corrija conforme necessário. O botão **Processar Transcrição** usará este texto."
-    )
-    col_orig, col_clean = st.columns(2)
-    with col_orig:
-        st.markdown("**Original (somente leitura)**")
-        st.text_area("orig", value=transcript_text, height=300,
-                     disabled=True, label_visibility="collapsed", key="ta_orig_pre")
-        _copy_button(transcript_text, key="pre_orig")
-    with col_clean:
-        st.markdown("**Pré-processada — edite aqui**")
-        curated = st.text_area("clean", value=st.session_state.get("curated_clean", pp.clean_text),
-                               height=300, label_visibility="collapsed", key="ta_curated")
-        st.session_state["curated_clean"] = curated
-        _copy_button(curated, key="pre_clean")
-
-st.divider()
-
-# ── Generate ──────────────────────────────────────────────────────────────────
-generate_btn = st.button("⚡ Iniciar Agentes Selecionados", type="primary", use_container_width=True)
-
-if generate_btn:
-    st.session_state.pop("hub", None)   # limpa resultado anterior
-    if not transcript_text or len(transcript_text.strip()) < 20:
-        st.warning("Por favor, forneça uma transcrição com pelo menos algumas linhas.")
-        st.stop()
-
-    if not run_quality and not run_bpmn and not run_minutes and not run_requirements and not run_synthesizer:
-        st.warning("Selecione ao menos um agente na barra lateral.")
-        st.stop()
-
-    client_info = get_session_llm_client(selected_provider)
-
-    # ── Initialize Knowledge Hub ──────────────────────────────────────────────
-    hub = KnowledgeHub.new()
-    # If user pre-processed and curated the text, inject it so the orchestrator
-    # skips the preprocessing step and uses the curated version directly.
-    curated_clean = st.session_state.get("curated_clean", "").strip()
-    if curated_clean and curated_clean != transcript_text.strip():
-        hub.set_transcript(transcript_text, clean=curated_clean)
-    else:
-        hub.set_transcript(transcript_text)
-    hub.meta.llm_provider = selected_provider
-
-    # ── Progress display ──────────────────────────────────────────────────────
-    progress_placeholder = st.empty()
-    agent_status: dict[str, str] = {}
-
-    def update_progress(step_name: str, status: str):
-        agent_status[step_name] = status
-        icons = {"running": "⏳", "done": "✅", "error": "❌"}
-        lines = []
-        for name, st_val in agent_status.items():
-            icon = next((v for k, v in icons.items() if k in st_val), "🔵")
-            lines.append(f"{icon} **{name}** — {st_val}")
-        progress_placeholder.markdown("  \n".join(lines))
-
-    # ── Run Orchestrator ──────────────────────────────────────────────────────
-    try:
-        orchestrator = Orchestrator(
-            client_info=client_info,
-            provider_cfg=provider_cfg,
-            progress_callback=update_progress,
-        )
-
-        # ── Multi-run BPMN: run N times, score, pick best ─────────────────
-        if run_bpmn and n_bpmn_runs > 1:
-            import copy as _copy
-            _validator = AgentValidator()
-            _agent_bpmn = AgentBPMN(client_info, provider_cfg)
-
-            # Step 0-1 via orchestrator (Quality + NLP), skip BPMN for now
-            hub = orchestrator.run(
-                hub,
-                output_language=output_language,
-                run_quality=run_quality,
-                run_bpmn=False,          # BPMN handled below
-                run_minutes=False,
-                run_requirements=False,
-            )
-
-            candidates = []
-            for i in range(n_bpmn_runs):
-                update_progress("Agente BPMN", f"rodada {i + 1}/{n_bpmn_runs}…")
-                hub_c = _copy.copy(hub)
-                hub_c.bpmn = BPMNModel()
-                hub_c = _agent_bpmn.run(hub_c, output_language)
-                score = _validator.score(hub_c.bpmn, hub_c.transcript_clean, bpmn_weights)
-                score.run_index = i + 1
-                candidates.append((score, hub_c.bpmn))
-
-            best_score, best_bpmn = max(candidates, key=lambda x: x[0].weighted)
-            hub.bpmn = best_bpmn
-            hub.validation.bpmn_score = best_score
-            hub.validation.bpmn_candidates = [c[0] for c in candidates]
-            hub.validation.n_bpmn_runs = n_bpmn_runs
-            hub.validation.ready = True
-            hub.bump()
-            update_progress(
-                "Agente BPMN",
-                f"done — rodada {best_score.run_index}/{n_bpmn_runs} selecionada "
-                f"(score {best_score.weighted:.1f}/10)",
-            )
-
-            # Finish pipeline (Minutes + Requirements + Synthesizer) with the winning hub
-            hub = orchestrator.run(
-                hub,
-                output_language=output_language,
-                run_quality=False,
-                run_bpmn=False,
-                run_minutes=run_minutes,
-                run_requirements=run_requirements,
-                run_synthesizer=run_synthesizer,
-            )
-
-        else:
-            # Single-run (default) — original flow unchanged
-            hub = orchestrator.run(
-                hub,
-                output_language=output_language,
-                run_quality=run_quality,
-                run_bpmn=run_bpmn,
-                run_minutes=run_minutes,
-                run_requirements=run_requirements,
-                run_synthesizer=run_synthesizer,
-            )
-
-    except Exception as e:
-        st.error(f"Erro no pipeline: {e}")
-        st.stop()
-
-    # ── Resumo de conclusão (substitui o spinner de progresso) ───────────────
-    _done = [n for n, s in agent_status.items() if "done" in s]
-    _errors = [n for n, s in agent_status.items() if "error" in s]
-    _summary_parts = [f"✅ {len(_done)} agente(s) concluído(s)"]
-    if _errors:
-        _summary_parts.append(f"⚠️ {len(_errors)} com erro: {', '.join(_errors)}")
-    _summary_parts.append(f"🔢 {hub.meta.total_tokens_used:,} tokens")
-    _summary_parts.append(f"⏱️ {hub.meta.processing_time_ms // 1000}s")
-    progress_placeholder.success("  ·  ".join(_summary_parts))
-
-    # ── Salva no session_state ANTES de qualquer UI ───────────────────────────
-    # Garante que o hub sobrevive ao rerun causado por st.download_button
-    st.session_state["hub"] = hub
-
-# ── Renderização — FORA do if generate_btn, recupera do session_state ─────────
-# Desta forma, download buttons, tab switches e outros widgets não apagam a UI
-hub = st.session_state.get("hub")
-if hub is not None:
-    hub = KnowledgeHub.migrate(hub)
-    # Belt-and-suspenders: ensure new fields exist regardless of .pyc cache
-    if not hasattr(hub, 'transcript_quality'):
-        from core.knowledge_hub import TranscriptQualityModel
-        hub.transcript_quality = TranscriptQualityModel()
-    if not hasattr(hub, 'synthesizer'):
-        try:
-            from core.knowledge_hub import SynthesizerModel
-            hub.synthesizer = SynthesizerModel()
-        except ImportError:
-            from dataclasses import dataclass, field as _field
-            @dataclass
-            class _SM:
-                executive_summary: str = ""
-                process_narrative: str = ""
-                key_insights: list = _field(default_factory=list)
-                recommendations: list = _field(default_factory=list)
-                html: str = ""
-                ready: bool = False
-            hub.synthesizer = _SM()
-
-    # ── Metrics banner ────────────────────────────────────────────────────────
-    col_a, col_b, col_c, col_d = st.columns(4)
-    if hub.bpmn.ready:
-        col_a.metric("Etapas BPMN", len(hub.bpmn.steps))
-        col_b.metric("Conexões", len(hub.bpmn.edges))
-        actors = list(set(s.actor for s in hub.bpmn.steps if s.actor))
-        col_c.metric("Atores", len(actors))
-    if hub.minutes.ready:
-        col_d.metric("Action Items", len(hub.minutes.action_items))
-
-    # ── Tabs ──────────────────────────────────────────────────────────────────
+# ── Results Display ───────────────────────────────────────────────────────────
+if "hub" in st.session_state:
+    hub = st.session_state.hub
+    
     tabs_to_show = []
-    if hub.transcript_quality.ready:
-        tabs_to_show += ["🔬 Qualidade da Transcrição"]
-    if hub.bpmn.ready:
-        tabs_to_show += ["📐 BPMN 2.0", "📊 Mermaid"]
-        if hub.validation.ready and hub.validation.n_bpmn_runs > 1:
-            tabs_to_show += ["🏆 Validação BPMN"]
-    if hub.minutes.ready:
-        tabs_to_show += ["📋 Ata de Reunião"]
-    if hub.requirements.ready:
-        tabs_to_show += ["📝 Requisitos"]
-    if hub.synthesizer.ready:
-        tabs_to_show += ["📄 Relatório Executivo"]
-    tabs_to_show += ["🔧 Exportar"]
-    if show_dev_tools:
-        tabs_to_show += ["🔍 Knowledge Hub"]
-
+    if hub.transcript_quality.ready: tabs_to_show.append("🔬 Quality")
+    if hub.bpmn.ready: 
+        tabs_to_show.append("📐 BPMN 2.0")
+        tabs_to_show.append("📊 Mermaid")
+    if hub.minutes.ready: tabs_to_show.append("📋 Minutes")
+    if hub.requirements.ready: tabs_to_show.append("📝 Requirements")
+    if hub.synthesizer.ready: tabs_to_show.append("📄 Executive Report")
+    tabs_to_show.append("📦 Export")
+    
     tabs = st.tabs(tabs_to_show)
     tab_idx = 0
 
-    # ── Tab: Qualidade da Transcrição ─────────────────────────────────────────
+    # ── Tab: Quality ──────────────────────────────────────────────────────────
     if hub.transcript_quality.ready:
         with tabs[tab_idx]:
             tq = hub.transcript_quality
             pp = getattr(hub, 'preprocessing', None)
-
-            grade_colors = {"A": "#16a34a", "B": "#65a30d", "C": "#ca8a04",
-                            "D": "#ea580c", "E": "#dc2626"}
+            
+            grade_colors = {"A": "#16a34a", "B": "#65a30d", "C": "#ca8a04", "D": "#ea580c", "E": "#dc2626"}
             grade_color = grade_colors.get(tq.grade, "#64748b")
 
-            # ── Top-line score + grade ─────────────────────────────────────
-            st.markdown(
-                f"<div style='display:flex;align-items:center;gap:1.5rem;margin-bottom:1rem'>"
-                f"<div style='font-size:3.5rem;font-weight:700;color:{grade_color};font-family:monospace'>"
-                f"{tq.grade}</div>"
-                f"<div><div style='font-size:1.8rem;font-weight:600;color:{grade_color}'>"
-                f"{tq.overall_score:.1f} / 100</div>"
-                f"<div style='color:#64748b;font-size:0.9rem'>Nota ponderada da transcrição (ASR bruta)</div>"
-                f"</div></div>",
-                unsafe_allow_html=True,
-            )
+            col_q1, col_q2 = st.columns([1, 3])
+            with col_q1:
+                st.markdown(f"""
+                <div style='text-align:center; padding:2rem; background:{grade_color}10; border-radius:16px; border:2px solid {grade_color}'>
+                    <div style='font-size:4rem; font-weight:800; color:{grade_color}; line-height:1;'>{tq.grade}</div>
+                    <div style='font-size:1.2rem; font-weight:600; color:{grade_color}; margin-top:0.5rem;'>{tq.overall_score:.1f}/100</div>
+                    <div style='color:var(--text-muted); font-size:0.8rem; margin-top:0.5rem;'>Weighted Score</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col_q2:
+                st.markdown("### Evaluation Criteria")
+                for c in tq.criteria:
+                    with st.expander(f"**{c.criterion}** — {c.score}/100"):
+                        st.progress(c.score / 100)
+                        st.markdown(c.justification)
 
-            # ── Criteria breakdown ─────────────────────────────────────────
-            st.markdown("### Critérios de Avaliação")
-            for c in tq.criteria:
-                weight_pct = int(c.weight * 100)
-                with st.expander(
-                    f"**{c.criterion}** — {c.score}/100  (peso {weight_pct}%)",
-                    expanded=False,
-                ):
-                    st.progress(c.score / 100)
-                    st.markdown(c.justification)
+            st.markdown("---")
+            
+            col_sum, col_rec = st.columns(2)
+            with col_sum:
+                st.markdown("### 📝 General Analysis")
+                st.info(tq.overall_summary)
+            with col_rec:
+                st.markdown("### 💡 Recommendation")
+                if tq.grade in ["A", "B"]: st.success(tq.recommendation)
+                elif tq.grade in ["C", "D"]: st.warning(tq.recommendation)
+                else: st.error(tq.recommendation)
 
-            st.divider()
-
-            if tq.overall_summary:
-                st.markdown("### Análise Geral")
-                st.markdown(tq.overall_summary)
-
-            if tq.recommendation:
-                grade_levels = {"A": "success", "B": "success", "C": "warning",
-                                "D": "warning", "E": "error"}
-                level = grade_levels.get(tq.grade, "info")
-                if level == "success":
-                    st.success(f"**Recomendação:** {tq.recommendation}")
-                elif level == "warning":
-                    st.warning(f"**Recomendação:** {tq.recommendation}")
-                else:
-                    st.error(f"**Recomendação:** {tq.recommendation}")
-
-            # ── Inconsistências detectadas pela IA ────────────────────────
-            if tq.inconsistencies:
-                st.divider()
-                st.markdown(f"### 🔍 Inconsistências Detectadas pela IA  `{len(tq.inconsistencies)}`")
-                st.caption(
-                    "Trechos identificados como prováveis ruídos de fundo, "
-                    "captura de microfone aberto ou artefatos de ASR. "
-                    "Use como guia para a curadoria manual."
-                )
-                for inc in tq.inconsistencies:
-                    label = f"**{inc.speaker}** `{inc.timestamp}` — *{inc.text}*"
-                    with st.expander(label, expanded=False):
-                        st.markdown(f"**Motivo:** {inc.reason}")
-
-            # ── Pré-processamento ──────────────────────────────────────────
             if pp and pp.ready:
-                st.divider()
-                st.markdown("### 🧹 Pré-processamento Automático")
+                st.markdown("### 🧹 Automated Pre-processing")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Fillers Removed", pp.fillers_removed)
+                c2.metric("Artifacts Flagged", pp.artifact_turns)
+                c3.metric("Repetitions Collapsed", pp.repetitions_collapsed)
 
-                # Stats pills
-                stats_html = (
-                    f"<div style='display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.8rem'>"
-                    f"<span style='background:#f1f5f9;padding:4px 12px;border-radius:20px;"
-                    f"font-size:0.82rem'><b>{pp.fillers_removed}</b> fillers removidos</span>"
-                    f"<span style='background:#fef9c3;padding:4px 12px;border-radius:20px;"
-                    f"font-size:0.82rem'><b>{pp.artifact_turns}</b> turnos de artefato sinalizados "
-                    f"<code>[?]</code></span>"
-                    f"<span style='background:#f1f5f9;padding:4px 12px;border-radius:20px;"
-                    f"font-size:0.82rem'><b>{pp.repetitions_collapsed}</b> repetições colapsadas</span>"
-                    f"</div>"
-                )
-                st.markdown(stats_html, unsafe_allow_html=True)
-
-                if pp.metadata_issues:
-                    for issue in pp.metadata_issues:
-                        st.warning(f"⚠️ {issue}")
-
-                st.caption(
-                    "Turnos marcados com `[?]` são candidatos a artefatos de ASR. "
-                    "Revise antes de usar o texto pré-processado como fonte definitiva."
-                )
-
-                # Before / After
                 col_raw, col_clean = st.columns(2)
                 with col_raw:
-                    st.markdown("**Transcrição original (ASR bruta)**")
-                    st.text_area(
-                        label="raw",
-                        value=hub.transcript_raw,
-                        height=400,
-                        disabled=True,
-                        label_visibility="collapsed",
-                        key="ta_raw",
-                    )
+                    st.markdown("**Original Transcript**")
+                    st.text_area("raw", hub.transcript_raw, height=400, disabled=True, label_visibility="collapsed", key="ta_raw")
                     _copy_button(hub.transcript_raw, key="tab_orig")
-                    st.download_button(
-                        "⬇ Baixar original (.txt)",
-                        data=hub.transcript_raw,
-                        file_name="transcricao_original.txt",
-                        mime="text/plain",
-                        key="dl_raw",
-                    )
                 with col_clean:
-                    st.markdown("**Transcrição pré-processada** *(inconsistências em* 🟡 *— passe o mouse)*")
-                    _render_highlighted_transcript(
-                        hub.transcript_clean,
-                        tq.inconsistencies,
-                        key=f"hl_{tab_idx}",
-                    )
+                    st.markdown("**Cleaned Transcript** (Hover for issues)")
+                    _render_highlighted_transcript(hub.transcript_clean, tq.inconsistencies, key=f"hl_{tab_idx}")
                     _copy_button(hub.transcript_clean, key="tab_clean")
-                    st.download_button(
-                        "⬇ Baixar pré-processada (.txt)",
-                        data=hub.transcript_clean,
-                        file_name="transcricao_preprocessada.txt",
-                        mime="text/plain",
-                        key="dl_clean",
-                    )
-
         tab_idx += 1
 
-    # ── Tab: BPMN 2.0 (bpmn-js viewer) ───────────────────────────────────────
+    # ── Tab: BPMN 2.0 ─────────────────────────────────────────────────────────
     if hub.bpmn.ready:
         with tabs[tab_idx]:
-            st.caption(
-                "Renderizado com [bpmn-js](https://bpmn.io) · Arraste para mover · Scroll para zoom · Tecla 0 para ajustar tela"
-            )
-
+            st.markdown("""
+            <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;'>
+                <h3 style='margin:0;'>📐 BPMN Process Model</h3>
+                <span class='badge badge-blue'>Interactive Viewer</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
             if hub.bpmn.bpmn_xml:
                 bpmn_html = preview_from_xml(hub.bpmn.bpmn_xml)
-                components.html(bpmn_html, height=1000, scrolling=False)
-
+                components.html(bpmn_html, height=800, scrolling=False)
+                
                 if hub.bpmn.lanes:
-                    st.markdown(f"**Swimlanes:** {', '.join(f'`{l}`' for l in hub.bpmn.lanes)}")
-
-                if show_dev_tools:
-                    render_bpmn_diagnostics(hub.bpmn)
+                    st.markdown("**Identified Roles:** " + " ".join([f"<span class='badge badge-green'>{l}</span>" for l in hub.bpmn.lanes]), unsafe_allow_html=True)
             else:
-                st.info("ℹ️ Viewer bpmn-js indisponível — exibindo Mermaid como fallback.")
+                st.warning("BPMN XML not available. Showing Mermaid fallback.")
                 render_mermaid_block(hub.bpmn.mermaid, show_code=False, key_suffix="bpmn_fallback")
-
         tab_idx += 1
 
         # ── Tab: Mermaid ──────────────────────────────────────────────────────
         with tabs[tab_idx]:
-            st.caption("Fluxograma Mermaid · ↓/→ alterna direção · Cole em [mermaid.live](https://mermaid.live) para editar.")
+            st.markdown("### 📊 Mermaid Flowchart")
             render_mermaid_block(hub.bpmn.mermaid, show_code=True, key_suffix="mermaid_tab")
-
         tab_idx += 1
 
-        # ── Tab: Validação BPMN (multi-run) ──────────────────────────────────
-        if hub.validation.ready and hub.validation.n_bpmn_runs > 1:
-            with tabs[tab_idx]:
-                val = hub.validation
-                st.markdown(f"### Seleção entre {val.n_bpmn_runs} rodadas")
-                best = val.bpmn_score
-
-                # Ranking table
-                rows = []
-                for c in sorted(val.bpmn_candidates, key=lambda x: x.weighted, reverse=True):
-                    rows.append({
-                        "Rodada":        f"{'⭐ ' if c.run_index == best.run_index else ''}{c.run_index}",
-                        "Granularidade": f"{c.granularity:.1f}",
-                        "Task type":     f"{c.task_type:.1f}",
-                        "Gateways":      f"{c.gateways:.1f}",
-                        "Score final":   f"{c.weighted:.2f}",
-                        "Atividades":    c.n_tasks,
-                        "Gateways #":    c.n_gateways,
-                    })
-                st.dataframe(rows, use_container_width=True)
-
-                st.caption(
-                    f"Rodada **{best.run_index}** selecionada · "
-                    f"Score {best.weighted:.2f}/10 · "
-                    f"{best.n_tasks} atividades · {best.transcript_words} palavras na transcrição"
-                )
-
-            tab_idx += 1
-
-    # ── Tab: Ata de Reunião ───────────────────────────────────────────────────
+    # ── Tab: Minutes ──────────────────────────────────────────────────────────
     if hub.minutes.ready:
         with tabs[tab_idx]:
             m = hub.minutes
-
-            # ── Export buttons — topo da aba ──────────────────────────────────
-            _md_content = AgentMinutes.to_markdown(m)
-            _exp_col1, _exp_col2, _exp_col3 = st.columns(3)
-            with _exp_col1:
-                st.download_button(
-                    "⬇️ Exportar .md",
-                    data=_md_content.encode("utf-8"),
-                    file_name="ata_reuniao.md",
-                    mime="text/markdown",
-                    use_container_width=True,
-                    key="ata_tab_md",
-                )
-            with _exp_col2:
-                try:
-                    from modules.minutes_exporter import to_docx as _to_docx
-                    _docx_bytes = _to_docx(m)
-                    st.download_button(
-                        "⬇️ Exportar .docx",
-                        data=_docx_bytes,
-                        file_name="ata_reuniao.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        use_container_width=True,
-                        key="ata_tab_docx",
-                    )
-                except Exception as _docx_err:
-                    st.caption(f"Word indisponível: {_docx_err}")
-            with _exp_col3:
-                try:
-                    from modules.minutes_exporter import to_pdf as _to_pdf
-                    _pdf_bytes = _to_pdf(m)
-                    st.download_button(
-                        "⬇️ Exportar .pdf",
-                        data=_pdf_bytes,
-                        file_name="ata_reuniao.pdf",
-                        mime="application/pdf",
-                        use_container_width=True,
-                        key="ata_tab_pdf",
-                    )
-                except Exception as _pdf_err:
-                    st.caption(f"PDF indisponível: {_pdf_err}")
-
-            st.markdown("---")
-
-            # ── Conteúdo da ata ───────────────────────────────────────────────
-            _has_content = any([m.participants, m.agenda, m.summary, m.decisions, m.action_items])
-            if not _has_content:
-                st.warning(
-                    "A ata foi gerada mas não contém conteúdo extraído. "
-                    "Verifique se a transcrição tem pelo menos um participante, pauta ou decisão identificável."
-                )
-
             st.markdown(f"## {m.title}")
-            col1, col2 = st.columns(2)
-            col1.markdown(f"**Data:** {m.date or '—'}")
-            col2.markdown(f"**Local:** {m.location or '—'}")
+            
+            col_m1, col_m2, col_m3 = st.columns(3)
+            col_m1.markdown(f"**📅 Date:** {m.date or 'N/A'}")
+            col_m2.markdown(f"**📍 Location:** {m.location or 'N/A'}")
+            col_m3.markdown(f"**👥 Participants:** {len(m.participants)}")
 
-            if m.participants:
-                st.markdown("**Participantes:**")
-                cols = st.columns(min(len(m.participants), 4))
-                for i, p in enumerate(m.participants):
-                    cols[i % 4].markdown(f"`{p}`")
+            st.markdown("### 📌 Agenda")
+            for i, item in enumerate(m.agenda, 1):
+                st.markdown(f"{i}. {item}")
 
-            if m.agenda:
-                st.markdown("### 📌 Pauta")
-                for i, item in enumerate(m.agenda, 1):
-                    st.markdown(f"{i}. {item}")
-
-            if m.summary:
-                st.markdown("### 📝 Resumo")
-                for block in m.summary:
+            st.markdown("### 📝 Summary")
+            for block in m.summary:
+                with st.container():
                     st.markdown(f"**{block.get('topic', '')}**")
                     st.markdown(block.get("content", ""))
 
             if m.decisions:
-                st.markdown("### ✅ Decisões")
+                st.markdown("### ✅ Key Decisions")
                 for d in m.decisions:
                     st.markdown(f"- {d}")
 
             if m.action_items:
                 st.markdown("### 🎯 Action Items")
-                prio_colors = {"high": "🔴", "normal": "🟡", "low": "🟢"}
+                prio_map = {"high": "🔴 High", "normal": "🟡 Normal", "low": "🟢 Low"}
                 rows = []
                 for ai in m.action_items:
-                    prio = prio_colors.get(ai.priority, "⚪")
                     rows.append({
-                        "Prioridade": prio,
-                        "Por": ai.raised_by or "—",
-                        "Tarefa": ai.task,
-                        "Responsável": ai.responsible,
-                        "Prazo": ai.deadline or "—",
+                        "Priority": prio_map.get(ai.priority, "⚪"),
+                        "Task": ai.task,
+                        "Owner": ai.responsible,
+                        "Deadline": ai.deadline or "—"
                     })
-                st.dataframe(rows, use_container_width=True)
-
-            if m.next_meeting:
-                st.info(f"📅 Próxima reunião: **{m.next_meeting}**")
-
+                st.table(rows)
         tab_idx += 1
 
-    # ── Tab: Requisitos ───────────────────────────────────────────────────────
+    # ── Tab: Requirements ─────────────────────────────────────────────────────
     if hub.requirements.ready:
         with tabs[tab_idx]:
             req = hub.requirements
-            type_labels = {
-                "ui_field":       "🖥️ Campo de tela",
-                "validation":     "✅ Validação",
-                "business_rule":  "📋 Regra de negócio",
-                "functional":     "⚙️ Funcional",
-                "non_functional": "📊 Não-funcional",
-            }
-            priority_colors = {"high": "🔴", "medium": "🟡", "low": "🟢", "unspecified": "⚪"}
+            st.markdown("### 📝 System Requirements")
+            
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Total Requirements", len(req.requirements))
+            c2.metric("High Priority", sum(1 for r in req.requirements if r.priority == "high"))
+            c3.metric("Distinct Types", len(set(r.type for r in req.requirements)))
 
-            col_r1, col_r2, col_r3 = st.columns(3)
-            col_r1.metric("Total de Requisitos", len(req.requirements))
-            high_count = sum(1 for r in req.requirements if r.priority == "high")
-            col_r2.metric("Alta Prioridade 🔴", high_count)
-            types_count = len(set(r.type for r in req.requirements))
-            col_r3.metric("Tipos distintos", types_count)
-
-            # Filter by type
-            selected_type = st.selectbox(
-                "Filtrar por tipo",
-                ["Todos"] + list(type_labels.values()),
-                key="req_type_filter",
-            )
-            type_reverse = {v: k for k, v in type_labels.items()}
-
-            rows = []
             for r in req.requirements:
-                if selected_type != "Todos" and r.type != type_reverse.get(selected_type):
-                    continue
-                rows.append({
-                    "ID": r.id,
-                    "Tipo": type_labels.get(r.type, r.type),
-                    "Prioridade": priority_colors.get(r.priority, "⚪"),
-                    "Título": r.title,
-                    "Etapa": r.process_step or "—",
-                    "Ator": r.actor or "—",
-                })
-
-            if rows:
-                st.dataframe(rows, use_container_width=True)
-
-            # Detail expander per requirement
-            st.markdown("---")
-            st.markdown("### Detalhamento")
-            for r in req.requirements:
-                if selected_type != "Todos" and r.type != type_reverse.get(selected_type):
-                    continue
-                with st.expander(f"{r.id} — {r.title}  {priority_colors.get(r.priority, '')}"):
-                    st.markdown(f"**Tipo:** {type_labels.get(r.type, r.type)}")
-                    st.markdown(f"**Prioridade:** {priority_colors.get(r.priority, '⚪')} {r.priority}")
-                    if r.actor:
-                        st.markdown(f"**Ator:** {r.actor}")
-                    if r.process_step:
-                        st.markdown(f"**Etapa do processo:** {r.process_step}")
-                    st.markdown(f"**Descrição:** {r.description}")
+                with st.expander(f"**{r.id}** — {r.title}"):
+                    st.markdown(f"**Type:** `{r.type}` | **Priority:** `{r.priority}`")
+                    st.markdown(f"**Description:** {r.description}")
                     if r.source_quote:
-                        speaker_tag = f"**[{r.speaker}]** " if r.speaker else ""
-                        st.markdown(f"> {speaker_tag}*\"{r.source_quote}\"*")
-
-            # ── Mind Map ──────────────────────────────────────────────────
-            if req.requirements:
-                st.markdown("---")
-                st.markdown("### 🗺️ Mind Map dos Requisitos")
-                from modules.mindmap_interactive import render_mindmap_from_requirements
-                session_title = getattr(req, 'session_title', '') or req.name
-                render_mindmap_from_requirements(req, session_title=session_title, height=540)
-                if getattr(req, 'mindmap', ''):
-                    with st.expander("📝 Código Mermaid (mindmap)", expanded=False):
-                        st.code(req.mindmap, language="text")
-
+                        st.markdown(f"> *\"{r.source_quote}\"* — **{r.speaker or 'Unknown'}**")
         tab_idx += 1
 
-    # ── Tab: Relatório Executivo ───────────────────────────────────────────────
-    if hub.synthesizer.ready:
-        with tabs[tab_idx]:
-            syn = hub.synthesizer
-            st.caption(
-                "Documento executivo gerado pelo Agente Sintetizador · "
-                "Clique em ⬇️ para baixar o HTML completo."
-            )
-            st.download_button(
-                "⬇️ Baixar Relatório Executivo (.html)",
-                data=syn.html,
-                file_name="relatorio_executivo.html",
-                mime="text/html",
-                use_container_width=True,
-            )
-            st.divider()
-            components.html(syn.html, height=900, scrolling=True)
-        tab_idx += 1
-
-    # ── Tab: Exportar ─────────────────────────────────────────────────────────
+    # ── Tab: Export ───────────────────────────────────────────────────────────
     with tabs[tab_idx]:
-        st.markdown("### ⬇️ Downloads")
+        st.markdown("### 📦 Export Assets")
+        
+        col_ex1, col_ex2 = st.columns(2)
+        
+        with col_ex1:
+            st.markdown("#### 📐 Process Models")
+            if hub.bpmn.ready:
+                st.download_button("⬇️ Download .bpmn", hub.bpmn.bpmn_xml, file_name="process.bpmn", use_container_width=True)
+                st.download_button("⬇️ Download .mermaid", hub.bpmn.mermaid, file_name="process.mmd", use_container_width=True)
+        
+        with col_ex2:
+            st.markdown("#### 📋 Documentation")
+            if hub.minutes.ready:
+                from agents.agent_minutes import AgentMinutes
+                md_minutes = AgentMinutes.to_markdown(hub.minutes)
+                st.download_button("⬇️ Download Minutes (.md)", md_minutes, file_name="minutes.md", use_container_width=True)
+            
+            if hub.synthesizer.ready:
+                st.download_button("⬇️ Download Executive Report (.html)", hub.synthesizer.html, file_name="report.html", use_container_width=True)
 
-        if hub.bpmn.ready:
-            st.markdown("**Diagrama BPMN**")
-            col1, col2 = st.columns(2)
-
-            with col1:
-                if hub.bpmn.bpmn_xml:
-                    st.download_button(
-                        "⬇️ Diagrama .bpmn",
-                        data=hub.bpmn.bpmn_xml,
-                        file_name=f"{hub.bpmn.name.replace(' ', '_')}.bpmn",
-                        mime="application/xml",
-                        use_container_width=True,
-                    )
-
-            with col2:
-                mermaid_content = generate_mermaid(hub.bpmn)
-                st.download_button(
-                    "⬇️ Fluxo .mermaid",
-                    data=mermaid_content,
-                    file_name=f"{hub.bpmn.name.replace(' ', '_')}.mmd",
-                    mime="text/plain",
-                    use_container_width=True,
-                )
-
-            st.markdown("---")
-
-            bpmn_json = json.dumps({
-                "name": hub.bpmn.name,
-                "steps": [vars(s) for s in hub.bpmn.steps],
-                "edges": [vars(e) for e in hub.bpmn.edges],
-                "lanes": hub.bpmn.lanes,
-            }, ensure_ascii=False, indent=2)
-
-            st.download_button(
-                "⬇️ BPMN estruturado .json",
-                data=bpmn_json,
-                file_name=f"{hub.bpmn.name.replace(' ', '_')}_bpmn.json",
-                mime="application/json",
-            )
-
-            with st.expander("Como importar o diagrama"):
-                st.markdown("""
-| Ferramenta | Como importar |
-|---|---|
-| **Camunda Modeler** | File → Open → selecione o `.bpmn` |
-| **Bizagi Modeler** | File → Open → selecione o `.bpmn` |
-| **bpmn.io** | Arraste o `.bpmn` para o canvas |
-| **Mermaid Live** | Cole o conteúdo do `.mmd` em [mermaid.live](https://mermaid.live) |
-""")
-
-        if hub.minutes.ready:
-            st.markdown("**Ata de Reunião**")
-            md_content = AgentMinutes.to_markdown(hub.minutes)
-            col_ata1, col_ata2, col_ata3 = st.columns(3)
-            with col_ata1:
-                st.download_button(
-                    "⬇️ Ata .md",
-                    data=md_content,
-                    file_name="ata_reuniao.md",
-                    mime="text/markdown",
-                    use_container_width=True,
-                )
-            with col_ata2:
-                try:
-                    from modules.minutes_exporter import to_docx
-                    docx_bytes = to_docx(hub.minutes)
-                    st.download_button(
-                        "⬇️ Ata .docx",
-                        data=docx_bytes,
-                        file_name="ata_reuniao.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        use_container_width=True,
-                    )
-                except Exception as _e:
-                    st.caption(f"Word indisponível: {_e}")
-            with col_ata3:
-                try:
-                    from modules.minutes_exporter import to_pdf
-                    pdf_bytes = to_pdf(hub.minutes)
-                    st.download_button(
-                        "⬇️ Ata .pdf",
-                        data=pdf_bytes,
-                        file_name="ata_reuniao.pdf",
-                        mime="application/pdf",
-                        use_container_width=True,
-                    )
-                except Exception as _e:
-                    st.caption(f"PDF indisponível: {_e}")
-
-        if hub.requirements.ready:
-            st.markdown("**Requisitos**")
-            col_req1, col_req2 = st.columns(2)
-            with col_req1:
-                st.download_button(
-                    "⬇️ Requisitos .md",
-                    data=hub.requirements.markdown,
-                    file_name=f"{hub.requirements.name.replace(' ', '_')}_requisitos.md",
-                    mime="text/markdown",
-                    use_container_width=True,
-                )
-            with col_req2:
-                import json as _json
-                req_json = _json.dumps(
-                    {"name": hub.requirements.name,
-                     "requirements": [r.__dict__ for r in hub.requirements.requirements]},
-                    ensure_ascii=False, indent=2
-                )
-                st.download_button(
-                    "⬇️ Requisitos .json",
-                    data=req_json,
-                    file_name=f"{hub.requirements.name.replace(' ', '_')}_requisitos.json",
-                    mime="application/json",
-                    use_container_width=True,
-                )
-
-        if hub.synthesizer.ready:
-            st.markdown("**Relatório Executivo**")
-            st.download_button(
-                "⬇️ Relatório Executivo .html",
-                data=hub.synthesizer.html,
-                file_name="relatorio_executivo.html",
-                mime="text/html",
-                use_container_width=True,
-            )
-
-    tab_idx += 1
-
-    # ── Tab: Knowledge Hub (modo desenvolvedor) ───────────────────────────────
-    if show_dev_tools:
-        with tabs[tab_idx]:
-            st.markdown("### 🔍 Knowledge Hub — Estado da Sessão")
-            col_meta1, col_meta2, col_meta3 = st.columns(3)
-            col_meta1.metric("Versão do Hub", hub.version)
-            col_meta2.metric("Tokens usados", hub.meta.total_tokens_used)
-            col_meta3.metric("Agentes executados", len(hub.meta.agents_run))
-            st.markdown(f"**Provider:** `{hub.meta.llm_provider}` — **Model:** `{hub.meta.llm_model}`")
-            st.markdown(
-                f"**Segmentos NLP:** {len(hub.nlp.segments)} — "
-                f"**Atores:** {', '.join(hub.nlp.actors) or '—'} — "
-                f"**Idioma:** `{hub.nlp.language_detected}`"
-            )
-
-            if show_raw_json:
-                st.json(hub.to_dict())
-
-            st.download_button(
-                "⬇️ Knowledge Hub .json",
-                data=hub.to_json(),
-                file_name="knowledge_hub.json",
-                mime="application/json",
-            )
-
-            # ── Diagnóstico de Skills ──────────────────────────────────────────
-            st.divider()
-            st.markdown("### 🛠️ Diagnóstico — Arquivos de Skill em Runtime")
-            st.caption(
-                "Mostra o conteúdo **real** dos arquivos lidos pelo servidor. "
-                "Use para confirmar que os skills estão corretos no repositório após cada commit."
-            )
-            import re as _re
-            _SKILL_FILES = {
-                "skill_bpmn.md":    "skills/skill_bpmn.md",
-                "skill_minutes.md": "skills/skill_minutes.md",
-            }
-            _SUSPICIOUS = [
-                "cache_resource", "reruns", "KnowledgeHub", "st.cache",
-                "Bearer", "base_agent", "ensure_utf8", "NLPChunker",
-            ]
-            for fname, rel_path in _SKILL_FILES.items():
-                p = root_dir / rel_path
-                st.markdown(f"#### 📄 `{rel_path}`")
-                if not p.exists():
-                    st.error(f"❌ Não encontrado: `{rel_path}`")
-                    continue
-                raw = p.read_text(encoding="utf-8", errors="replace")
-                found_suspicious = [t for t in _SUSPICIOUS if t in raw]
-                has_placeholder = "{output_language}" in raw
-                non_ascii = sum(1 for c in raw if ord(c) > 127)
-                json_hits = len(_re.findall(r"json", raw, _re.IGNORECASE))
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Tamanho", f"{len(raw):,} chars")
-                c2.metric("Não-ASCII", non_ascii)
-                c3.metric("Ocorr. 'json'", json_hits)
-                c4.metric("{output_language}", "✅" if has_placeholder else "❌")
-                if found_suspicious:
-                    st.error("⚠️ Conteúdo suspeito: " + ", ".join(f"`{t}`" for t in found_suspicious))
-                else:
-                    st.success("✅ Arquivo íntegro.")
-                st.code(raw, language="markdown")
-                st.download_button(
-                    label=f"⬇️ Baixar {fname}",
-                    data=raw.encode("utf-8"),
-                    file_name=fname,
-                    mime="text/markdown",
-                    key=f"diag_dl_{fname}",
-                )
-                st.divider()
-
-            # ── Skills (system prompts) ────────────────────────────────────────
-            st.markdown("### 🧠 Skills — System Prompts dos Agentes")
-            _SKILLS = [
-                ("🔬 Qualidade da Transcrição", "skills/skill_transcript_quality.md"),
-                ("📐 BPMN",                     "skills/skill_bpmn.md"),
-                ("📋 Ata de Reunião",            "skills/skill_minutes.md"),
-                ("📝 Requisitos",               "skills/SKILL_REQUIREMENTS.md"),
-                ("📄 Sintetizador",             "skills/SKILL_SYNTHESIZER.md"),
-            ]
-            for skill_label, skill_file in _SKILLS:
-                skill_path_f = Path(root_dir) / skill_file
-                if skill_path_f.exists():
-                    with st.expander(skill_label, expanded=False):
-                        st.markdown(skill_path_f.read_text(encoding="utf-8"))
-                else:
-                    with st.expander(f"{skill_label} ⚠️ arquivo não encontrado", expanded=False):
-                        st.caption(f"`{skill_file}` não encontrado.")
-
-        tab_idx += 1
+# ── Footer ────────────────────────────────────────────────────────────────────
+st.markdown("---")
+st.markdown("""
+<div style='text-align:center; color:var(--text-muted); font-size:0.8rem; padding:1rem;'>
+    Process2Diagram v4.0 • Powered by Multi-Agent AI Architecture • 2024
+</div>
+""", unsafe_allow_html=True)
