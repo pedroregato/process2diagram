@@ -869,15 +869,55 @@ if "hub" in st.session_state:
                     })
                 st.dataframe(rows, use_container_width=True)
             
-            # Download buttons inside Minutes tab
+            # ── Export buttons for Minutes (MD, DOCX, PDF) ────────────────────
+            st.markdown("---")
+            st.markdown("### 📎 Export Minutes")
+            col_exp1, col_exp2, col_exp3 = st.columns(3)
+            
+            # Markdown
             md_content = AgentMinutes.to_markdown(m)
-            st.download_button(
-                "⬇️ Download Minutes (.md)",
-                data=md_content,
-                file_name=_make_filename("minutes", "md", prefix, suffix),
-                use_container_width=True,
-                key="dl_minutes_tab",
-            )
+            with col_exp1:
+                st.download_button(
+                    "⬇️ Download .md",
+                    data=md_content,
+                    file_name=_make_filename("minutes", "md", prefix, suffix),
+                    use_container_width=True,
+                    key="dl_minutes_tab_md",
+                )
+            
+            # DOCX
+            with col_exp2:
+                try:
+                    from modules.minutes_exporter import to_docx
+                    docx_bytes = to_docx(m)
+                    st.download_button(
+                        "⬇️ Download .docx",
+                        data=docx_bytes,
+                        file_name=_make_filename("minutes", "docx", prefix, suffix),
+                        use_container_width=True,
+                        key="dl_minutes_tab_docx",
+                    )
+                except ImportError as e:
+                    st.caption("⚠️ DOCX export not available (python-docx missing)")
+                except Exception as e:
+                    st.caption(f"⚠️ DOCX error: {e}")
+            
+            # PDF
+            with col_exp3:
+                try:
+                    from modules.minutes_exporter import to_pdf
+                    pdf_bytes = to_pdf(m)
+                    st.download_button(
+                        "⬇️ Download .pdf",
+                        data=pdf_bytes,
+                        file_name=_make_filename("minutes", "pdf", prefix, suffix),
+                        use_container_width=True,
+                        key="dl_minutes_tab_pdf",
+                    )
+                except ImportError as e:
+                    st.caption("⚠️ PDF export not available (reportlab missing)")
+                except Exception as e:
+                    st.caption(f"⚠️ PDF error: {e}")
         tab_idx += 1
 
     # ── Tab: Requirements ─────────────────────────────────────────────────────
@@ -985,14 +1025,46 @@ if "hub" in st.session_state:
         
         if hub.minutes.ready:
             st.markdown("**Meeting Minutes**")
+            col_md, col_docx, col_pdf = st.columns(3)
             md_content = AgentMinutes.to_markdown(hub.minutes)
-            st.download_button(
-                "⬇️ Download Minutes (.md)",
-                data=md_content,
-                file_name=_make_filename("minutes", "md", prefix, suffix),
-                use_container_width=True,
-                key="dl_minutes",
-            )
+            
+            with col_md:
+                st.download_button(
+                    "⬇️ .md",
+                    data=md_content,
+                    file_name=_make_filename("minutes", "md", prefix, suffix),
+                    use_container_width=True,
+                    key="dl_minutes_md",
+                )
+            
+            with col_docx:
+                try:
+                    from modules.minutes_exporter import to_docx
+                    docx_bytes = to_docx(hub.minutes)
+                    st.download_button(
+                        "⬇️ .docx",
+                        data=docx_bytes,
+                        file_name=_make_filename("minutes", "docx", prefix, suffix),
+                        use_container_width=True,
+                        key="dl_minutes_docx",
+                    )
+                except Exception as e:
+                    st.caption(f"DOCX unavailable: {e}")
+            
+            with col_pdf:
+                try:
+                    from modules.minutes_exporter import to_pdf
+                    pdf_bytes = to_pdf(hub.minutes)
+                    st.download_button(
+                        "⬇️ .pdf",
+                        data=pdf_bytes,
+                        file_name=_make_filename("minutes", "pdf", prefix, suffix),
+                        use_container_width=True,
+                        key="dl_minutes_pdf",
+                    )
+                except Exception as e:
+                    st.caption(f"PDF unavailable: {e}")
+            
             st.markdown("---")
         
         if hub.requirements.ready:
