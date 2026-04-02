@@ -15,6 +15,9 @@ spacy>=3.7,<4.0                 # motor NLP
 # Modelo pt após instalar: python -m spacy download pt_core_news_lg
 
 # ── Exportação de documentos ──────────────────────────────────────────────────
+pypdf>=5.0.0
+
+# ── Inportação de documentos ──────────────────────────────────────────────────
 python-docx==1.1.2              # exportação DOCX da Ata (pure Python)
 fpdf2==2.8.2                    # exportação PDF da Ata (pure Python, sem GTK)
 
