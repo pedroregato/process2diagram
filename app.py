@@ -177,29 +177,36 @@ with st.sidebar:
     st.markdown(f"*v3.5 — Multi-Agent* `{_commit}`")
     st.markdown("---")
 
-    st.markdown("### 🤖 LLM Provider")
+    st.markdown("### 🤖 Provedor LLM")
     provider_names = list(AVAILABLE_PROVIDERS.keys())
     selected_provider = st.selectbox(
-        "Choose provider",
+        "Provedor",
         provider_names,
         index=provider_names.index("DeepSeek") if "DeepSeek" in provider_names else 0,
         key="selected_provider",
+        label_visibility="collapsed",
     )
 
     provider_cfg = AVAILABLE_PROVIDERS[selected_provider]
-    st.markdown(f"**Model:** `{provider_cfg['default_model']}`")
-    st.markdown(f"**Cost:** {provider_cfg['cost_hint']}")
+    st.markdown(f"**Modelo:** `{provider_cfg['default_model']}`")
+    st.markdown(f"**Custo:** {provider_cfg['cost_hint']}")
     st.markdown("---")
 
     render_api_key_gate(selected_provider, provider_cfg)
 
     st.markdown("---")
-    st.markdown("### ⚙️ Options")
-    output_language = st.selectbox("Output language", ["Auto-detect", "Portuguese (BR)", "English"])
+    st.markdown("### ⚙️ Configurações")
+    output_language = st.selectbox(
+        "Idioma de saída",
+        ["Auto-detectar", "Português (BR)", "English"],
+        key="output_language_select",
+    )
+    _lang_map = {"Auto-detectar": "Auto-detect", "Português (BR)": "Portuguese (BR)", "English": "English"}
+    output_language = _lang_map.get(output_language, output_language)
 
-    st.markdown("### 🤖 Active Agents")
-    run_quality = st.checkbox("Agente Qualidade da Transcrição", value=True)
-    run_bpmn = st.checkbox("Agente BPMN", value=True)
+    st.markdown("### 🤖 Agentes")
+    run_quality = st.checkbox("Qualidade da Transcrição", value=True)
+    run_bpmn = st.checkbox("BPMN", value=True)
 
     # ── Multi-run BPMN validator ───────────────────────────────────────────
     n_bpmn_runs = 1
@@ -213,18 +220,27 @@ with st.sidebar:
             st.caption("Pesos para seleção do melhor resultado (0 = ignorar):")
             bpmn_weights = {
                 "granularity": st.slider("Granularidade", 0, 10, 5, key="w_gran"),
-                "task_type":   st.slider("Task type",     0, 10, 5, key="w_type"),
-                "gateways":    st.slider("Gateways",      0, 10, 8, key="w_gw"),
+                "task_type":   st.slider("Tipo de tarefa", 0, 10, 5, key="w_type"),
+                "gateways":    st.slider("Gateways",       0, 10, 8, key="w_gw"),
             }
 
-    run_minutes = st.checkbox("Agente Ata de Reunião", value=True)
-    run_requirements = st.checkbox("Agente Requisitos", value=True)
-    run_synthesizer = st.checkbox("Agente Sintetizador (Relatório HTML)", value=False,
-                                  help="Gera um documento executivo HTML com síntese de todos os artefatos.")
+    run_minutes = st.checkbox("Ata de Reunião", value=True)
+    run_requirements = st.checkbox("Requisitos", value=True)
+    run_synthesizer = st.checkbox(
+        "Relatório Executivo (HTML)",
+        value=False,
+        help="Gera um documento executivo HTML com síntese de todos os artefatos.",
+    )
 
-    show_raw_json = st.checkbox("Show raw JSON", value=False)
     st.markdown("---")
-    st.caption("Keys live **only in your session**.\nNever stored or logged.")
+    st.caption("Chaves de API ficam **apenas na sua sessão**.\nNunca armazenadas ou registradas.")
+
+    # ── Modo desenvolvedor ────────────────────────────────────────────────
+    st.markdown("---")
+    show_dev_tools = st.checkbox("🛠️ Modo desenvolvedor", value=False)
+    show_raw_json = False
+    if show_dev_tools:
+        show_raw_json = st.checkbox("Mostrar JSON bruto", value=False)
 
 # ── Main area ─────────────────────────────────────────────────────────────────
 st.markdown('<p class="main-title">Process2Diagram</p>', unsafe_allow_html=True)
@@ -269,71 +285,6 @@ uploaded_file = st.file_uploader("Ou envie um arquivo .txt", type=["txt"])
 if uploaded_file:
     transcript_text = load_transcript(uploaded_file)
     st.success(f"Carregado: {uploaded_file.name}")
-
-# ── Diagnóstico — sempre visível, fora do bloco generate_btn ─────────────────
-with st.expander("🛠️ Diagnóstico — Arquivos de Skill em Runtime", expanded=False):
-    st.caption(
-        "Mostra o conteúdo **real** dos arquivos lidos pelo servidor. "
-        "Use para confirmar que os skills estão corretos no repositório após cada commit."
-    )
-
-    import re as _re
-
-    _SKILL_FILES = {
-        "skill_bpmn.md":     "skills/skill_bpmn.md",
-        "skill_minutes.md":  "skills/skill_minutes.md",
-    }
-    _SUSPICIOUS = [
-        "cache_resource", "reruns", "KnowledgeHub", "st.cache",
-        "Bearer", "base_agent", "ensure_utf8", "NLPChunker",
-    ]
-
-    for fname, rel_path in _SKILL_FILES.items():
-        p = root_dir / rel_path  # absolute path — avoids CWD / case-sensitivity issues
-        st.markdown(f"#### 📄 `{rel_path}`")
-
-        if not p.exists():
-            st.error(
-                f"❌ **Arquivo não encontrado:** `{rel_path}`  \n"
-                "O agente está rodando **sem system prompt**. "
-                "Verifique o nome e o caminho no repositório."
-            )
-            continue
-
-        raw = p.read_text(encoding="utf-8", errors="replace")
-        found_suspicious = [t for t in _SUSPICIOUS if t in raw]
-        has_placeholder = "{output_language}" in raw
-        non_ascii = sum(1 for c in raw if ord(c) > 127)
-        json_hits = len(_re.findall(r"json", raw, _re.IGNORECASE))
-
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Tamanho", f"{len(raw):,} chars")
-        c2.metric("Não-ASCII", non_ascii)
-        c3.metric("Ocorr. 'json'", json_hits)
-        c4.metric("{output_language}", "✅" if has_placeholder else "❌")
-
-        if found_suspicious:
-            st.error(
-                "⚠️ **Conteúdo suspeito** — tokens encontrados: "
-                + ", ".join(f"`{t}`" for t in found_suspicious)
-                + "  \nEste arquivo pode estar corrompido com texto de chat. "
-                  "Substitua pelo arquivo correto no repositório."
-            )
-        else:
-            st.success("✅ Arquivo íntegro — nenhum conteúdo suspeito detectado.")
-
-        if not has_placeholder:
-            st.warning("⚠️ Placeholder `{output_language}` ausente — instrução de idioma não será injetada.")
-
-        st.code(raw, language="markdown")
-        st.download_button(
-            label=f"⬇️ Baixar {fname}",
-            data=raw.encode("utf-8"),
-            file_name=fname,
-            mime="text/markdown",
-            key=f"diag_dl_{fname}",
-        )
-        st.divider()
 
 # ── Pré-processamento independente ────────────────────────────────────────────
 preprocess_btn = st.button("🧹 Pré-processar Transcrição", use_container_width=True)
@@ -498,7 +449,15 @@ if generate_btn:
         st.error(f"Erro no pipeline: {e}")
         st.stop()
 
-    progress_placeholder.empty()
+    # ── Resumo de conclusão (substitui o spinner de progresso) ───────────────
+    _done = [n for n, s in agent_status.items() if "done" in s]
+    _errors = [n for n, s in agent_status.items() if "error" in s]
+    _summary_parts = [f"✅ {len(_done)} agente(s) concluído(s)"]
+    if _errors:
+        _summary_parts.append(f"⚠️ {len(_errors)} com erro: {', '.join(_errors)}")
+    _summary_parts.append(f"🔢 {hub.meta.total_tokens_used:,} tokens")
+    _summary_parts.append(f"⏱️ {hub.meta.processing_time_ms // 1000}s")
+    progress_placeholder.success("  ·  ".join(_summary_parts))
 
     # ── Salva no session_state ANTES de qualquer UI ───────────────────────────
     # Garante que o hub sobrevive ao rerun causado por st.download_button
@@ -547,19 +506,15 @@ if hub is not None:
         tabs_to_show += ["📐 BPMN 2.0", "📊 Mermaid"]
         if hub.validation.ready and hub.validation.n_bpmn_runs > 1:
             tabs_to_show += ["🏆 Validação BPMN"]
-
-    if hub.bpmn.lanes:
-        st.markdown(f"**Swimlanes:** {', '.join(f'`{l}`' for l in hub.bpmn.lanes)}")
-
-    render_bpmn_diagnostics(hub.bpmn)  # ← adicionar esta linha
-
     if hub.minutes.ready:
         tabs_to_show += ["📋 Ata de Reunião"]
     if hub.requirements.ready:
         tabs_to_show += ["📝 Requisitos"]
     if hub.synthesizer.ready:
         tabs_to_show += ["📄 Relatório Executivo"]
-    tabs_to_show += ["🔧 Exportar", "🔍 Knowledge Hub"]
+    tabs_to_show += ["🔧 Exportar"]
+    if show_dev_tools:
+        tabs_to_show += ["🔍 Knowledge Hub"]
 
     tabs = st.tabs(tabs_to_show)
     tab_idx = 0
@@ -707,6 +662,9 @@ if hub is not None:
 
                 if hub.bpmn.lanes:
                     st.markdown(f"**Swimlanes:** {', '.join(f'`{l}`' for l in hub.bpmn.lanes)}")
+
+                if show_dev_tools:
+                    render_bpmn_diagnostics(hub.bpmn)
             else:
                 st.info("ℹ️ Viewer bpmn-js indisponível — exibindo Mermaid como fallback.")
                 render_mermaid_block(hub.bpmn.mermaid, show_code=False, key_suffix="bpmn_fallback")
@@ -1077,45 +1035,93 @@ if hub is not None:
 
     tab_idx += 1
 
-    # ── Tab: Knowledge Hub ────────────────────────────────────────────────────
-    with tabs[tab_idx]:
-        st.markdown("### 🔍 Knowledge Hub — Estado da Sessão")
-        col_meta1, col_meta2, col_meta3 = st.columns(3)
-        col_meta1.metric("Versão do Hub", hub.version)
-        col_meta2.metric("Tokens usados", hub.meta.total_tokens_used)
-        col_meta3.metric("Agentes executados", len(hub.meta.agents_run))
-        st.markdown(f"**Provider:** `{hub.meta.llm_provider}` — **Model:** `{hub.meta.llm_model}`")
-        st.markdown(
-            f"**Segmentos NLP:** {len(hub.nlp.segments)} — "
-            f"**Atores:** {', '.join(hub.nlp.actors) or '—'} — "
-            f"**Idioma:** `{hub.nlp.language_detected}`"
-        )
+    # ── Tab: Knowledge Hub (modo desenvolvedor) ───────────────────────────────
+    if show_dev_tools:
+        with tabs[tab_idx]:
+            st.markdown("### 🔍 Knowledge Hub — Estado da Sessão")
+            col_meta1, col_meta2, col_meta3 = st.columns(3)
+            col_meta1.metric("Versão do Hub", hub.version)
+            col_meta2.metric("Tokens usados", hub.meta.total_tokens_used)
+            col_meta3.metric("Agentes executados", len(hub.meta.agents_run))
+            st.markdown(f"**Provider:** `{hub.meta.llm_provider}` — **Model:** `{hub.meta.llm_model}`")
+            st.markdown(
+                f"**Segmentos NLP:** {len(hub.nlp.segments)} — "
+                f"**Atores:** {', '.join(hub.nlp.actors) or '—'} — "
+                f"**Idioma:** `{hub.nlp.language_detected}`"
+            )
 
-        if show_raw_json:
-            st.json(hub.to_dict())
+            if show_raw_json:
+                st.json(hub.to_dict())
 
-        st.download_button(
-            "⬇️ Knowledge Hub .json",
-            data=hub.to_json(),
-            file_name="knowledge_hub.json",
-            mime="application/json",
-        )
+            st.download_button(
+                "⬇️ Knowledge Hub .json",
+                data=hub.to_json(),
+                file_name="knowledge_hub.json",
+                mime="application/json",
+            )
 
-        # ── Skills (system prompts) ────────────────────────────────────────────
-        st.divider()
-        st.markdown("### 🧠 Skills — System Prompts dos Agentes")
-        _SKILLS = [
-            ("🔬 Qualidade da Transcrição", "skills/skill_transcript_quality.md"),
-            ("📐 BPMN",                     "skills/skill_bpmn.md"),
-            ("📋 Ata de Reunião",            "skills/skill_minutes.md"),
-            ("📝 Requisitos",               "skills/SKILL_REQUIREMENTS.md"),
-            ("📄 Sintetizador",             "skills/SKILL_SYNTHESIZER.md"),
-        ]
-        for skill_label, skill_file in _SKILLS:
-            skill_path = Path(root_dir) / skill_file
-            if skill_path.exists():
-                with st.expander(skill_label, expanded=False):
-                    st.markdown(skill_path.read_text(encoding="utf-8"))
-            else:
-                with st.expander(f"{skill_label} ⚠️ arquivo não encontrado", expanded=False):
-                    st.caption(f"`{skill_file}` não encontrado.")
+            # ── Diagnóstico de Skills ──────────────────────────────────────────
+            st.divider()
+            st.markdown("### 🛠️ Diagnóstico — Arquivos de Skill em Runtime")
+            st.caption(
+                "Mostra o conteúdo **real** dos arquivos lidos pelo servidor. "
+                "Use para confirmar que os skills estão corretos no repositório após cada commit."
+            )
+            import re as _re
+            _SKILL_FILES = {
+                "skill_bpmn.md":    "skills/skill_bpmn.md",
+                "skill_minutes.md": "skills/skill_minutes.md",
+            }
+            _SUSPICIOUS = [
+                "cache_resource", "reruns", "KnowledgeHub", "st.cache",
+                "Bearer", "base_agent", "ensure_utf8", "NLPChunker",
+            ]
+            for fname, rel_path in _SKILL_FILES.items():
+                p = root_dir / rel_path
+                st.markdown(f"#### 📄 `{rel_path}`")
+                if not p.exists():
+                    st.error(f"❌ Não encontrado: `{rel_path}`")
+                    continue
+                raw = p.read_text(encoding="utf-8", errors="replace")
+                found_suspicious = [t for t in _SUSPICIOUS if t in raw]
+                has_placeholder = "{output_language}" in raw
+                non_ascii = sum(1 for c in raw if ord(c) > 127)
+                json_hits = len(_re.findall(r"json", raw, _re.IGNORECASE))
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Tamanho", f"{len(raw):,} chars")
+                c2.metric("Não-ASCII", non_ascii)
+                c3.metric("Ocorr. 'json'", json_hits)
+                c4.metric("{output_language}", "✅" if has_placeholder else "❌")
+                if found_suspicious:
+                    st.error("⚠️ Conteúdo suspeito: " + ", ".join(f"`{t}`" for t in found_suspicious))
+                else:
+                    st.success("✅ Arquivo íntegro.")
+                st.code(raw, language="markdown")
+                st.download_button(
+                    label=f"⬇️ Baixar {fname}",
+                    data=raw.encode("utf-8"),
+                    file_name=fname,
+                    mime="text/markdown",
+                    key=f"diag_dl_{fname}",
+                )
+                st.divider()
+
+            # ── Skills (system prompts) ────────────────────────────────────────
+            st.markdown("### 🧠 Skills — System Prompts dos Agentes")
+            _SKILLS = [
+                ("🔬 Qualidade da Transcrição", "skills/skill_transcript_quality.md"),
+                ("📐 BPMN",                     "skills/skill_bpmn.md"),
+                ("📋 Ata de Reunião",            "skills/skill_minutes.md"),
+                ("📝 Requisitos",               "skills/SKILL_REQUIREMENTS.md"),
+                ("📄 Sintetizador",             "skills/SKILL_SYNTHESIZER.md"),
+            ]
+            for skill_label, skill_file in _SKILLS:
+                skill_path_f = Path(root_dir) / skill_file
+                if skill_path_f.exists():
+                    with st.expander(skill_label, expanded=False):
+                        st.markdown(skill_path_f.read_text(encoding="utf-8"))
+                else:
+                    with st.expander(f"{skill_label} ⚠️ arquivo não encontrado", expanded=False):
+                        st.caption(f"`{skill_file}` não encontrado.")
+
+        tab_idx += 1
