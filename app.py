@@ -365,14 +365,14 @@ with st.sidebar:
         prefix_input = st.text_input(
             "Prefix (max 10 chars)",
             value="P2D_",
-            max_chars=10,
+            max_chars=11,
             help="Used at the beginning of every downloaded file. Leave empty to use 'P2D_'."
         )
     with col_suf:
         suffix_input = st.text_input(
             "Suffix (max 10 chars)",
             value="",
-            max_chars=10,
+            max_chars=11,
             help="Used at the end of every downloaded file (before extension). Leave empty to use current date (YYYY-MM-DD)."
         )
     
