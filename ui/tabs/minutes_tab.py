@@ -37,14 +37,16 @@ def render(hub, prefix, suffix):
     st.markdown("---")
     st.markdown("### Export Minutes")
     md_content = AgentMinutes.to_markdown(m)
-    st.download_button("⬇️ .md", data=md_content, file_name=make_filename("minutes", "md", prefix, suffix))
+    
+    # Dentro de render(hub, prefix, suffix):
+    st.download_button("⬇️ .md", data=md_content, file_name=make_filename("minutes", "md", prefix, suffix), key="minutes_md")
     try:
         from modules.minutes_exporter import to_docx
-        st.download_button("⬇️ .docx", data=to_docx(m), file_name=make_filename("minutes", "docx", prefix, suffix))
+        st.download_button("⬇️ .docx", data=to_docx(m), file_name=make_filename("minutes", "docx", prefix, suffix), key="minutes_docx")
     except Exception:
-        st.caption("DOCX export unavailable")
+        pass
     try:
         from modules.minutes_exporter import to_pdf
-        st.download_button("⬇️ .pdf", data=to_pdf(m), file_name=make_filename("minutes", "pdf", prefix, suffix))
+        st.download_button("⬇️ .pdf", data=to_pdf(m), file_name=make_filename("minutes", "pdf", prefix, suffix), key="minutes_pdf")
     except Exception:
-        st.caption("PDF export unavailable")
+        pass
