@@ -27,7 +27,17 @@ def render(hub, prefix, suffix):
         col_raw, col_clean = st.columns(2)
         with col_raw:
             st.text_area("Original", hub.transcript_raw, height=300, disabled=True)
-            download_button(hub.transcript_raw, make_filename("transcricao_original", "txt", prefix, suffix), "⬇️ Original")
+            download_button(
+                hub.transcript_raw,
+                make_filename("transcricao_original", "txt", prefix, suffix),
+                "⬇️ Original",
+                key="dl_raw_quality"
+            )
         with col_clean:
             render_highlighted_transcript(hub.transcript_clean, tq.inconsistencies)
-            download_button(hub.transcript_clean, make_filename("transcricao_preprocessada", "txt", prefix, suffix), "⬇️ Limpa")
+            download_button(
+                hub.transcript_clean,
+                make_filename("transcricao_preprocessada", "txt", prefix, suffix),
+                "⬇️ Limpa",
+                key="dl_clean_quality"
+            )
