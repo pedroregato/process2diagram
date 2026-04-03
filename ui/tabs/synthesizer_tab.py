@@ -6,5 +6,5 @@ from services.export_service import make_filename
 def render(hub, prefix, suffix):
     syn = hub.synthesizer
     st.markdown("### 📄 Executive Report")
-    st.download_button("⬇️ Download HTML", data=syn.html, file_name=make_filename("executive_report", "html", prefix, suffix))
+    st.download_button("⬇️ Download HTML", data=syn.html, file_name=make_filename("executive_report", "html", prefix, suffix), key="synth_html")
     components.html(syn.html, height=800, scrolling=True)
