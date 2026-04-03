@@ -55,15 +55,24 @@ def render_sidebar():
         if st.session_state.show_dev_tools:
             st.session_state.show_raw_json = st.checkbox("Show Raw JSON", value=st.session_state.show_raw_json)
 
-        # Seção de reexecução (aparece se hub existir)
+        # ── SEÇÃO DE REEXECUÇÃO (diagnóstico incluído) ──
         if "hub" in st.session_state:
             st.markdown("---")
             st.markdown("### 🔄 Re‑run Agents")
+            st.caption("Run any agent again on the current transcript.")
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("🔬 Quality", key="rr_q"): st.session_state.rerun_agent = "quality"
-                if st.button("📐 BPMN", key="rr_b"): st.session_state.rerun_agent = "bpmn"
-                if st.button("📋 Minutes", key="rr_m"): st.session_state.rerun_agent = "minutes"
+                if st.button("🔬 Quality", key="rr_q"):
+                    st.session_state.rerun_agent = "quality"
+                if st.button("📐 BPMN", key="rr_b"):
+                    st.session_state.rerun_agent = "bpmn"
+                if st.button("📋 Minutes", key="rr_m"):
+                    st.session_state.rerun_agent = "minutes"
             with col2:
-                if st.button("📝 Requirements", key="rr_r"): st.session_state.rerun_agent = "requirements"
-                if st.button("📄 Report", key="rr_s"): st.session_state.rerun_agent = "synthesizer"
+                if st.button("📝 Requirements", key="rr_r"):
+                    st.session_state.rerun_agent = "requirements"
+                if st.button("📄 Report", key="rr_s"):
+                    st.session_state.rerun_agent = "synthesizer"
+        else:
+            # Mensagem de diagnóstico (opcional)
+            st.caption("(Execute o pipeline primeiro para ver os botões de reexecução)")
