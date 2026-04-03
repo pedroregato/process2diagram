@@ -1,4 +1,4 @@
-## --- Process2Diagram v4.6 — Final (indentação corrigida, mindmap incluso) ---
+## --- Process2Diagram v4.6 — Final (sem SessionInfo error) ---
 
 import sys
 from pathlib import Path
@@ -255,11 +255,10 @@ with st.sidebar:
     if st.session_state.show_dev_tools:
         st.session_state.show_raw_json = st.checkbox("Show Raw JSON", value=st.session_state.show_raw_json)
 
-    # ── SEÇÃO DE REEXECUÇÃO (movida para antes do dev tools e com diagnóstico) ──
+    # ── SEÇÃO DE REEXECUÇÃO (aparece somente após o pipeline) ────────────────
     if "hub" in st.session_state:
         st.markdown("---")
         st.markdown("### 🔄 Re‑run Agents")
-        st.caption("Run an agent again on the current transcript.")
         col_r1, col_r2 = st.columns(2)
         with col_r1:
             if st.button("🔬 Quality", use_container_width=True, key="rerun_quality"):
@@ -274,9 +273,7 @@ with st.sidebar:
             if st.button("📄 Report", use_container_width=True, key="rerun_synthesizer"):
                 st.session_state["rerun_agent"] = "synthesizer"
         st.caption("⚠️ Re-running overwrites previous output for that agent.")
-    else:
-        # Diagnóstico (remova após testar)
-        st.caption("(Nenhum hub encontrado ainda. Execute o pipeline primeiro.)")
+
 
 # ── MAIN AREA ─────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -318,7 +315,6 @@ with st.container():
             st.session_state.pop("curated_clean", None)
             # Remove hub antigo para evitar exibição de resultados desatualizados
             st.session_state.pop("hub", None)
-            # O Streamlit rerun automaticamente após a interação
     with col_btn:
         preproc = st.button("🧹 Pré‑processar Transcrição (sem LLM)", use_container_width=True)
         if preproc and st.session_state.transcript_text.strip():
@@ -593,7 +589,7 @@ if "hub" in st.session_state:
     tabs = st.tabs(tabs_to_show)
     tab_idx = 0
 
-    # ── Tab: Quality ──────────────────────────────────────────────────────────
+    # ── Tab: Quality (igual ao anterior, omitido por brevidade) ───────────────
     if hub.transcript_quality.ready:
         with tabs[tab_idx]:
             tq = hub.transcript_quality
@@ -648,7 +644,7 @@ if "hub" in st.session_state:
                                        key="dl_clean")
         tab_idx += 1
 
-    # ── Tab: BPMN 2.0 ─────────────────────────────────────────────────────────
+    # ── Tab: BPMN 2.0 (igual ao anterior) ─────────────────────────────────────
     if hub.bpmn.ready:
         with tabs[tab_idx]:
             st.markdown("<h3>📐 BPMN Process Model</h3><span class='badge badge-blue'>Interactive Viewer</span>", unsafe_allow_html=True)
@@ -685,7 +681,7 @@ if "hub" in st.session_state:
                 st.caption(f"Pass **{best.run_index}** selected · Score {best.weighted:.2f}/10")
             tab_idx += 1
 
-    # ── Tab: Minutes ──────────────────────────────────────────────────────────
+    # ── Tab: Minutes (igual ao anterior) ──────────────────────────────────────
     if hub.minutes.ready:
         with tabs[tab_idx]:
             m = hub.minutes
@@ -743,15 +739,13 @@ if "hub" in st.session_state:
                     st.caption(f"PDF unavailable: {e}")
         tab_idx += 1
 
-    # ── Tab: Requirements (com Mind Map interativo) ───────────────────────────
+    # ── Tab: Requirements (com Mind Map interativo e fallback) ─────────────────
     if hub.requirements.ready:
         with tabs[tab_idx]:
             req = hub.requirements
-            
             if not req.requirements:
-                st.warning("Nenhum requisito foi extraído da transcrição. Verifique se o texto contém descrições de funcionalidades, regras ou campos.")
+                st.warning("Nenhum requisito foi extraído da transcrição.")
             else:
-                # Métricas
                 type_labels = {"ui_field":"🖥️ UI Field","validation":"✅ Validation","business_rule":"📋 Business Rule",
                                "functional":"⚙️ Functional","non_functional":"📊 Non-functional"}
                 priority_colors = {"high":"🔴","medium":"🟡","low":"🟢","unspecified":"⚪"}
@@ -760,11 +754,8 @@ if "hub" in st.session_state:
                 c2.metric("High Priority", sum(1 for r in req.requirements if r.priority=="high"))
                 c3.metric("Distinct Types", len(set(r.type for r in req.requirements)))
 
-                # Filtro por tipo
                 selected_type = st.selectbox("Filter by type", ["All"]+list(type_labels.values()), key="req_type_filter")
                 type_reverse = {v:k for k,v in type_labels.items()}
-                
-                # Tabela de requisitos
                 rows = []
                 for r in req.requirements:
                     if selected_type!="All" and r.type!=type_reverse.get(selected_type):
@@ -780,7 +771,6 @@ if "hub" in st.session_state:
                 if rows:
                     st.dataframe(rows, use_container_width=True)
 
-                # Detalhamento expansível
                 st.markdown("---")
                 st.markdown("### Detailed View")
                 for r in req.requirements:
@@ -798,28 +788,21 @@ if "hub" in st.session_state:
                             speaker_tag = f"**[{r.speaker}]** " if r.speaker else ""
                             st.markdown(f"> {speaker_tag}*\"{r.source_quote}\"*")
 
-                # ── MIND MAP (INTERATIVO) ─────────────────────────────────────
+                # Mind Map
                 st.markdown("---")
                 st.markdown("### 🗺️ Mind Map dos Requisitos")
-                
                 try:
                     from modules.mindmap_interactive import render_mindmap_from_requirements
                     session_title = getattr(req, 'session_title', '') or req.name
                     render_mindmap_from_requirements(req, session_title=session_title, height=540)
                 except Exception as e:
-                    st.warning(f"Não foi possível renderizar o mindmap interativo: {e}")
-                    # Fallback: exibir código Mermaid
+                    st.warning(f"Mindmap interativo indisponível: {e}. Exibindo código Mermaid.")
                     from modules.requirements_mindmap import generate_requirements_mindmap
                     mindmap_code = generate_requirements_mindmap(req)
                     if mindmap_code:
                         st.code(mindmap_code, language="mermaid")
                     else:
                         st.info("Mind map não disponível (sem dados suficientes).")
-
-                # Exibe o código Mermaid (se existir no modelo) como expansível
-                if hasattr(req, 'mindmap') and req.mindmap:
-                    with st.expander("📝 Código Mermaid (mindmap)", expanded=False):
-                        st.code(req.mindmap, language="text")
         tab_idx += 1
 
     # ── Tab: Executive Report ─────────────────────────────────────────────────
