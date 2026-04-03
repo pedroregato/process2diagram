@@ -14,7 +14,7 @@ def render(hub, prefix, suffix):
                 "⬇️ .bpmn",
                 data=hub.bpmn.bpmn_xml,
                 file_name=make_filename("process", "bpmn", prefix, suffix),
-                key="export_bpmn"   # chave única
+                key="export_bpmn"
             )
         st.download_button(
             "⬇️ .mermaid",
