@@ -255,10 +255,11 @@ with st.sidebar:
     if st.session_state.show_dev_tools:
         st.session_state.show_raw_json = st.checkbox("Show Raw JSON", value=st.session_state.show_raw_json)
 
-    # Re‑run agents section (aparece após primeiro pipeline)
+    # ── SEÇÃO DE REEXECUÇÃO (movida para antes do dev tools e com diagnóstico) ──
     if "hub" in st.session_state:
         st.markdown("---")
         st.markdown("### 🔄 Re‑run Agents")
+        st.caption("Run an agent again on the current transcript.")
         col_r1, col_r2 = st.columns(2)
         with col_r1:
             if st.button("🔬 Quality", use_container_width=True, key="rerun_quality"):
@@ -272,7 +273,10 @@ with st.sidebar:
                 st.session_state["rerun_agent"] = "requirements"
             if st.button("📄 Report", use_container_width=True, key="rerun_synthesizer"):
                 st.session_state["rerun_agent"] = "synthesizer"
-
+        st.caption("⚠️ Re-running overwrites previous output for that agent.")
+    else:
+        # Diagnóstico (remova após testar)
+        st.caption("(Nenhum hub encontrado ainda. Execute o pipeline primeiro.)")
 
 # ── MAIN AREA ─────────────────────────────────────────────────────────────────
 st.markdown("""
