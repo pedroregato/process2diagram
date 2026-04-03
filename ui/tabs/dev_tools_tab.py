@@ -12,4 +12,4 @@ def render(hub, show_raw_json):
     st.markdown(f"**NLP segments:** {len(hub.nlp.segments)} — **Actors:** {', '.join(hub.nlp.actors)}")
     if show_raw_json:
         st.json(hub.to_dict())
-    st.download_button("⬇️ Knowledge Hub JSON", data=hub.to_json(), file_name=make_filename("knowledge_hub", "json", "", ""))
+    st.download_button("⬇️ Knowledge Hub JSON", data=hub.to_json(), file_name=make_filename("knowledge_hub", "json", "", ""), key="dev_hub_json")
