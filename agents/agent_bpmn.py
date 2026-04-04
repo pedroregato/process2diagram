@@ -179,6 +179,11 @@ class AgentBPMN(BaseAgent):
 
         hub.bpmn = self._build_model(data)
         self._enforce_rules(hub.bpmn, getattr(hub.nlp, "actors", None))
+        try:
+            from modules.bpmn_auto_repair import repair_bpmn
+            repair_bpmn(hub.bpmn)
+        except Exception:
+            pass
         hub.bpmn.mermaid  = self._generate_mermaid(hub.bpmn)
         hub.bpmn.bpmn_xml = self._generate_bpmn_xml(hub.bpmn)
         hub.bpmn.ready = True
