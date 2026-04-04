@@ -56,6 +56,8 @@ def render_validation(hub):
             "Granularity": f"{c.granularity:.1f}",
             "Task Type": f"{c.task_type:.1f}",
             "Gateways": f"{c.gateways:.1f}",
+            "Structural": f"{getattr(c, 'structural', 0.0):.1f}",
+            "Issues": f"{getattr(c, 'n_structural_errors', 0)}E / {getattr(c, 'n_structural_warnings', 0)}W",
             "Final Score": f"{c.weighted:.2f}",
             "Activities": c.n_tasks,
             "Gateways #": c.n_gateways,

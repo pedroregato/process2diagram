@@ -30,7 +30,7 @@ def init_session_state():
     if "n_bpmn_runs" not in st.session_state:
         st.session_state.n_bpmn_runs = 1
     if "bpmn_weights" not in st.session_state:
-        st.session_state.bpmn_weights = {"granularity": 5, "task_type": 5, "gateways": 5}
+        st.session_state.bpmn_weights = {"granularity": 5, "task_type": 5, "gateways": 5, "structural": 5}
     if "show_dev_tools" not in st.session_state:
         st.session_state.show_dev_tools = False
     if "show_raw_json" not in st.session_state:

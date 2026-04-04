@@ -41,9 +41,10 @@ def render_sidebar():
             if st.session_state.n_bpmn_runs > 1:
                 with st.expander("Selection Weights"):
                     st.session_state.bpmn_weights = {
-                        "granularity": st.slider("Granularity",0,10, st.session_state.bpmn_weights["granularity"]),
-                        "task_type":   st.slider("Task Type",   0,10, st.session_state.bpmn_weights["task_type"]),
-                        "gateways":    st.slider("Gateways",    0,10, st.session_state.bpmn_weights["gateways"]),
+                        "granularity": st.slider("Granularity", 0, 10, st.session_state.bpmn_weights.get("granularity", 5)),
+                        "task_type":   st.slider("Task Type",   0, 10, st.session_state.bpmn_weights.get("task_type",   5)),
+                        "gateways":    st.slider("Gateways",    0, 10, st.session_state.bpmn_weights.get("gateways",    5)),
+                        "structural":  st.slider("Structural",  0, 10, st.session_state.bpmn_weights.get("structural",  5)),
                     }
         st.session_state.run_minutes = st.checkbox("Meeting Minutes", value=st.session_state.run_minutes)
         st.session_state.run_requirements = st.checkbox("Requirements", value=st.session_state.run_requirements)

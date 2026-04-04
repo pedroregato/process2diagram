@@ -2,10 +2,12 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # AgentValidator — pure-Python BPMN quality scorer, no LLM call.
 #
-# Scores a BPMNModel on three user-configurable dimensions:
+# Scores a BPMNModel on four user-configurable dimensions:
 #   1. Granularidade  — activity count relative to transcript length
 #   2. Task type      — specificity of task_type assignments
-#   3. Gateways       — structural correctness (labels, split/join symmetry)
+#   3. Gateways       — gateway correctness (labels, split/join symmetry)
+#   4. Structural     — penalty for structural issues (dangling refs, isolated
+#                       nodes, unreachable nodes, XOR missing labels, …)
 #
 # Usage (called by Orchestrator when n_bpmn_runs > 1):
 #   validator = AgentValidator()
@@ -15,6 +17,7 @@
 from __future__ import annotations
 
 from core.knowledge_hub import BPMNModel, BPMNValidationScore
+from modules.bpmn_structural_validator import validate_bpmn_structure
 
 # ── Task type sets ────────────────────────────────────────────────────────────
 
@@ -51,7 +54,7 @@ class AgentValidator:
         self,
         model: BPMNModel,
         transcript: str,
-        weights: dict,       # {"granularity": int, "task_type": int, "gateways": int}
+        weights: dict,  # {"granularity": int, "task_type": int, "gateways": int, "structural": int}
     ) -> BPMNValidationScore:
 
         steps = self._flat_steps(model)
@@ -60,25 +63,29 @@ class AgentValidator:
         s_gran = self._score_granularity(steps, transcript)
         s_type = self._score_tasktype(steps)
         s_gw   = self._score_gateways(steps, edges)
+        s_str, n_errors, n_warnings = self._score_structural(model)
 
-        w_g = weights.get("granularity", 5)
-        w_t = weights.get("task_type",   5)
-        w_gw = weights.get("gateways",   5)
-        total_w = w_g + w_t + w_gw or 1
+        w_g  = weights.get("granularity", 5)
+        w_t  = weights.get("task_type",   5)
+        w_gw = weights.get("gateways",    5)
+        w_s  = weights.get("structural",  5)
+        total_w = w_g + w_t + w_gw + w_s or 1
 
-        weighted = (w_g * s_gran + w_t * s_type + w_gw * s_gw) / total_w
+        weighted = (w_g * s_gran + w_t * s_type + w_gw * s_gw + w_s * s_str) / total_w
 
-        tasks = [s for s in steps
-                 if s.task_type not in _EVENT_TYPES | _GATEWAY_TYPES]
+        tasks    = [s for s in steps if s.task_type not in _EVENT_TYPES | _GATEWAY_TYPES]
         gateways = [s for s in steps if s.task_type in _GATEWAY_TYPES]
 
         return BPMNValidationScore(
             granularity=round(s_gran, 2),
             task_type=round(s_type, 2),
             gateways=round(s_gw, 2),
+            structural=round(s_str, 2),
             weighted=round(weighted, 2),
             n_tasks=len(tasks),
             n_gateways=len(gateways),
+            n_structural_errors=n_errors,
+            n_structural_warnings=n_warnings,
             transcript_words=len(transcript.split()),
         )
 
@@ -177,6 +184,18 @@ class AgentValidator:
                 scores.append(10.0 if join_exists else 0.0)
 
         return round(sum(scores) / len(scores), 2) if scores else 5.0
+
+    def _score_structural(self, model: BPMNModel) -> tuple[float, int, int]:
+        """
+        Score 0-10 based on bpmn_structural_validator results.
+        Penalty: -2.5 per error, -0.5 per warning; info issues are free.
+        Returns (score, n_errors, n_warnings).
+        """
+        issues = validate_bpmn_structure(model)
+        n_errors   = sum(1 for i in issues if i.severity == "error")
+        n_warnings = sum(1 for i in issues if i.severity == "warning")
+        score = max(0.0, 10.0 - n_errors * 2.5 - n_warnings * 0.5)
+        return round(score, 2), n_errors, n_warnings
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
