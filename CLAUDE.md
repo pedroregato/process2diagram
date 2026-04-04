@@ -6,10 +6,11 @@
 
 **Process2Diagram** converts meeting transcriptions into professional process diagrams using a multi-LLM pipeline.
 
-- **Input:** raw text transcript (paste or `.txt` upload)
-- **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown / Word / PDF), requirements analysis (JSON/Markdown), executive HTML report
+- **Input:** raw text transcript (paste, `.txt`, `.docx`, or `.pdf` upload)
+- **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown / Word / PDF), requirements analysis (JSON/Markdown), executive HTML report, interactive requirements mind map
 - **Deploy:** Streamlit Cloud — auto-deploy on push to `main` branch (`github.com/pedroregato/process2diagram`)
 - **Dev environment:** PyCharm on Windows; Python 3.13
+- **Current version:** v4.6
 
 Supported LLM providers: DeepSeek (default), Claude (Anthropic), OpenAI, Groq, Google Gemini.
 
@@ -35,10 +36,16 @@ No build step, no test suite, no Makefile.
 
 ```
 process2diagram/
-├── app.py                        # Streamlit entry point — UI, progress bar, multi-tab results
+├── app.py                        # Streamlit entry point — slim orchestrator; delegates to ui/ and core/
+│
+├── pages/
+│   └── Diagramas.py              # Full-screen multi-page diagram viewer (BPMN, Mermaid, Mind Map)
 │
 ├── core/
 │   ├── knowledge_hub.py          # KnowledgeHub: central session state shared by all agents
+│   ├── pipeline.py               # run_pipeline() — executes orchestrator with multi-run BPMN support
+│   ├── session_state.py          # init_session_state() — initializes all st.session_state keys
+│   ├── rerun_handlers.py         # handle_rerun() — re-executes a single named agent
 │   └── schema.py                 # Legacy schemas (Process, Step, Edge, BpmnProcess…)
 │
 ├── agents/
@@ -47,25 +54,55 @@ process2diagram/
 │   ├── nlp_chunker.py            # Pure Python/spaCy preprocessor — no LLM
 │   ├── agent_transcript_quality.py  # Transcript quality gate (grade A–E, criteria)
 │   ├── agent_bpmn.py             # BPMN extraction + _enforce_rules() + generators
+│   ├── agent_mermaid.py          # MermaidGenerator class — pure Python, no LLM
 │   ├── agent_minutes.py          # Meeting minutes extraction (full transcript, initials)
 │   ├── agent_requirements.py     # Requirements extraction (IEEE 830; speaker attribution)
-│   └── agent_synthesizer.py      # Executive HTML report synthesis (narrative + HTML gen)
+│   ├── agent_synthesizer.py      # Executive HTML report synthesis (narrative + HTML gen)
+│   └── agent_validator.py        # AgentValidator — pure Python BPMN quality scorer, no LLM
 │
 ├── modules/
 │   ├── config.py                 # LLM provider registry — add new providers here
 │   ├── session_security.py       # API keys in st.session_state only, never persisted
 │   ├── bpmn_generator.py         # OMG BPMN 2.0 XML generator (absolute coordinates layout)
 │   ├── bpmn_viewer.py            # BPMN viewer component (bpmn-js 17 injected inline)
-│   ├── diagram_mermaid.py        # Mermaid flowchart generator
+│   ├── bpmn_diagnostics.py       # render_bpmn_diagnostics() — BPMN diagnostic panel for Streamlit
+│   ├── mermaid_renderer.py       # render_mermaid_block() — shared Mermaid SVG renderer (pan/zoom/fit)
+│   ├── requirements_mindmap.py   # generate_requirements_mindmap() + build_mindmap_tree()
+│   ├── mindmap_interactive.py    # render_mindmap_from_requirements() — interactive SVG mindmap
+│   ├── diagram_mermaid.py        # Mermaid flowchart generator (legacy)
 │   ├── executive_html.py         # Executive HTML report generator (self-contained, interactive)
 │   ├── minutes_exporter.py       # Export MinutesModel → Word (.docx) and PDF via fpdf2
 │   ├── transcript_preprocessor.py  # Cleans ASR artefacts, fillers, repetitions
 │   ├── diagram_bpmn.py           # Legacy BPMN generator (kept for compatibility)
 │   ├── extract_llm.py            # Legacy LLM adapter (used by app.py v1 flow)
 │   ├── extract_heuristic.py      # Heuristic extractor (no-LLM fallback)
-│   ├── ingest.py                 # .txt file loader
+│   ├── ingest.py                 # .txt/.docx/.pdf file loader
 │   ├── preprocess.py             # Basic text cleaning
 │   └── utils.py                  # Helpers (process_to_json, etc.)
+│
+├── ui/
+│   ├── sidebar.py                # render_sidebar() — provider, config, agent toggles, re-run buttons
+│   ├── input_area.py             # render_input_area() — transcript text area + file upload + pre-process
+│   ├── components/
+│   │   ├── copy_button.py        # Copy-to-clipboard button component
+│   │   ├── download_button.py    # Styled download button wrapper
+│   │   └── transcript_highlighter.py  # Transcript text highlighter component
+│   └── tabs/
+│       ├── bpmn_tabs.py          # render_bpmn(), render_mermaid(), render_validation()
+│       ├── quality_tab.py        # render() — transcript quality results
+│       ├── minutes_tab.py        # render() — meeting minutes display
+│       ├── requirements_tab.py   # render() — requirements table + mindmap
+│       ├── synthesizer_tab.py    # render() — executive HTML report
+│       ├── export_tab.py         # render() — all download buttons grouped
+│       └── dev_tools_tab.py      # render() — KnowledgeHub JSON debug panel
+│
+├── services/
+│   ├── export_service.py         # make_filename(base, ext, prefix, suffix) → str
+│   ├── file_ingest.py            # load_transcript() wrapper over modules/ingest.py
+│   └── preprocessor_service.py  # preprocess_transcript() wrapper over transcript_preprocessor
+│
+├── setup/
+│   └── setup_v3.py               # Setup helpers
 │
 ├── skills/
 │   ├── skill_bpmn.md             # System prompt for AgentBPMN
@@ -107,6 +144,9 @@ Transcript Preprocessor  ← no LLM; removes ASR fillers/artefacts/repetitions
         │  _enforce_rules() post-processes: generic lanes, service-task lanes,
         │  correction-loop redirect, redundant event steps
         │  hub.bpmn.ready = True
+        │
+        │  (if n_bpmn_runs > 1)
+        │  AgentValidator scores each run → best candidate selected → hub.validation.ready
         ▼
   AgentMinutes           ← LLM; full transcript; initials convention (MF, PG…)
         │  extracts decisions, action items (raised_by), participants with initials
@@ -122,6 +162,19 @@ AgentSynthesizer         ← LLM (optional); reads all hub artifacts; produces
         ▼
    KnowledgeHub          ← fully populated; stored in st.session_state["hub"]
 ```
+
+### App.py — Slim Entry Point
+
+`app.py` (v4.6) no longer contains UI rendering logic. It delegates to:
+
+- `core.session_state.init_session_state()` — initializes all `st.session_state` keys with defaults
+- `ui.sidebar.render_sidebar()` — sidebar panel (always visible)
+- `ui.input_area.render_input_area()` — transcript input + file upload + pre-processing
+- `core.pipeline.run_pipeline(hub, config, callback)` — executes the full pipeline
+- `core.rerun_handlers.handle_rerun(agent, hub, …)` — re-executes a named agent
+- `ui.tabs.*` — renders each result tab by delegating to dedicated tab modules
+
+The re-run pattern (sidebar + main body buttons) writes `st.session_state.rerun_agent` which is then consumed by `handle_rerun()` on the next Streamlit run cycle.
 
 ### KnowledgeHub — Central State
 
@@ -146,11 +199,11 @@ class KnowledgeHub:
 
 **Schema evolution:** `KnowledgeHub.migrate(hub)` is the single point for backward-compatibility fixes when fields are added. Always add new field guards here instead of scattered `hasattr` checks in `app.py`.
 
-**Golden rule:** never instantiate an agent directly from `app.py`. Always go through `Orchestrator`.
+**Golden rule:** never instantiate an agent directly from `app.py`. Always go through `Orchestrator` (via `run_pipeline`) or `handle_rerun`.
 
 ### Agent Pattern
 
-Every agent in `agents/` inherits from `BaseAgent`:
+Every LLM agent in `agents/` inherits from `BaseAgent`:
 
 ```python
 class MyAgent(BaseAgent):
@@ -175,6 +228,29 @@ class MyAgent(BaseAgent):
 **`_load_skill()` uses absolute path** based on `Path(__file__).parent.parent / skill_path` so it works correctly regardless of the process CWD (local, PyCharm, Streamlit Cloud). Never rely on CWD for file resolution in agents.
 
 Provider routing in `BaseAgent._call_llm()`: reads `client_type` from config — `"openai_compatible"` uses the OpenAI SDK with a custom `base_url`; `"anthropic"` uses the native Anthropic SDK.
+
+### AgentValidator — Pure Python BPMN Scorer
+
+`agents/agent_validator.py` — no LLM call. Used by `core/pipeline.py` when `n_bpmn_runs > 1`.
+
+Scores a `BPMNModel` on three dimensions (each 0–10):
+- **Granularity** — activity count relative to transcript word count (target: 1 task per 40–100 words)
+- **Task type** — specificity of `task_type` assignments vs. keyword heuristics
+- **Gateways** — XOR edges labeled; AND/OR gateways have matching join
+
+Each dimension is weighted via `bpmn_weights = {"granularity": int, "task_type": int, "gateways": int}` (configurable in sidebar). The candidate with highest `weighted` score is selected and stored in `hub.bpmn`; all scores stored in `hub.validation`.
+
+### Multi-run BPMN Optimization
+
+Controlled by `n_bpmn_runs` (sidebar slider: 1, 3, or 5):
+
+1. Run Quality + NLP (pre-requisites) once
+2. Run `AgentBPMN` N times on separate `hub` copies
+3. `AgentValidator.score()` each candidate
+4. Best-scoring BPMN written to `hub.bpmn`; all scores in `hub.validation`
+5. Continue with Minutes → Requirements → Synthesizer
+
+A "Validação BPMN" tab appears in results when `hub.validation.ready` and `n_bpmn_runs > 1`.
 
 ---
 
@@ -211,6 +287,21 @@ Configured in `modules/config.py → AVAILABLE_PROVIDERS`:
 2. **Lane-spanning detection** — flags flows whose source and target are separated by **≥ 2 lane boundaries**. Adjacent-lane flows (span = 1) are intentionally left as direct arrows — bpmn-js routes them natively.
 3. **Link Event injection** — replaces each flagged flow with throw/catch Intermediate Link Events.
 
+### Parallel branch alignment (`_align_parallel_branches`)
+
+Post-pass over column assignments, called immediately after `_assign_columns` in `_compute_layout`.
+
+**Problem:** when a split gateway has branches with different numbers of steps, the shorter branch finishes several columns before the join, producing a long diagonal arrow that spans empty column slots.
+
+**Fix:** for each node that is the *terminal step* of a branch (its only successor is a join with ≥ 2 incoming edges), snap its column to `join_col − 1` when it currently sits further left.
+
+Safety conditions that must all hold before a node is moved:
+- Exactly one successor (the join) — so moving right cannot conflict with other downstream nodes
+- Current column strictly less than `join_col − 1`
+- The new column stays strictly greater than `max(col[predecessor])` — topological order preserved
+
+This turns long diagonal arrows into single-column hops without affecting any other layout logic.
+
 ### Waypoint routing
 
 `_build_di` emits waypoints for every sequence flow:
@@ -220,12 +311,13 @@ Configured in `modules/config.py → AVAILABLE_PROVIDERS`:
 
 ### Post-extraction rule enforcement (`_enforce_rules`)
 
-Applied in `agent_bpmn.py` after LLM extraction, before generators. Mutates the model in-place:
+Applied in `agent_bpmn.py` after LLM extraction, before generators. Mutates the model in-place.
+Receives `nlp_actors` from `hub.nlp.actors` to improve lane inference.
 
 - **Rule 0** — removes steps the LLM declared as `startEvent`/`endEvent` (generator adds these)
 - **Rule 1** — `serviceTask` with unnamed system actor → `lane = None` (OMG §7.4)
-- **Rule 1b** — generic lane names (`usuário`, `validador`, `sistema`…) → scans step descriptions for capitalized organizational noun phrases; replaces with the most frequent candidate
-- **Rule 2** — correction loop pointing back to gateway → redirected to the upstream work step that feeds the gateway
+- **Rule 1b** — generic lane names (`usuário`, `validador`, `sistema`…) → infers real organizational name using three-priority lookup: (1) step `actor` fields for that lane, (2) NLP actors appearing in step texts, (3) regex over step descriptions
+- **Rule 2** — correction loop pointing back to **any gateway type** (`exclusiveGateway`, `parallelGateway`, `inclusiveGateway`, `eventBasedGateway`, `complexGateway`) → redirected to the upstream work step that feeds the gateway
 
 ### Rules the LLM must follow (enforced by `skill_bpmn.md`)
 
@@ -238,12 +330,113 @@ Applied in `agent_bpmn.py` after LLM extraction, before generators. Mutates the 
 
 ---
 
+## Mermaid Generator (`agents/agent_mermaid.py`)
+
+`MermaidGenerator` is a pure-Python class (no LLM) that converts a `BPMNModel` to Mermaid flowchart syntax:
+
+- `sanitize_text(text)` — replaces accented chars, removes Mermaid-breaking punctuation
+- `format_node(step)` — `{}` for decisions, `[]` for tasks; always uses quoted labels
+- `format_edge(edge)` — pipe syntax `-->|label|` for labeled edges
+- `generate(model)` — `flowchart LR` with decision node styling
+
+**Entry point:** `generate_mermaid(model: BPMNModel) -> str` (module-level convenience function).
+
+---
+
 ## BPMN Viewer (`modules/bpmn_viewer.py`)
 
 - Rendered via `streamlit.components.v1.html` with **bpmn-js 17** injected inline (no external CDN).
 - Toolbar positioned top-right (light theme).
 - `MutationObserver` triggers auto-fit when the SVG is inserted into the DOM.
 - `getBoundingClientRect()` returns zero before paint — use `fitWhenReady` polling loop.
+
+---
+
+## Mermaid Renderer (`modules/mermaid_renderer.py`)
+
+Shared rendering utility used by both `app.py` tabs and `pages/Diagramas.py`.
+
+`render_mermaid_block(mermaid_text, *, show_code, key_suffix, height)`:
+- Fetches both TD and LR SVGs **server-side** from `mermaid.ink/svg/{base64}` — no external CDN inside the iframe.
+- Injects both SVGs inline; client-side JS toggles between them (no Streamlit rerun).
+- Pan/zoom/fit with mouse drag and scroll wheel.
+- For non-flowchart diagrams (mindmap, etc.) the direction toggle is hidden.
+- `robustFit` polling handles SVG dimension timing.
+
+**Why no CDN in the iframe?**
+Streamlit Cloud sandbox blocks external script loading inside `components.html`.
+All JS dependencies must be resolved server-side or injected inline.
+
+---
+
+## Requirements Mind Map
+
+Two modules cooperate:
+
+- `modules/requirements_mindmap.py` — `generate_requirements_mindmap(model)` → Mermaid mindmap string; `build_mindmap_tree(model)` → hierarchical dict for the interactive renderer.
+- `modules/mindmap_interactive.py` — `render_mindmap_from_requirements(model, *, session_title, height)` — renders an interactive SVG mind map (pure JS, pan/zoom, collapse/expand per type group). Falls back to Mermaid code block if tree is empty.
+
+Hierarchy: `root((Process Name)) → Type group → REQ-ID — Title (priority dot)`.
+
+The `pages/Diagramas.py` page also renders this mind map under a "🗺️ Mind Map" tab.
+
+---
+
+## Multi-Page App (`pages/Diagramas.py`)
+
+Streamlit multi-page app — accessible via sidebar navigation or `st.page_link`.
+
+- Shares `st.session_state["hub"]` with `app.py` — no re-processing needed.
+- Calls `KnowledgeHub.migrate(hub)` for schema compatibility.
+- Renders three tabs dynamically (only if data is available): **BPMN 2.0** (bpmn-js, 900px), **Mermaid** (render_mermaid_block, 820px), **Mind Map** (interactive, 840px).
+- Page config: `layout="wide"`, `initial_sidebar_state="collapsed"`.
+
+---
+
+## UI Package (`ui/`)
+
+All Streamlit UI code lives in `ui/` — `app.py` only coordinates flow.
+
+### `ui/sidebar.py` — `render_sidebar()`
+- Provider selector + API key gate
+- Output language selector
+- Prefix/suffix for file naming
+- Agent enable/disable checkboxes
+- BPMN optimization passes slider (1/3/5) + weight sliders (only when n > 1)
+- Developer Mode toggle (shows Dev Tools tab + Raw JSON option)
+- Re-run buttons (appear after first pipeline run)
+
+### `ui/input_area.py` — `render_input_area()`
+- `st.text_area` for pasting transcript
+- File uploader (`.txt`, `.docx`, `.pdf`) via `services/file_ingest.py`
+- "Pre-process" button (no LLM) — shows side-by-side original vs. cleaned with stats
+- Editable cleaned text area (`curated_clean`) — "Use curated text" button sets it as main input
+- Returns `True` when "🚀 Generate Insights" is clicked
+
+### `ui/tabs/`
+Each tab is a standalone module with a `render(hub, prefix, suffix)` function (or variant):
+- `bpmn_tabs.py` — `render_bpmn()`, `render_mermaid()`, `render_validation()`
+- `quality_tab.py`, `minutes_tab.py`, `requirements_tab.py`, `synthesizer_tab.py`
+- `export_tab.py` — all download buttons (BPMN XML, Mermaid, Minutes MD/DOCX/PDF, Requirements MD/JSON, Executive HTML)
+- `dev_tools_tab.py` — KnowledgeHub metadata + optional raw JSON + Hub JSON download
+
+---
+
+## Services Package (`services/`)
+
+Thin wrappers that decouple `ui/` from `modules/`:
+
+- `export_service.make_filename(base, ext, prefix, suffix) → str` — e.g. `P2D_process_2026-04-04.bpmn`
+- `file_ingest.load_transcript(uploaded_file)` — delegates to `modules/ingest.py`
+- `preprocessor_service.preprocess_transcript(text)` — delegates to `modules/transcript_preprocessor.preprocess()`
+
+---
+
+## Core Modules (`core/`)
+
+- `session_state.init_session_state()` — idempotent initialization of all `st.session_state` keys. Must be called immediately after `st.set_page_config()`. Defaults: provider=DeepSeek, run_quality/bpmn/minutes/requirements=True, run_synthesizer=False, n_bpmn_runs=1.
+- `pipeline.run_pipeline(hub, config, progress_callback)` — single entry point for pipeline execution. Handles single-run and multi-run BPMN paths. Raises on error (caller catches).
+- `rerun_handlers.handle_rerun(agent_name, hub, client_info, provider_cfg, output_language)` — re-executes one named agent (`"quality"`, `"bpmn"`, `"minutes"`, `"requirements"`, `"synthesizer"`). When BPMN is re-run, invalidates `hub.synthesizer`.
 
 ---
 
@@ -273,18 +466,6 @@ Both return raw bytes ready for `st.download_button`.
 
 ---
 
-## Mermaid Viewer
-
-- SVG fetched **server-side** from `mermaid.ink/svg/{base64_payload}` and injected into `components.html` via JavaScript — no external CDN dependency inside the iframe.
-- Both `TD` (top-down) and `LR` (left-right) variants are pre-fetched for instant client-side toggling.
-- `robustFit` polling function handles SVG dimension availability timing.
-
-**Why no CDN in the iframe?**
-Streamlit Cloud sandbox blocks external script loading inside `components.html`.
-All JS dependencies must be resolved server-side or injected inline.
-
----
-
 ## Streamlit Session State
 
 **Critical issue:** clicking any `st.download_button` triggers a full app rerun, wiping any local variable.
@@ -294,16 +475,18 @@ All JS dependencies must be resolved server-side or injected inline.
 ```python
 # app.py — correct pattern
 if generate_btn:
-    hub = orchestrator.run(hub)
+    hub = run_pipeline(hub, config, callback)
     st.session_state["hub"] = hub   # ← store BEFORE rendering any widget
 
-# Render block lives OUTSIDE the if generate_btn: block
+# Render block lives OUTSIDE the if block
 if "hub" in st.session_state:
     hub = st.session_state["hub"]
     # render tabs, download buttons, viewers...
 ```
 
 **Rule:** any state that must survive reruns (hub, generated outputs) must be written to `st.session_state` before the first widget that could trigger a rerun.
+
+**Re-run pattern:** sidebar/body buttons write `st.session_state.rerun_agent = "bpmn"`. On next Streamlit run, `handle_rerun()` picks it up via `st.session_state.pop("rerun_agent")` and re-executes the agent.
 
 ---
 
@@ -379,7 +562,8 @@ If `client_type` is new, add a routing branch in `BaseAgent._call_llm()`.
 1. Create `modules/diagram_newformat.py` → `generate_newformat(bpmn: BPMNModel) -> str`
 2. Add field to `BPMNModel` in `core/knowledge_hub.py`
 3. Call generator in `agents/agent_bpmn.py` after JSON extraction
-4. Add tab / download button in `app.py`
+4. Add tab module in `ui/tabs/` and register in `ui/tabs/__init__.py`
+5. Add tab to the dynamic tab list in `app.py`
 
 ### Adding a new agent
 
@@ -390,7 +574,9 @@ If `client_type` is new, add a routing branch in `BaseAgent._call_llm()`.
 5. Add field to `KnowledgeHub` in `core/knowledge_hub.py`
 6. Add migrate guard in `KnowledgeHub.migrate()` for the new field
 7. Register in `agents/orchestrator.py → _PLAN` list and `run()` parameters
-8. Update `app.py` to render the new output and add checkbox in sidebar
+8. Add checkbox in `ui/sidebar.py`
+9. Add to `core/rerun_handlers.py` if individual re-run is desired
+10. Create tab module in `ui/tabs/` and register in `ui/tabs/__init__.py`
 
 ### Modifying BPMN layout
 
@@ -442,6 +628,18 @@ frame, not the iframe. Use `data-target` + JS `scrollIntoView` instead:
 </script>
 ```
 
+### Pages import path on Streamlit Cloud
+
+`pages/Diagramas.py` adds the project root to `sys.path` manually:
+
+```python
+root_dir = Path(__file__).parent.parent.absolute()
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
+```
+
+This is required because Streamlit multi-page apps run page files in a different working directory context.
+
 ---
 
 ## Security Model
@@ -468,9 +666,31 @@ API keys are stored exclusively in `st.session_state` (server-side, per-session 
 - [x] `KnowledgeHub.migrate()` para evolução de schema sem quebrar sessões
 - [x] `_load_skill()` com path absoluto — resolve CWD e case-sensitivity no Linux
 
-### PC2 — Planejado
+### PC2 — Concluído (v4.6 → v4.7)
+- [x] `AgentValidator` — pure-Python BPMN quality scorer (granularity, task type, gateways)
+- [x] Multi-run BPMN optimization (1/3/5 passes, weighted scoring, best candidate selection)
+- [x] UI modularizada: `ui/sidebar.py`, `ui/input_area.py`, `ui/tabs/*`, `ui/components/*`
+- [x] `core/pipeline.py`, `core/session_state.py`, `core/rerun_handlers.py` — separação de responsabilidades
+- [x] `services/` package — export_service, file_ingest, preprocessor_service
+- [x] Re-execução individual de agentes (sidebar + corpo principal)
+- [x] `MermaidGenerator` classe — sanitização robusta, sem LLM
+- [x] `modules/mermaid_renderer.py` — `render_mermaid_block()` compartilhado (pan/zoom/fit, TD/LR toggle)
+- [x] `modules/requirements_mindmap.py` + `modules/mindmap_interactive.py` — mind map interativo de requisitos
+- [x] `pages/Diagramas.py` — visualizador full-screen multi-diagrama (BPMN, Mermaid, Mind Map)
+- [x] `modules/bpmn_diagnostics.py` — painel de diagnóstico BPMN isolado
+- [x] Upload suporta `.txt`, `.docx`, `.pdf`
+- [x] Pré-processamento com curadoria editável antes de executar o pipeline
+
+### PC2.1 — Melhorias BPMN (v4.7)
+- [x] Mermaid edge label syntax corrigido (`-->|label|` em vez de `-- label -->`) em single e multi-pool
+- [x] `_enforce_rules` Rule 2 expandida para todos os tipos de gateway, não só `is_decision`
+- [x] `_infer_lane_name` — três prioridades: actor fields → NLP actors → regex; recebe `hub.nlp.actors`
+- [x] `modules/bpmn_structural_validator.py` — 6 verificações estruturais (dangling refs, isolated/unreachable nodes, XOR sem labels, AND/OR sem join, gateway com saída única)
+- [x] Diagnóstico estrutural exibido no tab BPMN como expander com severidade (error/warning/info)
+- [x] `_align_parallel_branches` no gerador de layout — elimina setas longas em branches paralelas desiguais
+
+### PC3 — Planejado
 - [ ] Parallel agent execution with `asyncio.gather()` in the Orchestrator
-- [ ] `AgentValidator` post-generation quality scoring
 - [ ] `AgentSBVR` and `AgentBMM` for semantic business modeling
 - [ ] LangGraph integration for conditional re-routing on validation failures
 - [ ] Suite de testes automatizados por cenário
@@ -485,5 +705,6 @@ API keys are stored exclusively in `st.session_state` (server-side, per-session 
 | bpmn-js | github.com/bpmn-io/bpmn-js (v17) |
 | mermaid.ink SVG endpoint | mermaid.ink |
 | Streamlit session state | docs.streamlit.io/library/api-reference/session-state |
+| Streamlit multi-page apps | docs.streamlit.io/library/advanced-features/multipage-apps |
 | python-docx | python-docx.readthedocs.io |
 | fpdf2 | py-pdf.github.io/fpdf2 |

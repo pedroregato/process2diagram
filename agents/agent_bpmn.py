@@ -29,18 +29,63 @@ def _ascii_id(s: str) -> str:
     return "".join(c for c in nfkd if _ud.category(c) != "Mn").lower().replace(" ", "_")
 
 
-def _infer_lane_name(generic_name: str, model: BPMNModel) -> str:
+def _infer_lane_name(generic_name: str, model: BPMNModel,
+                     nlp_actors: list | None = None) -> str:
     """
-    When the LLM uses a generic lane name (e.g. 'usuário'), try to infer a
-    better organizational name by scanning step descriptions and titles in
-    that lane for capitalized multi-word noun phrases.
+    Infer a real organizational lane name from three sources, in priority order:
+
+    Priority 1 — step.actor fields for steps in the generic lane.
+        If a step already has a non-generic actor assigned by the LLM, that
+        actor is the most direct answer.  Prefer NLP-normalized form when
+        there is a close match.
+
+    Priority 2 — NLP actors that appear verbatim in step texts for this lane.
+        Uses hub.nlp.actors (named entities detected before the LLM call).
+
+    Priority 3 — regex over step titles/descriptions (original heuristic).
     """
+    from collections import Counter
+
+    _GENERIC_SET = {
+        "usuário", "usuario", "user", "utilizador",
+        "validador", "validator", "revisor", "reviewer",
+        "sistema", "system", "automático", "automatic",
+        "ator", "actor", "papel", "role", "pessoa", "person",
+        "participante", "participant",
+    }
+
+    # ── Priority 1: step actor fields ────────────────────────────────────────
+    actor_candidates = [
+        s.actor for s in model.steps
+        if s.lane == generic_name
+        and s.actor
+        and s.actor.lower().strip() not in _GENERIC_SET
+    ]
+    if actor_candidates:
+        best = Counter(actor_candidates).most_common(1)[0][0]
+        if nlp_actors:
+            for nlp_actor in nlp_actors:
+                if (nlp_actor.lower() in best.lower()
+                        or best.lower() in nlp_actor.lower()):
+                    return nlp_actor   # prefer NLP-normalized form
+        return best
+
+    # ── Priority 2: NLP actors appearing in step texts ───────────────────────
+    if nlp_actors:
+        lane_text = " ".join(
+            (s.title or "") + " " + (s.description or "")
+            for s in model.steps if s.lane == generic_name
+        )
+        nlp_hits = Counter(a for a in nlp_actors if a in lane_text)
+        if nlp_hits:
+            return nlp_hits.most_common(1)[0][0]
+
+    # ── Priority 3: regex heuristic (original) ───────────────────────────────
     texts = []
     for step in model.steps:
         if step.lane == generic_name:
             texts.append(step.title)
             texts.append(step.description)
-
     combined = " ".join(texts)
 
     org_patterns = [
@@ -48,13 +93,11 @@ def _infer_lane_name(generic_name: str, model: BPMNModel) -> str:
         r'\b(Gestores?\s+[A-ZÁÉÍÓÚÃÕ][a-záéíóúãõ]+(?:\s+[A-ZÁÉÍÓÚÃÕ][a-záéíóúãõ]+)*)\b',
         r'\b([A-ZÁÉÍÓÚÃÕ][a-záéíóúãõ]+(?:\s+[A-ZÁÉÍÓÚÃÕ][a-záéíóúãõ]+){1,3})\b',
     ]
-
     _STOP_WORDS = {
         "cadastrar", "cadastro", "enviar", "validar", "processar",
         "organograma", "escola", "unidade", "após", "para", "com",
         "início", "iniciar", "ajustar", "devolvido",
     }
-
     candidates: list[str] = []
     for pattern in org_patterns:
         for match in _re.finditer(pattern, combined):
@@ -64,9 +107,7 @@ def _infer_lane_name(generic_name: str, model: BPMNModel) -> str:
                 continue
             if 2 <= len(phrase.split()) <= 4:
                 candidates.append(phrase)
-
     if candidates:
-        from collections import Counter
         return Counter(candidates).most_common(1)[0][0]
 
     return generic_name
@@ -137,7 +178,7 @@ class AgentBPMN(BaseAgent):
         data = self._call_with_retry(system, user, hub)
 
         hub.bpmn = self._build_model(data)
-        self._enforce_rules(hub.bpmn)
+        self._enforce_rules(hub.bpmn, getattr(hub.nlp, "actors", None))
         hub.bpmn.mermaid  = self._generate_mermaid(hub.bpmn)
         hub.bpmn.bpmn_xml = self._generate_bpmn_xml(hub.bpmn)
         hub.bpmn.ready = True
@@ -296,7 +337,7 @@ class AgentBPMN(BaseAgent):
     # ── Post-extraction rule enforcement ─────────────────────────────────────
 
     @staticmethod
-    def _enforce_rules(model: BPMNModel) -> None:
+    def _enforce_rules(model: BPMNModel, nlp_actors: list | None = None) -> None:
         """
         Deterministic post-processing. Mutates the model in-place.
 
@@ -331,7 +372,7 @@ class AgentBPMN(BaseAgent):
         lane_replacement: dict[str, str] = {}
         for lane_name in list(model.lanes):
             if lane_name.lower().strip() in _GENERIC_LANE_NAMES:
-                candidate = _infer_lane_name(lane_name, model)
+                candidate = _infer_lane_name(lane_name, model, nlp_actors)
                 if candidate and candidate != lane_name:
                     lane_replacement[lane_name] = candidate
 
@@ -371,7 +412,14 @@ class AgentBPMN(BaseAgent):
             if edge.target in incoming:
                 incoming[edge.target].append(edge.source)
 
-        gateway_ids = {s.id for s in model.steps if s.is_decision}
+        _ALL_GW_TYPES = {
+            "exclusiveGateway", "parallelGateway", "inclusiveGateway",
+            "eventBasedGateway", "complexGateway", "gateway",
+        }
+        gateway_ids = {
+            s.id for s in model.steps
+            if s.is_decision or s.task_type in _ALL_GW_TYPES
+        }
 
         for edge in model.edges:
             if edge.target not in gateway_ids:
@@ -607,8 +655,11 @@ class AgentBPMN(BaseAgent):
             else:
                 lines.append(f'    {step.id}["{label}"]')
         for edge in model.edges:
-            arrow = f"-- {edge.label} -->" if edge.label else "-->"
-            lines.append(f"    {edge.source} {arrow} {edge.target}")
+            if edge.label:
+                safe = edge.label.replace('"', "'").replace("|", "/")
+                lines.append(f"    {edge.source} -->|{safe}| {edge.target}")
+            else:
+                lines.append(f"    {edge.source} --> {edge.target}")
         for step in model.steps:
             if step.is_decision:
                 lines.append(f"    style {step.id} fill:#fff3cd,stroke:#f59e0b")
@@ -632,10 +683,13 @@ class AgentBPMN(BaseAgent):
                 else:
                     lines.append(f'        {sid}["{label}"]')
             for edge in pm.edges:
-                src   = prefix + edge.source
-                tgt   = prefix + edge.target
-                arrow = f"-- {edge.label} -->" if edge.label else "-->"
-                lines.append(f"        {src} {arrow} {tgt}")
+                src = prefix + edge.source
+                tgt = prefix + edge.target
+                if edge.label:
+                    safe = edge.label.replace('"', "'").replace("|", "/")
+                    lines.append(f"        {src} -->|{safe}| {tgt}")
+                else:
+                    lines.append(f"        {src} --> {tgt}")
             lines.append("    end")
 
         # Message flows as dashed arrows

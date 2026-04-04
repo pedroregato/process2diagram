@@ -566,8 +566,6 @@ def _assign_columns(order, flows):
 
     Returns dict {element_id: column_index}
     """
-    import re as _re
-
     id_set   = set(order)
     preds_of = {eid: [] for eid in order}
     for f in flows:
@@ -578,6 +576,59 @@ def _assign_columns(order, flows):
     for eid in order:
         preds = [p for p in preds_of[eid] if p in col]
         col[eid] = (max(col[p] for p in preds) + 1) if preds else 0
+
+    return col
+
+
+def _align_parallel_branches(col: dict, flows: list) -> dict:
+    """
+    Post-pass alignment for parallel branches of unequal length.
+
+    Problem: when a parallel split has branches with different numbers of
+    steps, the shorter branch finishes several columns before the join
+    gateway.  bpmn-js then draws a long diagonal arrow from the short
+    branch's terminal step to the join, spanning empty column slots and
+    making the diagram visually confusing.
+
+    Fix: for each node that is the *terminal step* of a branch (its only
+    successor is a join gateway with ≥2 incoming edges), snap its column
+    to join_col − 1 when it currently sits further left.
+
+    Safety conditions (all must hold before moving a node):
+      - The node has exactly one successor (the join) — so moving it right
+        cannot violate ordering with other downstream nodes.
+      - The node's natural column is strictly less than join_col − 1.
+      - Moving the node does not place it before any of its own predecessors
+        (col[node] stays > max(col[pred])).
+
+    The function mutates `col` in-place and returns it.
+    """
+    id_set = set(col.keys())
+    succs: dict[str, list[str]] = {eid: [] for eid in id_set}
+    preds: dict[str, list[str]] = {eid: [] for eid in id_set}
+    for f in flows:
+        if f.source in id_set and f.target in id_set:
+            succs[f.source].append(f.target)
+            preds[f.target].append(f.source)
+
+    # Identify join nodes: more than one incoming edge
+    joins = {eid for eid in id_set if len(preds[eid]) > 1}
+
+    for join_id in joins:
+        join_col = col[join_id]
+        target_col = join_col - 1
+        for pred_id in preds[join_id]:
+            if col[pred_id] >= target_col:
+                continue                    # already aligned
+            if len(succs[pred_id]) != 1:
+                continue                    # feeds other nodes too — don't touch
+            # Ensure the move doesn't place pred before any of its own preds
+            own_pred_max = max(
+                (col[p] for p in preds[pred_id] if p in col), default=-1
+            )
+            if target_col <= own_pred_max:
+                continue                    # would violate topological order
+            col[pred_id] = target_col
 
     return col
 
@@ -607,6 +658,7 @@ def _compute_layout(bpmn, lane_assignment):
 
         # ── Step 1: assign global columns ─────────────────────────────────────
         col_of = _assign_columns(order, bpmn.flows)
+        col_of = _align_parallel_branches(col_of, bpmn.flows)
 
         # Fix lnk_catch_N columns: catch events have no incoming flows so
         # _assign_columns gives them col=0.  Place them at the same column as

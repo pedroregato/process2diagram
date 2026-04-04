@@ -13,6 +13,31 @@ def render_bpmn(hub, prefix, suffix):
         components.html(bpmn_html, height=800, scrolling=False)
         if hub.bpmn.lanes:
             st.markdown("**Lanes:** " + ", ".join(hub.bpmn.lanes))
+
+        # ── Structural validation panel ────────────────────────────────────
+        try:
+            from modules.bpmn_structural_validator import validate_bpmn_structure
+            issues = validate_bpmn_structure(hub.bpmn)
+            if issues:
+                errors   = [i for i in issues if i.severity == "error"]
+                warnings = [i for i in issues if i.severity == "warning"]
+                infos    = [i for i in issues if i.severity == "info"]
+                label = (
+                    f"🔴 {len(errors)} erro(s)" if errors else
+                    f"🟡 {len(warnings)} aviso(s)" if warnings else
+                    f"🔵 {len(infos)} info(s)"
+                )
+                with st.expander(f"Diagnóstico estrutural — {label}", expanded=bool(errors)):
+                    for i in errors:
+                        st.error(f"`{i.element_id or '—'}` {i.message}")
+                    for i in warnings:
+                        st.warning(f"`{i.element_id or '—'}` {i.message}")
+                    for i in infos:
+                        st.info(f"`{i.element_id or '—'}` {i.message}")
+            else:
+                st.caption("✅ Nenhum problema estrutural detectado.")
+        except Exception:
+            pass
     else:
         st.warning("BPMN XML not available")
 
