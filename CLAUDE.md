@@ -50,7 +50,7 @@ process2diagram/
 │
 ├── agents/
 │   ├── base_agent.py             # Abstract base — LLM routing, JSON retry, token tracking
-│   ├── orchestrator.py           # Sequences all agents; accepts progress_callback
+│   ├── orchestrator.py           # Sequences all agents; Minutes+Requirements run in parallel via ThreadPoolExecutor
 │   ├── nlp_chunker.py            # Pure Python/spaCy preprocessor — no LLM
 │   ├── agent_transcript_quality.py  # Transcript quality gate (grade A–E, criteria)
 │   ├── agent_bpmn.py             # BPMN extraction + _enforce_rules() + generators
@@ -200,6 +200,20 @@ class KnowledgeHub:
 **Schema evolution:** `KnowledgeHub.migrate(hub)` is the single point for backward-compatibility fixes when fields are added. Always add new field guards here instead of scattered `hasattr` checks in `app.py`.
 
 **Golden rule:** never instantiate an agent directly from `app.py`. Always go through `Orchestrator` (via `run_pipeline`) or `handle_rerun`.
+
+### Orchestrator parallel execution
+
+When both `run_minutes=True` and `run_requirements=True`, `Orchestrator._run_minutes_requirements_parallel()` runs both agents concurrently via `ThreadPoolExecutor(max_workers=2)`.
+
+**Why ThreadPoolExecutor, not asyncio?** Streamlit's synchronous run model is incompatible with `asyncio.gather()`. CPython's threading module works correctly inside a Streamlit session.
+
+**Race-condition isolation:** each worker receives `copy.copy(hub)` with `meta = copy.copy(hub.meta)` and `meta.agents_run = list(...)`. Minutes and Requirements each write only to their own section of the hub. No hub field is written by both workers.
+
+**Token merge:** both copies start from `tokens_base = hub.meta.total_tokens_used`. After join: `hub.meta.total_tokens_used += delta_m + delta_r`.
+
+**Thread-safe progress:** `Orchestrator._progress(name, status)` acquires `threading.Lock()` before calling the raw callback — prevents concurrent Streamlit placeholder writes.
+
+**Automatic fallback:** if `ThreadPoolExecutor` raises any exception, execution falls back to sequential Minutes → Requirements with a `(sequencial)` status label.
 
 ### Agent Pattern
 
@@ -688,9 +702,10 @@ API keys are stored exclusively in `st.session_state` (server-side, per-session 
 - [x] `modules/bpmn_structural_validator.py` — 6 verificações estruturais (dangling refs, isolated/unreachable nodes, XOR sem labels, AND/OR sem join, gateway com saída única)
 - [x] Diagnóstico estrutural exibido no tab BPMN como expander com severidade (error/warning/info)
 - [x] `_align_parallel_branches` no gerador de layout — elimina setas longas em branches paralelas desiguais
+- [x] `AgentMinutes` + `AgentRequirements` executados em paralelo via `ThreadPoolExecutor` — hub shallow-copied com `meta` isolado por worker; deltas de token mergeados; fallback automático para sequencial; `threading.Lock` protege o progress callback
 
 ### PC3 — Planejado
-- [ ] Parallel agent execution with `asyncio.gather()` in the Orchestrator
+- [ ] `AgentSBVR` and `AgentBMM` for semantic business modeling
 - [ ] `AgentSBVR` and `AgentBMM` for semantic business modeling
 - [ ] LangGraph integration for conditional re-routing on validation failures
 - [ ] Suite de testes automatizados por cenário
