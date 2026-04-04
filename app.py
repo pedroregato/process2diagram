@@ -1,4 +1,4 @@
-# app.py (modular)
+# app.py
 import streamlit as st
 from core.session_state import init_session_state
 from ui.sidebar import render_sidebar
@@ -13,18 +13,29 @@ from ui.tabs import (
 from services.export_service import make_filename
 from modules.session_security import get_session_llm_client
 
+# Configuração da página (sempre primeiro)
 st.set_page_config(page_title="Process2Diagram", layout="wide")
+
+# Inicialização segura do session_state
 init_session_state()
 
+# Sidebar (sempre visível)
 render_sidebar()
+
+# Área de entrada e curadoria
 start_process = render_input_area()
 
+# Verificação de API key
 if not get_session_llm_client(st.session_state.selected_provider):
-    st.warning("👈 Enter API key.")
+    st.warning("👈 Enter your API key in the sidebar.")
     st.stop()
 
+# Placeholder para progresso
 progress_placeholder = st.empty()
 
+# ──────────────────────────────────────────────────────────────────────────────
+# PIPELINE PRINCIPAL
+# ──────────────────────────────────────────────────────────────────────────────
 if start_process and st.session_state.transcript_text.strip():
     if not any([st.session_state.run_quality, st.session_state.run_bpmn,
                 st.session_state.run_minutes, st.session_state.run_requirements,
@@ -66,11 +77,39 @@ if start_process and st.session_state.transcript_text.strip():
     try:
         hub = run_pipeline(hub, config, update_progress)
         st.session_state.hub = hub
-        progress_placeholder.success(f"✅ Pipeline done. Tokens: {hub.meta.total_tokens_used}")
+        progress_placeholder.success(f"✅ Pipeline concluído. Tokens: {hub.meta.total_tokens_used}")
     except Exception as e:
-        progress_placeholder.error(f"Error: {e}")
+        progress_placeholder.error(f"Erro no pipeline: {e}")
         st.stop()
 
+# ──────────────────────────────────────────────────────────────────────────────
+# REEXECUÇÃO DE AGENTES (botões no corpo principal)
+# ──────────────────────────────────────────────────────────────────────────────
+if "hub" in st.session_state:
+    st.markdown("---")
+    st.markdown("### 🔄 Re‑executar Agentes")
+    st.caption("Execute novamente um agente individualmente (sobrescreve o resultado anterior).")
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        if st.button("🔬 Qualidade", key="rr_quality_body"):
+            st.session_state.rerun_agent = "quality"
+    with col2:
+        if st.button("📐 BPMN", key="rr_bpmn_body"):
+            st.session_state.rerun_agent = "bpmn"
+    with col3:
+        if st.button("📋 Ata", key="rr_minutes_body"):
+            st.session_state.rerun_agent = "minutes"
+    with col4:
+        if st.button("📝 Requisitos", key="rr_req_body"):
+            st.session_state.rerun_agent = "requirements"
+    with col5:
+        if st.button("📄 Relatório", key="rr_synth_body"):
+            st.session_state.rerun_agent = "synthesizer"
+    st.markdown("---")
+
+# ──────────────────────────────────────────────────────────────────────────────
+# HANDLER DE REEXECUÇÃO (deve vir após os botões)
+# ──────────────────────────────────────────────────────────────────────────────
 if "rerun_agent" in st.session_state:
     agent = st.session_state.pop("rerun_agent")
     hub = st.session_state.get("hub")
@@ -78,39 +117,58 @@ if "rerun_agent" in st.session_state:
         client_info = get_session_llm_client(st.session_state.selected_provider)
         if client_info:
             try:
-                hub = handle_rerun(agent, hub, client_info, st.session_state.provider_cfg, st.session_state.output_language)
+                hub = handle_rerun(agent, hub, client_info,
+                                   st.session_state.provider_cfg,
+                                   st.session_state.output_language)
                 st.session_state.hub = hub
-                st.success(f"✅ {agent.capitalize()} re-run done.")
+                st.success(f"✅ {agent.capitalize()} re‑executado com sucesso.")
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"Erro na reexecução: {e}")
         else:
-            st.error("API key missing.")
+            st.error("Chave de API não encontrada.")
     else:
-        st.error("No active session.")
+        st.error("Nenhuma sessão ativa. Execute o pipeline primeiro.")
 
+# ──────────────────────────────────────────────────────────────────────────────
+# EXIBIÇÃO DOS RESULTADOS (abas)
+# ──────────────────────────────────────────────────────────────────────────────
 if "hub" in st.session_state:
     hub = st.session_state.hub
     prefix = st.session_state.prefix
     suffix = st.session_state.suffix
 
+    # Define quais abas mostrar
     tabs_to_show = []
-    if hub.transcript_quality.ready: tabs_to_show.append("quality")
+    if hub.transcript_quality.ready:
+        tabs_to_show.append("quality")
     if hub.bpmn.ready:
         tabs_to_show.append("bpmn")
         tabs_to_show.append("mermaid")
         if hub.validation.ready and hub.validation.n_bpmn_runs > 1:
             tabs_to_show.append("validation")
-    if hub.minutes.ready: tabs_to_show.append("minutes")
-    if hub.requirements.ready: tabs_to_show.append("requirements")
-    if hub.synthesizer.ready: tabs_to_show.append("synthesizer")
+    if hub.minutes.ready:
+        tabs_to_show.append("minutes")
+    if hub.requirements.ready:
+        tabs_to_show.append("requirements")
+    if hub.synthesizer.ready:
+        tabs_to_show.append("synthesizer")
     tabs_to_show.append("export")
-    if st.session_state.show_dev_tools: tabs_to_show.append("devtools")
+    if st.session_state.show_dev_tools:
+        tabs_to_show.append("devtools")
 
+    # Rótulos das abas
     tab_labels = {
-        "quality": "🔬 Quality", "bpmn": "📐 BPMN", "mermaid": "📊 Mermaid",
-        "validation": "🏆 Validation", "minutes": "📋 Minutes", "requirements": "📝 Requirements",
-        "synthesizer": "📄 Report", "export": "📦 Export", "devtools": "🔍 Dev"
+        "quality": "🔬 Qualidade",
+        "bpmn": "📐 BPMN 2.0",
+        "mermaid": "📊 Mermaid",
+        "validation": "🏆 Validação BPMN",
+        "minutes": "📋 Ata de Reunião",
+        "requirements": "📝 Requisitos",
+        "synthesizer": "📄 Relatório Executivo",
+        "export": "📦 Exportar",
+        "devtools": "🔍 Dev Tools"
     }
+
     tabs = st.tabs([tab_labels[t] for t in tabs_to_show])
     for idx, tab_id in enumerate(tabs_to_show):
         with tabs[idx]:
@@ -133,5 +191,6 @@ if "hub" in st.session_state:
             elif tab_id == "devtools":
                 render_dev_tools(hub, st.session_state.show_raw_json)
 
+# Rodapé
 st.markdown("---")
-st.markdown("Process2Diagram v4.6 — Modular Architecture")
+st.markdown("Process2Diagram v4.6 — Arquitetura Multi‑Agente Modular", unsafe_allow_html=True)
