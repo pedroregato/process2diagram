@@ -181,9 +181,10 @@ class AgentBPMN(BaseAgent):
         self._enforce_rules(hub.bpmn, getattr(hub.nlp, "actors", None))
         try:
             from modules.bpmn_auto_repair import repair_bpmn
-            repair_bpmn(hub.bpmn)
+            report = repair_bpmn(hub.bpmn)
+            hub.bpmn.repair_log = report.repairs
         except Exception:
-            pass
+            hub.bpmn.repair_log = []
         hub.bpmn.mermaid  = self._generate_mermaid(hub.bpmn)
         hub.bpmn.bpmn_xml = self._generate_bpmn_xml(hub.bpmn)
         hub.bpmn.ready = True
@@ -644,73 +645,8 @@ class AgentBPMN(BaseAgent):
 
     @staticmethod
     def _generate_mermaid(model: BPMNModel) -> str:
-        if model.is_collaboration:
-            return AgentBPMN._generate_mermaid_multi(model)
-        return AgentBPMN._generate_mermaid_single(model)
-
-    @staticmethod
-    def _generate_mermaid_single(model: BPMNModel) -> str:
-        lines = ["flowchart TD"]
-        for step in model.steps:
-            label = step.title.replace('"', "'")
-            if step.is_decision:
-                lines.append(f'    {step.id}{{"{label}"}}')
-            elif step.task_type in _EVENT_TASK_TYPE_MAP:
-                lines.append(f'    {step.id}(("{label}"))')
-            else:
-                lines.append(f'    {step.id}["{label}"]')
-        for edge in model.edges:
-            if edge.label:
-                safe = edge.label.replace('"', "'").replace("|", "/")
-                lines.append(f"    {edge.source} -->|{safe}| {edge.target}")
-            else:
-                lines.append(f"    {edge.source} --> {edge.target}")
-        for step in model.steps:
-            if step.is_decision:
-                lines.append(f"    style {step.id} fill:#fff3cd,stroke:#f59e0b")
-        return "\n".join(lines)
-
-    @staticmethod
-    def _generate_mermaid_multi(model: BPMNModel) -> str:
-        lines = ["flowchart TD"]
-
-        for i, pm in enumerate(model.pool_models):
-            prefix    = f"p{i + 1}_"
-            pool_name = pm.name.replace('"', "'")
-            lines.append(f'    subgraph {prefix}pool["{pool_name}"]')
-            for step in pm.steps:
-                sid   = prefix + step.id
-                label = step.title.replace('"', "'")
-                if step.is_decision:
-                    lines.append(f'        {sid}{{"{label}"}}')
-                elif step.task_type in _EVENT_TASK_TYPE_MAP:
-                    lines.append(f'        {sid}(("{label}"))')
-                else:
-                    lines.append(f'        {sid}["{label}"]')
-            for edge in pm.edges:
-                src = prefix + edge.source
-                tgt = prefix + edge.target
-                if edge.label:
-                    safe = edge.label.replace('"', "'").replace("|", "/")
-                    lines.append(f"        {src} -->|{safe}| {tgt}")
-                else:
-                    lines.append(f"        {src} --> {tgt}")
-            lines.append("    end")
-
-        # Message flows as dashed arrows
-        pool_prefix: dict[str, str] = {
-            pm.pool_id: f"p{i + 1}_"
-            for i, pm in enumerate(model.pool_models)
-        }
-        for mf in model.message_flows_data:
-            src_pfx = pool_prefix.get(mf.source_pool, "p1_")
-            tgt_pfx = pool_prefix.get(mf.target_pool, "p2_")
-            src_id  = _resolve_mf_step(mf.source_step, src_pfx, "throw")
-            tgt_id  = _resolve_mf_step(mf.target_step, tgt_pfx, "catch")
-            label   = mf.name or "msg"
-            lines.append(f"    {src_id} -. {label} .-> {tgt_id}")
-
-        return "\n".join(lines)
+        from agents.agent_mermaid import MermaidGenerator
+        return MermaidGenerator.generate(model)
 
 
 # ── Pool builder helpers (module-level for readability) ───────────────────────

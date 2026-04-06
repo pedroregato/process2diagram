@@ -1,18 +1,35 @@
 # agents/agent_mermaid.py
 # ─────────────────────────────────────────────────────────────────────────────
-# Mermaid Diagram Generator for BPMN processes
-# Handles sanitization and generation of Mermaid flowchart syntax
+# MermaidGenerator — pure-Python Mermaid flowchart generator, no LLM.
+#
+# Handles both single-pool and multi-pool (collaboration) BPMNModels.
+# Used by:
+#   - agent_bpmn.py   → stores hub.bpmn.mermaid during extraction
+#   - export_tab.py   → generate_mermaid(hub.bpmn) for .mmd download
+#   - bpmn_tabs.py    → render_mermaid_block(hub.bpmn.mermaid)
 # ─────────────────────────────────────────────────────────────────────────────
 
 import re
-from typing import Optional, List, Dict, Any
+from typing import Optional
 from core.knowledge_hub import BPMNModel, BPMNStep, BPMNEdge
 
 
-class MermaidGenerator:
-    """Gera diagramas Mermaid a partir de modelos BPMN."""
+# Event task_type values → rendered as stadium shape (("label"))
+_EVENT_TASK_TYPES = {
+    "noneStartEvent", "startMessageEvent", "startTimerEvent",
+    "noneEndEvent", "endMessageEvent", "errorEndEvent",
+    "intermediateTimerCatchEvent", "intermediateMessageCatchEvent",
+    "intermediateMessageThrowEvent",
+    # Legacy / generic aliases the LLM sometimes emits
+    "startEvent", "endEvent", "start", "end",
+}
 
-    # Mapeamento de caracteres acentuados para seus equivalentes ASCII
+
+class MermaidGenerator:
+    """Generates Mermaid flowchart syntax from a BPMNModel."""
+
+    # ── Character maps ────────────────────────────────────────────────────────
+
     ACENTOS_MAP = {
         'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a', 'ä': 'a',
         'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
@@ -25,145 +42,119 @@ class MermaidGenerator:
         'Í': 'I', 'Ì': 'I', 'Î': 'I', 'Ï': 'I',
         'Ó': 'O', 'Ò': 'O', 'Õ': 'O', 'Ô': 'O', 'Ö': 'O',
         'Ú': 'U', 'Ù': 'U', 'Û': 'U', 'Ü': 'U',
-        'Ç': 'C', 'Ñ': 'N'
+        'Ç': 'C', 'Ñ': 'N',
     }
-
-    # Caracteres proibidos no Mermaid (serão substituídos por espaço)
     PROIBIDOS_PATTERN = r'[()\[\]{}/\\:;|<>]'
+
+    # ── Public API ────────────────────────────────────────────────────────────
+
+    @classmethod
+    def generate(cls, model: BPMNModel, direction: str = "TD") -> str:
+        """
+        Generate a complete Mermaid flowchart string from *model*.
+
+        Args:
+            model:     BPMNModel (single-pool or collaboration).
+            direction: Mermaid direction — "TD" (top-down) or "LR" (left-right).
+                       mermaid_renderer.py fetches both anyway, so this only
+                       affects the initial/default orientation.
+        """
+        if model.is_collaboration and model.pool_models:
+            return cls._generate_multi(model, direction)
+        return cls._generate_single(model, direction)
+
+    # ── Formatters (usable standalone) ───────────────────────────────────────
 
     @classmethod
     def sanitize_text(cls, text: Optional[str]) -> str:
-        """
-        Remove/replace characters that break Mermaid syntax.
-
-        Args:
-            text: Texto a ser sanitizado
-
-        Returns:
-            Texto sanitizado ou "Step" se vazio
-        """
+        """Remove/replace characters that break Mermaid syntax."""
         if not text:
             return "Step"
-
-        # 1. Substitui caracteres acentuados
-        for acento, sem_acento in cls.ACENTOS_MAP.items():
-            text = text.replace(acento, sem_acento)
-
-        # 2. Substitui aspas duplas por simples
+        for acento, sem in cls.ACENTOS_MAP.items():
+            text = text.replace(acento, sem)
         text = text.replace('"', "'")
-
-        # 3. Remove caracteres proibidos (substitui por espaço)
         text = re.sub(cls.PROIBIDOS_PATTERN, " ", text)
-
-        # 4. Remove espaços múltiplos
         text = re.sub(r' {2,}', " ", text)
-
-        # 5. Remove espaços no início e fim
-        text = text.strip()
-
-        return text or "Step"
+        return text.strip() or "Step"
 
     @classmethod
-    def needs_quotes(cls, text: str) -> bool:
-        """
-        Verifica se um texto precisa de aspas no Mermaid.
-
-        Args:
-            text: Texto a ser verificado
-
-        Returns:
-            True se precisa de aspas, False caso contrário
-        """
-        if not text:
-            return False
-
-        # Precisa de aspas se contém espaços
-        if ' ' in text:
-            return True
-
-        # Precisa de aspas se começa com número
-        if text and text[0].isdigit():
-            return True
-
-        # Precisa de aspas se contém pontuação
-        if any(c in text for c in '.,;:!@#$%&*()[]{}'):
-            return True
-
-        return False
-
-    @classmethod
-    def format_node(cls, step: BPMNStep) -> str:
-        """
-        Formata um nó do diagrama Mermaid.
-
-        Args:
-            step: BPMNStep a ser formatado
-
-        Returns:
-            Linha Mermaid para o nó
-        """
-        node_id = step.id
-        label = cls.sanitize_text(step.title)
-
+    def format_node(cls, step: BPMNStep, id_prefix: str = "",
+                    indent: str = "    ") -> str:
+        """Format a single BPMN step as a Mermaid node line."""
+        node_id = id_prefix + step.id
+        label   = cls.sanitize_text(step.title)
         if step.is_decision:
-            # Nó de decisão: usa chaves — aspas obrigatórias para labels com espaço/acento
-            return f'    {node_id}{{"{label}"}}'
-        else:
-            # Nó de tarefa: usa colchetes — aspas obrigatórias para labels com espaço/acento
-            return f'    {node_id}["{label}"]'
+            return f'{indent}{node_id}{{"{label}"}}'
+        if step.task_type in _EVENT_TASK_TYPES:
+            return f'{indent}{node_id}(("{label}"))'
+        return f'{indent}{node_id}["{label}"]'
 
     @classmethod
-    def format_edge(cls, edge: BPMNEdge) -> str:
-        """
-        Formata uma aresta do diagrama Mermaid.
-
-        Args:
-            edge: BPMNEdge a ser formatada
-
-        Returns:
-            Linha Mermaid para a aresta
-        """
-        source = edge.source
-        target = edge.target
-
+    def format_edge(cls, edge: BPMNEdge, src_prefix: str = "",
+                    tgt_prefix: str = "", indent: str = "    ") -> str:
+        """Format a single BPMN edge as a Mermaid arrow line."""
+        source = src_prefix + edge.source
+        target = tgt_prefix + edge.target
         if edge.label:
-            safe_label = cls.sanitize_text(edge.label)
-            if safe_label:
-                # Pipe syntax -->|label| is canonical Mermaid — no quotes needed
-                return f'    {source} -->|{safe_label}| {target}'
+            safe = cls.sanitize_text(edge.label)
+            if safe and safe != "Step":
+                return f'{indent}{source} -->|{safe}| {target}'
+        return f'{indent}{source} --> {target}'
 
-        return f'    {source} --> {target}'
+    # ── Internal generators ───────────────────────────────────────────────────
 
     @classmethod
-    def generate(cls, model: BPMNModel) -> str:
-        """
-        Gera um diagrama Mermaid completo a partir de um modelo BPMN.
-
-        Args:
-            model: BPMNModel com steps e edges
-
-        Returns:
-            String com a sintaxe Mermaid do diagrama
-        """
-        lines = ["flowchart LR"]
-
-        # Adiciona nós (steps)
+    def _generate_single(cls, model: BPMNModel, direction: str) -> str:
+        lines = [f"flowchart {direction}"]
         for step in model.steps:
             lines.append(cls.format_node(step))
-
-        # Adiciona arestas (edges)
         for edge in model.edges:
             lines.append(cls.format_edge(edge))
+        for step in model.steps:
+            if step.is_decision:
+                lines.append(f"    style {step.id} fill:#fff3cd,stroke:#f59e0b")
+        return "\n".join(lines)
 
-        # Adiciona estilo para nós de decisão
-        decision_ids = [s.id for s in model.steps if s.is_decision]
-        for did in decision_ids:
-            lines.append(f'    style {did} fill:#fff3cd,stroke:#f59e0b')
+    @classmethod
+    def _generate_multi(cls, model: BPMNModel, direction: str) -> str:
+        lines = [f"flowchart {direction}"]
+
+        pool_prefix: dict[str, str] = {}
+        for i, pm in enumerate(model.pool_models):
+            prefix = f"p{i + 1}_"
+            pool_prefix[pm.pool_id] = prefix
+            pool_name = cls.sanitize_text(pm.name)
+            lines.append(f'    subgraph {prefix}pool["{pool_name}"]')
+            for step in pm.steps:
+                lines.append(cls.format_node(step, id_prefix=prefix, indent="        "))
+            for edge in pm.edges:
+                lines.append(cls.format_edge(
+                    edge, src_prefix=prefix, tgt_prefix=prefix, indent="        "))
+            lines.append("    end")
+
+        # Cross-pool message flows as dashed arrows
+        for mf in model.message_flows_data:
+            src_pfx = pool_prefix.get(mf.source_pool, "p1_")
+            tgt_pfx = pool_prefix.get(mf.target_pool, "p2_")
+            src_id  = cls._resolve_mf_step(mf.source_step, src_pfx)
+            tgt_id  = cls._resolve_mf_step(mf.target_step, tgt_pfx)
+            label   = mf.name or "msg"
+            lines.append(f"    {src_id} -. {label} .-> {tgt_id}")
 
         return "\n".join(lines)
 
+    @staticmethod
+    def _resolve_mf_step(step_ref: str, prefix: str) -> str:
+        """Resolve a message-flow step reference to a prefixed element ID."""
+        if step_ref in ("start", "ev_start"):
+            return prefix + "ev_start"
+        if step_ref in ("end", "ev_end"):
+            return prefix + "ev_end"
+        return prefix + step_ref
 
-# Função de conveniência para uso direto
+
+# ── Module-level convenience function (kept for backward compatibility) ───────
+
 def generate_mermaid(model: BPMNModel) -> str:
-    """Gera diagrama Mermaid a partir de um modelo BPMN."""
+    """Generate a Mermaid flowchart string from a BPMNModel."""
     return MermaidGenerator.generate(model)

@@ -38,6 +38,12 @@ def render_bpmn(hub, prefix, suffix):
                 st.caption("✅ Nenhum problema estrutural detectado.")
         except Exception:
             pass
+
+        repair_log = getattr(hub.bpmn, 'repair_log', [])
+        if repair_log:
+            with st.expander(f"🔧 {len(repair_log)} auto-repair(s) applied", expanded=False):
+                for entry in repair_log:
+                    st.caption(f"• {entry}")
     else:
         st.warning("BPMN XML not available")
 

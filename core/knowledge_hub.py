@@ -92,6 +92,7 @@ class BPMNModel:
     bpmn_xml: str = ""            # OMG BPMN 2.0 XML
     mermaid: str = ""
     ready: bool = False
+    repair_log: list[str] = field(default_factory=list)  # repairs from bpmn_auto_repair
     # Multi-pool (collaboration) — populated when LLM returns pools format
     is_collaboration: bool = False
     pool_models: list[BPMNPoolData] = field(default_factory=list)
@@ -361,6 +362,10 @@ class KnowledgeHub:
             hub.validation.bpmn_candidates = []
         if not hasattr(hub.validation, 'n_bpmn_runs'):
             hub.validation.n_bpmn_runs = 1
+
+        # ── v4.8: repair_log added to BPMNModel ──────────────────────────────────
+        if not hasattr(hub.bpmn, 'repair_log'):
+            hub.bpmn.repair_log = []
 
         # ── v4.7: structural score fields added to BPMNValidationScore ──────────
         for score_obj in [hub.validation.bpmn_score] + list(hub.validation.bpmn_candidates):
