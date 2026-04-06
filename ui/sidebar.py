@@ -48,6 +48,8 @@ def render_sidebar():
                     }
         st.session_state.run_minutes = st.checkbox("Meeting Minutes", value=st.session_state.run_minutes)
         st.session_state.run_requirements = st.checkbox("Requirements", value=st.session_state.run_requirements)
+        st.session_state.run_sbvr = st.checkbox("Business Vocabulary & Rules (SBVR)", value=st.session_state.run_sbvr)
+        st.session_state.run_bmm = st.checkbox("Business Motivation Model (BMM)", value=st.session_state.run_bmm)
         st.session_state.run_synthesizer = st.checkbox("Executive Report", value=st.session_state.run_synthesizer)
 
         st.markdown("---")

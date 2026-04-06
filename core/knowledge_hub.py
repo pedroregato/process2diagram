@@ -261,6 +261,74 @@ class ValidationReport:
         return [i for i in self.issues if i.severity == "warning"]
 
 
+# ── SBVR Model ───────────────────────────────────────────────────────────────
+
+@dataclass
+class BusinessTerm:
+    """A business vocabulary term extracted by AgentSBVR."""
+    term: str
+    definition: str
+    category: str = "concept"   # concept | fact_type | role | process
+
+
+@dataclass
+class BusinessRule:
+    """A business rule extracted by AgentSBVR."""
+    id: str
+    statement: str
+    rule_type: str = "constraint"   # constraint | operational | behavioral | structural
+    source: str = ""                # participant initials who stated it
+
+
+@dataclass
+class SBVRModel:
+    """Output of AgentSBVR — business vocabulary + rules."""
+    domain: str = ""
+    vocabulary: list[BusinessTerm] = field(default_factory=list)
+    rules: list[BusinessRule] = field(default_factory=list)
+    ready: bool = False
+
+
+# ── BMM Model ─────────────────────────────────────────────────────────────────
+
+@dataclass
+class BMMGoal:
+    """A business goal extracted by AgentBMM."""
+    id: str
+    name: str
+    description: str = ""
+    goal_type: str = "strategic"   # strategic | tactical | operational
+    horizon: str = "medium"        # short | medium | long
+
+
+@dataclass
+class BMMStrategy:
+    """A business strategy extracted by AgentBMM."""
+    id: str
+    name: str
+    description: str = ""
+    supports: list[str] = field(default_factory=list)   # goal ids
+
+
+@dataclass
+class BMMPolicy:
+    """A business policy extracted by AgentBMM."""
+    id: str
+    statement: str
+    category: str = ""   # governance | compliance | operational | financial
+
+
+@dataclass
+class BMMModel:
+    """Output of AgentBMM — business motivation model."""
+    vision: str = ""
+    mission: str = ""
+    goals: list[BMMGoal] = field(default_factory=list)
+    strategies: list[BMMStrategy] = field(default_factory=list)
+    policies: list[BMMPolicy] = field(default_factory=list)
+    ready: bool = False
+
+
 # ── Session Metadata ──────────────────────────────────────────────────────────
 
 @dataclass
@@ -298,6 +366,8 @@ class KnowledgeHub:
     bpmn: BPMNModel = field(default_factory=BPMNModel)
     minutes: MinutesModel = field(default_factory=MinutesModel)
     requirements: RequirementsModel = field(default_factory=RequirementsModel)
+    sbvr: SBVRModel = field(default_factory=SBVRModel)
+    bmm: BMMModel = field(default_factory=BMMModel)
     validation: ValidationReport = field(default_factory=ValidationReport)
     synthesizer: SynthesizerModel = field(default_factory=SynthesizerModel)
     meta: SessionMetadata = field(default_factory=SessionMetadata)
@@ -362,6 +432,12 @@ class KnowledgeHub:
             hub.validation.bpmn_candidates = []
         if not hasattr(hub.validation, 'n_bpmn_runs'):
             hub.validation.n_bpmn_runs = 1
+
+        # ── v4.9: SBVRModel and BMMModel added to KnowledgeHub ───────────────────
+        if not hasattr(hub, 'sbvr'):
+            hub.sbvr = SBVRModel()
+        if not hasattr(hub, 'bmm'):
+            hub.bmm = BMMModel()
 
         # ── v4.8: repair_log added to BPMNModel ──────────────────────────────────
         if not hasattr(hub.bpmn, 'repair_log'):

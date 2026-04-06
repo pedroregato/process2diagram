@@ -18,6 +18,8 @@ def run_pipeline(hub, config, progress_callback):
     run_bpmn = config["run_bpmn"]
     run_minutes = config["run_minutes"]
     run_requirements = config["run_requirements"]
+    run_sbvr = config.get("run_sbvr", False)
+    run_bmm = config.get("run_bmm", False)
     run_synthesizer = config["run_synthesizer"]
     n_bpmn_runs = config["n_bpmn_runs"]
     bpmn_weights = config["bpmn_weights"]
@@ -58,6 +60,8 @@ def run_pipeline(hub, config, progress_callback):
                                run_bpmn=False,
                                run_minutes=run_minutes,
                                run_requirements=run_requirements,
+                               run_sbvr=run_sbvr,
+                               run_bmm=run_bmm,
                                run_synthesizer=run_synthesizer)
     else:
         hub = orchestrator.run(hub, output_lang,
@@ -65,5 +69,7 @@ def run_pipeline(hub, config, progress_callback):
                                run_bpmn=run_bpmn,
                                run_minutes=run_minutes,
                                run_requirements=run_requirements,
+                               run_sbvr=run_sbvr,
+                               run_bmm=run_bmm,
                                run_synthesizer=run_synthesizer)
     return hub

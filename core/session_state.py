@@ -25,6 +25,10 @@ def init_session_state():
         st.session_state.run_minutes = True
     if "run_requirements" not in st.session_state:
         st.session_state.run_requirements = True
+    if "run_sbvr" not in st.session_state:
+        st.session_state.run_sbvr = False
+    if "run_bmm" not in st.session_state:
+        st.session_state.run_bmm = False
     if "run_synthesizer" not in st.session_state:
         st.session_state.run_synthesizer = False
     if "n_bpmn_runs" not in st.session_state:

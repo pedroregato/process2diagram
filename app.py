@@ -7,8 +7,8 @@ from core.pipeline import run_pipeline
 from core.rerun_handlers import handle_rerun
 from ui.tabs import (
     render_quality, render_bpmn, render_mermaid, render_validation,
-    render_minutes, render_requirements, render_synthesizer,
-    render_export, render_dev_tools
+    render_minutes, render_requirements, render_sbvr, render_bmm,
+    render_synthesizer, render_export, render_dev_tools
 )
 from services.export_service import make_filename
 from modules.session_security import get_session_llm_client
@@ -63,6 +63,8 @@ if start_process and st.session_state.transcript_text.strip():
         "run_bpmn": st.session_state.run_bpmn,
         "run_minutes": st.session_state.run_minutes,
         "run_requirements": st.session_state.run_requirements,
+        "run_sbvr": st.session_state.run_sbvr,
+        "run_bmm": st.session_state.run_bmm,
         "run_synthesizer": st.session_state.run_synthesizer,
         "n_bpmn_runs": st.session_state.n_bpmn_runs,
         "bpmn_weights": st.session_state.bpmn_weights,
@@ -105,6 +107,13 @@ if "hub" in st.session_state:
     with col5:
         if st.button("📄 Relatório", key="rr_synth_body"):
             st.session_state.rerun_agent = "synthesizer"
+    col6, col7, _ = st.columns([1, 1, 3])
+    with col6:
+        if st.button("📖 SBVR", key="rr_sbvr_body"):
+            st.session_state.rerun_agent = "sbvr"
+    with col7:
+        if st.button("🎯 BMM", key="rr_bmm_body"):
+            st.session_state.rerun_agent = "bmm"
     st.markdown("---")
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -150,6 +159,10 @@ if "hub" in st.session_state:
         tabs_to_show.append("minutes")
     if hub.requirements.ready:
         tabs_to_show.append("requirements")
+    if hub.sbvr.ready:
+        tabs_to_show.append("sbvr")
+    if hub.bmm.ready:
+        tabs_to_show.append("bmm")
     if hub.synthesizer.ready:
         tabs_to_show.append("synthesizer")
     tabs_to_show.append("export")
@@ -164,6 +177,8 @@ if "hub" in st.session_state:
         "validation": "🏆 Validação BPMN",
         "minutes": "📋 Ata de Reunião",
         "requirements": "📝 Requisitos",
+        "sbvr": "📖 SBVR",
+        "bmm": "🎯 BMM",
         "synthesizer": "📄 Relatório Executivo",
         "export": "📦 Exportar",
         "devtools": "🔍 Dev Tools"
@@ -184,6 +199,10 @@ if "hub" in st.session_state:
                 render_minutes(hub, prefix, suffix)
             elif tab_id == "requirements":
                 render_requirements(hub, prefix, suffix)
+            elif tab_id == "sbvr":
+                render_sbvr(hub, prefix, suffix)
+            elif tab_id == "bmm":
+                render_bmm(hub, prefix, suffix)
             elif tab_id == "synthesizer":
                 render_synthesizer(hub, prefix, suffix)
             elif tab_id == "export":

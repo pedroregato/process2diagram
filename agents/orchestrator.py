@@ -35,6 +35,8 @@ from agents.nlp_chunker import NLPChunker
 from agents.agent_bpmn import AgentBPMN
 from agents.agent_minutes import AgentMinutes
 from agents.agent_requirements import AgentRequirements
+from agents.agent_sbvr import AgentSBVR
+from agents.agent_bmm import AgentBMM
 from agents.agent_synthesizer import AgentSynthesizer
 from agents.agent_transcript_quality import AgentTranscriptQuality
 from core.knowledge_hub import KnowledgeHub, PreprocessingModel, SessionMetadata
@@ -61,7 +63,7 @@ class Orchestrator:
     """
 
     _PLAN = ["transcript_quality", "preprocessing", "nlp", "bpmn",
-             "minutes", "requirements", "synthesizer"]
+             "minutes", "requirements", "sbvr", "bmm", "synthesizer"]
 
     def __init__(
         self,
@@ -80,6 +82,8 @@ class Orchestrator:
         self._agent_bpmn         = AgentBPMN(client_info, provider_cfg)
         self._agent_minutes      = AgentMinutes(client_info, provider_cfg)
         self._agent_requirements = AgentRequirements(client_info, provider_cfg)
+        self._agent_sbvr         = AgentSBVR(client_info, provider_cfg)
+        self._agent_bmm          = AgentBMM(client_info, provider_cfg)
         self._agent_synthesizer  = AgentSynthesizer(client_info, provider_cfg)
 
     # ── Thread-safe progress callback ─────────────────────────────────────────
@@ -99,6 +103,8 @@ class Orchestrator:
         run_bpmn: bool = True,
         run_minutes: bool = True,
         run_requirements: bool = True,
+        run_sbvr: bool = False,
+        run_bmm: bool = False,
         run_synthesizer: bool = False,
     ) -> KnowledgeHub:
         """
@@ -189,7 +195,27 @@ class Orchestrator:
                     self._progress("Agente Requisitos", f"error: {exc}")
                     raise RuntimeError(f"Requirements Agent failed: {exc}") from exc
 
-        # ── Step 5: Synthesizer Agent ─────────────────────────────────────────
+        # ── Step 5: SBVR Agent ────────────────────────────────────────────────
+        if run_sbvr:
+            self._progress("Agente SBVR", "running")
+            try:
+                hub = self._agent_sbvr.run(hub, output_language)
+                self._progress("Agente SBVR", "done")
+            except Exception as exc:
+                self._progress("Agente SBVR", f"error: {exc}")
+                hub.bump()
+
+        # ── Step 6: BMM Agent ─────────────────────────────────────────────────
+        if run_bmm:
+            self._progress("Agente BMM", "running")
+            try:
+                hub = self._agent_bmm.run(hub, output_language)
+                self._progress("Agente BMM", "done")
+            except Exception as exc:
+                self._progress("Agente BMM", f"error: {exc}")
+                hub.bump()
+
+        # ── Step 7: Synthesizer Agent ─────────────────────────────────────────
         if run_synthesizer:
             self._progress("Agente Sintetizador", "running")
             try:
