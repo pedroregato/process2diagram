@@ -82,6 +82,45 @@ class AgentSynthesizer(BaseAgent):
             if quality.recommendation:
                 qual_lines.append(f"Recommendation: {quality.recommendation}")
 
+        # ── SBVR summary ──────────────────────────────────────────────────────
+        sbvr = getattr(hub, "sbvr", None)
+        sbvr_lines: list[str] = []
+        if sbvr and sbvr.ready:
+            sbvr_lines.append(f"Domain: {sbvr.domain}")
+            sbvr_lines.append(f"Vocabulary terms ({len(sbvr.vocabulary)}):")
+            for t in sbvr.vocabulary[:8]:
+                sbvr_lines.append(f"  - [{t.category}] {t.term}: {t.definition}")
+            if len(sbvr.vocabulary) > 8:
+                sbvr_lines.append(f"  ... and {len(sbvr.vocabulary) - 8} more terms")
+            sbvr_lines.append(f"Business rules ({len(sbvr.rules)}):")
+            for r in sbvr.rules[:8]:
+                src = f" (source: {r.source})" if r.source else ""
+                sbvr_lines.append(f"  - [{r.rule_type}] {r.statement}{src}")
+            if len(sbvr.rules) > 8:
+                sbvr_lines.append(f"  ... and {len(sbvr.rules) - 8} more rules")
+
+        # ── BMM summary ───────────────────────────────────────────────────────
+        bmm = getattr(hub, "bmm", None)
+        bmm_lines: list[str] = []
+        if bmm and bmm.ready:
+            if bmm.vision:
+                bmm_lines.append(f"Vision: {bmm.vision}")
+            if bmm.mission:
+                bmm_lines.append(f"Mission: {bmm.mission}")
+            if bmm.goals:
+                bmm_lines.append(f"Goals ({len(bmm.goals)}):")
+                for g in bmm.goals[:6]:
+                    bmm_lines.append(f"  - [{g.goal_type}|{g.horizon}] {g.name}: {g.description}")
+            if bmm.strategies:
+                bmm_lines.append(f"Strategies ({len(bmm.strategies)}):")
+                for s in bmm.strategies[:4]:
+                    supports = ", ".join(s.supports[:3]) if s.supports else "—"
+                    bmm_lines.append(f"  - {s.name} → supports: {supports}")
+            if bmm.policies:
+                bmm_lines.append(f"Policies ({len(bmm.policies)}):")
+                for p in bmm.policies[:4]:
+                    bmm_lines.append(f"  - [{p.category}] {p.statement}")
+
         # ── Assemble user prompt ──────────────────────────────────────────────
         sections: list[str] = []
         if bpmn_lines:
@@ -92,6 +131,10 @@ class AgentSynthesizer(BaseAgent):
             sections.append("## Requirements\n" + "\n".join(req_lines))
         if qual_lines:
             sections.append("## Transcript Quality\n" + "\n".join(qual_lines))
+        if sbvr_lines:
+            sections.append("## Business Vocabulary & Rules (SBVR)\n" + "\n".join(sbvr_lines))
+        if bmm_lines:
+            sections.append("## Business Motivation Model (BMM)\n" + "\n".join(bmm_lines))
 
         user = (
             "Synthesize the following meeting artifacts into an executive report.\n\n"

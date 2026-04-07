@@ -864,6 +864,12 @@ def _sidebar(hub, narrative) -> str:
         links.append(('📝', 'Ata de Reunião', 'sec-minutes'))
     if hub.requirements.ready and hub.requirements.requirements:
         links.append(('📋', 'Requisitos', 'sec-reqs'))
+    sbvr = getattr(hub, "sbvr", None)
+    if sbvr and sbvr.ready:
+        links.append(('📖', 'Vocabulário SBVR', 'sec-sbvr'))
+    bmm = getattr(hub, "bmm", None)
+    if bmm and bmm.ready:
+        links.append(('🎯', 'Motivação BMM', 'sec-bmm'))
     if hub.transcript_quality.ready:
         links.append(('🔬', 'Qualidade', 'sec-quality'))
     links.append(('💡', 'Insights', 'sec-insights'))
@@ -972,6 +978,13 @@ def _stats_bar(hub) -> str:
         high = sum(1 for r in hub.requirements.requirements if r.priority == "high")
         if high:
             stats.append((str(high), "Alta Prioridade"))
+    sbvr = getattr(hub, "sbvr", None)
+    if sbvr and sbvr.ready:
+        stats.append((str(len(sbvr.vocabulary)), "Termos SBVR"))
+        stats.append((str(len(sbvr.rules)), "Regras SBVR"))
+    bmm = getattr(hub, "bmm", None)
+    if bmm and bmm.ready:
+        stats.append((str(len(bmm.goals)), "Objetivos BMM"))
     if not stats:
         return ""
     cells = "".join(
@@ -1331,6 +1344,283 @@ def _section_insights(narrative) -> str:
     return _section_card("💡", "Insights e Recomendações", body, "sec-insights")
 
 
+_SBVR_CAT_COLOR = {
+    "concept":   "#2E7FD9",
+    "fact_type": "#0891b2",
+    "role":      "#6B3FA0",
+    "process":   "#1A7F5A",
+}
+_SBVR_CAT_BG = {
+    "concept":   "#EEF4FC",
+    "fact_type": "#E0F5FA",
+    "role":      "#F0E8FA",
+    "process":   "#E3F5ED",
+}
+_SBVR_RULE_COLOR = {
+    "constraint":  "#C0392B",
+    "operational": "#1A7F5A",
+    "behavioral":  "#C97B1A",
+    "structural":  "#2E7FD9",
+}
+_SBVR_RULE_BG = {
+    "constraint":  "#FDE8E4",
+    "operational": "#E3F5ED",
+    "behavioral":  "#FEF3E2",
+    "structural":  "#EEF4FC",
+}
+
+
+def _sbvr_cat_badge(cat: str) -> str:
+    color = _SBVR_CAT_COLOR.get(cat, "#8496B0")
+    bg    = _SBVR_CAT_BG.get(cat, "#F4F7FB")
+    label = cat.replace("_", " ").title()
+    return (
+        f'<span style="display:inline-block;font-size:10px;font-weight:500;'
+        f'padding:2px 8px;border-radius:100px;background:{bg};color:{color};'
+        f'border:1px solid {color}33">{_e(label)}</span>'
+    )
+
+
+def _sbvr_rule_badge(rt: str) -> str:
+    color = _SBVR_RULE_COLOR.get(rt, "#8496B0")
+    bg    = _SBVR_RULE_BG.get(rt, "#F4F7FB")
+    label = rt.replace("_", " ").title()
+    return (
+        f'<span style="display:inline-block;font-size:10px;font-weight:500;'
+        f'padding:2px 8px;border-radius:100px;background:{bg};color:{color};'
+        f'border:1px solid {color}33">{_e(label)}</span>'
+    )
+
+
+def _section_sbvr(hub) -> str:
+    sbvr = getattr(hub, "sbvr", None)
+    if not sbvr or not sbvr.ready:
+        return ""
+
+    # ── Vocabulary table ──────────────────────────────────────────────────────
+    vocab_rows = ""
+    for t in sbvr.vocabulary:
+        vocab_rows += (
+            f'<tr>'
+            f'<td style="font-weight:500">{_e(t.term)}</td>'
+            f'<td>{_sbvr_cat_badge(t.category)}</td>'
+            f'<td style="font-size:13px;color:var(--text)">{_e(t.definition)}</td>'
+            f'</tr>'
+        )
+
+    vocab_html = f"""
+<div style="overflow-x:auto;margin-bottom:24px">
+<table>
+  <thead><tr><th>Termo</th><th>Categoria</th><th>Definição</th></tr></thead>
+  <tbody>{vocab_rows}</tbody>
+</table>
+</div>"""
+
+    # ── Rules list ────────────────────────────────────────────────────────────
+    rules_html = ""
+    for r in sbvr.rules:
+        src_tag = (
+            f'<span style="font-size:11px;color:var(--muted);margin-left:8px">— {_e(r.source)}</span>'
+            if r.source else ""
+        )
+        rules_html += (
+            f'<div style="padding:10px 14px;border-radius:8px;background:var(--light);'
+            f'border-left:3px solid {_SBVR_RULE_COLOR.get(r.rule_type, "#8496B0")};'
+            f'margin-bottom:8px">'
+            f'<div style="margin-bottom:5px">'
+            f'<span style="font-family:JetBrains Mono,monospace;font-size:11px;'
+            f'color:var(--muted);margin-right:8px">{_e(r.id)}</span>'
+            f'{_sbvr_rule_badge(r.rule_type)}{src_tag}</div>'
+            f'<div style="font-size:13px">{_e(r.statement)}</div>'
+            f'</div>'
+        )
+
+    domain_tag = (
+        f'<span style="font-size:13px;color:var(--muted);font-style:italic;margin-bottom:18px;'
+        f'display:block">Domínio: {_e(sbvr.domain)}</span>'
+        if sbvr.domain else ""
+    )
+
+    body = f"""
+{domain_tag}
+<div class="two-col">
+  <div>
+    <div class="col-label" style="margin-bottom:10px">
+      Vocabulário de Negócio &nbsp;
+      <span style="font-size:12px;font-weight:400;color:var(--muted)">({len(sbvr.vocabulary)} termos)</span>
+    </div>
+    {vocab_html}
+  </div>
+  <div>
+    <div class="col-label" style="margin-bottom:10px">
+      Regras de Negócio &nbsp;
+      <span style="font-size:12px;font-weight:400;color:var(--muted)">({len(sbvr.rules)} regras)</span>
+    </div>
+    {rules_html}
+  </div>
+</div>"""
+    return _section_card("📖", "Vocabulário e Regras de Negócio (SBVR)", body, "sec-sbvr")
+
+
+_BMM_GOAL_COLOR = {
+    "strategic":   "#0B1E3D",
+    "tactical":    "#1A4B8C",
+    "operational": "#2E7FD9",
+}
+_BMM_GOAL_BG = {
+    "strategic":   "#E8EDF5",
+    "tactical":    "#EDF2FB",
+    "operational": "#EEF4FC",
+}
+_BMM_HORIZON_COLOR = {"short": "#C97B1A", "medium": "#1A7F5A", "long": "#6B3FA0"}
+_BMM_POL_COLOR = {
+    "governance":  "#6B3FA0",
+    "compliance":  "#C0392B",
+    "operational": "#1A7F5A",
+    "financial":   "#C97B1A",
+}
+_BMM_POL_BG = {
+    "governance":  "#F0E8FA",
+    "compliance":  "#FDE8E4",
+    "operational": "#E3F5ED",
+    "financial":   "#FEF3E2",
+}
+
+
+def _bmm_goal_badge(gt: str) -> str:
+    color = _BMM_GOAL_COLOR.get(gt, "#8496B0")
+    bg    = _BMM_GOAL_BG.get(gt, "#F4F7FB")
+    label = gt.title()
+    return (
+        f'<span style="display:inline-block;font-size:10px;font-weight:500;'
+        f'padding:2px 8px;border-radius:100px;background:{bg};color:{color};'
+        f'border:1px solid {color}33">{_e(label)}</span>'
+    )
+
+
+def _bmm_horizon_badge(h: str) -> str:
+    color = _BMM_HORIZON_COLOR.get(h, "#8496B0")
+    label = {"short": "Curto prazo", "medium": "Médio prazo", "long": "Longo prazo"}.get(h, h)
+    return (
+        f'<span style="font-size:10px;color:{color};border:1px solid {color}44;'
+        f'padding:1px 7px;border-radius:100px;background:{color}11">{_e(label)}</span>'
+    )
+
+
+def _bmm_pol_badge(cat: str) -> str:
+    color = _BMM_POL_COLOR.get(cat, "#8496B0")
+    bg    = _BMM_POL_BG.get(cat, "#F4F7FB")
+    label = cat.title() if cat else "Geral"
+    return (
+        f'<span style="display:inline-block;font-size:10px;font-weight:500;'
+        f'padding:2px 8px;border-radius:100px;background:{bg};color:{color};'
+        f'border:1px solid {color}33">{_e(label)}</span>'
+    )
+
+
+def _section_bmm(hub) -> str:
+    bmm = getattr(hub, "bmm", None)
+    if not bmm or not bmm.ready:
+        return ""
+
+    # ── Vision + Mission ──────────────────────────────────────────────────────
+    vision_html  = f'<p style="font-size:14px;font-style:italic">{_e(bmm.vision)}</p>' if bmm.vision  else "<p><em>—</em></p>"
+    mission_html = f'<p style="font-size:14px">{_e(bmm.mission)}</p>'                   if bmm.mission else "<p><em>—</em></p>"
+
+    vm_block = f"""
+<div class="two-col" style="margin-bottom:24px">
+  <div style="background:var(--navy);border-radius:10px;padding:18px 20px;color:#fff">
+    <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+         color:rgba(255,255,255,.45);margin-bottom:8px;font-weight:500">Visão</div>
+    <div style="font-size:14px;font-style:italic;color:rgba(255,255,255,.88);line-height:1.55">
+      {_e(bmm.vision) if bmm.vision else "—"}
+    </div>
+  </div>
+  <div style="background:var(--light);border:1px solid var(--border);border-radius:10px;padding:18px 20px">
+    <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+         color:var(--muted);margin-bottom:8px;font-weight:500">Missão</div>
+    <div style="font-size:14px;color:var(--text);line-height:1.55">
+      {_e(bmm.mission) if bmm.mission else "—"}
+    </div>
+  </div>
+</div>"""
+
+    # ── Goals ─────────────────────────────────────────────────────────────────
+    goals_html = ""
+    for g in bmm.goals:
+        goals_html += (
+            f'<div style="padding:10px 14px;border-radius:8px;background:var(--light);'
+            f'border-left:3px solid {_BMM_GOAL_COLOR.get(g.goal_type, "#8496B0")};'
+            f'margin-bottom:8px">'
+            f'<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px;flex-wrap:wrap">'
+            f'{_bmm_goal_badge(g.goal_type)}{_bmm_horizon_badge(g.horizon)}'
+            f'<span style="font-family:JetBrains Mono,monospace;font-size:11px;'
+            f'color:var(--muted)">{_e(g.id)}</span></div>'
+            f'<div style="font-weight:500;font-size:13px;margin-bottom:3px">{_e(g.name)}</div>'
+            f'<div style="font-size:12px;color:var(--muted)">{_e(g.description)}</div>'
+            f'</div>'
+        )
+
+    # ── Strategies ────────────────────────────────────────────────────────────
+    strategies_html = ""
+    goal_map = {g.id: g.name for g in bmm.goals}
+    for s in bmm.strategies:
+        linked_goals = ""
+        if s.supports:
+            linked_goals = " ".join(
+                f'<span style="font-size:11px;color:var(--accent);border:1px solid var(--accent)33;'
+                f'padding:1px 7px;border-radius:100px;background:var(--accent)0D">'
+                f'{_e(goal_map.get(gid, gid))}</span>'
+                for gid in s.supports[:3]
+            )
+        strategies_html += (
+            f'<div style="padding:10px 14px;border-radius:8px;border:1px solid var(--border);'
+            f'margin-bottom:8px;background:#fff">'
+            f'<div style="font-weight:500;font-size:13px;margin-bottom:4px">{_e(s.name)}</div>'
+            f'<div style="font-size:12px;color:var(--muted);margin-bottom:{6 if linked_goals else 0}px">'
+            f'{_e(s.description)}</div>'
+            + (f'<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">'
+               f'<span style="font-size:10px;color:var(--muted)">Apoia:</span>{linked_goals}</div>'
+               if linked_goals else "") +
+            f'</div>'
+        )
+
+    # ── Policies ──────────────────────────────────────────────────────────────
+    policies_html = ""
+    for p in bmm.policies:
+        policies_html += (
+            f'<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;'
+            f'border-bottom:1px solid var(--border)">'
+            f'<div style="flex-shrink:0;margin-top:2px">{_bmm_pol_badge(p.category)}</div>'
+            f'<div style="font-size:13px">{_e(p.statement)}</div>'
+            f'</div>'
+        )
+
+    body = f"""{vm_block}
+<div class="two-col" style="margin-bottom:0">
+  <div>
+    <div class="col-label" style="margin-bottom:10px">
+      Objetivos Estratégicos &nbsp;
+      <span style="font-size:12px;font-weight:400;color:var(--muted)">({len(bmm.goals)})</span>
+    </div>
+    {goals_html or "<p><em>Sem objetivos</em></p>"}
+    <div class="col-label" style="margin:16px 0 10px">
+      Estratégias &nbsp;
+      <span style="font-size:12px;font-weight:400;color:var(--muted)">({len(bmm.strategies)})</span>
+    </div>
+    {strategies_html or "<p><em>Sem estratégias</em></p>"}
+  </div>
+  <div>
+    <div class="col-label" style="margin-bottom:10px">
+      Políticas &nbsp;
+      <span style="font-size:12px;font-weight:400;color:var(--muted)">({len(bmm.policies)})</span>
+    </div>
+    {policies_html or "<p><em>Sem políticas</em></p>"}
+  </div>
+</div>"""
+    return _section_card("🎯", "Modelo de Motivação do Negócio (BMM)", body, "sec-bmm")
+
+
 def _next_meeting(hub) -> str:
     nm = getattr(hub.minutes, "next_meeting", None) if hub.minutes.ready else None
     if not nm:
@@ -1390,6 +1680,8 @@ def generate_executive_html(hub, narrative) -> str:
         _section_mermaid_diagram(hub),
         _section_minutes(hub),
         _section_requirements(hub),
+        _section_sbvr(hub),
+        _section_bmm(hub),
         _section_quality(hub),
         _section_insights(narrative),
     ]))
