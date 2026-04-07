@@ -12,6 +12,7 @@ from ui.tabs import (
 )
 from services.export_service import make_filename
 from modules.session_security import get_session_llm_client
+from ui.architecture_diagram import render_architecture_diagram
 
 # Configuração da página (sempre primeiro)
 st.set_page_config(page_title="Process2Diagram", layout="wide")
@@ -21,6 +22,11 @@ init_session_state()
 
 # Sidebar (sempre visível)
 render_sidebar()
+
+# ── Diagrama de arquitetura (splash) ──────────────────────────────────────────
+with st.expander("🏗️ Arquitetura do Sistema — Como o Process2Diagram funciona",
+                 expanded=not ("hub" in st.session_state)):
+    render_architecture_diagram(height=720)
 
 # Área de entrada e curadoria
 start_process = render_input_area()
