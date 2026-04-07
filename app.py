@@ -68,6 +68,9 @@ if start_process and st.session_state.transcript_text.strip():
         "run_synthesizer": st.session_state.run_synthesizer,
         "n_bpmn_runs": st.session_state.n_bpmn_runs,
         "bpmn_weights": st.session_state.bpmn_weights,
+        "use_langgraph": st.session_state.use_langgraph,
+        "validation_threshold": st.session_state.validation_threshold,
+        "max_bpmn_retries": st.session_state.max_bpmn_retries,
     }
 
     agent_status = {}

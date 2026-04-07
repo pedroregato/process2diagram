@@ -44,6 +44,7 @@ process2diagram/
 ├── core/
 │   ├── knowledge_hub.py          # KnowledgeHub: central session state shared by all agents
 │   ├── pipeline.py               # run_pipeline() — executes orchestrator with multi-run BPMN support
+│   ├── lg_pipeline.py            # LGBPMNRunner — LangGraph adaptive BPMN retry loop
 │   ├── session_state.py          # init_session_state() — initializes all st.session_state keys
 │   ├── rerun_handlers.py         # handle_rerun() — re-executes a single named agent
 │   └── schema.py                 # Legacy schemas (Process, Step, Edge, BpmnProcess…)
@@ -704,11 +705,11 @@ API keys are stored exclusively in `st.session_state` (server-side, per-session 
 - [x] `_align_parallel_branches` no gerador de layout — elimina setas longas em branches paralelas desiguais
 - [x] `AgentMinutes` + `AgentRequirements` executados em paralelo via `ThreadPoolExecutor` — hub shallow-copied com `meta` isolado por worker; deltas de token mergeados; fallback automático para sequencial; `threading.Lock` protege o progress callback
 
-### PC3 — Planejado
-- [ ] `AgentSBVR` and `AgentBMM` for semantic business modeling
-- [ ] `AgentSBVR` and `AgentBMM` for semantic business modeling
-- [ ] LangGraph integration for conditional re-routing on validation failures
-- [ ] Suite de testes automatizados por cenário
+### PC3 — Concluído
+- [x] `AgentSBVR` — OMG SBVR extraction: business vocabulary (5–15 terms) + business rules (3–10); default OFF; skills/skill_sbvr.md
+- [x] `AgentBMM` — OMG BMM extraction: vision, mission, goals, strategies (with goal links), policies; default OFF; skills/skill_bmm.md
+- [x] Suite de testes automatizados — 106 tests, 0 LLM calls; covers auto-repair, structural validator, AgentValidator, MermaidGenerator
+- [x] LangGraph integration — adaptive BPMN retry loop (`core/lg_pipeline.py`); opt-in "🔄 Adaptive Retry" checkbox (single-pass mode only); configurable quality threshold (0–10, default 6.0) and max retries (1/2/3/5, default 3); best-scoring candidate committed to hub; `hub.bpmn.lg_attempts` + `hub.bpmn.lg_final_score` shown in BPMN tab
 
 ---
 

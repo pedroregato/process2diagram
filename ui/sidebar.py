@@ -46,6 +46,25 @@ def render_sidebar():
                         "gateways":    st.slider("Gateways",    0, 10, st.session_state.bpmn_weights.get("gateways",    5)),
                         "structural":  st.slider("Structural",  0, 10, st.session_state.bpmn_weights.get("structural",  5)),
                     }
+            if st.session_state.n_bpmn_runs == 1:
+                st.session_state.use_langgraph = st.checkbox(
+                    "🔄 Adaptive Retry (LangGraph)",
+                    value=st.session_state.use_langgraph,
+                    help="Automatically retries BPMN extraction if quality score is below the threshold.",
+                )
+                if st.session_state.use_langgraph:
+                    st.session_state.validation_threshold = st.slider(
+                        "Quality Threshold", 0.0, 10.0,
+                        value=float(st.session_state.validation_threshold),
+                        step=0.5,
+                        help="Retry until the validation score reaches this value (0–10).",
+                    )
+                    st.session_state.max_bpmn_retries = st.selectbox(
+                        "Max Retries", [1, 2, 3, 5],
+                        index=[1, 2, 3, 5].index(st.session_state.max_bpmn_retries)
+                        if st.session_state.max_bpmn_retries in [1, 2, 3, 5] else 2,
+                        help="Maximum number of BPMN extraction attempts.",
+                    )
         st.session_state.run_minutes = st.checkbox("Meeting Minutes", value=st.session_state.run_minutes)
         st.session_state.run_requirements = st.checkbox("Requirements", value=st.session_state.run_requirements)
         st.session_state.run_sbvr = st.checkbox("Business Vocabulary & Rules (SBVR)", value=st.session_state.run_sbvr)

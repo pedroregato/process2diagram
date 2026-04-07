@@ -27,7 +27,7 @@ def run_pipeline(hub, config, progress_callback):
     orchestrator = Orchestrator(client_info, provider_cfg, progress_callback)
 
     if run_bpmn and n_bpmn_runs > 1:
-        # Multi‑run BPMN
+        # ── Multi‑run tournament: run N passes, pick best by AgentValidator ──────
         hub = orchestrator.run(hub, output_lang,
                                run_quality=run_quality,
                                run_bpmn=False,
@@ -63,7 +63,37 @@ def run_pipeline(hub, config, progress_callback):
                                run_sbvr=run_sbvr,
                                run_bmm=run_bmm,
                                run_synthesizer=run_synthesizer)
+
+    elif run_bpmn and config.get("use_langgraph", False):
+        # ── LangGraph adaptive retry: run until score ≥ threshold or max retries ─
+        from core.lg_pipeline import LGBPMNRunner
+
+        # Step 1: prerequisites (Quality + Preprocessing + NLP only)
+        hub = orchestrator.run(hub, output_lang,
+                               run_quality=run_quality,
+                               run_bpmn=False,
+                               run_minutes=False,
+                               run_requirements=False,
+                               run_sbvr=False,
+                               run_bmm=False,
+                               run_synthesizer=False)
+
+        # Step 2: BPMN adaptive retry via LangGraph
+        lg_runner = LGBPMNRunner(client_info, provider_cfg, config, progress_callback)
+        hub = lg_runner.run(hub, output_lang)
+
+        # Step 3: downstream agents
+        hub = orchestrator.run(hub, output_lang,
+                               run_quality=False,
+                               run_bpmn=False,
+                               run_minutes=run_minutes,
+                               run_requirements=run_requirements,
+                               run_sbvr=run_sbvr,
+                               run_bmm=run_bmm,
+                               run_synthesizer=run_synthesizer)
+
     else:
+        # ── Standard single‑run (no validation) ──────────────────────────────────
         hub = orchestrator.run(hub, output_lang,
                                run_quality=run_quality,
                                run_bpmn=run_bpmn,

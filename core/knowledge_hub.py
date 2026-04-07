@@ -93,6 +93,8 @@ class BPMNModel:
     mermaid: str = ""
     ready: bool = False
     repair_log: list[str] = field(default_factory=list)  # repairs from bpmn_auto_repair
+    lg_attempts: int = 0          # LangGraph adaptive-retry: number of BPMN passes run
+    lg_final_score: float = 0.0   # LangGraph adaptive-retry: best validation score achieved
     # Multi-pool (collaboration) — populated when LLM returns pools format
     is_collaboration: bool = False
     pool_models: list[BPMNPoolData] = field(default_factory=list)
@@ -442,6 +444,12 @@ class KnowledgeHub:
         # ── v4.8: repair_log added to BPMNModel ──────────────────────────────────
         if not hasattr(hub.bpmn, 'repair_log'):
             hub.bpmn.repair_log = []
+
+        # ── v4.10: LangGraph retry fields added to BPMNModel ─────────────────────
+        if not hasattr(hub.bpmn, 'lg_attempts'):
+            hub.bpmn.lg_attempts = 0
+        if not hasattr(hub.bpmn, 'lg_final_score'):
+            hub.bpmn.lg_final_score = 0.0
 
         # ── v4.7: structural score fields added to BPMNValidationScore ──────────
         for score_obj in [hub.validation.bpmn_score] + list(hub.validation.bpmn_candidates):

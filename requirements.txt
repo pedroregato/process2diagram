@@ -28,6 +28,9 @@ lxml>=5.0                       # validação do BPMN XML contra XSD da OMG
 # ── Utilitários ───────────────────────────────────────────────────────────────
 python-dateutil>=2.9            # parsing de datas nos action items
 
+# ── Orquestração com grafo (LangGraph) ───────────────────────────────────────
+langgraph>=1.0                  # adaptive BPMN retry loop (core/lg_pipeline.py)
+
 # ── Testes ────────────────────────────────────────────────────────────────────
 pytest>=8.0                     # suite de testes automatizados (run: pytest tests/)
 

@@ -44,6 +44,14 @@ def render_bpmn(hub, prefix, suffix):
             with st.expander(f"🔧 {len(repair_log)} auto-repair(s) applied", expanded=False):
                 for entry in repair_log:
                     st.caption(f"• {entry}")
+
+        lg_attempts = getattr(hub.bpmn, 'lg_attempts', 0)
+        if lg_attempts > 0:
+            lg_score = getattr(hub.bpmn, 'lg_final_score', 0.0)
+            st.info(
+                f"🔄 **LangGraph adaptive retry** — "
+                f"{lg_attempts} attempt(s), best quality score: **{lg_score:.1f}/10**"
+            )
     else:
         st.warning("BPMN XML not available")
 
