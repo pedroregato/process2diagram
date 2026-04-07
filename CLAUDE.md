@@ -58,6 +58,8 @@ process2diagram/
 │   ├── agent_mermaid.py          # MermaidGenerator class — pure Python, no LLM
 │   ├── agent_minutes.py          # Meeting minutes extraction (full transcript, initials)
 │   ├── agent_requirements.py     # Requirements extraction (IEEE 830; speaker attribution)
+│   ├── agent_sbvr.py             # AgentSBVR — OMG SBVR vocabulary (5–15 terms) + rules (3–10)
+│   ├── agent_bmm.py              # AgentBMM — OMG BMM vision/mission/goals/strategies/policies
 │   ├── agent_synthesizer.py      # Executive HTML report synthesis (narrative + HTML gen)
 │   └── agent_validator.py        # AgentValidator — pure Python BPMN quality scorer, no LLM
 │
@@ -66,6 +68,8 @@ process2diagram/
 │   ├── session_security.py       # API keys in st.session_state only, never persisted
 │   ├── bpmn_generator.py         # OMG BPMN 2.0 XML generator (absolute coordinates layout)
 │   ├── bpmn_viewer.py            # BPMN viewer component (bpmn-js 17 injected inline)
+│   ├── bpmn_auto_repair.py       # repair_bpmn() — 4-pass deterministic repair engine (no LLM)
+│   ├── bpmn_structural_validator.py  # validate_bpmn_structure() — 6 structural checks, severity levels
 │   ├── bpmn_diagnostics.py       # render_bpmn_diagnostics() — BPMN diagnostic panel for Streamlit
 │   ├── mermaid_renderer.py       # render_mermaid_block() — shared Mermaid SVG renderer (pan/zoom/fit)
 │   ├── requirements_mindmap.py   # generate_requirements_mindmap() + build_mindmap_tree()
@@ -84,6 +88,7 @@ process2diagram/
 ├── ui/
 │   ├── sidebar.py                # render_sidebar() — provider, config, agent toggles, re-run buttons
 │   ├── input_area.py             # render_input_area() — transcript text area + file upload + pre-process
+│   ├── architecture_diagram.py   # render_architecture_diagram() — splash flowchart TD (cached SVG)
 │   ├── components/
 │   │   ├── copy_button.py        # Copy-to-clipboard button component
 │   │   ├── download_button.py    # Styled download button wrapper
@@ -93,6 +98,8 @@ process2diagram/
 │       ├── quality_tab.py        # render() — transcript quality results
 │       ├── minutes_tab.py        # render() — meeting minutes display
 │       ├── requirements_tab.py   # render() — requirements table + mindmap
+│       ├── sbvr_tab.py           # render() — SBVR vocabulary table + rules list + JSON export
+│       ├── bmm_tab.py            # render() — BMM vision/mission/goals/strategies/policies
 │       ├── synthesizer_tab.py    # render() — executive HTML report
 │       ├── export_tab.py         # render() — all download buttons grouped
 │       └── dev_tools_tab.py      # render() — KnowledgeHub JSON debug panel
@@ -106,11 +113,20 @@ process2diagram/
 │   └── setup_v3.py               # Setup helpers
 │
 ├── skills/
-│   ├── skill_bpmn.md             # System prompt for AgentBPMN
-│   ├── skill_minutes.md          # System prompt for AgentMinutes
-│   ├── skill_transcript_quality.md  # System prompt for AgentTranscriptQuality
-│   ├── SKILL_REQUIREMENTS.md     # System prompt for AgentRequirements
-│   └── SKILL_SYNTHESIZER.md      # System prompt for AgentSynthesizer
+│   ├── skill_bpmn.md             # System prompt for AgentBPMN (lowercase)
+│   ├── skill_minutes.md          # System prompt for AgentMinutes (lowercase — SKILL_MINUTES.md also exists, legacy)
+│   ├── skill_transcript_quality.md  # System prompt for AgentTranscriptQuality (lowercase)
+│   ├── skill_sbvr.md             # System prompt for AgentSBVR (lowercase)
+│   ├── skill_bmm.md              # System prompt for AgentBMM (lowercase)
+│   ├── SKILL_REQUIREMENTS.md     # System prompt for AgentRequirements (uppercase — git-tracked name)
+│   └── SKILL_SYNTHESIZER.md      # System prompt for AgentSynthesizer (uppercase — git-tracked name)
+│
+├── tests/
+│   ├── conftest.py               # Shared factory helpers (step, edge, model, pool, collab)
+│   ├── test_bpmn_auto_repair.py  # 36 tests — dangling edges, isolated nodes, XOR labels, gateway bypass
+│   ├── test_bpmn_structural_validator.py  # 22 tests — all 6 structural checks + collaboration
+│   ├── test_agent_validator.py   # 22 tests — granularity, task type, gateways, structural, weighted
+│   └── test_mermaid_generator.py # 26 tests — sanitize, format_node, format_edge, single/multi generate
 │
 ├── requirements.txt              # pinned versions (streamlit, anthropic, openai, python-docx, fpdf2…)
 └── CLAUDE.md                     # This file
@@ -144,20 +160,24 @@ Transcript Preprocessor  ← no LLM; removes ASR fillers/artefacts/repetitions
    AgentBPMN             ← LLM; extracts steps/edges/lanes → BPMN XML, Mermaid
         │  _enforce_rules() post-processes: generic lanes, service-task lanes,
         │  correction-loop redirect, redundant event steps
+        │  repair_bpmn() auto-repairs 4 structural issue classes (no LLM)
         │  hub.bpmn.ready = True
         │
-        │  (if n_bpmn_runs > 1)
-        │  AgentValidator scores each run → best candidate selected → hub.validation.ready
+        │  (if n_bpmn_runs > 1)  → AgentValidator tournament; best candidate selected
+        │  (if use_langgraph)     → LGBPMNRunner adaptive retry until score ≥ threshold
+        │  hub.validation.ready = True (tournament) / hub.bpmn.lg_attempts (LangGraph)
         ▼
-  AgentMinutes           ← LLM; full transcript; initials convention (MF, PG…)
-        │  extracts decisions, action items (raised_by), participants with initials
-        │  hub.minutes.ready = True
+  AgentMinutes  ┐  parallel via ThreadPoolExecutor (when both enabled)
+AgentRequirements┘  each reads hub.transcript_clean (read-only); writes own section
+        │  hub.minutes.ready = True; hub.requirements.ready = True
         ▼
-AgentRequirements        ← LLM; IEEE 830 adapted; speaker attribution per requirement
-        │  extracts ui_field, validation, business_rule, functional, non_functional
-        │  hub.requirements.ready = True
+   AgentSBVR            ← LLM (optional); OMG SBVR; domain vocabulary + business rules
+        │  hub.sbvr.ready = True
         ▼
-AgentSynthesizer         ← LLM (optional); reads all hub artifacts; produces
+   AgentBMM             ← LLM (optional); OMG BMM; vision/mission/goals/strategies/policies
+        │  hub.bmm.ready = True
+        ▼
+AgentSynthesizer         ← LLM (optional); reads all hub artifacts incl. SBVR + BMM;
         │  executive narrative (JSON) + calls generate_executive_html()
         │  hub.synthesizer.ready = True; hub.synthesizer.html = full HTML
         ▼
@@ -416,10 +436,11 @@ All Streamlit UI code lives in `ui/` — `app.py` only coordinates flow.
 - Provider selector + API key gate
 - Output language selector
 - Prefix/suffix for file naming
-- Agent enable/disable checkboxes
+- Agent enable/disable checkboxes (Quality, BPMN, Minutes, Requirements, SBVR, BMM, Executive Report)
 - BPMN optimization passes slider (1/3/5) + weight sliders (only when n > 1)
+- **🔄 Adaptive Retry (LangGraph)** checkbox + Quality Threshold slider + Max Retries selector (only when n_bpmn_runs == 1)
 - Developer Mode toggle (shows Dev Tools tab + Raw JSON option)
-- Re-run buttons (appear after first pipeline run)
+- Re-run buttons for all agents (appear after first pipeline run)
 
 ### `ui/input_area.py` — `render_input_area()`
 - `st.text_area` for pasting transcript
@@ -428,11 +449,20 @@ All Streamlit UI code lives in `ui/` — `app.py` only coordinates flow.
 - Editable cleaned text area (`curated_clean`) — "Use curated text" button sets it as main input
 - Returns `True` when "🚀 Generate Insights" is clicked
 
+### `ui/architecture_diagram.py` — `render_architecture_diagram()`
+- Displays a `flowchart TD` Mermaid architecture diagram as a splash section at app startup.
+- SVG fetched once from mermaid.ink via `@st.cache_data` — zero network overhead on reruns.
+- Pan/zoom/fit viewer injected via `components.html`. No external CDN inside the iframe.
+- Shown in `st.expander` that starts **expanded** when no pipeline results exist yet (`"hub"` not in session state) and collapsed automatically afterwards — no UX friction for repeat users.
+- `ARCHITECTURE_DIAGRAM` constant: `flowchart TD` with nested subgraphs, `classDef` palette matching brand colours (navy=input, amber=LLM, blue=core agents, purple=optional, green=outputs).
+
 ### `ui/tabs/`
 Each tab is a standalone module with a `render(hub, prefix, suffix)` function (or variant):
-- `bpmn_tabs.py` — `render_bpmn()`, `render_mermaid()`, `render_validation()`
+- `bpmn_tabs.py` — `render_bpmn()` (structural diagnostics + auto-repair log + LangGraph badge), `render_mermaid()`, `render_validation()`
 - `quality_tab.py`, `minutes_tab.py`, `requirements_tab.py`, `synthesizer_tab.py`
-- `export_tab.py` — all download buttons (BPMN XML, Mermaid, Minutes MD/DOCX/PDF, Requirements MD/JSON, Executive HTML)
+- `sbvr_tab.py` — vocabulary dataframe (term/category/definition) + rules list with type badges + JSON export
+- `bmm_tab.py` — vision/mission columns + goals/strategies expanders with type badges + policies list
+- `export_tab.py` — all download buttons (BPMN XML, Mermaid, Minutes MD/DOCX/PDF, Requirements MD/JSON, SBVR JSON, BMM JSON, Executive HTML)
 - `dev_tools_tab.py` — KnowledgeHub metadata + optional raw JSON + Hub JSON download
 
 ---
@@ -449,9 +479,10 @@ Thin wrappers that decouple `ui/` from `modules/`:
 
 ## Core Modules (`core/`)
 
-- `session_state.init_session_state()` — idempotent initialization of all `st.session_state` keys. Must be called immediately after `st.set_page_config()`. Defaults: provider=DeepSeek, run_quality/bpmn/minutes/requirements=True, run_synthesizer=False, n_bpmn_runs=1.
-- `pipeline.run_pipeline(hub, config, progress_callback)` — single entry point for pipeline execution. Handles single-run and multi-run BPMN paths. Raises on error (caller catches).
-- `rerun_handlers.handle_rerun(agent_name, hub, client_info, provider_cfg, output_language)` — re-executes one named agent (`"quality"`, `"bpmn"`, `"minutes"`, `"requirements"`, `"synthesizer"`). When BPMN is re-run, invalidates `hub.synthesizer`.
+- `session_state.init_session_state()` — idempotent initialization of all `st.session_state` keys. Must be called immediately after `st.set_page_config()`. Defaults: provider=DeepSeek, run_quality/bpmn/minutes/requirements=True, run_sbvr/bmm/synthesizer=False, n_bpmn_runs=1, use_langgraph=False, validation_threshold=6.0, max_bpmn_retries=3.
+- `pipeline.run_pipeline(hub, config, progress_callback)` — single entry point for pipeline execution. Three paths: (1) multi-run tournament (`n_bpmn_runs > 1`), (2) LangGraph adaptive retry (`use_langgraph=True`), (3) standard single-run. Raises on error (caller catches).
+- `lg_pipeline.LGBPMNRunner` — LangGraph `StateGraph` with BPMN→validate→(retry|proceed) loop. `@st.cache_data` not used here; graph is compiled per run instance. `hub.bpmn.lg_attempts` and `hub.bpmn.lg_final_score` written after completion.
+- `rerun_handlers.handle_rerun(agent_name, hub, client_info, provider_cfg, output_language)` — re-executes one named agent (`"quality"`, `"bpmn"`, `"minutes"`, `"requirements"`, `"sbvr"`, `"bmm"`, `"synthesizer"`). When BPMN is re-run, invalidates `hub.synthesizer`.
 
 ---
 
@@ -461,7 +492,18 @@ Generated by `AgentSynthesizer` → `generate_executive_html(hub, narrative) →
 
 - **Self-contained HTML** — Google Fonts via CDN (works in browser download), no other external deps.
 - **Sidebar nav** — `data-target` + JS `scrollIntoView` (never `href="#id"` which navigates the Streamlit parent frame).
-- **Sections built from hub:** Sumário Executivo, Visão do Processo, Diagrama BPMN (iframe srcdoc), Fluxograma (SVG fetched server-side from mermaid.ink), Ata de Reunião, Requisitos, Qualidade, Insights.
+- **Sections built from hub (in order):**
+  1. Sumário Executivo (LLM narrative)
+  2. Visão do Processo (LLM narrative + BPMN stats)
+  3. Diagrama BPMN (iframe srcdoc with bpmn-js)
+  4. Fluxograma Mermaid (SVG fetched server-side from mermaid.ink)
+  5. Ata de Reunião (decisions, action items with localStorage status)
+  6. Especificação de Requisitos (filterable table by type + priority)
+  7. **Vocabulário e Regras de Negócio (SBVR)** — two-column: vocabulary table + rules list with type badges (shown only when `hub.sbvr.ready`)
+  8. **Modelo de Motivação do Negócio (BMM)** — vision/mission banner + goals + strategies with goal links + policies (shown only when `hub.bmm.ready`)
+  9. Qualidade da Transcrição (grade badge + criteria progress bars)
+  10. Insights e Recomendações (LLM key_insights + recommendations)
+- **Stats bar** includes SBVR term/rule counts and BMM goal count when available.
 - **Interactive features:** collapsible cards, action item status (localStorage `p2d_ai_{session_id}`), requirements filter by type + priority, comments per action item (localStorage `p2d_cmt_{session_id}`).
 - **Visibility:** cards default to `opacity:1`; animation (`.will-animate`) added only via JS when IntersectionObserver is supported and viewport > 300 px — prevents blank content inside Streamlit iframe.
 - **Displayed in app** via `components.html(syn.html, height=900, scrolling=True)` and downloadable as `.html`.
