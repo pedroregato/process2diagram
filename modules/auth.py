@@ -15,8 +15,13 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+from pathlib import Path
 
+import toml
 import streamlit as st
+
+# Absolute path to the secrets file — works regardless of CWD
+_SECRETS_PATH = Path(__file__).parent.parent / ".streamlit" / "secrets.toml"
 
 
 # ── Password utilities ────────────────────────────────────────────────────────
@@ -45,22 +50,46 @@ def _verify_password(password: str, stored: str) -> bool:
 # ── Credential loading ────────────────────────────────────────────────────────
 
 def _load_users() -> dict:
-    """Load users dict from st.secrets['auth']['users'].
+    """Load users from credentials configuration.
 
-    Returns an empty dict when no auth section is configured —
-    this disables auth (local dev without secrets.toml).
+    Resolution order:
+    1. st.secrets["auth"]["users"]  — Streamlit Cloud / runtime injection
+    2. .streamlit/secrets.toml read directly by absolute path — local dev
+
+    Returns {} only when no [auth] section exists anywhere (auth disabled).
+    Raises RuntimeError when a secrets file exists but cannot be parsed,
+    so the caller can display a clear error instead of silently opening access.
     """
+    # ── 1. st.secrets (Streamlit Cloud or local Streamlit runtime) ────────────
     try:
         auth_section = st.secrets.get("auth", {})
-        users = auth_section.get("users", {})
-        return dict(users) if users else {}
+        if auth_section:
+            users = auth_section.get("users", {})
+            return dict(users) if users else {}
     except Exception:
-        return {}
+        pass  # Fall through to file-based loading
+
+    # ── 2. Direct file read by absolute path (CWD-independent) ───────────────
+    if _SECRETS_PATH.exists():
+        try:
+            data = toml.loads(_SECRETS_PATH.read_text(encoding="utf-8"))
+        except Exception as exc:
+            raise RuntimeError(
+                f"secrets.toml encontrado mas não pôde ser lido: {exc}"
+            ) from exc
+        users = data.get("auth", {}).get("users", {})
+        return users  # may be {} if [auth] section absent
+
+    # No secrets file anywhere → auth disabled (open local dev)
+    return {}
 
 
 def auth_required() -> bool:
     """True when credentials are configured and auth should be enforced."""
-    return bool(_load_users())
+    try:
+        return bool(_load_users())
+    except RuntimeError:
+        return True  # Fail-closed: broken config still enforces auth
 
 
 # ── Session helpers ───────────────────────────────────────────────────────────
@@ -170,6 +199,12 @@ def render_login_page() -> None:
     the rest of the page does not render.
     """
     st.markdown(_LOGIN_CSS, unsafe_allow_html=True)
+
+    # Check for config errors and surface them clearly
+    try:
+        _load_users()
+    except RuntimeError as exc:
+        st.error(f"⚠️ Erro na configuração de autenticação: {exc}")
 
     # Center the card using columns
     _, col, _ = st.columns([1, 1.4, 1])
