@@ -66,13 +66,21 @@ def _load_users() -> dict:
     so the caller can display a clear error instead of silently opening access.
     """
     # ── 1. st.secrets (Streamlit Cloud or local Streamlit runtime) ────────────
+    # Only used when NOT running from a direct file-read context (e.g. Cloud).
+    # On local dev, st.secrets may raise FileNotFoundError or AttributeError
+    # before the secrets file is loaded — fall through silently in that case.
+    _st_secrets_error: str | None = None
     try:
         auth_section = st.secrets.get("auth", {})
         if auth_section:
             users = auth_section.get("users", {})
-            return dict(users) if users else {}
-    except Exception:
-        pass  # Fall through to file-based loading
+            result = dict(users) if users else {}
+            if result:
+                return result
+            # auth section exists but users is empty — treat as misconfiguration
+            _st_secrets_error = "[auth] section found in st.secrets but [auth.users] is empty"
+    except Exception as exc:
+        _st_secrets_error = str(exc)  # captured for diagnostic; fall through
 
     # ── 2. Direct file read by absolute path (CWD-independent) ───────────────
     if _SECRETS_PATH.exists():
@@ -83,7 +91,13 @@ def _load_users() -> dict:
                 f"secrets.toml encontrado mas não pôde ser lido: {exc}"
             ) from exc
         users = data.get("auth", {}).get("users", {})
-        return users  # may be {} if [auth] section absent
+        if users:
+            return users
+        # File exists and parsed OK, but [auth.users] is empty or absent
+        raise RuntimeError(
+            "secrets.toml encontrado, mas [auth.users] está vazio ou ausente. "
+            f"st.secrets error (if any): {_st_secrets_error}"
+        )
 
     # No secrets file anywhere → auth disabled (open local dev)
     return {}
