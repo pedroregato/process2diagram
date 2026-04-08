@@ -108,18 +108,20 @@ def _attempt_login(username: str, password: str) -> None:
         st.error("Usuário ou senha incorretos.")
         return
 
-    stored_hash = (
-        user_data.get("password_hash", "")
-        if hasattr(user_data, "get")
-        else getattr(user_data, "password_hash", "")
-    )
+    # Support both formats:
+    #   simple:  admin = "sha256$salt$hex"          → user_data is a string
+    #   nested:  [auth.users.admin] password_hash = → user_data is a dict/AttrDict
+    if isinstance(user_data, str):
+        stored_hash = user_data
+        display_name = username
+    elif hasattr(user_data, "get"):
+        stored_hash = user_data.get("password_hash", "")
+        display_name = user_data.get("name", username)
+    else:
+        stored_hash = getattr(user_data, "password_hash", "")
+        display_name = getattr(user_data, "name", username)
 
     if _verify_password(password, stored_hash):
-        display_name = (
-            user_data.get("name", username)
-            if hasattr(user_data, "get")
-            else getattr(user_data, "name", username)
-        )
         st.session_state.authenticated = True
         st.session_state.auth_user = username
         st.session_state.auth_name = display_name
