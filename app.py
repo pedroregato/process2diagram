@@ -1,7 +1,7 @@
 # app.py
 import streamlit as st
 from core.session_state import init_session_state
-from modules.auth import is_authenticated, render_login_page
+from ui.auth_gate import apply_auth_gate
 from ui.sidebar import render_sidebar
 from ui.input_area import render_input_area
 from core.pipeline import run_pipeline
@@ -22,9 +22,7 @@ st.set_page_config(page_title="Process2Diagram", layout="wide")
 init_session_state()
 
 # ── Autenticação ───────────────────────────────────────────────────────────────
-if not is_authenticated():
-    render_login_page()
-    st.stop()
+apply_auth_gate()
 
 # Sidebar (sempre visível)
 render_sidebar()

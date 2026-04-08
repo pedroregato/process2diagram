@@ -20,7 +20,7 @@ if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
 from core.knowledge_hub import KnowledgeHub
-from modules.auth import is_authenticated, render_login_page
+from ui.auth_gate import apply_auth_gate
 from modules.bpmn_viewer import preview_from_xml
 from modules.mermaid_renderer import render_mermaid_block
 
@@ -33,9 +33,7 @@ st.set_page_config(
 )
 
 # ── Autenticação ───────────────────────────────────────────────────────────────
-if not is_authenticated():
-    render_login_page()
-    st.stop()
+apply_auth_gate()
 
 st.markdown("""
 <style>
