@@ -86,6 +86,10 @@ class AgentReqReconciler(BaseAgent):
     def _load_skill(self) -> str:  # type: ignore[override]
         return _SYSTEM_PROMPT
 
+    def build_prompt(self, hub, output_language="Auto-detect"):  # type: ignore[override]
+        # Not used directly — reconciler builds prompts inline in _classify_pair
+        return _SYSTEM_PROMPT, ""
+
     # ── Ponto de entrada público ──────────────────────────────────────────────
 
     def run(  # type: ignore[override]
