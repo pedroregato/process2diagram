@@ -47,3 +47,16 @@ def init_session_state():
         st.session_state.validation_threshold = 6.0
     if "max_bpmn_retries" not in st.session_state:
         st.session_state.max_bpmn_retries = 3
+    # ── Projeto / Reunião (F2) ─────────────────────────────────────────────
+    if "project_id" not in st.session_state:
+        st.session_state.project_id = None
+    if "project_name" not in st.session_state:
+        st.session_state.project_name = ""
+    if "meeting_title" not in st.session_state:
+        st.session_state.meeting_title = ""
+    if "meeting_date" not in st.session_state:
+        st.session_state.meeting_date = date.today()
+    if "current_meeting_id" not in st.session_state:
+        st.session_state.current_meeting_id = None
+    if "project_confirmed" not in st.session_state:
+        st.session_state.project_confirmed = False

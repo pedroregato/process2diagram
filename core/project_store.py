@@ -236,6 +236,42 @@ def list_requirements(project_id: str) -> list[dict]:
         return []
 
 
+def save_requirements_from_hub(meeting_id: str, project_id: str, hub) -> int:
+    """Persiste todos os requisitos de hub.requirements no Supabase.
+
+    Atribui numeração incremental por projeto (REQ-001, REQ-002...).
+    Retorna o número de requisitos salvos.
+    """
+    db = _db()
+    if not db:
+        return 0
+    if not hasattr(hub, "requirements") or not hub.requirements.ready:
+        return 0
+
+    items = hub.requirements.requirements
+    if not items:
+        return 0
+
+    saved = 0
+    next_num = next_req_number(project_id)
+
+    for item in items:
+        result = save_new_requirement(
+            project_id=project_id,
+            meeting_id=meeting_id,
+            req_number=next_num,
+            title=item.title,
+            description=item.description,
+            req_type=getattr(item, "type", ""),
+            priority=getattr(item, "priority", ""),
+        )
+        if result:
+            next_num += 1
+            saved += 1
+
+    return saved
+
+
 def list_contradictions(project_id: str) -> list[dict]:
     """Retorna versões de requisitos com contradições ativas no projeto."""
     db = _db()

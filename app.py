@@ -4,8 +4,11 @@ from core.session_state import init_session_state
 from ui.auth_gate import apply_auth_gate
 from ui.sidebar import render_sidebar
 from ui.input_area import render_input_area
+from ui.project_selector import render_project_selector
 from core.pipeline import run_pipeline
 from core.rerun_handlers import handle_rerun
+from core.project_store import create_meeting, save_meeting_artifacts, save_requirements_from_hub
+from modules.supabase_client import supabase_configured
 from ui.tabs import (
     render_quality, render_bpmn, render_mermaid, render_validation,
     render_minutes, render_requirements, render_sbvr, render_bmm,
@@ -23,8 +26,7 @@ init_session_state()
 
 # ── Autenticação ───────────────────────────────────────────────────────────────
 apply_auth_gate()
-st.write(f"DEBUG: is_authenticated = {st.session_state.get('_autenticado')}")
-st.write("⚡ PASSOU PELO GATE")   # <-- só aparece se NÃO chamou st.stop()
+
 # Sidebar (sempre visível)
 render_sidebar()
 
@@ -32,6 +34,9 @@ render_sidebar()
 with st.expander("🏗️ Arquitetura do Sistema — Como o Process2Diagram funciona",
                  expanded=not ("hub" in st.session_state)):
     render_architecture_diagram(height=720)
+
+# ── Projeto / Reunião ─────────────────────────────────────────────────────────
+render_project_selector()
 
 # Área de entrada e curadoria
 start_process = render_input_area()
@@ -98,6 +103,23 @@ if start_process and st.session_state.transcript_text.strip():
         progress_placeholder.error(f"Erro no pipeline: {e}")
         st.stop()
 
+    # ── Persistência no Supabase ───────────────────────────────────────────
+    if supabase_configured() and st.session_state.get("project_confirmed"):
+        try:
+            meeting = create_meeting(
+                project_id=st.session_state.project_id,
+                title=st.session_state.meeting_title,
+                meeting_date=st.session_state.meeting_date,
+            )
+            if meeting:
+                meeting_id = meeting["id"]
+                st.session_state.current_meeting_id = meeting_id
+                save_meeting_artifacts(meeting_id, hub)
+                n_req = save_requirements_from_hub(meeting_id, st.session_state.project_id, hub)
+                st.toast(f"💾 Reunião salva · {n_req} requisito(s) registrado(s)", icon="✅")
+        except Exception as e:
+            st.warning(f"⚠️ Erro ao salvar no Supabase: {e}")
+
 # ──────────────────────────────────────────────────────────────────────────────
 # REEXECUÇÃO DE AGENTES (botões no corpo principal)
 # ──────────────────────────────────────────────────────────────────────────────
@@ -160,7 +182,6 @@ if "hub" in st.session_state:
     prefix = st.session_state.prefix
     suffix = st.session_state.suffix
 
-    # Define quais abas mostrar
     tabs_to_show = []
     if hub.transcript_quality.ready:
         tabs_to_show.append("quality")
@@ -183,7 +204,6 @@ if "hub" in st.session_state:
     if st.session_state.show_dev_tools:
         tabs_to_show.append("devtools")
 
-    # Rótulos das abas
     tab_labels = {
         "quality": "🔬 Qualidade",
         "bpmn": "📐 BPMN 2.0",
