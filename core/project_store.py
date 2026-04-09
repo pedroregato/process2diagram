@@ -335,6 +335,85 @@ def save_requirements_from_hub(meeting_id: str, project_id: str, hub) -> int:
     return saved
 
 
+# ── SBVR ──────────────────────────────────────────────────────────────────────
+
+def save_sbvr_from_hub(meeting_id: str, project_id: str, hub) -> tuple[int, int]:
+    """Persiste termos e regras SBVR do hub no Supabase.
+
+    Retorna (n_terms, n_rules) salvos.
+    """
+    db = _db()
+    if not db:
+        return 0, 0
+    if not hasattr(hub, "sbvr") or not hub.sbvr.ready:
+        return 0, 0
+
+    n_terms = n_rules = 0
+
+    for t in hub.sbvr.vocabulary:
+        try:
+            db.table("sbvr_terms").insert({
+                "meeting_id": meeting_id,
+                "project_id": project_id,
+                "term":       t.term,
+                "definition": t.definition,
+                "category":   t.category,
+            }).execute()
+            n_terms += 1
+        except Exception:
+            pass
+
+    for r in hub.sbvr.rules:
+        try:
+            db.table("sbvr_rules").insert({
+                "meeting_id": meeting_id,
+                "project_id": project_id,
+                "rule_id":    r.id,
+                "statement":  r.statement,
+                "rule_type":  r.rule_type,
+                "source":     r.source,
+            }).execute()
+            n_rules += 1
+        except Exception:
+            pass
+
+    return n_terms, n_rules
+
+
+def list_sbvr_terms(project_id: str) -> list[dict]:
+    """Retorna todos os termos SBVR do projeto, com reunião de origem."""
+    db = _db()
+    if not db:
+        return []
+    try:
+        return _ok(
+            db.table("sbvr_terms")
+            .select("*, meetings(meeting_number, title, meeting_date)")
+            .eq("project_id", project_id)
+            .order("created_at")
+            .execute()
+        )
+    except Exception:
+        return []
+
+
+def list_sbvr_rules(project_id: str) -> list[dict]:
+    """Retorna todas as regras SBVR do projeto, com reunião de origem."""
+    db = _db()
+    if not db:
+        return []
+    try:
+        return _ok(
+            db.table("sbvr_rules")
+            .select("*, meetings(meeting_number, title, meeting_date)")
+            .eq("project_id", project_id)
+            .order("created_at")
+            .execute()
+        )
+    except Exception:
+        return []
+
+
 def list_contradictions(project_id: str) -> list[dict]:
     """Retorna versões de requisitos com contradições ativas no projeto."""
     db = _db()

@@ -7,7 +7,7 @@ from ui.input_area import render_input_area
 from ui.project_selector import render_project_selector
 from core.pipeline import run_pipeline
 from core.rerun_handlers import handle_rerun
-from core.project_store import create_meeting, save_meeting_artifacts
+from core.project_store import create_meeting, save_meeting_artifacts, save_sbvr_from_hub
 from agents.agent_req_reconciler import AgentReqReconciler
 from modules.supabase_client import supabase_configured
 from ui.tabs import (
@@ -116,6 +116,10 @@ if start_process and st.session_state.transcript_text.strip():
                 meeting_id = meeting["id"]
                 st.session_state.current_meeting_id = meeting_id
                 save_meeting_artifacts(meeting_id, hub)
+
+                # Persiste SBVR (termos + regras) se disponível
+                if hub.sbvr.ready:
+                    save_sbvr_from_hub(meeting_id, st.session_state.project_id, hub)
 
                 # Reconciliação: compara com histórico e persiste requisitos
                 with st.spinner("🔍 Reconciliando requisitos com histórico do projeto..."):

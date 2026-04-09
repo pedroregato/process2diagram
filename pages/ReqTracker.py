@@ -20,7 +20,8 @@ from datetime import date
 from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured
 from core.project_store import (
-    list_projects, list_meetings, list_requirements, list_contradictions
+    list_projects, list_meetings, list_requirements, list_contradictions,
+    list_sbvr_terms, list_sbvr_rules,
 )
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -87,9 +88,11 @@ project = proj_map[selected_name]
 project_id = project["id"]
 
 # ── Carrega dados ─────────────────────────────────────────────────────────────
-meetings     = list_meetings(project_id)
-requirements = list_requirements(project_id)
+meetings       = list_meetings(project_id)
+requirements   = list_requirements(project_id)
 contradictions = list_contradictions(project_id)
+sbvr_terms     = list_sbvr_terms(project_id)
+sbvr_rules     = list_sbvr_rules(project_id)
 
 meet_map = {m["id"]: m for m in meetings}
 
@@ -106,21 +109,24 @@ n_contradicted = sum(1 for r in requirements if r.get("status") == "contradicted
 n_revised      = sum(1 for r in requirements if r.get("status") == "revised")
 n_meetings     = len(meetings)
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3, c4, c5, c6 = st.columns(6)
 c1.metric("Total de Requisitos", n_total)
 c2.metric("Reuniões", n_meetings)
 c3.metric("Revisados", n_revised)
 c4.metric("⚠️ Contradições", n_contradicted, delta=None,
           delta_color="off" if n_contradicted == 0 else "inverse")
+c5.metric("Termos SBVR", len(sbvr_terms))
+c6.metric("Regras SBVR", len(sbvr_rules))
 
 st.markdown("---")
 
 # ── Abas principais ───────────────────────────────────────────────────────────
-tab_req, tab_contra, tab_hist, tab_meet = st.tabs([
+tab_req, tab_contra, tab_hist, tab_meet, tab_sbvr = st.tabs([
     "📝 Requisitos",
     f"⚠️ Contradições ({len(contradictions)})",
     "📅 Histórico",
     "🗓️ Reuniões",
+    f"📖 SBVR ({len(sbvr_terms)}T · {len(sbvr_rules)}R)",
 ])
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -323,3 +329,105 @@ with tab_meet:
                         st.markdown(
                             f"- `REQ-{r['req_number']:03d}` {r.get('title','')}"
                         )
+
+                # Termos/regras SBVR desta reunião
+                terms_here = [t for t in sbvr_terms if t.get("meeting_id") == m["id"]]
+                rules_here = [r for r in sbvr_rules if r.get("meeting_id") == m["id"]]
+                if terms_here or rules_here:
+                    st.markdown(f"**SBVR:** {len(terms_here)} termo(s) · {len(rules_here)} regra(s)")
+
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 5 — SBVR
+# ════════════════════════════════════════════════════════════════════════════
+_CATEGORY_BADGE = {
+    "concept":   ("badge-new",       "Conceito"),
+    "fact_type": ("badge-confirmed",  "Tipo de Fato"),
+    "role":      ("badge-revised",    "Papel"),
+    "process":   ("badge-active",     "Processo"),
+}
+_RULE_BADGE = {
+    "constraint":   ("badge-contradicted", "Restrição"),
+    "operational":  ("badge-active",       "Operacional"),
+    "behavioral":   ("badge-revised",      "Comportamental"),
+    "structural":   ("badge-new",          "Estrutural"),
+}
+
+with tab_sbvr:
+    if not sbvr_terms and not sbvr_rules:
+        st.info("Nenhum dado SBVR registrado. Execute o pipeline com o agente SBVR habilitado.")
+    else:
+        col_t, col_r = st.columns(2)
+
+        # ── Vocabulário ──────────────────────────────────────────────────────
+        with col_t:
+            st.markdown(f"### 📚 Vocabulário ({len(sbvr_terms)} termos)")
+
+            # Filtro por reunião
+            meet_ids = sorted({t.get("meeting_id") for t in sbvr_terms if t.get("meeting_id")})
+            meet_labels_sbvr = {"Todas": None}
+            for mid in meet_ids:
+                meet_labels_sbvr[meet_label(mid)] = mid
+            sel_meet_t = st.selectbox("Reunião", list(meet_labels_sbvr.keys()), key="sbvr_meet_t")
+            filtered_terms = sbvr_terms if not meet_labels_sbvr[sel_meet_t] else [
+                t for t in sbvr_terms if t.get("meeting_id") == meet_labels_sbvr[sel_meet_t]
+            ]
+
+            # Filtro por categoria
+            cats = sorted({t.get("category", "") for t in filtered_terms if t.get("category")})
+            sel_cat = st.selectbox("Categoria", ["Todas"] + cats, key="sbvr_cat")
+            if sel_cat != "Todas":
+                filtered_terms = [t for t in filtered_terms if t.get("category") == sel_cat]
+
+            st.caption(f"{len(filtered_terms)} termo(s)")
+            st.markdown("")
+
+            for t in filtered_terms:
+                cat = t.get("category", "concept")
+                badge_cls, badge_txt = _CATEGORY_BADGE.get(cat, ("badge-active", cat))
+                meet_info = t.get("meetings") or {}
+                m_num = meet_info.get("meeting_number", "?")
+                with st.expander(f"**{t.get('term', '—')}**", expanded=False):
+                    st.markdown(
+                        f'<span class="badge {badge_cls}">{badge_txt}</span>',
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(f"**Definição:** {t.get('definition', '—')}")
+                    st.caption(f"🗓️ Reunião {m_num}")
+
+        # ── Regras ───────────────────────────────────────────────────────────
+        with col_r:
+            st.markdown(f"### 📋 Regras de Negócio ({len(sbvr_rules)} regras)")
+
+            meet_ids_r = sorted({r.get("meeting_id") for r in sbvr_rules if r.get("meeting_id")})
+            meet_labels_sbvr_r = {"Todas": None}
+            for mid in meet_ids_r:
+                meet_labels_sbvr_r[meet_label(mid)] = mid
+            sel_meet_r = st.selectbox("Reunião", list(meet_labels_sbvr_r.keys()), key="sbvr_meet_r")
+            filtered_rules = sbvr_rules if not meet_labels_sbvr_r[sel_meet_r] else [
+                r for r in sbvr_rules if r.get("meeting_id") == meet_labels_sbvr_r[sel_meet_r]
+            ]
+
+            types = sorted({r.get("rule_type", "") for r in filtered_rules if r.get("rule_type")})
+            sel_rtype = st.selectbox("Tipo", ["Todos"] + types, key="sbvr_rtype")
+            if sel_rtype != "Todos":
+                filtered_rules = [r for r in filtered_rules if r.get("rule_type") == sel_rtype]
+
+            st.caption(f"{len(filtered_rules)} regra(s)")
+            st.markdown("")
+
+            for idx, r in enumerate(filtered_rules, 1):
+                rtype = r.get("rule_type", "constraint")
+                badge_cls, badge_txt = _RULE_BADGE.get(rtype, ("badge-active", rtype))
+                rule_id = r.get("rule_id") or f"BR-{idx:03d}"
+                meet_info = r.get("meetings") or {}
+                m_num = meet_info.get("meeting_number", "?")
+                with st.expander(f"**{rule_id}**", expanded=False):
+                    st.markdown(
+                        f'<span class="badge {badge_cls}">{badge_txt}</span>',
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(f"{r.get('statement', '—')}")
+                    footer = f"🗓️ Reunião {m_num}"
+                    if r.get("source"):
+                        footer += f" · 👤 {r['source']}"
+                    st.caption(footer)
