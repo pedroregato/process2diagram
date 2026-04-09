@@ -2,184 +2,202 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Authentication UI — login page rendering and session gate.
 #
-# Business logic (credential loading, password hashing/verification, session
-# state helpers) lives in modules/auth.py.
-# This module owns all Streamlit rendering for the auth flow.
+# Pattern mirrors DataJudMonitor/auth.py:
+#   • st.button (not st.form) — simpler rerun model
+#   • error state stored in st.session_state["_login_erro"]
+#   • render_login_page() calls st.stop() at the end
+#   • apply_auth_gate() is the single entry point for every page
+#
+# Business logic (credential loading, password verification, session helpers)
+# lives in modules/auth.py.
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
 
 import streamlit as st
 
-from modules.auth import (
-    _load_users,
-    _verify_password,
-    is_authenticated,
-)
+from modules.auth import _load_users, _extract_name, login_valido, is_authenticated, auth_required
 
 # ── Login page styles ─────────────────────────────────────────────────────────
 
 _LOGIN_CSS = """
 <style>
-/* Dark gradient background */
-[data-testid="stAppViewContainer"] > .main {
-    background: linear-gradient(145deg, #0B1E3D 0%, #1A3A6B 60%, #0F2850 100%);
-    min-height: 100vh;
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+html, body,
+[data-testid="stAppViewContainer"],
+[data-testid="stAppViewBlockContainer"],
+.main .block-container {
+    background: #0A1628 !important;
+    min-height: 100vh !important;
+    padding-top: 0 !important;
+    font-family: 'IBM Plex Sans', sans-serif;
 }
-[data-testid="stAppViewContainer"] {
-    background: linear-gradient(145deg, #0B1E3D 0%, #1A3A6B 60%, #0F2850 100%);
+section[data-testid="stSidebar"],
+header[data-testid="stHeader"],
+div[data-testid="stToolbar"],
+[data-testid="stDecoration"] { display: none !important; }
+.l-card {
+    max-width: 420px;
+    margin: 0 auto;
+    padding-top: 8vh;
 }
-/* Hide sidebar on login page */
-[data-testid="stSidebar"] { display: none !important; }
-/* Hide the top header */
-[data-testid="stHeader"] { background: transparent !important; }
-/* Card */
-.login-card {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 16px;
-    padding: 2.5rem 2.5rem 2rem;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
-}
-.login-logo {
-    font-size: 2.6rem;
+.l-banner {
+    background: linear-gradient(135deg, #0B1E3D 0%, #1A3A6B 100%);
+    border-bottom: 3px solid #C97B1A;
+    border-radius: 10px 10px 0 0;
+    padding: 1.8rem 2rem 1.5rem;
     text-align: center;
-    margin-bottom: 0.2rem;
 }
-.login-title {
-    color: #FFFFFF;
+.l-banner .icon  { font-size: 2.8rem; line-height: 1; margin-bottom: .5rem; }
+.l-banner .title {
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 1.7rem;
-    font-weight: 700;
+    color: #FAFAF8;
+    margin: 0 0 .2rem;
+    letter-spacing: -.01em;
+}
+.l-banner .sub {
+    font-size: .75rem;
+    color: #8899AA;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+.l-body {
+    background: #0F2040;
+    border-radius: 0 0 10px 10px;
+    padding: 2rem;
+    border: 1px solid #1e3a55;
+    border-top: none;
+}
+.l-label {
+    font-size: .75rem;
+    font-weight: 600;
+    color: #8899AA;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    margin-bottom: .3rem;
+}
+.l-err {
+    background: rgba(192,57,43,.15);
+    border: 1px solid rgba(192,57,43,.4);
+    border-radius: 6px;
+    color: #E74C3C;
+    font-size: .82rem;
+    padding: .6rem .9rem;
+    margin-bottom: 1rem;
+}
+.l-cfg-err {
+    background: rgba(201,123,26,.12);
+    border: 1px solid rgba(201,123,26,.4);
+    border-radius: 6px;
+    color: #E8941A;
+    font-size: .8rem;
+    padding: .6rem .9rem;
+    margin-bottom: 1rem;
+}
+.l-foot {
+    margin-top: 1.2rem;
     text-align: center;
-    letter-spacing: -0.5px;
-    margin-bottom: 0.15rem;
+    font-size: .7rem;
+    color: #445566;
 }
-.login-subtitle {
-    color: rgba(255,255,255,0.55);
-    font-size: 0.85rem;
-    text-align: center;
-    margin-bottom: 1.8rem;
+div[data-testid="stTextInput"] input {
+    background: #0D1B2A !important;
+    border: 1px solid #1e3a55 !important;
+    color: #FAFAF8 !important;
+    border-radius: 6px !important;
 }
-.login-divider {
-    border: none;
-    border-top: 1px solid rgba(255,255,255,0.10);
-    margin: 1.4rem 0;
+div[data-testid="stTextInput"] input:focus {
+    border-color: #C97B1A !important;
+    box-shadow: 0 0 0 2px rgba(201,123,26,.2) !important;
 }
-/* Override Streamlit input labels inside form */
-.login-card label { color: rgba(255,255,255,0.80) !important; font-size: 0.82rem !important; }
-/* Button override */
-.login-card .stButton > button {
-    background: linear-gradient(90deg, #C97B1A, #E8941A) !important;
+div[data-testid="stTextInput"] label { color: #8899AA !important; font-size:.75rem !important; }
+div[data-testid="stButton"] button {
+    background: linear-gradient(135deg, #C97B1A, #E8941A) !important;
     color: #fff !important;
+    font-weight: 700 !important;
     border: none !important;
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.3px;
-    height: 2.6rem;
+    border-radius: 6px !important;
     width: 100%;
-    transition: opacity .15s;
-}
-.login-card .stButton > button:hover { opacity: 0.88; }
-.login-footer {
-    color: rgba(255,255,255,0.30);
-    font-size: 0.72rem;
-    text-align: center;
-    margin-top: 1.4rem;
+    font-size: .9rem !important;
+    letter-spacing: .04em;
+    margin-top: .5rem;
 }
 </style>
 """
 
 
-# ── Internal helpers ──────────────────────────────────────────────────────────
-
-def _attempt_login(username: str, password: str) -> None:
-    """Validate credentials and update session state."""
-    if not username or not password:
-        st.warning("Preencha usuário e senha.")
-        return
-
-    users = _load_users()
-    user_data = users.get(username)
-
-    if user_data is None:
-        # Deliberate vague message — don't reveal whether user exists
-        st.error("Usuário ou senha incorretos.")
-        return
-
-    # Support both formats:
-    #   simple:  admin = "sha256$salt$hex"          → user_data is a string
-    #   nested:  [auth.users.admin] password_hash = → user_data is a dict/AttrDict
-    if isinstance(user_data, str):
-        stored_hash = user_data
-        display_name = username
-    elif hasattr(user_data, "get"):
-        stored_hash = user_data.get("password_hash", "")
-        display_name = user_data.get("name", username)
-    else:
-        stored_hash = getattr(user_data, "password_hash", "")
-        display_name = getattr(user_data, "name", username)
-
-    if _verify_password(password, stored_hash):
-        st.session_state.authenticated = True
-        st.session_state.auth_user = username
-        st.session_state.auth_name = display_name
-        st.rerun()
-    else:
-        st.error("Usuário ou senha incorretos.")
-
-
-# ── Public API ────────────────────────────────────────────────────────────────
+# ── Login page ────────────────────────────────────────────────────────────────
 
 def render_login_page() -> None:
-    """Render the full-page login form.
+    """Render the full-page login form and call st.stop().
 
-    Call this when ``is_authenticated()`` returns False.
-    The caller is responsible for calling ``st.stop()`` afterwards so
-    the rest of the page does not render.
+    Mirrors the DataJudMonitor pattern: uses st.button (not st.form),
+    stores error state in session_state, and always ends with st.stop()
+    so the rest of the page never renders.
     """
     st.markdown(_LOGIN_CSS, unsafe_allow_html=True)
 
-    # Surface config errors clearly
+    # Check for credential config errors
+    cfg_error: str | None = None
     try:
         _load_users()
     except RuntimeError as exc:
-        st.error(f"⚠️ Erro na configuração de autenticação: {exc}")
+        cfg_error = str(exc)
 
-    _, col, _ = st.columns([1, 1.4, 1])
-    with col:
-        st.markdown('<div class="login-card">', unsafe_allow_html=True)
-        st.markdown('<div class="login-logo">⚡</div>', unsafe_allow_html=True)
-        st.markdown('<div class="login-title">Process2Diagram</div>', unsafe_allow_html=True)
-        st.markdown(
-            '<div class="login-subtitle">Multi-agent process intelligence platform</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown('<hr class="login-divider">', unsafe_allow_html=True)
+    erro = st.session_state.get("_login_erro", False)
 
-        with st.form("p2d_login", clear_on_submit=False):
-            username = st.text_input("Usuário", placeholder="seu.usuario")
-            password = st.text_input("Senha", type="password", placeholder="••••••••")
-            submitted = st.form_submit_button("Entrar →", use_container_width=True)
+    erro_html = '<div class="l-err">⚠️ Usuário ou senha incorretos.</div>' if erro else ""
+    cfg_html  = f'<div class="l-cfg-err">⚙️ Erro de configuração: {cfg_error}</div>' if cfg_error else ""
 
-        if submitted:
-            _attempt_login(username.strip(), password)
+    st.markdown(f"""
+    <div class="l-card">
+      <div class="l-banner">
+        <div class="icon">⚡</div>
+        <div class="title">Process2Diagram</div>
+        <div class="sub">Multi-agent process intelligence platform</div>
+      </div>
+      <div class="l-body">
+        {cfg_html}{erro_html}
+        <div class="l-label">Usuário</div>
+    """, unsafe_allow_html=True)
 
-        st.markdown(
-            '<div class="login-footer">Process2Diagram v4.6 · Acesso restrito</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
+    usuario = st.text_input("Usuário", label_visibility="collapsed", key="_l_user",
+                            placeholder="seu.usuario")
+    st.markdown('<div class="l-label" style="margin-top:.8rem">Senha</div>',
+                unsafe_allow_html=True)
+    senha = st.text_input("Senha", type="password", label_visibility="collapsed",
+                          key="_l_pass", placeholder="••••••••")
 
+    if st.button("Entrar →", use_container_width=True, key="_l_btn"):
+        uname = usuario.strip()
+        if login_valido(uname, senha):
+            users = _load_users()
+            user_data = users.get(uname) or users.get(uname.upper())
+            st.session_state["_autenticado"]   = True
+            st.session_state["_usuario_login"] = uname
+            st.session_state["_usuario_nome"]  = _extract_name(user_data, uname)
+            st.session_state["_login_erro"]    = False
+            st.rerun()
+        else:
+            st.session_state["_login_erro"] = True
+            st.rerun()
+
+    st.markdown("""
+      <div class="l-foot">Process2Diagram v4.6 · Acesso restrito</div>
+      </div></div>
+    """, unsafe_allow_html=True)
+
+    st.stop()
+
+
+# ── Gate ──────────────────────────────────────────────────────────────────────
 
 def apply_auth_gate() -> None:
     """Enforce authentication gate.
 
-    If the current session is not authenticated, renders the login page and
-    halts the page execution via ``st.stop()``.  Call this once, immediately
-    after ``st.set_page_config()``, in every page that requires protection.
+    Call once, immediately after st.set_page_config(), on every page.
+    If not authenticated, renders the login page and halts execution.
     """
     if not is_authenticated():
         render_login_page()
-        st.stop()
