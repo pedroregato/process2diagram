@@ -414,6 +414,79 @@ def list_sbvr_rules(project_id: str) -> list[dict]:
         return []
 
 
+# ── Batch Log ─────────────────────────────────────────────────────────────────
+
+def is_file_processed(project_id: str, file_hash: str) -> bool:
+    """Retorna True se este arquivo já foi processado com sucesso neste projeto."""
+    db = _db()
+    if not db:
+        return False
+    try:
+        rows = _ok(
+            db.table("batch_log")
+            .select("id")
+            .eq("project_id", project_id)
+            .eq("file_hash", file_hash)
+            .eq("status", "done")
+            .limit(1)
+            .execute()
+        )
+        return bool(rows)
+    except Exception:
+        return False
+
+
+def log_batch_file(
+    project_id: str,
+    meeting_id: str | None,
+    filename: str,
+    file_hash: str,
+    status: str,
+    req_counts: dict,
+    n_terms: int,
+    n_rules: int,
+    error_detail: str,
+) -> None:
+    """Registra o resultado do processamento de um arquivo no batch_log."""
+    db = _db()
+    if not db:
+        return
+    try:
+        db.table("batch_log").insert({
+            "project_id":       project_id,
+            "meeting_id":       meeting_id,
+            "filename":         filename,
+            "file_hash":        file_hash,
+            "status":           status,
+            "req_new":          req_counts.get("new", 0),
+            "req_revised":      req_counts.get("revised", 0),
+            "req_contradicted": req_counts.get("contradicted", 0),
+            "req_confirmed":    req_counts.get("confirmed", 0),
+            "n_terms":          n_terms,
+            "n_rules":          n_rules,
+            "error_detail":     (error_detail or "")[:500],
+        }).execute()
+    except Exception:
+        pass
+
+
+def list_batch_log(project_id: str) -> list[dict]:
+    """Retorna o histórico de arquivos processados em lote para o projeto."""
+    db = _db()
+    if not db:
+        return []
+    try:
+        return _ok(
+            db.table("batch_log")
+            .select("*")
+            .eq("project_id", project_id)
+            .order("processed_at", desc=True)
+            .execute()
+        )
+    except Exception:
+        return []
+
+
 def list_contradictions(project_id: str) -> list[dict]:
     """Retorna versões de requisitos com contradições ativas no projeto."""
     db = _db()
