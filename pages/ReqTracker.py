@@ -19,6 +19,7 @@ from datetime import date
 
 from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured
+from modules.reqtracker_exporter import to_html as export_html, to_pdf as export_pdf
 from core.project_store import (
     list_projects, list_meetings, list_requirements, list_contradictions,
     list_sbvr_terms, list_sbvr_rules,
@@ -117,6 +118,57 @@ c4.metric("⚠️ Contradições", n_contradicted, delta=None,
           delta_color="off" if n_contradicted == 0 else "inverse")
 c5.metric("Termos SBVR", len(sbvr_terms))
 c6.metric("Regras SBVR", len(sbvr_rules))
+
+st.markdown("---")
+
+# ── Export ────────────────────────────────────────────────────────────────────
+with st.expander("📦 Exportar Relatório", expanded=False):
+    st.caption("Gera um relatório completo com requisitos, contradições, SBVR e reuniões.")
+    col_html, col_pdf, _ = st.columns([1, 1, 4])
+
+    with col_html:
+        if st.button("🌐 Gerar HTML", key="rt_export_html"):
+            with st.spinner("Gerando relatório HTML..."):
+                try:
+                    html_bytes = export_html(
+                        project, meetings, requirements,
+                        contradictions, sbvr_terms, sbvr_rules,
+                    ).encode("utf-8")
+                    st.session_state["rt_html"] = html_bytes
+                except Exception as e:
+                    st.error(f"Erro ao gerar HTML: {e}")
+
+    with col_pdf:
+        if st.button("📄 Gerar PDF", key="rt_export_pdf"):
+            with st.spinner("Gerando relatório PDF..."):
+                try:
+                    pdf_bytes = export_pdf(
+                        project, meetings, requirements,
+                        contradictions, sbvr_terms, sbvr_rules,
+                    )
+                    st.session_state["rt_pdf"] = pdf_bytes
+                except Exception as e:
+                    st.error(f"Erro ao gerar PDF: {e}")
+
+    fname = selected_name.replace(" ", "_")
+
+    if st.session_state.get("rt_html"):
+        st.download_button(
+            label="⬇️ Download HTML",
+            data=st.session_state["rt_html"],
+            file_name=f"ReqTracker_{fname}.html",
+            mime="text/html",
+            key="rt_dl_html",
+        )
+
+    if st.session_state.get("rt_pdf"):
+        st.download_button(
+            label="⬇️ Download PDF",
+            data=st.session_state["rt_pdf"],
+            file_name=f"ReqTracker_{fname}.pdf",
+            mime="application/pdf",
+            key="rt_dl_pdf",
+        )
 
 st.markdown("---")
 
