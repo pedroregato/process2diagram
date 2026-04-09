@@ -13,7 +13,18 @@
       "Bash(ls:*)",
       "Bash(python -c:*)",
       "Bash(iconv -f cp1252 -t utf-8)",
-      "Bash(python -c \":*)"
+      "Bash(python -c \":*)",
+      "Bash(.venv/Scripts/pip install:*)",
+      "Bash(pip install:*)",
+      "Bash(pip show:*)",
+      "Bash(gh repo:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(curl:*)",
+      "Bash(find D:/PythonProjects/process2diagram -name \"*.pyc\" -path \"*/auth*\" -delete)",
+      "Bash(find D:/PythonProjects/process2diagram -name \"*.pyc\" -path \"*/auth_gate*\" -delete)",
+      "Bash(find D:/PythonProjects/process2diagram -name auth*.pyc -o -name auth_gate*.pyc)",
+      "Bash(find D:/PythonProjects/process2diagram/modules/__pycache__ D:/PythonProjects/process2diagram/ui/__pycache__ -name *.pyc)"
     ]
   }
 }

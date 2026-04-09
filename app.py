@@ -23,7 +23,8 @@ init_session_state()
 
 # ── Autenticação ───────────────────────────────────────────────────────────────
 apply_auth_gate()
-
+st.write(f"DEBUG: is_authenticated = {st.session_state.get('_autenticado')}")
+st.write("⚡ PASSOU PELO GATE")   # <-- só aparece se NÃO chamou st.stop()
 # Sidebar (sempre visível)
 render_sidebar()
 
