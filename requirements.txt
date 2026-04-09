@@ -31,6 +31,9 @@ python-dateutil>=2.9            # parsing de datas nos action items
 # ── Orquestração com grafo (LangGraph) ───────────────────────────────────────
 langgraph>=1.0                  # adaptive BPMN retry loop (core/lg_pipeline.py)
 
+# ── Supabase (persistência de projetos/reuniões/requisitos) ──────────────────
+supabase>=2.4.0                 # cliente Python para Supabase (project_store.py)
+
 # ── Testes ────────────────────────────────────────────────────────────────────
 pytest>=8.0                     # suite de testes automatizados (run: pytest tests/)
 
