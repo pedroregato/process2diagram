@@ -1,24 +1,14 @@
 # ui/auth_gate.py
 # ─────────────────────────────────────────────────────────────────────────────
-# Authentication UI — login page rendering and session gate.
+# Tela de login e gate de autenticação — padrão DataJudMonitor.
 #
-# Pattern mirrors DataJudMonitor/auth.py:
-#   • st.button (not st.form) — simpler rerun model
-#   • error state stored in st.session_state["_login_erro"]
-#   • render_login_page() calls st.stop() at the end
-#   • apply_auth_gate() is the single entry point for every page
-#
-# Business logic (credential loading, password verification, session helpers)
-# lives in modules/auth.py.
+# Usa st.button (não st.form), erro via session_state, st.stop() dentro
+# da própria função. Sem dependência de arquivos externos.
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
-
 import streamlit as st
-
-from modules.auth import _load_users, _extract_name, login_valido, is_authenticated, auth_required
-
-# ── Login page styles ─────────────────────────────────────────────────────────
+from modules.auth import login_valido, is_authenticated, USUARIOS
 
 _LOGIN_CSS = """
 <style>
@@ -51,61 +41,32 @@ div[data-testid="stToolbar"],
 .l-banner .icon  { font-size: 2.8rem; line-height: 1; margin-bottom: .5rem; }
 .l-banner .title {
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 1.7rem;
-    color: #FAFAF8;
-    margin: 0 0 .2rem;
-    letter-spacing: -.01em;
+    font-size: 1.7rem; color: #FAFAF8;
+    margin: 0 0 .2rem; letter-spacing: -.01em;
 }
 .l-banner .sub {
-    font-size: .75rem;
-    color: #8899AA;
-    letter-spacing: .08em;
-    text-transform: uppercase;
+    font-size: .75rem; color: #8899AA;
+    letter-spacing: .08em; text-transform: uppercase;
 }
 .l-body {
     background: #0F2040;
     border-radius: 0 0 10px 10px;
     padding: 2rem;
-    border: 1px solid #1e3a55;
-    border-top: none;
+    border: 1px solid #1e3a55; border-top: none;
 }
 .l-label {
-    font-size: .75rem;
-    font-weight: 600;
-    color: #8899AA;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    margin-bottom: .3rem;
+    font-size: .75rem; font-weight: 600; color: #8899AA;
+    letter-spacing: .08em; text-transform: uppercase; margin-bottom: .3rem;
 }
 .l-err {
-    background: rgba(192,57,43,.15);
-    border: 1px solid rgba(192,57,43,.4);
-    border-radius: 6px;
-    color: #E74C3C;
-    font-size: .82rem;
-    padding: .6rem .9rem;
-    margin-bottom: 1rem;
+    background: rgba(192,57,43,.15); border: 1px solid rgba(192,57,43,.4);
+    border-radius: 6px; color: #E74C3C;
+    font-size: .82rem; padding: .6rem .9rem; margin-bottom: 1rem;
 }
-.l-cfg-err {
-    background: rgba(201,123,26,.12);
-    border: 1px solid rgba(201,123,26,.4);
-    border-radius: 6px;
-    color: #E8941A;
-    font-size: .8rem;
-    padding: .6rem .9rem;
-    margin-bottom: 1rem;
-}
-.l-foot {
-    margin-top: 1.2rem;
-    text-align: center;
-    font-size: .7rem;
-    color: #445566;
-}
+.l-foot { margin-top: 1.2rem; text-align: center; font-size: .7rem; color: #445566; }
 div[data-testid="stTextInput"] input {
-    background: #0D1B2A !important;
-    border: 1px solid #1e3a55 !important;
-    color: #FAFAF8 !important;
-    border-radius: 6px !important;
+    background: #0D1B2A !important; border: 1px solid #1e3a55 !important;
+    color: #FAFAF8 !important; border-radius: 6px !important;
 }
 div[data-testid="stTextInput"] input:focus {
     border-color: #C97B1A !important;
@@ -114,42 +75,21 @@ div[data-testid="stTextInput"] input:focus {
 div[data-testid="stTextInput"] label { color: #8899AA !important; font-size:.75rem !important; }
 div[data-testid="stButton"] button {
     background: linear-gradient(135deg, #C97B1A, #E8941A) !important;
-    color: #fff !important;
-    font-weight: 700 !important;
-    border: none !important;
-    border-radius: 6px !important;
-    width: 100%;
-    font-size: .9rem !important;
-    letter-spacing: .04em;
-    margin-top: .5rem;
+    color: #fff !important; font-weight: 700 !important;
+    border: none !important; border-radius: 6px !important;
+    width: 100%; font-size: .9rem !important;
+    letter-spacing: .04em; margin-top: .5rem;
 }
 </style>
 """
 
 
-# ── Login page ────────────────────────────────────────────────────────────────
-
 def render_login_page() -> None:
-    """Render the full-page login form and call st.stop().
-
-    Mirrors the DataJudMonitor pattern: uses st.button (not st.form),
-    stores error state in session_state, and always ends with st.stop()
-    so the rest of the page never renders.
-    """
-    st.markdown(_LOGIN_CSS, unsafe_allow_html=True)
-
-    # Check for credential config errors
-    cfg_error: str | None = None
-    try:
-        _load_users()
-    except RuntimeError as exc:
-        cfg_error = str(exc)
-
+    """Renderiza a tela de login completa e chama st.stop()."""
     erro = st.session_state.get("_login_erro", False)
-
     erro_html = '<div class="l-err">⚠️ Usuário ou senha incorretos.</div>' if erro else ""
-    cfg_html  = f'<div class="l-cfg-err">⚙️ Erro de configuração: {cfg_error}</div>' if cfg_error else ""
 
+    st.markdown(_LOGIN_CSS, unsafe_allow_html=True)
     st.markdown(f"""
     <div class="l-card">
       <div class="l-banner">
@@ -158,25 +98,23 @@ def render_login_page() -> None:
         <div class="sub">Multi-agent process intelligence platform</div>
       </div>
       <div class="l-body">
-        {cfg_html}{erro_html}
+        {erro_html}
         <div class="l-label">Usuário</div>
     """, unsafe_allow_html=True)
 
-    usuario = st.text_input("Usuário", label_visibility="collapsed", key="_l_user",
-                            placeholder="seu.usuario")
+    usuario = st.text_input("Usuário", label_visibility="collapsed",
+                            key="_l_user", placeholder="seu.usuario")
     st.markdown('<div class="l-label" style="margin-top:.8rem">Senha</div>',
                 unsafe_allow_html=True)
     senha = st.text_input("Senha", type="password", label_visibility="collapsed",
                           key="_l_pass", placeholder="••••••••")
 
     if st.button("Entrar →", use_container_width=True, key="_l_btn"):
-        uname = usuario.strip()
+        uname = usuario.lower().strip()
         if login_valido(uname, senha):
-            users = _load_users()
-            user_data = users.get(uname) or users.get(uname.upper())
             st.session_state["_autenticado"]   = True
             st.session_state["_usuario_login"] = uname
-            st.session_state["_usuario_nome"]  = _extract_name(user_data, uname)
+            st.session_state["_usuario_nome"]  = USUARIOS[uname]["nome"]
             st.session_state["_login_erro"]    = False
             st.rerun()
         else:
@@ -191,13 +129,7 @@ def render_login_page() -> None:
     st.stop()
 
 
-# ── Gate ──────────────────────────────────────────────────────────────────────
-
 def apply_auth_gate() -> None:
-    """Enforce authentication gate.
-
-    Call once, immediately after st.set_page_config(), on every page.
-    If not authenticated, renders the login page and halts execution.
-    """
+    """Gate de autenticação. Chamar logo após st.set_page_config()."""
     if not is_authenticated():
         render_login_page()
