@@ -16,11 +16,11 @@ import streamlit as st
 
 USUARIOS = {
     "admin": {
-        "hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+        "hash": "b5cda95e2e42318a9d2ab8d0f77d77d8f2319d4cf09f73219efe9d716b30caf6",
         "nome": "Administrador",
     },
     "demo": {
-        "hash": "3fb59388d9fcc5f7b965bc0f1747bea74c0f59102e733e1a7279911899e2879b",
+        "hash": "2c3749eab531cf5fd3f8fca77f80b1b2a4c2efab51c3a66badff46fca754f8fa",
         "nome": "Usuário Demo",
     },
 }
