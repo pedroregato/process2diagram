@@ -3,14 +3,14 @@ import streamlit as st
 from datetime import date
 from modules.config import AVAILABLE_PROVIDERS
 from modules.session_security import render_api_key_gate
-from modules.auth import auth_required, get_current_name, logout
+from modules.auth import get_current_name, logout
 
 def render_sidebar():
     with st.sidebar:
         st.markdown("⚡ Process2Diagram", unsafe_allow_html=True)
 
         # ── Usuário autenticado ────────────────────────────────────────────────
-        if auth_required():
+        if True:  # autenticação sempre ativa
             name = get_current_name() or "Usuário"
             col_usr, col_out = st.columns([3, 1])
             with col_usr:
