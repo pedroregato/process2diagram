@@ -236,6 +236,69 @@ def list_requirements(project_id: str) -> list[dict]:
         return []
 
 
+def add_requirement_version(
+    requirement_id: str,
+    meeting_id: str,
+    version: int,
+    title: str,
+    description: str,
+    req_type: str,
+    priority: str,
+    change_type: str,
+    change_summary: str = "",
+    contradiction_flag: bool = False,
+    contradiction_detail: str = "",
+) -> bool:
+    """Adiciona uma nova versão a um requisito existente."""
+    db = _db()
+    if not db:
+        return False
+    try:
+        db.table("requirement_versions").insert({
+            "requirement_id":      requirement_id,
+            "meeting_id":          meeting_id,
+            "version":             version,
+            "title":               title,
+            "description":         description,
+            "req_type":            req_type,
+            "priority":            priority,
+            "change_type":         change_type,
+            "change_summary":      change_summary,
+            "contradiction_flag":  contradiction_flag,
+            "contradiction_detail": contradiction_detail,
+        }).execute()
+        return True
+    except Exception:
+        return False
+
+
+def update_requirement(
+    requirement_id: str,
+    status: str | None = None,
+    last_meeting_id: str | None = None,
+    title: str | None = None,
+    description: str | None = None,
+) -> bool:
+    """Atualiza campos do registro mestre de um requisito."""
+    db = _db()
+    if not db:
+        return False
+    payload: dict[str, Any] = {"updated_at": "NOW()"}
+    if status is not None:
+        payload["status"] = status
+    if last_meeting_id is not None:
+        payload["last_meeting_id"] = last_meeting_id
+    if title is not None:
+        payload["title"] = title
+    if description is not None:
+        payload["description"] = description
+    try:
+        db.table("requirements").update(payload).eq("id", requirement_id).execute()
+        return True
+    except Exception:
+        return False
+
+
 def save_requirements_from_hub(meeting_id: str, project_id: str, hub) -> int:
     """Persiste todos os requisitos de hub.requirements no Supabase.
 

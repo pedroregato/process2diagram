@@ -7,7 +7,8 @@ from ui.input_area import render_input_area
 from ui.project_selector import render_project_selector
 from core.pipeline import run_pipeline
 from core.rerun_handlers import handle_rerun
-from core.project_store import create_meeting, save_meeting_artifacts, save_requirements_from_hub
+from core.project_store import create_meeting, save_meeting_artifacts
+from agents.agent_req_reconciler import AgentReqReconciler
 from modules.supabase_client import supabase_configured
 from ui.tabs import (
     render_quality, render_bpmn, render_mermaid, render_validation,
@@ -103,7 +104,7 @@ if start_process and st.session_state.transcript_text.strip():
         progress_placeholder.error(f"Erro no pipeline: {e}")
         st.stop()
 
-    # ── Persistência no Supabase ───────────────────────────────────────────
+    # ── Persistência no Supabase + reconciliação de requisitos ───────────────
     if supabase_configured() and st.session_state.get("project_confirmed"):
         try:
             meeting = create_meeting(
@@ -115,8 +116,27 @@ if start_process and st.session_state.transcript_text.strip():
                 meeting_id = meeting["id"]
                 st.session_state.current_meeting_id = meeting_id
                 save_meeting_artifacts(meeting_id, hub)
-                n_req = save_requirements_from_hub(meeting_id, st.session_state.project_id, hub)
-                st.toast(f"💾 Reunião salva · {n_req} requisito(s) registrado(s)", icon="✅")
+
+                # Reconciliação: compara com histórico e persiste requisitos
+                with st.spinner("🔍 Reconciliando requisitos com histórico do projeto..."):
+                    reconciler = AgentReqReconciler(client_info, st.session_state.provider_cfg)
+                    counts = reconciler.run(
+                        hub,
+                        project_id=st.session_state.project_id,
+                        meeting_id=meeting_id,
+                    )
+                total = sum(counts.values())
+                parts = []
+                if counts.get("new"):
+                    parts.append(f"{counts['new']} novo(s)")
+                if counts.get("revised"):
+                    parts.append(f"{counts['revised']} revisado(s)")
+                if counts.get("contradicted"):
+                    parts.append(f"⚠️ {counts['contradicted']} contradição(ões)")
+                if counts.get("confirmed"):
+                    parts.append(f"{counts['confirmed']} confirmado(s)")
+                summary = " · ".join(parts) if parts else f"{total} requisito(s)"
+                st.toast(f"💾 Reunião salva · {summary}", icon="✅")
         except Exception as e:
             st.warning(f"⚠️ Erro ao salvar no Supabase: {e}")
 
