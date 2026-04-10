@@ -130,6 +130,21 @@ def create_meeting(
         return None
 
 
+def save_meeting_tokens(meeting_id: str, total_tokens: int, llm_provider: str) -> bool:
+    """Atualiza apenas tokens e provedor — payload mínimo, nunca falha por tamanho."""
+    db = _db()
+    if not db:
+        return False
+    try:
+        db.table("meetings").update({
+            "total_tokens": total_tokens,
+            "llm_provider": llm_provider,
+        }).eq("id", meeting_id).execute()
+        return True
+    except Exception:
+        return False
+
+
 def save_meeting_artifacts(meeting_id: str, hub) -> bool:
     """Persiste os artefatos gerados pelo pipeline na reunião."""
     db = _db()

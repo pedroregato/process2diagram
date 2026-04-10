@@ -371,16 +371,29 @@ with tab_meet:
                 c3.metric("Data", str(dt))
 
                 # Requisitos originados nesta reunião
-                reqs_here = [
+                reqs_originated = [
                     r for r in requirements
                     if r.get("first_meeting_id") == m["id"]
                 ]
-                if reqs_here:
-                    st.markdown(f"**{len(reqs_here)} requisito(s) originado(s) nesta reunião:**")
-                    for r in reqs_here:
-                        st.markdown(
-                            f"- `REQ-{r['req_number']:03d}` {r.get('title','')}"
-                        )
+                # Requisitos revisados/confirmados nesta reunião (não originados aqui)
+                reqs_touched = [
+                    r for r in requirements
+                    if r.get("first_meeting_id") != m["id"]
+                    and any(
+                        v.get("meeting_id") == m["id"]
+                        for v in (r.get("requirement_versions") or [])
+                    )
+                ]
+                if reqs_originated:
+                    st.markdown(f"**{len(reqs_originated)} requisito(s) originado(s) nesta reunião:**")
+                    for r in reqs_originated:
+                        st.markdown(f"- `REQ-{r['req_number']:03d}` {r.get('title','')}")
+                if reqs_touched:
+                    st.markdown(f"**{len(reqs_touched)} requisito(s) revisado(s)/confirmado(s) nesta reunião:**")
+                    for r in reqs_touched:
+                        status = r.get("status", "active")
+                        icon = "🔄" if status == "revised" else "⚠️" if status == "contradicted" else "✅"
+                        st.markdown(f"- {icon} `REQ-{r['req_number']:03d}` {r.get('title','')}")
 
                 # Termos/regras SBVR desta reunião
                 terms_here = [t for t in sbvr_terms if t.get("meeting_id") == m["id"]]

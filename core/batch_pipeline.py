@@ -192,8 +192,8 @@ class BatchPipeline:
         agents_config: dict,
     ) -> FileResult:
         from core.project_store import (
-            create_meeting, save_meeting_artifacts, save_sbvr_from_hub,
-            log_batch_file, is_file_processed,
+            create_meeting, save_meeting_artifacts, save_meeting_tokens,
+            save_sbvr_from_hub, log_batch_file, is_file_processed,
         )
         from core.pipeline import run_pipeline
         from core.knowledge_hub import KnowledgeHub
@@ -255,6 +255,12 @@ class BatchPipeline:
             meeting_id = meeting["id"]
 
             save_meeting_artifacts(meeting_id, hub)
+            # Garante tokens mesmo se save_meeting_artifacts falhou com payload grande
+            save_meeting_tokens(
+                meeting_id,
+                getattr(hub.meta, "total_tokens_used", 0),
+                getattr(hub.meta, "llm_provider", ""),
+            )
 
             n_terms, n_rules = 0, 0
             if getattr(hub, "sbvr", None) and hub.sbvr.ready:
