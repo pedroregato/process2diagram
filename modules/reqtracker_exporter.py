@@ -267,8 +267,17 @@ a{{color:var(--accent2);text-decoration:none}}
 .main{{margin-left:230px;padding:2rem 2.5rem;max-width:1100px}}
 .section{{margin-bottom:3rem}}
 .section-title{{font-size:1.25rem;font-weight:700;color:var(--white);
-  padding-bottom:.6rem;border-bottom:2px solid var(--accent);margin-bottom:1.5rem;
-  display:flex;align-items:center;gap:.5rem}}
+  padding:.7rem 1rem;border-bottom:2px solid var(--accent);margin-bottom:0;
+  display:flex;align-items:center;gap:.5rem;cursor:pointer;
+  background:var(--navy2);border-radius:8px 8px 0 0;user-select:none;
+  transition:background .15s}}
+.section-title:hover{{background:#162d52}}
+.section-title .chev{{margin-left:auto;font-size:.8rem;color:var(--muted);
+  transition:transform .25s;display:inline-block}}
+.section-title.collapsed .chev{{transform:rotate(-90deg)}}
+.section-body{{overflow:hidden;transition:max-height .3s ease,opacity .25s ease;
+  max-height:9999px;opacity:1;padding-top:1rem}}
+.section-body.collapsed{{max-height:0;opacity:0;padding-top:0}}
 
 /* ── Header banner ── */
 .header-banner{{background:linear-gradient(135deg,var(--navy) 0%,#1a3a6e 100%);
@@ -433,7 +442,11 @@ a{{color:var(--accent2);text-decoration:none}}
 
   <!-- Requirements -->
   <div id="sec-req" class="section">
-    <div class="section-title">📝 Especificação de Requisitos</div>
+    <div class="section-title" onclick="toggleSection('body-req')">
+      📝 Especificação de Requisitos
+      <span class="chev">▼</span>
+    </div>
+    <div id="body-req" class="section-body">
     <div class="filter-bar">
       <select id="f-status" onchange="filterReqs()">
         <option value="">Todos os status</option>
@@ -466,50 +479,79 @@ a{{color:var(--accent2);text-decoration:none}}
         </tbody>
       </table>
     </div>
+    </div><!-- /body-req -->
   </div>
 
   <!-- Contradictions -->
   <div id="sec-contra" class="section">
-    <div class="section-title">⚠️ Contradições Detectadas</div>
-    {contra_cards}
+    <div class="section-title" onclick="toggleSection('body-contra')">
+      ⚠️ Contradições Detectadas
+      <span class="chev">▼</span>
+    </div>
+    <div id="body-contra" class="section-body">
+      {contra_cards}
+    </div>
   </div>
 
   <!-- SBVR -->
   <div id="sec-sbvr" class="section">
-    <div class="section-title">📖 Vocabulário e Regras SBVR</div>
-    <div class="sbvr-grid">
-      <div>
-        <div class="subsection-title">📚 Vocabulário de Negócio ({n_terms} termos)</div>
-        <table class="sbvr-table">
-          <thead><tr><th>Termo</th><th>Categoria</th><th>Definição</th><th>Reunião</th></tr></thead>
-          <tbody>{terms_rows}</tbody>
-        </table>
-      </div>
-      <div>
-        <div class="subsection-title">📋 Regras de Negócio ({n_rules} regras)</div>
-        <table class="sbvr-table">
-          <thead><tr><th>ID</th><th>Tipo</th><th>Enunciado</th><th>Fonte</th><th>Reunião</th></tr></thead>
-          <tbody>{rules_rows}</tbody>
-        </table>
+    <div class="section-title" onclick="toggleSection('body-sbvr')">
+      📖 Vocabulário e Regras SBVR
+      <span class="chev">▼</span>
+    </div>
+    <div id="body-sbvr" class="section-body">
+      <div class="sbvr-grid">
+        <div>
+          <div class="subsection-title">📚 Vocabulário de Negócio ({n_terms} termos)</div>
+          <table class="sbvr-table">
+            <thead><tr><th>Termo</th><th>Categoria</th><th>Definição</th><th>Reunião</th></tr></thead>
+            <tbody>{terms_rows}</tbody>
+          </table>
+        </div>
+        <div>
+          <div class="subsection-title">📋 Regras de Negócio ({n_rules} regras)</div>
+          <table class="sbvr-table">
+            <thead><tr><th>ID</th><th>Tipo</th><th>Enunciado</th><th>Fonte</th><th>Reunião</th></tr></thead>
+            <tbody>{rules_rows}</tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Meetings -->
   <div id="sec-meetings" class="section">
-    <div class="section-title">🗓️ Linha do Tempo de Reuniões</div>
-    {meet_cards}
+    <div class="section-title" onclick="toggleSection('body-meetings')">
+      🗓️ Linha do Tempo de Reuniões
+      <span class="chev">▼</span>
+    </div>
+    <div id="body-meetings" class="section-body">
+      {meet_cards}
+    </div>
   </div>
 
 </main>
 
 <script>
-// Sidebar navigation
+function toggleSection(bodyId) {{
+  const body  = document.getElementById(bodyId);
+  const title = body.previousElementSibling;
+  const isCollapsed = body.classList.contains('collapsed');
+  body.classList.toggle('collapsed', !isCollapsed);
+  title.classList.toggle('collapsed', !isCollapsed);
+}}
+
+// Sidebar navigation — expands section if collapsed before scrolling
 document.querySelectorAll('.nav-link[data-target]').forEach(link => {{
   link.addEventListener('click', e => {{
     e.preventDefault();
-    const el = document.getElementById(link.dataset.target);
-    if (el) el.scrollIntoView({{behavior: 'smooth', block: 'start'}});
+    const section = document.getElementById(link.dataset.target);
+    if (!section) return;
+    const body = section.querySelector('.section-body');
+    if (body && body.classList.contains('collapsed')) {{
+      toggleSection(body.id);
+    }}
+    section.scrollIntoView({{behavior: 'smooth', block: 'start'}});
   }});
 }});
 
