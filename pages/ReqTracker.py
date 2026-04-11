@@ -24,6 +24,7 @@ from modules.reqtracker_exporter import to_html as export_html, to_pdf as export
 from core.project_store import (
     list_projects, list_meetings, list_requirements, list_contradictions,
     list_sbvr_terms, list_sbvr_rules,
+    list_bpmn_processes, list_bpmn_versions, bpmn_tables_exist,
 )
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -95,6 +96,7 @@ requirements   = list_requirements(project_id)
 contradictions = list_contradictions(project_id)
 sbvr_terms     = list_sbvr_terms(project_id)
 sbvr_rules     = list_sbvr_rules(project_id)
+bpmn_procs     = list_bpmn_processes(project_id) if bpmn_tables_exist() else []
 
 meet_map = {m["id"]: m for m in meetings}
 
@@ -119,6 +121,8 @@ c4.metric("⚠️ Contradições", n_contradicted, delta=None,
           delta_color="off" if n_contradicted == 0 else "inverse")
 c5.metric("Termos SBVR", len(sbvr_terms))
 c6.metric("Regras SBVR", len(sbvr_rules))
+if bpmn_procs:
+    st.metric("Processos BPMN", len(bpmn_procs))
 
 st.markdown("---")
 
@@ -174,12 +178,13 @@ with st.expander("📦 Exportar Relatório", expanded=False):
 st.markdown("---")
 
 # ── Abas principais ───────────────────────────────────────────────────────────
-tab_req, tab_contra, tab_hist, tab_meet, tab_sbvr = st.tabs([
+tab_req, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn = st.tabs([
     "📝 Requisitos",
     f"⚠️ Contradições ({len(contradictions)})",
     "📅 Histórico",
     "🗓️ Reuniões",
     f"📖 SBVR ({len(sbvr_terms)}T · {len(sbvr_rules)}R)",
+    f"📐 Processos BPMN ({len(bpmn_procs)})",
 ])
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -501,3 +506,126 @@ with tab_sbvr:
                     if r.get("source"):
                         footer += f" · 👤 {r['source']}"
                     st.caption(footer)
+
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 6 — PROCESSOS BPMN
+# ════════════════════════════════════════════════════════════════════════════
+import streamlit.components.v1 as components
+from modules.bpmn_viewer import preview_from_xml
+from modules.mermaid_renderer import render_mermaid_block
+
+_STATUS_PROC_BADGE = {
+    "active":   ("badge-active",    "Ativo"),
+    "archived": ("badge-deprecated","Arquivado"),
+}
+
+with tab_bpmn:
+    if not bpmn_procs:
+        if not bpmn_tables_exist():
+            st.warning(
+                "⚠️ Tabelas BPMN ainda não criadas. "
+                "Execute `setup/supabase_schema_bpmn_processes.sql` no Supabase."
+            )
+        else:
+            st.info(
+                "Nenhum processo BPMN registrado para este projeto. "
+                "Execute o pipeline com BPMN habilitado ou use o **📐 BPMN Backfill**."
+            )
+    else:
+        st.caption(
+            f"**{len(bpmn_procs)} processo(s)** registrado(s). "
+            "Expanda um processo para ver o histórico de versões e visualizar o diagrama."
+        )
+        st.markdown("")
+
+        for proc in bpmn_procs:
+            pid        = proc["id"]
+            proc_name  = proc.get("name") or "Processo"
+            n_ver      = proc.get("version_count") or 0
+            status     = proc.get("status", "active")
+            slug       = proc.get("slug", "")
+            last_mid   = proc.get("last_meeting_id")
+            badge_cls, badge_txt = _STATUS_PROC_BADGE.get(status, ("badge-active", status))
+
+            header = (
+                f"**{proc_name}**  ·  "
+                f'{n_ver} versão(ões)  ·  '
+                f'última: {meet_label(last_mid)}'
+            )
+            with st.expander(header, expanded=(n_ver > 0)):
+                # Metadados do processo
+                col_m1, col_m2, col_m3 = st.columns(3)
+                with col_m1:
+                    st.markdown(
+                        f'<span class="badge {badge_cls}">{badge_txt}</span>',
+                        unsafe_allow_html=True,
+                    )
+                with col_m2:
+                    st.caption(f"🔑 slug: `{slug}`")
+                with col_m3:
+                    st.caption(f"🏁 Primeira: {meet_label(proc.get('first_meeting_id'))}")
+
+                st.markdown("---")
+
+                # Versões
+                versions = list_bpmn_versions(pid)
+                if not versions:
+                    st.info("Nenhuma versão registrada ainda.")
+                    continue
+
+                # Seletor de versão
+                ver_options = {}
+                for v in versions:   # já vem desc por version
+                    m_info = v.get("meetings") or {}
+                    m_num  = m_info.get("meeting_number", "?")
+                    m_tit  = m_info.get("title", "")
+                    m_dt   = m_info.get("meeting_date", "")
+                    lbl    = f"v{v['version']}  ·  Reunião {m_num} — {m_tit} ({m_dt})"
+                    if v.get("is_current"):
+                        lbl = "⭐ " + lbl + "  (atual)"
+                    ver_options[lbl] = v
+
+                sel_ver_lbl = st.selectbox(
+                    "Versão",
+                    list(ver_options.keys()),
+                    key=f"bpmn_ver_sel_{pid}",
+                )
+                sel_ver = ver_options[sel_ver_lbl]
+
+                # Diagrama da versão selecionada
+                bpmn_xml     = sel_ver.get("bpmn_xml") or ""
+                mermaid_code = sel_ver.get("mermaid_code") or ""
+
+                if not bpmn_xml and not mermaid_code:
+                    st.warning("Esta versão não possui diagrama armazenado.")
+                    continue
+
+                sub_bpmn, sub_mermaid = st.tabs(["📐 BPMN 2.0", "📊 Mermaid"])
+
+                with sub_bpmn:
+                    if bpmn_xml:
+                        try:
+                            bpmn_html = preview_from_xml(bpmn_xml)
+                            components.html(bpmn_html, height=700, scrolling=False)
+                        except Exception as e:
+                            st.error(f"Erro ao renderizar BPMN: {e}")
+                        st.download_button(
+                            "⬇️ Download BPMN XML",
+                            data=bpmn_xml.encode("utf-8"),
+                            file_name=f"{slug}_v{sel_ver['version']}.bpmn",
+                            mime="application/xml",
+                            key=f"dl_bpmn_{pid}_{sel_ver['version']}",
+                        )
+                    else:
+                        st.info("XML BPMN não disponível para esta versão.")
+
+                with sub_mermaid:
+                    if mermaid_code:
+                        render_mermaid_block(
+                            mermaid_code,
+                            show_code=True,
+                            key_suffix=f"rt_mmd_{pid}_{sel_ver['version']}",
+                            height=500,
+                        )
+                    else:
+                        st.info("Código Mermaid não disponível para esta versão.")
