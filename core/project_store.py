@@ -1115,6 +1115,329 @@ def format_context(ctx: dict, project_name: str) -> str:
     return "\n".join(lines)
 
 
+# ── Embeddings / Busca Semântica ──────────────────────────────────────────────
+
+def transcript_chunks_table_exists() -> bool:
+    """Verifica se a tabela transcript_chunks existe no banco."""
+    db = _db()
+    if not db:
+        return False
+    try:
+        db.table("transcript_chunks").select("id").limit(1).execute()
+        return True
+    except Exception:
+        return False
+
+
+def save_transcript_embeddings(
+    meeting_id: str,
+    project_id: str,
+    transcript: str,
+    api_key: str,
+    provider: str,
+) -> int:
+    """
+    Divide a transcrição em chunks, gera embeddings e salva na tabela transcript_chunks.
+
+    Apaga os chunks anteriores da reunião antes de inserir novos (idempotente).
+
+    Returns:
+        Número de chunks salvos (0 em caso de erro).
+    """
+    db = _db()
+    if not db or not transcript or not transcript.strip():
+        return 0
+
+    try:
+        from modules.embeddings import chunk_text, embed_batch
+
+        # 1. Gera chunks
+        chunks = chunk_text(transcript)
+        if not chunks:
+            return 0
+
+        # 2. Gera embeddings em batch
+        vectors = embed_batch(chunks, api_key, provider)
+
+        # 3. Remove chunks anteriores desta reunião
+        try:
+            db.table("transcript_chunks").delete().eq("meeting_id", meeting_id).execute()
+        except Exception:
+            pass
+
+        # 4. Insere novos chunks
+        rows = [
+            {
+                "meeting_id":   meeting_id,
+                "project_id":   project_id,
+                "chunk_index":  i,
+                "chunk_text":   chunk,
+                "embedding":    vector,
+            }
+            for i, (chunk, vector) in enumerate(zip(chunks, vectors))
+        ]
+
+        # Insere em lotes de 50 para evitar payload overflow
+        batch_size = 50
+        for start in range(0, len(rows), batch_size):
+            db.table("transcript_chunks").insert(rows[start:start + batch_size]).execute()
+
+        return len(rows)
+
+    except Exception:
+        return 0
+
+
+def search_semantic(
+    project_id: str,
+    question: str,
+    api_key: str,
+    provider: str,
+    top_k: int = 8,
+) -> list[dict]:
+    """
+    Busca semântica nos chunks de transcrição do projeto usando pgvector.
+
+    Returns:
+        Lista de dicts com: meeting_id, chunk_text, similarity
+        Ordenada por similarity descendente.
+    """
+    db = _db()
+    if not db:
+        return []
+
+    try:
+        from modules.embeddings import embed_text
+
+        # 1. Embed da pergunta
+        query_vector = embed_text(question, api_key, provider)
+
+        # 2. Chama a função SQL match_transcript_chunks
+        rows = _ok(
+            db.rpc(
+                "match_transcript_chunks",
+                {
+                    "query_embedding":    query_vector,
+                    "filter_project_id": project_id,
+                    "match_count":       top_k,
+                },
+            ).execute()
+        )
+
+        return rows
+
+    except Exception:
+        return []
+
+
+def retrieve_context_semantic(
+    project_id: str,
+    question: str,
+    api_key: str,
+    provider: str,
+    top_k: int = 8,
+) -> dict:
+    """
+    Versão semântica de retrieve_context_for_question().
+
+    Substitui a busca por keyword nas transcrições por busca pgvector.
+    Os demais dados estruturados (requisitos, BPMN, SBVR) continuam sendo
+    recuperados por keyword — eles já são precisos e compactos.
+
+    Returns:
+        Mesmo formato de retrieve_context_for_question().
+    """
+    db = _db()
+    keywords = _extract_keywords(question)
+
+    result: dict = {
+        "meetings_passages": [],
+        "requirements": [],
+        "processes": [],
+        "sbvr_terms": [],
+        "sbvr_rules": [],
+        "meetings_without_transcript": [],
+        "search_mode": "semantic",
+    }
+
+    # ── Busca semântica nas transcrições ──────────────────────────────────────
+    semantic_chunks = search_semantic(project_id, question, api_key, provider, top_k)
+
+    if semantic_chunks:
+        # Agrupa chunks por meeting_id para montar passagens por reunião
+        from collections import defaultdict
+        chunk_map: dict[str, list[dict]] = defaultdict(list)
+        for chunk in semantic_chunks:
+            chunk_map[chunk["meeting_id"]].append(chunk)
+
+        # Busca metadados das reuniões referenciadas
+        meeting_ids = list(chunk_map.keys())
+        if db and meeting_ids:
+            try:
+                meeting_rows = _ok(
+                    db.table("meetings")
+                    .select("id, title, meeting_date, meeting_number")
+                    .in_("id", meeting_ids)
+                    .order("meeting_number")
+                    .execute()
+                )
+            except Exception:
+                meeting_rows = []
+
+            meeting_meta = {m["id"]: m for m in meeting_rows}
+
+            for mid, chunks in chunk_map.items():
+                meta = meeting_meta.get(mid, {})
+                passages = [c["chunk_text"] for c in chunks]
+                result["meetings_passages"].append({
+                    "meeting_number": meta.get("meeting_number") or 0,
+                    "title":          meta.get("title") or "",
+                    "meeting_date":   str(meta.get("meeting_date") or ""),
+                    "passages":       passages,
+                })
+
+    # Verifica reuniões sem chunks (sem transcript indexado)
+    if db:
+        try:
+            all_meetings = _ok(
+                db.table("meetings")
+                .select("id, title")
+                .eq("project_id", project_id)
+                .execute()
+            )
+            indexed_ids = {
+                c["meeting_id"] for c in semantic_chunks
+            } if semantic_chunks else set()
+
+            for m in all_meetings:
+                if m["id"] not in indexed_ids:
+                    # Verifica se tem transcript mas não está indexado
+                    try:
+                        chunk_count = _ok(
+                            db.table("transcript_chunks")
+                            .select("id")
+                            .eq("meeting_id", m["id"])
+                            .limit(1)
+                            .execute()
+                        )
+                        if not chunk_count:
+                            result["meetings_without_transcript"].append(
+                                m.get("title") or m["id"]
+                            )
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    # ── Dados estruturados (keyword-based, inalterado) ─────────────────────────
+    if db and keywords:
+        # Requirements
+        try:
+            all_reqs = _ok(
+                db.table("requirements")
+                .select("req_number, title, description, req_type, status")
+                .eq("project_id", project_id)
+                .order("req_number")
+                .execute()
+            )
+            for req in all_reqs:
+                combined = (
+                    (req.get("title") or "") + " " + (req.get("description") or "")
+                ).lower()
+                if any(kw in combined for kw in keywords):
+                    result["requirements"].append(req)
+        except Exception:
+            pass
+
+        # SBVR terms
+        try:
+            all_terms = _ok(
+                db.table("sbvr_terms")
+                .select("term, definition")
+                .eq("project_id", project_id)
+                .execute()
+            )
+            for t in all_terms:
+                combined = (
+                    (t.get("term") or "") + " " + (t.get("definition") or "")
+                ).lower()
+                if any(kw in combined for kw in keywords):
+                    result["sbvr_terms"].append(t)
+        except Exception:
+            pass
+
+        # SBVR rules
+        try:
+            all_rules = _ok(
+                db.table("sbvr_rules")
+                .select("rule_id, statement, nucleo_nominal")
+                .eq("project_id", project_id)
+                .execute()
+            )
+            for r in all_rules:
+                combined = (
+                    (r.get("statement") or "") + " " + (r.get("nucleo_nominal") or "")
+                ).lower()
+                if any(kw in combined for kw in keywords):
+                    result["sbvr_rules"].append(r)
+        except Exception:
+            pass
+
+    # BPMN processes (always)
+    if db:
+        try:
+            proc_rows = _ok(
+                db.table("bpmn_processes")
+                .select("name, version_count")
+                .eq("project_id", project_id)
+                .order("name")
+                .execute()
+            )
+            result["processes"] = [
+                {"name": p.get("name") or "", "version_count": p.get("version_count") or 0}
+                for p in proc_rows
+            ]
+        except Exception:
+            pass
+
+    return result
+
+
+def get_embedding_coverage(project_id: str) -> dict:
+    """
+    Retorna estatísticas de cobertura de embeddings do projeto.
+
+    Returns:
+        {total_meetings, indexed_meetings, total_chunks}
+    """
+    db = _db()
+    if not db:
+        return {"total_meetings": 0, "indexed_meetings": 0, "total_chunks": 0}
+
+    try:
+        total_meetings = len(_ok(
+            db.table("meetings")
+            .select("id")
+            .eq("project_id", project_id)
+            .execute()
+        ))
+        chunk_rows = _ok(
+            db.table("transcript_chunks")
+            .select("meeting_id")
+            .eq("project_id", project_id)
+            .execute()
+        )
+        total_chunks = len(chunk_rows)
+        indexed_meetings = len({r["meeting_id"] for r in chunk_rows})
+        return {
+            "total_meetings":   total_meetings,
+            "indexed_meetings": indexed_meetings,
+            "total_chunks":     total_chunks,
+        }
+    except Exception:
+        return {"total_meetings": 0, "indexed_meetings": 0, "total_chunks": 0}
+
+
 def list_contradictions(project_id: str) -> list[dict]:
     """Retorna versões de requisitos com contradições ativas no projeto."""
     db = _db()

@@ -19,25 +19,31 @@ from agents.base_agent import BaseAgent
 # ── System prompt template ────────────────────────────────────────────────────
 
 _SYSTEM_TEMPLATE = """\
-Você é um assistente especializado em análise de reuniões, processos e requisitos de negócio.
-Seu papel é responder perguntas com base exclusivamente nas informações do contexto fornecido abaixo.
+Você é um assistente especializado em dois domínios:
 
-═══ CONTEXTO DISPONÍVEL ═══
+1. **Análise de reuniões e projetos**: responde perguntas com base nas informações do
+   contexto fornecido (transcrições, requisitos, processos BPMN e vocabulário SBVR).
+2. **Orientação ao usuário**: explica como utilizar o Process2Diagram usando o guia abaixo.
+
+{p2d_guide}
+
+═══ CONTEXTO DO PROJETO ═══
 {context}
 ═══ FIM DO CONTEXTO ═══
 
 REGRAS DE RESPOSTA:
-1. Responda APENAS com base no contexto fornecido acima.
-2. Se a informação não estiver no contexto, diga claramente:
+1. Se a pergunta for sobre o conteúdo das reuniões, responda APENAS com base no contexto acima.
+2. Se a pergunta for sobre como usar o Process2Diagram, use o guia acima.
+3. Se a informação não estiver disponível em nenhuma das fontes, diga claramente:
    "Não encontrei informação sobre isso nos dados disponíveis."
-3. Ao mencionar algo de uma transcrição, sempre cite a reunião (ex: "Na Reunião 3 — Título (data)...").
-4. Se o participante for identificável no formato "Nome: texto" ou "NOME: texto", cite-o diretamente
+4. Ao mencionar algo de uma transcrição, sempre cite a reunião (ex: "Na Reunião 3 — Título (data)...").
+5. Se o participante for identificável no formato "Nome: texto" ou "NOME: texto", cite-o diretamente
    (ex: 'Pedro disse: "..."').
-5. Seja organizado: use listas quando houver múltiplos itens.
-6. Não invente, não extrapole além do que está escrito no contexto.
-7. Responda em Português do Brasil, a menos que o usuário escreva em outro idioma.
-8. Para requisitos, sempre inclua o identificador (ex: REQ-001) e o tipo quando relevante.
-9. Para regras SBVR, mencione o núcleo nominal e a declaração completa quando pertinente.
+6. Seja organizado: use listas quando houver múltiplos itens.
+7. Não invente, não extrapole além do que está escrito no contexto ou no guia.
+8. Responda em Português do Brasil, a menos que o usuário escreva em outro idioma.
+9. Para requisitos, sempre inclua o identificador (ex: REQ-001) e o tipo quando relevante.
+10. Para regras SBVR, mencione o núcleo nominal e a declaração completa quando pertinente.
 """
 
 
@@ -45,7 +51,7 @@ REGRAS DE RESPOSTA:
 
 class AgentAssistant(BaseAgent):
     """
-    Conversational RAG agent for project/meeting Q&A.
+    Conversational RAG agent for project/meeting Q&A + P2D usage orientation.
 
     Usage:
         agent = AgentAssistant(client_info, provider_cfg)
@@ -53,7 +59,7 @@ class AgentAssistant(BaseAgent):
     """
 
     name = "assistant"
-    skill_path = ""  # No external skill file — system prompt is built inline
+    skill_path = "skills/skill_assistant.md"
 
     # ── Stubs (this agent uses chat(), not the hub pipeline) ──────────────────
 
@@ -70,8 +76,16 @@ class AgentAssistant(BaseAgent):
     # ── System prompt builder ─────────────────────────────────────────────────
 
     def _build_system_prompt(self, context_text: str) -> str:
-        """Embed the retrieved context into the system prompt."""
-        return _SYSTEM_TEMPLATE.format(context=context_text)
+        """Build system prompt combining the P2D guide and the retrieved context."""
+        try:
+            p2d_guide = self._load_skill()
+        except Exception:
+            p2d_guide = "(guia do Process2Diagram não disponível)"
+
+        return _SYSTEM_TEMPLATE.format(
+            p2d_guide=p2d_guide,
+            context=context_text,
+        )
 
     # ── LLM call methods (multi-turn, plain text) ─────────────────────────────
 
@@ -132,7 +146,7 @@ class AgentAssistant(BaseAgent):
         question: str,
     ) -> tuple[str, int]:
         """
-        Run a conversational turn against the RAG context.
+        Run a conversational turn against the RAG context + P2D guide.
 
         Args:
             history:      Prior turns — [{"role": "user"|"assistant", "content": "..."}]

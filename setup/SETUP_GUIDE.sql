@@ -21,6 +21,10 @@
 -- Passo 4 — Tabelas BPMN (bpmn_processes, bpmn_versions)
 --   → supabase_schema_bpmn_processes.sql
 --
+-- Passo 5 — Busca semântica: chunks de transcrição com embeddings (pgvector)
+--   → supabase_schema_transcript_chunks.sql
+--   OPCIONAL — só necessário para usar "Busca Semântica" no Assistente
+--
 -- ──────────────────────────────────────────────────────────────────────────────
 
 -- ── MIGRAÇÕES (ambiente existente — execute apenas o que ainda não rodou) ────
@@ -37,6 +41,10 @@
 --      (necessário se o banco não tem essas tabelas ainda)
 --   → supabase_schema_bpmn_processes.sql
 --      (seguro rodar mesmo em ambiente novo — usa CREATE TABLE IF NOT EXISTS)
+--
+-- M4 — Cria tabela transcript_chunks + índice ivfflat + função match_transcript_chunks
+--      (necessário para habilitar busca semântica no Assistente)
+--   → supabase_schema_transcript_chunks.sql
 --
 -- ──────────────────────────────────────────────────────────────────────────────
 

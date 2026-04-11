@@ -1,5 +1,6 @@
 # pages/Assistente.py
 # Assistente conversacional RAG sobre reuniões, requisitos, processos e SBVR.
+# Suporta busca por keyword (padrão) e busca semântica via pgvector (opcional).
 
 from __future__ import annotations
 
@@ -15,10 +16,15 @@ import streamlit as st
 from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured
 from modules.config import AVAILABLE_PROVIDERS
+from modules.embeddings import EMBEDDING_PROVIDERS
 from core.project_store import (
     list_projects,
     retrieve_context_for_question,
+    retrieve_context_semantic,
     format_context,
+    transcript_chunks_table_exists,
+    save_transcript_embeddings,
+    get_embedding_coverage,
 )
 from agents.agent_assistant import AgentAssistant
 
@@ -74,6 +80,80 @@ with st.sidebar:
 
     st.markdown("---")
 
+    # ── Busca semântica ───────────────────────────────────────────────────────
+    st.markdown("#### 🔍 Busca Semântica (pgvector)")
+
+    # Detecta se a tabela existe
+    _chunks_table_ok = supabase_configured() and transcript_chunks_table_exists()
+
+    if not _chunks_table_ok and supabase_configured():
+        st.caption(
+            "⚠️ Tabela `transcript_chunks` não encontrada. "
+            "Execute `setup/supabase_schema_transcript_chunks.sql` para habilitar a busca semântica."
+        )
+
+    use_semantic = st.checkbox(
+        "Usar busca semântica",
+        value=False,
+        key="asst_use_semantic",
+        disabled=not _chunks_table_ok,
+        help="Substitui a busca por palavras-chave por busca vetorial (pgvector). "
+             "Requer que os embeddings das transcrições tenham sido gerados.",
+    )
+
+    if _chunks_table_ok and project_id:
+        # Cobertura de embeddings
+        coverage = get_embedding_coverage(project_id)
+        total = coverage.get("total_meetings", 0)
+        indexed = coverage.get("indexed_meetings", 0)
+        n_chunks = coverage.get("total_chunks", 0)
+        if total > 0:
+            pct = int(100 * indexed / total)
+            st.caption(
+                f"📊 Cobertura: **{indexed}/{total}** reuniões indexadas "
+                f"({pct}%) · {n_chunks:,} chunks"
+            )
+        else:
+            st.caption("📊 Nenhuma reunião indexada ainda.")
+
+        # Seção de geração de embeddings
+        with st.expander("⚡ Gerar Embeddings", expanded=(indexed == 0)):
+            st.caption(
+                "Gera embeddings das transcrições para habilitar a busca semântica. "
+                "Execute uma vez por projeto (ou novamente quando adicionar reuniões)."
+            )
+            embed_provider = st.selectbox(
+                "Provedor de Embedding",
+                list(EMBEDDING_PROVIDERS.keys()),
+                key="asst_embed_provider",
+                help="Google Gemini text-embedding-004 ou OpenAI text-embedding-3-small (768 dims)",
+            )
+            embed_cfg = EMBEDDING_PROVIDERS[embed_provider]
+            embed_api_key = st.text_input(
+                embed_cfg["api_key_label"],
+                type="password",
+                key="asst_embed_key",
+                help=embed_cfg["api_key_help"],
+            )
+            if st.button("⚡ Gerar Embeddings", key="asst_gen_embeddings", type="secondary"):
+                if not embed_api_key:
+                    st.warning("Insira a API key do provedor de embedding.")
+                else:
+                    st.session_state["_trigger_embed"] = {
+                        "provider": embed_provider,
+                        "api_key":  embed_api_key,
+                        "project_id": project_id,
+                    }
+
+    if use_semantic:
+        embed_provider_sel = st.session_state.get("asst_embed_provider", list(EMBEDDING_PROVIDERS.keys())[0])
+        embed_key_sel = st.session_state.get("asst_embed_key", "")
+        st.caption(f"Provedor ativo: **{embed_provider_sel}**")
+        if not embed_key_sel:
+            st.warning("Insira a API key de embedding acima para a busca semântica funcionar.")
+
+    st.markdown("---")
+
     # ── Clear conversation ────────────────────────────────────────────────────
     if st.button("🗑️ Limpar conversa", key="asst_clear"):
         st.session_state["assistant_history"] = []
@@ -83,7 +163,7 @@ with st.sidebar:
 st.markdown("# 💬 Assistente de Reuniões")
 st.caption(
     "Faça perguntas sobre transcrições, requisitos, processos BPMN e vocabulário SBVR "
-    "armazenados no projeto selecionado. O assistente cita as reuniões de origem das informações."
+    "armazenados no projeto selecionado. Também responde dúvidas sobre como usar o Process2Diagram."
 )
 
 # ── Guard: Supabase + project + API key ───────────────────────────────────────
@@ -101,6 +181,51 @@ if not api_key:
     st.warning("👈 Insira a API key na sidebar antes de fazer perguntas.")
     st.stop()
 
+# ── Trigger: geração de embeddings ───────────────────────────────────────────
+if "_trigger_embed" in st.session_state:
+    trigger = st.session_state.pop("_trigger_embed")
+    if trigger["project_id"] == project_id:
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if db:
+            with st.spinner("⚡ Gerando embeddings das transcrições..."):
+                try:
+                    meeting_rows_raw = db.table("meetings") \
+                        .select("id, title, meeting_number, transcript_clean, transcript_raw") \
+                        .eq("project_id", project_id) \
+                        .execute().data or []
+                except Exception:
+                    meeting_rows_raw = []
+
+            total_gen = 0
+            errors = []
+            prog = st.progress(0.0)
+            n_total = len(meeting_rows_raw)
+
+            for i, m in enumerate(meeting_rows_raw):
+                transcript = m.get("transcript_clean") or m.get("transcript_raw") or ""
+                title = m.get("title") or f"Reunião {m.get('meeting_number','?')}"
+                if transcript.strip():
+                    n_saved = save_transcript_embeddings(
+                        meeting_id=m["id"],
+                        project_id=project_id,
+                        transcript=transcript,
+                        api_key=trigger["api_key"],
+                        provider=trigger["provider"],
+                    )
+                    if n_saved > 0:
+                        total_gen += n_saved
+                    else:
+                        errors.append(title)
+                prog.progress((i + 1) / n_total if n_total else 1.0)
+
+            prog.empty()
+            if errors:
+                st.warning(f"⚠️ Falha ao gerar embeddings para: {', '.join(errors)}")
+            else:
+                st.success(f"✅ {total_gen} chunks indexados em {n_total} reuniões.")
+            st.rerun()
+
 # ── Session history ───────────────────────────────────────────────────────────
 if "assistant_history" not in st.session_state:
     st.session_state["assistant_history"] = []
@@ -113,7 +238,7 @@ for msg in history:
         st.markdown(msg["content"])
 
 # ── New message input ─────────────────────────────────────────────────────────
-question = st.chat_input("Faça uma pergunta sobre as reuniões, requisitos ou processos...")
+question = st.chat_input("Faça uma pergunta sobre as reuniões, requisitos, processos ou sobre como usar o sistema...")
 
 if question:
     # 1. Append and render user message
@@ -122,17 +247,43 @@ if question:
         st.markdown(question)
 
     # 2. Retrieve context
+    use_semantic_now = (
+        st.session_state.get("asst_use_semantic", False)
+        and _chunks_table_ok
+    )
+
+    if use_semantic_now:
+        embed_key_now = st.session_state.get("asst_embed_key", "")
+        embed_provider_now = st.session_state.get("asst_embed_provider", list(EMBEDDING_PROVIDERS.keys())[0])
+
+        if not embed_key_now:
+            st.warning("⚠️ Busca semântica ativa mas sem API key de embedding. Usando busca por keyword.")
+            use_semantic_now = False
+
     with st.spinner("🔍 Pesquisando nas fontes de dados..."):
-        ctx = retrieve_context_for_question(project_id, question)
+        if use_semantic_now:
+            ctx = retrieve_context_semantic(
+                project_id=project_id,
+                question=question,
+                api_key=embed_key_now,
+                provider=embed_provider_now,
+            )
+        else:
+            ctx = retrieve_context_for_question(project_id, question)
+
         context_text = format_context(ctx, project_name)
 
     # Warn if no transcript data is available at all
     meetings_passages = ctx.get("meetings_passages") or []
     no_transcript = ctx.get("meetings_without_transcript") or []
+    search_mode = ctx.get("search_mode", "keyword")
+
     if not meetings_passages and no_transcript:
         st.warning(
             "⚠️ Nenhuma transcrição encontrada para este projeto. "
-            "As reuniões a seguir não têm transcrição armazenada e não podem ser pesquisadas: "
+            "As reuniões a seguir não têm transcrição "
+            + ("indexada (gere os embeddings acima)" if search_mode == "semantic" else "armazenada")
+            + ": "
             + ", ".join(no_transcript)
         )
 
@@ -140,7 +291,6 @@ if question:
     with st.spinner("🤖 Gerando resposta..."):
         client_info = {"api_key": api_key}
         agent = AgentAssistant(client_info, provider_cfg)
-        # Pass all history except the current question (history[:-1]) + question separately
         try:
             response_text, tokens_used = agent.chat(
                 history=history[:-1],
@@ -160,6 +310,7 @@ if question:
 
     # 5. Token / source info caption
     n_meetings = len(meetings_passages)
+    mode_badge = "🔮 semântica" if use_semantic_now else "🔑 keyword"
     st.caption(
-        f"🔢 {tokens_used} tokens · {n_meetings} reunião(ões) consultada(s)"
+        f"🔢 {tokens_used} tokens · {n_meetings} reunião(ões) consultada(s) · {mode_badge}"
     )
