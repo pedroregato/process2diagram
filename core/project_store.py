@@ -185,6 +185,44 @@ def save_transcript(meeting_id: str, hub) -> bool:
         return False
 
 
+def save_transcript_text(meeting_id: str, text: str) -> bool:
+    """Salva texto de transcrição diretamente (sem KnowledgeHub).
+
+    Usado pelo Transcript Backfill para reuniões cujo transcript_clean é NULL.
+    Salva como transcript_clean (sempre) e transcript_raw somente se ≤ 100 000 chars.
+    """
+    db = _db()
+    if not db or not text or not text.strip():
+        return False
+    try:
+        payload: dict[str, Any] = {"transcript_clean": text}
+        if len(text) <= 100_000:
+            payload["transcript_raw"] = text
+        db.table("meetings").update(payload).eq("id", meeting_id).execute()
+        return True
+    except Exception:
+        return False
+
+
+def list_meetings_without_transcript(project_id: str) -> list[dict]:
+    """Retorna reuniões do projeto que não têm transcrição armazenada."""
+    db = _db()
+    if not db:
+        return []
+    try:
+        rows = _ok(
+            db.table("meetings")
+            .select("id, meeting_number, title, meeting_date")
+            .eq("project_id", project_id)
+            .is_("transcript_clean", "null")
+            .order("meeting_number")
+            .execute()
+        )
+        return rows
+    except Exception:
+        return []
+
+
 def save_meeting_artifacts(meeting_id: str, hub) -> bool:
     """Persiste os artefatos gerados pelo pipeline na reunião.
 
