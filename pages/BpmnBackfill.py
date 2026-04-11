@@ -32,6 +32,7 @@ from modules.ingest import load_transcript
 from core.project_store import (
     list_projects,
     list_meetings_without_bpmn,
+    save_transcript,
     save_bpmn_from_hub,
     bpmn_tables_exist,
 )
@@ -258,6 +259,9 @@ if st.button(
             hub = run_pipeline(hub, pipeline_config, lambda *_: None)
 
             if hub.bpmn.ready:
+                # Salva transcrição na reunião (backfill para meetings com transcript nulo)
+                save_transcript(meeting_id, hub)
+
                 process_id = save_bpmn_from_hub(
                     meeting_id=meeting_id,
                     project_id=project_id,

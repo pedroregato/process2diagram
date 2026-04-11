@@ -192,7 +192,7 @@ class BatchPipeline:
         agents_config: dict,
     ) -> FileResult:
         from core.project_store import (
-            create_meeting, save_meeting_artifacts, save_meeting_tokens,
+            create_meeting, save_transcript, save_meeting_artifacts, save_meeting_tokens,
             save_sbvr_from_hub, save_bpmn_from_hub, log_batch_file, is_file_processed,
         )
         from core.pipeline import run_pipeline
@@ -254,8 +254,9 @@ class BatchPipeline:
                 raise RuntimeError("Falha ao criar reunião no Supabase")
             meeting_id = meeting["id"]
 
-            save_meeting_artifacts(meeting_id, hub)
-            # Garante tokens mesmo se save_meeting_artifacts falhou com payload grande
+            save_transcript(meeting_id, hub)        # leve — sempre primeiro
+            save_meeting_artifacts(meeting_id, hub)  # artefatos em chamadas separadas
+            # Garante tokens mesmo se save_meeting_artifacts falhou
             save_meeting_tokens(
                 meeting_id,
                 getattr(hub.meta, "total_tokens_used", 0),

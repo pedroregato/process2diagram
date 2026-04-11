@@ -150,30 +150,79 @@ def save_meeting_tokens(meeting_id: str, total_tokens: int, llm_provider: str) -
         return False
 
 
-def save_meeting_artifacts(meeting_id: str, hub) -> bool:
-    """Persiste os artefatos gerados pelo pipeline na reunião."""
+def save_transcript(meeting_id: str, hub) -> bool:
+    """Persiste apenas as transcrições da reunião — chamada leve e isolada.
+
+    Estratégia de economia de espaço (desejável):
+    - Prefere ``transcript_clean`` (já sem fillers/artefatos ASR, ~30-50 % menor).
+    - Armazena ``transcript_raw`` apenas se for diferente do clean E tiver ≤ 100 000 chars;
+      caso contrário omite o raw (o clean já é suficiente para re-processar).
+    - Nunca trunca o clean — ele é a fonte primária para re-processamento.
+    """
     db = _db()
     if not db:
         return False
     try:
-        payload: dict[str, Any] = {
-            "transcript_raw":   getattr(hub, "transcript_raw", None),
-            "transcript_clean": getattr(hub, "transcript_clean", None),
-            "llm_provider":     getattr(hub.meta, "llm_provider", None) if hasattr(hub, "meta") else None,
-            "total_tokens":     getattr(hub.meta, "total_tokens_used", 0) if hasattr(hub, "meta") else 0,
-        }
-        if hasattr(hub, "bpmn") and hub.bpmn.ready:
-            payload["bpmn_xml"]     = hub.bpmn.xml
-            payload["mermaid_code"] = hub.bpmn.mermaid
-        if hasattr(hub, "minutes") and hub.minutes.ready:
-            payload["minutes_md"] = hub.minutes.full_text
-        if hasattr(hub, "synthesizer") and hub.synthesizer.ready:
-            payload["report_html"] = hub.synthesizer.html
+        raw   = getattr(hub, "transcript_raw",   None) or ""
+        clean = getattr(hub, "transcript_clean", None) or ""
+
+        payload: dict[str, Any] = {}
+        if clean:
+            payload["transcript_clean"] = clean
+            # raw só vale a pena armazenar se acrescentar informação
+            if raw and raw != clean and len(raw) <= 100_000:
+                payload["transcript_raw"] = raw
+        elif raw:
+            # sem clean: guarda raw (truncado se necessário)
+            payload["transcript_raw"] = raw[:100_000]
+
+        if not payload:
+            return False
 
         db.table("meetings").update(payload).eq("id", meeting_id).execute()
         return True
     except Exception:
         return False
+
+
+def save_meeting_artifacts(meeting_id: str, hub) -> bool:
+    """Persiste os artefatos gerados pelo pipeline na reunião.
+
+    Divide o save em três chamadas independentes para evitar estouro do limite
+    de payload do PostgREST (~512 KB):
+      1. Metadados leves + BPMN + Mermaid + Ata  (nunca falha por tamanho)
+      2. Relatório HTML executivo                 (grande; falha isolada)
+    As transcrições NÃO são salvas aqui — use save_transcript() separadamente.
+    """
+    db = _db()
+    if not db:
+        return False
+
+    # ── Chamada 1: metadados + artefatos leves ────────────────────────────────
+    try:
+        payload1: dict[str, Any] = {
+            "llm_provider": getattr(hub.meta, "llm_provider", None) if hasattr(hub, "meta") else None,
+            "total_tokens": getattr(hub.meta, "total_tokens_used", 0) if hasattr(hub, "meta") else 0,
+        }
+        if hasattr(hub, "bpmn") and hub.bpmn.ready:
+            payload1["bpmn_xml"]     = hub.bpmn.xml
+            payload1["mermaid_code"] = hub.bpmn.mermaid
+        if hasattr(hub, "minutes") and hub.minutes.ready:
+            payload1["minutes_md"] = hub.minutes.full_text
+        db.table("meetings").update(payload1).eq("id", meeting_id).execute()
+    except Exception:
+        return False
+
+    # ── Chamada 2: relatório HTML (pesado — falha não bloqueia) ───────────────
+    if hasattr(hub, "synthesizer") and hub.synthesizer.ready:
+        try:
+            db.table("meetings").update(
+                {"report_html": hub.synthesizer.html}
+            ).eq("id", meeting_id).execute()
+        except Exception:
+            pass   # HTML indisponível mas o restante foi salvo
+
+    return True
 
 
 # ── Requisitos ────────────────────────────────────────────────────────────────

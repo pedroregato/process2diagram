@@ -8,7 +8,8 @@ from ui.project_selector import render_project_selector, render_bpmn_process_sel
 from core.pipeline import run_pipeline
 from core.rerun_handlers import handle_rerun
 from core.project_store import (
-    create_meeting, save_meeting_artifacts, save_sbvr_from_hub, save_bpmn_from_hub,
+    create_meeting, save_transcript, save_meeting_artifacts,
+    save_sbvr_from_hub, save_bpmn_from_hub,
 )
 from agents.agent_req_reconciler import AgentReqReconciler
 from modules.supabase_client import supabase_configured
@@ -118,7 +119,8 @@ if start_process and st.session_state.transcript_text.strip():
             if meeting:
                 meeting_id = meeting["id"]
                 st.session_state.current_meeting_id = meeting_id
-                save_meeting_artifacts(meeting_id, hub)
+                save_transcript(meeting_id, hub)        # leve — sempre primeiro
+                save_meeting_artifacts(meeting_id, hub)  # artefatos em chamadas separadas
 
                 # Persiste SBVR (termos + regras) se disponível
                 if hub.sbvr.ready:
