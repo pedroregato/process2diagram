@@ -1482,6 +1482,15 @@ def retrieve_context_semantic(
     # ── Busca semântica nas transcrições ──────────────────────────────────────
     semantic_chunks = search_semantic(project_id, question, api_key, provider, top_k)
 
+    # Fallback automático: sem chunks (embeddings não gerados ou erro de API)
+    # → usa busca por keyword para as transcrições, mantém dados estruturados via
+    #   o caminho semântico abaixo. Sinaliza o modo para a UI mostrar aviso correto.
+    if not semantic_chunks:
+        fallback = retrieve_context_for_question(project_id, question)
+        fallback["search_mode"] = "keyword_fallback"
+        fallback["data_summary"] = result["data_summary"]  # reutiliza o já calculado
+        return fallback
+
     if semantic_chunks:
         # Agrupa chunks por meeting_id para montar passagens por reunião
         from collections import defaultdict

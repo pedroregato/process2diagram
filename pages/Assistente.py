@@ -326,17 +326,22 @@ if question:
 
         context_text = format_context(ctx, project_name)
 
-    # Warn if no transcript data is available at all
+    # Warn / inform about search mode and coverage
     meetings_passages = ctx.get("meetings_passages") or []
-    no_transcript = ctx.get("meetings_without_transcript") or []
-    search_mode = ctx.get("search_mode", "keyword")
+    no_transcript     = ctx.get("meetings_without_transcript") or []
+    search_mode       = ctx.get("search_mode", "keyword")
+
+    if search_mode == "keyword_fallback":
+        st.info(
+            "ℹ️ Embeddings ainda não gerados — usando busca por **keyword** desta vez. "
+            "Gere os embeddings na sidebar (⚡) para ativar a busca semântica.",
+            icon=None,
+        )
 
     if not meetings_passages and no_transcript:
         st.warning(
-            "⚠️ Nenhuma transcrição encontrada para este projeto. "
-            "As reuniões a seguir não têm transcrição "
-            + ("indexada (gere os embeddings acima)" if search_mode == "semantic" else "armazenada")
-            + ": "
+            "⚠️ Nenhum trecho relevante encontrado para esta pergunta. "
+            "Reuniões sem correspondência: "
             + ", ".join(no_transcript)
         )
 
@@ -363,7 +368,12 @@ if question:
 
     # 5. Token / source info caption
     n_meetings = len(meetings_passages)
-    mode_badge = "🔮 semântica" if use_semantic_now else "🔑 keyword"
+    if search_mode == "semantic":
+        mode_badge = "🔮 semântica"
+    elif search_mode == "keyword_fallback":
+        mode_badge = "🔑 keyword (fallback)"
+    else:
+        mode_badge = "🔑 keyword"
     st.caption(
         f"🔢 {tokens_used} tokens · {n_meetings} reunião(ões) consultada(s) · {mode_badge}"
     )
