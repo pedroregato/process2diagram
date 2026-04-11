@@ -166,3 +166,173 @@ Para salvar reuniões, requisitos e diagramas no banco de dados:
 - **Batch Runner para múltiplas reuniões**: use esta página para carregar um histórico inteiro de reuniões de uma vez.
 - **ReqTracker para visão longitudinal**: acompanhe a evolução dos requisitos ao longo de múltiplas reuniões do projeto.
 - **Idioma de saída**: "Auto-detect" usa o idioma da transcrição; selecione "Portuguese (BR)" ou "English" para forçar o idioma dos artefatos.
+
+---
+
+## Estrutura de Dados (Banco de Dados Supabase)
+
+O Process2Diagram persiste todos os artefatos no Supabase. Abaixo está a estrutura completa das tabelas.
+
+### Tabela: `projects`
+Agrupa reuniões e artefatos por projeto.
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `id` | uuid PK | Identificador único do projeto |
+| `name` | text | Nome do projeto |
+| `sigla` | text | Sigla/acrônimo (ex: "P2D") |
+| `description` | text | Descrição opcional |
+| `created_at` | timestamptz | Data de criação |
+
+### Tabela: `meetings`
+Cada reunião processada. Um projeto tem várias reuniões.
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `id` | uuid PK | Identificador único da reunião |
+| `project_id` | uuid FK→projects | Projeto ao qual pertence |
+| `meeting_number` | integer | Número sequencial da reunião no projeto |
+| `title` | text | Título da reunião (sugerido pelo LLM) |
+| `meeting_date` | date | Data da reunião |
+| `transcript_raw` | text | Transcrição original (salva se ≤ 100k chars e diferente da clean) |
+| `transcript_clean` | text | Transcrição pré-processada (principal; sempre salva) |
+| `minutes_md` | text | Ata de reunião em Markdown |
+| `requirements_json` | jsonb | Requisitos extraídos (formato JSON bruto do agente) |
+| `bpmn_xml` | text | BPMN 2.0 XML gerado |
+| `mermaid_code` | text | Código Mermaid do fluxograma |
+| `report_html` | text | Relatório executivo HTML completo |
+| `tokens_used` | integer | Total de tokens consumidos no processamento |
+| `llm_provider` | text | Provedor LLM usado (ex: "DeepSeek") |
+| `created_at` | timestamptz | Data/hora de criação do registro |
+
+### Tabela: `requirements`
+Requisitos extraídos e reconciliados ao longo das reuniões do projeto.
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `id` | uuid PK | Identificador único |
+| `project_id` | uuid FK→projects | Projeto |
+| `req_number` | integer | Número sequencial (REQ-001, REQ-002…) |
+| `title` | text | Título curto do requisito |
+| `description` | text | Descrição completa |
+| `req_type` | text | Tipo: Funcional, Não-Funcional, Interface, Desempenho, Segurança, Restrição |
+| `priority` | text | Prioridade: Alta, Média, Baixa |
+| `status` | text | Status: active, revised, contradicted, confirmed |
+| `source_meeting_id` | uuid FK→meetings | Reunião de origem |
+| `created_at` | timestamptz | Data de criação |
+
+### Tabela: `requirement_versions`
+Histórico de versões de cada requisito (rastreabilidade).
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `requirement_id` | uuid FK→requirements | Requisito pai |
+| `meeting_id` | uuid FK→meetings | Reunião que originou esta versão |
+| `version` | integer | Número da versão (1, 2, 3…) |
+| `description` | text | Texto do requisito nesta versão |
+| `change_summary` | text | Resumo da mudança em relação à versão anterior |
+| `contradiction_flag` | boolean | True se esta versão contradiz versão anterior |
+| `created_at` | timestamptz | Data |
+
+### Tabela: `sbvr_terms`
+Vocabulário de negócio (OMG SBVR — Semantics of Business Vocabulary and Rules).
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `project_id` | uuid FK→projects | Projeto |
+| `meeting_id` | uuid FK→meetings | Reunião de origem |
+| `term` | text | Termo de domínio (ex: "Contrato de Serviço") |
+| `definition` | text | Definição do termo |
+| `category` | text | Categoria: Concept, Fact Type, Individual Concept |
+| `created_at` | timestamptz | Data |
+
+### Tabela: `sbvr_rules`
+Regras de negócio (OMG SBVR).
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `project_id` | uuid FK→projects | Projeto |
+| `meeting_id` | uuid FK→meetings | Reunião de origem |
+| `rule_id` | text | Identificador legível (ex: "RN-001") |
+| `nucleo_nominal` | text | Conceito principal da regra (ex: "Pedido de Compra") |
+| `statement` | text | Declaração completa da regra de negócio |
+| `rule_type` | text | Tipo: Operative Rule, Structural Rule, Definitional Rule |
+| `created_at` | timestamptz | Data |
+
+### Tabela: `bpmn_processes`
+Processos de negócio identificados ao longo das reuniões.
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `project_id` | uuid FK→projects | Projeto |
+| `name` | text | Nome do processo (ex: "Gestão de Contratos") |
+| `slug` | text | Versão normalizada do nome para matching automático |
+| `description` | text | Descrição opcional |
+| `status` | text | Status: active, archived |
+| `version_count` | integer | Total de versões BPMN registradas |
+| `first_meeting_id` | uuid FK→meetings | Primeira reunião que originou este processo |
+| `last_meeting_id` | uuid FK→meetings | Reunião mais recente que atualizou o processo |
+
+### Tabela: `bpmn_versions`
+Versões do diagrama BPMN de cada processo.
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `process_id` | uuid FK→bpmn_processes | Processo pai |
+| `meeting_id` | uuid FK→meetings | Reunião que gerou esta versão |
+| `project_id` | uuid FK→projects | Projeto |
+| `version` | integer | Número da versão (1, 2, 3…) |
+| `bpmn_xml` | text | Diagrama BPMN 2.0 em XML |
+| `mermaid_code` | text | Fluxograma Mermaid correspondente |
+| `is_current` | boolean | True = versão mais recente deste processo |
+| `created_at` | timestamptz | Data |
+
+### Tabela: `batch_log`
+Registro de auditoria do processamento em lote (Batch Runner).
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `project_id` | uuid FK→projects | Projeto |
+| `meeting_id` | uuid FK→meetings | Reunião criada (null se falhou) |
+| `filename` | text | Nome do arquivo processado |
+| `file_hash` | text | SHA-256 (16 chars) para deduplicação |
+| `status` | text | done, failed, duplicate |
+| `req_new` | integer | Requisitos novos criados |
+| `req_revised` | integer | Requisitos revisados |
+| `req_contradicted` | integer | Requisitos com contradição detectada |
+| `req_confirmed` | integer | Requisitos confirmados |
+| `n_terms` | integer | Termos SBVR criados |
+| `n_rules` | integer | Regras SBVR criadas |
+| `error_message` | text | Mensagem de erro (quando status=failed) |
+| `created_at` | timestamptz | Data/hora do processamento |
+
+### Tabela: `transcript_chunks` (opcional — busca semântica)
+Chunks de transcrição com embeddings vetoriais para busca semântica via pgvector.
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `meeting_id` | uuid FK→meetings | Reunião de origem |
+| `project_id` | uuid FK→projects | Projeto |
+| `chunk_index` | integer | Posição do chunk na transcrição (0-based) |
+| `chunk_text` | text | Texto do chunk (~500 chars com overlap) |
+| `embedding` | vector(768) | Vetor de embedding (768 dims — DeepSeek/Gemini/OpenAI) |
+| `created_at` | timestamptz | Data |
+
+### Relacionamentos principais
+```
+projects
+  └── meetings (1:N)
+        ├── requirements → requirement_versions (1:N)
+        ├── sbvr_terms (1:N)
+        ├── sbvr_rules (1:N)
+        ├── bpmn_versions → bpmn_processes (N:1)
+        ├── batch_log (1:1 ou null)
+        └── transcript_chunks (1:N, opcional)
+```

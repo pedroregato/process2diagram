@@ -889,6 +889,7 @@ def retrieve_context_for_question(project_id: str, question: str) -> dict:
         "sbvr_terms": [],
         "sbvr_rules": [],
         "meetings_without_transcript": [],
+        "data_summary": retrieve_data_summary(project_id),
     }
 
     # ── Meetings + transcripts ─────────────────────────────────────────────────
@@ -1027,6 +1028,52 @@ def format_context(ctx: dict, project_name: str) -> str:
     lines.append(f"═══ PROJETO: {project_name} ═══")
     lines.append("")
 
+    # ── Data summary (sempre presente) ────────────────────────────────────────
+    ds = ctx.get("data_summary") or {}
+    if ds:
+        lines.append("── RESUMO DOS DADOS DO PROJETO ──")
+
+        # Reuniões
+        meetings_list = ds.get("meetings") or []
+        lines.append(f"Total de reuniões: {len(meetings_list)}")
+        for m in meetings_list:
+            transcript_flag = "✓ transcrição" if m.get("has_transcript") else "✗ sem transcrição"
+            lines.append(
+                f"  • Reunião {m.get('number','?')} — {m.get('title')} ({m.get('date')}) [{transcript_flag}]"
+            )
+
+        # Requisitos
+        req_total = ds.get("req_total", 0)
+        lines.append(f"Total de requisitos: {req_total}")
+        by_type = ds.get("req_by_type") or {}
+        if by_type:
+            lines.append("  Por tipo: " + ", ".join(f"{k}={v}" for k, v in sorted(by_type.items())))
+        by_status = ds.get("req_by_status") or {}
+        if by_status:
+            lines.append("  Por status: " + ", ".join(f"{k}={v}" for k, v in sorted(by_status.items())))
+        by_priority = ds.get("req_by_priority") or {}
+        if by_priority:
+            lines.append("  Por prioridade: " + ", ".join(f"{k}={v}" for k, v in sorted(by_priority.items())))
+
+        # SBVR
+        n_terms = ds.get("n_sbvr_terms", 0)
+        n_rules = ds.get("n_sbvr_rules", 0)
+        lines.append(f"SBVR: {n_terms} termo(s) de domínio, {n_rules} regra(s) de negócio")
+
+        # BPMN
+        bpmn_procs = ds.get("bpmn_processes") or []
+        n_versions = ds.get("n_bpmn_versions", 0)
+        lines.append(f"Processos BPMN: {len(bpmn_procs)} processo(s), {n_versions} versão(ões) total")
+        for p in bpmn_procs:
+            lines.append(f"  • {p['name']} — {p['version_count']} versão(ões) [{p['status']}]")
+
+        # Busca semântica
+        n_chunks = ds.get("n_chunks_indexed", 0)
+        if n_chunks:
+            lines.append(f"Embeddings indexados: {n_chunks} chunks")
+
+        lines.append("")
+
     # ── Transcript passages ───────────────────────────────────────────────────
     lines.append("── TRECHOS DE TRANSCRIÇÃO RELEVANTES ──")
     lines.append("")
@@ -1113,6 +1160,139 @@ def format_context(ctx: dict, project_name: str) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+# ── Resumo da estrutura de dados do projeto ──────────────────────────────────
+
+def retrieve_data_summary(project_id: str) -> dict:
+    """
+    Retorna um resumo quantitativo e estrutural dos dados do projeto:
+    contagens por tabela, lista de reuniões, distribuição de requisitos por tipo/status,
+    processos BPMN registrados, termos SBVR e elementos BMM.
+
+    Sempre retorna um dict — nunca lança exceção.
+    """
+    db = _db()
+    summary: dict = {
+        "meetings": [],
+        "req_total": 0,
+        "req_by_type": {},
+        "req_by_status": {},
+        "req_by_priority": {},
+        "n_sbvr_terms": 0,
+        "n_sbvr_rules": 0,
+        "bpmn_processes": [],
+        "n_bpmn_versions": 0,
+        "n_chunks_indexed": 0,
+    }
+    if not db:
+        return summary
+
+    # Meetings
+    try:
+        rows = _ok(
+            db.table("meetings")
+            .select("id, meeting_number, title, meeting_date, transcript_clean")
+            .eq("project_id", project_id)
+            .order("meeting_number")
+            .execute()
+        )
+        summary["meetings"] = [
+            {
+                "number":     r.get("meeting_number"),
+                "title":      r.get("title") or "(sem título)",
+                "date":       str(r.get("meeting_date") or "—"),
+                "has_transcript": bool(r.get("transcript_clean")),
+            }
+            for r in rows
+        ]
+    except Exception:
+        pass
+
+    # Requirements — contagens
+    try:
+        all_reqs = _ok(
+            db.table("requirements")
+            .select("req_number, req_type, status, priority")
+            .eq("project_id", project_id)
+            .execute()
+        )
+        summary["req_total"] = len(all_reqs)
+        by_type: dict = {}
+        by_status: dict = {}
+        by_priority: dict = {}
+        for r in all_reqs:
+            t = r.get("req_type") or "não classificado"
+            s = r.get("status") or "indefinido"
+            p = r.get("priority") or "—"
+            by_type[t]      = by_type.get(t, 0) + 1
+            by_status[s]    = by_status.get(s, 0) + 1
+            by_priority[p]  = by_priority.get(p, 0) + 1
+        summary["req_by_type"]     = by_type
+        summary["req_by_status"]   = by_status
+        summary["req_by_priority"] = by_priority
+    except Exception:
+        pass
+
+    # SBVR
+    try:
+        summary["n_sbvr_terms"] = len(_ok(
+            db.table("sbvr_terms").select("id").eq("project_id", project_id).execute()
+        ))
+    except Exception:
+        pass
+    try:
+        summary["n_sbvr_rules"] = len(_ok(
+            db.table("sbvr_rules").select("id").eq("project_id", project_id).execute()
+        ))
+    except Exception:
+        pass
+
+    # BPMN processes
+    try:
+        proc_rows = _ok(
+            db.table("bpmn_processes")
+            .select("name, version_count, status")
+            .eq("project_id", project_id)
+            .order("name")
+            .execute()
+        )
+        summary["bpmn_processes"] = [
+            {
+                "name":          p.get("name") or "—",
+                "version_count": p.get("version_count") or 0,
+                "status":        p.get("status") or "—",
+            }
+            for p in proc_rows
+        ]
+    except Exception:
+        pass
+
+    # BPMN versions total
+    try:
+        ver_rows = _ok(
+            db.table("bpmn_versions")
+            .select("id")
+            .eq("project_id", project_id)
+            .execute()
+        )
+        summary["n_bpmn_versions"] = len(ver_rows)
+    except Exception:
+        pass
+
+    # Chunks indexados (busca semântica)
+    try:
+        chunk_rows = _ok(
+            db.table("transcript_chunks")
+            .select("id")
+            .eq("project_id", project_id)
+            .execute()
+        )
+        summary["n_chunks_indexed"] = len(chunk_rows)
+    except Exception:
+        pass
+
+    return summary
 
 
 # ── Embeddings / Busca Semântica ──────────────────────────────────────────────
@@ -1258,6 +1438,7 @@ def retrieve_context_semantic(
         "sbvr_rules": [],
         "meetings_without_transcript": [],
         "search_mode": "semantic",
+        "data_summary": retrieve_data_summary(project_id),
     }
 
     # ── Busca semântica nas transcrições ──────────────────────────────────────
