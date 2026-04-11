@@ -5,14 +5,16 @@
 #
 # Fluxo:
 #   1. Seleciona o projeto
-#   2. Lista reuniões sem BPMN (possuem transcrição no banco)
-#   3. Usuário seleciona quais processar
-#   4. Executa apenas AgentBPMN (sem recriar a reunião nem duplicar dados)
-#   5. Salva bpmn_processes + bpmn_versions vinculados ao meeting_id existente
+#   2. Lista todas as reuniões sem BPMN (com ou sem transcrição armazenada)
+#   3. Para reuniões COM transcrição no banco: processa direto
+#   4. Para reuniões SEM transcrição: permite upload do arquivo original
+#   5. Executa apenas AgentBPMN; salva bpmn_processes + bpmn_versions
+#      vinculados ao meeting_id existente (sem recriar reuniões)
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
 
+import io
 import sys
 from pathlib import Path
 
@@ -20,11 +22,13 @@ root_dir = Path(__file__).parent.parent.absolute()
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
+import pandas as pd
 import streamlit as st
 
 from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured
 from modules.config import AVAILABLE_PROVIDERS
+from modules.ingest import load_transcript
 from core.project_store import (
     list_projects,
     list_meetings_without_bpmn,
@@ -63,8 +67,10 @@ with st.sidebar:
         key="bf_lang",
     )
     st.markdown("---")
-    n_runs = st.selectbox("Passes BPMN", [1, 3, 5], key="bf_runs",
-                          help="Número de gerações por reunião — melhor qualidade com mais passes.")
+    n_runs = st.selectbox(
+        "Passes BPMN", [1, 3, 5], key="bf_runs",
+        help="Número de gerações por reunião — melhor qualidade com mais passes.",
+    )
 
 client_info = {"api_key": api_key} if api_key else None
 
@@ -82,25 +88,14 @@ if not supabase_configured():
 # ── Pré-requisito: tabelas BPMN devem existir ─────────────────────────────────
 if not bpmn_tables_exist():
     st.error("⚠️ Tabelas BPMN ainda não foram criadas no banco de dados.")
-    st.markdown(
-        "Execute o script abaixo no **SQL Editor do Supabase Dashboard** e recarregue a página:"
-    )
-    st.code("setup/supabase_schema_bpmn_processes.sql", language="sql")
-    st.markdown("""
-```sql
--- Conteúdo resumido (use o arquivo completo em setup/):
-CREATE TABLE IF NOT EXISTS bpmn_processes ( ... );
-CREATE TABLE IF NOT EXISTS bpmn_versions  ( ... );
-```
-""")
-    st.info("Após executar o SQL, recarregue esta página (F5).")
+    st.info("Execute `setup/supabase_schema_bpmn_processes.sql` no SQL Editor do Supabase e recarregue a página (F5).")
     st.stop()
 
 # ── 1. Projeto ────────────────────────────────────────────────────────────────
 st.markdown("## 1️⃣ Projeto")
-projects  = list_projects()
-proj_map  = {p["name"]: p for p in projects}
-sel_proj  = st.selectbox("Projeto", list(proj_map.keys()), key="bf_proj")
+projects = list_projects()
+proj_map = {p["name"]: p for p in projects}
+sel_proj = st.selectbox("Projeto", list(proj_map.keys()), key="bf_proj")
 
 if not sel_proj:
     st.stop()
@@ -115,40 +110,92 @@ if not pending:
     st.success("✅ Todas as reuniões do projeto já possuem versão BPMN registrada.")
     st.stop()
 
-st.info(f"**{len(pending)}** reunião(ões) sem BPMN encontrada(s).")
+n_with    = sum(1 for m in pending if m.get("has_transcript"))
+n_without = len(pending) - n_with
 
-# Tabela de seleção
-import pandas as pd
+col_a, col_b = st.columns(2)
+col_a.metric("📄 Com transcrição no banco", n_with, help="Processamento automático")
+col_b.metric("⚠️ Sem transcrição no banco", n_without,
+             help="Necessário fazer upload do arquivo original")
 
-rows = []
+if n_without:
+    st.warning(
+        f"**{n_without} reunião(ões)** não têm transcrição armazenada — "
+        "provavelmente o `save_meeting_artifacts` falhou por payload muito grande. "
+        "Faça o upload do arquivo original de cada uma na seção abaixo."
+    )
+
+# Tabela de preview
+preview_rows = []
 for m in pending:
-    rows.append({
-        "Nº":    m.get("meeting_number") or "—",
-        "Título": m.get("title") or "(sem título)",
-        "Data":   str(m.get("meeting_date") or "—"),
-        "ID":     m["id"],
+    preview_rows.append({
+        "Nº":          m.get("meeting_number") or "—",
+        "Título":      m.get("title") or "(sem título)",
+        "Data":        str(m.get("meeting_date") or "—"),
+        "Transcrição": "✅ no banco" if m.get("has_transcript") else "⚠️ ausente — upload necessário",
+        "ID":          m["id"],
     })
 
-df = pd.DataFrame(rows)
-st.dataframe(df[["Nº", "Título", "Data"]], use_container_width=True, hide_index=True)
-
-# Seleção das reuniões a processar
-all_titles = [f"#{r['Nº']} — {r['Título']} ({r['Data']})" for r in rows]
-selected   = st.multiselect(
-    "Selecione as reuniões a processar",
-    options=all_titles,
-    default=all_titles,
-    key="bf_sel",
+st.dataframe(
+    pd.DataFrame(preview_rows)[["Nº", "Título", "Data", "Transcrição"]],
+    use_container_width=True,
+    hide_index=True,
 )
 
-selected_ids = [rows[all_titles.index(t)]["ID"] for t in selected]
-pending_sel  = [m for m in pending if m["id"] in selected_ids]
+# ── Upload para reuniões sem transcrição ──────────────────────────────────────
+# Mapeia meeting_id → conteúdo de texto (via upload)
+uploaded_transcripts: dict[str, str] = {}
+
+if n_without:
+    st.markdown("### 📤 Upload de transcrições ausentes")
+    st.caption("Faça o upload de cada arquivo — o sistema vincula ao meeting_id correspondente.")
+
+    for m in pending:
+        if m.get("has_transcript"):
+            continue
+        num   = m.get("meeting_number") or "?"
+        title = m.get("title") or "(sem título)"
+        uf = st.file_uploader(
+            f"Reunião {num} — {title}",
+            type=["txt", "docx", "pdf"],
+            key=f"bf_upload_{m['id']}",
+        )
+        if uf:
+            try:
+                content = load_transcript(uf)
+                uploaded_transcripts[m["id"]] = content
+                st.caption(f"   ✅ `{uf.name}` carregado ({len(content):,} chars)")
+            except Exception as exc:
+                st.error(f"   ❌ Erro ao ler {uf.name}: {exc}")
+
+# ── Seleção das reuniões a processar ─────────────────────────────────────────
+st.markdown("---")
+processable = [
+    m for m in pending
+    if m.get("has_transcript") or m["id"] in uploaded_transcripts
+]
+
+if not processable:
+    if n_without and not uploaded_transcripts:
+        st.info("👆 Faça o upload das transcrições acima para habilitar o processamento.")
+    st.stop()
+
+all_labels = [
+    f"#{m.get('meeting_number','?')} — {m.get('title','(sem título)')} ({m.get('meeting_date','—')})"
+    for m in processable
+]
+selected_labels = st.multiselect(
+    "Selecione as reuniões a processar",
+    options=all_labels,
+    default=all_labels,
+    key="bf_sel",
+)
+selected_ids = {processable[all_labels.index(lbl)]["id"] for lbl in selected_labels}
+pending_sel  = [m for m in processable if m["id"] in selected_ids]
 
 if not pending_sel:
     st.warning("Nenhuma reunião selecionada.")
     st.stop()
-
-st.markdown("---")
 
 # ── 3. Execução ───────────────────────────────────────────────────────────────
 st.markdown("## 3️⃣ Execução")
@@ -186,20 +233,22 @@ if st.button(
 
     progress_bar = st.progress(0.0)
     status_area  = st.empty()
-    total = len(pending_sel)
+    total        = len(pending_sel)
     results: list[dict] = []
 
     for i, meeting in enumerate(pending_sel):
         meeting_id = meeting["id"]
         title      = meeting.get("title") or "(sem título)"
-        transcript = meeting.get("transcript_clean") or meeting.get("transcript_raw") or ""
+
+        # Fonte da transcrição: banco ou upload
+        transcript = (
+            uploaded_transcripts.get(meeting_id)
+            or meeting.get("transcript_clean")
+            or meeting.get("transcript_raw")
+            or ""
+        )
 
         status_area.info(f"⏳ **{i + 1}/{total}** — `{title}`")
-
-        if not transcript.strip():
-            results.append({"Reunião": title, "Status": "⚠️ sem transcrição", "Processo": ""})
-            progress_bar.progress((i + 1) / total)
-            continue
 
         try:
             hub = KnowledgeHub.new()
@@ -214,15 +263,11 @@ if st.button(
                     project_id=project_id,
                     hub=hub,
                 )
-                proc_name = hub.bpmn.name or "—"
+                proc_name   = hub.bpmn.name or "—"
                 status_icon = "✅" if process_id else "⚠️ BPMN gerado, falha ao salvar"
-                results.append({
-                    "Reunião":  title,
-                    "Status":   status_icon,
-                    "Processo": proc_name,
-                })
+                results.append({"Reunião": title, "Status": status_icon, "Processo": proc_name})
             else:
-                results.append({"Reunião": title, "Status": "❌ AgentBPMN não gerou resultado", "Processo": ""})
+                results.append({"Reunião": title, "Status": "❌ AgentBPMN sem resultado", "Processo": ""})
 
         except Exception as exc:
             results.append({"Reunião": title, "Status": f"❌ {str(exc)[:80]}", "Processo": ""})
@@ -239,17 +284,17 @@ if st.session_state.get("bf_results"):
     st.markdown("---")
     st.markdown("## 📊 Resultados")
 
-    ok    = sum(1 for r in results if r["Status"].startswith("✅"))
-    fail  = len(results) - ok
+    ok   = sum(1 for r in results if r["Status"].startswith("✅"))
+    fail = len(results) - ok
 
     c1, c2 = st.columns(2)
     c1.metric("✅ Gerados com sucesso", ok)
-    c2.metric("❌ Erros / sem transcrição", fail)
+    c2.metric("❌ Erros", fail)
 
     st.dataframe(pd.DataFrame(results), use_container_width=True, hide_index=True)
 
     if ok:
-        st.info(
-            "💡 Os processos BPMN estão registrados no banco. "
-            "Acesse **ReqTracker** para visualizar os diagramas por processo."
+        st.success(
+            "💡 Processos BPMN registrados. "
+            "Acesse **ReqTracker → aba 📐 Processos BPMN** para visualizar os diagramas."
         )

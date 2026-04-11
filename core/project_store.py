@@ -526,7 +526,11 @@ def bpmn_tables_exist() -> bool:
 
 
 def list_meetings_without_bpmn(project_id: str) -> list[dict]:
-    """Retorna reuniões que têm transcrição mas ainda não têm versão BPMN registrada.
+    """Retorna TODAS as reuniões do projeto que ainda não têm versão BPMN registrada.
+
+    Inclui reuniões sem transcrição armazenada (transcript_raw / transcript_clean nulos)
+    — o campo `has_transcript` é adicionado ao dict para que a UI possa informar
+    o usuário sobre quais reuniões precisam de upload manual.
 
     Presume que as tabelas bpmn_versions e bpmn_processes já existem.
     Use bpmn_tables_exist() para verificar antes de chamar esta função.
@@ -542,7 +546,6 @@ def list_meetings_without_bpmn(project_id: str) -> list[dict]:
             .order("meeting_number")
             .execute()
         )
-        # meeting_ids que já têm pelo menos uma versão BPMN
         try:
             bpmn_rows = _ok(
                 db.table("bpmn_versions")
@@ -553,11 +556,15 @@ def list_meetings_without_bpmn(project_id: str) -> list[dict]:
             covered = {r["meeting_id"] for r in bpmn_rows}
         except Exception:
             covered = set()   # tabela ainda não existe → trata todas como pendentes
-        return [
-            m for m in all_meetings
-            if m["id"] not in covered
-            and (m.get("transcript_clean") or m.get("transcript_raw"))
-        ]
+
+        result = []
+        for m in all_meetings:
+            if m["id"] in covered:
+                continue
+            has_transcript = bool(m.get("transcript_clean") or m.get("transcript_raw"))
+            m["has_transcript"] = has_transcript
+            result.append(m)
+        return result
     except Exception:
         return []
 
