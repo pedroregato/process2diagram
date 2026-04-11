@@ -46,6 +46,55 @@ _MODAL_VERBS: frozenset[str] = frozenset({
 })
 
 
+# ── Normalização de slug de processo ─────────────────────────────────────────
+#
+# Usada para comparação de identidade de processos BPMN:
+#   "Gestão de Contratos"   → "gestao_contratos"
+#   "Fluxo de Aprovação"    → "aprovacao"
+#   "Processo de Onboarding" → "onboarding"
+#
+# Algoritmo:
+#   1. Normalizar unicode NFD → remover diacríticos
+#   2. Lowercase
+#   3. Tokenizar por \w+
+#   4. Remover stopwords e termos genéricos de processo
+#   5. Juntar com "_"; truncar em max_chars
+
+_PROCESS_STOPWORDS: frozenset[str] = frozenset({
+    "o", "a", "os", "as", "e", "de", "do", "da", "dos", "das",
+    "em", "no", "na", "nos", "nas", "para", "por", "com", "um", "uma",
+    "processo", "fluxo", "diagrama", "procedimento", "roteiro",
+    "atividade", "atividades", "workflow", "map", "mapa",
+})
+
+
+def process_slug(name: str, max_chars: int = 60) -> str:
+    """Normaliza o nome de um processo BPMN para comparação de identidade.
+
+    Usado para correspondência automática (Opção A): duas reuniões que descrevem
+    o mesmo processo produzem o mesmo slug mesmo com variações de capitalização
+    ou presença/ausência de preposições.
+
+    Exemplos::
+
+        process_slug("Gestão de Contratos")     → "gestao_contratos"
+        process_slug("Fluxo de Aprovação")      → "aprovacao"
+        process_slug("Processo de Onboarding")  → "onboarding"
+    """
+    import unicodedata as _ud
+    # Remove diacríticos
+    text = _ud.normalize("NFD", name.lower())
+    text = "".join(c for c in text if _ud.category(c) != "Mn")
+    tokens = re.findall(r"\w+", text)
+    tokens = [t for t in tokens if t not in _PROCESS_STOPWORDS and len(t) > 1]
+    slug = "_".join(tokens)
+    if len(slug) > max_chars:
+        slug = slug[:max_chars].rsplit("_", 1)[0]
+    return slug or "processo"
+
+
+# ── Extração de núcleo nominal de regras de negócio em PT-BR ─────────────────
+
 def rule_keyword_pt(statement: str, max_tokens: int = 3, max_chars: int = 28) -> str:
     """Extrai o núcleo nominal (palavra-chave) de uma regra de negócio em PT-BR.
 

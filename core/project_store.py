@@ -510,6 +510,197 @@ def list_batch_log(project_id: str) -> list[dict]:
         return []
 
 
+# ── BPMN Processos e Versões ──────────────────────────────────────────────────
+
+def list_meetings_without_bpmn(project_id: str) -> list[dict]:
+    """Retorna reuniões que têm transcrição mas ainda não têm versão BPMN registrada."""
+    db = _db()
+    if not db:
+        return []
+    try:
+        all_meetings = _ok(
+            db.table("meetings")
+            .select("id, title, meeting_date, meeting_number, transcript_raw, transcript_clean")
+            .eq("project_id", project_id)
+            .order("meeting_number")
+            .execute()
+        )
+        # meeting_ids que já têm pelo menos uma versão BPMN
+        bpmn_rows = _ok(
+            db.table("bpmn_versions")
+            .select("meeting_id")
+            .eq("project_id", project_id)
+            .execute()
+        )
+        covered = {r["meeting_id"] for r in bpmn_rows}
+        return [
+            m for m in all_meetings
+            if m["id"] not in covered
+            and (m.get("transcript_clean") or m.get("transcript_raw"))
+        ]
+    except Exception:
+        return []
+
+
+def list_bpmn_processes(project_id: str) -> list[dict]:
+    """Retorna todos os processos BPMN do projeto ordenados por nome."""
+    db = _db()
+    if not db:
+        return []
+    try:
+        return _ok(
+            db.table("bpmn_processes")
+            .select("*")
+            .eq("project_id", project_id)
+            .order("name")
+            .execute()
+        )
+    except Exception:
+        return []
+
+
+def get_bpmn_process(process_id: str) -> dict | None:
+    """Retorna um processo BPMN pelo ID."""
+    db = _db()
+    if not db:
+        return None
+    try:
+        rows = _ok(
+            db.table("bpmn_processes")
+            .select("*")
+            .eq("id", process_id)
+            .limit(1)
+            .execute()
+        )
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
+def _find_or_create_bpmn_process(
+    project_id: str,
+    process_name: str,
+    first_meeting_id: str,
+) -> dict | None:
+    """Localiza um processo pelo slug ou cria um novo (Opção A — automático)."""
+    from modules.text_utils import process_slug
+    slug = process_slug(process_name)
+    db = _db()
+    if not db:
+        return None
+    try:
+        rows = _ok(
+            db.table("bpmn_processes")
+            .select("*")
+            .eq("project_id", project_id)
+            .eq("slug", slug)
+            .limit(1)
+            .execute()
+        )
+        if rows:
+            return rows[0]
+        rows = _ok(
+            db.table("bpmn_processes")
+            .insert({
+                "project_id":       project_id,
+                "name":             process_name,
+                "slug":             slug,
+                "version_count":    0,
+                "first_meeting_id": first_meeting_id,
+                "last_meeting_id":  first_meeting_id,
+            })
+            .execute()
+        )
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
+def list_bpmn_versions(process_id: str) -> list[dict]:
+    """Retorna todas as versões de um processo ordenadas da mais recente."""
+    db = _db()
+    if not db:
+        return []
+    try:
+        return _ok(
+            db.table("bpmn_versions")
+            .select("*, meetings(title, meeting_date, meeting_number)")
+            .eq("process_id", process_id)
+            .order("version", desc=True)
+            .execute()
+        )
+    except Exception:
+        return []
+
+
+def save_bpmn_from_hub(
+    meeting_id: str,
+    project_id: str,
+    hub,
+    bpmn_process_id: str | None = None,
+    bpmn_process_override_name: str = "",
+) -> str | None:
+    """Persiste o BPMN do hub como nova versão de um processo.
+
+    Estratégia de resolução do processo destino:
+      1. ``bpmn_process_id`` fornecido → usa o processo existente (Opção B).
+      2. ``bpmn_process_override_name`` fornecido → cria processo com esse nome.
+      3. Nenhum → slug normalizado de ``hub.bpmn.name`` (Opção A automática).
+
+    Retorna o ``process_id`` salvo, ou ``None`` em caso de erro / BPMN ausente.
+    """
+    if not hasattr(hub, "bpmn") or not hub.bpmn.ready:
+        return None
+
+    db = _db()
+    if not db:
+        return None
+
+    process_name = hub.bpmn.name or "Processo"
+
+    # Resolve processo destino
+    if bpmn_process_id:
+        process = get_bpmn_process(bpmn_process_id)
+    elif bpmn_process_override_name.strip():
+        process = _find_or_create_bpmn_process(
+            project_id, bpmn_process_override_name.strip(), meeting_id
+        )
+    else:
+        process = _find_or_create_bpmn_process(project_id, process_name, meeting_id)
+
+    if not process:
+        return None
+
+    pid = process["id"]
+    version = (process.get("version_count") or 0) + 1
+
+    try:
+        # Desmarca versão atual anterior
+        db.table("bpmn_versions").update({"is_current": False}).eq("process_id", pid).execute()
+
+        # Insere nova versão
+        db.table("bpmn_versions").insert({
+            "process_id":    pid,
+            "meeting_id":    meeting_id,
+            "project_id":    project_id,
+            "version":       version,
+            "bpmn_xml":      getattr(hub.bpmn, "bpmn_xml", "") or "",
+            "mermaid_code":  getattr(hub.bpmn, "mermaid", "") or "",
+            "is_current":    True,
+        }).execute()
+
+        # Atualiza metadados do processo
+        db.table("bpmn_processes").update({
+            "version_count":   version,
+            "last_meeting_id": meeting_id,
+            "updated_at":      "NOW()",
+        }).eq("id", pid).execute()
+
+        return pid
+    except Exception:
+        return None
+
+
 def list_contradictions(project_id: str) -> list[dict]:
     """Retorna versões de requisitos com contradições ativas no projeto."""
     db = _db()

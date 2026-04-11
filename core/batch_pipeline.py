@@ -193,7 +193,7 @@ class BatchPipeline:
     ) -> FileResult:
         from core.project_store import (
             create_meeting, save_meeting_artifacts, save_meeting_tokens,
-            save_sbvr_from_hub, log_batch_file, is_file_processed,
+            save_sbvr_from_hub, save_bpmn_from_hub, log_batch_file, is_file_processed,
         )
         from core.pipeline import run_pipeline
         from core.knowledge_hub import KnowledgeHub
@@ -265,6 +265,10 @@ class BatchPipeline:
             n_terms, n_rules = 0, 0
             if getattr(hub, "sbvr", None) and hub.sbvr.ready:
                 n_terms, n_rules = save_sbvr_from_hub(meeting_id, project_id, hub)
+
+            # Persiste BPMN (opção A: slug automático, sem curadoria humana)
+            if getattr(hub, "bpmn", None) and hub.bpmn.ready:
+                save_bpmn_from_hub(meeting_id, project_id, hub)
 
             req_counts: dict[str, int] = {}
             if getattr(hub, "requirements", None) and hub.requirements.ready:

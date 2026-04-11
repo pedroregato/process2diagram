@@ -14,20 +14,26 @@ from datetime import date
 import streamlit as st
 
 from modules.supabase_client import supabase_configured
-from core.project_store import list_projects, create_project
+from core.project_store import list_projects, create_project, list_bpmn_processes
 
 
-_NEW = "➕  Novo projeto"
+_NEW  = "➕  Novo projeto"
+_AUTO = "🔄  Auto-detectar (recomendado)"
+_NEW_PROC = "➕  Novo processo"
 
 
 def _init():
     for key, default in [
-        ("project_id",        None),
-        ("project_name",      ""),
-        ("meeting_title",     ""),
-        ("meeting_date",      date.today()),
-        ("current_meeting_id", None),
-        ("project_confirmed", False),
+        ("project_id",                  None),
+        ("project_name",                ""),
+        ("meeting_title",               ""),
+        ("meeting_date",                date.today()),
+        ("current_meeting_id",          None),
+        ("project_confirmed",           False),
+        # BPMN process selector (Option B)
+        ("bpmn_process_id",             None),   # None = auto slug matching
+        ("bpmn_process_override_name",  ""),     # non-empty = create new with this name
+        ("bpmn_process_display",        ""),     # label shown in confirmed badge
     ]:
         if key not in st.session_state:
             st.session_state[key] = default
@@ -140,4 +146,88 @@ def _handle_confirm(projects, sel, new_name, new_sigla, new_desc, title, meeting
     if sigla:
         st.session_state.prefix = sigla + "_"
 
+    # Reseta seleção de processo BPMN ao trocar de projeto/reunião
+    st.session_state.bpmn_process_id            = None
+    st.session_state.bpmn_process_override_name = ""
+    st.session_state.bpmn_process_display       = ""
+
     st.rerun()
+
+
+def render_bpmn_process_selector() -> None:
+    """Seletor opcional de processo BPMN — Opção B (curadoria humana).
+
+    Permite que o usuário vincule explicitamente a reunião atual a um processo
+    BPMN já existente ou defina um nome para um novo processo.
+
+    Aparece apenas quando:
+    - Supabase está configurado
+    - Projeto já foi confirmado (``project_confirmed = True``)
+
+    Se o usuário não interagir, o sistema usa detecção automática por slug
+    (Opção A) ao salvar o BPMN.
+    """
+    if not supabase_configured():
+        return
+    if not st.session_state.get("project_confirmed"):
+        return
+
+    project_id = st.session_state.project_id
+    processes  = list_bpmn_processes(project_id)
+
+    # Badge compacto quando já há uma seleção explícita
+    if st.session_state.bpmn_process_display:
+        col_info, col_btn = st.columns([5, 1])
+        with col_info:
+            st.info(f"📐 Processo BPMN: **{st.session_state.bpmn_process_display}**")
+        with col_btn:
+            if st.button("Alterar", key="change_bpmn_proc_btn"):
+                st.session_state.bpmn_process_id            = None
+                st.session_state.bpmn_process_override_name = ""
+                st.session_state.bpmn_process_display       = ""
+                st.rerun()
+        return
+
+    with st.expander("📐 Processo BPMN — vincular explicitamente (opcional)", expanded=False):
+        st.caption(
+            "Por padrão o sistema identifica o processo automaticamente pelo nome do diagrama. "
+            "Use esta seleção apenas quando quiser vincular ou criar um processo manualmente."
+        )
+
+        proc_options = [_AUTO] + [p["name"] for p in processes] + [_NEW_PROC]
+        sel_proc = st.selectbox(
+            "Processo BPMN",
+            proc_options,
+            key="bpmn_proc_sel",
+            help="Selecione um processo existente, crie um novo ou deixe o sistema decidir.",
+        )
+
+        new_proc_name = ""
+        if sel_proc == _NEW_PROC:
+            new_proc_name = st.text_input(
+                "Nome do novo processo *",
+                key="bpmn_new_proc_name",
+                placeholder="Ex: Gestão de Contratos, Onboarding de Clientes…",
+            )
+
+        if st.button("✅ Confirmar processo", key="confirm_bpmn_proc_btn"):
+            if sel_proc == _AUTO:
+                st.session_state.bpmn_process_id            = None
+                st.session_state.bpmn_process_override_name = ""
+                st.session_state.bpmn_process_display       = "Auto-detectar"
+            elif sel_proc == _NEW_PROC:
+                if not new_proc_name.strip():
+                    st.error("Informe o nome do novo processo.")
+                    return
+                st.session_state.bpmn_process_id            = None
+                st.session_state.bpmn_process_override_name = new_proc_name.strip()
+                st.session_state.bpmn_process_display       = new_proc_name.strip()
+            else:
+                proc = next((p for p in processes if p["name"] == sel_proc), None)
+                if not proc:
+                    st.error("Processo não encontrado.")
+                    return
+                st.session_state.bpmn_process_id            = proc["id"]
+                st.session_state.bpmn_process_override_name = ""
+                st.session_state.bpmn_process_display       = proc["name"]
+            st.rerun()

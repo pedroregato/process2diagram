@@ -4,10 +4,12 @@ from core.session_state import init_session_state
 from ui.auth_gate import apply_auth_gate
 from ui.sidebar import render_sidebar
 from ui.input_area import render_input_area
-from ui.project_selector import render_project_selector
+from ui.project_selector import render_project_selector, render_bpmn_process_selector
 from core.pipeline import run_pipeline
 from core.rerun_handlers import handle_rerun
-from core.project_store import create_meeting, save_meeting_artifacts, save_sbvr_from_hub
+from core.project_store import (
+    create_meeting, save_meeting_artifacts, save_sbvr_from_hub, save_bpmn_from_hub,
+)
 from agents.agent_req_reconciler import AgentReqReconciler
 from modules.supabase_client import supabase_configured
 from ui.tabs import (
@@ -38,6 +40,7 @@ with st.expander("🏗️ Arquitetura do Sistema — Como o Process2Diagram func
 
 # ── Projeto / Reunião ─────────────────────────────────────────────────────────
 render_project_selector()
+render_bpmn_process_selector()
 
 # Área de entrada e curadoria
 start_process = render_input_area()
@@ -120,6 +123,18 @@ if start_process and st.session_state.transcript_text.strip():
                 # Persiste SBVR (termos + regras) se disponível
                 if hub.sbvr.ready:
                     save_sbvr_from_hub(meeting_id, st.session_state.project_id, hub)
+
+                # Persiste BPMN (processo + versão)
+                if hub.bpmn.ready:
+                    save_bpmn_from_hub(
+                        meeting_id=meeting_id,
+                        project_id=st.session_state.project_id,
+                        hub=hub,
+                        bpmn_process_id=st.session_state.get("bpmn_process_id"),
+                        bpmn_process_override_name=st.session_state.get(
+                            "bpmn_process_override_name", ""
+                        ),
+                    )
 
                 # Reconciliação: compara com histórico e persiste requisitos
                 with st.spinner("🔍 Reconciliando requisitos com histórico do projeto..."):

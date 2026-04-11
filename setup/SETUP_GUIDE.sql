@@ -1,0 +1,48 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Process2Diagram — Guia de Setup do Banco de Dados Supabase
+--
+-- Execute os scripts abaixo NO SQL Editor do Supabase Dashboard,
+-- NESTA ORDEM, uma única vez por ambiente (dev / prod).
+--
+-- Cada script usa IF NOT EXISTS / IF NOT EXISTS — seguro para re-execução.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- ── INSTALAÇÃO COMPLETA (ambiente novo) ──────────────────────────────────────
+--
+-- Passo 1 — Esquema principal (projects, meetings, requirements, SBVR, índices)
+--   → supabase_schema.sql
+--
+-- Passo 2 — Tabelas SBVR (sbvr_terms, sbvr_rules + nucleo_nominal)
+--   → supabase_schema_sbvr.sql
+--
+-- Passo 3 — Tabela Batch Runner (batch_log)
+--   → supabase_schema_batch.sql
+--
+-- Passo 4 — Tabelas BPMN (bpmn_processes, bpmn_versions)
+--   → supabase_schema_bpmn_processes.sql
+--
+-- ──────────────────────────────────────────────────────────────────────────────
+
+-- ── MIGRAÇÕES (ambiente existente — execute apenas o que ainda não rodou) ────
+--
+-- M1 — Adiciona coluna sigla à tabela projects
+--      (necessário se supabase_schema.sql foi executado antes de jun/2025)
+--   → supabase_migration_sigla.sql
+--
+-- M2 — Adiciona coluna nucleo_nominal à tabela sbvr_rules
+--      (necessário se supabase_schema_sbvr.sql foi executado sem a coluna)
+--   → supabase_migration_nucleo_nominal.sql
+--
+-- M3 — Cria tabelas bpmn_processes e bpmn_versions
+--      (necessário se o banco não tem essas tabelas ainda)
+--   → supabase_schema_bpmn_processes.sql
+--      (seguro rodar mesmo em ambiente novo — usa CREATE TABLE IF NOT EXISTS)
+--
+-- ──────────────────────────────────────────────────────────────────────────────
+
+-- ── UTILITÁRIOS ──────────────────────────────────────────────────────────────
+--
+-- Limpeza de dados de teste (mantém projeto, apaga todos os dados derivados)
+--   → supabase_cleanup_test_data.sql
+--
+-- ──────────────────────────────────────────────────────────────────────────────
