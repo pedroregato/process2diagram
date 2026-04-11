@@ -9,7 +9,7 @@ streamlit==1.42.0
 # ── LLM Providers ────────────────────────────────────────────────────────────
 anthropic==0.49.0
 openai==1.65.0                  # também usado por DeepSeek, Groq e Gemini
-google-generativeai>=0.8.0      # embeddings via Gemini text-embedding-004 (busca semântica)
+google-genai>=1.0.0             # embeddings via Gemini text-embedding-004 (busca semântica)
 
 # ── NLP / Chunker (Agente sem LLM) ───────────────────────────────────────────
 spacy>=3.7,<4.0                 # motor NLP

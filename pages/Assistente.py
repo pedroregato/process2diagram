@@ -208,26 +208,32 @@ if "_trigger_embed" in st.session_state:
             prog = st.progress(0.0)
             n_total = len(meeting_rows_raw)
 
+            first_error_msg: str | None = None
             for i, m in enumerate(meeting_rows_raw):
                 transcript = m.get("transcript_clean") or m.get("transcript_raw") or ""
                 title = m.get("title") or f"Reunião {m.get('meeting_number','?')}"
                 if transcript.strip():
-                    n_saved = save_transcript_embeddings(
-                        meeting_id=m["id"],
-                        project_id=project_id,
-                        transcript=transcript,
-                        api_key=trigger["api_key"],
-                        provider=trigger["provider"],
-                    )
-                    if n_saved > 0:
+                    try:
+                        n_saved = save_transcript_embeddings(
+                            meeting_id=m["id"],
+                            project_id=project_id,
+                            transcript=transcript,
+                            api_key=trigger["api_key"],
+                            provider=trigger["provider"],
+                        )
                         total_gen += n_saved
-                    else:
+                    except Exception as exc:
                         errors.append(title)
+                        if first_error_msg is None:
+                            first_error_msg = str(exc)
                 prog.progress((i + 1) / n_total if n_total else 1.0)
 
             prog.empty()
             if errors:
-                st.warning(f"⚠️ Falha ao gerar embeddings para: {', '.join(errors)}")
+                detail = f"\n\n**Erro:** `{first_error_msg}`" if first_error_msg else ""
+                st.error(
+                    f"❌ Falha ao gerar embeddings para: {', '.join(errors)}.{detail}"
+                )
             else:
                 st.success(f"✅ {total_gen} chunks indexados em {n_total} reuniões.")
             st.rerun()

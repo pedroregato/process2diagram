@@ -9,6 +9,8 @@
 # NOTA: A API pública do DeepSeek (api.deepseek.com) NÃO possui endpoint de
 # embeddings — apenas chat/completions. Use Google Gemini (gratuito) ou OpenAI.
 #
+# SDK Gemini: google-genai>=1.0.0 (substituto do depreciado google-generativeai).
+#
 # Funções públicas:
 #   chunk_text(text, chunk_size, overlap) → list[str]
 #   embed_text(text, api_key, provider)   → list[float]  (768 dims)
@@ -223,22 +225,23 @@ def _embed_batch_openai_compatible(
 
 
 def _embed_gemini(text: str, api_key: str) -> list[float]:
-    """Google Generative AI — text-embedding-004 (768 dims)."""
+    """Google Gemini — text-embedding-004 (768 dims) via google-genai SDK."""
     try:
-        import google.generativeai as genai
+        from google import genai
+        from google.genai import types as genai_types
     except ImportError as exc:
         raise ImportError(
-            "Pacote google-generativeai não instalado. "
-            "Execute: pip install google-generativeai"
+            "Pacote google-genai não instalado. "
+            "Execute: pip install google-genai"
         ) from exc
 
-    genai.configure(api_key=api_key)
-    result = genai.embed_content(
-        model="models/text-embedding-004",
-        content=text,
-        task_type="retrieval_document",
+    client = genai.Client(api_key=api_key)
+    result = client.models.embed_content(
+        model="text-embedding-004",
+        contents=text,
+        config=genai_types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
     )
-    embedding = result["embedding"]
+    embedding = list(result.embeddings[0].values)
     if len(embedding) != EMBEDDING_DIM:
         raise ValueError(
             f"Embedding Gemini retornou {len(embedding)} dims, esperado {EMBEDDING_DIM}"

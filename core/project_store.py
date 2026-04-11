@@ -1366,44 +1366,40 @@ def save_transcript_embeddings(
     if not db or not transcript or not transcript.strip():
         return 0
 
-    try:
-        from modules.embeddings import chunk_text, embed_batch
+    from modules.embeddings import chunk_text, embed_batch
 
-        # 1. Gera chunks
-        chunks = chunk_text(transcript)
-        if not chunks:
-            return 0
-
-        # 2. Gera embeddings em batch
-        vectors = embed_batch(chunks, api_key, provider)
-
-        # 3. Remove chunks anteriores desta reunião
-        try:
-            db.table("transcript_chunks").delete().eq("meeting_id", meeting_id).execute()
-        except Exception:
-            pass
-
-        # 4. Insere novos chunks
-        rows = [
-            {
-                "meeting_id":   meeting_id,
-                "project_id":   project_id,
-                "chunk_index":  i,
-                "chunk_text":   chunk,
-                "embedding":    vector,
-            }
-            for i, (chunk, vector) in enumerate(zip(chunks, vectors))
-        ]
-
-        # Insere em lotes de 50 para evitar payload overflow
-        batch_size = 50
-        for start in range(0, len(rows), batch_size):
-            db.table("transcript_chunks").insert(rows[start:start + batch_size]).execute()
-
-        return len(rows)
-
-    except Exception:
+    # 1. Gera chunks
+    chunks = chunk_text(transcript)
+    if not chunks:
         return 0
+
+    # 2. Gera embeddings em batch (lança exceção se a API key for inválida, etc.)
+    vectors = embed_batch(chunks, api_key, provider)
+
+    # 3. Remove chunks anteriores desta reunião
+    try:
+        db.table("transcript_chunks").delete().eq("meeting_id", meeting_id).execute()
+    except Exception:
+        pass
+
+    # 4. Insere novos chunks
+    rows = [
+        {
+            "meeting_id":   meeting_id,
+            "project_id":   project_id,
+            "chunk_index":  i,
+            "chunk_text":   chunk,
+            "embedding":    vector,
+        }
+        for i, (chunk, vector) in enumerate(zip(chunks, vectors))
+    ]
+
+    # Insere em lotes de 50 para evitar payload overflow
+    batch_size = 50
+    for start in range(0, len(rows), batch_size):
+        db.table("transcript_chunks").insert(rows[start:start + batch_size]).execute()
+
+    return len(rows)
 
 
 def search_semantic(
