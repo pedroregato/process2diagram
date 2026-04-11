@@ -2,10 +2,12 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Utilitários de embedding para busca semântica.
 #
-# Provedores suportados:
-#   - DeepSeek: deepseek-embedding (768 dims, API OpenAI-compatible, mesma key do chat)
-#   - Google Gemini: text-embedding-004 (768 dims nativos)
+# Provedores suportados (APIs de nuvem com endpoint de embeddings):
+#   - Google Gemini: text-embedding-004 (768 dims nativos) — tier gratuito
 #   - OpenAI: text-embedding-3-small com dimensions=768
+#
+# NOTA: A API pública do DeepSeek (api.deepseek.com) NÃO possui endpoint de
+# embeddings — apenas chat/completions. Use Google Gemini (gratuito) ou OpenAI.
 #
 # Funções públicas:
 #   chunk_text(text, chunk_size, overlap) → list[str]
@@ -20,18 +22,11 @@ EMBEDDING_DIM = 768
 
 # ── Provedores de embedding suportados ───────────────────────────────────────
 EMBEDDING_PROVIDERS = {
-    "DeepSeek": {
-        "model":         "deepseek-embedding",
-        "base_url":      "https://api.deepseek.com",
-        "api_key_label": "DeepSeek API Key",
-        "api_key_help":  "Mesma chave usada para o chat — platform.deepseek.com/api-keys",
-        "api_key_prefix": "sk-",
-    },
     "Google Gemini": {
         "model":         "models/text-embedding-004",
         "base_url":      None,
         "api_key_label": "Google API Key",
-        "api_key_help":  "Crie em console.cloud.google.com → APIs → Generative Language API",
+        "api_key_help":  "Crie em console.cloud.google.com → APIs → Generative Language API. Tier gratuito disponível.",
         "api_key_prefix": "AI",
     },
     "OpenAI": {
@@ -126,7 +121,7 @@ def embed_text(text: str, api_key: str, provider: str) -> list[float]:
     Args:
         text:     Texto a embedar.
         api_key:  API key do provedor.
-        provider: "DeepSeek", "Google Gemini" ou "OpenAI".
+        provider: "Google Gemini" ou "OpenAI".
 
     Returns:
         Lista de 768 floats.
@@ -135,9 +130,7 @@ def embed_text(text: str, api_key: str, provider: str) -> list[float]:
         ValueError: provedor desconhecido ou resposta inesperada.
         Exception:  erro da API.
     """
-    if provider == "DeepSeek":
-        return _embed_openai_compatible(text, api_key, "deepseek-embedding", "https://api.deepseek.com")
-    elif provider == "Google Gemini":
+    if provider == "Google Gemini":
         return _embed_gemini(text, api_key)
     elif provider == "OpenAI":
         return _embed_openai_compatible(text, api_key, "text-embedding-3-small", None)
@@ -149,7 +142,7 @@ def embed_batch(texts: list[str], api_key: str, provider: str) -> list[list[floa
     """
     Gera embeddings para uma lista de textos.
 
-    DeepSeek e OpenAI: batch nativo (uma chamada para todos os textos).
+    OpenAI: batch nativo (uma chamada para todos os textos).
     Google Gemini: chamadas individuais (SDK Python não suporta batch).
 
     Returns:
@@ -158,7 +151,7 @@ def embed_batch(texts: list[str], api_key: str, provider: str) -> list[list[floa
     if not texts:
         return []
 
-    if provider in ("DeepSeek", "OpenAI"):
+    if provider == "OpenAI":
         cfg = EMBEDDING_PROVIDERS[provider]
         return _embed_batch_openai_compatible(
             texts, api_key,
@@ -166,7 +159,7 @@ def embed_batch(texts: list[str], api_key: str, provider: str) -> list[list[floa
             base_url=cfg.get("base_url"),
         )
     else:
-        # Fallback: chamadas individuais
+        # Gemini e outros: chamadas individuais
         return [embed_text(t, api_key, provider) for t in texts]
 
 

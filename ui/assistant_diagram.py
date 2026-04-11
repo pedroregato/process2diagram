@@ -39,7 +39,7 @@ flowchart TD
             K1["Extração de\\npalavras-chave PT"]:::aCls
         end
         subgraph SEM_BOX["🔮 Busca Semântica  (pgvector — opcional)"]
-            S1["Embedding\\nda pergunta"]:::sCls
+            S1["Embedding da pergunta\\n(Gemini · OpenAI)"]:::sCls
             S2["Cosine similarity\\ntranscript_chunks"]:::sCls
             S1 --> S2
         end

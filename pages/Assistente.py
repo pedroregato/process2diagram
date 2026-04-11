@@ -123,11 +123,16 @@ with st.sidebar:
                 "Gera embeddings das transcrições para habilitar a busca semântica. "
                 "Execute uma vez por projeto (ou novamente quando adicionar reuniões)."
             )
+            st.info(
+                "💡 A API pública do DeepSeek não possui endpoint de embeddings. "
+                "Use **Google Gemini** (tier gratuito) ou **OpenAI**.",
+                icon=None,
+            )
             embed_provider = st.selectbox(
                 "Provedor de Embedding",
                 list(EMBEDDING_PROVIDERS.keys()),
                 key="asst_embed_provider",
-                help="Google Gemini text-embedding-004 ou OpenAI text-embedding-3-small (768 dims)",
+                help="Google Gemini text-embedding-004 (gratuito) ou OpenAI text-embedding-3-small (768 dims)",
             )
             embed_cfg = EMBEDDING_PROVIDERS[embed_provider]
             embed_api_key = st.text_input(
@@ -181,11 +186,8 @@ if not project_id:
     st.warning("👈 Selecione um projeto na sidebar para começar.")
     st.stop()
 
-if not api_key:
-    st.warning("👈 Insira a API key na sidebar antes de fazer perguntas.")
-    st.stop()
-
-# ── Trigger: geração de embeddings ───────────────────────────────────────────
+# ── Trigger: geração de embeddings (antes do guard de api_key LLM) ──────────
+# Processado aqui para não depender da chave LLM — usa a chave de embedding.
 if "_trigger_embed" in st.session_state:
     trigger = st.session_state.pop("_trigger_embed")
     if trigger["project_id"] == project_id:
@@ -229,6 +231,11 @@ if "_trigger_embed" in st.session_state:
             else:
                 st.success(f"✅ {total_gen} chunks indexados em {n_total} reuniões.")
             st.rerun()
+
+# ── Guard: LLM API key (somente para o chat — embeddings independem disso) ───
+if not api_key:
+    st.warning("👈 Insira a API key na sidebar antes de fazer perguntas.")
+    st.stop()
 
 # ── Session history ───────────────────────────────────────────────────────────
 if "assistant_history" not in st.session_state:
