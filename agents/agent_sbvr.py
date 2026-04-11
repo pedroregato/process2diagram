@@ -59,6 +59,7 @@ class AgentSBVR(BaseAgent):
             BusinessRule(
                 id=r.get("id", f"BR{i + 1:03d}"),
                 statement=r.get("statement", "").strip(),
+                short_title=r.get("short_title", "").strip(),
                 rule_type=r.get("rule_type", "constraint"),
                 source=r.get("source") or "",
             )

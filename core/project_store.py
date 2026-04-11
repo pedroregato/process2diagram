@@ -381,12 +381,14 @@ def save_sbvr_from_hub(meeting_id: str, project_id: str, hub) -> tuple[int, int]
 
     for r in hub.sbvr.rules:
         try:
+            # nucleo_nominal: LLM short_title preferred; heuristic fallback
+            nucleo = getattr(r, "short_title", "").strip() or rule_keyword_pt(r.statement)
             db.table("sbvr_rules").insert({
                 "meeting_id":     meeting_id,
                 "project_id":     project_id,
                 "rule_id":        r.id,
                 "statement":      r.statement,
-                "nucleo_nominal": rule_keyword_pt(r.statement),
+                "nucleo_nominal": nucleo,
                 "rule_type":      r.rule_type,
                 "source":         r.source,
             }).execute()

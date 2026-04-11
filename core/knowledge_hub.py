@@ -279,6 +279,7 @@ class BusinessRule:
     """A business rule extracted by AgentSBVR."""
     id: str
     statement: str
+    short_title: str = ""           # 2–5 word inferred title; stored as nucleo_nominal in DB
     rule_type: str = "constraint"   # constraint | operational | behavioral | structural
     source: str = ""                # participant initials who stated it
 

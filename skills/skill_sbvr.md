@@ -28,6 +28,7 @@ Return a single JSON object — no markdown, no explanations, no extra keys.
   "rules": [
     {
       "id": "BR001",
+      "short_title": "2–5 word title capturing WHAT the rule regulates",
       "statement": "business rule stated in plain, declarative language",
       "rule_type": "constraint|operational|behavioral|structural",
       "source": "participant initials if identifiable, otherwise null"
@@ -57,6 +58,20 @@ Return a single JSON object — no markdown, no explanations, no extra keys.
 - Write statements in the first person or imperative — avoid passive constructions.
 - Set `source` to the participant's initials only when the rule was explicitly stated
   by that person; otherwise set to null.
+
+**`short_title` — how to write it:**
+- 2–5 words that capture WHAT the rule regulates — this is the **topic**, not a summary of the sentence.
+- Do NOT just copy the grammatical subject. Identify the key concept or business situation being constrained.
+- Do NOT start with an article (o, a, os, as, the, a/an).
+- Use the same language as the statement.
+- Examples of correct inference:
+  | statement | short_title |
+  |---|---|
+  | "Documentos como organogramas devem ter uma data de validade definida" | "Validade de organogramas" |
+  | "Na data de corte, todas as informações do legado devem estar cadastradas" | "Data de corte" |
+  | "O e-mail do sistema deve ser passado para a DTI para configuração de segurança" | "E-mail do sistema" |
+  | "O gestor pode aprovar pedidos sem consultar o financeiro" | "Aprovação pelo gestor" |
+  | "Pedidos acima de R$10.000 requerem aprovação dupla" | "Aprovação dupla de pedidos" |
 
 ## Quality Constraints
 - Extract only what is mentioned or clearly implied in the transcript.
