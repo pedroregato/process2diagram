@@ -623,7 +623,7 @@ with tab_bpmn:
                     if mermaid_code:
                         render_mermaid_block(
                             mermaid_code,
-                            show_code=True,
+                            show_code=False,  # expanders cannot be nested inside st.expander
                             key_suffix=f"rt_mmd_{pid}_{sel_ver['version']}",
                             height=500,
                         )
