@@ -777,6 +777,344 @@ def save_bpmn_from_hub(
         return None
 
 
+# ── RAG context retrieval ─────────────────────────────────────────────────────
+
+_PT_STOPWORDS = {
+    "o", "a", "os", "as", "e", "de", "do", "da", "dos", "das", "em", "no",
+    "na", "nos", "nas", "para", "com", "que", "não", "se", "por", "mais",
+    "mas", "foi", "foram", "ser", "estar", "está", "estão", "um", "uma",
+    "como", "ao", "aos", "ou", "já", "também", "este", "esta", "esse",
+    "essa", "isso", "qual", "quais", "quando", "onde", "quem", "sobre",
+    "reunião", "reuniões", "teve", "tiveram", "pode", "podem", "seria",
+    "fazer", "feito", "dever", "deve", "devem", "tinha", "tinham",
+    "ter", "tem", "têm", "temos", "tenho", "há", "haver", "houve",
+    "seu", "sua", "seus", "suas", "meu", "minha", "meus", "minhas",
+    "nosso", "nossa", "nossos", "nossas", "pelo", "pela", "pelos", "pelas",
+    "num", "numa", "nuns", "numas", "dum", "duma", "duns", "dumas",
+    "me", "te", "lhe", "nos", "vos", "lhes", "ele", "ela", "eles", "elas",
+    "eu", "tu", "nós", "vós", "você", "vocês", "muito", "muita", "muitos",
+    "muitas", "todo", "toda", "todos", "todas", "algum", "alguma", "alguns",
+    "algumas", "nenhum", "nenhuma", "cada", "qualquer", "quaisquer",
+}
+
+
+def _extract_keywords(question: str) -> list[str]:
+    """
+    Split question into lowercase word tokens, remove Portuguese stopwords,
+    and keep only tokens with length > 2.
+    """
+    import re
+    tokens = re.findall(r'\w+', question.lower())
+    return [t for t in tokens if len(t) > 2 and t not in _PT_STOPWORDS]
+
+
+def _extract_passages(
+    transcript: str,
+    keywords: list[str],
+    context_lines: int = 4,
+    max_passages: int = 6,
+) -> list[str]:
+    """
+    Find lines in the transcript that contain any of the keywords and return
+    surrounding passages (context_lines before and after each match).
+
+    Consecutive matching regions (gap <= 2 lines) are merged into a single passage.
+    Returns up to max_passages passages as strings.
+    """
+    if not keywords or not transcript:
+        return []
+
+    lines = [ln for ln in transcript.splitlines() if ln.strip()]
+    if not lines:
+        return []
+
+    # Find indices of lines containing any keyword
+    matching_indices: set[int] = set()
+    for i, line in enumerate(lines):
+        line_lower = line.lower()
+        if any(kw in line_lower for kw in keywords):
+            matching_indices.add(i)
+
+    if not matching_indices:
+        return []
+
+    # Expand each match with context
+    expanded: set[int] = set()
+    for idx in matching_indices:
+        for offset in range(-context_lines, context_lines + 1):
+            neighbor = idx + offset
+            if 0 <= neighbor < len(lines):
+                expanded.add(neighbor)
+
+    # Sort and group into consecutive runs (gap <= 2)
+    sorted_indices = sorted(expanded)
+    groups: list[list[int]] = []
+    current_group: list[int] = [sorted_indices[0]]
+    for idx in sorted_indices[1:]:
+        if idx - current_group[-1] <= 2:
+            current_group.append(idx)
+        else:
+            groups.append(current_group)
+            current_group = [idx]
+    groups.append(current_group)
+
+    # Build passage strings, limited to max_passages
+    passages = []
+    for group in groups[:max_passages]:
+        passage_lines = [lines[i] for i in group]
+        passages.append("\n".join(passage_lines))
+
+    return passages
+
+
+def retrieve_context_for_question(project_id: str, question: str) -> dict:
+    """
+    Retrieve relevant context from Supabase for a RAG-based question.
+
+    Returns a dict with:
+      - meetings_passages: list of {meeting_number, title, meeting_date, passages}
+      - requirements: list of {req_number, title, description, req_type, status}
+      - processes: list of {name, version_count}
+      - sbvr_terms: list of {term, definition}
+      - sbvr_rules: list of {rule_id, statement, nucleo_nominal}
+      - meetings_without_transcript: list of titles with no stored transcript
+    """
+    db = _db()
+    keywords = _extract_keywords(question)
+
+    result: dict = {
+        "meetings_passages": [],
+        "requirements": [],
+        "processes": [],
+        "sbvr_terms": [],
+        "sbvr_rules": [],
+        "meetings_without_transcript": [],
+    }
+
+    # ── Meetings + transcripts ─────────────────────────────────────────────────
+    if db:
+        try:
+            meeting_rows = _ok(
+                db.table("meetings")
+                .select("id, title, meeting_date, meeting_number, transcript_clean, transcript_raw")
+                .eq("project_id", project_id)
+                .order("meeting_number")
+                .execute()
+            )
+        except Exception:
+            meeting_rows = []
+
+        for m in meeting_rows:
+            transcript = m.get("transcript_clean") or m.get("transcript_raw") or ""
+            title = m.get("title") or ""
+            meeting_date = str(m.get("meeting_date") or "")
+            meeting_number = m.get("meeting_number") or 0
+
+            if not transcript:
+                result["meetings_without_transcript"].append(title)
+                continue
+
+            if keywords:
+                passages = _extract_passages(transcript, keywords)
+            else:
+                # No keywords — return first passage as overview
+                passages = _extract_passages(transcript, [], context_lines=0, max_passages=0)
+
+            if passages:
+                result["meetings_passages"].append({
+                    "meeting_number": meeting_number,
+                    "title": title,
+                    "meeting_date": meeting_date,
+                    "passages": passages,
+                })
+
+    # ── Requirements ──────────────────────────────────────────────────────────
+    if db and keywords:
+        try:
+            all_reqs = _ok(
+                db.table("requirements")
+                .select("req_number, title, description, req_type, status")
+                .eq("project_id", project_id)
+                .order("req_number")
+                .execute()
+            )
+            for req in all_reqs:
+                title = (req.get("title") or "").lower()
+                description = (req.get("description") or "").lower()
+                combined = title + " " + description
+                if any(kw in combined for kw in keywords):
+                    result["requirements"].append({
+                        "req_number": req.get("req_number"),
+                        "title": req.get("title") or "",
+                        "description": req.get("description") or "",
+                        "req_type": req.get("req_type") or "",
+                        "status": req.get("status") or "",
+                    })
+        except Exception:
+            pass
+
+    # ── BPMN processes ────────────────────────────────────────────────────────
+    if db:
+        try:
+            proc_rows = _ok(
+                db.table("bpmn_processes")
+                .select("name, version_count")
+                .eq("project_id", project_id)
+                .order("name")
+                .execute()
+            )
+            for p in proc_rows:
+                result["processes"].append({
+                    "name": p.get("name") or "",
+                    "version_count": p.get("version_count") or 0,
+                })
+        except Exception:
+            pass
+
+    # ── SBVR terms ────────────────────────────────────────────────────────────
+    if db and keywords:
+        try:
+            all_terms = _ok(
+                db.table("sbvr_terms")
+                .select("term, definition")
+                .eq("project_id", project_id)
+                .execute()
+            )
+            for t in all_terms:
+                term = (t.get("term") or "").lower()
+                definition = (t.get("definition") or "").lower()
+                combined = term + " " + definition
+                if any(kw in combined for kw in keywords):
+                    result["sbvr_terms"].append({
+                        "term": t.get("term") or "",
+                        "definition": t.get("definition") or "",
+                    })
+        except Exception:
+            pass
+
+    # ── SBVR rules ────────────────────────────────────────────────────────────
+    if db and keywords:
+        try:
+            all_rules = _ok(
+                db.table("sbvr_rules")
+                .select("rule_id, statement, nucleo_nominal")
+                .eq("project_id", project_id)
+                .execute()
+            )
+            for r in all_rules:
+                statement = (r.get("statement") or "").lower()
+                nucleo = (r.get("nucleo_nominal") or "").lower()
+                combined = statement + " " + nucleo
+                if any(kw in combined for kw in keywords):
+                    result["sbvr_rules"].append({
+                        "rule_id": r.get("rule_id") or "",
+                        "statement": r.get("statement") or "",
+                        "nucleo_nominal": r.get("nucleo_nominal") or "",
+                    })
+        except Exception:
+            pass
+
+    return result
+
+
+def format_context(ctx: dict, project_name: str) -> str:
+    """
+    Format a context dict (from retrieve_context_for_question) into a readable
+    string suitable for injection into the LLM system prompt.
+    """
+    lines: list[str] = []
+
+    lines.append(f"═══ PROJETO: {project_name} ═══")
+    lines.append("")
+
+    # ── Transcript passages ───────────────────────────────────────────────────
+    lines.append("── TRECHOS DE TRANSCRIÇÃO RELEVANTES ──")
+    lines.append("")
+
+    meetings_passages = ctx.get("meetings_passages") or []
+    if meetings_passages:
+        for mp in meetings_passages:
+            n = mp.get("meeting_number", "?")
+            title = mp.get("title", "")
+            date = mp.get("meeting_date", "")
+            date_str = f" ({date})" if date else ""
+            lines.append(f"[Reunião {n} — {title}{date_str}]")
+            passages = mp.get("passages") or []
+            for i, passage in enumerate(passages):
+                lines.append(passage)
+                if i < len(passages) - 1:
+                    lines.append("---")
+            lines.append("")
+    else:
+        lines.append("Nenhum trecho de transcrição encontrado para esta consulta.")
+        lines.append("")
+
+    # ── Requirements ─────────────────────────────────────────────────────────
+    lines.append("── REQUISITOS RELACIONADOS ──")
+    requirements = ctx.get("requirements") or []
+    if requirements:
+        for req in requirements:
+            n = req.get("req_number")
+            req_id = f"REQ-{n:03d}" if isinstance(n, int) else "REQ-???"
+            req_type = req.get("req_type") or ""
+            status = req.get("status") or ""
+            title = req.get("title") or ""
+            description = req.get("description") or ""
+            desc_preview = description[:120] + ("..." if len(description) > 120 else "")
+            type_status = f"{req_type}/{status}" if req_type or status else ""
+            bracket = f" [{type_status}]" if type_status else ""
+            lines.append(f"• {req_id}{bracket}: {title} — {desc_preview}")
+    else:
+        lines.append("Nenhum requisito relacionado encontrado.")
+    lines.append("")
+
+    # ── BPMN processes ────────────────────────────────────────────────────────
+    lines.append("── PROCESSOS BPMN ──")
+    processes = ctx.get("processes") or []
+    if processes:
+        for p in processes:
+            name = p.get("name") or ""
+            vc = p.get("version_count") or 0
+            lines.append(f"• {name} ({vc} versão(ões))")
+    else:
+        lines.append("Nenhum processo BPMN registrado.")
+    lines.append("")
+
+    # ── SBVR ─────────────────────────────────────────────────────────────────
+    lines.append("── VOCABULÁRIO E REGRAS SBVR ──")
+    sbvr_terms = ctx.get("sbvr_terms") or []
+    sbvr_rules = ctx.get("sbvr_rules") or []
+
+    if sbvr_terms or sbvr_rules:
+        if sbvr_terms:
+            terms_str = " | ".join(
+                f"{t['term']}: {t['definition']}" for t in sbvr_terms
+            )
+            lines.append(f"Termos: {terms_str}")
+        if sbvr_rules:
+            rules_str = " | ".join(
+                f"{r['nucleo_nominal']} — {r['statement'][:100]}"
+                + ("..." if len(r.get("statement", "")) > 100 else "")
+                for r in sbvr_rules
+            )
+            lines.append(f"Regras: {rules_str}")
+    else:
+        lines.append("Nenhum dado SBVR relacionado encontrado.")
+    lines.append("")
+
+    # ── Meetings without transcript ───────────────────────────────────────────
+    no_transcript = ctx.get("meetings_without_transcript") or []
+    if no_transcript:
+        lines.append("── REUNIÕES SEM TRANSCRIÇÃO ARMAZENADA ──")
+        lines.append(
+            "As seguintes reuniões não têm transcrição armazenada e não podem ser pesquisadas:"
+        )
+        lines.append(", ".join(no_transcript))
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def list_contradictions(project_id: str) -> list[dict]:
     """Retorna versões de requisitos com contradições ativas no projeto."""
     db = _db()
