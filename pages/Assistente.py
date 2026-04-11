@@ -237,6 +237,48 @@ if not api_key:
     st.warning("👈 Insira a API key na sidebar antes de fazer perguntas.")
     st.stop()
 
+# ── Status badges ────────────────────────────────────────────────────────────
+def _badge(icon: str, label: str, value: str, color: str) -> str:
+    return (
+        f'<span style="display:inline-flex;align-items:center;gap:5px;'
+        f'background:{color};border-radius:20px;padding:4px 12px;'
+        f'font-size:0.78rem;font-weight:600;color:#fff;white-space:nowrap;">'
+        f'{icon} <span style="opacity:.75">{label}</span> {value}'
+        f'</span>'
+    )
+
+_use_sem   = st.session_state.get("asst_use_semantic", False) and _chunks_table_ok
+_embed_prov = st.session_state.get("asst_embed_provider", "")
+_embed_key  = st.session_state.get("asst_embed_key", "")
+_model      = provider_cfg.get("default_model", "")
+
+_badges = [
+    _badge("📁", "Projeto", project_name, "#1A4B8C"),
+    _badge("🤖", "LLM", selected_provider, "#C97B1A"),
+    _badge("⚡", "Modelo", _model, "#1e3a5f"),
+]
+
+if _use_sem and _embed_key:
+    _badges.append(_badge("🔮", "Busca", "Semântica · pgvector", "#6B3FA0"))
+    _badges.append(_badge("🧮", "Embedding", _embed_prov, "#4A2870"))
+else:
+    _badges.append(_badge("🔑", "Busca", "Keyword", "#374151"))
+
+if _chunks_table_ok:
+    _cov = get_embedding_coverage(project_id)
+    _idx = _cov.get("indexed_meetings", 0)
+    _tot = _cov.get("total_meetings", 0)
+    _chunks_n = _cov.get("total_chunks", 0)
+    if _idx > 0:
+        _badges.append(_badge("📊", "Índice", f"{_idx}/{_tot} reuniões · {_chunks_n:,} chunks", "#1A7F5A"))
+
+st.markdown(
+    '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 16px 0;">'
+    + "".join(_badges)
+    + "</div>",
+    unsafe_allow_html=True,
+)
+
 # ── Session history ───────────────────────────────────────────────────────────
 if "assistant_history" not in st.session_state:
     st.session_state["assistant_history"] = []
