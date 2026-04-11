@@ -33,7 +33,7 @@ render_sidebar()
 
 # ── Diagrama de arquitetura (splash) ──────────────────────────────────────────
 with st.expander("🏗️ Arquitetura do Sistema — Como o Process2Diagram funciona",
-                 expanded=not ("hub" in st.session_state)):
+                 expanded=False):
     render_architecture_diagram(height=720)
 
 # ── Projeto / Reunião ─────────────────────────────────────────────────────────

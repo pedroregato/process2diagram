@@ -50,8 +50,9 @@ def render_project_selector() -> None:
     if st.session_state.project_confirmed:
         col_info, col_btn = st.columns([5, 1])
         with col_info:
+            sigla_badge = f"`{st.session_state.prefix.rstrip('_')}` · " if st.session_state.get("prefix", "P2D_") != "P2D_" else ""
             st.success(
-                f"📁 **{st.session_state.project_name}** · "
+                f"📁 {sigla_badge}**{st.session_state.project_name}** · "
                 f"📝 {st.session_state.meeting_title or '(sem título)'} · "
                 f"📅 {st.session_state.meeting_date}"
             )
@@ -86,22 +87,27 @@ def render_project_selector() -> None:
             meeting_dt = st.date_input("Data", value=date.today(), key="meeting_date_input")
 
         # Campos extras para novo projeto
-        new_name = new_desc = ""
+        new_name = new_sigla = new_desc = ""
         if sel == _NEW:
-            col_n, col_d = st.columns([1, 2])
+            col_n, col_s, col_d = st.columns([2, 1, 2])
             with col_n:
                 new_name = st.text_input("Nome do projeto *", key="new_proj_name",
-                                         placeholder="Nome curto, único")
+                                         placeholder="Nome completo do projeto")
+            with col_s:
+                new_sigla = st.text_input("Sigla *", key="new_proj_sigla",
+                                           placeholder="Ex: SDEA",
+                                           max_chars=10,
+                                           help="Sigla em maiúsculas — usada como prefixo nos artefatos exportados")
             with col_d:
                 new_desc = st.text_input("Descrição (opcional)", key="new_proj_desc",
                                           placeholder="Contexto ou objetivo do projeto")
 
         if st.button("✅ Confirmar projeto", key="confirm_project_btn",
                      type="primary", use_container_width=True):
-            _handle_confirm(projects, sel, new_name, new_desc, title, meeting_dt)
+            _handle_confirm(projects, sel, new_name, new_sigla, new_desc, title, meeting_dt)
 
 
-def _handle_confirm(projects, sel, new_name, new_desc, title, meeting_dt):
+def _handle_confirm(projects, sel, new_name, new_sigla, new_desc, title, meeting_dt):
     if not title.strip():
         st.error("Informe o título da reunião.")
         return
@@ -110,7 +116,10 @@ def _handle_confirm(projects, sel, new_name, new_desc, title, meeting_dt):
         if not new_name.strip():
             st.error("Informe o nome do novo projeto.")
             return
-        project = create_project(new_name.strip(), new_desc.strip())
+        if not new_sigla.strip():
+            st.error("Informe a sigla do projeto.")
+            return
+        project = create_project(new_name.strip(), new_desc.strip(), new_sigla.strip())
         if not project:
             st.error("Erro ao criar projeto no Supabase.")
             return
@@ -125,4 +134,10 @@ def _handle_confirm(projects, sel, new_name, new_desc, title, meeting_dt):
     st.session_state.meeting_title     = title.strip()
     st.session_state.meeting_date      = meeting_dt
     st.session_state.project_confirmed = True
+
+    # Auto-prefixo: sigla do projeto → prefixo dos artefatos exportados
+    sigla = project.get("sigla", "").strip()
+    if sigla:
+        st.session_state.prefix = sigla + "_"
+
     st.rerun()

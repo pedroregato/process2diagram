@@ -55,7 +55,7 @@ def get_project(project_id: str) -> dict | None:
         return None
 
 
-def create_project(name: str, description: str = "") -> dict | None:
+def create_project(name: str, description: str = "", sigla: str = "") -> dict | None:
     """Cria e retorna um novo projeto."""
     db = _db()
     if not db:
@@ -63,7 +63,11 @@ def create_project(name: str, description: str = "") -> dict | None:
     try:
         rows = _ok(
             db.table("projects")
-            .insert({"name": name.strip(), "description": description.strip()})
+            .insert({
+                "name":        name.strip(),
+                "sigla":       sigla.strip().upper(),
+                "description": description.strip(),
+            })
             .execute()
         )
         return rows[0] if rows else None

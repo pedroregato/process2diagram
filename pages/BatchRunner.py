@@ -141,16 +141,25 @@ sel_proj = st.selectbox("Selecione o projeto destino", proj_names, key="br_proj_
 project_id: str | None = None
 
 if sel_proj == "➕ Criar novo projeto":
-    col_n, col_b = st.columns([4, 1])
+    col_n, col_s, col_b = st.columns([3, 1, 1])
     with col_n:
         new_proj_name = st.text_input("Nome do novo projeto", key="br_new_proj_name")
+    with col_s:
+        new_proj_sigla = st.text_input("Sigla", key="br_new_proj_sigla",
+                                       max_chars=10,
+                                       placeholder="Ex: SDEA",
+                                       help="Usada como prefixo nos artefatos exportados")
     with col_b:
         st.markdown("<div style='padding-top:28px'>", unsafe_allow_html=True)
         if st.button("Criar", key="br_create_proj"):
-            if new_proj_name.strip():
-                created = create_project(new_proj_name.strip())
+            if not new_proj_name.strip():
+                st.error("Informe o nome do projeto.")
+            elif not new_proj_sigla.strip():
+                st.error("Informe a sigla.")
+            else:
+                created = create_project(new_proj_name.strip(), sigla=new_proj_sigla.strip())
                 if created:
-                    st.success(f"Projeto **{new_proj_name}** criado!")
+                    st.success(f"Projeto **{new_proj_name}** ({new_proj_sigla.upper()}) criado!")
                     st.rerun()
                 else:
                     st.error("Erro ao criar projeto.")
