@@ -3,6 +3,7 @@
 # Utilitários de embedding para busca semântica.
 #
 # Provedores suportados:
+#   - DeepSeek: deepseek-embedding (768 dims, API OpenAI-compatible, mesma key do chat)
 #   - Google Gemini: text-embedding-004 (768 dims nativos)
 #   - OpenAI: text-embedding-3-small com dimensions=768
 #
@@ -14,23 +15,30 @@
 
 from __future__ import annotations
 
-from typing import List
-
 # ── Dimensão alvo ─────────────────────────────────────────────────────────────
 EMBEDDING_DIM = 768
 
 # ── Provedores de embedding suportados ───────────────────────────────────────
 EMBEDDING_PROVIDERS = {
+    "DeepSeek": {
+        "model":         "deepseek-embedding",
+        "base_url":      "https://api.deepseek.com",
+        "api_key_label": "DeepSeek API Key",
+        "api_key_help":  "Mesma chave usada para o chat — platform.deepseek.com/api-keys",
+        "api_key_prefix": "sk-",
+    },
     "Google Gemini": {
-        "model": "models/text-embedding-004",
+        "model":         "models/text-embedding-004",
+        "base_url":      None,
         "api_key_label": "Google API Key",
-        "api_key_help": "Crie em console.cloud.google.com → APIs → Generative Language API",
+        "api_key_help":  "Crie em console.cloud.google.com → APIs → Generative Language API",
         "api_key_prefix": "AI",
     },
     "OpenAI": {
-        "model": "text-embedding-3-small",
+        "model":         "text-embedding-3-small",
+        "base_url":      None,
         "api_key_label": "OpenAI API Key",
-        "api_key_help": "Crie em platform.openai.com/api-keys",
+        "api_key_help":  "Crie em platform.openai.com/api-keys",
         "api_key_prefix": "sk-",
     },
 }
@@ -118,7 +126,7 @@ def embed_text(text: str, api_key: str, provider: str) -> list[float]:
     Args:
         text:     Texto a embedar.
         api_key:  API key do provedor.
-        provider: "Google Gemini" ou "OpenAI".
+        provider: "DeepSeek", "Google Gemini" ou "OpenAI".
 
     Returns:
         Lista de 768 floats.
@@ -127,10 +135,12 @@ def embed_text(text: str, api_key: str, provider: str) -> list[float]:
         ValueError: provedor desconhecido ou resposta inesperada.
         Exception:  erro da API.
     """
-    if provider == "Google Gemini":
+    if provider == "DeepSeek":
+        return _embed_openai_compatible(text, api_key, "deepseek-embedding", "https://api.deepseek.com")
+    elif provider == "Google Gemini":
         return _embed_gemini(text, api_key)
     elif provider == "OpenAI":
-        return _embed_openai(text, api_key)
+        return _embed_openai_compatible(text, api_key, "text-embedding-3-small", None)
     else:
         raise ValueError(f"Provedor de embedding desconhecido: {provider!r}")
 
@@ -138,8 +148,9 @@ def embed_text(text: str, api_key: str, provider: str) -> list[float]:
 def embed_batch(texts: list[str], api_key: str, provider: str) -> list[list[float]]:
     """
     Gera embeddings para uma lista de textos.
-    Google Gemini: chamadas individuais (API não suporta batch nativo pelo SDK Python).
-    OpenAI: batch nativo.
+
+    DeepSeek e OpenAI: batch nativo (uma chamada para todos os textos).
+    Google Gemini: chamadas individuais (SDK Python não suporta batch).
 
     Returns:
         Lista de listas de 768 floats, na mesma ordem de `texts`.
@@ -147,14 +158,76 @@ def embed_batch(texts: list[str], api_key: str, provider: str) -> list[list[floa
     if not texts:
         return []
 
-    if provider == "OpenAI":
-        return _embed_batch_openai(texts, api_key)
+    if provider in ("DeepSeek", "OpenAI"):
+        cfg = EMBEDDING_PROVIDERS[provider]
+        return _embed_batch_openai_compatible(
+            texts, api_key,
+            model=cfg["model"],
+            base_url=cfg.get("base_url"),
+        )
     else:
         # Fallback: chamadas individuais
         return [embed_text(t, api_key, provider) for t in texts]
 
 
 # ── Implementações por provedor ───────────────────────────────────────────────
+
+def _embed_openai_compatible(
+    text: str,
+    api_key: str,
+    model: str,
+    base_url: str | None,
+) -> list[float]:
+    """
+    Embedding via API compatível com OpenAI SDK.
+    Usado tanto para OpenAI quanto para DeepSeek (mesmo formato).
+    Para OpenAI usa dimensions=768; para DeepSeek o modelo já gera 768 dims nativamente.
+    """
+    from openai import OpenAI
+
+    kwargs: dict = {"api_key": api_key}
+    if base_url:
+        kwargs["base_url"] = base_url
+
+    client = OpenAI(**kwargs)
+
+    create_kwargs: dict = {"model": model, "input": text}
+    # OpenAI text-embedding-3-small suporta dimensions; DeepSeek ignora o parâmetro
+    if not base_url:  # OpenAI nativo
+        create_kwargs["dimensions"] = EMBEDDING_DIM
+
+    resp = client.embeddings.create(**create_kwargs)
+    embedding = resp.data[0].embedding
+
+    if len(embedding) != EMBEDDING_DIM:
+        raise ValueError(
+            f"Embedding {model} retornou {len(embedding)} dims, esperado {EMBEDDING_DIM}"
+        )
+    return embedding
+
+
+def _embed_batch_openai_compatible(
+    texts: list[str],
+    api_key: str,
+    model: str,
+    base_url: str | None,
+) -> list[list[float]]:
+    """Batch embedding via API compatível com OpenAI SDK."""
+    from openai import OpenAI
+
+    kwargs: dict = {"api_key": api_key}
+    if base_url:
+        kwargs["base_url"] = base_url
+
+    client = OpenAI(**kwargs)
+
+    create_kwargs: dict = {"model": model, "input": texts}
+    if not base_url:  # OpenAI nativo
+        create_kwargs["dimensions"] = EMBEDDING_DIM
+
+    resp = client.embeddings.create(**create_kwargs)
+    return [item.embedding for item in sorted(resp.data, key=lambda x: x.index)]
+
 
 def _embed_gemini(text: str, api_key: str) -> list[float]:
     """Google Generative AI — text-embedding-004 (768 dims)."""
@@ -178,30 +251,3 @@ def _embed_gemini(text: str, api_key: str) -> list[float]:
             f"Embedding Gemini retornou {len(embedding)} dims, esperado {EMBEDDING_DIM}"
         )
     return embedding
-
-
-def _embed_openai(text: str, api_key: str) -> list[float]:
-    """OpenAI — text-embedding-3-small com dimensions=768."""
-    from openai import OpenAI
-
-    client = OpenAI(api_key=api_key)
-    resp = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=text,
-        dimensions=EMBEDDING_DIM,
-    )
-    return resp.data[0].embedding
-
-
-def _embed_batch_openai(texts: list[str], api_key: str) -> list[list[float]]:
-    """OpenAI batch embedding — mais eficiente que chamadas individuais."""
-    from openai import OpenAI
-
-    client = OpenAI(api_key=api_key)
-    resp = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=texts,
-        dimensions=EMBEDDING_DIM,
-    )
-    # A API retorna embeddings na mesma ordem do input
-    return [item.embedding for item in sorted(resp.data, key=lambda x: x.index)]
