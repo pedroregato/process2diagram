@@ -512,8 +512,25 @@ def list_batch_log(project_id: str) -> list[dict]:
 
 # ── BPMN Processos e Versões ──────────────────────────────────────────────────
 
+def bpmn_tables_exist() -> bool:
+    """Verifica se as tabelas bpmn_processes e bpmn_versions existem no banco."""
+    db = _db()
+    if not db:
+        return False
+    try:
+        db.table("bpmn_versions").select("id").limit(1).execute()
+        db.table("bpmn_processes").select("id").limit(1).execute()
+        return True
+    except Exception:
+        return False
+
+
 def list_meetings_without_bpmn(project_id: str) -> list[dict]:
-    """Retorna reuniões que têm transcrição mas ainda não têm versão BPMN registrada."""
+    """Retorna reuniões que têm transcrição mas ainda não têm versão BPMN registrada.
+
+    Presume que as tabelas bpmn_versions e bpmn_processes já existem.
+    Use bpmn_tables_exist() para verificar antes de chamar esta função.
+    """
     db = _db()
     if not db:
         return []
@@ -526,13 +543,16 @@ def list_meetings_without_bpmn(project_id: str) -> list[dict]:
             .execute()
         )
         # meeting_ids que já têm pelo menos uma versão BPMN
-        bpmn_rows = _ok(
-            db.table("bpmn_versions")
-            .select("meeting_id")
-            .eq("project_id", project_id)
-            .execute()
-        )
-        covered = {r["meeting_id"] for r in bpmn_rows}
+        try:
+            bpmn_rows = _ok(
+                db.table("bpmn_versions")
+                .select("meeting_id")
+                .eq("project_id", project_id)
+                .execute()
+            )
+            covered = {r["meeting_id"] for r in bpmn_rows}
+        except Exception:
+            covered = set()   # tabela ainda não existe → trata todas como pendentes
         return [
             m for m in all_meetings
             if m["id"] not in covered

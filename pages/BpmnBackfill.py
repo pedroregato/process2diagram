@@ -29,6 +29,7 @@ from core.project_store import (
     list_projects,
     list_meetings_without_bpmn,
     save_bpmn_from_hub,
+    bpmn_tables_exist,
 )
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -78,6 +79,23 @@ if not supabase_configured():
     st.error("⚙️ Supabase não configurado.")
     st.stop()
 
+# ── Pré-requisito: tabelas BPMN devem existir ─────────────────────────────────
+if not bpmn_tables_exist():
+    st.error("⚠️ Tabelas BPMN ainda não foram criadas no banco de dados.")
+    st.markdown(
+        "Execute o script abaixo no **SQL Editor do Supabase Dashboard** e recarregue a página:"
+    )
+    st.code("setup/supabase_schema_bpmn_processes.sql", language="sql")
+    st.markdown("""
+```sql
+-- Conteúdo resumido (use o arquivo completo em setup/):
+CREATE TABLE IF NOT EXISTS bpmn_processes ( ... );
+CREATE TABLE IF NOT EXISTS bpmn_versions  ( ... );
+```
+""")
+    st.info("Após executar o SQL, recarregue esta página (F5).")
+    st.stop()
+
 # ── 1. Projeto ────────────────────────────────────────────────────────────────
 st.markdown("## 1️⃣ Projeto")
 projects  = list_projects()
@@ -94,7 +112,7 @@ st.markdown("## 2️⃣ Reuniões sem BPMN")
 pending = list_meetings_without_bpmn(project_id)
 
 if not pending:
-    st.success("✅ Todas as reuniões do projeto já possuem BPMN registrado.")
+    st.success("✅ Todas as reuniões do projeto já possuem versão BPMN registrada.")
     st.stop()
 
 st.info(f"**{len(pending)}** reunião(ões) sem BPMN encontrada(s).")
