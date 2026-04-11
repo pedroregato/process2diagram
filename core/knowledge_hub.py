@@ -89,6 +89,7 @@ class BPMNModel:
     steps: list[BPMNStep] = field(default_factory=list)
     edges: list[BPMNEdge] = field(default_factory=list)
     lanes: list[str] = field(default_factory=list)
+    description: str = ""        # process description → <documentation> in XML
     bpmn_xml: str = ""            # OMG BPMN 2.0 XML
     mermaid: str = ""
     ready: bool = False

@@ -231,6 +231,7 @@ class AgentBPMN(BaseAgent):
         ]
         return BPMNModel(
             name=data.get("name", "Process"),
+            description=data.get("description", ""),
             steps=steps,
             edges=edges,
             lanes=data.get("lanes", []),
@@ -332,6 +333,7 @@ class AgentBPMN(BaseAgent):
 
         return BPMNModel(
             name=data.get("name", "Process"),
+            description=data.get("description", ""),
             steps=all_steps,
             edges=all_edges,
             lanes=all_lanes,
@@ -575,6 +577,7 @@ class AgentBPMN(BaseAgent):
 
         bpmn_process = BpmnProcess(
             name=model.name,
+            documentation=model.description or "",
             elements=elements,
             flows=flows,
             pools=pools,
@@ -634,6 +637,7 @@ class AgentBPMN(BaseAgent):
 
         bpmn_process = BpmnProcess(
             name=model.name,
+            documentation=model.description or "",
             elements=[],    # elements are owned by each pool
             flows=[],       # flows are owned by each pool
             pools=pools,

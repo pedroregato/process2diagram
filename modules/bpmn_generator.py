@@ -1017,13 +1017,23 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         b.set("width", str(int(w))); b.set("height", str(int(h)))
         lbl = _sub(shape, DI + "BPMNLabel")
         lb  = _sub(lbl, DC + "Bounds")
-        # Events are small circles — place their label ABOVE so that vertical
-        # sequence flows exiting the bottom of the circle don't cross the text.
-        _event_types = ("startEvent", "endEvent",
-                        "intermediateThrowEvent", "intermediateCatchEvent")
-        lbl_y = (y - 22) if el.type in _event_types else (y + h + 2)
-        lb.set("x", str(int(x))); lb.set("y", str(int(lbl_y)))
-        lb.set("width", str(int(w))); lb.set("height", "20")
+        # Label placement strategy:
+        # • Events (small circles): label above, extra width so text doesn't clip
+        # • Gateways (diamonds): label below, wider area for longer names
+        # • Tasks / sub-processes: bounds match shape — bpmn-js word-wraps inside
+        _event_types   = ("startEvent", "endEvent",
+                          "intermediateThrowEvent", "intermediateCatchEvent")
+        _gateway_types = ("exclusiveGateway", "parallelGateway", "inclusiveGateway",
+                          "eventBasedGateway", "complexGateway")
+        if el.type in _event_types:
+            lb.set("x", str(int(x - 15))); lb.set("y", str(int(y - 30)))
+            lb.set("width",  str(int(w + 30))); lb.set("height", "28")
+        elif el.type in _gateway_types:
+            lb.set("x", str(int(x - 10))); lb.set("y", str(int(y + h + 2)))
+            lb.set("width",  str(int(w + 20))); lb.set("height", "30")
+        else:
+            lb.set("x", str(int(x))); lb.set("y", str(int(y)))
+            lb.set("width",  str(int(w))); lb.set("height", str(int(h)))
 
     # ── Lane bounds for smart routing ─────────────────────────────────────────
     _la = _assign_lanes(bpmn)
@@ -1488,9 +1498,15 @@ def _generate_bpmn_xml_multi(bpmn: BpmnProcess) -> str:
         b.set("width", str(int(w))); b.set("height", str(int(h)))
         lbl = _sub(shape, DI + "BPMNLabel")
         lb  = _sub(lbl, DC + "Bounds")
-        lbl_y = (y - 22) if el.type in _event_types else (y + h + 2)
-        lb.set("x", str(int(x))); lb.set("y", str(int(lbl_y)))
-        lb.set("width", str(int(w))); lb.set("height", "20")
+        if el.type in _event_types:
+            lb.set("x", str(int(x - 15))); lb.set("y", str(int(y - 30)))
+            lb.set("width",  str(int(w + 30))); lb.set("height", "28")
+        elif "Gateway" in el.type:
+            lb.set("x", str(int(x - 10))); lb.set("y", str(int(y + h + 2)))
+            lb.set("width",  str(int(w + 20))); lb.set("height", "30")
+        else:
+            lb.set("x", str(int(x))); lb.set("y", str(int(y)))
+            lb.set("width",  str(int(w))); lb.set("height", str(int(h)))
 
     # ── Lane bounds for smart routing (multi-pool) ────────────────────────────
     _all_la: dict = {}

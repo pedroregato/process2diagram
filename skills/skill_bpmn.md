@@ -193,6 +193,7 @@ Antes de gerar o JSON, confirme:
 ```json
 {
   "name": "Nome do Processo",
+  "description": "Resumo em 1–3 frases do objetivo e escopo do processo. Usado como documentação no XML BPMN.",
   "steps": [
     {
       "id": "S01",
@@ -216,6 +217,7 @@ Antes de gerar o JSON, confirme:
 ```json
 {
   "name": "Nome do Processo",
+  "description": "Resumo em 1–3 frases do objetivo e escopo do processo.",
   "pools": [
     {
       "id": "pool_1",
