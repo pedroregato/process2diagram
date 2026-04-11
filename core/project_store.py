@@ -13,6 +13,7 @@ from datetime import date
 from typing import Any
 
 from modules.supabase_client import get_supabase_client
+from modules.text_utils import rule_keyword_pt
 
 
 # ── helpers internos ──────────────────────────────────────────────────────────
@@ -381,12 +382,13 @@ def save_sbvr_from_hub(meeting_id: str, project_id: str, hub) -> tuple[int, int]
     for r in hub.sbvr.rules:
         try:
             db.table("sbvr_rules").insert({
-                "meeting_id": meeting_id,
-                "project_id": project_id,
-                "rule_id":    r.id,
-                "statement":  r.statement,
-                "rule_type":  r.rule_type,
-                "source":     r.source,
+                "meeting_id":     meeting_id,
+                "project_id":     project_id,
+                "rule_id":        r.id,
+                "statement":      r.statement,
+                "nucleo_nominal": rule_keyword_pt(r.statement),
+                "rule_type":      r.rule_type,
+                "source":         r.source,
             }).execute()
             n_rules += 1
         except Exception:

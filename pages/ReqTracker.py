@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -20,6 +19,7 @@ from datetime import date
 
 from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured
+from modules.text_utils import rule_keyword_pt
 from modules.reqtracker_exporter import to_html as export_html, to_pdf as export_pdf
 from core.project_store import (
     list_projects, list_meetings, list_requirements, list_contradictions,
@@ -97,68 +97,6 @@ sbvr_terms     = list_sbvr_terms(project_id)
 sbvr_rules     = list_sbvr_rules(project_id)
 
 meet_map = {m["id"]: m for m in meetings}
-
-# ── Extração de palavra-chave de regra de negócio ────────────────────────────
-#
-# Técnica: heurística pura em PT-BR — sem LLM, sem spaCy.
-#
-# Padrão das regras: [Artigo?] [Núcleo nominal] [verbo modal] [predicado]
-# Exemplos:
-#   "O cronograma deve ter data final..." → "Cronograma"
-#   "As reuniões de validação dos fluxos devem incluir..." → "Reuniões de validação"
-#   "A data de entrega deve ser aprovada..." → "Data de entrega"
-#
-# Algoritmo:
-#   1. Tokenizar por \w+  (ignora pontuação)
-#   2. Pular artigos/determinantes iniciais (o, a, os, as, um, uma, todo...)
-#   3. Coletar tokens até bater em verbo modal/auxiliar (deve, devem, é, são...)
-#      que sinaliza o início do predicado — o núcleo nominal está completo
-#   4. Limitar a 3 tokens e 28 chars; capitalizar
-
-_RULE_SKIP_INITIAL = {
-    "o", "a", "os", "as", "um", "uma", "uns", "umas",
-    "todo", "toda", "todos", "todas", "cada", "qualquer",
-    "este", "esta", "estes", "estas", "esse", "essa", "esses", "essas",
-    "aquele", "aquela", "aqueles", "aquelas",
-}
-_RULE_MODAL_VERBS = {
-    "deve", "devem", "deverá", "deverão", "deveriam",
-    "é", "são", "foi", "foram", "sera", "serão",
-    "pode", "podem", "poderá", "poderão",
-    "precisa", "precisam", "precisará",
-    "tem", "têm", "terá", "terão",
-    "inclui", "incluem", "incluir",
-    "exige", "exigem", "requer", "requerem",
-    "garante", "garantem", "obriga", "obrigam",
-    "representa", "representam", "define", "definem",
-}
-
-
-def _rule_keyword(statement: str, max_tokens: int = 3, max_chars: int = 28) -> str:
-    """Extrai o núcleo nominal (palavra-chave) de uma regra de negócio em PT-BR."""
-    if not statement:
-        return ""
-    tokens = re.findall(r"\w+", statement, re.UNICODE)
-    collected: list[str] = []
-    for tok in tokens:
-        tl = tok.lower()
-        # Fase 1: pular artigos/determinantes enquanto ainda não coletamos nada
-        if not collected and tl in _RULE_SKIP_INITIAL:
-            continue
-        # Fase 2: parar quando atingirmos verbo modal (início do predicado)
-        if tl in _RULE_MODAL_VERBS:
-            break
-        collected.append(tok)
-        if len(collected) >= max_tokens:
-            break
-    if not collected:
-        # Fallback: primeiras 3 palavras com mais de 2 chars
-        collected = [t for t in tokens if len(t) > 2][:3]
-    phrase = " ".join(collected)
-    if len(phrase) > max_chars:
-        phrase = phrase[:max_chars].rsplit(" ", 1)[0]
-    return phrase.capitalize() if phrase else ""
-
 
 def meet_label(mid: str | None) -> str:
     if not mid or mid not in meet_map:
@@ -549,7 +487,9 @@ with tab_sbvr:
                 rule_id = r.get("rule_id") or f"BR-{idx:03d}"
                 meet_info = r.get("meetings") or {}
                 m_num = meet_info.get("meeting_number", "?")
-                kw = _rule_keyword(r.get("statement", ""))
+                # nucleo_nominal: lido do banco (gravado na inserção);
+                # fallback on-the-fly para regras gravadas antes da migração.
+                kw = r.get("nucleo_nominal") or rule_keyword_pt(r.get("statement", ""))
                 label = f"**{rule_id}**  —  {kw}" if kw else f"**{rule_id}**"
                 with st.expander(label, expanded=False):
                     st.markdown(

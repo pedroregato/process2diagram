@@ -15,14 +15,15 @@ CREATE TABLE IF NOT EXISTS sbvr_terms (
 );
 
 CREATE TABLE IF NOT EXISTS sbvr_rules (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    meeting_id  UUID NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
-    project_id  UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    rule_id     TEXT,           -- ex: "BR-001" (id gerado pelo LLM)
-    statement   TEXT NOT NULL,
-    rule_type   TEXT DEFAULT 'constraint',  -- constraint | operational | behavioral | structural
-    source      TEXT,           -- iniciais do participante que enunciou a regra
-    created_at  TIMESTAMPTZ DEFAULT NOW()
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    meeting_id      UUID NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+    project_id      UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    rule_id         TEXT,           -- ex: "BR-001" (id gerado pelo LLM)
+    statement       TEXT NOT NULL,
+    nucleo_nominal  TEXT NOT NULL DEFAULT '',  -- núcleo nominal extraído do statement (calculado 1× na gravação)
+    rule_type       TEXT DEFAULT 'constraint',  -- constraint | operational | behavioral | structural
+    source          TEXT,           -- iniciais do participante que enunciou a regra
+    created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_sbvr_terms_project  ON sbvr_terms(project_id);
