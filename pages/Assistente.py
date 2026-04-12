@@ -231,12 +231,21 @@ if "_trigger_embed" in st.session_state:
             prog.empty()
             if errors:
                 detail = f"\n\n**Erro:** `{first_error_msg}`" if first_error_msg else ""
-                st.error(
+                # Persiste o erro no session_state — rerun apagaria o st.error imediatamente
+                st.session_state["_embed_error"] = (
                     f"❌ Falha ao gerar embeddings para: {', '.join(errors)}.{detail}"
                 )
             else:
-                st.success(f"✅ {total_gen} chunks indexados em {n_total} reuniões.")
+                st.session_state["_embed_success"] = (
+                    f"✅ {total_gen} chunks indexados em {n_total} reuniões."
+                )
             st.rerun()
+
+# ── Feedback de geração de embeddings (persiste entre reruns) ────────────────
+if "_embed_error" in st.session_state:
+    st.error(st.session_state.pop("_embed_error"))
+if "_embed_success" in st.session_state:
+    st.success(st.session_state.pop("_embed_success"))
 
 # ── Guard: LLM API key (somente para o chat — embeddings independem disso) ───
 if not api_key:
