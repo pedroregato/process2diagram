@@ -226,16 +226,21 @@ def _embed_batch_openai_compatible(
     return [item.embedding for item in sorted(resp.data, key=lambda x: x.index)]
 
 
+_GEMINI_RATE_DELAY = 0.7   # segundos entre chamadas (~85 req/min, abaixo do limite free de 100)
+_GEMINI_MAX_RETRIES = 5    # tentativas em caso de 429
+
+
 def _embed_gemini(text: str, api_key: str) -> list[float]:
     """Google Gemini embeddings via google-generativeai SDK.
 
-    Modelos disponíveis via chave AI Studio (confirmados pelo diagnóstico):
-      - models/gemini-embedding-001  (estável, padrão 3072 dims → solicitamos 768)
+    Modelos (confirmados pelo diagnóstico):
+      - models/gemini-embedding-001  (estável, 1536 dims via output_dimensionality)
       - models/gemini-embedding-2-preview  (fallback)
 
-    output_dimensionality=768 trunca o vetor para compatibilidade com o
-    schema Supabase transcript_chunks.embedding vector(768).
+    Retry automático em 429 usando o retry_delay sugerido pelo próprio erro.
     """
+    import re
+    import time
     import warnings
     warnings.filterwarnings("ignore", category=FutureWarning, module="google")
     try:
@@ -249,34 +254,52 @@ def _embed_gemini(text: str, api_key: str) -> list[float]:
     genai.configure(api_key=api_key)
 
     for model_name in ("models/gemini-embedding-001", "models/gemini-embedding-2-preview"):
-        try:
-            result = genai.embed_content(
-                model=model_name,
-                content=text,
-                task_type="retrieval_document",
-                output_dimensionality=EMBEDDING_DIM,
-            )
-            embedding = result["embedding"]
-            if len(embedding) != EMBEDDING_DIM:
-                raise ValueError(
-                    f"Embedding {model_name} retornou {len(embedding)} dims, "
-                    f"esperado {EMBEDDING_DIM}"
+        for attempt in range(_GEMINI_MAX_RETRIES):
+            try:
+                result = genai.embed_content(
+                    model=model_name,
+                    content=text,
+                    task_type="retrieval_document",
+                    output_dimensionality=EMBEDDING_DIM,
                 )
-            return embedding
-        except Exception as exc:
-            if "404" in str(exc) and model_name == "models/gemini-embedding-001":
-                continue  # tenta fallback
-            raise
+                embedding = result["embedding"]
+                if len(embedding) != EMBEDDING_DIM:
+                    raise ValueError(
+                        f"Embedding {model_name} retornou {len(embedding)} dims, "
+                        f"esperado {EMBEDDING_DIM}"
+                    )
+                return embedding
+
+            except Exception as exc:
+                exc_str = str(exc)
+                if "429" in exc_str:
+                    # Extrai retry_delay do corpo do erro (ex: "seconds: 20")
+                    m = re.search(r"seconds[\":\s]+(\d+)", exc_str)
+                    wait = int(m.group(1)) + 5 if m else 35
+                    time.sleep(wait)
+                    continue  # retenta
+                if "404" in exc_str and model_name == "models/gemini-embedding-001":
+                    break  # tenta modelo fallback
+                raise  # outro erro — propaga imediatamente
+        else:
+            raise RuntimeError(
+                f"Rate limit Gemini: {_GEMINI_MAX_RETRIES} tentativas esgotadas para {model_name}."
+            )
 
     raise RuntimeError(
         "Nenhum modelo Gemini disponível. "
-        "Use '🔍 Testar chave' no expander de embeddings para ver os modelos disponíveis."
+        "Use '🔍 Testar chave' para ver os modelos disponíveis para sua chave."
     )
 
 
 def _embed_batch_gemini(texts: list[str], api_key: str) -> list[list[float]]:
-    """Batch: chama _embed_gemini individualmente."""
-    return [_embed_gemini(t, api_key) for t in texts]
+    """Batch: chama _embed_gemini com delay entre chamadas para respeitar rate limit."""
+    import time
+    results = []
+    for t in texts:
+        results.append(_embed_gemini(t, api_key))
+        time.sleep(_GEMINI_RATE_DELAY)  # ~85 req/min, abaixo do free tier (100/min)
+    return results
 
 
 # ── Diagnóstico ───────────────────────────────────────────────────────────────
