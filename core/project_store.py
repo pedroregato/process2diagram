@@ -60,19 +60,23 @@ def create_project(name: str, description: str = "", sigla: str = "") -> dict | 
     db = _db()
     if not db:
         return None
+    payload: dict = {
+        "name":        name.strip(),
+        "description": description.strip(),
+    }
+    if sigla:
+        payload["sigla"] = sigla.strip().upper()
     try:
-        rows = _ok(
-            db.table("projects")
-            .insert({
-                "name":        name.strip(),
-                "sigla":       sigla.strip().upper(),
-                "description": description.strip(),
-            })
-            .execute()
-        )
+        rows = _ok(db.table("projects").insert(payload).execute())
         return rows[0] if rows else None
     except Exception:
-        return None
+        # Retry without sigla in case column doesn't exist yet
+        try:
+            payload.pop("sigla", None)
+            rows = _ok(db.table("projects").insert(payload).execute())
+            return rows[0] if rows else None
+        except Exception:
+            return None
 
 
 # ── Reuniões ──────────────────────────────────────────────────────────────────

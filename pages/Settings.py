@@ -359,6 +359,99 @@ with tab_db:
             st.error("❌ Falha ao conectar ao Supabase.")
 
     st.markdown("---")
+
+    # ── Projetos — gestão de sigla ─────────────────────────────────────────
+    if db:
+        st.markdown("#### 📁 Projetos")
+        st.caption("Visualize e edite a sigla dos projetos cadastrados.")
+
+        try:
+            proj_rows = db.table("projects").select("*").order("name").execute().data or []
+        except Exception as e:
+            proj_rows = []
+            st.warning(f"Erro ao carregar projetos: {e}")
+
+        if not proj_rows:
+            st.info("Nenhum projeto cadastrado.")
+            # Show migration SQL if sigla column is likely missing
+            with st.expander("🔧 Adicionar coluna `sigla` ao Supabase", expanded=False):
+                st.markdown(
+                    "Execute este SQL no **Supabase → SQL Editor** para adicionar a coluna:"
+                )
+                st.code(
+                    "ALTER TABLE projects ADD COLUMN IF NOT EXISTS sigla TEXT DEFAULT '';",
+                    language="sql",
+                )
+        else:
+            # Check if sigla column exists in response
+            _has_sigla = "sigla" in (proj_rows[0] if proj_rows else {})
+            if not _has_sigla:
+                st.warning(
+                    "⚠️ A coluna `sigla` não existe na tabela `projects`. "
+                    "Execute o SQL abaixo no Supabase para criá-la:"
+                )
+                st.code(
+                    "ALTER TABLE projects ADD COLUMN IF NOT EXISTS sigla TEXT DEFAULT '';",
+                    language="sql",
+                )
+
+            for p in proj_rows:
+                pid   = p["id"]
+                pname = p.get("name", "—")
+                psig  = p.get("sigla", "") or ""
+                with st.expander(f"📁 {pname}", expanded=False):
+                    col_a, col_b = st.columns([3, 1])
+                    new_sigla = col_a.text_input(
+                        "Sigla",
+                        value=psig,
+                        max_chars=20,
+                        key=f"sigla_{pid}",
+                        help="Abreviação do projeto (ex: SDEA, FGV, P2D)",
+                    )
+                    new_name = col_a.text_input(
+                        "Nome",
+                        value=pname,
+                        key=f"pname_{pid}",
+                    )
+                    new_desc = col_a.text_area(
+                        "Descrição",
+                        value=p.get("description", "") or "",
+                        key=f"pdesc_{pid}",
+                        height=80,
+                    )
+                    with col_b:
+                        st.write("")
+                        st.write("")
+                        if st.button("💾 Salvar", key=f"save_proj_{pid}", use_container_width=True):
+                            patch: dict = {"name": new_name.strip(), "description": new_desc.strip()}
+                            if _has_sigla:
+                                patch["sigla"] = new_sigla.strip().upper()
+                            try:
+                                db.table("projects").update(patch).eq("id", pid).execute()
+                                st.success("✅ Projeto atualizado.")
+                                st.rerun()
+                            except Exception as upd_err:
+                                st.error(f"Erro ao salvar: {upd_err}")
+
+    st.markdown("---")
+
+    # ── Migração de schema ─────────────────────────────────────────────────
+    if db:
+        st.markdown("#### 🔧 Migração de Schema")
+        st.caption(
+            "Se alguma tabela estiver com colunas ausentes, execute o SQL correspondente "
+            "no **Supabase → SQL Editor**."
+        )
+        _migration_sql = """\
+-- Adiciona coluna sigla em projects (caso não exista)
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS sigla TEXT DEFAULT '';
+
+-- Garante que requirements tem first_meeting_id (já deve existir se gerado pelo pipeline)
+-- ALTER TABLE requirements ADD COLUMN IF NOT EXISTS first_meeting_id UUID REFERENCES meetings(id);
+"""
+        st.code(_migration_sql, language="sql")
+
+    st.markdown("---")
     st.markdown("#### 📊 Painel completo do banco")
     st.markdown(
         "Para ver totais de registros, integridade de dados, distribuição de requisitos "

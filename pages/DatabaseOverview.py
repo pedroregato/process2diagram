@@ -82,7 +82,7 @@ with st.spinner("Carregando dados do banco…"):
 
     projects = _safe(
         lambda: db.table("projects")
-                  .select("id, name, sigla, description, created_at")
+                  .select("*")
                   .order("name").execute().data or [],
         "projects",
     )
@@ -99,7 +99,7 @@ with st.spinner("Carregando dados do banco…"):
 
     requirements = _safe(
         lambda: db.table("requirements")
-                  .select("id, project_id, meeting_id, req_type, status, priority, created_at")
+                  .select("id, project_id, first_meeting_id, req_type, status, priority, created_at")
                   .execute().data or [],
         "requirements",
     )
