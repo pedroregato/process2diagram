@@ -9,7 +9,8 @@
 # NOTA: A API pública do DeepSeek (api.deepseek.com) NÃO possui endpoint de
 # embeddings — apenas chat/completions. Use Google Gemini (gratuito) ou OpenAI.
 #
-# SDK Gemini: google-genai>=1.0.0 (substituto do depreciado google-generativeai).
+# Gemini embeddings usam o endpoint OpenAI-compatível do Google (v1beta/openai/).
+# Nenhum SDK extra necessário — mesmo pacote openai já instalado.
 #
 # Funções públicas:
 #   chunk_text(text, chunk_size, overlap) → list[str]
@@ -153,7 +154,13 @@ def embed_batch(texts: list[str], api_key: str, provider: str) -> list[list[floa
     if not texts:
         return []
 
-    if provider == "OpenAI":
+    if provider == "Google Gemini":
+        return _embed_batch_openai_compatible(
+            texts, api_key,
+            model="text-embedding-004",
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        )
+    elif provider == "OpenAI":
         cfg = EMBEDDING_PROVIDERS[provider]
         return _embed_batch_openai_compatible(
             texts, api_key,
@@ -161,7 +168,6 @@ def embed_batch(texts: list[str], api_key: str, provider: str) -> list[list[floa
             base_url=cfg.get("base_url"),
         )
     else:
-        # Gemini e outros: chamadas individuais
         return [embed_text(t, api_key, provider) for t in texts]
 
 
@@ -225,25 +231,14 @@ def _embed_batch_openai_compatible(
 
 
 def _embed_gemini(text: str, api_key: str) -> list[float]:
-    """Google Gemini — text-embedding-004 (768 dims) via google-genai SDK."""
-    try:
-        from google import genai
-        from google.genai import types as genai_types
-    except ImportError as exc:
-        raise ImportError(
-            "Pacote google-genai não instalado. "
-            "Execute: pip install google-genai"
-        ) from exc
+    """Google Gemini — text-embedding-004 (768 dims) via endpoint OpenAI-compatível.
 
-    client = genai.Client(api_key=api_key)
-    result = client.models.embed_content(
+    Usa https://generativelanguage.googleapis.com/v1beta/openai/ — não requer
+    nenhum SDK Google extra; apenas o pacote openai já instalado.
+    """
+    return _embed_openai_compatible(
+        text,
+        api_key,
         model="text-embedding-004",
-        contents=text,
-        config=genai_types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
     )
-    embedding = list(result.embeddings[0].values)
-    if len(embedding) != EMBEDDING_DIM:
-        raise ValueError(
-            f"Embedding Gemini retornou {len(embedding)} dims, esperado {EMBEDDING_DIM}"
-        )
-    return embedding
