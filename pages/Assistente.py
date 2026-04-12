@@ -347,14 +347,62 @@ if "assistant_history" not in st.session_state:
 history: list[dict] = st.session_state["assistant_history"]
 
 # ── Render existing conversation ──────────────────────────────────────────────
-for msg in history:
+_editing_idx: int | None = st.session_state.get("_edit_idx")
+
+for i, msg in enumerate(history):
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
+        if msg["role"] == "user":
+            if st.button("✏️", key=f"_edit_btn_{i}", help="Reeditar esta pergunta"):
+                st.session_state["_edit_idx"]   = i
+                st.session_state["_edit_draft"] = msg["content"]
+                st.rerun()
+
+# ── Edit panel (shown when a message is being re-edited) ──────────────────────
+if _editing_idx is not None:
+    st.markdown("---")
+    st.markdown(
+        f"**✏️ Reeditando pergunta {_editing_idx // 2 + 1}** "
+        f"— as respostas seguintes serão descartadas."
+    )
+    edited_text = st.text_area(
+        "Editar pergunta:",
+        value=st.session_state.get("_edit_draft", ""),
+        height=100,
+        key="_edit_ta",
+    )
+    col_cancel, col_submit = st.columns([1, 3])
+    with col_cancel:
+        if st.button("✖️ Cancelar", key="_edit_cancel", use_container_width=True):
+            st.session_state.pop("_edit_idx", None)
+            st.session_state.pop("_edit_draft", None)
+            st.rerun()
+    with col_submit:
+        if st.button("🔄 Reenviar", key="_edit_submit", type="primary", use_container_width=True):
+            if edited_text.strip():
+                st.session_state["assistant_history"] = history[:_editing_idx]
+                st.session_state["_resubmit_question"] = edited_text.strip()
+                st.session_state.pop("_edit_idx", None)
+                st.session_state.pop("_edit_draft", None)
+                st.rerun()
 
 # ── New message input ─────────────────────────────────────────────────────────
-question = st.chat_input("Faça uma pergunta sobre as reuniões, requisitos, processos ou sobre como usar o sistema...")
+question = st.chat_input(
+    "Faça uma pergunta sobre as reuniões, requisitos, processos ou sobre como usar o sistema...",
+    disabled=(_editing_idx is not None),
+)
 
-if question:
+# Aceita pergunta nova ou pergunta reeditada
+active_question: str | None = (
+    st.session_state.pop("_resubmit_question", None)
+    or question
+)
+
+if active_question:
+    question = active_question
+    # Reload history (may have been truncated by resubmit)
+    history = st.session_state["assistant_history"]
+
     # 1. Append and render user message
     history.append({"role": "user", "content": question})
     with st.chat_message("user"):
