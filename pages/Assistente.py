@@ -30,6 +30,7 @@ from core.project_store import (
     get_embedding_coverage,
 )
 from agents.agent_assistant import AgentAssistant
+from ui.components.copy_button import copy_button
 
 # ── Page config ───────────────────────────────────────────────────────────────
 apply_auth_gate()
@@ -346,10 +347,16 @@ for i, msg in enumerate(history):
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
         if msg["role"] == "user":
-            if st.button("✏️", key=f"_edit_btn_{i}", help="Reeditar esta pergunta"):
-                st.session_state["_edit_idx"]   = i
-                st.session_state["_edit_draft"] = msg["content"]
-                st.rerun()
+            col_edit, col_copy, _ = st.columns([1, 1, 8])
+            with col_edit:
+                if st.button("✏️", key=f"_edit_btn_{i}", help="Reeditar esta pergunta"):
+                    st.session_state["_edit_idx"]   = i
+                    st.session_state["_edit_draft"] = msg["content"]
+                    st.rerun()
+            with col_copy:
+                copy_button(msg["content"], key=f"copy_q_{i}", label="📋", compact=True)
+        else:
+            copy_button(msg["content"], key=f"copy_a_{i}", label="📋 Copiar resposta", compact=True)
 
 # ── Edit panel (shown when a message is being re-edited) ──────────────────────
 if _editing_idx is not None:
