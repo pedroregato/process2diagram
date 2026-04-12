@@ -281,6 +281,7 @@ INSTRUÇÕES DE USO DAS FERRAMENTAS:
   • Lista de reuniões existentes → get_meeting_list
   • Localizar texto / pré-visualizar correção → preview_text_correction
   • Aplicar correção (após confirmação) → apply_text_correction
+  • Qualidade de reuniões / ROI / eficiência / desperdício → calculate_meeting_roi
 - Você pode encadear múltiplas ferramentas quando necessário.
 - Após obter os dados, sintetize uma resposta clara e objetiva.
 

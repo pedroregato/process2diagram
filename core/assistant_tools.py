@@ -387,6 +387,41 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "calculate_meeting_roi",
+                "description": (
+                    "Calcula o ROI-TR (Retorno sobre Investimento de Tempo de Reunião) para uma "
+                    "ou todas as reuniões do projeto. Analisa decisões concretas, itens de ação "
+                    "com responsável e prazo, requisitos formalizados, participantes e estima "
+                    "custo em horas. Retorna índice ROI-TR (0–10), Taxa de Retrabalho Conceitual "
+                    "(TRC) e comparativo entre reuniões. "
+                    "USE quando o usuário perguntar sobre qualidade, eficiência, desperdício de "
+                    "tempo, produtividade, ROI ou indicadores das reuniões."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": (
+                                "Número de uma reunião específica. "
+                                "Omita para calcular todas as reuniões do projeto."
+                            ),
+                        },
+                        "cost_per_hour": {
+                            "type": "number",
+                            "description": (
+                                "Custo médio por participante por hora em R$ (padrão: 150). "
+                                "Use valores diferentes se o usuário informar custos específicos."
+                            ),
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
     ]
 
 
@@ -1128,6 +1163,215 @@ class AssistantToolExecutor:
             lines.extend(errors)
         return "\n".join(lines)
 
+    # ── ROI-TR calculator ─────────────────────────────────────────────────────
+
+    def calculate_meeting_roi(
+        self,
+        meeting_number: int | None = None,
+        cost_per_hour: float = 150.0,
+    ) -> str:
+        """
+        Compute ROI-TR (Return on Investment – Meeting Time) and TRC (Taxa de
+        Retrabalho Conceitual) for one or all meetings in the project.
+
+        All inputs come from existing Supabase data (minutes_md, transcripts,
+        requirements). No LLM call is made.
+        """
+        import re as _re
+
+        # ── Cyclical-discussion signal patterns ───────────────────────────────
+        _CYCLE_SIGNALS = [
+            r'\bcomo (?:eu|já) (?:disse|falei|mencionei)\b',
+            r'\bcomo já (?:falamos|discutimos|abordamos)\b',
+            r'\bjá (?:mencionei|mencionamos|foi dito|abordamos|discutimos)\b',
+            r'\bvoltando ao mesmo\b',
+            r'\bpatinando\b',
+            r'\bde novo\b',
+            r'\bnovamente\b',
+            r'\bmais uma vez\b',
+            r'\brepetindo\b',
+            r'\brepete\b',
+            r'\bnão avança\b',
+            r'\bnão progride\b',
+        ]
+        _CYCLE_RE     = _re.compile('|'.join(_CYCLE_SIGNALS), _re.IGNORECASE)
+        _RESP_RE      = _re.compile(
+            r'\b[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÀÇÜ][a-záéíóúâêîôûãõàçü]+'
+            r'(?:\s+[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÀÇÜ][a-záéíóúâêîôûãõàçü]+)*\b'
+        )
+        _DEADLINE_RE  = _re.compile(
+            r'\b(?:\d{1,2}/\d{1,2}(?:/\d{2,4})?'
+            r'|\d{4}-\d{2}-\d{2}'
+            r'|prazo|deadline'
+            r'|até\s+\w+)\b',
+            _re.IGNORECASE,
+        )
+
+        # ── Load meetings ─────────────────────────────────────────────────────
+        meetings = self._get_meetings()
+        if not meetings:
+            return "Nenhuma reunião encontrada no projeto."
+
+        if meeting_number is not None:
+            meetings = [m for m in meetings if m.get("meeting_number") == meeting_number]
+            if not meetings:
+                return f"Reunião {meeting_number} não encontrada no projeto."
+
+        # ── Load requirements (project-wide) ──────────────────────────────────
+        try:
+            from modules.supabase_client import get_supabase_client
+            db = get_supabase_client()
+            req_rows = (
+                db.table("requirements")
+                .select("req_number, first_meeting_id")
+                .eq("project_id", self.project_id)
+                .execute().data or []
+            ) if db else []
+        except Exception:
+            req_rows = []
+
+        total_reqs = len(req_rows)
+        req_by_mid: dict[str, int] = {}
+        for r in req_rows:
+            mid = r.get("first_meeting_id")
+            if mid:
+                req_by_mid[mid] = req_by_mid.get(mid, 0) + 1
+
+        results: list[str] = []
+        all_roi: list[float] = []
+
+        for m in meetings:
+            n          = m.get("meeting_number", "?")
+            title      = m.get("title") or f"Reunião {n}"
+            date       = m.get("meeting_date") or ""
+            minutes_md = m.get("minutes_md") or ""
+            transcript = m.get("transcript_clean") or m.get("transcript_raw") or ""
+            mid        = m.get("id") or ""
+
+            # ── Participants ──────────────────────────────────────────────────
+            part_text   = self._section(minutes_md, "Participantes")
+            part_lines  = [l for l in part_text.splitlines() if l.strip()]
+            n_part      = max(1, len(part_lines))
+
+            # ── Decisions ────────────────────────────────────────────────────
+            dec_text   = self._section(minutes_md, "Decisões", "Decisions")
+            dec_lines  = [
+                l for l in dec_text.splitlines()
+                if l.strip() and l.strip()[0] in "-•*|123456789"
+            ]
+            n_decisions = len(dec_lines)
+
+            # ── Action items ─────────────────────────────────────────────────
+            act_text   = self._section(minutes_md, "Itens de Ação", "Action Items", "Ações")
+            act_lines  = [l for l in act_text.splitlines() if l.strip()]
+            n_act_total = len([
+                l for l in act_lines
+                if l.strip()[0:1] in "-•*|" or l.strip()[0:1].isdigit()
+            ])
+            n_act_done  = sum(
+                1 for l in act_lines
+                if bool(_DEADLINE_RE.search(l)) and bool(_RESP_RE.search(l))
+            )
+
+            # ── Requirements for this meeting ────────────────────────────────
+            n_reqs = req_by_mid.get(mid, 0)
+
+            # ── Transcript metrics ────────────────────────────────────────────
+            words          = len(transcript.split()) if transcript else 0
+            dur_min        = words / 130.0 if words else 0.0   # ~130 wpm in meetings
+            dur_h          = dur_min / 60.0
+            n_cycle        = len(_CYCLE_RE.findall(transcript)) if transcript else 0
+            # TRC proxy: cycles per 500-word block, scaled 0–100
+            trc = min(100.0, (n_cycle / max(1, words / 500)) * 20) if words > 0 else 0.0
+
+            # ── Concrete Decisions composite score (DC) ───────────────────────
+            dc = n_decisions + (n_act_done * 2) + (n_reqs * 1.5)
+
+            # ── Cost estimate ────────────────────────────────────────────────
+            cost = n_part * dur_h * cost_per_hour if dur_h > 0 else 0.0
+
+            # ── ROI-TR (0–10) ─────────────────────────────────────────────────
+            if cost > 0:
+                roi = min(10.0, (dc * 1000.0 / cost) * 1.5)
+            elif dc > 0:
+                roi = 5.0   # decisions exist but duration unknown → neutral
+            else:
+                roi = 0.0
+            all_roi.append(roi)
+
+            # ── Labels ────────────────────────────────────────────────────────
+            roi_label = (
+                "🟢 Alto" if roi >= 7.5 else
+                "🟡 Médio" if roi >= 4.5 else
+                "🟠 Baixo" if roi >= 2.0 else
+                "🔴 Crítico"
+            )
+            trc_label = (
+                "🔴 Alto" if trc > 40 else
+                "🟠 Médio" if trc > 20 else
+                "🟢 Baixo"
+            )
+            no_data = not (minutes_md or transcript)
+
+            block: list[str] = [
+                f"┌─ Reunião {n}"
+                + (f" — {title}" if title != f"Reunião {n}" else "")
+                + (f" ({date})" if date else "")
+                + (" ⚠️ sem dados" if no_data else ""),
+                f"│  Participantes (est.):      {n_part}",
+            ]
+            if transcript:
+                block.append(f"│  Duração estimada:          {dur_min:.0f} min ({dur_h:.1f}h)")
+            if cost > 0:
+                block.append(f"│  Custo estimado:            R$ {cost:,.0f}")
+            block += [
+                f"│  Decisões na ata:           {n_decisions}",
+                f"│  Itens de ação total:       {n_act_total}",
+                f"│  Itens c/ responsável+prazo:{n_act_done}",
+                f"│  Requisitos formalizados:   {n_reqs}",
+            ]
+            if transcript:
+                block.append(f"│  Sinais de ciclagem (TRC):  {n_cycle}x → TRC {trc:.0f}% {trc_label}")
+            block.append(f"└─ ROI-TR: {roi:.1f}/10  {roi_label}")
+            results.append("\n".join(block))
+
+        # ── Project summary (multi-meeting) ───────────────────────────────────
+        summary = ""
+        if len(meetings) > 1 and all_roi:
+            avg     = sum(all_roi) / len(all_roi)
+            best_i  = all_roi.index(max(all_roi))
+            worst_i = all_roi.index(min(all_roi))
+            avg_lbl = (
+                "🟢 Alto" if avg >= 7.5 else
+                "🟡 Médio" if avg >= 4.5 else
+                "🟠 Baixo" if avg >= 2.0 else
+                "🔴 Crítico"
+            )
+            summary = (
+                f"\n{'═' * 52}\n"
+                f"RESUMO DO PROJETO ({len(meetings)} reuniões avaliadas)\n"
+                f"  ROI-TR médio:        {avg:.1f}/10  {avg_lbl}\n"
+                f"  Melhor reunião:      Reunião {meetings[best_i].get('meeting_number')} "
+                f"(ROI {max(all_roi):.1f})\n"
+                f"  Pior reunião:        Reunião {meetings[worst_i].get('meeting_number')} "
+                f"(ROI {min(all_roi):.1f})\n"
+                f"  Total de requisitos: {total_reqs}\n"
+                f"  Custo/h utilizado:   R$ {cost_per_hour:.0f}/participante\n"
+                f"{'═' * 52}"
+            )
+
+        footer = (
+            "\n\nNota: ROI-TR = DC×peso / (Participantes × Horas × Custo/h). "
+            "TRC = proxy linguístico de retrabalho conceitual (sinais de repetição na transcrição). "
+            "Reuniões sem ata ou transcrição têm precisão limitada."
+        )
+        return (
+            "=== Análise ROI-TR — Qualidade de Reuniões ===\n"
+            + "\n\n".join(results)
+            + summary
+            + footer
+        )
+
     # ── Dispatcher ────────────────────────────────────────────────────────────
 
     def execute(self, tool_name: str, tool_input: dict) -> str:
@@ -1181,6 +1425,10 @@ class AssistantToolExecutor:
                     tool_input["replace_text"],
                     tool_input["scope"],
                     tool_input.get("meeting_number"),
+                ),
+                "calculate_meeting_roi":     lambda: self.calculate_meeting_roi(
+                    tool_input.get("meeting_number"),
+                    float(tool_input.get("cost_per_hour", 150.0)),
                 ),
             }
             if tool_name not in dispatch:
