@@ -79,16 +79,18 @@ def _parse_dsml_tool_calls(content: str) -> list[dict]:
 
 
 def _strip_dsml(content: str) -> str:
-    """Remove all DSML tags (and their content) from a response string."""
-    # First strip full blocks, then stray tags
-    cleaned = re.sub(
-        r'<' + _P + r'DSML' + _P + r'[^>]*>.*?</' + _P + r'DSML' + _P + r'[^>]*>',
-        '',
-        content,
-        flags=re.DOTALL,
-    )
-    cleaned = _DSML_ANY_TAG_RE.sub('', cleaned)
-    return cleaned.strip()
+    """Remove DSML markup from a response string.
+
+    Strategy: DeepSeek always appends DSML *after* the text content, so cutting
+    at the first DSML tag position reliably isolates the human-readable part.
+    Any residual stray tags are removed in a second pass.
+    """
+    m = re.search(r'<[|\uff5c]DSML[|\uff5c]', content)
+    if m:
+        content = content[:m.start()].rstrip()
+    # Remove any stray DSML tags that may remain
+    content = _DSML_ANY_TAG_RE.sub('', content)
+    return content.strip()
 
 
 # ── Correction-intent interceptor ────────────────────────────────────────────
