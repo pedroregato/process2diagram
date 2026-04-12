@@ -91,17 +91,18 @@ def render_login_page() -> None:
 
     st.markdown(_LOGIN_CSS, unsafe_allow_html=True)
     st.markdown(f"""
-    <div class="l-card">
-      <div class="l-banner">
-        <div class="icon">⚡</div>
-        <div class="title">Process2Diagram</div>
-        <div class="sub">Multi-agent process intelligence platform</div>
-      </div>
-      <div class="l-body">
-        {erro_html}
-        <div class="l-label">Usuário</div>
-    """, unsafe_allow_html=True)
+<div class="l-card">
+<div class="l-banner">
+<div class="icon">⚡</div>
+<div class="title">Process2Diagram</div>
+<div class="sub">Multi-agent process intelligence platform</div>
+</div>
+<div class="l-body">
+{erro_html}
+</div></div>
+""", unsafe_allow_html=True)
 
+    st.markdown('<div class="l-label">Usuário</div>', unsafe_allow_html=True)
     usuario = st.text_input("Usuário", label_visibility="collapsed",
                             key="_l_user", placeholder="seu.usuario")
     st.markdown('<div class="l-label" style="margin-top:.8rem">Senha</div>',
