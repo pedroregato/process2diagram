@@ -95,20 +95,43 @@ else:
             except Exception:
                 meetings = []
 
+            # Verifica se há reuniões com provedor não registrado
+            n_unknown = sum(
+                1 for m in meetings
+                if not (m.get("llm_provider") or "").strip()
+                or m.get("llm_provider") not in PROVIDER_PRICING
+            )
+            if n_unknown > 0:
+                fallback_provider = st.selectbox(
+                    f"⚠️ {n_unknown} reunião(ões) sem provedor registrado — usar para custo:",
+                    list(PROVIDER_PRICING.keys()),
+                    index=0,
+                    key="ce_fallback_prov",
+                    help="Provedor assumido para reuniões processadas antes do registro de llm_provider.",
+                )
+            else:
+                fallback_provider = list(PROVIDER_PRICING.keys())[0]
+
             for m in meetings:
                 tokens   = m.get("total_tokens") or 0
-                provider = m.get("llm_provider") or "—"
+                provider = m.get("llm_provider") or ""
+                if not provider.strip() or provider not in PROVIDER_PRICING:
+                    provider_display = f"{fallback_provider} *"
+                    provider_for_cost = fallback_provider
+                else:
+                    provider_display = provider
+                    provider_for_cost = provider
                 # Estimativa de custo: assume split 70/30 input/output
                 inp = int(tokens * 0.70)
                 out = int(tokens * 0.30)
-                cost = cost_for_tokens(inp, out, provider)
+                cost = cost_for_tokens(inp, out, provider_for_cost)
                 total_tok  += tokens
                 total_cost += cost
                 hist_rows.append({
                     "Nº":        m.get("meeting_number") or "—",
                     "Reunião":   m.get("title") or "(sem título)",
                     "Data":      str(m.get("meeting_date") or "—"),
-                    "Provedor":  provider,
+                    "Provedor":  provider_display,
                     "Tokens":    f"{tokens:,}",
                     "Custo (USD)": f"${cost:.4f}" if cost else "—",
                 })
@@ -124,10 +147,14 @@ else:
                 use_container_width=True,
                 hide_index=True,
             )
-            st.caption(
-                "💡 Custo estimado com base no split 70% entrada / 30% saída aplicado "
-                "ao total de tokens registrado por reunião. Pode variar ±20% do custo real."
-            )
+            caption_parts = [
+                "💡 Custo estimado com base no split 70% entrada / 30% saída. Pode variar ±20% do custo real."
+            ]
+            if n_unknown > 0:
+                caption_parts.append(
+                    f"\\* {n_unknown} reunião(ões) sem provedor registrado — custo calculado com **{fallback_provider}**."
+                )
+            st.caption(" · ".join(caption_parts))
         else:
             st.info("Nenhuma reunião com tokens registrados neste projeto.")
     else:
