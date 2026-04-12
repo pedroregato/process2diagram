@@ -1,4 +1,4 @@
-# agents/agent_assistant.py  (v7 — write-capable system prompt + DSML robust fix)
+# agents/agent_assistant.py  (v8 — Python-level correction interceptor + DSML fix)
 # ─────────────────────────────────────────────────────────────────────────────
 # AgentAssistant — conversational RAG agent for meeting/project Q&A.
 #
@@ -89,6 +89,47 @@ def _strip_dsml(content: str) -> str:
     )
     cleaned = _DSML_ANY_TAG_RE.sub('', cleaned)
     return cleaned.strip()
+
+
+# ── Correction-intent interceptor ────────────────────────────────────────────
+# Detects substitution requests (substitua X por Y, troque X por Y, etc.) in
+# the user message at the Python level so we never rely on LLM judgment to
+# choose the right tool for this case.
+
+_CORRECTION_RE = re.compile(
+    r'(?:substitua|troque|corrija|altere|mude|renomeie|renomear)\s+'
+    r'["\u201c\u201d]?(.+?)["\u201c\u201d]?\s+'
+    r'(?:por|para)\s+'
+    r'["\u201c\u201d\u201c]?(.+?)["\u201c\u201d\u201d]?'
+    r'(?:\s+em\s+(?:todos\s+os\s+)?artefatos?|\s+(?:nos|em\s+nossos)\s+artefatos?|$)',
+    re.IGNORECASE,
+)
+
+# Also match simpler form: "substitua X por Y" (without "em artefatos")
+_CORRECTION_SIMPLE_RE = re.compile(
+    r'(?:substitua|troque|corrija|altere|mude)\s+'
+    r'["\u201c\u201d]?(.+?)["\u201c\u201d]?\s+'
+    r'(?:por|para)\s+'
+    r'["\u201c\u201d]?([^\s,\.]+)["\u201c\u201d]?',
+    re.IGNORECASE,
+)
+
+
+def _detect_correction_intent(text: str) -> tuple[str, str] | None:
+    """
+    Return (find_text, replace_text) if the message is a substitution request,
+    else None.  Prefers the longer pattern first (with "em artefatos"), falls
+    back to the simple two-word form.
+    """
+    m = _CORRECTION_RE.search(text)
+    if m:
+        return m.group(1).strip().strip('"').strip('\u201c\u201d'), \
+               m.group(2).strip().strip('"').strip('\u201c\u201d')
+    m = _CORRECTION_SIMPLE_RE.search(text)
+    if m:
+        return m.group(1).strip().strip('"').strip('\u201c\u201d'), \
+               m.group(2).strip().strip('"').strip('\u201c\u201d')
+    return None
 
 
 # ── System prompt templates ───────────────────────────────────────────────────
@@ -607,6 +648,39 @@ class AgentAssistant(BaseAgent):
         system   = self._build_system_prompt_tools(project_name, project_id)
         messages = list(history) + [{"role": "user", "content": question}]
         executor = AssistantToolExecutor(project_id)
+
+        # ── Correction-intent pre-flight ─────────────────────────────────────
+        # If the user is asking to substitute/replace text, bypass LLM tool
+        # selection entirely: run preview_text_correction in Python, inject the
+        # result as a synthetic tool turn, then let the LLM compose the
+        # confirmation question from real data.
+        correction = _detect_correction_intent(question)
+        if correction:
+            find_text, replace_text = correction
+            if status_fn:
+                status_fn("🔍 Localizando ocorrências de substituição…")
+            preview_result = executor.execute(
+                "preview_text_correction",
+                {"find_text": find_text, "replace_text": replace_text, "scope": "all"},
+            )
+            # Inject as a completed tool interaction so the LLM sees the data
+            messages.append({
+                "role": "assistant",
+                "content": (
+                    f"[Pré-visualização automática]\n"
+                    f"Chamei preview_text_correction(find_text=\"{find_text}\", "
+                    f"replace_text=\"{replace_text}\", scope=\"all\") e obtive:\n\n"
+                    f"{preview_result}"
+                ),
+            })
+            messages.append({
+                "role": "user",
+                "content": (
+                    "Com base nessa pré-visualização, apresente as ocorrências encontradas "
+                    "e pergunte se devo aplicar a substituição."
+                ),
+            })
+        # ─────────────────────────────────────────────────────────────────────
 
         client_type = self.provider_cfg["client_type"]
         api_key     = self.client_info["api_key"]
