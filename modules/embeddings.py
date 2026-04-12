@@ -226,68 +226,33 @@ def _embed_batch_openai_compatible(
     return [item.embedding for item in sorted(resp.data, key=lambda x: x.index)]
 
 
-_GEMINI_EMBED_URL = (
-    "https://generativelanguage.googleapis.com/v1"
-    "/models/text-embedding-004:{method}?key={key}"
-)
-
-
 def _embed_gemini(text: str, api_key: str) -> list[float]:
-    """Google Gemini — text-embedding-004 (768 dims) via REST API nativo (stdlib)."""
-    import json
-    import urllib.request
-    import urllib.error
-
-    url = _GEMINI_EMBED_URL.format(method="embedContent", key=api_key)
-    payload = {
-        "model": "models/text-embedding-004",
-        "content": {"parts": [{"text": text}]},
-        "taskType": "RETRIEVAL_DOCUMENT",
-    }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+    """Google Gemini — text-embedding-004 (768 dims) via google-generativeai SDK."""
+    import warnings
+    # Suprime FutureWarning de deprecação — o SDK ainda funciona para chaves AI Studio
+    warnings.filterwarnings("ignore", category=FutureWarning, module="google")
     try:
-        with urllib.request.urlopen(req) as resp:
-            result = json.loads(resp.read())
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        _raise_gemini_error(exc.code, body)
+        import google.generativeai as genai
+    except ImportError as exc:
+        raise ImportError(
+            "Pacote google-generativeai não instalado. "
+            "Execute: pip install google-generativeai"
+        ) from exc
 
-    embedding = result.get("embedding", {}).get("values", [])
+    genai.configure(api_key=api_key)
+    result = genai.embed_content(
+        model="models/text-embedding-004",
+        content=text,
+        task_type="retrieval_document",
+    )
+    embedding = result["embedding"]
     if len(embedding) != EMBEDDING_DIM:
         raise ValueError(
-            f"Gemini retornou {len(embedding)} dims, esperado {EMBEDDING_DIM}"
+            f"Embedding Gemini retornou {len(embedding)} dims, esperado {EMBEDDING_DIM}"
         )
     return embedding
 
 
 def _embed_batch_gemini(texts: list[str], api_key: str) -> list[list[float]]:
-    """Batch: chama _embed_gemini individualmente (embedContent por texto)."""
+    """Batch: chama _embed_gemini individualmente."""
     return [_embed_gemini(t, api_key) for t in texts]
-
-
-def _raise_gemini_error(code: int, body: str) -> None:
-    """Formata erro da API Gemini com dica de diagnóstico."""
-    if code == 400:
-        raise RuntimeError(
-            f"Gemini API 400 (requisição inválida): {body}"
-        )
-    if code == 401 or code == 403:
-        raise RuntimeError(
-            f"Gemini API {code} (chave inválida ou sem permissão). "
-            "Verifique se a chave foi criada em aistudio.google.com "
-            "e se a 'Generative Language API' está habilitada no projeto. "
-            f"Detalhe: {body}"
-        )
-    if code == 404:
-        raise RuntimeError(
-            f"Gemini API 404 (modelo não encontrado). "
-            "Confirme que a chave é do Google AI Studio (começa com 'AI') "
-            "e não uma chave do Google Cloud / Vertex AI. "
-            f"Detalhe: {body}"
-        )
-    raise RuntimeError(f"Gemini API error {code}: {body}")
