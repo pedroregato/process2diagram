@@ -446,8 +446,14 @@ with tab_db:
 -- Adiciona coluna sigla em projects (caso não exista)
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS sigla TEXT DEFAULT '';
 
--- Garante que requirements tem first_meeting_id (já deve existir se gerado pelo pipeline)
--- ALTER TABLE requirements ADD COLUMN IF NOT EXISTS first_meeting_id UUID REFERENCES meetings(id);
+-- Torna meeting_id opcional em sbvr_terms e sbvr_rules
+-- (permite termos/regras adicionados pelo Assistente sem reunião de origem)
+ALTER TABLE sbvr_terms ALTER COLUMN meeting_id DROP NOT NULL;
+ALTER TABLE sbvr_rules ALTER COLUMN meeting_id DROP NOT NULL;
+
+-- Adiciona coluna source para identificar a origem do termo/regra
+ALTER TABLE sbvr_terms ADD COLUMN IF NOT EXISTS source TEXT DEFAULT NULL;
+ALTER TABLE sbvr_rules ADD COLUMN IF NOT EXISTS source TEXT DEFAULT NULL;
 """
         st.code(_migration_sql, language="sql")
 

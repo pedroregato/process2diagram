@@ -694,43 +694,39 @@ class AssistantToolExecutor:
             "term":       term.strip(),
             "definition": definition.strip(),
             "category":   category.strip() or "Conceito",
+            "source":     "assistente",
         }
 
-        # Try without meeting_id first (works if column is nullable)
-        try:
-            db.table("sbvr_terms").insert({**payload, "meeting_id": None}).execute()
+        def _ok_msg():
             return (
                 f"✅ Termo SBVR adicionado com sucesso!\n"
                 f"• Termo: {term}\n"
                 f"• Definição: {definition}\n"
                 f"• Categoria: {category or 'Conceito'}"
             )
+
+        # Try without meeting_id (works if column is nullable — preferred)
+        try:
+            db.table("sbvr_terms").insert({**payload, "meeting_id": None}).execute()
+            return _ok_msg()
         except Exception as exc1:
             err1 = str(exc1)
 
-        # Fallback: meeting_id column may be NOT NULL — use any meeting from this project
+        # Fallback: meeting_id NOT NULL constraint — use any meeting from this project
+        # The display layer shows "🤖 Assistente" when source="assistente", regardless of meeting_id
         fallback_mid = self._get_fallback_meeting_id(db)
         if fallback_mid:
             try:
                 db.table("sbvr_terms").insert({**payload, "meeting_id": fallback_mid}).execute()
-                return (
-                    f"✅ Termo SBVR adicionado com sucesso!\n"
-                    f"• Termo: {term}\n"
-                    f"• Definição: {definition}\n"
-                    f"• Categoria: {category or 'Conceito'}\n"
-                    f"• Vinculado à primeira reunião do projeto (meeting_id é obrigatório no schema)"
-                )
+                return _ok_msg()
             except Exception as exc2:
                 return (
                     f"❌ Falha ao inserir termo SBVR.\n"
                     f"• Erro sem meeting_id: {err1}\n"
-                    f"• Erro com meeting_id={fallback_mid[:8]}…: {exc2}\n"
+                    f"• Erro com meeting_id fallback: {exc2}\n"
                     f"Verifique se a tabela sbvr_terms existe e se a chave tem permissão INSERT."
                 )
-        return (
-            f"❌ Falha ao inserir termo SBVR: {err1}\n"
-            f"Não foi possível encontrar uma reunião de fallback para meeting_id."
-        )
+        return f"❌ Falha ao inserir termo SBVR: {err1}"
 
     def add_sbvr_rule(
         self,

@@ -448,14 +448,18 @@ with tab_sbvr:
                 cat = t.get("category", "concept")
                 badge_cls, badge_txt = _CATEGORY_BADGE.get(cat, ("badge-active", cat))
                 meet_info = t.get("meetings") or {}
-                m_num = meet_info.get("meeting_number", "?")
+                m_num = meet_info.get("meeting_number")
+                if t.get("source") == "assistente" or not m_num:
+                    origin_label = "🤖 Assistente"
+                else:
+                    origin_label = f"🗓️ Reunião {m_num}"
                 with st.expander(f"**{t.get('term', '—')}**", expanded=False):
                     st.markdown(
                         f'<span class="badge {badge_cls}">{badge_txt}</span>',
                         unsafe_allow_html=True,
                     )
                     st.markdown(f"**Definição:** {t.get('definition', '—')}")
-                    st.caption(f"🗓️ Reunião {m_num}")
+                    st.caption(origin_label)
 
         # ── Regras ───────────────────────────────────────────────────────────
         with col_r:
@@ -483,7 +487,7 @@ with tab_sbvr:
                 badge_cls, badge_txt = _RULE_BADGE.get(rtype, ("badge-active", rtype))
                 rule_id = r.get("rule_id") or f"BR-{idx:03d}"
                 meet_info = r.get("meetings") or {}
-                m_num = meet_info.get("meeting_number", "?")
+                m_num = meet_info.get("meeting_number")
                 # nucleo_nominal: lido do banco (gravado na inserção);
                 # fallback on-the-fly para regras gravadas antes da migração.
                 kw = r.get("nucleo_nominal") or rule_keyword_pt(r.get("statement", ""))
@@ -494,8 +498,11 @@ with tab_sbvr:
                         unsafe_allow_html=True,
                     )
                     st.markdown(f"{r.get('statement', '—')}")
-                    footer = f"🗓️ Reunião {m_num}"
-                    if r.get("source"):
+                    if m_num:
+                        footer = f"🗓️ Reunião {m_num}"
+                    else:
+                        footer = "🤖 Assistente"
+                    if r.get("source") and r["source"] not in ("manual", "assistente"):
                         footer += f" · 👤 {r['source']}"
                     st.caption(footer)
 
