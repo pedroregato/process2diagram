@@ -211,6 +211,81 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "preview_text_correction",
+                "description": (
+                    "Localiza e pré-visualiza onde um texto ocorre nos dados do projeto (transcrições, atas, requisitos). "
+                    "USE SEMPRE esta ferramenta primeiro quando o usuário pedir para substituir/trocar/corrigir um termo. "
+                    "Retorna contagem de ocorrências e trechos de contexto. Somente-leitura — não modifica dados."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "find_text": {
+                            "type": "string",
+                            "description": "Texto a ser localizado (diferencia maiúsculas/minúsculas)",
+                        },
+                        "replace_text": {
+                            "type": "string",
+                            "description": "Texto pelo qual será substituído (apenas para exibição no preview)",
+                        },
+                        "scope": {
+                            "type": "string",
+                            "enum": ["transcripts", "minutes", "requirements", "all"],
+                            "description": (
+                                "Onde buscar: 'transcripts' (transcrições), 'minutes' (atas), "
+                                "'requirements' (requisitos), 'all' (tudo)"
+                            ),
+                        },
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Limitar a busca a uma reunião específica (opcional; não aplicável a 'requirements')",
+                        },
+                    },
+                    "required": ["find_text", "replace_text", "scope"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "apply_text_correction",
+                "description": (
+                    "Aplica substituição de texto nos dados armazenados no Supabase. "
+                    "ATENÇÃO: esta operação modifica dados permanentemente. "
+                    "NUNCA chame esta ferramenta sem antes apresentar o preview ao usuário e "
+                    "receber confirmação explícita ('sim', 'confirmar', 'pode alterar', 'aplique', 'execute')."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "find_text": {
+                            "type": "string",
+                            "description": "Texto a ser substituído (diferencia maiúsculas/minúsculas)",
+                        },
+                        "replace_text": {
+                            "type": "string",
+                            "description": "Texto substituto",
+                        },
+                        "scope": {
+                            "type": "string",
+                            "enum": ["transcripts", "minutes", "requirements", "all"],
+                            "description": (
+                                "Onde aplicar: 'transcripts' (transcrições), 'minutes' (atas), "
+                                "'requirements' (requisitos), 'all' (tudo)"
+                            ),
+                        },
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Limitar a uma reunião específica (opcional; não aplicável a 'requirements')",
+                        },
+                    },
+                    "required": ["find_text", "replace_text", "scope"],
+                },
+            },
+        },
     ]
 
 
@@ -528,6 +603,249 @@ class AssistantToolExecutor:
             lines.append(f"• [{rule_id}] {nucleo}: {statement}")
         return "\n".join(lines)
 
+    # ── Write tools ───────────────────────────────────────────────────────────
+
+    def preview_text_correction(
+        self,
+        find_text: str,
+        replace_text: str,
+        scope: str,
+        meeting_number: int | None = None,
+    ) -> str:
+        """
+        Read-only preview: shows all occurrences of find_text within the
+        requested scope without modifying any data.
+        """
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        results: list[str] = []
+        total_occurrences = 0
+
+        # ── Meetings table (transcripts and/or minutes) ────────────────────
+        if scope in ("transcripts", "minutes", "all"):
+            try:
+                q = (
+                    db.table("meetings")
+                    .select("meeting_number, title, transcript_clean, transcript_raw, minutes_md")
+                    .eq("project_id", self.project_id)
+                )
+                if meeting_number is not None:
+                    q = q.eq("meeting_number", meeting_number)
+                rows = q.order("meeting_number").execute().data or []
+            except Exception as exc:
+                return f"Erro ao acessar reuniões: {exc}"
+
+            for m in rows:
+                n     = m.get("meeting_number", "?")
+                title = m.get("title") or f"Reunião {n}"
+                fields_to_check = []
+                if scope in ("transcripts", "all"):
+                    for fld in ("transcript_clean", "transcript_raw"):
+                        val = m.get(fld) or ""
+                        if val:
+                            fields_to_check.append((fld, val))
+                if scope in ("minutes", "all"):
+                    val = m.get("minutes_md") or ""
+                    if val:
+                        fields_to_check.append(("minutes_md", val))
+
+                for fld, text in fields_to_check:
+                    count = text.count(find_text)
+                    if count == 0:
+                        continue
+                    total_occurrences += count
+                    # Extract up to 3 context snippets
+                    snippets: list[str] = []
+                    idx = 0
+                    while len(snippets) < 3:
+                        pos = text.find(find_text, idx)
+                        if pos == -1:
+                            break
+                        start = max(0, pos - 60)
+                        end   = min(len(text), pos + len(find_text) + 60)
+                        snippet = text[start:end].replace("\n", " ")
+                        if start > 0:
+                            snippet = "…" + snippet
+                        if end < len(text):
+                            snippet = snippet + "…"
+                        snippets.append(f'  "{snippet}"')
+                        idx = pos + len(find_text)
+                    extra = count - len(snippets)
+                    field_label = {
+                        "transcript_clean": "transcrição",
+                        "transcript_raw":   "transcrição (raw)",
+                        "minutes_md":       "ata",
+                    }.get(fld, fld)
+                    results.append(
+                        f"• Reunião {n} — {title} [{field_label}]: {count} ocorrência(s)"
+                    )
+                    results.extend(snippets)
+                    if extra > 0:
+                        results.append(f"  … e mais {extra} ocorrência(s)")
+
+        # ── Requirements table ─────────────────────────────────────────────
+        if scope in ("requirements", "all"):
+            try:
+                req_rows = (
+                    db.table("requirements")
+                    .select("req_number, title, description")
+                    .eq("project_id", self.project_id)
+                    .execute().data or []
+                )
+            except Exception as exc:
+                return f"Erro ao acessar requisitos: {exc}"
+
+            for r in req_rows:
+                n = r.get("req_number")
+                req_id = f"REQ-{n:03d}" if isinstance(n, int) else "REQ-???"
+                for fld in ("title", "description"):
+                    text = r.get(fld) or ""
+                    count = text.count(find_text)
+                    if count == 0:
+                        continue
+                    total_occurrences += count
+                    pos     = text.find(find_text)
+                    start   = max(0, pos - 60)
+                    end     = min(len(text), pos + len(find_text) + 60)
+                    snippet = text[start:end].replace("\n", " ")
+                    if start > 0:
+                        snippet = "…" + snippet
+                    if end < len(text):
+                        snippet += "…"
+                    results.append(
+                        f"• {req_id} [{fld}]: {count} ocorrência(s)\n"
+                        f'  "{snippet}"'
+                    )
+
+        if total_occurrences == 0:
+            scope_label = {"transcripts": "transcrições", "minutes": "atas",
+                           "requirements": "requisitos", "all": "todos os dados"}.get(scope, scope)
+            return (
+                f'Nenhuma ocorrência de "{find_text}" encontrada em {scope_label}.'
+            )
+
+        header = (
+            f'Preview de correção: "{find_text}" → "{replace_text}"\n'
+            f"Total: {total_occurrences} ocorrência(s) encontrada(s)\n"
+            "──────────────────────────────────────────\n"
+        )
+        footer = (
+            "\n──────────────────────────────────────────\n"
+            "⚠️ Para aplicar a correção, confirme explicitamente (ex: 'sim, aplique')."
+        )
+        return header + "\n".join(results) + footer
+
+    def apply_text_correction(
+        self,
+        find_text: str,
+        replace_text: str,
+        scope: str,
+        meeting_number: int | None = None,
+    ) -> str:
+        """
+        Applies find→replace across the specified scope in Supabase.
+        Returns a summary of records updated.
+        """
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        updated_records: list[str] = []
+        errors: list[str] = []
+
+        # ── Meetings table ─────────────────────────────────────────────────
+        if scope in ("transcripts", "minutes", "all"):
+            try:
+                q = (
+                    db.table("meetings")
+                    .select("id, meeting_number, title, transcript_clean, transcript_raw, minutes_md")
+                    .eq("project_id", self.project_id)
+                )
+                if meeting_number is not None:
+                    q = q.eq("meeting_number", meeting_number)
+                rows = q.order("meeting_number").execute().data or []
+            except Exception as exc:
+                return f"Erro ao acessar reuniões: {exc}"
+
+            for m in rows:
+                mid   = m["id"]
+                n     = m.get("meeting_number", "?")
+                title = m.get("title") or f"Reunião {n}"
+                patch: dict = {}
+
+                if scope in ("transcripts", "all"):
+                    for fld in ("transcript_clean", "transcript_raw"):
+                        val = m.get(fld) or ""
+                        if find_text in val:
+                            patch[fld] = val.replace(find_text, replace_text)
+
+                if scope in ("minutes", "all"):
+                    val = m.get("minutes_md") or ""
+                    if find_text in val:
+                        patch["minutes_md"] = val.replace(find_text, replace_text)
+
+                if not patch:
+                    continue
+
+                try:
+                    db.table("meetings").update(patch).eq("id", mid).execute()
+                    fields_str = ", ".join(patch.keys())
+                    updated_records.append(
+                        f"✅ Reunião {n} — {title} (campos: {fields_str})"
+                    )
+                    # Invalidate the meeting cache so subsequent reads reflect the change
+                    self._meeting_cache = None
+                except Exception as exc:
+                    errors.append(f"❌ Reunião {n} — {title}: {exc}")
+
+        # ── Requirements table ─────────────────────────────────────────────
+        if scope in ("requirements", "all"):
+            try:
+                req_rows = (
+                    db.table("requirements")
+                    .select("id, req_number, title, description")
+                    .eq("project_id", self.project_id)
+                    .execute().data or []
+                )
+            except Exception as exc:
+                return f"Erro ao acessar requisitos: {exc}"
+
+            for r in req_rows:
+                rid    = r["id"]
+                n      = r.get("req_number")
+                req_id = f"REQ-{n:03d}" if isinstance(n, int) else "REQ-???"
+                patch: dict = {}
+                for fld in ("title", "description"):
+                    val = r.get(fld) or ""
+                    if find_text in val:
+                        patch[fld] = val.replace(find_text, replace_text)
+                if not patch:
+                    continue
+                try:
+                    db.table("requirements").update(patch).eq("id", rid).execute()
+                    updated_records.append(f"✅ {req_id} (campos: {', '.join(patch.keys())})")
+                except Exception as exc:
+                    errors.append(f"❌ {req_id}: {exc}")
+
+        if not updated_records and not errors:
+            return (
+                f'Nenhuma ocorrência de "{find_text}" encontrada — nenhum dado alterado.'
+            )
+
+        lines = [
+            f'Correção aplicada: "{find_text}" → "{replace_text}"',
+            f"{len(updated_records)} registro(s) atualizado(s):",
+        ]
+        lines.extend(updated_records)
+        if errors:
+            lines.append(f"\n{len(errors)} erro(s):")
+            lines.extend(errors)
+        return "\n".join(lines)
+
     # ── Dispatcher ────────────────────────────────────────────────────────────
 
     def execute(self, tool_name: str, tool_input: dict) -> str:
@@ -554,6 +872,18 @@ class AssistantToolExecutor:
                 "list_bpmn_processes":       lambda: self.list_bpmn_processes(),
                 "get_sbvr_terms":            lambda: self.get_sbvr_terms(tool_input.get("keyword")),
                 "get_sbvr_rules":            lambda: self.get_sbvr_rules(tool_input.get("keyword")),
+                "preview_text_correction":   lambda: self.preview_text_correction(
+                    tool_input["find_text"],
+                    tool_input["replace_text"],
+                    tool_input["scope"],
+                    tool_input.get("meeting_number"),
+                ),
+                "apply_text_correction":     lambda: self.apply_text_correction(
+                    tool_input["find_text"],
+                    tool_input["replace_text"],
+                    tool_input["scope"],
+                    tool_input.get("meeting_number"),
+                ),
             }
             if tool_name not in dispatch:
                 return f"Ferramenta desconhecida: '{tool_name}'"

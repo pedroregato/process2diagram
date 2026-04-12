@@ -39,13 +39,15 @@ process2diagram/
 ├── app.py                        # Streamlit entry point — slim orchestrator; delegates to ui/ and core/
 │
 ├── pages/
+│   ├── Settings.py               # ⚙️ Central settings — LLM providers, API keys, embedding, search, preferences
 │   ├── Diagramas.py              # Full-screen multi-page diagram viewer (BPMN, Mermaid, Mind Map)
 │   ├── Assistente.py             # RAG-powered assistant — semantic Q&A over meeting transcripts
 │   ├── BatchRunner.py            # Batch pipeline — runs the full pipeline on multiple transcripts
 │   ├── BpmnBackfill.py           # Backfill BPMN XML for meetings stored in Supabase (no re-transcription)
 │   ├── ReqTracker.py             # Requirements tracker — Supabase-backed requirement status board
 │   ├── TranscriptBackfill.py     # Backfill transcript embeddings for existing meetings in Supabase
-│   └── CostEstimator.py          # LLM cost estimator — interactive breakdown per provider/agent
+│   ├── CostEstimator.py          # LLM cost estimator — interactive breakdown per provider/agent
+│   └── DatabaseOverview.py       # Database health dashboard — consolidated record counts and integrity check
 │
 ├── core/
 │   ├── knowledge_hub.py          # KnowledgeHub: central session state shared by all agents

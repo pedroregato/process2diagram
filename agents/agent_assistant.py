@@ -1,4 +1,4 @@
-# agents/agent_assistant.py  (v2)
+# agents/agent_assistant.py  (v7 — write-capable system prompt + DSML robust fix)
 # ─────────────────────────────────────────────────────────────────────────────
 # AgentAssistant — conversational RAG agent for meeting/project Q&A.
 #
@@ -17,16 +17,122 @@
 
 from __future__ import annotations
 import json
+import re
+import threading
+from typing import Callable
 
 from core.knowledge_hub import KnowledgeHub
 from agents.base_agent import BaseAgent
 
 MAX_TOOL_ROUNDS = 5  # max LLM ↔ tool iterations before forcing final answer
 
+# ── DeepSeek DSML tool-call format parser ─────────────────────────────────────
+# DeepSeek sometimes outputs tool calls using its internal DSML XML format in the
+# response *content* instead of the standard OpenAI `tool_calls` field.
+# These regexes detect and parse that format so the calls can still be executed.
+#
+# Observed format:
+#   <｜DSML｜function_calls>            (｜ may be U+FF5C or U+007C)
+#     <｜DSML｜invoke name="tool_name">
+#       <｜DSML｜parameter name="param">value</｜DSML｜parameter>
+#     </｜DSML｜invoke>
+#   </｜DSML｜function_calls>
+#
+# We match both ASCII pipe | (U+007C) and fullwidth ｜ (U+FF5C) to be safe.
+
+_P = r'[|\uff5c]'   # matches both pipe variants in a character class
+
+_DSML_DETECT_RE = re.compile(_P + r'DSML' + _P)   # quick presence check
+_DSML_INVOKE_RE = re.compile(
+    r'<' + _P + r'DSML' + _P + r'invoke\s+name="([^"]+)">(.*?)</' + _P + r'DSML' + _P + r'invoke>',
+    re.DOTALL,
+)
+_DSML_PARAM_RE = re.compile(
+    r'<' + _P + r'DSML' + _P + r'parameter\s+name="([^"]+)"[^>]*>(.*?)</' + _P + r'DSML' + _P + r'parameter>',
+    re.DOTALL,
+)
+# Strip any remaining <｜DSML｜...>…</｜DSML｜...> blocks
+_DSML_ANY_TAG_RE = re.compile(
+    r'<[/]?' + _P + r'DSML' + _P + r'[^>]*>',
+    re.DOTALL,
+)
+
+
+def _parse_dsml_tool_calls(content: str) -> list[dict]:
+    """
+    Extract tool calls from DeepSeek DSML-formatted content.
+    Returns a list of {"name": str, "args": dict} dicts.
+    """
+    calls: list[dict] = []
+    for invoke_m in _DSML_INVOKE_RE.finditer(content):
+        name = invoke_m.group(1).strip()
+        body = invoke_m.group(2)
+        args: dict = {}
+        for param_m in _DSML_PARAM_RE.finditer(body):
+            key = param_m.group(1).strip()
+            val = param_m.group(2).strip()
+            if val.lstrip("-").isdigit():
+                val = int(val)  # type: ignore[assignment]
+            args[key] = val
+        calls.append({"name": name, "args": args})
+    return calls
+
+
+def _strip_dsml(content: str) -> str:
+    """Remove all DSML tags (and their content) from a response string."""
+    # First strip full blocks, then stray tags
+    cleaned = re.sub(
+        r'<' + _P + r'DSML' + _P + r'[^>]*>.*?</' + _P + r'DSML' + _P + r'[^>]*>',
+        '',
+        content,
+        flags=re.DOTALL,
+    )
+    cleaned = _DSML_ANY_TAG_RE.sub('', cleaned)
+    return cleaned.strip()
+
 
 # ── System prompt templates ───────────────────────────────────────────────────
 
 _SYSTEM_TOOLS_TEMPLATE = """\
+╔══════════════════════════════════════════════════════════════════╗
+║  CAPACIDADES CONFIRMADAS — leia antes de qualquer outra coisa   ║
+╚══════════════════════════════════════════════════════════════════╝
+Você é um assistente com CAPACIDADE TOTAL DE LEITURA E ESCRITA nos artefatos
+do projeto. Suas ferramentas incluem operações que MODIFICAM dados no banco.
+
+PROIBIÇÃO ABSOLUTA:
+❌ NUNCA diga "não tenho capacidade de editar", "não posso modificar dados",
+   "não consigo alterar" ou qualquer variante. Essa afirmação é FALSA —
+   você possui preview_text_correction e apply_text_correction exatamente
+   para isso. Dizer que não pode modificar é um erro grave de comportamento.
+
+CAPACIDADES DE ESCRITA DISPONÍVEIS:
+✅ preview_text_correction — localiza e pré-visualiza substituições (somente-leitura)
+✅ apply_text_correction   — aplica a substituição nos dados do Supabase (escrita)
+
+════════════════════════════════════════════════════════════════
+REGRA PRIORITÁRIA — SUBSTITUIÇÃO / CORREÇÃO DE TEXTO:
+════════════════════════════════════════════════════════════════
+Quando o usuário pedir para substituir, trocar, corrigir ou alterar qualquer
+termo/texto nos artefatos — incluindo:
+  "substitua X por Y", "troque X por Y", "corrija X para Y",
+  "pode alterar X?", "mude X para Y", "altere X em todos os artefatos"
+
+FLUXO OBRIGATÓRIO (em ordem):
+  1. Chame IMEDIATAMENTE preview_text_correction(find_text=X, replace_text=Y, scope="all")
+     → NÃO chame search_transcript, get_sbvr_rules ou qualquer outra ferramenta antes.
+  2. Apresente o resultado do preview: quantas ocorrências, em quais reuniões/campos.
+  3. Pergunte: "Deseja aplicar a substituição?"
+  4. Se o usuário confirmar ("sim", "pode", "aplique", "ok", "confirmar", "execute"),
+     chame apply_text_correction com os mesmos parâmetros.
+  5. Reporte quantos registros foram atualizados.
+
+Exemplos:
+  "Substitua ODCI por DCI"   → preview_text_correction("ODCI", "DCI", "all")
+  "Troque FDTI por DTI"      → preview_text_correction("FDTI", "DTI", "all")
+  "Corrija OSEUITE para SESUITE" → preview_text_correction("OSEUITE", "SESUITE", "all")
+════════════════════════════════════════════════════════════════
+
 Você é um assistente especializado em análise de reuniões e projetos.
 
 {p2d_guide}
@@ -46,8 +152,21 @@ INSTRUÇÕES DE USO DAS FERRAMENTAS:
   • Processos BPMN → list_bpmn_processes
   • Vocabulário ou regras SBVR → get_sbvr_terms / get_sbvr_rules
   • Lista de reuniões existentes → get_meeting_list
+  • Localizar texto / pré-visualizar correção → preview_text_correction
+  • Aplicar correção (após confirmação) → apply_text_correction
 - Você pode encadear múltiplas ferramentas quando necessário.
 - Após obter os dados, sintetize uma resposta clara e objetiva.
+
+PROTOCOLO COMPLETO DE CORREÇÃO DE TEXTO:
+  1. Usuário solicita correção → chame preview_text_correction imediatamente.
+  2. Apresente o resultado: quantas ocorrências, em quais reuniões/campos.
+  3. AGUARDE confirmação explícita: "sim", "pode fazer", "confirmar", "aplique", "ok".
+  4. SOMENTE após confirmação, chame apply_text_correction.
+  5. Reporte: quantos registros foram atualizados.
+
+REGRA ABSOLUTA: NUNCA chame apply_text_correction sem antes:
+  (a) ter chamado preview_text_correction e apresentado o resultado, E
+  (b) ter recebido confirmação explícita do usuário nesta mesma conversa.
 
 REGRAS DE RESPOSTA:
 1. Responda APENAS com base nos dados retornados pelas ferramentas ou no guia acima.
@@ -225,10 +344,14 @@ class AgentAssistant(BaseAgent):
         api_key: str,
         model: str,
         executor,
+        cancel_event: threading.Event | None = None,
+        status_fn: Callable[[str], None] | None = None,
     ) -> tuple[str, int, list[str]]:
         """
         OpenAI / DeepSeek / Groq function-calling loop.
         Returns (response_text, total_tokens, tools_called).
+        cancel_event: if set between rounds, returns early with an interruption message.
+        status_fn: optional callback called with a human-readable status string on each step.
         """
         from openai import OpenAI
         from core.assistant_tools import get_tool_schemas_openai
@@ -239,7 +362,13 @@ class AgentAssistant(BaseAgent):
         total_tk = 0
         called: list[str] = []
 
-        for _ in range(MAX_TOOL_ROUNDS):
+        for round_n in range(MAX_TOOL_ROUNDS):
+            if cancel_event and cancel_event.is_set():
+                return "⏹ Processamento interrompido pelo usuário.", total_tk, called
+
+            if status_fn:
+                status_fn(f"🧠 Analisando pergunta (rodada {round_n + 1}/{MAX_TOOL_ROUNDS})…")
+
             resp = client.chat.completions.create(
                 model=model,
                 messages=msgs,
@@ -251,17 +380,56 @@ class AgentAssistant(BaseAgent):
             total_tk += resp.usage.total_tokens if resp.usage else 0
             choice = resp.choices[0]
 
+            content = choice.message.content or ""
+
             if choice.finish_reason != "tool_calls" or not choice.message.tool_calls:
-                # Final text answer
-                return choice.message.content or "", total_tk, called
+                # Check if DeepSeek leaked tool calls in DSML format inside the text
+                if _DSML_DETECT_RE.search(content):
+                    dsml_calls = _parse_dsml_tool_calls(content)
+                    if dsml_calls:
+                        # Execute the DSML-encoded tool calls
+                        msgs.append({"role": "assistant", "content": _strip_dsml(content) or content})
+                        for dc in dsml_calls:
+                            called.append(dc["name"])
+                            if status_fn:
+                                status_fn(f"🔧 Executando `{dc['name']}`…")
+                            if cancel_event and cancel_event.is_set():
+                                return "⏹ Processamento interrompido pelo usuário.", total_tk, called
+                            result = executor.execute(dc["name"], dc["args"])
+                            msgs.append({
+                                "role": "user",
+                                "content": f"[Resultado de {dc['name']}]:\n{result}",
+                            })
+                        # Force a text-only final answer WITHOUT tools parameter
+                        # (avoids another DSML cycle from DeepSeek)
+                        if status_fn:
+                            status_fn("🧠 Elaborando resposta final…")
+                        if cancel_event and cancel_event.is_set():
+                            return "⏹ Processamento interrompido pelo usuário.", total_tk, called
+                        final_resp = client.chat.completions.create(
+                            model=model,
+                            messages=msgs,
+                            max_tokens=self.provider_cfg.get("max_tokens", 2048),
+                            temperature=0.3,
+                            # No tools= → DeepSeek returns plain text, no DSML
+                        )
+                        total_tk += final_resp.usage.total_tokens if final_resp.usage else 0
+                        final_text = final_resp.choices[0].message.content or ""
+                        return _strip_dsml(final_text) or final_text, total_tk, called
+                # No DSML — clean any stray tags and return as final answer
+                return _strip_dsml(content) or content, total_tk, called
 
             # Execute each tool call and append results
             msgs.append(choice.message)
             for tc in choice.message.tool_calls:
+                if cancel_event and cancel_event.is_set():
+                    return "⏹ Processamento interrompido pelo usuário.", total_tk, called
                 fn_name = tc.function.name
                 fn_args = json.loads(tc.function.arguments or "{}")
                 called.append(fn_name)
-                result  = executor.execute(fn_name, fn_args)
+                if status_fn:
+                    status_fn(f"🔧 Executando `{fn_name}`…")
+                result = executor.execute(fn_name, fn_args)
                 msgs.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
@@ -269,6 +437,10 @@ class AgentAssistant(BaseAgent):
                 })
 
         # Force a final answer after MAX_TOOL_ROUNDS
+        if cancel_event and cancel_event.is_set():
+            return "⏹ Processamento interrompido pelo usuário.", total_tk, called
+        if status_fn:
+            status_fn("🧠 Elaborando resposta final…")
         resp = client.chat.completions.create(
             model=model,
             messages=msgs,
@@ -276,7 +448,8 @@ class AgentAssistant(BaseAgent):
             temperature=0.3,
         )
         total_tk += resp.usage.total_tokens if resp.usage else 0
-        return resp.choices[0].message.content or "", total_tk, called
+        raw = resp.choices[0].message.content or ""
+        return _strip_dsml(raw) or raw, total_tk, called
 
     # ── Tool-use loop — Anthropic ─────────────────────────────────────────────
 
@@ -287,10 +460,14 @@ class AgentAssistant(BaseAgent):
         api_key: str,
         model: str,
         executor,
+        cancel_event: threading.Event | None = None,
+        status_fn: Callable[[str], None] | None = None,
     ) -> tuple[str, int, list[str]]:
         """
         Anthropic tool_use loop.
         Returns (response_text, total_tokens, tools_called).
+        cancel_event: if set between rounds, returns early with an interruption message.
+        status_fn: optional callback called with a human-readable status string on each step.
         """
         import anthropic
         from core.assistant_tools import get_tool_schemas_anthropic
@@ -301,7 +478,13 @@ class AgentAssistant(BaseAgent):
         total_tk = 0
         called: list[str] = []
 
-        for _ in range(MAX_TOOL_ROUNDS):
+        for round_n in range(MAX_TOOL_ROUNDS):
+            if cancel_event and cancel_event.is_set():
+                return "⏹ Processamento interrompido pelo usuário.", total_tk, called
+
+            if status_fn:
+                status_fn(f"🧠 Analisando pergunta (rodada {round_n + 1}/{MAX_TOOL_ROUNDS})…")
+
             resp = client.messages.create(
                 model=model,
                 system=system,
@@ -313,29 +496,23 @@ class AgentAssistant(BaseAgent):
             total_tk += (resp.usage.input_tokens + resp.usage.output_tokens) if resp.usage else 0
 
             if resp.stop_reason != "tool_use":
-                # Final text answer — extract first text block
-                text = next(
-                    (b.text for b in resp.content if hasattr(b, "text")),
-                    "",
-                )
+                text = next((b.text for b in resp.content if hasattr(b, "text")), "")
                 return text, total_tk, called
 
-            # Collect tool_use blocks
             tool_use_blocks = [b for b in resp.content if b.type == "tool_use"]
             if not tool_use_blocks:
-                text = next(
-                    (b.text for b in resp.content if hasattr(b, "text")),
-                    "",
-                )
+                text = next((b.text for b in resp.content if hasattr(b, "text")), "")
                 return text, total_tk, called
 
-            # Append assistant turn (full content list)
             msgs.append({"role": "assistant", "content": resp.content})
 
-            # Execute tools and build tool_result turn
             tool_results = []
             for tb in tool_use_blocks:
+                if cancel_event and cancel_event.is_set():
+                    return "⏹ Processamento interrompido pelo usuário.", total_tk, called
                 called.append(tb.name)
+                if status_fn:
+                    status_fn(f"🔧 Executando `{tb.name}`…")
                 result = executor.execute(tb.name, tb.input or {})
                 tool_results.append({
                     "type": "tool_result",
@@ -345,6 +522,10 @@ class AgentAssistant(BaseAgent):
             msgs.append({"role": "user", "content": tool_results})
 
         # Force final answer
+        if cancel_event and cancel_event.is_set():
+            return "⏹ Processamento interrompido pelo usuário.", total_tk, called
+        if status_fn:
+            status_fn("🧠 Elaborando resposta final…")
         resp = client.messages.create(
             model=model,
             system=system,
@@ -396,6 +577,8 @@ class AgentAssistant(BaseAgent):
         question: str,
         project_id: str,
         project_name: str = "",
+        cancel_event: threading.Event | None = None,
+        status_fn: Callable[[str], None] | None = None,
     ) -> tuple[str, int, list[str]]:
         """
         Tool-use conversational turn.
@@ -406,11 +589,14 @@ class AgentAssistant(BaseAgent):
         and synthesises a final answer.
 
         Args:
-            history:      Prior turns — [{"role": "user"|"assistant", "content": "..."}]
-                          Pass history[:-1] (exclude current question).
-            question:     Current user question.
-            project_id:   Supabase project UUID.
-            project_name: Human-readable project name (for the system prompt).
+            history:       Prior turns — [{"role": "user"|"assistant", "content": "..."}]
+                           Pass history[:-1] (exclude current question).
+            question:      Current user question.
+            project_id:    Supabase project UUID.
+            project_name:  Human-readable project name (for the system prompt).
+            cancel_event:  threading.Event — set it to interrupt the loop between rounds.
+            status_fn:     Optional callable(str) invoked with step descriptions
+                           (e.g. "🔧 Executando `get_meeting_list`…").
 
         Returns:
             (response_text, tokens_used, tools_called)
@@ -427,8 +613,12 @@ class AgentAssistant(BaseAgent):
         model       = self.provider_cfg["default_model"]
 
         if client_type == "openai_compatible":
-            return self._chat_with_tools_openai(system, messages, api_key, model, executor)
+            return self._chat_with_tools_openai(
+                system, messages, api_key, model, executor, cancel_event, status_fn
+            )
         elif client_type == "anthropic":
-            return self._chat_with_tools_anthropic(system, messages, api_key, model, executor)
+            return self._chat_with_tools_anthropic(
+                system, messages, api_key, model, executor, cancel_event, status_fn
+            )
         else:
             raise ValueError(f"client_type '{client_type}' não suporta tool-use")

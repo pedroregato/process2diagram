@@ -11,6 +11,9 @@ root_dir = Path(__file__).parent.parent.absolute()
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
+import threading
+import time
+
 import streamlit as st
 
 from ui.auth_gate import apply_auth_gate
@@ -192,8 +195,9 @@ with st.sidebar:
     )
     if use_tools:
         st.caption(
-            "🔟 ferramentas disponíveis: participantes, decisões, ações, "
-            "busca em transcrições, requisitos, BPMN, SBVR…"
+            "🔢 12 ferramentas: participantes, decisões, ações, "
+            "transcrições, requisitos, BPMN, SBVR · "
+            "✏️ correção de texto (preview + aplicar)"
         )
 
     st.markdown("---")
@@ -375,10 +379,78 @@ if _editing_idx is not None:
                 st.session_state.pop("_edit_draft", None)
                 st.rerun()
 
+# ── Polling block — tool-use running in background thread ─────────────────────
+_asst_running = st.session_state.get("_asst_running", False)
+
+if _asst_running:
+    thread: threading.Thread = st.session_state.get("_asst_thread")
+    cancel_ev: threading.Event = st.session_state.get("_asst_cancel_event")
+    result_box: dict = st.session_state.get("_asst_result_box", {})
+
+    if thread and thread.is_alive():
+        # Show live status + stop button
+        status_msg = st.session_state.get("_asst_status", "🔧 Consultando ferramentas…")
+        with st.chat_message("assistant"):
+            st.markdown(f"_{status_msg}_")
+
+        col_msg, col_stop = st.columns([4, 1])
+        with col_msg:
+            st.caption(status_msg)
+        with col_stop:
+            if st.button("⏹ Parar", key="asst_stop_btn", type="secondary", use_container_width=True):
+                cancel_ev.set()
+                st.session_state["_asst_status"] = "⏹ Interrompendo…"
+
+        # Poll — sleep briefly then rerun to check thread again
+        time.sleep(0.6)
+        st.rerun()
+
+    else:
+        # Thread finished (or never started) — collect result
+        if thread:
+            thread.join(timeout=2)
+
+        response_text = result_box.get("response") or "❌ Sem resposta."
+        tokens_used   = result_box.get("tokens", 0)
+        tools_called  = result_box.get("tools_called", [])
+        error         = result_box.get("error")
+
+        if error and not result_box.get("response"):
+            response_text = f"❌ Erro: {error}"
+
+        history = st.session_state["assistant_history"]
+        history.append({"role": "assistant", "content": response_text})
+        st.session_state["assistant_history"] = history
+
+        # Store caption info for display after rerun
+        st.session_state["_asst_last_caption"] = {
+            "tokens": tokens_used,
+            "tools": tools_called,
+            "mode": "tools",
+        }
+
+        # Clear running state
+        for _k in ("_asst_running", "_asst_thread", "_asst_cancel_event",
+                   "_asst_result_box", "_asst_status"):
+            st.session_state.pop(_k, None)
+
+        st.rerun()
+
+# Show caption from the just-completed tool-use turn (survives one rerun)
+if "_asst_last_caption" in st.session_state:
+    cap = st.session_state.pop("_asst_last_caption")
+    tools_called = cap.get("tools", [])
+    tokens_used  = cap.get("tokens", 0)
+    if tools_called:
+        tools_str = " · ".join(f"`{t}`" for t in tools_called)
+        st.caption(f"🔢 {tokens_used} tokens · 🔧 ferramentas usadas: {tools_str}")
+    else:
+        st.caption(f"🔢 {tokens_used} tokens · 🔧 tool-use (sem chamadas externas)")
+
 # ── New message input ─────────────────────────────────────────────────────────
 question = st.chat_input(
     "Faça uma pergunta sobre as reuniões, requisitos, processos ou sobre como usar o sistema...",
-    disabled=(_editing_idx is not None),
+    disabled=(_editing_idx is not None or _asst_running),
 )
 
 # Aceita pergunta nova ou pergunta reeditada
@@ -387,7 +459,7 @@ active_question: str | None = (
     or question
 )
 
-if active_question:
+if active_question and not _asst_running:
     question = active_question
     # Reload history (may have been truncated by resubmit)
     history = st.session_state["assistant_history"]
@@ -399,49 +471,68 @@ if active_question:
 
     use_tools_now = st.session_state.get("asst_use_tools", True)
 
-    # ── Caminho A: Tool-use (LLM decide quais ferramentas usar) ──────────────
+    # ── Caminho A: Tool-use — background thread com botão Parar ──────────────
     if use_tools_now:
-        with st.spinner("🔧 Consultando ferramentas..."):
-            client_info = {"api_key": api_key}
-            agent = AgentAssistant(client_info, provider_cfg)
+        _cancel_ev  = threading.Event()
+        _result_box: dict = {}
+
+        # Capture values needed by the thread
+        _api_key       = api_key
+        _provider_cfg  = provider_cfg
+        _history_snap  = list(history[:-1])   # excludes the current question
+        _question      = question
+        _project_id    = project_id
+        _project_name  = project_name
+
+        def _run_tools_thread() -> None:
+            def _status(msg: str) -> None:
+                st.session_state["_asst_status"] = msg
+
             try:
-                response_text, tokens_used, tools_called = agent.chat_with_tools(
-                    history=history[:-1],
-                    question=question,
-                    project_id=project_id,
-                    project_name=project_name,
+                _status("🔧 Iniciando consulta…")
+                _agent = AgentAssistant({"api_key": _api_key}, _provider_cfg)
+                resp_text, tok, tools = _agent.chat_with_tools(
+                    history=_history_snap,
+                    question=_question,
+                    project_id=_project_id,
+                    project_name=_project_name,
+                    cancel_event=_cancel_ev,
+                    status_fn=_status,
                 )
-            except Exception as exc:
-                # Fallback to classic RAG on tool-use failure
-                st.warning(
-                    f"⚠️ Tool-use falhou ({exc}). Usando busca por keyword como fallback."
-                )
-                ctx = retrieve_context_for_question(project_id, question)
-                context_text = format_context(ctx, project_name)
+                _result_box["response"]     = resp_text
+                _result_box["tokens"]       = tok
+                _result_box["tools_called"] = tools
+            except Exception as _exc:
+                # Fallback to keyword RAG
+                _status("⚠️ Tool-use falhou — usando busca por keyword…")
                 try:
-                    response_text, tokens_used = agent.chat(
-                        history=history[:-1],
-                        context_text=context_text,
-                        question=question,
+                    _ctx  = retrieve_context_for_question(_project_id, _question)
+                    _ctxt = format_context(_ctx, _project_name)
+                    _agent2 = AgentAssistant({"api_key": _api_key}, _provider_cfg)
+                    resp_text, tok = _agent2.chat(
+                        history=_history_snap,
+                        context_text=_ctxt,
+                        question=_question,
                     )
-                except Exception as exc2:
-                    response_text = f"❌ Erro ao gerar resposta: {exc2}"
-                    tokens_used = 0
-                tools_called = []
+                    _result_box["response"]     = resp_text
+                    _result_box["tokens"]       = tok
+                    _result_box["tools_called"] = []
+                    _result_box["error"]        = f"tool-use falhou: {_exc} (fallback keyword)"
+                except Exception as _exc2:
+                    _result_box["response"]     = f"❌ Erro ao gerar resposta: {_exc2}"
+                    _result_box["tokens"]       = 0
+                    _result_box["tools_called"] = []
+                    _result_box["error"]        = str(_exc2)
 
-        # 4. Append and render
-        history.append({"role": "assistant", "content": response_text})
-        st.session_state["assistant_history"] = history
-
-        with st.chat_message("assistant"):
-            st.markdown(response_text)
-
-        # 5. Info caption
-        if tools_called:
-            tools_str = " · ".join(f"`{t}`" for t in tools_called)
-            st.caption(f"🔢 {tokens_used} tokens · 🔧 ferramentas usadas: {tools_str}")
-        else:
-            st.caption(f"🔢 {tokens_used} tokens · 🔧 tool-use (sem chamadas externas)")
+        _thread = threading.Thread(target=_run_tools_thread, daemon=True)
+        st.session_state["_asst_running"]      = True
+        st.session_state["_asst_thread"]       = _thread
+        st.session_state["_asst_cancel_event"] = _cancel_ev
+        st.session_state["_asst_result_box"]   = _result_box
+        st.session_state["_asst_status"]       = "🔧 Iniciando consulta…"
+        st.session_state["assistant_history"]  = history
+        _thread.start()
+        st.rerun()
 
     # ── Caminho B: RAG clássico (keyword / semântico) ─────────────────────────
     else:

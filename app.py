@@ -4,10 +4,11 @@
 # Código aqui roda em TODAS as páginas antes de pg.run().
 #
 # Estrutura de seções:
+#   Sistema      → Configurações (provedores, API keys, busca, preferências)
 #   Orientações  → Como Iniciar, Arquiteturas
 #   Pipeline     → Processar Transcrição, Diagramas
 #   Análise & Dados → Assistente, Req. Tracker
-#   Operações    → Batch Runner, BPMN Backfill, Transcript Backfill, Custo
+#   Operações    → Batch Runner, BPMN Backfill, Transcript Backfill, Custo, Visão do Banco
 # ─────────────────────────────────────────────────────────────────────────────
 
 import streamlit as st
@@ -31,6 +32,9 @@ init_session_state()
 # não-autenticadas), caso contrário o roteamento não é inicializado e
 # Streamlit trata cada navegação de página como nova sessão → login repetido.
 pages = {
+    "Sistema": [
+        st.Page("pages/Settings.py", title="Configurações", icon="⚙️"),
+    ],
     "Orientações": [
         st.Page("pages/Orientacoes_ComoIniciar.py",   title="Como Iniciar",   icon="📖"),
         st.Page("pages/Orientacoes_Arquiteturas.py",  title="Arquiteturas",   icon="🏗️"),
@@ -48,6 +52,7 @@ pages = {
         st.Page("pages/BpmnBackfill.py",        title="BPMN Backfill",       icon="🔧"),
         st.Page("pages/TranscriptBackfill.py",  title="Transcript Backfill", icon="📝"),
         st.Page("pages/CostEstimator.py",       title="Estimativa de Custo", icon="💰"),
+        st.Page("pages/DatabaseOverview.py",    title="Visão do Banco",      icon="🗄️"),
     ],
 }
 pg = st.navigation(pages)

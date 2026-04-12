@@ -47,6 +47,16 @@ def init_session_state():
         st.session_state.validation_threshold = 6.0
     if "max_bpmn_retries" not in st.session_state:
         st.session_state.max_bpmn_retries = 3
+    # ── Assistente & Embeddings (lidos por pages/Settings.py e pages/Assistente.py) ──
+    if "asst_provider" not in st.session_state:
+        st.session_state["asst_provider"] = "DeepSeek"
+    if "asst_use_tools" not in st.session_state:
+        st.session_state["asst_use_tools"] = True
+    if "asst_use_semantic" not in st.session_state:
+        st.session_state["asst_use_semantic"] = False
+    if "asst_embed_provider" not in st.session_state:
+        st.session_state["asst_embed_provider"] = "Google Gemini"
+
     # ── Projeto / Reunião (F2) ─────────────────────────────────────────────
     if "project_id" not in st.session_state:
         st.session_state.project_id = None
