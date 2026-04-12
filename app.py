@@ -50,6 +50,7 @@ pages = {
     "Operações": [
         st.Page("pages/BatchRunner.py",         title="Batch Runner",        icon="🔄"),
         st.Page("pages/BpmnBackfill.py",        title="BPMN Backfill",       icon="🔧"),
+        st.Page("pages/MinutesBackfill.py",     title="Minutes Backfill",    icon="📋"),
         st.Page("pages/TranscriptBackfill.py",  title="Transcript Backfill", icon="📝"),
         st.Page("pages/CostEstimator.py",       title="Estimativa de Custo", icon="💰"),
         st.Page("pages/DatabaseOverview.py",    title="Visão do Banco",      icon="🗄️"),
