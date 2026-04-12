@@ -226,7 +226,7 @@ def _embed_batch_openai_compatible(
     return [item.embedding for item in sorted(resp.data, key=lambda x: x.index)]
 
 
-_GEMINI_RATE_DELAY = 0.7   # segundos entre chamadas (~85 req/min, abaixo do limite free de 100)
+_GEMINI_RATE_DELAY = 1.2   # segundos entre chamadas (~50 req/min, metade do limite free de 100)
 _GEMINI_MAX_RETRIES = 5    # tentativas em caso de 429
 
 
@@ -272,10 +272,16 @@ def _embed_gemini(text: str, api_key: str) -> list[float]:
 
             except Exception as exc:
                 exc_str = str(exc)
-                if "429" in exc_str:
-                    # Extrai retry_delay do corpo do erro (ex: "seconds: 20")
-                    m = re.search(r"seconds[\":\s]+(\d+)", exc_str)
-                    wait = int(m.group(1)) + 5 if m else 35
+                is_rate_limit = (
+                    "429" in exc_str
+                    or "quota" in exc_str.lower()
+                    or "rate limit" in exc_str.lower()
+                    or "resource exhausted" in exc_str.lower()
+                )
+                if is_rate_limit:
+                    # Extrai retry_delay do corpo do erro (ex: "seconds: 6")
+                    m = re.search(r"seconds[\"':\s]+(\d+)", exc_str)
+                    wait = int(m.group(1)) + 10 if m else 40
                     time.sleep(wait)
                     continue  # retenta
                 if "404" in exc_str and model_name == "models/gemini-embedding-001":
