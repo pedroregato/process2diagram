@@ -49,6 +49,17 @@ if not db:
     st.error("Não foi possível conectar ao Supabase.")
     st.stop()
 
+# Quick connectivity probe — tries to count projects rows
+try:
+    _probe = db.table("projects").select("id", count="exact").limit(1).execute()
+    _probe_count = _probe.count if hasattr(_probe, "count") else "?"
+    st.caption(f"✅ Supabase conectado · projetos acessíveis (count={_probe_count})")
+except Exception as _probe_err:
+    st.warning(
+        f"⚠️ Supabase conectado mas a tabela **projects** não está acessível: `{_probe_err}`  \n"
+        "Verifique se a tabela existe e se a chave possui permissão SELECT."
+    )
+
 # Refresh button (top-right)
 _, _col_r = st.columns([6, 1])
 with _col_r:
@@ -56,36 +67,56 @@ with _col_r:
         st.rerun()
 
 # ── Load all data ─────────────────────────────────────────────────────────────
+_load_errors: list[str] = []
+
 with st.spinner("Carregando dados do banco…"):
 
-    def _safe(fn):
+    def _safe(fn, label: str = ""):
         try:
-            return fn()
-        except Exception:
+            result = fn()
+            return result if result is not None else []
+        except Exception as exc:
+            if label:
+                _load_errors.append(f"**{label}**: `{exc}`")
             return []
 
-    projects = _safe(lambda: db.table("projects")
-                     .select("id, name, sigla, description, created_at")
-                     .order("name").execute().data or [])
+    projects = _safe(
+        lambda: db.table("projects")
+                  .select("id, name, sigla, description, created_at")
+                  .order("name").execute().data or [],
+        "projects",
+    )
 
-    meetings = _safe(lambda: db.table("meetings")
-                     .select(
-                         "id, project_id, meeting_number, title, meeting_date, "
-                         "created_at, total_tokens, llm_provider, "
-                         "transcript_clean, transcript_raw, minutes_md"
-                     ).order("created_at").execute().data or [])
+    meetings = _safe(
+        lambda: db.table("meetings")
+                  .select(
+                      "id, project_id, meeting_number, title, meeting_date, "
+                      "created_at, total_tokens, llm_provider, "
+                      "transcript_clean, transcript_raw, minutes_md"
+                  ).order("created_at").execute().data or [],
+        "meetings",
+    )
 
-    requirements = _safe(lambda: db.table("requirements")
-                         .select("id, project_id, meeting_id, req_type, status, priority, created_at")
-                         .execute().data or [])
+    requirements = _safe(
+        lambda: db.table("requirements")
+                  .select("id, project_id, meeting_id, req_type, status, priority, created_at")
+                  .execute().data or [],
+        "requirements",
+    )
 
-    sbvr_terms = _safe(lambda: db.table("sbvr_terms")
-                       .select("id, project_id, meeting_id, term, category")
-                       .execute().data or [])
+    sbvr_terms = _safe(
+        lambda: db.table("sbvr_terms")
+                  .select("id, project_id, meeting_id, term, category")
+                  .execute().data or [],
+        "sbvr_terms",
+    )
 
-    sbvr_rules = _safe(lambda: db.table("sbvr_rules")
-                       .select("id, project_id, meeting_id, rule_type")
-                       .execute().data or [])
+    sbvr_rules = _safe(
+        lambda: db.table("sbvr_rules")
+                  .select("id, project_id, meeting_id, rule_type")
+                  .execute().data or [],
+        "sbvr_rules",
+    )
 
     bpmn_ok = False
     bpmn_processes: list[dict] = []
@@ -105,9 +136,22 @@ with st.spinner("Carregando dados do banco…"):
     except Exception:
         pass
 
-    batch_log = _safe(lambda: db.table("batch_log")
-                      .select("id, project_id, status, processed_at, filename")
-                      .execute().data or [])
+    batch_log = _safe(
+        lambda: db.table("batch_log")
+                  .select("id, project_id, status, processed_at, filename")
+                  .execute().data or [],
+        "batch_log",
+    )
+
+# ── Show load errors (if any) ─────────────────────────────────────────────────
+if _load_errors:
+    with st.expander(f"⚠️ {len(_load_errors)} erro(s) ao carregar tabelas — clique para ver", expanded=True):
+        for err in _load_errors:
+            st.markdown(f"- {err}")
+        st.caption(
+            "Possíveis causas: tabela inexistente, coluna ausente, "
+            "RLS bloqueando acesso ou chave Supabase sem permissão de leitura."
+        )
 
 # ── Build lookup indexes ───────────────────────────────────────────────────────
 proj_map = {p["id"]: p for p in projects}
