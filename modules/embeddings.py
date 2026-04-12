@@ -227,33 +227,22 @@ def _embed_batch_openai_compatible(
 
 
 _GEMINI_EMBED_URL = (
-    "https://generativelanguage.googleapis.com/v1beta"
+    "https://generativelanguage.googleapis.com/v1"
     "/models/text-embedding-004:{method}?key={key}"
 )
 
 
 def _embed_gemini(text: str, api_key: str) -> list[float]:
     """Google Gemini — text-embedding-004 (768 dims) via REST API nativo (stdlib)."""
-    result = _embed_batch_gemini([text], api_key)
-    return result[0]
-
-
-def _embed_batch_gemini(texts: list[str], api_key: str) -> list[list[float]]:
-    """Batch embedding via Google batchEmbedContents REST API (sem SDK extra)."""
     import json
     import urllib.request
     import urllib.error
 
-    url = _GEMINI_EMBED_URL.format(method="batchEmbedContents", key=api_key)
+    url = _GEMINI_EMBED_URL.format(method="embedContent", key=api_key)
     payload = {
-        "requests": [
-            {
-                "model": "models/text-embedding-004",
-                "content": {"parts": [{"text": t}]},
-                "taskType": "RETRIEVAL_DOCUMENT",
-            }
-            for t in texts
-        ]
+        "model": "models/text-embedding-004",
+        "content": {"parts": [{"text": text}]},
+        "taskType": "RETRIEVAL_DOCUMENT",
     }
     req = urllib.request.Request(
         url,
@@ -266,11 +255,39 @@ def _embed_batch_gemini(texts: list[str], api_key: str) -> list[list[float]]:
             result = json.loads(resp.read())
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Gemini API error {exc.code}: {body}") from exc
+        _raise_gemini_error(exc.code, body)
 
-    embeddings = [e["values"] for e in result.get("embeddings", [])]
-    if len(embeddings) != len(texts):
+    embedding = result.get("embedding", {}).get("values", [])
+    if len(embedding) != EMBEDDING_DIM:
         raise ValueError(
-            f"Gemini retornou {len(embeddings)} embeddings para {len(texts)} textos"
+            f"Gemini retornou {len(embedding)} dims, esperado {EMBEDDING_DIM}"
         )
-    return embeddings
+    return embedding
+
+
+def _embed_batch_gemini(texts: list[str], api_key: str) -> list[list[float]]:
+    """Batch: chama _embed_gemini individualmente (embedContent por texto)."""
+    return [_embed_gemini(t, api_key) for t in texts]
+
+
+def _raise_gemini_error(code: int, body: str) -> None:
+    """Formata erro da API Gemini com dica de diagnóstico."""
+    if code == 400:
+        raise RuntimeError(
+            f"Gemini API 400 (requisição inválida): {body}"
+        )
+    if code == 401 or code == 403:
+        raise RuntimeError(
+            f"Gemini API {code} (chave inválida ou sem permissão). "
+            "Verifique se a chave foi criada em aistudio.google.com "
+            "e se a 'Generative Language API' está habilitada no projeto. "
+            f"Detalhe: {body}"
+        )
+    if code == 404:
+        raise RuntimeError(
+            f"Gemini API 404 (modelo não encontrado). "
+            "Confirme que a chave é do Google AI Studio (começa com 'AI') "
+            "e não uma chave do Google Cloud / Vertex AI. "
+            f"Detalhe: {body}"
+        )
+    raise RuntimeError(f"Gemini API error {code}: {body}")
