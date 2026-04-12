@@ -28,13 +28,6 @@ from core.project_store import (
 )
 
 # ── Page config ───────────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="Transcript Backfill — Process2Diagram",
-    page_icon="📝",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
 apply_auth_gate()
 
 # ── Header ────────────────────────────────────────────────────────────────────

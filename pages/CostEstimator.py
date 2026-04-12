@@ -35,14 +35,6 @@ from modules.cost_estimator import (
 )
 from core.project_store import list_projects, _db, _ok
 
-# ── Page config ───────────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="Custos LLM — Process2Diagram",
-    page_icon="💰",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
 apply_auth_gate()
 
 # ── Header ────────────────────────────────────────────────────────────────────

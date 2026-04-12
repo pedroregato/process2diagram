@@ -14,7 +14,6 @@ if str(root_dir) not in sys.path:
 import streamlit as st
 
 from ui.auth_gate import apply_auth_gate
-from ui.assistant_diagram import render_assistant_diagram
 from modules.supabase_client import supabase_configured
 from modules.config import AVAILABLE_PROVIDERS
 from modules.embeddings import EMBEDDING_PROVIDERS, list_gemini_embedding_models
@@ -30,13 +29,6 @@ from core.project_store import (
 from agents.agent_assistant import AgentAssistant
 
 # ── Page config ───────────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="Assistente — Process2Diagram",
-    page_icon="💬",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
 apply_auth_gate()
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -217,9 +209,6 @@ st.caption(
     "Faça perguntas sobre transcrições, requisitos, processos BPMN e vocabulário SBVR "
     "armazenados no projeto selecionado. Também responde dúvidas sobre como usar o Process2Diagram."
 )
-
-with st.expander("🏗️ Arquitetura do Assistente — Como o RAG funciona", expanded=False):
-    render_assistant_diagram(height=660)
 
 # ── Guard: Supabase + project + API key ───────────────────────────────────────
 if not supabase_configured():

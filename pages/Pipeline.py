@@ -1,0 +1,286 @@
+# pages/Pipeline.py
+# ─────────────────────────────────────────────────────────────────────────────
+# Pipeline Principal — Processar Transcrição
+# Conteúdo movido de app.py na reestruturação de navegação (v4.12).
+# ─────────────────────────────────────────────────────────────────────────────
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+root_dir = Path(__file__).parent.parent.absolute()
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
+
+import streamlit as st
+from ui.auth_gate import apply_auth_gate
+from ui.sidebar import render_sidebar
+from ui.input_area import render_input_area
+from ui.project_selector import render_project_selector, render_bpmn_process_selector
+from core.pipeline import run_pipeline
+from core.rerun_handlers import handle_rerun
+from core.project_store import (
+    create_meeting, save_transcript, save_meeting_artifacts,
+    save_sbvr_from_hub, save_bpmn_from_hub,
+)
+from agents.agent_req_reconciler import AgentReqReconciler
+from modules.supabase_client import supabase_configured
+from ui.tabs import (
+    render_quality, render_bpmn, render_mermaid, render_validation,
+    render_minutes, render_requirements, render_sbvr, render_bmm,
+    render_synthesizer, render_export, render_dev_tools
+)
+from modules.session_security import get_session_llm_client
+
+apply_auth_gate()
+
+# Sidebar (específica do pipeline)
+render_sidebar()
+
+# ── Projeto / Reunião ─────────────────────────────────────────────────────────
+render_project_selector()
+render_bpmn_process_selector()
+
+# Área de entrada e curadoria
+start_process = render_input_area()
+
+# Verificação de API key
+if not get_session_llm_client(st.session_state.selected_provider):
+    st.warning("👈 Insira sua API key na sidebar para continuar.")
+    st.stop()
+
+# Placeholder para progresso
+progress_placeholder = st.empty()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PIPELINE PRINCIPAL
+# ─────────────────────────────────────────────────────────────────────────────
+if start_process and st.session_state.transcript_text.strip():
+    if not any([st.session_state.run_quality, st.session_state.run_bpmn,
+                st.session_state.run_minutes, st.session_state.run_requirements,
+                st.session_state.run_synthesizer]):
+        st.warning("Selecione ao menos um agente na sidebar.")
+        st.stop()
+
+    client_info = get_session_llm_client(st.session_state.selected_provider)
+    if not client_info:
+        st.error("API key ausente.")
+        st.stop()
+
+    from core.knowledge_hub import KnowledgeHub
+    hub = KnowledgeHub.new()
+    hub.set_transcript(st.session_state.transcript_text)
+    if st.session_state.get("curated_clean") and st.session_state.curated_clean != st.session_state.transcript_text:
+        hub.transcript_clean = st.session_state.curated_clean
+    hub.meta.llm_provider = st.session_state.selected_provider
+
+    config = {
+        "client_info": client_info,
+        "provider_cfg": st.session_state.provider_cfg,
+        "output_language": st.session_state.output_language,
+        "run_quality": st.session_state.run_quality,
+        "run_bpmn": st.session_state.run_bpmn,
+        "run_minutes": st.session_state.run_minutes,
+        "run_requirements": st.session_state.run_requirements,
+        "run_sbvr": st.session_state.run_sbvr,
+        "run_bmm": st.session_state.run_bmm,
+        "run_synthesizer": st.session_state.run_synthesizer,
+        "n_bpmn_runs": st.session_state.n_bpmn_runs,
+        "bpmn_weights": st.session_state.bpmn_weights,
+        "use_langgraph": st.session_state.use_langgraph,
+        "validation_threshold": st.session_state.validation_threshold,
+        "max_bpmn_retries": st.session_state.max_bpmn_retries,
+    }
+
+    agent_status = {}
+    def update_progress(step, status):
+        agent_status[step] = status
+        lines = [f"{'✅' if 'done' in s else '⏳' if 'running' in s else '❌'} **{n}** — {s}" for n, s in agent_status.items()]
+        progress_placeholder.markdown("\n".join(lines))
+
+    try:
+        hub = run_pipeline(hub, config, update_progress)
+        st.session_state.hub = hub
+        progress_placeholder.success(f"✅ Pipeline concluído. Tokens: {hub.meta.total_tokens_used}")
+    except Exception as e:
+        progress_placeholder.error(f"Erro no pipeline: {e}")
+        st.stop()
+
+    # ── Persistência no Supabase + reconciliação de requisitos ───────────────
+    if supabase_configured() and st.session_state.get("project_confirmed"):
+        try:
+            meeting = create_meeting(
+                project_id=st.session_state.project_id,
+                title=st.session_state.meeting_title,
+                meeting_date=st.session_state.meeting_date,
+            )
+            if meeting:
+                meeting_id = meeting["id"]
+                st.session_state.current_meeting_id = meeting_id
+                save_transcript(meeting_id, hub)
+                save_meeting_artifacts(meeting_id, hub)
+
+                if hub.sbvr.ready:
+                    save_sbvr_from_hub(meeting_id, st.session_state.project_id, hub)
+
+                if hub.bpmn.ready:
+                    save_bpmn_from_hub(
+                        meeting_id=meeting_id,
+                        project_id=st.session_state.project_id,
+                        hub=hub,
+                        bpmn_process_id=st.session_state.get("bpmn_process_id"),
+                        bpmn_process_override_name=st.session_state.get(
+                            "bpmn_process_override_name", ""
+                        ),
+                    )
+
+                with st.spinner("🔍 Reconciliando requisitos com histórico do projeto..."):
+                    reconciler = AgentReqReconciler(client_info, st.session_state.provider_cfg)
+                    counts = reconciler.run(
+                        hub,
+                        project_id=st.session_state.project_id,
+                        meeting_id=meeting_id,
+                    )
+                total = sum(counts.values())
+                parts = []
+                if counts.get("new"):
+                    parts.append(f"{counts['new']} novo(s)")
+                if counts.get("revised"):
+                    parts.append(f"{counts['revised']} revisado(s)")
+                if counts.get("contradicted"):
+                    parts.append(f"⚠️ {counts['contradicted']} contradição(ões)")
+                if counts.get("confirmed"):
+                    parts.append(f"{counts['confirmed']} confirmado(s)")
+                summary = " · ".join(parts) if parts else f"{total} requisito(s)"
+                st.toast(f"💾 Reunião salva · {summary}", icon="✅")
+        except Exception as e:
+            st.warning(f"⚠️ Erro ao salvar no Supabase: {e}")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# REEXECUÇÃO DE AGENTES
+# ─────────────────────────────────────────────────────────────────────────────
+if "hub" in st.session_state:
+    st.markdown("---")
+    st.markdown("### 🔄 Re‑executar Agentes")
+    st.caption("Execute novamente um agente individualmente (sobrescreve o resultado anterior).")
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        if st.button("🔬 Qualidade", key="rr_quality_body"):
+            st.session_state.rerun_agent = "quality"
+    with col2:
+        if st.button("📐 BPMN", key="rr_bpmn_body"):
+            st.session_state.rerun_agent = "bpmn"
+    with col3:
+        if st.button("📋 Ata", key="rr_minutes_body"):
+            st.session_state.rerun_agent = "minutes"
+    with col4:
+        if st.button("📝 Requisitos", key="rr_req_body"):
+            st.session_state.rerun_agent = "requirements"
+    with col5:
+        if st.button("📄 Relatório", key="rr_synth_body"):
+            st.session_state.rerun_agent = "synthesizer"
+    col6, col7, _ = st.columns([1, 1, 3])
+    with col6:
+        if st.button("📖 SBVR", key="rr_sbvr_body"):
+            st.session_state.rerun_agent = "sbvr"
+    with col7:
+        if st.button("🎯 BMM", key="rr_bmm_body"):
+            st.session_state.rerun_agent = "bmm"
+    st.markdown("---")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HANDLER DE REEXECUÇÃO
+# ─────────────────────────────────────────────────────────────────────────────
+if "rerun_agent" in st.session_state:
+    agent = st.session_state.pop("rerun_agent")
+    hub = st.session_state.get("hub")
+    if hub:
+        client_info = get_session_llm_client(st.session_state.selected_provider)
+        if client_info:
+            try:
+                hub = handle_rerun(agent, hub, client_info,
+                                   st.session_state.provider_cfg,
+                                   st.session_state.output_language)
+                st.session_state.hub = hub
+                st.success(f"✅ {agent.capitalize()} re‑executado com sucesso.")
+            except Exception as e:
+                st.error(f"Erro na reexecução: {e}")
+        else:
+            st.error("Chave de API não encontrada.")
+    else:
+        st.error("Nenhuma sessão ativa. Execute o pipeline primeiro.")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EXIBIÇÃO DOS RESULTADOS (abas)
+# ─────────────────────────────────────────────────────────────────────────────
+if "hub" in st.session_state:
+    hub = st.session_state.hub
+    prefix = st.session_state.prefix
+    suffix = st.session_state.suffix
+
+    tabs_to_show = []
+    if hub.transcript_quality.ready:
+        tabs_to_show.append("quality")
+    if hub.bpmn.ready:
+        tabs_to_show.append("bpmn")
+        tabs_to_show.append("mermaid")
+        if hub.validation.ready and hub.validation.n_bpmn_runs > 1:
+            tabs_to_show.append("validation")
+    if hub.minutes.ready:
+        tabs_to_show.append("minutes")
+    if hub.requirements.ready:
+        tabs_to_show.append("requirements")
+    if hub.sbvr.ready:
+        tabs_to_show.append("sbvr")
+    if hub.bmm.ready:
+        tabs_to_show.append("bmm")
+    if hub.synthesizer.ready:
+        tabs_to_show.append("synthesizer")
+    tabs_to_show.append("export")
+    if st.session_state.show_dev_tools:
+        tabs_to_show.append("devtools")
+
+    tab_labels = {
+        "quality":    "🔬 Qualidade",
+        "bpmn":       "📐 BPMN 2.0",
+        "mermaid":    "📊 Mermaid",
+        "validation": "🏆 Validação BPMN",
+        "minutes":    "📋 Ata de Reunião",
+        "requirements": "📝 Requisitos",
+        "sbvr":       "📖 SBVR",
+        "bmm":        "🎯 BMM",
+        "synthesizer": "📄 Relatório Executivo",
+        "export":     "📦 Exportar",
+        "devtools":   "🔍 Dev Tools",
+    }
+
+    tabs = st.tabs([tab_labels[t] for t in tabs_to_show])
+    for idx, tab_id in enumerate(tabs_to_show):
+        with tabs[idx]:
+            if tab_id == "quality":
+                render_quality(hub, prefix, suffix)
+            elif tab_id == "bpmn":
+                render_bpmn(hub, prefix, suffix)
+            elif tab_id == "mermaid":
+                render_mermaid(hub, prefix, suffix)
+            elif tab_id == "validation":
+                render_validation(hub)
+            elif tab_id == "minutes":
+                render_minutes(hub, prefix, suffix)
+            elif tab_id == "requirements":
+                render_requirements(hub, prefix, suffix)
+            elif tab_id == "sbvr":
+                render_sbvr(hub, prefix, suffix)
+            elif tab_id == "bmm":
+                render_bmm(hub, prefix, suffix)
+            elif tab_id == "synthesizer":
+                render_synthesizer(hub, prefix, suffix)
+            elif tab_id == "export":
+                render_export(hub, prefix, suffix)
+            elif tab_id == "devtools":
+                render_dev_tools(hub, st.session_state.show_raw_json)
+
+# Rodapé
+st.markdown("---")
+st.caption("Process2Diagram v4.12 — Arquitetura Multi‑Agente Modular")

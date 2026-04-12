@@ -36,14 +36,6 @@ from core.batch_pipeline import (
     extract_date_from_filename, extract_date_from_text, file_hash,
 )
 
-# ── Page config ───────────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="Batch Runner — Process2Diagram",
-    page_icon="🗂️",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
 apply_auth_gate()
 
 # ── Estilos ───────────────────────────────────────────────────────────────────
