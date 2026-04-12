@@ -26,10 +26,10 @@ EMBEDDING_DIM = 768
 # ── Provedores de embedding suportados ───────────────────────────────────────
 EMBEDDING_PROVIDERS = {
     "Google Gemini": {
-        "model":         "models/text-embedding-004",
+        "model":         "models/gemini-embedding-001",
         "base_url":      None,
         "api_key_label": "Google API Key",
-        "api_key_help":  "Crie em console.cloud.google.com → APIs → Generative Language API. Tier gratuito disponível.",
+        "api_key_help":  "Crie em aistudio.google.com → Get API Key. Tier gratuito disponível.",
         "api_key_prefix": "AI",
     },
     "OpenAI": {
@@ -227,36 +227,36 @@ def _embed_batch_openai_compatible(
 
 
 def _embed_gemini(text: str, api_key: str) -> list[float]:
-    """Google Gemini embeddings via google-genai SDK forçando endpoint v1 (estável).
+    """Google Gemini embeddings via google-generativeai SDK.
 
-    O SDK usa v1beta por padrão, mas os modelos de embedding requerem v1.
-    http_options={"api_version": "v1"} replica o que LangChain faz com version="v1".
+    Modelos disponíveis via chave AI Studio (confirmados pelo diagnóstico):
+      - models/gemini-embedding-001  (estável, padrão 3072 dims → solicitamos 768)
+      - models/gemini-embedding-2-preview  (fallback)
 
-    Tenta text-embedding-004 primeiro (mais recente, 768 dims) e faz fallback
-    para embedding-001 (estável, 768 dims) se o modelo não estiver disponível.
+    output_dimensionality=768 trunca o vetor para compatibilidade com o
+    schema Supabase transcript_chunks.embedding vector(768).
     """
+    import warnings
+    warnings.filterwarnings("ignore", category=FutureWarning, module="google")
     try:
-        from google import genai
-        from google.genai import types as genai_types
+        import google.generativeai as genai
     except ImportError as exc:
         raise ImportError(
-            "Pacote google-genai não instalado. "
-            "Execute: pip install google-genai"
+            "Pacote google-generativeai não instalado. "
+            "Execute: pip install google-generativeai"
         ) from exc
 
-    client = genai.Client(
-        api_key=api_key,
-        http_options={"api_version": "v1"},  # força endpoint estável (não v1beta)
-    )
+    genai.configure(api_key=api_key)
 
-    for model_name in ("text-embedding-004", "embedding-001"):
+    for model_name in ("models/gemini-embedding-001", "models/gemini-embedding-2-preview"):
         try:
-            result = client.models.embed_content(
+            result = genai.embed_content(
                 model=model_name,
-                contents=text,
-                config=genai_types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
+                content=text,
+                task_type="retrieval_document",
+                output_dimensionality=EMBEDDING_DIM,
             )
-            embedding = list(result.embeddings[0].values)
+            embedding = result["embedding"]
             if len(embedding) != EMBEDDING_DIM:
                 raise ValueError(
                     f"Embedding {model_name} retornou {len(embedding)} dims, "
@@ -264,14 +264,13 @@ def _embed_gemini(text: str, api_key: str) -> list[float]:
                 )
             return embedding
         except Exception as exc:
-            if "404" in str(exc) and model_name == "text-embedding-004":
+            if "404" in str(exc) and model_name == "models/gemini-embedding-001":
                 continue  # tenta fallback
             raise
 
     raise RuntimeError(
-        "Nenhum modelo Gemini disponível (text-embedding-004 e embedding-001 falharam). "
-        "Verifique se a chave foi criada em aistudio.google.com e se a "
-        "'Generative Language API' está habilitada."
+        "Nenhum modelo Gemini disponível. "
+        "Use '🔍 Testar chave' no expander de embeddings para ver os modelos disponíveis."
     )
 
 
