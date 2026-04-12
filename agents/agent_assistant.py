@@ -147,9 +147,9 @@ _Q = r'["\u201c\u201d\u2018\u2019]'  # any quote variant
 _SBVR_DASH_RE = re.compile(
     r'(?:inclua?|adicione?|cadastre?|insira?|coloque?)\s+'
     r'(?:o\s+termo\s+)?' + _Q + r'?(.+?)' + _Q + r'?'
-    r'\s*[-–—]\s*'
-    r'(.+?)'
-    r'\s+(?:em\s+nosso|em\s+nossos|no|ao|em)\s+' + _SBVR_KEYWORD,
+    + r'\s*[-\u2013\u2014]\s*'
+    + r'(.+?)'
+    + r'\s+(?:em\s+nosso|em\s+nossos|no|ao|em)\s+' + _SBVR_KEYWORD,
     re.IGNORECASE,
 )
 
@@ -157,15 +157,15 @@ _SBVR_DASH_RE = re.compile(
 _SBVR_COMO_RE = re.compile(
     r'(?:inclua?|adicione?|cadastre?|insira?|coloque?)\s+'
     r'(?:o\s+termo\s+)?' + _Q + r'?(.+?)' + _Q + r'?'
-    r'\s+(?:em\s+nosso|em\s+nossos|no|ao|em|ao\s+vocabulário\s+do)?\s*' + _SBVR_KEYWORD
-    r'(?:\s+como\s+' + _Q + r'?(.+?)' + _Q + r'?)?'
-    r'(?:\.|$)',
+    + r'\s+(?:em\s+nosso|em\s+nossos|no|ao|em|ao\s+vocabulário\s+do)?\s*' + _SBVR_KEYWORD
+    + r'(?:\s+como\s+' + _Q + r'?(.+?)' + _Q + r'?)?'
+    + r'(?:\.|$)',
     re.IGNORECASE,
 )
 
 # Pattern 3: bare "TERM como DEFINITION no SBVR" (no verb at start)
 _SBVR_BARE_RE = re.compile(
-    r'' + _Q + r'?(\w[\w\s]{0,30})' + _Q + r'?\s+como\s+(.+?)\s+(?:no|ao|em)\s+' + _SBVR_KEYWORD,
+    _Q + r'?(\w[\w\s]{0,30})' + _Q + r'?\s+como\s+(.+?)\s+(?:no|ao|em)\s+' + _SBVR_KEYWORD,
     re.IGNORECASE,
 )
 
