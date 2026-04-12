@@ -87,7 +87,7 @@ else:
             try:
                 meetings = _ok(
                     db.table("meetings")
-                    .select("meeting_number, title, meeting_date, tokens_used, llm_provider")
+                    .select("meeting_number, title, meeting_date, total_tokens, llm_provider")
                     .eq("project_id", project_id)
                     .order("meeting_number")
                     .execute()
@@ -96,7 +96,7 @@ else:
                 meetings = []
 
             for m in meetings:
-                tokens   = m.get("tokens_used") or 0
+                tokens   = m.get("total_tokens") or 0
                 provider = m.get("llm_provider") or "—"
                 # Estimativa de custo: assume split 70/30 input/output
                 inp = int(tokens * 0.70)
