@@ -668,6 +668,15 @@ class AssistantToolExecutor:
             lines.append(f"• [{rule_id}] {nucleo}: {statement}")
         return "\n".join(lines)
 
+    def _get_fallback_meeting_id(self, db) -> str | None:
+        """Return any meeting_id from this project — used when meeting_id NOT NULL constraint exists."""
+        try:
+            rows = db.table("meetings").select("id") \
+                .eq("project_id", self.project_id).limit(1).execute().data or []
+            return rows[0]["id"] if rows else None
+        except Exception:
+            return None
+
     def add_sbvr_term(
         self,
         term: str,
@@ -679,22 +688,49 @@ class AssistantToolExecutor:
         db = get_supabase_client()
         if not db:
             return "❌ Supabase não configurado — não é possível inserir o termo."
+
+        payload = {
+            "project_id": self.project_id,
+            "term":       term.strip(),
+            "definition": definition.strip(),
+            "category":   category.strip() or "Conceito",
+        }
+
+        # Try without meeting_id first (works if column is nullable)
         try:
-            db.table("sbvr_terms").insert({
-                "project_id": self.project_id,
-                "meeting_id": None,   # manually added — not from a specific meeting
-                "term":       term.strip(),
-                "definition": definition.strip(),
-                "category":   category.strip() or "Conceito",
-            }).execute()
+            db.table("sbvr_terms").insert({**payload, "meeting_id": None}).execute()
             return (
                 f"✅ Termo SBVR adicionado com sucesso!\n"
                 f"• Termo: {term}\n"
                 f"• Definição: {definition}\n"
                 f"• Categoria: {category or 'Conceito'}"
             )
-        except Exception as exc:
-            return f"❌ Erro ao inserir termo SBVR: {exc}"
+        except Exception as exc1:
+            err1 = str(exc1)
+
+        # Fallback: meeting_id column may be NOT NULL — use any meeting from this project
+        fallback_mid = self._get_fallback_meeting_id(db)
+        if fallback_mid:
+            try:
+                db.table("sbvr_terms").insert({**payload, "meeting_id": fallback_mid}).execute()
+                return (
+                    f"✅ Termo SBVR adicionado com sucesso!\n"
+                    f"• Termo: {term}\n"
+                    f"• Definição: {definition}\n"
+                    f"• Categoria: {category or 'Conceito'}\n"
+                    f"• Vinculado à primeira reunião do projeto (meeting_id é obrigatório no schema)"
+                )
+            except Exception as exc2:
+                return (
+                    f"❌ Falha ao inserir termo SBVR.\n"
+                    f"• Erro sem meeting_id: {err1}\n"
+                    f"• Erro com meeting_id={fallback_mid[:8]}…: {exc2}\n"
+                    f"Verifique se a tabela sbvr_terms existe e se a chave tem permissão INSERT."
+                )
+        return (
+            f"❌ Falha ao inserir termo SBVR: {err1}\n"
+            f"Não foi possível encontrar uma reunião de fallback para meeting_id."
+        )
 
     def add_sbvr_rule(
         self,
@@ -708,22 +744,27 @@ class AssistantToolExecutor:
         db = get_supabase_client()
         if not db:
             return "❌ Supabase não configurado — não é possível inserir a regra."
+
         try:
             nucleo = rule_keyword_pt(statement)
-            # Generate a simple rule_id: RBN-NNN (next available)
             existing = db.table("sbvr_rules").select("rule_id") \
                 .eq("project_id", self.project_id).execute()
             count = len(existing.data or []) + 1
             rule_id = f"RBN-{count:03d}"
-            db.table("sbvr_rules").insert({
-                "project_id":     self.project_id,
-                "meeting_id":     None,
-                "rule_id":        rule_id,
-                "statement":      statement.strip(),
-                "nucleo_nominal": nucleo,
-                "rule_type":      rule_type.strip() or "Behavioral Rule",
-                "source":         source.strip() or "manual",
-            }).execute()
+        except Exception:
+            rule_id = "RBN-001"
+            nucleo  = statement.split()[0] if statement else "regra"
+
+        payload = {
+            "project_id":     self.project_id,
+            "rule_id":        rule_id,
+            "statement":      statement.strip(),
+            "nucleo_nominal": nucleo,
+            "rule_type":      rule_type.strip() or "Behavioral Rule",
+            "source":         source.strip() or "manual",
+        }
+
+        def _success_msg():
             return (
                 f"✅ Regra SBVR adicionada com sucesso!\n"
                 f"• ID: {rule_id}\n"
@@ -731,8 +772,25 @@ class AssistantToolExecutor:
                 f"• Tipo: {rule_type or 'Behavioral Rule'}\n"
                 f"• Origem: {source or 'manual'}"
             )
-        except Exception as exc:
-            return f"❌ Erro ao inserir regra SBVR: {exc}"
+
+        try:
+            db.table("sbvr_rules").insert({**payload, "meeting_id": None}).execute()
+            return _success_msg()
+        except Exception as exc1:
+            err1 = str(exc1)
+
+        fallback_mid = self._get_fallback_meeting_id(db)
+        if fallback_mid:
+            try:
+                db.table("sbvr_rules").insert({**payload, "meeting_id": fallback_mid}).execute()
+                return _success_msg()
+            except Exception as exc2:
+                return (
+                    f"❌ Falha ao inserir regra SBVR.\n"
+                    f"• Erro sem meeting_id: {err1}\n"
+                    f"• Erro com meeting_id: {exc2}"
+                )
+        return f"❌ Falha ao inserir regra SBVR: {err1}"
 
     # ── Write tools ───────────────────────────────────────────────────────────
 
