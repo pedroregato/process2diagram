@@ -227,9 +227,13 @@ def _embed_batch_openai_compatible(
 
 
 def _embed_gemini(text: str, api_key: str) -> list[float]:
-    """Google Gemini — text-embedding-004 (768 dims) via google-generativeai SDK."""
+    """Google Gemini embeddings via google-generativeai SDK.
+
+    Tenta text-embedding-004 (768 dims, mais recente) e faz fallback para
+    embedding-001 (768 dims, estável) se o modelo não estiver disponível na
+    região/versão da chave.
+    """
     import warnings
-    # Suprime FutureWarning de deprecação — o SDK ainda funciona para chaves AI Studio
     warnings.filterwarnings("ignore", category=FutureWarning, module="google")
     try:
         import google.generativeai as genai
@@ -240,17 +244,32 @@ def _embed_gemini(text: str, api_key: str) -> list[float]:
         ) from exc
 
     genai.configure(api_key=api_key)
-    result = genai.embed_content(
-        model="models/text-embedding-004",
-        content=text,
-        task_type="retrieval_document",
+
+    for model_name in ("models/text-embedding-004", "models/embedding-001"):
+        try:
+            result = genai.embed_content(
+                model=model_name,
+                content=text,
+                task_type="retrieval_document",
+            )
+            embedding = result["embedding"]
+            if len(embedding) != EMBEDDING_DIM:
+                raise ValueError(
+                    f"Embedding {model_name} retornou {len(embedding)} dims, "
+                    f"esperado {EMBEDDING_DIM}"
+                )
+            return embedding
+        except Exception as exc:
+            if "404" in str(exc) and model_name == "models/text-embedding-004":
+                # Modelo não disponível nesta região/versão — tenta fallback
+                continue
+            raise
+
+    raise RuntimeError(
+        "Nenhum modelo Gemini disponível (text-embedding-004 e embedding-001 falharam). "
+        "Verifique se a chave foi criada em aistudio.google.com e se a "
+        "'Generative Language API' está habilitada."
     )
-    embedding = result["embedding"]
-    if len(embedding) != EMBEDDING_DIM:
-        raise ValueError(
-            f"Embedding Gemini retornou {len(embedding)} dims, esperado {EMBEDDING_DIM}"
-        )
-    return embedding
 
 
 def _embed_batch_gemini(texts: list[str], api_key: str) -> list[list[float]]:
