@@ -10,7 +10,7 @@
 - **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown / Word / PDF), requirements analysis (JSON/Markdown), executive HTML report, interactive requirements mind map
 - **Deploy:** Streamlit Cloud — auto-deploy on push to `main` branch (`github.com/pedroregato/process2diagram`)
 - **Dev environment:** PyCharm on Windows; Python 3.13
-- **Current version:** v4.6
+- **Current version:** v4.11
 
 Supported LLM providers: DeepSeek (default), Claude (Anthropic), OpenAI, Groq, Google Gemini.
 
@@ -39,7 +39,13 @@ process2diagram/
 ├── app.py                        # Streamlit entry point — slim orchestrator; delegates to ui/ and core/
 │
 ├── pages/
-│   └── Diagramas.py              # Full-screen multi-page diagram viewer (BPMN, Mermaid, Mind Map)
+│   ├── Diagramas.py              # Full-screen multi-page diagram viewer (BPMN, Mermaid, Mind Map)
+│   ├── Assistente.py             # RAG-powered assistant — semantic Q&A over meeting transcripts
+│   ├── BatchRunner.py            # Batch pipeline — runs the full pipeline on multiple transcripts
+│   ├── BpmnBackfill.py           # Backfill BPMN XML for meetings stored in Supabase (no re-transcription)
+│   ├── ReqTracker.py             # Requirements tracker — Supabase-backed requirement status board
+│   ├── TranscriptBackfill.py     # Backfill transcript embeddings for existing meetings in Supabase
+│   └── CostEstimator.py          # LLM cost estimator — interactive breakdown per provider/agent
 │
 ├── core/
 │   ├── knowledge_hub.py          # KnowledgeHub: central session state shared by all agents
@@ -83,12 +89,21 @@ process2diagram/
 │   ├── extract_heuristic.py      # Heuristic extractor (no-LLM fallback)
 │   ├── ingest.py                 # .txt/.docx/.pdf file loader
 │   ├── preprocess.py             # Basic text cleaning
-│   └── utils.py                  # Helpers (process_to_json, etc.)
+│   ├── utils.py                  # Helpers (process_to_json, etc.)
+│   ├── auth.py                   # Session-based login — SHA-256 credential validation, is_authenticated()
+│   ├── supabase_client.py        # get_supabase_client() — singleton Supabase client from st.secrets
+│   ├── reqtracker_exporter.py    # Export RequirementsModel to Excel/CSV for ReqTracker page
+│   ├── text_utils.py             # rule_keyword_pt() — Portuguese keyword normalisation helpers
+│   ├── cost_estimator.py         # Pure-Python LLM cost calculator — PROVIDER_PRICING table, estimate_cost()
+│   └── embeddings.py             # chunk_text(), embed_text(), embed_batch() — Gemini/OpenAI embeddings (1536 dims)
 │
 ├── ui/
 │   ├── sidebar.py                # render_sidebar() — provider, config, agent toggles, re-run buttons
 │   ├── input_area.py             # render_input_area() — transcript text area + file upload + pre-process
 │   ├── architecture_diagram.py   # render_architecture_diagram() — splash flowchart TD (cached SVG)
+│   ├── auth_gate.py              # apply_auth_gate() / render_login_page() — login wall; st.stop() if unauthenticated
+│   ├── assistant_diagram.py      # render_assistant_diagram() — RAG pipeline architecture splash (Assistente page)
+│   ├── project_selector.py       # render_project_selector() — Supabase project/meeting picker widget
 │   ├── components/
 │   │   ├── copy_button.py        # Copy-to-clipboard button component
 │   │   ├── download_button.py    # Styled download button wrapper
@@ -110,7 +125,8 @@ process2diagram/
 │   └── preprocessor_service.py  # preprocess_transcript() wrapper over transcript_preprocessor
 │
 ├── setup/
-│   └── setup_v3.py               # Setup helpers
+│   ├── setup_v3.py               # Setup helpers
+│   └── supabase_schema_transcript_chunks.sql  # DDL: transcript_chunks table (vector(1536), ivfflat), match_transcript_chunks()
 │
 ├── skills/
 │   ├── skill_bpmn.md             # System prompt for AgentBPMN (lowercase)
@@ -128,7 +144,7 @@ process2diagram/
 │   ├── test_agent_validator.py   # 22 tests — granularity, task type, gateways, structural, weighted
 │   └── test_mermaid_generator.py # 26 tests — sanitize, format_node, format_edge, single/multi generate
 │
-├── requirements.txt              # pinned versions (streamlit, anthropic, openai, python-docx, fpdf2…)
+├── requirements.txt              # pinned versions (streamlit, anthropic, openai, python-docx, fpdf2, google-genai…)
 └── CLAUDE.md                     # This file
 ```
 
@@ -186,8 +202,9 @@ AgentSynthesizer         ← LLM (optional); reads all hub artifacts incl. SBVR 
 
 ### App.py — Slim Entry Point
 
-`app.py` (v4.6) no longer contains UI rendering logic. It delegates to:
+`app.py` (v4.11) no longer contains UI rendering logic. It delegates to:
 
+- `ui.auth_gate.apply_auth_gate()` — login wall; called immediately after `st.set_page_config()`; calls `st.stop()` if unauthenticated
 - `core.session_state.init_session_state()` — initializes all `st.session_state` keys with defaults
 - `ui.sidebar.render_sidebar()` — sidebar panel (always visible)
 - `ui.input_area.render_input_area()` — transcript input + file upload + pre-processing
@@ -428,6 +445,50 @@ Streamlit multi-page app — accessible via sidebar navigation or `st.page_link`
 
 ---
 
+## RAG Assistant (`pages/Assistente.py`)
+
+Semantic Q&A over meeting transcripts stored in Supabase.
+
+### Architecture
+
+```
+User question
+      │
+      ├── Keyword search  ──► project_store.search_by_keyword(project_id, query)
+      │                       (exact / ILIKE match on chunk_text)
+      │
+      └── Semantic search ──► embed_text(query, api_key, "Google Gemini")
+                               └─► project_store.search_transcript_chunks(project_id, embedding, k=8)
+                                   (calls match_transcript_chunks() SQL function — cosine similarity)
+                                          │
+                                          ▼
+                              Retrieved chunks (top-K)
+                                          │
+                                          ▼
+                              AgentAssistant (LLM)
+                              system: P2D guide + instructions
+                              user:   question + context chunks
+                                          │
+                                          ▼
+                              Answer displayed in chat UI
+```
+
+### Embedding pipeline
+
+- Chunks created by `chunk_text(transcript, chunk_size=500, overlap=80)`
+- Each chunk embedded via `embed_text(chunk, api_key, provider)`
+- Embeddings stored in `transcript_chunks` table (`vector(1536)`)
+- `save_transcript_embeddings(meeting_id, project_id, chunks, embeddings)` — upserts by `(meeting_id, chunk_index)`
+- Provider: **Google Gemini** (`models/gemini-embedding-001`, `output_dimensionality=1536`) — free tier; 1.2s delay between calls; auto-retry on 429
+- Fallback model: `models/gemini-embedding-2-preview` (tried if 404 on primary)
+- Diagnostic: "🔍 Testar chave" button calls `list_gemini_embedding_models(api_key)` to list available models
+
+### Error handling
+
+Errors and success messages from the embedding generation flow are persisted in `st.session_state["_embed_error"]` / `["_embed_success"]` before `st.rerun()` and displayed+popped immediately after rerun — prevents the instant-disappear bug caused by `st.error()` before `st.rerun()`.
+
+---
+
 ## UI Package (`ui/`)
 
 All Streamlit UI code lives in `ui/` — `app.py` only coordinates flow.
@@ -483,6 +544,8 @@ Thin wrappers that decouple `ui/` from `modules/`:
 - `pipeline.run_pipeline(hub, config, progress_callback)` — single entry point for pipeline execution. Three paths: (1) multi-run tournament (`n_bpmn_runs > 1`), (2) LangGraph adaptive retry (`use_langgraph=True`), (3) standard single-run. Raises on error (caller catches).
 - `lg_pipeline.LGBPMNRunner` — LangGraph `StateGraph` with BPMN→validate→(retry|proceed) loop. `@st.cache_data` not used here; graph is compiled per run instance. `hub.bpmn.lg_attempts` and `hub.bpmn.lg_final_score` written after completion.
 - `rerun_handlers.handle_rerun(agent_name, hub, client_info, provider_cfg, output_language)` — re-executes one named agent (`"quality"`, `"bpmn"`, `"minutes"`, `"requirements"`, `"sbvr"`, `"bmm"`, `"synthesizer"`). When BPMN is re-run, invalidates `hub.synthesizer`.
+- `project_store` — Supabase CRUD for projects, meetings, requirements, and transcript embeddings. Functions: `list_projects()`, `list_meetings(project_id)`, `save_transcript_embeddings(meeting_id, project_id, chunks, embeddings)`, `search_transcript_chunks(project_id, query_embedding, match_count)`. Fail-open: returns `[]`/`None` when Supabase is unconfigured.
+- `batch_pipeline.run_batch(transcripts, config, callback)` — runs the full pipeline on a list of transcripts sequentially, accumulating results.
 
 ---
 
@@ -563,8 +626,12 @@ if "hub" in st.session_state:
 streamlit==1.42.0
 anthropic==0.49.0
 openai==1.65.0
-python-docx==1.1.2      # Word export (pure Python)
-fpdf2==2.8.2            # PDF export (pure Python, no GTK)
+python-docx==1.1.2          # Word export (pure Python)
+fpdf2==2.8.2                # PDF export (pure Python, no GTK)
+google-generativeai>=0.8.0  # list_models() diagnostic + embed_content() for embeddings
+google-genai>=1.0.0         # newer Google GenAI SDK (kept for future migration)
+supabase>=2.4.0             # Supabase Python client
+langgraph>=1.0              # LangGraph BPMN adaptive retry
 ```
 
 Always pin exact versions for Streamlit Cloud reproducibility.
@@ -697,6 +764,46 @@ if str(root_dir) not in sys.path:
 
 This is required because Streamlit multi-page apps run page files in a different working directory context.
 
+### Gemini embedding model availability per API key
+
+Not all `text-embedding-*` models are available to every AI Studio key. The model namespace varies silently — `text-embedding-004` may return 404 even though Google documentation mentions it. Use the diagnostic button "🔍 Testar chave" in `pages/Assistente.py` which calls `list_gemini_embedding_models(api_key)` to enumerate models that actually respond to `embedContent` for the provided key.
+
+**Confirmed working models (for keys that don't have text-embedding-004):**
+- `models/gemini-embedding-001` — 1536 dims via `output_dimensionality=1536` (primary)
+- `models/gemini-embedding-2-preview` — fallback
+
+`_embed_gemini()` tries `gemini-embedding-001` first and falls back to `gemini-embedding-2-preview` on 404.
+
+### Gemini embedding rate limits (free tier: 100 req/min)
+
+The free AI Studio tier allows 100 requests/minute for `gemini-embedding-1.0`. With one API call per chunk, large transcripts easily exceed this.
+
+**Mitigations in `modules/embeddings.py`:**
+- `_GEMINI_RATE_DELAY = 1.2` seconds between batch calls (~50 req/min sustained)
+- `_GEMINI_MAX_RETRIES = 5` automatic retries on 429
+- Retry wait extracts `retry_delay { seconds: N }` from the error body via regex (`r"seconds[\"':\s]+(\d+)"`) and adds a 10-second buffer
+
+### pgvector dimension limit (ivfflat ≤ 2000 dims)
+
+PostgreSQL `ivfflat` index cannot handle vectors with more than 2000 dimensions. `gemini-embedding-001` natively produces 3072 dims. Always use `output_dimensionality=1536` when calling the Gemini embedding API, and create the Supabase column as `vector(1536)`. The SQL schema is in `setup/supabase_schema_transcript_chunks.sql`.
+
+### Login page HTML rendered as code block
+
+In `ui/auth_gate.py`, HTML injected via `st.markdown(unsafe_allow_html=True)` **must not be indented ≥ 4 spaces after a blank line** — Markdown treats that as a code fence and shows raw HTML. Keep the f-string HTML at zero indentation. Extract labels (`<div class="l-label">`) to separate `st.markdown` calls to avoid the blank-line-from-empty-interpolation trap.
+
+### st.error() / st.success() disappear before st.rerun()
+
+Any `st.error()` or `st.success()` call made immediately before `st.rerun()` is never rendered. The widget is drawn but the rerun clears it before the browser paints.
+
+**Pattern:** persist the message in `st.session_state` before rerunning; pop and display it after the rerun:
+```python
+st.session_state["_embed_error"] = "❌ Falha ao gerar embeddings: ..."
+st.rerun()
+# --- next run ---
+if "_embed_error" in st.session_state:
+    st.error(st.session_state.pop("_embed_error"))
+```
+
 ---
 
 ## Security Model
@@ -705,6 +812,20 @@ API keys are stored exclusively in `st.session_state` (server-side, per-session 
 
 - `session_security.render_api_key_gate(provider)` — renders the key input in the sidebar
 - `session_security.get_session_llm_client(provider)` — retrieves the live client or `None`
+
+### Login Gate
+
+All pages begin with `ui.auth_gate.apply_auth_gate()` immediately after `st.set_page_config()`. If the user is not authenticated, `render_login_page()` is called and `st.stop()` prevents the rest of the page from rendering.
+
+- Credentials are SHA-256 hashed in `modules/auth.py → USUARIOS` (hardcoded — no `secrets.toml` dependency)
+- Session state keys: `_autenticado` (bool), `_usuario_login` (str), `_usuario_nome` (str)
+- `is_authenticated()` checks `st.session_state.get("_autenticado", False)`
+- `login_valido(uname, senha)` hashes the input with SHA-256 and compares against stored hash
+- Login page HTML pitfall: any content indented ≥ 4 spaces after a blank line inside an `st.markdown(unsafe_allow_html=True)` block is rendered as a Markdown code block — keep HTML zero-indented in the f-string.
+
+### Supabase Secrets
+
+`modules/supabase_client.py` reads `st.secrets["supabase"]["url"]` and `st.secrets["supabase"]["key"]`. If secrets are absent (local dev without `.streamlit/secrets.toml`), `get_supabase_client()` returns `None` and all `project_store` functions fail-open.
 
 ---
 
@@ -753,6 +874,24 @@ API keys are stored exclusively in `st.session_state` (server-side, per-session 
 - [x] Suite de testes automatizados — 106 tests, 0 LLM calls; covers auto-repair, structural validator, AgentValidator, MermaidGenerator
 - [x] LangGraph integration — adaptive BPMN retry loop (`core/lg_pipeline.py`); opt-in "🔄 Adaptive Retry" checkbox (single-pass mode only); configurable quality threshold (0–10, default 6.0) and max retries (1/2/3/5, default 3); best-scoring candidate committed to hub; `hub.bpmn.lg_attempts` + `hub.bpmn.lg_final_score` shown in BPMN tab
 
+### PC4 — Concluído (v4.8 → v4.11)
+- [x] **Authentication layer** — `modules/auth.py` + `ui/auth_gate.py`; SHA-256 session-based login gate; all pages protected; credentials hardcoded (no secrets.toml dependency for auth)
+- [x] **Supabase integration** — `modules/supabase_client.py` + `core/project_store.py`; CRUD for projects, meetings, requirements, transcript chunks; fail-open when unconfigured
+- [x] **Embedding pipeline** — `modules/embeddings.py`; `chunk_text()` + `embed_text()` + `embed_batch()`; Google Gemini (`gemini-embedding-001`) and OpenAI (`text-embedding-3-small`); 1536 dims; auto-retry on 429 with extracted retry_delay; 1.2s inter-call delay for free tier
+- [x] **Supabase schema** — `setup/supabase_schema_transcript_chunks.sql`; `transcript_chunks` table with `vector(1536)` column; `ivfflat` cosine index; `match_transcript_chunks()` SQL function for semantic search
+- [x] **`pages/Assistente.py`** — RAG-powered Q&A over meeting transcripts; keyword search + semantic search via `match_transcript_chunks`; embedding generation with "⚡ Gerar Embeddings" + "🔍 Testar chave" diagnostic; errors persisted in `session_state` to survive `st.rerun()`
+- [x] **`pages/BatchRunner.py`** — batch pipeline over multiple transcripts via `core/batch_pipeline.py`
+- [x] **`pages/BpmnBackfill.py`** — retroactive BPMN generation for meetings already stored in Supabase
+- [x] **`pages/ReqTracker.py`** — requirement status board backed by Supabase
+- [x] **`pages/TranscriptBackfill.py`** — retroactive embedding generation for meetings already in Supabase
+- [x] **`pages/CostEstimator.py`** — interactive LLM cost calculator using `modules/cost_estimator.py` pricing table
+- [x] **`ui/project_selector.py`** — Supabase project/meeting picker widget shared by Assistente and ReqTracker
+- [x] **`ui/assistant_diagram.py`** — RAG architecture splash diagram (Mermaid, cached SVG) for Assistente page
+- [x] **`modules/cost_estimator.py`** — `PROVIDER_PRICING` table + `estimate_cost()` — pure Python, no LLM calls
+- [x] **`modules/text_utils.py`** — `rule_keyword_pt()` and other Portuguese text utilities
+- [x] **`modules/reqtracker_exporter.py`** — Excel/CSV export for ReqTracker
+- [x] **Google Gemini SDK migration** — use `google-generativeai` (stable) for `embed_content()` + `list_models()`; `google-genai` kept as secondary dependency
+
 ---
 
 ## Technical References
@@ -766,3 +905,6 @@ API keys are stored exclusively in `st.session_state` (server-side, per-session 
 | Streamlit multi-page apps | docs.streamlit.io/library/advanced-features/multipage-apps |
 | python-docx | python-docx.readthedocs.io |
 | fpdf2 | py-pdf.github.io/fpdf2 |
+| pgvector | github.com/pgvector/pgvector — ivfflat index, max 2000 dims |
+| google-generativeai | pypi.org/project/google-generativeai — embed_content(), list_models() |
+| Supabase Python client | supabase.com/docs/reference/python |

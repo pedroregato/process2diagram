@@ -185,6 +185,27 @@ with st.sidebar:
 
     st.markdown("---")
 
+    # ── Modo ferramentas (tool-use) ───────────────────────────────────────────
+    st.markdown("#### 🔧 Modo Ferramentas")
+    use_tools = st.checkbox(
+        "Ativar tool-use",
+        value=True,
+        key="asst_use_tools",
+        help=(
+            "O LLM decide dinamicamente quais ferramentas chamar para responder "
+            "(participantes, decisões, requisitos, transcrições...). "
+            "Mais preciso para perguntas estruturadas. "
+            "Requer suporte a function calling do provedor selecionado."
+        ),
+    )
+    if use_tools:
+        st.caption(
+            "🔟 ferramentas disponíveis: participantes, decisões, ações, "
+            "busca em transcrições, requisitos, BPMN, SBVR…"
+        )
+
+    st.markdown("---")
+
     # ── Clear conversation ────────────────────────────────────────────────────
     if st.button("🗑️ Limpar conversa", key="asst_clear"):
         st.session_state["assistant_history"] = []
@@ -339,81 +360,125 @@ if question:
     with st.chat_message("user"):
         st.markdown(question)
 
-    # 2. Retrieve context
-    use_semantic_now = (
-        st.session_state.get("asst_use_semantic", False)
-        and _chunks_table_ok
-    )
+    use_tools_now = st.session_state.get("asst_use_tools", True)
 
-    if use_semantic_now:
-        embed_key_now = st.session_state.get("asst_embed_key", "")
-        embed_provider_now = st.session_state.get("asst_embed_provider", list(EMBEDDING_PROVIDERS.keys())[0])
+    # ── Caminho A: Tool-use (LLM decide quais ferramentas usar) ──────────────
+    if use_tools_now:
+        with st.spinner("🔧 Consultando ferramentas..."):
+            client_info = {"api_key": api_key}
+            agent = AgentAssistant(client_info, provider_cfg)
+            try:
+                response_text, tokens_used, tools_called = agent.chat_with_tools(
+                    history=history[:-1],
+                    question=question,
+                    project_id=project_id,
+                    project_name=project_name,
+                )
+            except Exception as exc:
+                # Fallback to classic RAG on tool-use failure
+                st.warning(
+                    f"⚠️ Tool-use falhou ({exc}). Usando busca por keyword como fallback."
+                )
+                ctx = retrieve_context_for_question(project_id, question)
+                context_text = format_context(ctx, project_name)
+                try:
+                    response_text, tokens_used = agent.chat(
+                        history=history[:-1],
+                        context_text=context_text,
+                        question=question,
+                    )
+                except Exception as exc2:
+                    response_text = f"❌ Erro ao gerar resposta: {exc2}"
+                    tokens_used = 0
+                tools_called = []
 
-        if not embed_key_now:
-            st.warning("⚠️ Busca semântica ativa mas sem API key de embedding. Usando busca por keyword.")
-            use_semantic_now = False
+        # 4. Append and render
+        history.append({"role": "assistant", "content": response_text})
+        st.session_state["assistant_history"] = history
 
-    with st.spinner("🔍 Pesquisando nas fontes de dados..."):
-        if use_semantic_now:
-            ctx = retrieve_context_semantic(
-                project_id=project_id,
-                question=question,
-                api_key=embed_key_now,
-                provider=embed_provider_now,
-            )
+        with st.chat_message("assistant"):
+            st.markdown(response_text)
+
+        # 5. Info caption
+        if tools_called:
+            tools_str = " · ".join(f"`{t}`" for t in tools_called)
+            st.caption(f"🔢 {tokens_used} tokens · 🔧 ferramentas usadas: {tools_str}")
         else:
-            ctx = retrieve_context_for_question(project_id, question)
+            st.caption(f"🔢 {tokens_used} tokens · 🔧 tool-use (sem chamadas externas)")
 
-        context_text = format_context(ctx, project_name)
-
-    # Warn / inform about search mode and coverage
-    meetings_passages = ctx.get("meetings_passages") or []
-    no_transcript     = ctx.get("meetings_without_transcript") or []
-    search_mode       = ctx.get("search_mode", "keyword")
-
-    if search_mode == "keyword_fallback":
-        st.info(
-            "ℹ️ Embeddings ainda não gerados — usando busca por **keyword** desta vez. "
-            "Gere os embeddings na sidebar (⚡) para ativar a busca semântica.",
-            icon=None,
-        )
-
-    if not meetings_passages and no_transcript:
-        st.warning(
-            "⚠️ Nenhum trecho relevante encontrado para esta pergunta. "
-            "Reuniões sem correspondência: "
-            + ", ".join(no_transcript)
-        )
-
-    # 3. Generate response
-    with st.spinner("🤖 Gerando resposta..."):
-        client_info = {"api_key": api_key}
-        agent = AgentAssistant(client_info, provider_cfg)
-        try:
-            response_text, tokens_used = agent.chat(
-                history=history[:-1],
-                context_text=context_text,
-                question=question,
-            )
-        except Exception as exc:
-            response_text = f"❌ Erro ao gerar resposta: {exc}"
-            tokens_used = 0
-
-    # 4. Append and render assistant response
-    history.append({"role": "assistant", "content": response_text})
-    st.session_state["assistant_history"] = history
-
-    with st.chat_message("assistant"):
-        st.markdown(response_text)
-
-    # 5. Token / source info caption
-    n_meetings = len(meetings_passages)
-    if search_mode == "semantic":
-        mode_badge = "🔮 semântica"
-    elif search_mode == "keyword_fallback":
-        mode_badge = "🔑 keyword (fallback)"
+    # ── Caminho B: RAG clássico (keyword / semântico) ─────────────────────────
     else:
-        mode_badge = "🔑 keyword"
-    st.caption(
-        f"🔢 {tokens_used} tokens · {n_meetings} reunião(ões) consultada(s) · {mode_badge}"
-    )
+        # 2. Retrieve context
+        use_semantic_now = (
+            st.session_state.get("asst_use_semantic", False)
+            and _chunks_table_ok
+        )
+
+        if use_semantic_now:
+            embed_key_now = st.session_state.get("asst_embed_key", "")
+            embed_provider_now = st.session_state.get("asst_embed_provider", list(EMBEDDING_PROVIDERS.keys())[0])
+            if not embed_key_now:
+                st.warning("⚠️ Busca semântica ativa mas sem API key de embedding. Usando keyword.")
+                use_semantic_now = False
+
+        with st.spinner("🔍 Pesquisando nas fontes de dados..."):
+            if use_semantic_now:
+                ctx = retrieve_context_semantic(
+                    project_id=project_id,
+                    question=question,
+                    api_key=embed_key_now,
+                    provider=embed_provider_now,
+                )
+            else:
+                ctx = retrieve_context_for_question(project_id, question)
+
+            context_text = format_context(ctx, project_name)
+
+        meetings_passages = ctx.get("meetings_passages") or []
+        no_transcript     = ctx.get("meetings_without_transcript") or []
+        search_mode       = ctx.get("search_mode", "keyword")
+
+        if search_mode == "keyword_fallback":
+            st.info(
+                "ℹ️ Embeddings ainda não gerados — usando busca por **keyword**. "
+                "Gere os embeddings na sidebar (⚡) para ativar a busca semântica.",
+                icon=None,
+            )
+        if not meetings_passages and no_transcript:
+            st.warning(
+                "⚠️ Nenhum trecho relevante encontrado. "
+                "Reuniões sem correspondência: " + ", ".join(no_transcript)
+            )
+
+        # 3. Generate response
+        with st.spinner("🤖 Gerando resposta..."):
+            client_info = {"api_key": api_key}
+            agent = AgentAssistant(client_info, provider_cfg)
+            try:
+                response_text, tokens_used = agent.chat(
+                    history=history[:-1],
+                    context_text=context_text,
+                    question=question,
+                )
+            except Exception as exc:
+                response_text = f"❌ Erro ao gerar resposta: {exc}"
+                tokens_used = 0
+
+        # 4. Append and render
+        history.append({"role": "assistant", "content": response_text})
+        st.session_state["assistant_history"] = history
+
+        with st.chat_message("assistant"):
+            st.markdown(response_text)
+
+        # 5. Info caption
+        n_meetings = len(meetings_passages)
+        if search_mode == "semantic":
+            mode_badge = "🔮 semântica"
+        elif search_mode == "keyword_fallback":
+            mode_badge = "🔑 keyword (fallback)"
+        else:
+            mode_badge = "🔑 keyword"
+        st.caption(
+            f"🔢 {tokens_used} tokens · {n_meetings} reunião(ões) · {mode_badge}"
+        )

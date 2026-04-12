@@ -836,6 +836,61 @@ _PT_STOPWORDS = {
 }
 
 
+def _extract_minutes_summary(minutes_md: str, max_chars: int = 700) -> str:
+    """
+    Extract a compact summary from a minutes markdown document.
+
+    Always includes the 'Participantes' section (critical metadata).
+    Adds 'Decisões' if space allows.
+    Strips the running summary body to keep context compact.
+
+    Returns a plain-text string suitable for injection into the LLM context.
+    """
+    import re
+    if not minutes_md or not minutes_md.strip():
+        return ""
+
+    lines: list[str] = []
+
+    # Extract Participantes section (##  Participantes or ## Participantes)
+    m_part = re.search(
+        r'##\s*Participantes\s*\n([\s\S]*?)(?=\n##|\Z)',
+        minutes_md,
+        re.IGNORECASE,
+    )
+    if m_part:
+        participants_text = m_part.group(1).strip()
+        lines.append("Participantes:")
+        lines.append(participants_text)
+
+    # Extract Pauta / Agenda section (compact)
+    m_pauta = re.search(
+        r'##\s*Pauta\s*\n([\s\S]*?)(?=\n##|\Z)',
+        minutes_md,
+        re.IGNORECASE,
+    )
+    if m_pauta:
+        pauta_text = m_pauta.group(1).strip()
+        lines.append("Pauta:")
+        lines.append(pauta_text)
+
+    # Extract Decisões section
+    m_dec = re.search(
+        r'##\s*Decis[õo]es\s*\n([\s\S]*?)(?=\n##|\Z)',
+        minutes_md,
+        re.IGNORECASE,
+    )
+    if m_dec:
+        dec_text = m_dec.group(1).strip()
+        lines.append("Decisões:")
+        lines.append(dec_text)
+
+    result = "\n".join(lines)
+    if len(result) > max_chars:
+        result = result[:max_chars] + "…"
+    return result
+
+
 def _extract_keywords(question: str) -> list[str]:
     """
     Split question into lowercase word tokens, remove Portuguese stopwords,
@@ -935,7 +990,7 @@ def retrieve_context_for_question(project_id: str, question: str) -> dict:
         try:
             meeting_rows = _ok(
                 db.table("meetings")
-                .select("id, title, meeting_date, meeting_number, transcript_clean, transcript_raw")
+                .select("id, title, meeting_date, meeting_number, transcript_clean, transcript_raw, minutes_md")
                 .eq("project_id", project_id)
                 .order("meeting_number")
                 .execute()
@@ -948,9 +1003,19 @@ def retrieve_context_for_question(project_id: str, question: str) -> dict:
             title = m.get("title") or ""
             meeting_date = str(m.get("meeting_date") or "")
             meeting_number = m.get("meeting_number") or 0
+            minutes_summary = _extract_minutes_summary(m.get("minutes_md") or "")
 
             if not transcript:
                 result["meetings_without_transcript"].append(title)
+                # Still include minutes summary even without transcript
+                if minutes_summary:
+                    result["meetings_passages"].append({
+                        "meeting_number": meeting_number,
+                        "title": title,
+                        "meeting_date": meeting_date,
+                        "passages": [],
+                        "minutes_summary": minutes_summary,
+                    })
                 continue
 
             if keywords:
@@ -959,12 +1024,13 @@ def retrieve_context_for_question(project_id: str, question: str) -> dict:
                 # No keywords — return first passage as overview
                 passages = _extract_passages(transcript, [], context_lines=0, max_passages=0)
 
-            if passages:
+            if passages or minutes_summary:
                 result["meetings_passages"].append({
                     "meeting_number": meeting_number,
                     "title": title,
                     "meeting_date": meeting_date,
                     "passages": passages,
+                    "minutes_summary": minutes_summary,
                 })
 
     # ── Requirements ──────────────────────────────────────────────────────────
@@ -1112,19 +1178,36 @@ def format_context(ctx: dict, project_name: str) -> str:
 
         lines.append("")
 
-    # ── Transcript passages ───────────────────────────────────────────────────
-    lines.append("── TRECHOS DE TRANSCRIÇÃO RELEVANTES ──")
-    lines.append("")
-
+    # ── Minutes summaries (always injected — participants, decisions, agenda) ──
     meetings_passages = ctx.get("meetings_passages") or []
-    if meetings_passages:
-        for mp in meetings_passages:
+    minutes_sections = [mp for mp in meetings_passages if mp.get("minutes_summary")]
+    if minutes_sections:
+        lines.append("── ATAS DAS REUNIÕES (PARTICIPANTES, PAUTA E DECISÕES) ──")
+        lines.append("")
+        for mp in minutes_sections:
             n = mp.get("meeting_number", "?")
             title = mp.get("title", "")
             date = mp.get("meeting_date", "")
             date_str = f" ({date})" if date else ""
             lines.append(f"[Reunião {n} — {title}{date_str}]")
+            lines.append(mp["minutes_summary"])
+            lines.append("")
+        lines.append("")
+
+    # ── Transcript passages ───────────────────────────────────────────────────
+    lines.append("── TRECHOS DE TRANSCRIÇÃO RELEVANTES ──")
+    lines.append("")
+
+    if meetings_passages:
+        for mp in meetings_passages:
             passages = mp.get("passages") or []
+            if not passages:
+                continue
+            n = mp.get("meeting_number", "?")
+            title = mp.get("title", "")
+            date = mp.get("meeting_date", "")
+            date_str = f" ({date})" if date else ""
+            lines.append(f"[Reunião {n} — {title}{date_str}]")
             for i, passage in enumerate(passages):
                 lines.append(passage)
                 if i < len(passages) - 1:
@@ -1500,7 +1583,7 @@ def retrieve_context_semantic(
             try:
                 meeting_rows = _ok(
                     db.table("meetings")
-                    .select("id, title, meeting_date, meeting_number")
+                    .select("id, title, meeting_date, meeting_number, minutes_md")
                     .in_("id", meeting_ids)
                     .order("meeting_number")
                     .execute()
@@ -1513,29 +1596,42 @@ def retrieve_context_semantic(
             for mid, chunks in chunk_map.items():
                 meta = meeting_meta.get(mid, {})
                 passages = [c["chunk_text"] for c in chunks]
+                minutes_summary = _extract_minutes_summary(meta.get("minutes_md") or "")
                 result["meetings_passages"].append({
                     "meeting_number": meta.get("meeting_number") or 0,
                     "title":          meta.get("title") or "",
                     "meeting_date":   str(meta.get("meeting_date") or ""),
                     "passages":       passages,
+                    "minutes_summary": minutes_summary,
                 })
 
-    # Verifica reuniões sem chunks (sem transcript indexado)
+    # Inclui resumo de atas para reuniões NÃO retornadas pela busca semântica
+    # (garante que participantes/decisões de todas as reuniões do projeto sejam
+    #  injetados — não apenas as que tiveram chunks mais similares)
     if db:
         try:
             all_meetings = _ok(
                 db.table("meetings")
-                .select("id, title")
+                .select("id, title, meeting_date, meeting_number, minutes_md")
                 .eq("project_id", project_id)
+                .order("meeting_number")
                 .execute()
             )
             indexed_ids = {
                 c["meeting_id"] for c in semantic_chunks
             } if semantic_chunks else set()
 
+            # IDs já incluídos via semantic chunks
+            already_in_passages = {
+                c["meeting_id"] for c in semantic_chunks
+            } if semantic_chunks else set()
+
             for m in all_meetings:
+                title = m.get("title") or m["id"]
+                minutes_summary = _extract_minutes_summary(m.get("minutes_md") or "")
+
                 if m["id"] not in indexed_ids:
-                    # Verifica se tem transcript mas não está indexado
+                    # Meeting has no matching chunks — check if it has any chunks at all
                     try:
                         chunk_count = _ok(
                             db.table("transcript_chunks")
@@ -1545,11 +1641,19 @@ def retrieve_context_semantic(
                             .execute()
                         )
                         if not chunk_count:
-                            result["meetings_without_transcript"].append(
-                                m.get("title") or m["id"]
-                            )
+                            result["meetings_without_transcript"].append(title)
                     except Exception:
                         pass
+
+                # Always inject minutes summary for meetings not yet included via chunks
+                if m["id"] not in already_in_passages and minutes_summary:
+                    result["meetings_passages"].append({
+                        "meeting_number": m.get("meeting_number") or 0,
+                        "title":          title,
+                        "meeting_date":   str(m.get("meeting_date") or ""),
+                        "passages":       [],
+                        "minutes_summary": minutes_summary,
+                    })
         except Exception:
             pass
 
