@@ -1,4 +1,4 @@
-# agents/agent_assistant.py  (v9 — SBVR write tools + add/correction interceptors)
+# agents/agent_assistant.py  (v10 — SBVR interceptor: direct exec + SVBR typo + dash pattern)
 # ─────────────────────────────────────────────────────────────────────────────
 # AgentAssistant — conversational RAG agent for meeting/project Q&A.
 #
@@ -133,38 +133,63 @@ def _detect_correction_intent(text: str) -> tuple[str, str] | None:
 
 
 # ── SBVR-add interceptor ──────────────────────────────────────────────────────
-# Detects "inclua X no SBVR como Y", "adicione X ao SBVR", etc. and pre-executes
-# add_sbvr_term directly in Python — same rationale as the correction interceptor.
+# Detects "inclua X no SBVR/SVBR como Y", "adicione X ao SBVR", etc.
+# Handles common typos (SVBR) and the "TERM - DEFINITION" dash pattern.
+# When term+definition are both present, executes add_sbvr_term directly in
+# Python and injects the result — LLM only needs to present the success.
+# When only term is present, injects a directive for the LLM to call the tool
+# immediately with an inferred definition (no user follow-up required).
 
-_SBVR_ADD_RE = re.compile(
+_SBVR_KEYWORD = r'(?:svbr|sbvr|vocab(?:ulário)?\s+sbvr|vocab(?:ulário)?\s+svbr)'
+_Q = r'["\u201c\u201d\u2018\u2019]'  # any quote variant
+
+# Pattern 1: "inclua TERM - DEFINITION no SBVR/SVBR"  (dash separator)
+_SBVR_DASH_RE = re.compile(
     r'(?:inclua?|adicione?|cadastre?|insira?|coloque?)\s+'
-    r'["\u201c\u201d]?(.+?)["\u201c\u201d]?\s+'
-    r'(?:no|ao|no vocabulário do|ao vocabulário do)?\s*(?:sbvr|vocabulário sbvr|vocab sbvr)'
-    r'(?:\s+como\s+["\u201c\u201d]?(.+?)["\u201c\u201d]?)?',
+    r'(?:o\s+termo\s+)?' + _Q + r'?(.+?)' + _Q + r'?'
+    r'\s*[-–—]\s*'
+    r'(.+?)'
+    r'\s+(?:em\s+nosso|em\s+nossos|no|ao|em)\s+' + _SBVR_KEYWORD,
     re.IGNORECASE,
 )
-_SBVR_ADD_AS_RE = re.compile(
-    r'(?:inclua?|adicione?|cadastre?|insira?)\s+'
-    r'["\u201c\u201d]?(.+?)["\u201c\u201d]?\s+como\s+'
-    r'["\u201c\u201d]?(.+?)["\u201c\u201d]?\s+'
-    r'(?:no|ao|em)\s+(?:sbvr|vocabulário)',
+
+# Pattern 2: "inclua TERM no SBVR como DEFINITION"
+_SBVR_COMO_RE = re.compile(
+    r'(?:inclua?|adicione?|cadastre?|insira?|coloque?)\s+'
+    r'(?:o\s+termo\s+)?' + _Q + r'?(.+?)' + _Q + r'?'
+    r'\s+(?:em\s+nosso|em\s+nossos|no|ao|em|ao\s+vocabulário\s+do)?\s*' + _SBVR_KEYWORD
+    r'(?:\s+como\s+' + _Q + r'?(.+?)' + _Q + r'?)?'
+    r'(?:\.|$)',
     re.IGNORECASE,
 )
+
+# Pattern 3: bare "TERM como DEFINITION no SBVR" (no verb at start)
+_SBVR_BARE_RE = re.compile(
+    r'' + _Q + r'?(\w[\w\s]{0,30})' + _Q + r'?\s+como\s+(.+?)\s+(?:no|ao|em)\s+' + _SBVR_KEYWORD,
+    re.IGNORECASE,
+)
+
+
+def _strip_quotes(s: str) -> str:
+    return s.strip().strip('"\'').strip('\u201c\u201d\u2018\u2019').strip()
 
 
 def _detect_sbvr_add_intent(text: str) -> tuple[str, str] | None:
     """
     Return (term, definition_hint) if the message asks to add an SBVR term.
-    definition_hint may be empty — the LLM will be asked to infer a definition.
+    definition_hint may be empty string when only the term was provided.
+    Handles typo SVBR, dash/dash-en/dash-em separators, and quote variants.
     """
-    m = _SBVR_ADD_AS_RE.search(text)
+    m = _SBVR_DASH_RE.search(text)
     if m:
-        return m.group(1).strip().strip('"').strip('\u201c\u201d'), \
-               m.group(2).strip().strip('"').strip('\u201c\u201d')
-    m = _SBVR_ADD_RE.search(text)
+        return _strip_quotes(m.group(1)), _strip_quotes(m.group(2))
+    m = _SBVR_BARE_RE.search(text)
     if m:
-        term    = m.group(1).strip().strip('"').strip('\u201c\u201d')
-        defhint = (m.group(2) or "").strip().strip('"').strip('\u201c\u201d')
+        return _strip_quotes(m.group(1)), _strip_quotes(m.group(2))
+    m = _SBVR_COMO_RE.search(text)
+    if m:
+        term    = _strip_quotes(m.group(1))
+        defhint = _strip_quotes(m.group(2) or "")
         return term, defhint
     return None
 
@@ -718,36 +743,56 @@ class AgentAssistant(BaseAgent):
                 ),
             })
         # ── SBVR-add pre-flight ───────────────────────────────────────────────
-        # Detect "inclua X no SBVR como Y" and inject add_sbvr_term directly,
-        # bypassing LLM tool selection (same rationale as correction interceptor).
+        # When term+definition are both present in the message: execute
+        # add_sbvr_term directly in Python and inject the result so the LLM
+        # only needs to present the success — no LLM tool-selection needed.
+        # When only the term is present: inject a strong directive telling the
+        # LLM to call add_sbvr_term immediately with an inferred definition,
+        # without asking the user for more information.
         if not correction:   # only if not already handled as a text correction
             sbvr_add = _detect_sbvr_add_intent(question)
             if sbvr_add:
                 term, defhint = sbvr_add
                 if status_fn:
-                    status_fn(f"📖 Preparando adição do termo SBVR '{term}'…")
-                # If the user gave a definition hint, ask the LLM to synthesize
-                # a proper definition and category, then call the tool.
-                # We pre-populate the "what the user wants" context so the LLM
-                # calls add_sbvr_term with the right arguments.
-                hint_line = f'Definição fornecida pelo usuário: "{defhint}"' if defhint else \
-                    "O usuário não forneceu uma definição — elabore uma com base no contexto do projeto."
-                messages.append({
-                    "role": "assistant",
-                    "content": (
-                        f"[Interceptação automática — adição de termo SBVR]\n"
-                        f"O usuário pediu para adicionar o termo SBVR: \"{term}\".\n"
-                        f"{hint_line}\n\n"
-                        f"Chame add_sbvr_term com term=\"{term}\", uma definição elaborada "
-                        f"e a categoria mais apropriada (Ator, Conceito, Processo, Documento, Sistema…)."
-                    ),
-                })
-                messages.append({
-                    "role": "user",
-                    "content": (
-                        "Prossiga: chame add_sbvr_term com os parâmetros corretos."
-                    ),
-                })
+                    status_fn(f"📖 Adicionando termo SBVR '{term}'…")
+
+                if defhint:
+                    # ── Definition provided → execute immediately in Python ──
+                    add_result = executor.execute(
+                        "add_sbvr_term",
+                        {"term": term, "definition": defhint, "category": "Conceito"},
+                    )
+                    messages.append({
+                        "role": "assistant",
+                        "content": (
+                            f"[Execução automática — add_sbvr_term]\n"
+                            f"Chamei add_sbvr_term(term=\"{term}\", "
+                            f"definition=\"{defhint}\", category=\"Conceito\") e obtive:\n\n"
+                            f"{add_result}"
+                        ),
+                    })
+                    messages.append({
+                        "role": "user",
+                        "content": "Apresente o resultado da inclusão ao usuário de forma clara.",
+                    })
+                else:
+                    # ── No definition → strong directive: infer and call NOW ──
+                    messages.append({
+                        "role": "assistant",
+                        "content": (
+                            f"[Interceptação automática — adição de termo SBVR]\n"
+                            f"O usuário pediu para adicionar o termo \"{term}\" ao SBVR.\n"
+                            f"NÃO pergunte por mais informações. NÃO faça buscas nas transcrições.\n"
+                            f"AÇÃO OBRIGATÓRIA: chame add_sbvr_term AGORA com:\n"
+                            f"  term=\"{term}\"\n"
+                            f"  definition=<definição inferida com base no contexto do projeto>\n"
+                            f"  category=<categoria mais adequada: Ator, Conceito, Organização, Processo…>"
+                        ),
+                    })
+                    messages.append({
+                        "role": "user",
+                        "content": "Prossiga: chame add_sbvr_term imediatamente.",
+                    })
         # ─────────────────────────────────────────────────────────────────────
 
         client_type = self.provider_cfg["client_type"]
