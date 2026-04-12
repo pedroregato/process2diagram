@@ -247,6 +247,42 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "update_sbvr_term",
+                "description": (
+                    "Atualiza um termo SBVR existente: definição, categoria e/ou origem. "
+                    "USE quando o usuário pedir para alterar a origem de um termo para 'Assistente', "
+                    "ou para corrigir a definição/categoria de um termo já cadastrado."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "term": {
+                            "type": "string",
+                            "description": "Nome do termo a atualizar (ex: 'DCI')",
+                        },
+                        "definition": {
+                            "type": "string",
+                            "description": "Nova definição (opcional — omita para não alterar)",
+                        },
+                        "category": {
+                            "type": "string",
+                            "description": "Nova categoria (opcional — omita para não alterar)",
+                        },
+                        "origin": {
+                            "type": "string",
+                            "description": (
+                                "Rótulo de origem. Use 'assistente' para marcar como adicionado pelo assistente. "
+                                "Padrão: 'assistente'."
+                            ),
+                        },
+                    },
+                    "required": ["term"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "add_sbvr_rule",
                 "description": (
                     "Adiciona uma nova regra de negócio SBVR ao projeto diretamente no banco de dados. "
@@ -689,44 +725,105 @@ class AssistantToolExecutor:
         if not db:
             return "❌ Supabase não configurado — não é possível inserir o termo."
 
-        payload = {
+        base_payload = {
             "project_id": self.project_id,
             "term":       term.strip(),
             "definition": definition.strip(),
             "category":   category.strip() or "Conceito",
-            "source":     "assistente",
         }
-
-        def _ok_msg():
-            return (
-                f"✅ Termo SBVR adicionado com sucesso!\n"
-                f"• Termo: {term}\n"
-                f"• Definição: {definition}\n"
-                f"• Categoria: {category or 'Conceito'}"
-            )
-
-        # Try without meeting_id (works if column is nullable — preferred)
-        try:
-            db.table("sbvr_terms").insert({**payload, "meeting_id": None}).execute()
-            return _ok_msg()
-        except Exception as exc1:
-            err1 = str(exc1)
-
-        # Fallback: meeting_id NOT NULL constraint — use any meeting from this project
-        # The display layer shows "🤖 Assistente" when source="assistente", regardless of meeting_id
         fallback_mid = self._get_fallback_meeting_id(db)
-        if fallback_mid:
+
+        # Try 4 combinations: (source col present/absent) × (meeting_id null/fallback)
+        attempts = []
+        for include_source in (True, False):
+            for mid in (None, fallback_mid):
+                p = {**base_payload}
+                if include_source:
+                    p["source"] = "assistente"
+                p["meeting_id"] = mid
+                attempts.append(p)
+
+        last_err = ""
+        for p in attempts:
+            if p.get("meeting_id") is None and fallback_mid is None:
+                # skip null-mid variant if we have no fallback (same as next attempt)
+                pass
             try:
-                db.table("sbvr_terms").insert({**payload, "meeting_id": fallback_mid}).execute()
-                return _ok_msg()
-            except Exception as exc2:
+                db.table("sbvr_terms").insert(p).execute()
                 return (
-                    f"❌ Falha ao inserir termo SBVR.\n"
-                    f"• Erro sem meeting_id: {err1}\n"
-                    f"• Erro com meeting_id fallback: {exc2}\n"
-                    f"Verifique se a tabela sbvr_terms existe e se a chave tem permissão INSERT."
+                    f"✅ Termo SBVR adicionado com sucesso!\n"
+                    f"• Termo: {term}\n"
+                    f"• Definição: {definition}\n"
+                    f"• Categoria: {category or 'Conceito'}"
                 )
-        return f"❌ Falha ao inserir termo SBVR: {err1}"
+            except Exception as exc:
+                last_err = str(exc)
+
+        return (
+            f"❌ Falha ao inserir termo SBVR após todas as tentativas.\n"
+            f"Último erro: {last_err}\n"
+            f"Execute o SQL de migração em Configurações → Banco de Dados para corrigir o schema."
+        )
+
+    def update_sbvr_term(
+        self,
+        term: str,
+        definition: str | None = None,
+        category: str | None = None,
+        origin: str = "assistente",
+    ) -> str:
+        """Update an existing SBVR term's definition, category, and/or origin label."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "❌ Supabase não configurado."
+
+        # Find the term
+        try:
+            rows = db.table("sbvr_terms").select("id, term, definition, category") \
+                .eq("project_id", self.project_id) \
+                .ilike("term", term.strip()) \
+                .execute().data or []
+        except Exception as exc:
+            return f"❌ Erro ao buscar termo: {exc}"
+
+        if not rows:
+            return f"❌ Termo '{term}' não encontrado no vocabulário SBVR do projeto."
+
+        patch: dict = {}
+        if definition:
+            patch["definition"] = definition.strip()
+        if category:
+            patch["category"] = category.strip()
+
+        # Try to set source and clear meeting_id
+        for include_source, clear_mid in ((True, True), (True, False), (False, False)):
+            p = dict(patch)
+            if include_source:
+                p["source"] = origin
+            if clear_mid:
+                p["meeting_id"] = None
+            if not p:
+                continue
+            try:
+                db.table("sbvr_terms").update(p).eq("id", rows[0]["id"]).execute()
+                updated_fields = []
+                if "definition" in p:
+                    updated_fields.append("definição")
+                if "category" in p:
+                    updated_fields.append("categoria")
+                if "source" in p:
+                    updated_fields.append(f"origem → '{origin}'")
+                if "meeting_id" in p:
+                    updated_fields.append("reunião de origem removida")
+                return (
+                    f"✅ Termo '{term}' atualizado com sucesso!\n"
+                    f"• Campos alterados: {', '.join(updated_fields) or 'nenhum'}"
+                )
+            except Exception:
+                continue
+
+        return f"❌ Não foi possível atualizar o termo '{term}'. Execute o SQL de migração em Configurações → Banco de Dados."
 
     def add_sbvr_rule(
         self,
@@ -1061,6 +1158,12 @@ class AssistantToolExecutor:
                     tool_input["term"],
                     tool_input["definition"],
                     tool_input.get("category", "Conceito"),
+                ),
+                "update_sbvr_term":          lambda: self.update_sbvr_term(
+                    tool_input["term"],
+                    tool_input.get("definition"),
+                    tool_input.get("category"),
+                    tool_input.get("origin", "assistente"),
                 ),
                 "add_sbvr_rule":             lambda: self.add_sbvr_rule(
                     tool_input["statement"],

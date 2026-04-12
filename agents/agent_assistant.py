@@ -1,4 +1,4 @@
-# agents/agent_assistant.py  (v10 — SBVR interceptor: direct exec + SVBR typo + dash pattern)
+# agents/agent_assistant.py  (v11 — update_sbvr_term + resilient add + origin interceptor)
 # ─────────────────────────────────────────────────────────────────────────────
 # AgentAssistant — conversational RAG agent for meeting/project Q&A.
 #
@@ -172,6 +172,28 @@ _SBVR_BARE_RE = re.compile(
 
 def _strip_quotes(s: str) -> str:
     return s.strip().strip('"\'').strip('\u201c\u201d\u2018\u2019').strip()
+
+
+def _detect_sbvr_update_origin_intent(text: str) -> str | None:
+    """
+    Return term name if the message asks to change an SBVR term's origin to 'assistente'.
+    Detects: "altere a origem do termo X para Assistente", "mude a origem de X", etc.
+    """
+    m = re.search(
+        r'(?:altere?|mude?|corrija?|atualize?)\s+(?:a\s+)?origem\s+(?:do\s+termo\s+)?'
+        + _Q + r'?(\w[\w\s]{0,30})' + _Q + r'?',
+        text, re.IGNORECASE,
+    )
+    if m:
+        return _strip_quotes(m.group(1))
+    # "origem do DCI para Assistente"
+    m = re.search(
+        r'origem\s+d[oa]\s+' + _Q + r'?(\w[\w\s]{0,20})' + _Q + r'?\s+para\s+assistente',
+        text, re.IGNORECASE,
+    )
+    if m:
+        return _strip_quotes(m.group(1))
+    return None
 
 
 def _detect_sbvr_add_intent(text: str) -> tuple[str, str] | None:
@@ -742,6 +764,29 @@ class AgentAssistant(BaseAgent):
                     "e pergunte se devo aplicar a substituição."
                 ),
             })
+        # ── SBVR update-origin pre-flight ────────────────────────────────────
+        if not correction:
+            origin_term = _detect_sbvr_update_origin_intent(question)
+            if origin_term:
+                if status_fn:
+                    status_fn(f"🔄 Atualizando origem do termo SBVR '{origin_term}'…")
+                update_result = executor.execute(
+                    "update_sbvr_term",
+                    {"term": origin_term, "origin": "assistente"},
+                )
+                messages.append({
+                    "role": "assistant",
+                    "content": (
+                        f"[Execução automática — update_sbvr_term]\n"
+                        f"Chamei update_sbvr_term(term=\"{origin_term}\", origin=\"assistente\") "
+                        f"e obtive:\n\n{update_result}"
+                    ),
+                })
+                messages.append({
+                    "role": "user",
+                    "content": "Apresente o resultado ao usuário.",
+                })
+
         # ── SBVR-add pre-flight ───────────────────────────────────────────────
         # When term+definition are both present in the message: execute
         # add_sbvr_term directly in Python and inject the result so the LLM
