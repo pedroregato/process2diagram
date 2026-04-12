@@ -1,4 +1,4 @@
-# agents/agent_assistant.py
+# agents/agent_assistant.py  (v2)
 # ─────────────────────────────────────────────────────────────────────────────
 # AgentAssistant — conversational RAG agent for meeting/project Q&A.
 #
