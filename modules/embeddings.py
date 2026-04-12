@@ -227,32 +227,36 @@ def _embed_batch_openai_compatible(
 
 
 def _embed_gemini(text: str, api_key: str) -> list[float]:
-    """Google Gemini embeddings via google-generativeai SDK.
+    """Google Gemini embeddings via google-genai SDK forçando endpoint v1 (estável).
 
-    Tenta text-embedding-004 (768 dims, mais recente) e faz fallback para
-    embedding-001 (768 dims, estável) se o modelo não estiver disponível na
-    região/versão da chave.
+    O SDK usa v1beta por padrão, mas os modelos de embedding requerem v1.
+    http_options={"api_version": "v1"} replica o que LangChain faz com version="v1".
+
+    Tenta text-embedding-004 primeiro (mais recente, 768 dims) e faz fallback
+    para embedding-001 (estável, 768 dims) se o modelo não estiver disponível.
     """
-    import warnings
-    warnings.filterwarnings("ignore", category=FutureWarning, module="google")
     try:
-        import google.generativeai as genai
+        from google import genai
+        from google.genai import types as genai_types
     except ImportError as exc:
         raise ImportError(
-            "Pacote google-generativeai não instalado. "
-            "Execute: pip install google-generativeai"
+            "Pacote google-genai não instalado. "
+            "Execute: pip install google-genai"
         ) from exc
 
-    genai.configure(api_key=api_key)
+    client = genai.Client(
+        api_key=api_key,
+        http_options={"api_version": "v1"},  # força endpoint estável (não v1beta)
+    )
 
-    for model_name in ("models/text-embedding-004", "models/embedding-001"):
+    for model_name in ("text-embedding-004", "embedding-001"):
         try:
-            result = genai.embed_content(
+            result = client.models.embed_content(
                 model=model_name,
-                content=text,
-                task_type="retrieval_document",
+                contents=text,
+                config=genai_types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
             )
-            embedding = result["embedding"]
+            embedding = list(result.embeddings[0].values)
             if len(embedding) != EMBEDDING_DIM:
                 raise ValueError(
                     f"Embedding {model_name} retornou {len(embedding)} dims, "
@@ -260,9 +264,8 @@ def _embed_gemini(text: str, api_key: str) -> list[float]:
                 )
             return embedding
         except Exception as exc:
-            if "404" in str(exc) and model_name == "models/text-embedding-004":
-                # Modelo não disponível nesta região/versão — tenta fallback
-                continue
+            if "404" in str(exc) and model_name == "text-embedding-004":
+                continue  # tenta fallback
             raise
 
     raise RuntimeError(
