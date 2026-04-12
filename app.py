@@ -44,8 +44,9 @@ pages = {
         st.Page("pages/Diagramas.py",  title="Diagramas",             icon="📐"),
     ],
     "Análise & Dados": [
-        st.Page("pages/Assistente.py",  title="Assistente",    icon="💬"),
-        st.Page("pages/ReqTracker.py",  title="Req. Tracker",  icon="📋"),
+        st.Page("pages/Assistente.py",  title="Assistente",      icon="💬"),
+        st.Page("pages/ReqTracker.py",  title="Req. Tracker",    icon="📋"),
+        st.Page("pages/MeetingROI.py",  title="Qualidade ROI-TR", icon="📊"),
     ],
     "Operações": [
         st.Page("pages/BatchRunner.py",         title="Batch Runner",        icon="🔄"),
