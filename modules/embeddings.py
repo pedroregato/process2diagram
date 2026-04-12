@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 # ── Dimensão alvo ─────────────────────────────────────────────────────────────
-EMBEDDING_DIM = 3072  # gemini-embedding-001 dimensão nativa completa
+EMBEDDING_DIM = 1536  # gemini-embedding-001 truncado (máx ivfflat = 2000 dims)
 
 # ── Provedores de embedding suportados ───────────────────────────────────────
 EMBEDDING_PROVIDERS = {
@@ -33,7 +33,7 @@ EMBEDDING_PROVIDERS = {
         "api_key_prefix": "AI",
     },
     "OpenAI": {
-        "model":         "text-embedding-3-large",
+        "model":         "text-embedding-3-small",
         "base_url":      None,
         "api_key_label": "OpenAI API Key",
         "api_key_help":  "Crie em platform.openai.com/api-keys",
@@ -254,6 +254,7 @@ def _embed_gemini(text: str, api_key: str) -> list[float]:
                 model=model_name,
                 content=text,
                 task_type="retrieval_document",
+                output_dimensionality=EMBEDDING_DIM,
             )
             embedding = result["embedding"]
             if len(embedding) != EMBEDDING_DIM:
