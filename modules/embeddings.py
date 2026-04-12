@@ -155,11 +155,7 @@ def embed_batch(texts: list[str], api_key: str, provider: str) -> list[list[floa
         return []
 
     if provider == "Google Gemini":
-        return _embed_batch_openai_compatible(
-            texts, api_key,
-            model="text-embedding-004",
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-        )
+        return _embed_batch_gemini(texts, api_key)
     elif provider == "OpenAI":
         cfg = EMBEDDING_PROVIDERS[provider]
         return _embed_batch_openai_compatible(
@@ -230,15 +226,51 @@ def _embed_batch_openai_compatible(
     return [item.embedding for item in sorted(resp.data, key=lambda x: x.index)]
 
 
-def _embed_gemini(text: str, api_key: str) -> list[float]:
-    """Google Gemini — text-embedding-004 (768 dims) via endpoint OpenAI-compatível.
+_GEMINI_EMBED_URL = (
+    "https://generativelanguage.googleapis.com/v1beta"
+    "/models/text-embedding-004:{method}?key={key}"
+)
 
-    Usa https://generativelanguage.googleapis.com/v1beta/openai/ — não requer
-    nenhum SDK Google extra; apenas o pacote openai já instalado.
-    """
-    return _embed_openai_compatible(
-        text,
-        api_key,
-        model="text-embedding-004",
-        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+
+def _embed_gemini(text: str, api_key: str) -> list[float]:
+    """Google Gemini — text-embedding-004 (768 dims) via REST API nativo (stdlib)."""
+    result = _embed_batch_gemini([text], api_key)
+    return result[0]
+
+
+def _embed_batch_gemini(texts: list[str], api_key: str) -> list[list[float]]:
+    """Batch embedding via Google batchEmbedContents REST API (sem SDK extra)."""
+    import json
+    import urllib.request
+    import urllib.error
+
+    url = _GEMINI_EMBED_URL.format(method="batchEmbedContents", key=api_key)
+    payload = {
+        "requests": [
+            {
+                "model": "models/text-embedding-004",
+                "content": {"parts": [{"text": t}]},
+                "taskType": "RETRIEVAL_DOCUMENT",
+            }
+            for t in texts
+        ]
+    }
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
     )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            result = json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Gemini API error {exc.code}: {body}") from exc
+
+    embeddings = [e["values"] for e in result.get("embeddings", [])]
+    if len(embeddings) != len(texts):
+        raise ValueError(
+            f"Gemini retornou {len(embeddings)} embeddings para {len(texts)} textos"
+        )
+    return embeddings
