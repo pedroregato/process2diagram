@@ -30,26 +30,38 @@ def copy_button(text: str, key: str, label: str = "📋 Copy to Clipboard", comp
         )
         height = 45
 
+    restore_color = '#94a3b8' if compact else '#475569'
     components.html(
         f"""
         <button id="cbtn_{key}"
           onclick="(function(){{
-            var el = document.createElement('textarea');
-            el.value = {safe};
-            el.style.position='fixed'; el.style.opacity='0';
-            document.body.appendChild(el);
-            el.focus(); el.select();
-            try {{ document.execCommand('copy'); }} catch(e) {{}}
-            document.body.removeChild(el);
+            var text = {safe};
             var b = document.getElementById('cbtn_{key}');
-            b.innerHTML = '✅';
-            b.style.borderColor = '#22c55e';
-            b.style.color = '#22c55e';
-            setTimeout(function(){{
+            function _ok() {{
+              b.innerHTML = '✅';
+              b.style.borderColor = '#22c55e';
+              b.style.color = '#22c55e';
+              setTimeout(function(){{
                 b.innerHTML = {json.dumps(label)};
                 b.style.borderColor = '#cbd5e1';
-                b.style.color = '{'#94a3b8' if compact else '#475569'}';
-            }}, 2000);
+                b.style.color = '{restore_color}';
+              }}, 2000);
+            }}
+            function _fallback() {{
+              var el = document.createElement('textarea');
+              el.value = text;
+              el.style.position = 'fixed';
+              el.style.left = '-9999px';
+              document.body.appendChild(el);
+              el.focus(); el.select();
+              try {{ document.execCommand('copy'); _ok(); }} catch(e) {{}}
+              document.body.removeChild(el);
+            }}
+            if (navigator.clipboard && window.isSecureContext) {{
+              navigator.clipboard.writeText(text).then(_ok, _fallback);
+            }} else {{
+              _fallback();
+            }}
           }})()"
           style="{style}">
           {label}

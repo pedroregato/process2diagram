@@ -1,4 +1,4 @@
-# agents/agent_assistant.py  (v11 — update_sbvr_term + resilient add + origin interceptor)
+# agents/agent_assistant.py  (v12 — declared-intent detection + copy button fix)
 # ─────────────────────────────────────────────────────────────────────────────
 # AgentAssistant — conversational RAG agent for meeting/project Q&A.
 #
@@ -508,6 +508,28 @@ class AgentAssistant(BaseAgent):
             content = choice.message.content or ""
 
             if choice.finish_reason != "tool_calls" or not choice.message.tool_calls:
+                # ── Declared-intent detection ──────────────────────────────────
+                # Detect responses like "Vou verificar a ata..." that declare intent
+                # to act but made no tool call — push the model to actually call it.
+                _DECLARED_INTENT_RE = re.compile(
+                    r'^(?:vou\s+(?:verificar|buscar|consultar|analisar|checar|obter|acessar|'
+                    r'pesquisar|investigar|examinar)|deixa\s+(?:eu|me)\s+(?:verificar|buscar|'
+                    r'consultar)|vamos\s+(?:ver|buscar|verificar))[^.!?]{0,120}[:.]\s*$',
+                    re.IGNORECASE | re.DOTALL,
+                )
+                if _DECLARED_INTENT_RE.match(content.strip()) and round_n < MAX_TOOL_ROUNDS - 1:
+                    # Model declared what it will do but didn't call a tool.
+                    # Push it to actually call the right tool in the next round.
+                    msgs.append({"role": "assistant", "content": content})
+                    msgs.append({
+                        "role": "user",
+                        "content": (
+                            "Prossiga: chame a ferramenta apropriada agora para obter os dados. "
+                            "Não descreva o que vai fazer — apenas chame a ferramenta."
+                        ),
+                    })
+                    continue  # next round
+
                 # Check if DeepSeek leaked tool calls in DSML format inside the text
                 if _DSML_DETECT_RE.search(content):
                     dsml_calls = _parse_dsml_tool_calls(content)
