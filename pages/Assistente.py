@@ -17,7 +17,7 @@ from ui.auth_gate import apply_auth_gate
 from ui.assistant_diagram import render_assistant_diagram
 from modules.supabase_client import supabase_configured
 from modules.config import AVAILABLE_PROVIDERS
-from modules.embeddings import EMBEDDING_PROVIDERS
+from modules.embeddings import EMBEDDING_PROVIDERS, list_gemini_embedding_models
 from core.project_store import (
     list_projects,
     retrieve_context_for_question,
@@ -141,15 +141,40 @@ with st.sidebar:
                 key="asst_embed_key",
                 help=embed_cfg["api_key_help"],
             )
-            if st.button("⚡ Gerar Embeddings", key="asst_gen_embeddings", type="secondary"):
-                if not embed_api_key:
-                    st.warning("Insira a API key do provedor de embedding.")
-                else:
-                    st.session_state["_trigger_embed"] = {
-                        "provider": embed_provider,
-                        "api_key":  embed_api_key,
-                        "project_id": project_id,
-                    }
+            col_btn, col_diag = st.columns([2, 1])
+            with col_btn:
+                if st.button("⚡ Gerar Embeddings", key="asst_gen_embeddings", type="secondary", use_container_width=True):
+                    if not embed_api_key:
+                        st.warning("Insira a API key do provedor de embedding.")
+                    else:
+                        st.session_state["_trigger_embed"] = {
+                            "provider": embed_provider,
+                            "api_key":  embed_api_key,
+                            "project_id": project_id,
+                        }
+            with col_diag:
+                if st.button("🔍 Testar chave", key="asst_diag_models", use_container_width=True,
+                             help="Lista os modelos de embedding disponíveis para esta chave"):
+                    if not embed_api_key:
+                        st.warning("Insira a API key antes de testar.")
+                    elif embed_provider == "Google Gemini":
+                        with st.spinner("Consultando modelos disponíveis..."):
+                            try:
+                                models = list_gemini_embedding_models(embed_api_key)
+                                if models:
+                                    st.success(f"✅ {len(models)} modelo(s) de embedding disponíveis:")
+                                    for m in models:
+                                        st.code(m["name"])
+                                else:
+                                    st.error(
+                                        "❌ Nenhum modelo de embedding encontrado para esta chave. "
+                                        "Verifique se a 'Generative Language API' está habilitada em "
+                                        "console.cloud.google.com para o projeto desta chave."
+                                    )
+                            except Exception as exc:
+                                st.error(f"❌ Erro ao consultar modelos: {exc}")
+                    else:
+                        st.info("Diagnóstico disponível apenas para Google Gemini.")
 
     if use_semantic:
         embed_provider_sel = st.session_state.get("asst_embed_provider", list(EMBEDDING_PROVIDERS.keys())[0])

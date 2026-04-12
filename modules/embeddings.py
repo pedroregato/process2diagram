@@ -9,8 +9,8 @@
 # NOTA: A API pública do DeepSeek (api.deepseek.com) NÃO possui endpoint de
 # embeddings — apenas chat/completions. Use Google Gemini (gratuito) ou OpenAI.
 #
-# Gemini embeddings usam o endpoint OpenAI-compatível do Google (v1beta/openai/).
-# Nenhum SDK extra necessário — mesmo pacote openai já instalado.
+# Gemini: google-genai SDK com api_version="v1" (estável).
+# Diagnóstico: list_gemini_embedding_models(api_key) lista modelos disponíveis.
 #
 # Funções públicas:
 #   chunk_text(text, chunk_size, overlap) → list[str]
@@ -278,3 +278,37 @@ def _embed_gemini(text: str, api_key: str) -> list[float]:
 def _embed_batch_gemini(texts: list[str], api_key: str) -> list[list[float]]:
     """Batch: chama _embed_gemini individualmente."""
     return [_embed_gemini(t, api_key) for t in texts]
+
+
+# ── Diagnóstico ───────────────────────────────────────────────────────────────
+
+def list_gemini_embedding_models(api_key: str) -> list[dict]:
+    """
+    Lista os modelos Gemini que suportam embedContent para a chave fornecida.
+
+    Usa google-generativeai (v1beta) para máxima compatibilidade com list_models().
+    Retorna lista de dicts com 'name' e 'display_name'.
+    Lança RuntimeError se a chave for inválida ou a API não estiver habilitada.
+    """
+    import warnings
+    warnings.filterwarnings("ignore", category=FutureWarning, module="google")
+
+    try:
+        import google.generativeai as genai
+    except ImportError as exc:
+        raise ImportError(
+            "Pacote google-generativeai não instalado. "
+            "Execute: pip install google-generativeai"
+        ) from exc
+
+    genai.configure(api_key=api_key)
+    try:
+        models = [
+            {"name": m.name, "display_name": getattr(m, "display_name", m.name)}
+            for m in genai.list_models()
+            if "embedContent" in (m.supported_generation_methods or [])
+        ]
+    except Exception as exc:
+        raise RuntimeError(f"Erro ao listar modelos Gemini: {exc}") from exc
+
+    return models
