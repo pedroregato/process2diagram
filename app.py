@@ -23,11 +23,13 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Inicialização e autenticação (rodam em todas as páginas) ──────────────────
+# ── Inicialização ─────────────────────────────────────────────────────────────
 init_session_state()
-apply_auth_gate()
 
-# ── Definição da navegação com seções ─────────────────────────────────────────
+# ── Navegação — deve ser definida ANTES de apply_auth_gate() ──────────────────
+# st.navigation() precisa ser chamado em TODAS as execuções (inclusive as
+# não-autenticadas), caso contrário o roteamento não é inicializado e
+# Streamlit trata cada navegação de página como nova sessão → login repetido.
 pages = {
     "Orientações": [
         st.Page("pages/Orientacoes_ComoIniciar.py",   title="Como Iniciar",   icon="📖"),
@@ -48,6 +50,11 @@ pages = {
         st.Page("pages/CostEstimator.py",       title="Estimativa de Custo", icon="💰"),
     ],
 }
-
 pg = st.navigation(pages)
+
+# ── Autenticação — após st.navigation(), antes de pg.run() ────────────────────
+# Se não autenticado: render_login_page() oculta a sidebar via CSS e chama
+# st.stop() — pg.run() nunca é alcançado. O CSS do login já esconde a sidebar.
+apply_auth_gate()
+
 pg.run()
