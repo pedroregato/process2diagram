@@ -29,64 +29,69 @@ flowchart TD
     classDef sCls  fill:#6B3FA0,stroke:#4A2870,color:#FFFFFF
     classDef rCls  fill:#14532D,stroke:#052E16,color:#FFFFFF
     classDef gCls  fill:#1e3a5f,stroke:#0B1E3D,color:#FFFFFF
+    classDef tCls  fill:#7C2D12,stroke:#4A1A07,color:#FFFFFF
+    classDef fCls  fill:#374151,stroke:#1F2937,color:#FFFFFF
 
     Q(["❓ Pergunta do Usuário"]):::iCls
     H[("💬 Histórico\\nda Conversa")]:::gCls
-
-    subgraph SEARCH["🔍 Recuperação de Contexto (RAG)"]
-        direction LR
-        subgraph KW_BOX["🔑 Busca por Keyword  (padrão)"]
-            K1["Extração de\\npalavras-chave PT"]:::aCls
-        end
-        subgraph SEM_BOX["🔮 Busca Semântica  (pgvector — opcional)"]
-            S1["Embedding da pergunta\\n(Gemini · OpenAI)"]:::sCls
-            S2["Cosine similarity\\ntranscript_chunks"]:::sCls
-            S1 --> S2
-        end
-    end
+    R(["💬 Resposta com Citações\\nde reuniões e fontes"]):::rCls
 
     subgraph DB["🗄️ Supabase — Fontes de Dados"]
         direction LR
-        T1[("📝 Transcrições\\nmeetings")]:::dCls
-        T2[("📋 Requisitos")]:::dCls
-        T3[("📐 Processos\\nBPMN")]:::dCls
-        T4[("📖 Vocabulário\\nSBVR")]:::dCls
-        T5[("📊 Resumo\\ndo Projeto")]:::dCls
+        D1[("📝 meetings\\n(atas · transcrições)")]:::dCls
+        D2[("📋 requirements")]:::dCls
+        D3[("📐 bpmn_processes")]:::dCls
+        D4[("🔤 sbvr_terms\\nsbvr_rules")]:::dCls
+        D5[("🧩 transcript_chunks\\n(vector 1536)")]:::sCls
     end
 
-    CTX["📋 Contexto RAG\\nPassagens · Requisitos · BPMN · SBVR · Resumo de Dados"]:::aCls
-
-    subgraph AGENT["🤖 AgentAssistant"]
+    subgraph MODEA["🔧 Modo A — Tool-use  ·  padrão"]
         direction TB
-        G["📘 Guia P2D\\nskill_assistant.md\\n(páginas · pipeline · schema)"]:::aCls
-        SP["System Prompt\\n= Guia P2D + Contexto RAG"]:::aCls
-        MH["Messages\\n= Histórico + Pergunta atual"]:::aCls
-        G --> SP
+        SPA["System Prompt A\\n= guia P2D + resumo do projeto"]:::aCls
+        LLMA["⚡ LLM  (tool_choice = auto)\\nDeepSeek · Claude · OpenAI · Groq · Gemini"]:::lCls
+
+        subgraph LOOP["🔄 Loop ≤ 5 rounds"]
+            direction LR
+            EX["AssistantToolExecutor"]:::tCls
+            subgraph TOOLS["🛠️ 10 Ferramentas"]
+                direction TB
+                TA["get_meeting_participants\\nget_meeting_decisions\\nget_meeting_action_items\\nget_meeting_summary\\nget_meeting_list"]:::tCls
+                TB2["search_transcript\\nget_requirements\\nlist_bpmn_processes\\nget_sbvr_terms\\nget_sbvr_rules"]:::tCls
+            end
+            EX --> TOOLS
+            TOOLS -.->|resultados| EX
+        end
+
+        SPA --> LLMA
+        LLMA -->|"tool_calls"| LOOP
+        LOOP -->|"tool_results"| LLMA
     end
 
-    subgraph LLM["⚡ LLM Providers — OpenAI-compatible ou Anthropic"]
-        direction LR
-        L1["DeepSeek\\n(padrão)"]:::lCls
-        L2["Claude\\nAnthropic"]:::lCls
-        L3["OpenAI\\nGPT-4o"]:::lCls
-        L4["Groq\\nLlama"]:::lCls
-        L5["Gemini\\nGoogle"]:::lCls
+    subgraph MODEB["🔍 Modo B — RAG Clássico  ·  fallback"]
+        direction TB
+        subgraph RETR["Recuperação de Contexto"]
+            direction LR
+            KW["🔑 Busca por Keyword\\npalavras-chave PT"]:::aCls
+            SEM["🔮 Busca Semântica\\ncosine similarity pgvector"]:::sCls
+        end
+        CTX["📋 Contexto RAG\\nPassagens · Atas · Requisitos · SBVR"]:::aCls
+        SPB["System Prompt B\\n= guia P2D + contexto RAG"]:::aCls
+        LLMB["⚡ LLM"]:::lCls
+        RETR --> CTX --> SPB --> LLMB
     end
 
-    R(["💬 Resposta com Citações\\nde reuniões e fontes"]):::rCls
+    FB["⚠️ Exceção → Fallback automático"]:::fCls
 
-    Q --> KW_BOX
-    Q --> SEM_BOX
-    K1 --> T1 & T2 & T3 & T4
-    S2 --> T1
-    T5 -.->|sempre| CTX
-    T1 & T2 & T3 & T4 --> CTX
-    CTX --> SP
-    H --> MH
-    Q --> MH
-    SP --> LLM
-    MH --> LLM
-    LLM --> R\
+    Q --> MODEA
+    Q --> MODEB
+    H --> LLMA
+    H --> LLMB
+    TOOLS <-->|"queries diretas"| D1 & D2 & D3 & D4
+    KW --> D1 & D2 & D3 & D4
+    SEM -->|"match_transcript_chunks()"| D5
+    MODEA -->|"stop_reason = end_turn"| R
+    MODEA -- "erro" --> FB --> MODEB
+    LLMB --> R\
 """
 
 

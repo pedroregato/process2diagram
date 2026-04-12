@@ -53,6 +53,7 @@ process2diagram/
 │   ├── lg_pipeline.py            # LGBPMNRunner — LangGraph adaptive BPMN retry loop
 │   ├── session_state.py          # init_session_state() — initializes all st.session_state keys
 │   ├── rerun_handlers.py         # handle_rerun() — re-executes a single named agent
+│   ├── assistant_tools.py        # Tool schemas + AssistantToolExecutor for AgentAssistant tool-use mode
 │   └── schema.py                 # Legacy schemas (Process, Step, Edge, BpmnProcess…)
 │
 ├── agents/
@@ -447,31 +448,88 @@ Streamlit multi-page app — accessible via sidebar navigation or `st.page_link`
 
 ## RAG Assistant (`pages/Assistente.py`)
 
-Semantic Q&A over meeting transcripts stored in Supabase.
+Semantic Q&A over meeting transcripts stored in Supabase. Two modes, selectable via "🔧 Modo Ferramentas" sidebar toggle (`asst_use_tools`, default `True`).
 
-### Architecture
+### Architecture — Modo A: Tool-use (padrão)
+
+```
+User question + History
+        │
+        ▼
+AgentAssistant.chat_with_tools(history, question, project_id)
+        │
+        ├── _build_system_prompt_tools()
+        │       retrieve_data_summary(project_id)      ← compact project overview
+        │       skill_assistant.md                     ← P2D guide
+        │
+        └── LLM (tool_choice="auto")
+                │
+                ▼  [loop ≤ MAX_TOOL_ROUNDS = 5]
+           ┌────────────────────────────────────────────────┐
+           │  Tool calls from LLM                           │
+           │  AssistantToolExecutor.execute(name, args)     │
+           │                                                │
+           │  get_meeting_list()                            │
+           │  get_meeting_participants(meeting_number)      │
+           │  get_meeting_decisions(meeting_number)         │
+           │  get_meeting_action_items(meeting_number)      │
+           │  get_meeting_summary(meeting_number)           │
+           │  search_transcript(query, meeting_number?)     │
+           │  get_requirements(keyword?, req_type?, status?)│
+           │  list_bpmn_processes()                         │
+           │  get_sbvr_terms(keyword?)                      │
+           │  get_sbvr_rules(keyword?)                      │
+           │         │                                      │
+           │         └─► direct Supabase queries            │
+           │             meetings · requirements ·          │
+           │             bpmn_processes · sbvr_*            │
+           └────────────────────────────────────────────────┘
+                │
+                ▼  stop_reason = "end_turn" / "stop"
+           Final answer → chat UI
+```
+
+**Tool schemas** live in `core/assistant_tools.py` in two formats:
+- `get_tool_schemas_openai()` — OpenAI/DeepSeek/Groq function-calling format
+- `get_tool_schemas_anthropic()` — Anthropic `tool_use` format (derived from OpenAI schemas)
+
+**Message format differences:**
+- OpenAI: `finish_reason == "tool_calls"` → tool results as `{"role": "tool", "tool_call_id": id, "content": text}`
+- Anthropic: `stop_reason == "tool_use"` → assistant turn appends full `content` list; tool results as `{"role": "user", "content": [{"type": "tool_result", "tool_use_id": id, "content": text}]}`
+
+**Fallback:** any exception in `chat_with_tools()` → automatically falls back to Mode B with keyword search.
+
+### Architecture — Modo B: RAG Clássico (fallback / opt-out)
 
 ```
 User question
       │
-      ├── Keyword search  ──► project_store.search_by_keyword(project_id, query)
-      │                       (exact / ILIKE match on chunk_text)
+      ├── Keyword search  ──► retrieve_context_for_question(project_id, query)
+      │                       ILIKE match on transcripts + minutes_md injection
       │
       └── Semantic search ──► embed_text(query, api_key, "Google Gemini")
-                               └─► project_store.search_transcript_chunks(project_id, embedding, k=8)
-                                   (calls match_transcript_chunks() SQL function — cosine similarity)
+                               └─► search_transcript_chunks(project_id, embedding, k=8)
+                                   match_transcript_chunks() SQL (cosine similarity)
                                           │
                                           ▼
-                              Retrieved chunks (top-K)
+                              Retrieved chunks + minutes summaries
                                           │
                                           ▼
-                              AgentAssistant (LLM)
-                              system: P2D guide + instructions
-                              user:   question + context chunks
+                              AgentAssistant.chat()
+                              system: P2D guide + format_context() RAG string
+                              user:   question
                                           │
                                           ▼
                               Answer displayed in chat UI
 ```
+
+### Re-edit feature
+
+Users can edit a previous question via the `✏️` button on any user message:
+- `st.session_state["_edit_idx"]` — index of the message being edited
+- `st.session_state["_edit_draft"]` — current draft text
+- `st.session_state["_resubmit_question"]` — populated on "🔄 Reenviar", consumed on next rerun
+- On resubmit: history is truncated to `history[:_edit_idx]`; `chat_input` is disabled while editing
 
 ### Embedding pipeline
 
@@ -879,7 +937,9 @@ All pages begin with `ui.auth_gate.apply_auth_gate()` immediately after `st.set_
 - [x] **Supabase integration** — `modules/supabase_client.py` + `core/project_store.py`; CRUD for projects, meetings, requirements, transcript chunks; fail-open when unconfigured
 - [x] **Embedding pipeline** — `modules/embeddings.py`; `chunk_text()` + `embed_text()` + `embed_batch()`; Google Gemini (`gemini-embedding-001`) and OpenAI (`text-embedding-3-small`); 1536 dims; auto-retry on 429 with extracted retry_delay; 1.2s inter-call delay for free tier
 - [x] **Supabase schema** — `setup/supabase_schema_transcript_chunks.sql`; `transcript_chunks` table with `vector(1536)` column; `ivfflat` cosine index; `match_transcript_chunks()` SQL function for semantic search
-- [x] **`pages/Assistente.py`** — RAG-powered Q&A over meeting transcripts; keyword search + semantic search via `match_transcript_chunks`; embedding generation with "⚡ Gerar Embeddings" + "🔍 Testar chave" diagnostic; errors persisted in `session_state` to survive `st.rerun()`
+- [x] **`pages/Assistente.py`** — RAG-powered Q&A over meeting transcripts; keyword search + semantic search via `match_transcript_chunks`; embedding generation with "⚡ Gerar Embeddings" + "🔍 Testar chave" diagnostic; errors persisted in `session_state` to survive `st.rerun()`; re-edit feature (✏️ button, history truncation, `_resubmit_question` pattern)
+- [x] **Tool-use mode** — `core/assistant_tools.py`; `AssistantToolExecutor` with 10 tools mapping to direct Supabase queries; `get_tool_schemas_openai()` + `get_tool_schemas_anthropic()`; `AgentAssistant.chat_with_tools()` with ≤5-round loop; automatic fallback to classic RAG on exception; `asst_use_tools` sidebar toggle (default `True`); tools called shown in response caption
+- [x] **RAG quality improvement** — `project_store._extract_minutes_summary()` extracts Participantes/Pauta/Decisões from `minutes_md`; injected unconditionally in `format_context()` for all meetings regardless of transcript availability
 - [x] **`pages/BatchRunner.py`** — batch pipeline over multiple transcripts via `core/batch_pipeline.py`
 - [x] **`pages/BpmnBackfill.py`** — retroactive BPMN generation for meetings already stored in Supabase
 - [x] **`pages/ReqTracker.py`** — requirement status board backed by Supabase
