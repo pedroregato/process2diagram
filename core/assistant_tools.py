@@ -214,6 +214,71 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "add_sbvr_term",
+                "description": (
+                    "Adiciona um novo termo ao vocabulário SBVR do projeto diretamente no banco de dados. "
+                    "Use quando o usuário pedir para incluir, cadastrar ou adicionar um termo SBVR. "
+                    "Não reprocessa reuniões — insere o termo manualmente."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "term": {
+                            "type": "string",
+                            "description": "Nome do termo (ex: 'DCI')",
+                        },
+                        "definition": {
+                            "type": "string",
+                            "description": "Definição do termo no domínio do negócio",
+                        },
+                        "category": {
+                            "type": "string",
+                            "description": (
+                                "Categoria SBVR do termo. Valores típicos: "
+                                "'Conceito', 'Ator', 'Processo', 'Documento', 'Sistema', 'Regra'. "
+                                "Infira a categoria com base no termo e definição se não informada."
+                            ),
+                        },
+                    },
+                    "required": ["term", "definition"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "add_sbvr_rule",
+                "description": (
+                    "Adiciona uma nova regra de negócio SBVR ao projeto diretamente no banco de dados. "
+                    "Use quando o usuário pedir para incluir, cadastrar ou adicionar uma regra SBVR."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "statement": {
+                            "type": "string",
+                            "description": "Enunciado formal da regra no padrão SBVR",
+                        },
+                        "rule_type": {
+                            "type": "string",
+                            "description": (
+                                "Tipo da regra SBVR. Valores: "
+                                "'Definitional Rule', 'Behavioral Rule', 'Structural Rule'. "
+                                "Infira com base no enunciado se não informado."
+                            ),
+                        },
+                        "source": {
+                            "type": "string",
+                            "description": "Origem da regra (ex: nome da reunião, documento, ou 'manual'). Opcional.",
+                        },
+                    },
+                    "required": ["statement"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "preview_text_correction",
                 "description": (
                     "Localiza e pré-visualiza onde um texto ocorre nos dados do projeto (transcrições, atas, requisitos). "
@@ -603,6 +668,72 @@ class AssistantToolExecutor:
             lines.append(f"• [{rule_id}] {nucleo}: {statement}")
         return "\n".join(lines)
 
+    def add_sbvr_term(
+        self,
+        term: str,
+        definition: str,
+        category: str = "Conceito",
+    ) -> str:
+        """Insert a new SBVR vocabulary term directly into the Supabase sbvr_terms table."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "❌ Supabase não configurado — não é possível inserir o termo."
+        try:
+            db.table("sbvr_terms").insert({
+                "project_id": self.project_id,
+                "meeting_id": None,   # manually added — not from a specific meeting
+                "term":       term.strip(),
+                "definition": definition.strip(),
+                "category":   category.strip() or "Conceito",
+            }).execute()
+            return (
+                f"✅ Termo SBVR adicionado com sucesso!\n"
+                f"• Termo: {term}\n"
+                f"• Definição: {definition}\n"
+                f"• Categoria: {category or 'Conceito'}"
+            )
+        except Exception as exc:
+            return f"❌ Erro ao inserir termo SBVR: {exc}"
+
+    def add_sbvr_rule(
+        self,
+        statement: str,
+        rule_type: str = "Behavioral Rule",
+        source: str = "manual",
+    ) -> str:
+        """Insert a new SBVR business rule directly into the Supabase sbvr_rules table."""
+        from modules.supabase_client import get_supabase_client
+        from modules.text_utils import rule_keyword_pt
+        db = get_supabase_client()
+        if not db:
+            return "❌ Supabase não configurado — não é possível inserir a regra."
+        try:
+            nucleo = rule_keyword_pt(statement)
+            # Generate a simple rule_id: RBN-NNN (next available)
+            existing = db.table("sbvr_rules").select("rule_id") \
+                .eq("project_id", self.project_id).execute()
+            count = len(existing.data or []) + 1
+            rule_id = f"RBN-{count:03d}"
+            db.table("sbvr_rules").insert({
+                "project_id":     self.project_id,
+                "meeting_id":     None,
+                "rule_id":        rule_id,
+                "statement":      statement.strip(),
+                "nucleo_nominal": nucleo,
+                "rule_type":      rule_type.strip() or "Behavioral Rule",
+                "source":         source.strip() or "manual",
+            }).execute()
+            return (
+                f"✅ Regra SBVR adicionada com sucesso!\n"
+                f"• ID: {rule_id}\n"
+                f"• Enunciado: {statement}\n"
+                f"• Tipo: {rule_type or 'Behavioral Rule'}\n"
+                f"• Origem: {source or 'manual'}"
+            )
+        except Exception as exc:
+            return f"❌ Erro ao inserir regra SBVR: {exc}"
+
     # ── Write tools ───────────────────────────────────────────────────────────
 
     def preview_text_correction(
@@ -872,6 +1003,16 @@ class AssistantToolExecutor:
                 "list_bpmn_processes":       lambda: self.list_bpmn_processes(),
                 "get_sbvr_terms":            lambda: self.get_sbvr_terms(tool_input.get("keyword")),
                 "get_sbvr_rules":            lambda: self.get_sbvr_rules(tool_input.get("keyword")),
+                "add_sbvr_term":             lambda: self.add_sbvr_term(
+                    tool_input["term"],
+                    tool_input["definition"],
+                    tool_input.get("category", "Conceito"),
+                ),
+                "add_sbvr_rule":             lambda: self.add_sbvr_rule(
+                    tool_input["statement"],
+                    tool_input.get("rule_type", "Behavioral Rule"),
+                    tool_input.get("source", "manual"),
+                ),
                 "preview_text_correction":   lambda: self.preview_text_correction(
                     tool_input["find_text"],
                     tool_input["replace_text"],

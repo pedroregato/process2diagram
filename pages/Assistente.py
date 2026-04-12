@@ -195,9 +195,9 @@ with st.sidebar:
     )
     if use_tools:
         st.caption(
-            "🔢 12 ferramentas: participantes, decisões, ações, "
+            "🔢 14 ferramentas: participantes, decisões, ações, "
             "transcrições, requisitos, BPMN, SBVR · "
-            "✏️ correção de texto (preview + aplicar)"
+            "✏️ correção de texto (preview + aplicar) · 📖 adicionar termos/regras SBVR"
         )
 
     st.markdown("---")

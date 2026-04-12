@@ -1,4 +1,4 @@
-# agents/agent_assistant.py  (v8 — Python-level correction interceptor + DSML fix)
+# agents/agent_assistant.py  (v9 — SBVR write tools + add/correction interceptors)
 # ─────────────────────────────────────────────────────────────────────────────
 # AgentAssistant — conversational RAG agent for meeting/project Q&A.
 #
@@ -129,6 +129,43 @@ def _detect_correction_intent(text: str) -> tuple[str, str] | None:
     if m:
         return m.group(1).strip().strip('"').strip('\u201c\u201d'), \
                m.group(2).strip().strip('"').strip('\u201c\u201d')
+    return None
+
+
+# ── SBVR-add interceptor ──────────────────────────────────────────────────────
+# Detects "inclua X no SBVR como Y", "adicione X ao SBVR", etc. and pre-executes
+# add_sbvr_term directly in Python — same rationale as the correction interceptor.
+
+_SBVR_ADD_RE = re.compile(
+    r'(?:inclua?|adicione?|cadastre?|insira?|coloque?)\s+'
+    r'["\u201c\u201d]?(.+?)["\u201c\u201d]?\s+'
+    r'(?:no|ao|no vocabulário do|ao vocabulário do)?\s*(?:sbvr|vocabulário sbvr|vocab sbvr)'
+    r'(?:\s+como\s+["\u201c\u201d]?(.+?)["\u201c\u201d]?)?',
+    re.IGNORECASE,
+)
+_SBVR_ADD_AS_RE = re.compile(
+    r'(?:inclua?|adicione?|cadastre?|insira?)\s+'
+    r'["\u201c\u201d]?(.+?)["\u201c\u201d]?\s+como\s+'
+    r'["\u201c\u201d]?(.+?)["\u201c\u201d]?\s+'
+    r'(?:no|ao|em)\s+(?:sbvr|vocabulário)',
+    re.IGNORECASE,
+)
+
+
+def _detect_sbvr_add_intent(text: str) -> tuple[str, str] | None:
+    """
+    Return (term, definition_hint) if the message asks to add an SBVR term.
+    definition_hint may be empty — the LLM will be asked to infer a definition.
+    """
+    m = _SBVR_ADD_AS_RE.search(text)
+    if m:
+        return m.group(1).strip().strip('"').strip('\u201c\u201d'), \
+               m.group(2).strip().strip('"').strip('\u201c\u201d')
+    m = _SBVR_ADD_RE.search(text)
+    if m:
+        term    = m.group(1).strip().strip('"').strip('\u201c\u201d')
+        defhint = (m.group(2) or "").strip().strip('"').strip('\u201c\u201d')
+        return term, defhint
     return None
 
 
@@ -680,6 +717,37 @@ class AgentAssistant(BaseAgent):
                     "e pergunte se devo aplicar a substituição."
                 ),
             })
+        # ── SBVR-add pre-flight ───────────────────────────────────────────────
+        # Detect "inclua X no SBVR como Y" and inject add_sbvr_term directly,
+        # bypassing LLM tool selection (same rationale as correction interceptor).
+        if not correction:   # only if not already handled as a text correction
+            sbvr_add = _detect_sbvr_add_intent(question)
+            if sbvr_add:
+                term, defhint = sbvr_add
+                if status_fn:
+                    status_fn(f"📖 Preparando adição do termo SBVR '{term}'…")
+                # If the user gave a definition hint, ask the LLM to synthesize
+                # a proper definition and category, then call the tool.
+                # We pre-populate the "what the user wants" context so the LLM
+                # calls add_sbvr_term with the right arguments.
+                hint_line = f'Definição fornecida pelo usuário: "{defhint}"' if defhint else \
+                    "O usuário não forneceu uma definição — elabore uma com base no contexto do projeto."
+                messages.append({
+                    "role": "assistant",
+                    "content": (
+                        f"[Interceptação automática — adição de termo SBVR]\n"
+                        f"O usuário pediu para adicionar o termo SBVR: \"{term}\".\n"
+                        f"{hint_line}\n\n"
+                        f"Chame add_sbvr_term com term=\"{term}\", uma definição elaborada "
+                        f"e a categoria mais apropriada (Ator, Conceito, Processo, Documento, Sistema…)."
+                    ),
+                })
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "Prossiga: chame add_sbvr_term com os parâmetros corretos."
+                    ),
+                })
         # ─────────────────────────────────────────────────────────────────────
 
         client_type = self.provider_cfg["client_type"]
