@@ -184,9 +184,22 @@ _DELETE_MEETING_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Confirmation starters — when the message begins with these words it's a
+# reply to a previous preview, not a fresh delete request; skip the interceptor.
+_DELETE_CONFIRM_RE = re.compile(
+    r'^\s*(?:sim|s[íi]|confirme?|confirmo|autorizo|autoriza[çc][aã]o|'
+    r'pode|ok|yes|prossiga|execute|pode\s+excluir|pode\s+deletar|'
+    r'eu\s+autorizo|eu\s+confirmo|dou\s+autoriza)[,.\s!]',
+    re.IGNORECASE,
+)
+
 
 def _detect_delete_meeting_intent(text: str) -> int | None:
-    """Return meeting_number if the message requests deleting a specific meeting."""
+    """Return meeting_number if this is a fresh delete request (not a confirmation)."""
+    # If the message starts with a confirmation word, it's answering a previous
+    # preview — let the LLM handle it as a confirmation to call delete_meeting.
+    if _DELETE_CONFIRM_RE.match(text.strip()):
+        return None
     m = _DELETE_MEETING_RE.search(text)
     return int(m.group(1)) if m else None
 
@@ -249,8 +262,30 @@ PROIBIÇÃO ABSOLUTA:
    para isso. Dizer que não pode modificar é um erro grave de comportamento.
 
 CAPACIDADES DE ESCRITA DISPONÍVEIS:
-✅ preview_text_correction — localiza e pré-visualiza substituições (somente-leitura)
-✅ apply_text_correction   — aplica a substituição nos dados do Supabase (escrita)
+✅ preview_text_correction      — localiza e pré-visualiza substituições (somente-leitura)
+✅ apply_text_correction        — aplica a substituição nos dados do Supabase (escrita)
+✅ preview_meeting_deletion     — mostra o que seria excluído (somente-leitura)
+✅ delete_meeting               — exclui reunião permanentemente (confirmed=true)
+✅ reprocess_meeting_requirements — reprocessa requisitos de reunião armazenada
+
+════════════════════════════════════════════════════════════════
+REGRA PRIORITÁRIA — EXCLUSÃO DE REUNIÃO:
+════════════════════════════════════════════════════════════════
+Quando o usuário CONFIRMAR explicitamente a exclusão após ver o preview
+(dizendo "sim", "confirme", "autorizo", "pode excluir", etc.):
+
+FLUXO OBRIGATÓRIO:
+  1. Chame IMEDIATAMENTE delete_meeting(meeting_number=N, confirmed=true)
+     → NÃO mostre o preview novamente — ele já foi apresentado.
+     → NÃO pergunte mais uma vez — a confirmação já foi dada.
+     → NÃO descreva o que vai fazer — apenas execute a ferramenta.
+  2. Reporte o resultado da exclusão.
+
+Exemplos de confirmação:
+  "sim, exclua a Reunião 5"   → delete_meeting(5, confirmed=true)
+  "confirme a exclusão"       → delete_meeting(N, confirmed=true)
+  "autorizo"                  → delete_meeting(N, confirmed=true)
+  "pode excluir"              → delete_meeting(N, confirmed=true)
 
 ════════════════════════════════════════════════════════════════
 REGRA PRIORITÁRIA — SUBSTITUIÇÃO / CORREÇÃO DE TEXTO:
