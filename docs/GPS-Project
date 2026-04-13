@@ -1,0 +1,495 @@
+Excelente! Vamos aprofundar a ideia do GPS-Project (ou talvez Timeline Navigator) - uma ferramenta leve de navegação temporal para governança de reuniões.
+
+🎯 VISÃO DO GPS-PROJECT
+Metáfora: Assim como um GPS de carro:
+
+Mostra onde você está no mapa (cronograma)
+Sugere rotas (tópicos de discussão)
+Alerta sobre engarrafamentos (atrasos)
+Recalcula rotas quando você desvia
+Mas NUNCA tira suas mãos do volante
+🏗️ ARQUITETURA CONCEITUAL
+1. Níveis de Integração (Pirâmide de Valor):
+┌─────────────────────────────────────┐
+       │   4. PREDIÇÃO & RECOMENDAÇÃO        │ ← (Opcional/Avançado)
+       │   • "Baseado em projetos similares" │
+       │   • Sugestões de mitigação          │
+       └─────────────────────────────────────┘
+       ┌─────────────────────────────────────┐
+       │   3. ANÁLISE & INSIGHTS             │ ← (Core)
+       │   • Saúde temporal                  │
+       │   • Alertas de desvio               │
+       │   • Relatórios automáticos          │
+       └─────────────────────────────────────┘
+       ┌─────────────────────────────────────┐
+       │   2. CONTEXTUALIZAÇÃO               │ ← (Essencial)
+       │   • Onde estamos no cronograma?     │
+       │   • O que deveríamos discutir?      │
+       │   • Preparação de reunião           │
+       └─────────────────────────────────────┘
+       ┌─────────────────────────────────────┐
+       │   1. VISUALIZAÇÃO                   │ ← (Base)
+       │   • Timeline interativa             │
+       │   • Posicionamento das reuniões     │
+       │   • Marcos vs. Realidade            │
+       └─────────────────────────────────────┘
+
+2. Componentes do Sistema:
+# Estrutura conceitual
+class GPSProject:
+    def __init__(self):
+        self.timeline = None  # Cronograma importado
+        self.meetings_tracker = []  # Reuniões realizadas
+        self.analysis_engine = AnalysisEngine()
+        self.suggestion_engine = SuggestionEngine()
+        self.visualization_engine = VisualizationEngine()
+
+    # Fluxo principal
+    def govern_meeting(self, meeting_context):
+        """Governança leve baseada em cronograma"""
+
+        # 1. Contextualizar
+        context = self.get_current_context(meeting_context.date)
+
+        # 2. Sugerir (opcionalmente)
+        suggestions = self.suggest_agenda_items(context)
+
+        # 3. Analisar (post-meeting)
+        if meeting_context.transcript:
+            analysis = self.analyze_alignment(meeting_context)
+
+        # 4. Visualizar
+        dashboard = self.generate_dashboard()
+
+        return {
+            "context": context,
+            "suggestions": suggestions,  # Apenas sugestões
+            "analysis": analysis,  # Apenas insights
+            "dashboard": dashboard  # Visualização
+        }
+
+📅 MODELO DE DADOS LEVE
+1. Estrutura mínima do cronograma:
+{
+  "project_id": "proj_123",
+  "phases": [
+    {
+      "id": "phase_1",
+      "name": "Planejamento",
+      "planned_start": "2026-01-01",
+      "planned_end": "2026-02-15",
+      "actual_start": "2026-01-01",
+      "actual_end": null,
+      "weight": 0.15,  // 15% do esforço total
+      "key_deliverables": ["Termo de Abertura", "EAP"],
+      "typical_topics": ["escopo", "stakeholders", "riscos"],
+      "success_criteria": ["TA aprovado", "EAP validada"]
+    }
+  ],
+  "milestones": [
+    {
+      "id": "ms_1",
+      "name": "Kick-off",
+      "planned_date": "2026-01-10",
+      "actual_date": "2026-01-10",
+      "type": "event",
+      "dependencies": []
+    }
+  ]
+}
+
+2. Mapeamento reunião-cronograma:
+# meeting_timeline_mapping.py
+class TimelineMapper:
+    def map_meeting_to_timeline(self, meeting_data, timeline):
+        """Mapeia uma reunião para o cronograma"""
+
+        mapping = {
+            "meeting_id": meeting_data["id"],
+            "date": meeting_data["date"],
+
+            # Onde estamos?
+            "current_phase": self._get_phase_for_date(
+                meeting_data["date"], 
+                timeline
+            ),
+
+            # O que discutimos?
+            "discussed_topics": self._extract_topics(
+                meeting_data["transcript"]
+            ),
+
+            # Quanto tempo gastamos?
+            "time_spent_by_topic": self._analyze_time_distribution(
+                meeting_data["transcript"]
+            ),
+
+            # Alinhamento
+            "alignment_score": self._calculate_alignment(
+                discussed_topics, 
+                current_phase
+            ),
+
+            # Insights
+            "insights": self._generate_insights(
+                meeting_data, 
+                timeline
+            )
+        }
+
+        return mapping
+
+🔍 ANÁLISES E INSIGHTS (VALOR REAL)
+1. Dashboard de Saúde Temporal:
+📊 GPS-PROJECT: SDEA - Status: Semana 18/52
+─────────────────────────────────────────────
+
+📍 POSIÇÃO ATUAL: Fase 3 - Desenvolvimento (65% concluída)
+   • Planejado: 01/03 a 15/04 | Real: 01/03 a ???
+   • Progresso: ███████░░░░░ 70% (levemente adiantado)
+
+📈 SAÚDE TEMPORAL:
+   • Alinhamento: 82% ✅
+   • Foco: 76% ⚠️ (alguma dispersão)
+   • Antecipação: 12% 🔮 (planejando à frente)
+   • Retrabalho: 8% ↩️ (revisando fases anteriores)
+
+🎯 TOP 3 TÓPICOS DESTA FASE:
+   1. Integração SE Suíte (35% do tempo)
+   2. Módulo de Assinatura (28% do tempo)
+   3. Relatórios (15% do tempo)
+
+⚠️ ALERTAS LEVES:
+   • Pouca discussão sobre testes (5% vs. esperado 15%)
+   • Muito tempo em detalhes técnicos vs. decisões
+   • Stakeholders menos presentes nas últimas 2 reuniões
+
+💡 SUGESTÕES PARA PRÓXIMA REUNIÃO:
+   • Revisar critérios de aceitação da Fase 3
+   • Planejar transição para Fase 4 (Testes)
+   • Validar com usuários chave
+
+2. Métricas de Governança Leve:
+# Métricas não-intrusivas
+TIMELINE_METRICS = {
+    # 1. Alinhamento
+    "phase_alignment": {
+        "description": "% do tempo em tópicos da fase atual",
+        "calculation": "topics_in_current_phase / total_topics",
+        "healthy_range": "70-90%",
+        "interpretation": "Muito baixo = dispersão; Muito alto = inflexibilidade"
+    },
+
+    # 2. Foco
+    "topic_concentration": {
+        "description": "Quantos tópicos únicos por hora",
+        "calculation": "unique_topics / meeting_duration_hours",
+        "healthy_range": "2-4 tópicos/hora",
+        "interpretation": "Alto = reunião pulando muito; Baixo = foco profundo"
+    },
+
+    # 3. Progresso
+    "phase_progression_rate": {
+        "description": "Velocidade de avanço na fase",
+        "calculation": "topics_covered / total_phase_topics",
+        "healthy_range": "Depende da fase",
+        "interpretation": "Comparar com histórico do projeto"
+    },
+
+    # 4. Qualidade Temporal
+    "temporal_quality_index": {
+        "description": "Combinação de métricas",
+        "calculation": "(alignment * 0.4) + (focus * 0.3) + (progress * 0.3)",
+        "healthy_range": "0.7-0.9",
+        "interpretation": "Score geral de saúde temporal"
+    }
+}
+
+3. Alertas Inteligentes (não alarmistas):
+class TimelineAlerts:
+    def generate_alerts(self, project_state):
+        """Gera alertas contextuais e úteis"""
+
+        alerts = []
+
+        # 1. Atrasos sutis
+        if self._is_phase_taking_longer_than_usual(project_state):
+            alerts.append({
+                "type": "info",
+                "title": "Fase está durando mais que o habitual",
+                "message": f"A Fase {current_phase} está em {duration} vs. {avg_duration} normalmente",
+                "suggestion": "Verificar se há bloqueadores não discutidos",
+                "severity": "low"
+            })
+
+        # 2. Mudança de padrão
+        if self._detect_pattern_change(project_state):
+            alerts.append({
+                "type": "insight",
+                "title": "Padrão de discussão mudou",
+                "message": "Últimas reuniões têm foco diferente das anteriores",
+                "suggestion": "Pode indicar mudança de prioridades ou novo desafio",
+                "severity": "medium"
+            })
+
+        # 3. Oportunidades
+        if self._detect_acceleration_opportunity(project_state):
+            alerts.append({
+                "type": "opportunity",
+                "title": "Oportunidade de avançar fase",
+                "message": "Critérios da fase atual estão 85% atendidos",
+                "suggestion": "Considerar revisão antecipada para liberar recursos",
+                "severity": "low"
+            })
+
+        return alerts
+
+🎨 INTERFACE DO USUÁRIO (STREAMLIT)
+1. Página do GPS-Project:
+# pages/GPSProject.py
+import streamlit as st
+import plotly.express as px
+import pandas as pd
+
+st.title("🧭 GPS-Project - Navegação Temporal")
+
+# 1. Seleção de projeto
+project = st.selectbox("Selecione o projeto", ["SDEA", "Outro Projeto"])
+
+# 2. Importação leve do cronograma
+with st.expander("📅 Configurar Cronograma", expanded=False):
+    col1, col2 = st.columns(2)
+    with col1:
+        upload_option = st.radio(
+            "Como importar cronograma?",
+            ["Manual (simples)", "Excel/CSV", "MS Project (XML)", "Jira/API"]
+        )
+    with col2:
+        if upload_option == "Manual (simples)":
+            phases = st.number_input("Número de fases", 1, 10, 4)
+            # Interface simples para definir fases
+
+        st.caption("💡 Dica: Comece com apenas marcos principais")
+
+# 3. Visualização principal
+tab1, tab2, tab3, tab4 = st.tabs(["🗺️ Mapa Temporal", "📊 Saúde", "🎯 Sugestões", "📈 Tendências"])
+
+with tab1:
+    # Timeline interativa
+    st.subheader("Mapa do Projeto")
+
+    # Gráfico Gantt simplificado
+    fig = px.timeline(
+        data_frame=timeline_data,
+        x_start="Planned_Start",
+        x_end="Planned_End",
+        y="Phase",
+        color="Status",
+        title="Cronograma vs. Realidade"
+    )
+
+    # Adicionar marcadores de reuniões
+    for meeting in meetings_data:
+        fig.add_vline(x=meeting["date"], line_dash="dot", annotation_text=f"Reunião {meeting['number']}")
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Legenda interativa
+    st.caption("""
+    **Como ler este mapa:**
+    - 🟢 Fases no prazo | 🟡 Pequeno atraso | 🔴 Atraso significativo
+    - ● Reuniões realizadas | ─── Planejado | ─── Realizado
+    - Clique em uma fase para detalhes
+    """)
+
+with tab2:
+    # Dashboard de saúde
+    st.subheader("Saúde Temporal do Projeto")
+
+    # Métricas em cards
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Alinhamento", "82%", "↑2%", delta_color="normal")
+    with col2:
+        st.metric("Foco", "76%", "↓5%", delta_color="inverse")
+    with col3:
+        st.metric("Progresso", "65%", "↑8%")
+    with col4:
+        st.metric("Qualidade Temporal", "0.74", "0.72", delta_color="off")
+
+    # Gráfico de radar
+    categories = ['Alinhamento', 'Foco', 'Progresso', 'Eficiência', 'Antecipação']
+    values = [0.82, 0.76, 0.65, 0.70, 0.12]
+
+    fig = px.line_polar(
+        r=values, 
+        theta=categories, 
+        line_close=True,
+        title="Perfil Temporal do Projeto"
+    )
+    st.plotly_chart(fig)
+
+with tab3:
+    # Sugestões contextuais
+    st.subheader("Sugestões para Próximos Passos")
+
+    # Baseado na fase atual
+    current_phase = timeline.get_current_phase()
+
+    st.info(f"**Fase Atual:** {current_phase['name']} ({current_phase['progress']}% concluída)")
+
+    # Sugestões em cards
+    suggestions = gps_engine.get_suggestions()
+
+    for i, suggestion in enumerate(suggestions):
+        with st.expander(f"💡 {suggestion['title']}", expanded=i==0):
+            st.write(suggestion["description"])
+            st.caption(f"**Baseado em:** {suggestion['basis']}")
+
+            if st.button(f"Aplicar esta sugestão", key=f"apply_{i}"):
+                # Ação leve - ex: adicionar à pauta da próxima reunião
+                st.success("Sugestão adicionada à próxima reunião")
+
+with tab4:
+    # Análise de tendências
+    st.subheader("Tendências e Padrões")
+
+    # Gráfico de evolução
+    trend_data = gps_engine.get_trend_data()
+
+    fig = px.line(
+        trend_data, 
+        x='date', 
+        y=['alignment', 'focus', 'progress'],
+        title='Evolução das Métricas ao Longo do Tempo'
+    )
+
+    st.plotly_chart(fig)
+
+    # Insights automáticos
+    st.subheader("Insights Detectados")
+
+    insights = gps_engine.get_insights()
+    for insight in insights:
+        emoji = {"positive": "✅", "warning": "⚠️", "opportunity": "🎯"}[insight["type"]]
+        st.write(f"{emoji} **{insight['title']}**")
+        st.write(insight["description"])
+        st.divider()
+
+# 4. Configurações (discretas)
+with st.sidebar.expander("⚙️ Configurações do GPS"):
+    sensitivity = st.slider(
+        "Sensibilidade dos alertas", 
+        1, 5, 3,
+        help="1 = Menos alertas, 5 = Mais alertas detalhados"
+    )
+
+    notification_level = st.selectbox(
+        "Nível de notificação",
+        ["Apenas crítico", "Moderado", "Detalhado"],
+        help="Quanto feedback você quer receber?"
+    )
+
+    auto_suggest = st.checkbox(
+        "Sugestões automáticas", 
+        value=True,
+        help="Mostrar sugestões baseadas no cronograma"
+    )
+
+    if st.button("🔧 Modo Manual", help="Desligar todas as sugestões automáticas"):
+        st.session_state.gps_mode = "manual"
+        st.success("GPS em modo manual - você está no controle total")
+
+🔧 IMPLEMENTAÇÃO PRAGMÁTICA (FASES)
+Fase 1 - MVP (2 semanas):
+# MVP mínimo viável
+class GPSProjectMVP:
+    def __init__(self):
+        self.features = {
+            "import_phases": True,  # Importar fases manualmente
+            "timeline_viz": True,   # Visualização básica
+            "meeting_mapping": True, # Mapear reuniões para fases
+            "basic_metrics": True,  # 2-3 métricas simples
+            "no_alerts": True,      # Sem alertas automáticos
+            "manual_mode": True     # Tudo opcional
+        }
+
+Fase 2 - Core (1 mês):
+Dashboard de saúde temporal
+Sugestões contextuais
+Alertas leves configuráveis
+Exportação de relatórios
+Fase 3 - Avançado (2 meses):
+Integração com ferramentas externas
+Machine learning para padrões
+Predições baseadas em histórico
+Recomendações personalizadas
+🎭 CENÁRIOS DE USO CONCRETOS
+Cenário 1: Reunião de Status Semanal
+ANTES:
+"O que vamos discutir hoje?" → Discussão aleatória
+
+COM GPS-PROJECT:
+"Estamos na Semana 8, Fase 2 (70% concluída).
+Na última reunião focamos em requisitos funcionais.
+Sugestão para hoje: validar requisitos não-funcionais
+e planejar transição para Fase 3."
+
+Cenário 2: Detecção de Desvio Sutil
+GPS detecta: "Discussão sobre testes começou 3 semanas antes do planejado"
+
+Insight: "Isso pode indicar:
+1. Preocupação antecipada com qualidade (bom)
+2. Problemas técnicos antecipados (preocupante)
+3. Mudança de escopo não documentada (crítico)"
+
+Ação sugerida: "Na próxima reunião, dedicar 15 minutos para entender o motivo"
+
+Cenário 3: Preparação para Revisão de Marco
+Próxima semana: Marco "Entrega Fase 1"
+
+GPS prepara automaticamente:
+• Lista de critérios de aceitação da Fase 1
+• Decisões pendentes que bloqueiam o marco
+• Participantes chave que devem estar presentes
+• Documentos que precisam ser revisados
+
+⚖️ PRINCÍPIOS DE DESIGN (NÃO NEGOCIÁVEIS)
+Opt-in sempre: Usuário decide usar ou não
+Sugestões, não comandos: "Você pode querer considerar..." nunca "Você deve..."
+Transparência total: Sem caixa preta - sempre mostrar o "porquê" das sugestões
+Fácil de ignorar: Um clique para silenciar/desligar
+Valor imediato: Primeiro uso deve gerar insight útil em 5 minutos
+Sem overhead: Configuração inicial em menos de 10 minutos
+Degradação graciosa: Se cronograma desatualizado, sistema avisa e sugere atualização
+🧪 TESTES DE VALIDAÇÃO (ANTES DE CONSTRUIR)
+Pergunte à equipe:
+
+"Se você pudesse saber magicamente se suas reuniões estão alinhadas com o cronograma, isso ajudaria?"
+"Que tipo de alerta seria útil vs. irritante?"
+"Quanto tempo você investiria para configurar isso?"
+"Qual o pior cenário se essa ferramenta sugerir algo errado?"
+🚀 ROADMAP DE VALOR
+Mês 1: "Entendo onde estou no cronograma" Mês 2: "Vejo padrões nas minhas reuniões" Mês 3: "Recebo sugestões úteis para próximos passos" Mês 6: "Consigo prever problemas antes que aconteçam"
+
+💎 RESUMO DO VALOR PROPOSTO
+O GPS-Project não é sobre:
+
+❌ Microgerenciamento
+❌ Burocracia
+❌ Rigidez
+❌ Controle
+O GPS-Project é sobre:
+
+✅ Consciência temporal
+✅ Insights acionáveis
+✅ Governança leve
+✅ Correção de curso proativa
+✅ Foco no que importa AGORA
+Metáfora final: É como ter um copiloto experiente que:
+
+Conhece o mapa (cronograma)
+Sabe os atalhos (melhores práticas)
+Vê a neblina à frente (riscos)
+Mas deixa VOCÊ dirigir (decisões)
+O que você acha dessa visão mais aprofundada? Algum aspecto que gostaria de explorar mais?
