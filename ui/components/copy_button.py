@@ -57,9 +57,19 @@ def copy_button(text: str, key: str, label: str = "📋 Copy to Clipboard", comp
               try {{ document.execCommand('copy'); _ok(); }} catch(e) {{}}
               document.body.removeChild(el);
             }}
-            if (navigator.clipboard && window.isSecureContext) {{
-              navigator.clipboard.writeText(text).then(_ok, _fallback);
-            }} else {{
+            // Prefer parent-frame clipboard: Streamlit iframes have allow-same-origin
+            // so window.parent.navigator.clipboard is reachable and has clipboard-write
+            // permission from the top-level user gesture.
+            try {{
+              var _cb = (window.parent && window.parent.navigator && window.parent.navigator.clipboard)
+                ? window.parent.navigator.clipboard
+                : (navigator.clipboard && window.isSecureContext ? navigator.clipboard : null);
+              if (_cb) {{
+                _cb.writeText(text).then(_ok, _fallback);
+              }} else {{
+                _fallback();
+              }}
+            }} catch(_e) {{
               _fallback();
             }}
           }})()"

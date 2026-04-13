@@ -28,6 +28,7 @@ import streamlit as st
 from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured
 from modules.config import AVAILABLE_PROVIDERS
+from modules.session_security import render_api_key_readonly
 from modules.ingest import load_transcript
 from core.project_store import (
     list_projects,
@@ -48,12 +49,7 @@ with st.sidebar:
         key="bf_provider",
     )
     provider_cfg = AVAILABLE_PROVIDERS[selected_provider]
-    api_key = st.text_input(
-        provider_cfg.get("api_key_label", "API Key"),
-        type="password",
-        key="bf_api_key",
-        help=provider_cfg.get("api_key_help", ""),
-    )
+    api_key = render_api_key_readonly(selected_provider)
     output_language = st.selectbox(
         "Idioma de saída",
         ["Auto-detect", "Portuguese (BR)", "English"],

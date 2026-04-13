@@ -31,6 +31,7 @@ from core.project_store import (
 )
 from agents.agent_assistant import AgentAssistant
 from ui.components.copy_button import copy_button
+from modules.session_security import render_session_key_readonly
 
 # ── Page config ───────────────────────────────────────────────────────────────
 apply_auth_gate()
@@ -68,12 +69,7 @@ with st.sidebar:
         key="asst_provider",
     )
     provider_cfg = AVAILABLE_PROVIDERS[selected_provider]
-    api_key = st.text_input(
-        provider_cfg.get("api_key_label", "API Key"),
-        type="password",
-        key="asst_api_key",
-        help=provider_cfg.get("api_key_help", ""),
-    )
+    api_key = render_session_key_readonly("asst_api_key", "Chave do Assistente")
 
     st.markdown("---")
 
@@ -131,17 +127,12 @@ with st.sidebar:
                 help="Google Gemini text-embedding-004 (gratuito) ou OpenAI text-embedding-3-small (768 dims)",
             )
             embed_cfg = EMBEDDING_PROVIDERS[embed_provider]
-            embed_api_key = st.text_input(
-                embed_cfg["api_key_label"],
-                type="password",
-                key="asst_embed_key",
-                help=embed_cfg["api_key_help"],
-            )
+            embed_api_key = render_session_key_readonly("asst_embed_key", "Chave de Embedding")
             col_btn, col_diag = st.columns([2, 1])
             with col_btn:
                 if st.button("⚡ Gerar Embeddings", key="asst_gen_embeddings", type="secondary", use_container_width=True):
                     if not embed_api_key:
-                        st.warning("Insira a API key do provedor de embedding.")
+                        st.warning("Configure a chave de embedding em ⚙️ Configurações.")
                     else:
                         st.session_state["_trigger_embed"] = {
                             "provider": embed_provider,
@@ -152,7 +143,7 @@ with st.sidebar:
                 if st.button("🔍 Testar chave", key="asst_diag_models", use_container_width=True,
                              help="Lista os modelos de embedding disponíveis para esta chave"):
                     if not embed_api_key:
-                        st.warning("Insira a API key antes de testar.")
+                        st.warning("Configure a chave de embedding em ⚙️ Configurações.")
                     elif embed_provider == "Google Gemini":
                         with st.spinner("Consultando modelos disponíveis..."):
                             try:
@@ -177,7 +168,7 @@ with st.sidebar:
         embed_key_sel = st.session_state.get("asst_embed_key", "")
         st.caption(f"Provedor ativo: **{embed_provider_sel}**")
         if not embed_key_sel:
-            st.warning("Insira a API key de embedding acima para a busca semântica funcionar.")
+            st.warning("Configure a chave de embedding em ⚙️ Configurações para a busca semântica funcionar.")
 
     st.markdown("---")
 
@@ -201,6 +192,62 @@ with st.sidebar:
             "📊 ROI-TR · 🔄 tópicos recorrentes · "
             "🗂️ metadados · 🗑️ excluir reunião · 🔁 reprocessar requisitos"
         )
+
+    st.markdown("---")
+
+    # ── Contexto adicional (arquivo) ──────────────────────────────────────────
+    st.markdown("#### 📎 Contexto Adicional")
+    st.caption(
+        "Carregue um arquivo para incluir seu conteúdo como contexto em todas as perguntas "
+        "desta sessão. Útil para análise de relatórios, planilhas ou documentos externos."
+    )
+    uploaded_ctx_file = st.file_uploader(
+        "Arquivo de contexto",
+        type=["txt", "docx", "pdf", "csv", "xlsx"],
+        key="asst_context_file",
+        label_visibility="collapsed",
+        help="Conteúdo incluído automaticamente no contexto de cada pergunta.",
+    )
+
+    if uploaded_ctx_file is not None:
+        _prev_name = st.session_state.get("_asst_file_name", "")
+        _prev_size = st.session_state.get("_asst_file_size", 0)
+        if uploaded_ctx_file.name != _prev_name or uploaded_ctx_file.size != _prev_size:
+            with st.spinner(f"Processando {uploaded_ctx_file.name}…"):
+                try:
+                    _ext = uploaded_ctx_file.name.rsplit(".", 1)[-1].lower()
+                    if _ext in ("txt", "docx", "pdf"):
+                        from modules.ingest import load_transcript
+                        _file_text = load_transcript(uploaded_ctx_file)
+                    elif _ext == "csv":
+                        import pandas as _pd
+                        _df = _pd.read_csv(uploaded_ctx_file)
+                        _file_text = _df.head(50).to_markdown(index=False)
+                    else:  # xlsx / xls
+                        import pandas as _pd
+                        _df = _pd.read_excel(uploaded_ctx_file)
+                        _file_text = _df.head(50).to_markdown(index=False)
+
+                    # Cap at 3 000 words to avoid blowing up the context window
+                    _words = _file_text.split()
+                    if len(_words) > 3000:
+                        _file_text = (
+                            " ".join(_words[:3000])
+                            + "\n\n[... conteúdo truncado em 3.000 palavras ...]"
+                        )
+                    st.session_state["_asst_file_ctx"]  = _file_text
+                    st.session_state["_asst_file_name"] = uploaded_ctx_file.name
+                    st.session_state["_asst_file_size"] = uploaded_ctx_file.size
+                except Exception as _exc:
+                    st.error(f"❌ Erro ao processar arquivo: {_exc}")
+                    for _k in ("_asst_file_ctx", "_asst_file_name", "_asst_file_size"):
+                        st.session_state.pop(_k, None)
+
+        _ctx_words = len(st.session_state.get("_asst_file_ctx", "").split())
+        st.success(f"📎 **{uploaded_ctx_file.name}** — {_ctx_words:,} palavras no contexto")
+    else:
+        for _k in ("_asst_file_ctx", "_asst_file_name", "_asst_file_size"):
+            st.session_state.pop(_k, None)
 
     st.markdown("---")
 
@@ -327,6 +374,11 @@ if _chunks_table_ok:
     _chunks_n = _cov.get("total_chunks", 0)
     if _idx > 0:
         _badges.append(_badge("📊", "Índice", f"{_idx}/{_tot} reuniões · {_chunks_n:,} chunks", "#1A7F5A"))
+
+_ctx_file_name = st.session_state.get("_asst_file_name", "")
+if _ctx_file_name:
+    _ctx_words = len(st.session_state.get("_asst_file_ctx", "").split())
+    _badges.append(_badge("📎", "Arquivo", f"{_ctx_file_name} · {_ctx_words:,} palavras", "#374151"))
 
 st.markdown(
     '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 16px 0;">'
@@ -468,14 +520,32 @@ active_question: str | None = (
 )
 
 if active_question and not _asst_running:
-    question = active_question
+    # ── Separate display question (stored in history) from LLM question ──────
+    # File context is injected into the LLM question but NOT shown in the chat
+    # UI or stored in history — so re-editing, copy and display stay clean.
+    display_question = active_question
+    _file_ctx  = st.session_state.get("_asst_file_ctx", "")
+    _file_name = st.session_state.get("_asst_file_name", "")
+    if _file_ctx:
+        _n_words = len(_file_ctx.split())
+        llm_question = (
+            f"[ARQUIVO ANEXADO: {_file_name} — {_n_words:,} palavras]\n"
+            f"{'─' * 50}\n"
+            f"{_file_ctx}\n"
+            f"{'─' * 50}\n\n"
+            f"{display_question}"
+        )
+    else:
+        llm_question = display_question
+
+    question = display_question  # used for display / history
     # Reload history (may have been truncated by resubmit)
     history = st.session_state["assistant_history"]
 
-    # 1. Append and render user message
-    history.append({"role": "user", "content": question})
+    # 1. Append and render user message (always shows clean question)
+    history.append({"role": "user", "content": display_question})
     with st.chat_message("user"):
-        st.markdown(question)
+        st.markdown(display_question)
 
     use_tools_now = st.session_state.get("asst_use_tools", True)
 
@@ -488,7 +558,7 @@ if active_question and not _asst_running:
         _api_key       = api_key
         _provider_cfg  = provider_cfg
         _history_snap  = list(history[:-1])   # excludes the current question
-        _question      = question
+        _question      = llm_question          # includes file context when present
         _project_id    = project_id
         _project_name  = project_name
 
@@ -561,14 +631,24 @@ if active_question and not _asst_running:
             if use_semantic_now:
                 ctx = retrieve_context_semantic(
                     project_id=project_id,
-                    question=question,
+                    question=display_question,
                     api_key=embed_key_now,
                     provider=embed_provider_now,
                 )
             else:
-                ctx = retrieve_context_for_question(project_id, question)
+                ctx = retrieve_context_for_question(project_id, display_question)
 
             context_text = format_context(ctx, project_name)
+
+            # Prepend file context when available (placed before meeting data)
+            if _file_ctx:
+                _n_words = len(_file_ctx.split())
+                context_text = (
+                    f"## Arquivo Anexado: {_file_name} ({_n_words:,} palavras)\n\n"
+                    f"{_file_ctx}\n\n"
+                    f"---\n\n"
+                    + context_text
+                )
 
         meetings_passages = ctx.get("meetings_passages") or []
         no_transcript     = ctx.get("meetings_without_transcript") or []

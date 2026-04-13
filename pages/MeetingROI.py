@@ -36,6 +36,7 @@ from modules.cross_meeting_analyzer import (
     load_score_history,
 )
 from modules.config import AVAILABLE_PROVIDERS
+from modules.session_security import render_api_key_readonly
 
 apply_auth_gate()
 
@@ -83,12 +84,7 @@ with st.sidebar:
         key="roi_classify_provider",
     )
     _prov_cfg  = AVAILABLE_PROVIDERS[_sel_prov]
-    _api_key   = st.text_input(
-        _prov_cfg.get("api_key_label", "API Key"),
-        type="password",
-        key="roi_classify_api_key",
-        help=_prov_cfg.get("api_key_help", ""),
-    )
+    _api_key   = render_api_key_readonly(_sel_prov)
 
     classify_btn = st.button(
         "🏷️ Classificar Tipos com IA",

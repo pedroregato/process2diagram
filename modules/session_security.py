@@ -62,6 +62,39 @@ def render_api_key_gate(provider: str, provider_cfg: dict) -> None:
                 st.error("Key seems too short. Check and try again.")
 
 
+def render_api_key_readonly(provider: str) -> str:
+    """
+    Displays the API key status for the given provider (read-only).
+    Reads from the canonical session_state key set by Settings.
+    Returns the stored key value (or "" if not configured).
+    """
+    sk = _session_key(provider)
+    stored = st.session_state.get(sk, "")
+    if stored:
+        masked = stored[:6] + "••••••••" + stored[-4:] if len(stored) > 10 else "••••••••"
+        st.success(f"🔑 Chave ativa: `{masked}`")
+    else:
+        st.warning("🔑 Chave não configurada.")
+        st.caption("Configure em **⚙️ Configurações** antes de prosseguir.")
+    return stored
+
+
+def render_session_key_readonly(state_key: str, label: str = "API Key") -> str:
+    """
+    Displays the key status for an arbitrary session_state key (read-only).
+    Used for non-provider keys like 'asst_api_key' and 'asst_embed_key'.
+    Returns the stored key value (or "" if not configured).
+    """
+    stored = st.session_state.get(state_key, "")
+    if stored:
+        masked = stored[:6] + "••••••••" + stored[-4:] if len(stored) > 10 else "••••••••"
+        st.success(f"🔑 {label} ativa: `{masked}`")
+    else:
+        st.warning(f"🔑 {label} não configurada.")
+        st.caption("Configure em **⚙️ Configurações** antes de prosseguir.")
+    return stored
+
+
 def get_session_llm_client(provider: str) -> dict | None:
     """
     Returns a dict with the API key and provider config if the key is set,
