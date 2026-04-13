@@ -449,6 +449,105 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_meeting_metadata",
+                "description": (
+                    "Retorna metadados detalhados de uma reunião: presença de transcrição, ata, "
+                    "requisitos, BPMN, termos SBVR e chunks de embedding. "
+                    "USE para verificar o status de uma reunião antes de tomar ações sobre ela."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Número da reunião",
+                        }
+                    },
+                    "required": ["meeting_number"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "preview_meeting_deletion",
+                "description": (
+                    "Exibe o que seria excluído ao deletar uma reunião: ata, transcrição, "
+                    "requisitos, embeddings e outros dados associados. "
+                    "SEMPRE chame esta ferramenta ANTES de delete_meeting. "
+                    "Somente-leitura — não modifica dados."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Número da reunião a ser pré-visualizada para exclusão",
+                        }
+                    },
+                    "required": ["meeting_number"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "delete_meeting",
+                "description": (
+                    "Exclui permanentemente uma reunião e todos os seus dados associados "
+                    "(requisitos, ata, transcrição, embeddings, BPMN, SBVR). "
+                    "ATENÇÃO: operação IRREVERSÍVEL. "
+                    "NUNCA chame sem antes chamar preview_meeting_deletion E receber "
+                    "confirmação explícita do usuário ('sim', 'confirme', 'pode excluir', 'delete')."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Número da reunião a excluir",
+                        },
+                        "confirmed": {
+                            "type": "boolean",
+                            "description": (
+                                "Deve ser true SOMENTE após o usuário confirmar explicitamente "
+                                "a exclusão depois de ver o preview. Padrão: false."
+                            ),
+                        },
+                    },
+                    "required": ["meeting_number"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "reprocess_meeting_requirements",
+                "description": (
+                    "Re-executa o AgentRequirements sobre a transcrição armazenada de uma reunião "
+                    "e salva os novos requisitos no banco. Útil para reuniões que não tiveram "
+                    "requisitos extraídos ou que precisam de reextração (ex: Reunião 6 com discussão "
+                    "sobre legado e patinação). Requer transcrição armazenada no Supabase."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Número da reunião a reprocessar",
+                        },
+                        "output_language": {
+                            "type": "string",
+                            "description": "Idioma dos requisitos extraídos. Padrão: 'Auto-detect'.",
+                        },
+                    },
+                    "required": ["meeting_number"],
+                },
+            },
+        },
     ]
 
 
@@ -474,8 +573,9 @@ class AssistantToolExecutor:
     returns a plain-text result string ready to be injected back into the LLM.
     """
 
-    def __init__(self, project_id: str):
+    def __init__(self, project_id: str, llm_config: dict | None = None):
         self.project_id = project_id
+        self.llm_config = llm_config or {}   # {"api_key", "model", "provider_cfg"}
         self._meeting_cache: list[dict] | None = None
 
     # ── Internal helpers ──────────────────────────────────────────────────────
@@ -1190,6 +1290,217 @@ class AssistantToolExecutor:
             lines.extend(errors)
         return "\n".join(lines)
 
+    # ── Meeting management tools ──────────────────────────────────────────────
+
+    def get_meeting_metadata(self, meeting_number: int) -> str:
+        """Detailed metadata for a single meeting: all stored artefacts + counts."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        m = self._find_meeting(meeting_number)
+        if not m:
+            return f"Reunião {meeting_number} não encontrada no projeto."
+
+        mid   = m.get("id", "")
+        title = m.get("title") or f"Reunião {meeting_number}"
+        date  = m.get("meeting_date") or "—"
+
+        has_transcript = bool(m.get("transcript_clean") or m.get("transcript_raw"))
+        has_minutes    = bool(m.get("minutes_md"))
+        transcript_len = len((m.get("transcript_clean") or m.get("transcript_raw") or "").split())
+
+        counts: dict[str, int] = {}
+        for table, filter_col in [
+            ("requirements",      "project_id"),
+            ("transcript_chunks", "meeting_id"),
+            ("sbvr_terms",        "meeting_id"),
+            ("bpmn_processes",    "project_id"),
+        ]:
+            try:
+                fv = self.project_id if filter_col == "project_id" else mid
+                rows = db.table(table).select("id").eq(filter_col, fv).execute().data or []
+                counts[table] = len(rows)
+            except Exception:
+                counts[table] = -1
+
+        # Also count requirements per meeting (first_meeting_id)
+        try:
+            req_rows = (
+                db.table("requirements").select("id")
+                .eq("project_id", self.project_id)
+                .eq("first_meeting_id", mid)
+                .execute().data or []
+            )
+            counts["requirements_this_meeting"] = len(req_rows)
+        except Exception:
+            counts["requirements_this_meeting"] = -1
+
+        def _c(v: int) -> str:
+            return str(v) if v >= 0 else "erro"
+
+        lines = [
+            f"=== Metadados: Reunião {meeting_number} — {title} ({date}) ===",
+            f"ID interno: {mid}",
+            "",
+            "Artefatos armazenados:",
+            f"  Transcrição: {'✅' if has_transcript else '❌'}",
+        ]
+        if has_transcript:
+            lines.append(f"  Palavras na transcrição: {transcript_len:,}")
+        lines += [
+            f"  Ata (minutes_md): {'✅' if has_minutes else '❌'}",
+            f"  Requisitos desta reunião: {_c(counts['requirements_this_meeting'])}",
+            f"  Chunks de embedding: {_c(counts['transcript_chunks'])}",
+            f"  Termos SBVR vinculados: {_c(counts['sbvr_terms'])}",
+        ]
+        return "\n".join(lines)
+
+    def preview_meeting_deletion(self, meeting_number: int) -> str:
+        """Show what would be cascade-deleted if the meeting were removed."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        m = self._find_meeting(meeting_number)
+        if not m:
+            return f"Reunião {meeting_number} não encontrada no projeto."
+
+        mid   = m.get("id", "")
+        title = m.get("title") or f"Reunião {meeting_number}"
+        date  = m.get("meeting_date") or "—"
+
+        cascade: list[str] = []
+        for table, col in [
+            ("requirements",      "first_meeting_id"),
+            ("transcript_chunks", "meeting_id"),
+            ("sbvr_terms",        "meeting_id"),
+            ("sbvr_rules",        "meeting_id"),
+            ("bpmn_processes",    "meeting_id"),
+        ]:
+            try:
+                rows = db.table(table).select("id").eq(col, mid).execute().data or []
+                if rows:
+                    cascade.append(f"  • {len(rows)} registro(s) em `{table}`")
+            except Exception:
+                cascade.append(f"  • `{table}`: não foi possível verificar")
+
+        has_transcript = bool(m.get("transcript_clean") or m.get("transcript_raw"))
+        has_minutes    = bool(m.get("minutes_md"))
+
+        lines = [
+            f"⚠️  PRÉVIA DE EXCLUSÃO — Reunião {meeting_number}",
+            f"   Título: {title}",
+            f"   Data: {date}",
+            f"   Transcrição: {'✅ presente' if has_transcript else '❌ ausente'}",
+            f"   Ata: {'✅ presente' if has_minutes else '❌ ausente'}",
+            "",
+            "Dados que serão excluídos em cascata:",
+        ]
+        if cascade:
+            lines += cascade
+        else:
+            lines.append("  (nenhum dado associado encontrado além do registro principal)")
+        lines += [
+            "",
+            "⚠️  Esta operação é IRREVERSÍVEL.",
+            "Para confirmar, responda: 'sim, exclua a Reunião N' ou 'confirme a exclusão'.",
+        ]
+        return "\n".join(lines)
+
+    def delete_meeting(self, meeting_number: int, confirmed: bool = False) -> str:
+        """Permanently delete a meeting and all cascade data."""
+        if not confirmed:
+            return (
+                f"❌ Exclusão não confirmada. "
+                f"Para excluir a Reunião {meeting_number}, confirme explicitamente: "
+                f"'sim, exclua a Reunião {meeting_number}'."
+            )
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        m = self._find_meeting(meeting_number)
+        if not m:
+            return f"Reunião {meeting_number} não encontrada."
+
+        mid   = m.get("id", "")
+        title = m.get("title") or f"Reunião {meeting_number}"
+
+        try:
+            db.table("meetings").delete().eq("id", mid).execute()
+            self._meeting_cache = None  # invalidate cache
+            return (
+                f"✅ Reunião {meeting_number} — '{title}' excluída com sucesso.\n"
+                "Todos os dados associados (requisitos, transcrição, ata, embeddings) "
+                "foram removidos em cascata."
+            )
+        except Exception as exc:
+            return f"❌ Erro ao excluir Reunião {meeting_number}: {exc}"
+
+    def reprocess_meeting_requirements(
+        self,
+        meeting_number: int,
+        output_language: str = "Auto-detect",
+    ) -> str:
+        """Re-run AgentRequirements on a stored transcript and save new requirements."""
+        if not self.llm_config:
+            return (
+                "❌ Configuração LLM não disponível no executor. "
+                "Certifique-se de que a chave de API está configurada no Assistente."
+            )
+
+        m = self._find_meeting(meeting_number)
+        if not m:
+            return f"Reunião {meeting_number} não encontrada no projeto."
+
+        mid        = m.get("id", "")
+        title      = m.get("title") or f"Reunião {meeting_number}"
+        transcript = m.get("transcript_clean") or m.get("transcript_raw") or ""
+
+        if not transcript:
+            return (
+                f"❌ Reunião {meeting_number} — '{title}' não possui transcrição armazenada. "
+                "Faça upload da transcrição via TranscriptBackfill antes de reprocessar."
+            )
+
+        try:
+            from core.knowledge_hub import KnowledgeHub
+            from agents.agent_requirements import AgentRequirements
+            from core.project_store import save_requirements_from_hub
+
+            hub = KnowledgeHub.new()
+            hub.transcript_clean = transcript
+            hub.transcript_raw   = transcript
+
+            provider_cfg = self.llm_config.get("provider_cfg", {})
+            client_info  = {"api_key": self.llm_config.get("api_key", "")}
+
+            agent = AgentRequirements(client_info, provider_cfg)
+            hub   = agent.run(hub, output_language=output_language)
+
+            if not hub.requirements.ready:
+                return (
+                    f"❌ AgentRequirements não produziu requisitos para Reunião {meeting_number}. "
+                    "Verifique a transcrição ou tente outro provedor LLM."
+                )
+
+            n_reqs = len(hub.requirements.requirements)
+            saved  = save_requirements_from_hub(mid, self.project_id, hub)
+
+            return (
+                f"✅ Reprocessamento concluído — Reunião {meeting_number} — '{title}'\n"
+                f"• Requisitos extraídos: {n_reqs}\n"
+                f"• Requisitos salvos no banco: {saved}\n"
+                f"• Acesse o ReqTracker para visualizar os novos requisitos."
+            )
+
+        except Exception as exc:
+            return f"❌ Erro ao reprocessar Reunião {meeting_number}: {exc}"
+
     # ── Cross-meeting recurring topics ───────────────────────────────────────
 
     def get_recurring_topics(self, threshold: float = 0.87) -> str:
@@ -1509,8 +1820,22 @@ class AssistantToolExecutor:
                     tool_input.get("meeting_number"),
                     float(tool_input.get("cost_per_hour", 150.0)),
                 ),
-                "get_recurring_topics":      lambda: self.get_recurring_topics(
+                "get_recurring_topics":           lambda: self.get_recurring_topics(
                     float(tool_input.get("threshold", 0.87)),
+                ),
+                "get_meeting_metadata":           lambda: self.get_meeting_metadata(
+                    tool_input["meeting_number"],
+                ),
+                "preview_meeting_deletion":       lambda: self.preview_meeting_deletion(
+                    tool_input["meeting_number"],
+                ),
+                "delete_meeting":                 lambda: self.delete_meeting(
+                    tool_input["meeting_number"],
+                    bool(tool_input.get("confirmed", False)),
+                ),
+                "reprocess_meeting_requirements": lambda: self.reprocess_meeting_requirements(
+                    tool_input["meeting_number"],
+                    tool_input.get("output_language", "Auto-detect"),
                 ),
             }
             if tool_name not in dispatch:

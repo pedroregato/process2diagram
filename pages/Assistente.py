@@ -196,10 +196,10 @@ with st.sidebar:
     )
     if use_tools:
         st.caption(
-            "🔢 17 ferramentas: participantes, decisões, ações, "
-            "transcrições, requisitos, BPMN, SBVR · "
-            "✏️ correção de texto · 📖 termos SBVR · "
-            "📊 ROI-TR · 🔄 tópicos recorrentes"
+            "🔢 21 ferramentas: participantes, decisões, ações, transcrições, "
+            "requisitos, BPMN, SBVR · ✏️ correção · 📖 termos SBVR · "
+            "📊 ROI-TR · 🔄 tópicos recorrentes · "
+            "🗂️ metadados · 🗑️ excluir reunião · 🔁 reprocessar requisitos"
         )
 
     st.markdown("---")

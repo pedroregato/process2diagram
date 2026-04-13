@@ -176,6 +176,21 @@ def _strip_quotes(s: str) -> str:
     return s.strip().strip('"\'').strip('\u201c\u201d\u2018\u2019').strip()
 
 
+_DELETE_MEETING_RE = re.compile(
+    r'(?:exclua?|delete|remova?|apague?|elimine?)\s+'
+    r'(?:a\s+)?'
+    r'(?:reunião|reuni[aã]o|meeting)\s*'
+    r'(?:n[oº°]?\s*)?(\d+)',
+    re.IGNORECASE,
+)
+
+
+def _detect_delete_meeting_intent(text: str) -> int | None:
+    """Return meeting_number if the message requests deleting a specific meeting."""
+    m = _DELETE_MEETING_RE.search(text)
+    return int(m.group(1)) if m else None
+
+
 def _detect_sbvr_update_origin_intent(text: str) -> str | None:
     """
     Return term name if the message asks to change an SBVR term's origin to 'assistente'.
@@ -283,6 +298,10 @@ INSTRUÇÕES DE USO DAS FERRAMENTAS:
   • Aplicar correção (após confirmação) → apply_text_correction
   • Qualidade de reuniões / ROI / eficiência / desperdício → calculate_meeting_roi
   • Assuntos repetidos / tópicos sem progressão / ciclagem → get_recurring_topics
+  • Status detalhado de uma reunião / verificar artefatos → get_meeting_metadata
+  • Ver o que seria excluído de uma reunião → preview_meeting_deletion
+  • Excluir reunião (após preview + confirmação) → delete_meeting
+  • Reprocessar requisitos de reunião já armazenada → reprocess_meeting_requirements
 - Você pode encadear múltiplas ferramentas quando necessário.
 - Após obter os dados, sintetize uma resposta clara e objetiva.
 
@@ -757,7 +776,14 @@ class AgentAssistant(BaseAgent):
 
         system   = self._build_system_prompt_tools(project_name, project_id)
         messages = list(history) + [{"role": "user", "content": question}]
-        executor = AssistantToolExecutor(project_id)
+        executor = AssistantToolExecutor(
+            project_id,
+            llm_config={
+                "api_key":      self.client_info.get("api_key", ""),
+                "model":        self.provider_cfg.get("default_model", ""),
+                "provider_cfg": self.provider_cfg,
+            },
+        )
 
         # ── Correction-intent pre-flight ─────────────────────────────────────
         # If the user is asking to substitute/replace text, bypass LLM tool
@@ -864,6 +890,33 @@ class AgentAssistant(BaseAgent):
                         "role": "user",
                         "content": "Prossiga: chame add_sbvr_term imediatamente.",
                     })
+        # ── Delete-meeting pre-flight ─────────────────────────────────────────
+        # When user requests deleting a meeting, bypass LLM tool-selection:
+        # always call preview_meeting_deletion first in Python so the LLM
+        # has real data to present before asking for confirmation.
+        if not correction:
+            del_num = _detect_delete_meeting_intent(question)
+            if del_num is not None:
+                if status_fn:
+                    status_fn(f"⚠️ Prévia de exclusão — Reunião {del_num}…")
+                preview_result = executor.execute(
+                    "preview_meeting_deletion", {"meeting_number": del_num}
+                )
+                messages.append({
+                    "role": "assistant",
+                    "content": (
+                        f"[Pré-visualização automática de exclusão]\n"
+                        f"Chamei preview_meeting_deletion(meeting_number={del_num}) e obtive:\n\n"
+                        f"{preview_result}"
+                    ),
+                })
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "Apresente ao usuário o que será excluído e pergunte se confirma "
+                        "a exclusão. Aguarde confirmação explícita antes de chamar delete_meeting."
+                    ),
+                })
         # ─────────────────────────────────────────────────────────────────────
 
         client_type = self.provider_cfg["client_type"]
