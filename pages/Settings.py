@@ -457,7 +457,29 @@ ALTER TABLE sbvr_rules ADD COLUMN IF NOT EXISTS source TEXT DEFAULT NULL;
 """
         st.code(_migration_sql, language="sql")
 
+        st.markdown("---")
         st.markdown("#### 📊 Fase 3 — ROI-TR: Qualidade de Reuniões")
+        st.info(
+            "**Como aplicar:**\n\n"
+            "1. Copie o SQL abaixo (ou baixe o arquivo)\n"
+            "2. Acesse **supabase.com → seu projeto → SQL Editor**\n"
+            "3. Clique em **New query**, cole o SQL e clique em **Run**\n\n"
+            "Isso cria a tabela `meeting_quality_scores` (histórico ROI-TR) "
+            "e a função `find_recurring_topics` (análise cross-meeting via embeddings)."
+        )
+        # Load from file so it's always in sync with the actual schema
+        _roi_sql_path = Path(__file__).parent.parent / "setup" / "supabase_schema_meeting_quality.sql"
+        try:
+            _roi_sql_content = _roi_sql_path.read_text(encoding="utf-8")
+        except Exception:
+            _roi_sql_content = "-- Arquivo não encontrado: setup/supabase_schema_meeting_quality.sql"
+        st.download_button(
+            "⬇️ Baixar supabase_schema_meeting_quality.sql",
+            data=_roi_sql_content,
+            file_name="supabase_schema_meeting_quality.sql",
+            mime="text/plain",
+            use_container_width=False,
+        )
         st.caption(
             "Execute no Supabase → SQL Editor para habilitar persistência de scores "
             "e análise cross-meeting semântica (tópicos recorrentes via embeddings)."
