@@ -458,6 +458,21 @@ ALTER TABLE sbvr_rules ADD COLUMN IF NOT EXISTS source TEXT DEFAULT NULL;
         st.code(_migration_sql, language="sql")
 
         st.markdown("---")
+        st.markdown("#### 🏷️ Fase 3b — ROI-TR v2: Tipo de Reunião")
+        st.info(
+            "**Como aplicar:**\n\n"
+            "1. Acesse **supabase.com → seu projeto → SQL Editor**\n"
+            "2. Clique em **New query**, cole o SQL abaixo e clique em **Run**\n\n"
+            "Adiciona a coluna `meeting_type` na tabela `meetings`. "
+            "Necessária para classificação de tipo e fórmula DC ponderada."
+        )
+        _meeting_type_sql = """\
+-- Adiciona coluna de tipo de reunião (classificada por LLM ou heurística)
+ALTER TABLE meetings ADD COLUMN IF NOT EXISTS meeting_type TEXT DEFAULT NULL;
+"""
+        st.code(_meeting_type_sql, language="sql")
+
+        st.markdown("---")
         st.markdown("#### 📊 Fase 3 — ROI-TR: Qualidade de Reuniões")
         st.info(
             "**Como aplicar:**\n\n"

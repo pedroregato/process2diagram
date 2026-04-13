@@ -1431,12 +1431,28 @@ class AssistantToolExecutor:
         title = m.get("title") or f"Reunião {meeting_number}"
 
         try:
+            # ── Step 1: Null-out non-cascade FK references in requirements ──────
+            for fk_col in ("last_meeting_id", "first_meeting_id"):
+                try:
+                    db.table("requirements").update({fk_col: None}).eq(fk_col, mid).execute()
+                except Exception:
+                    pass  # column may not exist — safe to ignore
+
+            # ── Step 2: Delete child rows in tables that may lack CASCADE DELETE ─
+            # (transcript_chunks, sbvr_terms, sbvr_rules, bpmn_processes)
+            for table in ("transcript_chunks", "sbvr_terms", "sbvr_rules", "bpmn_processes"):
+                try:
+                    db.table(table).delete().eq("meeting_id", mid).execute()
+                except Exception:
+                    pass  # table/column may not exist — safe to ignore
+
+            # ── Step 3: Delete the meeting row itself ────────────────────────────
             db.table("meetings").delete().eq("id", mid).execute()
             self._meeting_cache = None  # invalidate cache
             return (
                 f"✅ Reunião {meeting_number} — '{title}' excluída com sucesso.\n"
-                "Todos os dados associados (requisitos, transcrição, ata, embeddings) "
-                "foram removidos em cascata."
+                "Todos os dados associados (requisitos, transcrição, ata, BPMN, "
+                "SBVR e embeddings) foram removidos."
             )
         except Exception as exc:
             return f"❌ Erro ao excluir Reunião {meeting_number}: {exc}"

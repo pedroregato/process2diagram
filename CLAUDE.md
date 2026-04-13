@@ -10,7 +10,7 @@
 - **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown / Word / PDF), requirements analysis (JSON/Markdown), executive HTML report, interactive requirements mind map
 - **Deploy:** Streamlit Cloud — auto-deploy on push to `main` branch (`github.com/pedroregato/process2diagram`)
 - **Dev environment:** PyCharm on Windows; Python 3.13
-- **Current version:** v4.11
+- **Current version:** v4.12
 
 Supported LLM providers: DeepSeek (default), Claude (Anthropic), OpenAI, Groq, Google Gemini.
 
@@ -42,6 +42,7 @@ process2diagram/
 │   ├── Settings.py               # ⚙️ Central settings — LLM providers, API keys, embedding, search, preferences
 │   ├── Diagramas.py              # Full-screen multi-page diagram viewer (BPMN, Mermaid, Mind Map)
 │   ├── Assistente.py             # RAG-powered assistant — semantic Q&A over meeting transcripts
+│   ├── MeetingROI.py             # 📊 ROI-TR dashboard — type-aware quality indicators (v2)
 │   ├── BatchRunner.py            # Batch pipeline — runs the full pipeline on multiple transcripts
 │   ├── BpmnBackfill.py           # Backfill BPMN XML for meetings stored in Supabase (no re-transcription)
 │   ├── ReqTracker.py             # Requirements tracker — Supabase-backed requirement status board
@@ -98,7 +99,9 @@ process2diagram/
 │   ├── reqtracker_exporter.py    # Export RequirementsModel to Excel/CSV for ReqTracker page
 │   ├── text_utils.py             # rule_keyword_pt() — Portuguese keyword normalisation helpers
 │   ├── cost_estimator.py         # Pure-Python LLM cost calculator — PROVIDER_PRICING table, estimate_cost()
-│   └── embeddings.py             # chunk_text(), embed_text(), embed_batch() — Gemini/OpenAI embeddings (1536 dims)
+│   ├── embeddings.py             # chunk_text(), embed_text(), embed_batch() — Gemini/OpenAI embeddings (1536 dims)
+│   ├── meeting_roi_calculator.py # ROI-TR v2 — MEETING_TYPES, TYPE_WEIGHTS matrix, classify_meeting_type() LLM, MeetingROIData, compute_project_roi()
+│   └── cross_meeting_analyzer.py # find_recurring_topics() — semantic (pgvector) + keyword fallback; save_project_scores(); load_score_history()
 │
 ├── ui/
 │   ├── sidebar.py                # render_sidebar() — provider, config, agent toggles, re-run buttons
@@ -205,7 +208,7 @@ AgentSynthesizer         ← LLM (optional); reads all hub artifacts incl. SBVR 
 
 ### App.py — Slim Entry Point
 
-`app.py` (v4.11) no longer contains UI rendering logic. It delegates to:
+`app.py` (v4.12) no longer contains UI rendering logic. It delegates to:
 
 - `ui.auth_gate.apply_auth_gate()` — login wall; called immediately after `st.set_page_config()`; calls `st.stop()` if unauthenticated
 - `core.session_state.init_session_state()` — initializes all `st.session_state` keys with defaults
@@ -546,6 +549,43 @@ Users can edit a previous question via the `✏️` button on any user message:
 ### Error handling
 
 Errors and success messages from the embedding generation flow are persisted in `st.session_state["_embed_error"]` / `["_embed_success"]` before `st.rerun()` and displayed+popped immediately after rerun — prevents the instant-disappear bug caused by `st.error()` before `st.rerun()`.
+
+---
+
+## ROI-TR Dashboard (`pages/MeetingROI.py` + `modules/meeting_roi_calculator.py`)
+
+Quality indicator system for corporate meetings — zero new Supabase tables required (reads from existing `meetings`, `requirements`, `sbvr_terms`, `sbvr_rules`, `bpmn_processes`).
+
+### Meeting type classification
+
+`classify_meeting_type(title, transcript_sample, n_req, n_dec, n_actions, n_sbvr, n_bpmn, llm_config) → (type, confidence)`:
+- **LLM path** (when `llm_config` provided): 1 call per unclassified meeting; JSON `{"type": str, "confidence": float}`; uses `json_mode` for OpenAI-compatible providers.
+- **Heuristic fallback**: keyword matching on meeting title → artefact-count heuristics → `"Híbrida"` (confidence 0.30).
+- Result persisted to `meetings.meeting_type` (SQL: `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS meeting_type TEXT`). Re-classified only when column is NULL.
+
+### Type weight matrix
+
+`TYPE_WEIGHTS: dict[str, dict]` — 11 types, 5 artefact dimensions each (`req`, `dec`, `act`, `sbvr`, `bpmn`) + `min_dc` (minimum DC for full fulfillment):
+
+```python
+"Tomada de Decisão": {"req": 0.5, "dec": 3.0, "act": 2.0, "sbvr": 0.0, "bpmn": 0.0, "min_dc": 6.0}
+"Levantamento de Requisitos": {"req": 3.0, "dec": 1.0, "act": 1.5, "sbvr": 2.0, "bpmn": 1.0, "min_dc": 4.5}
+```
+
+### Formulas
+
+```
+DC_ponderado = n_dec×w[dec] + n_act_done×w[act] + n_reqs×w[req] + n_sbvr×w[sbvr] + min(1,n_bpmn)×w[bpmn]
+fulfillment  = min(1.0, DC_ponderado / min_dc)
+ROI-TR       = min(10, DC_ponderado × 1000 / (n_part × dur_h × custo_h) × 1.5)
+TRC          = min(100, (n_cycle_signals / (word_count / 500)) × 20)
+```
+
+`fulfillment` is a separate display metric — it does not multiply into ROI-TR. DC already captures under-delivery naturally via the type-specific weights.
+
+### Backward compatibility
+
+`compute_project_roi()` catches `Exception` when selecting `meeting_type` (column may not exist) and retries without it — safe to deploy before running the SQL migration.
 
 ---
 
@@ -953,6 +993,16 @@ All pages begin with `ui.auth_gate.apply_auth_gate()` immediately after `st.set_
 - [x] **`modules/text_utils.py`** — `rule_keyword_pt()` and other Portuguese text utilities
 - [x] **`modules/reqtracker_exporter.py`** — Excel/CSV export for ReqTracker
 - [x] **Google Gemini SDK migration** — use `google-generativeai` (stable) for `embed_content()` + `list_models()`; `google-genai` kept as secondary dependency
+
+### PC5 — Concluído (v4.12)
+- [x] **ROI-TR sensível ao tipo de reunião** — `modules/meeting_roi_calculator.py` v2; `MEETING_TYPES` (11 tipos), `TYPE_WEIGHTS` (matriz de pesos por tipo), `TYPE_ICONS`; DC ponderado substitui fórmula linear fixa
+- [x] **`classify_meeting_type()`** — classificação LLM (DeepSeek/qualquer provedor); 1 chamada por reunião; JSON `{type, confidence}`; fallback heurístico por palavras-chave no título + distribuição de artefatos; resultado persistido em `meetings.meeting_type`
+- [x] **`fulfillment_score`** — novo indicador 0–1: proporção entre DC gerado e DC mínimo esperado para o tipo; exibido na tabela, no detalhe e nos gráficos
+- [x] **`MeetingROIData` v2** — novos campos: `meeting_type`, `meeting_type_confidence`, `fulfillment_score`, `n_sbvr`, `n_bpmn_procs`; pesos do tipo exibidos no expander de fórmula
+- [x] **`compute_project_roi()` v2** — busca SBVR (`sbvr_terms` + `sbvr_rules`) e BPMN (`bpmn_processes`) por meeting; aceita `llm_config` opcional; retrocompatível (fallback sem coluna `meeting_type` no schema)
+- [x] **`pages/MeetingROI.py` v2** — sidebar com seletor de provedor + API key + botão "🏷️ Classificar Tipos com IA"; 6 KPIs (inclui "Tipos classificados"); gráfico de Fulfillment e distribuição de tipos; detalhe mostra pesos por artefato e min_dc; recomendações incluem "Baixo Fulfillment"
+- [x] **`delete_meeting` fix** — pré-exclusão limpa `requirements.last_meeting_id`, `requirements.first_meeting_id`, `sbvr_terms`, `sbvr_rules`, `bpmn_processes` e `transcript_chunks` para contornar FKs sem CASCADE
+- [x] **SQL migração** — `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS meeting_type TEXT` adicionado em Configurações → Banco de Dados → Fase 3b
 
 ---
 

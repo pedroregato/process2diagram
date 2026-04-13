@@ -72,6 +72,8 @@ Cada usuário insere sua própria chave de API no sidebar — nunca armazenada e
 - **Execução paralela** — Meeting Minutes e Requirements rodam simultaneamente via `ThreadPoolExecutor`.
 - **Diagrama de arquitetura interativo** — exibido como splash screen ao abrir o app (pan/zoom/fit).
 - **Relatório executivo auto-contido** — HTML standalone com sidebar, colapsável, filtros de requisitos, status de action items e comentários em localStorage.
+- **ROI-TR sensível ao tipo de reunião** — classifica cada reunião em 11 tipos (Levantamento, Tomada de Decisão, Revisão de Processos, etc.) via LLM e aplica matriz de pesos específica para cada tipo. Decisões valem mais numa reunião de Governança; requisitos valem mais num Levantamento. Inclui índice de **Fulfillment** (entrega vs. expectativa do tipo).
+- **Assistente com ferramentas de gestão** — além de Q&A semântico, o Assistente pode excluir reuniões, reprocessar requisitos e calcular ROI-TR sob demanda via tool-use (21 ferramentas).
 
 ---
 
@@ -134,7 +136,9 @@ process2diagram/
 │   ├── bpmn_structural_validator.py  # 6 verificações estruturais
 │   ├── executive_html.py      # Gerador de relatório HTML interativo
 │   ├── mermaid_renderer.py    # render_mermaid_block() — pan/zoom/fit
-│   └── minutes_exporter.py    # Export Ata → .docx e .pdf
+│   ├── minutes_exporter.py    # Export Ata → .docx e .pdf
+│   ├── meeting_roi_calculator.py  # ROI-TR v2 — tipo-aware; TYPE_WEIGHTS (11 tipos); LLM classifier
+│   └── cross_meeting_analyzer.py  # Tópicos recorrentes cross-meeting (semântico + keyword)
 ├── ui/
 │   ├── sidebar.py             # Sidebar completa
 │   ├── input_area.py          # Área de entrada + pré-processamento
@@ -144,6 +148,26 @@ process2diagram/
 ├── tests/                     # 106 testes, 0 chamadas LLM
 └── requirements.txt
 ```
+
+---
+
+## Dashboard de Qualidade de Reuniões (ROI-TR)
+
+A página **📊 Qualidade de Reuniões** calcula indicadores de eficiência para todas as reuniões de um projeto armazenadas no Supabase:
+
+| Indicador | Descrição |
+|---|---|
+| **ROI-TR** (0–10) | DC ponderado ÷ custo humano estimado |
+| **Fulfillment** (0–100 %) | Entrega real vs. mínimo esperado para o tipo |
+| **TRC** (%) | Taxa de Retrabalho Conceitual — sinais linguísticos de repetição |
+
+**Tipos de reunião classificados automaticamente por LLM:**
+
+> Kick-off · Levantamento de Requisitos · Validação · Planejamento · Tomada de Decisão · Revisão de Processos · Definição Conceitual · Retrospectiva · Status Report · Esclarecimento de Dúvidas · Híbrida
+
+Cada tipo tem uma **matriz de pesos** que define quais artefatos são primários (decisões numa Tomada de Decisão, requisitos num Levantamento, SBVR numa Definição Conceitual, etc.). Isso elimina a distorção de comparar reuniões de naturezas diferentes com a mesma fórmula.
+
+A classificação é persistida em `meetings.meeting_type` — LLM chamado apenas uma vez por reunião.
 
 ---
 
