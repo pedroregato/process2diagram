@@ -422,6 +422,33 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_recurring_topics",
+                "description": (
+                    "Detecta tópicos que foram discutidos em múltiplas reuniões sem resolução "
+                    "definitiva — o padrão de 'patinação' que gera desperdício de tempo. "
+                    "Usa embeddings semânticos quando disponíveis; caso contrário usa análise "
+                    "de palavras-chave. "
+                    "USE quando o usuário perguntar sobre assuntos repetidos, tópicos sem "
+                    "progressão, ciclagem de discussões ou padrões de desperdício entre reuniões."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "threshold": {
+                            "type": "number",
+                            "description": (
+                                "Limiar de similaridade semântica (0.80–0.98). "
+                                "Padrão 0.87. Maior = correspondências mais estritas."
+                            ),
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
     ]
 
 
@@ -1163,6 +1190,58 @@ class AssistantToolExecutor:
             lines.extend(errors)
         return "\n".join(lines)
 
+    # ── Cross-meeting recurring topics ───────────────────────────────────────
+
+    def get_recurring_topics(self, threshold: float = 0.87) -> str:
+        """Detect topics recurring across meetings (semantic or keyword fallback)."""
+        from modules.cross_meeting_analyzer import find_recurring_topics as _find
+
+        topics, method = _find(self.project_id, threshold=threshold, max_results=20)
+
+        method_label = {
+            "semantic":    "análise semântica de embeddings",
+            "keyword":     "correspondência de palavras-chave (embeddings não disponíveis)",
+            "unavailable": "Supabase indisponível",
+            "error":       "erro ao acessar o banco",
+        }.get(method, method)
+
+        if not topics:
+            return (
+                f"Nenhum tópico recorrente detectado (método: {method_label}). "
+                f"Limiar usado: {threshold:.2f}. "
+                "Tente reduzir o limiar ou verifique se as transcrições estão disponíveis."
+            )
+
+        lines = [
+            f"=== Tópicos Recorrentes entre Reuniões (método: {method_label}) ===",
+            f"Limiar de similaridade: {threshold:.2f}",
+            f"{len(topics)} tópico(s) identificado(s):",
+            "",
+        ]
+        for t in topics:
+            meet_str = ", ".join(f"Reunião {n}" for n in t.meetings)
+            kw_str   = " · ".join(t.keywords[:5]) if t.keywords else "—"
+            sim_str  = f"  (similaridade: {t.similarity:.2f})" if t.similarity > 0 else ""
+            lines.append(f"• {t.intensity_label}  [{meet_str}]{sim_str}")
+            lines.append(f"  Termos-chave: {kw_str}")
+            lines.append(f"  Trecho (R{t.meetings[0]}): {t.excerpt_a[:200]}")
+            if len(t.meetings) > 1:
+                n_b = t.meetings[1]
+                lines.append(f"  Trecho (R{n_b}): {t.excerpt_b[:200]}")
+            lines.append("")
+
+        # Meeting recurrence summary
+        meeting_counts: dict[int, int] = {}
+        for t in topics:
+            for n in t.meetings:
+                meeting_counts[n] = meeting_counts.get(n, 0) + 1
+        if meeting_counts:
+            lines.append("Reuniões com mais tópicos recorrentes:")
+            for n, cnt in sorted(meeting_counts.items(), key=lambda x: -x[1])[:5]:
+                lines.append(f"  Reunião {n}: {cnt} tópico(s)")
+
+        return "\n".join(lines)
+
     # ── ROI-TR calculator ─────────────────────────────────────────────────────
 
     def calculate_meeting_roi(
@@ -1429,6 +1508,9 @@ class AssistantToolExecutor:
                 "calculate_meeting_roi":     lambda: self.calculate_meeting_roi(
                     tool_input.get("meeting_number"),
                     float(tool_input.get("cost_per_hour", 150.0)),
+                ),
+                "get_recurring_topics":      lambda: self.get_recurring_topics(
+                    float(tool_input.get("threshold", 0.87)),
                 ),
             }
             if tool_name not in dispatch:

@@ -23,6 +23,11 @@ import streamlit as st
 from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured, get_supabase_client
 from modules.meeting_roi_calculator import compute_project_roi, project_summary, MeetingROIData
+from modules.cross_meeting_analyzer import (
+    find_recurring_topics,
+    save_project_scores,
+    load_score_history,
+)
 
 apply_auth_gate()
 
@@ -161,8 +166,27 @@ col5.metric(
 
 st.markdown("---")
 
+# ── Save scores button ────────────────────────────────────────────────────────
+save_col, hist_col = st.columns([1, 4])
+with save_col:
+    if st.button("💾 Salvar Scores no Banco", use_container_width=True,
+                 help="Persiste os indicadores ROI-TR atuais em meeting_quality_scores para análise de tendência."):
+        result = save_project_scores(project_id, roi_data)
+        if result["saved"] > 0:
+            st.toast(f"✅ {result['saved']} scores salvos com sucesso!", icon="✅")
+        if result["errors"]:
+            for e in result["errors"]:
+                st.warning(e)
+        if result["saved"] == 0 and not result["errors"]:
+            st.info("Tabela meeting_quality_scores não encontrada. Execute o SQL de migração em Configurações → Banco de Dados.")
+
 # ── Charts ─────────────────────────────────────────────────────────────────────
-tab_charts, tab_table, tab_detail = st.tabs(["📈 Gráficos", "📋 Tabela Detalhada", "🔍 Detalhes por Reunião"])
+tab_charts, tab_table, tab_detail, tab_cross = st.tabs([
+    "📈 Gráficos",
+    "📋 Tabela Detalhada",
+    "🔍 Detalhes por Reunião",
+    "🔄 Tópicos Recorrentes",
+])
 
 with tab_charts:
     chart_labels = [f"R{m.meeting_number}" for m in roi_data]
@@ -352,6 +376,154 @@ ROI-TR = min(10, DC × 1000 / Custo × 1.5)
 ```
 """
         )
+
+with tab_cross:
+    st.markdown("#### 🔄 Tópicos Recorrentes entre Reuniões")
+    st.caption(
+        "Detecta assuntos discutidos em múltiplas reuniões sem resolução definitiva — "
+        "o padrão de 'patinação' que gera desgaste e baixo ROI-TR. "
+        "Usa embeddings semânticos quando disponíveis; caso contrário, análise de palavras-chave."
+    )
+
+    col_thresh, col_btn = st.columns([2, 1])
+    with col_thresh:
+        sim_threshold = st.slider(
+            "Limiar de similaridade semântica",
+            min_value=0.80,
+            max_value=0.98,
+            value=0.87,
+            step=0.01,
+            format="%.2f",
+            help="Maior = correspondências mais estritas. Recomendado: 0.87–0.92",
+            key="cross_threshold",
+        )
+    with col_btn:
+        st.markdown("<br>", unsafe_allow_html=True)
+        run_cross = st.button("🔍 Analisar", use_container_width=True, key="run_cross_btn")
+
+    if run_cross or st.session_state.get("_cross_data_loaded"):
+        with st.spinner("Analisando padrões cross-meeting..."):
+            topics, method = find_recurring_topics(
+                project_id,
+                threshold=sim_threshold,
+                max_results=30,
+            )
+        st.session_state["_cross_data_loaded"] = True
+        st.session_state["_cross_topics"] = topics
+        st.session_state["_cross_method"] = method
+    else:
+        topics = st.session_state.get("_cross_topics", [])
+        method = st.session_state.get("_cross_method", "")
+
+    if topics or method:
+        method_label = {
+            "semantic": "🧠 Semântico (embeddings)",
+            "keyword":  "🔤 Palavras-chave (fallback)",
+            "unavailable": "⚠️ Supabase indisponível",
+            "error":    "❌ Erro ao consultar banco",
+        }.get(method, method)
+
+        st.caption(f"Método de detecção: **{method_label}**")
+
+        if method == "keyword" and not st.session_state.get("_cross_data_loaded"):
+            st.info(
+                "💡 Embeddings não encontrados para este projeto. "
+                "Gere os embeddings na página **Assistente** → '⚡ Gerar Embeddings' "
+                "para ativar a análise semântica (mais precisa)."
+            )
+
+    if topics:
+        st.markdown(f"**{len(topics)} tópico(s) recorrente(s) identificado(s):**")
+
+        for t in topics:
+            title_parts = [f"**{t.meetings_str}**"]
+            if t.keywords:
+                title_parts.append("·  " + "  ·  ".join(t.keywords[:4]))
+            if t.similarity > 0:
+                title_parts.append(f"  ·  sim. {t.similarity:.2f}")
+
+            with st.expander(
+                f"{t.intensity_label}  {'  '.join(title_parts)}",
+                expanded=False,
+            ):
+                meet_list = "  →  ".join(
+                    f"**Reunião {n}** — {t.meeting_titles.get(n, '')}"
+                    for n in t.meetings
+                )
+                st.markdown(f"Reuniões envolvidas: {meet_list}")
+
+                if t.keywords:
+                    st.markdown(f"Termos-chave: `{'` · `'.join(t.keywords)}`")
+
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    st.markdown(f"*Reunião {t.meetings[0]}:*")
+                    st.markdown(
+                        f'<div style="background:#f8fafc;border-left:3px solid #94a3b8;'
+                        f'padding:8px 12px;border-radius:4px;font-size:0.85rem">'
+                        f'{t.excerpt_a}</div>',
+                        unsafe_allow_html=True,
+                    )
+                with col_b:
+                    n_b = t.meetings[1] if len(t.meetings) > 1 else t.meetings[0]
+                    st.markdown(f"*Reunião {n_b}:*")
+                    st.markdown(
+                        f'<div style="background:#f8fafc;border-left:3px solid #94a3b8;'
+                        f'padding:8px 12px;border-radius:4px;font-size:0.85rem">'
+                        f'{t.excerpt_b}</div>',
+                        unsafe_allow_html=True,
+                    )
+
+        # Summary table
+        if len(topics) >= 3:
+            st.markdown("---")
+            st.markdown("##### Resumo de recorrência por reunião")
+            meeting_recurrence: dict[int, int] = {}
+            for t in topics:
+                for n in t.meetings:
+                    meeting_recurrence[n] = meeting_recurrence.get(n, 0) + 1
+
+            df_rec = pd.DataFrame([
+                {"Reunião": f"R{n}", "Tópicos recorrentes": cnt}
+                for n, cnt in sorted(meeting_recurrence.items())
+            ]).set_index("Reunião")
+            st.bar_chart(df_rec, color="#a78bfa", height=240)
+            st.caption(
+                "Reuniões com mais tópicos recorrentes são candidatas prioritárias "
+                "para revisão de pauta e implementação de timeboxing."
+            )
+    elif st.session_state.get("_cross_data_loaded"):
+        st.success(
+            "✅ Nenhum tópico recorrente detectado com o limiar atual. "
+            "Tente reduzir o limiar ou verifique se as transcrições estão disponíveis."
+        )
+
+# ── Score history ──────────────────────────────────────────────────────────────
+history = load_score_history(project_id)
+if history:
+    with st.expander("📜 Histórico de Scores ROI-TR", expanded=False):
+        st.caption(
+            "Registros salvos via '💾 Salvar Scores no Banco'. "
+            "Permite acompanhar a evolução dos indicadores ao longo do tempo."
+        )
+        df_hist = pd.DataFrame(history)
+        df_hist["computed_at"] = pd.to_datetime(df_hist["computed_at"]).dt.strftime("%Y-%m-%d %H:%M")
+        df_hist = df_hist.rename(columns={
+            "meeting_number": "Reunião",
+            "computed_at":    "Calculado em",
+            "roi_tr":         "ROI-TR",
+            "trc":            "TRC %",
+            "cost_estimate":  "Custo est.",
+            "dc_score":       "DC",
+        })
+        cols_show = [c for c in ["Reunião", "Calculado em", "ROI-TR", "TRC %", "Custo est.", "DC"] if c in df_hist.columns]
+        st.dataframe(df_hist[cols_show], hide_index=True, use_container_width=True)
+
+        if len(df_hist["Reunião"].unique()) > 0:
+            pivot = df_hist.pivot_table(index="Calculado em", columns="Reunião", values="ROI-TR", aggfunc="mean")
+            if not pivot.empty and len(pivot) > 1:
+                st.markdown("**Evolução do ROI-TR por reunião**")
+                st.line_chart(pivot, height=280)
 
 # ── Recomendações automáticas ─────────────────────────────────────────────────
 st.markdown("---")

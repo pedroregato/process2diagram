@@ -457,6 +457,53 @@ ALTER TABLE sbvr_rules ADD COLUMN IF NOT EXISTS source TEXT DEFAULT NULL;
 """
         st.code(_migration_sql, language="sql")
 
+        st.markdown("#### 📊 Fase 3 — ROI-TR: Qualidade de Reuniões")
+        st.caption(
+            "Execute no Supabase → SQL Editor para habilitar persistência de scores "
+            "e análise cross-meeting semântica (tópicos recorrentes via embeddings)."
+        )
+        _roi_sql = """\
+-- Tabela de histórico de indicadores ROI-TR
+CREATE TABLE IF NOT EXISTS meeting_quality_scores (
+    id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id          UUID        NOT NULL REFERENCES projects(id)  ON DELETE CASCADE,
+    meeting_id          UUID        NOT NULL REFERENCES meetings(id)  ON DELETE CASCADE,
+    meeting_number      INTEGER     NOT NULL,
+    computed_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    cost_per_hour       NUMERIC     DEFAULT 150,
+    n_participants      INTEGER,
+    duration_min        NUMERIC,
+    cost_estimate       NUMERIC,
+    n_decisions         INTEGER,
+    n_actions_total     INTEGER,
+    n_actions_complete  INTEGER,
+    n_requirements      INTEGER,
+    cycle_signals       INTEGER,
+    trc                 NUMERIC,
+    dc_score            NUMERIC,
+    roi_tr              NUMERIC
+);
+CREATE INDEX IF NOT EXISTS idx_mqs_project
+    ON meeting_quality_scores (project_id, meeting_number, computed_at DESC);
+ALTER TABLE meeting_quality_scores DISABLE ROW LEVEL SECURITY;
+
+-- Função para análise cross-meeting (requer pgvector + transcript_chunks)
+CREATE OR REPLACE FUNCTION find_recurring_topics(
+    p_project_id UUID, p_threshold FLOAT DEFAULT 0.87, p_max_results INT DEFAULT 30
+)
+RETURNS TABLE (meeting_id_a UUID, meeting_id_b UUID, chunk_text_a TEXT, chunk_text_b TEXT, similarity FLOAT)
+LANGUAGE sql STABLE AS $$
+    SELECT a.meeting_id, b.meeting_id, a.chunk_text, b.chunk_text,
+           (1 - (a.embedding <=> b.embedding))::FLOAT
+    FROM transcript_chunks a
+    JOIN transcript_chunks b ON a.project_id = b.project_id AND a.meeting_id < b.meeting_id
+    WHERE a.project_id = p_project_id
+      AND (1 - (a.embedding <=> b.embedding)) > p_threshold
+    ORDER BY (1 - (a.embedding <=> b.embedding)) DESC LIMIT p_max_results;
+$$;
+"""
+        st.code(_roi_sql, language="sql")
+
     st.markdown("---")
     st.markdown("#### 📊 Painel completo do banco")
     st.markdown(
