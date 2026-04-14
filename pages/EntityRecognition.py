@@ -28,11 +28,25 @@ from core.project_store import list_projects
 
 apply_auth_gate()
 
+# ── Sidebar: LLM provider + API key ──────────────────────────────────────────
+from modules.config import AVAILABLE_PROVIDERS
+from modules.session_security import render_api_key_readonly
+
+with st.sidebar:
+    st.markdown("### ⚙️ Configuração LLM")
+    selected_provider = st.selectbox(
+        "Provedor", list(AVAILABLE_PROVIDERS.keys()), key="er_provider",
+    )
+    provider_cfg = AVAILABLE_PROVIDERS[selected_provider]
+    api_key = render_api_key_readonly(selected_provider)
+
+client_info = {"api_key": api_key} if api_key else None
+
 # ── Header ────────────────────────────────────────────────────────────────────
 st.markdown("# 🔍 Reconhecimento de Entidades")
 st.caption(
     "Identifica automaticamente pessoas, áreas, unidades organizacionais e cargos "
-    "mencionados nas transcrições de reuniões usando spaCy + padrões linguísticos + dicionário."
+    "mencionados nas transcrições de reuniões. Usa LLM (primário) ou spaCy + padrões linguísticos + dicionário (fallback)."
 )
 
 if not supabase_configured():
@@ -195,11 +209,7 @@ with tab_extract:
         type="primary",
         key="er_run",
     ):
-        from modules.ner_extractor import EntityRecognizer, save_entities
-
-        # Carrega dicionário uma única vez para o projeto
-        rec = EntityRecognizer()
-        n_dict = rec.load_dictionary(project_id)
+        from modules.ner_extractor import extract_entities, save_entities
 
         progress_bar = st.progress(0.0)
         status_area  = st.empty()
@@ -218,7 +228,12 @@ with tab_extract:
             status_area.info(f"⏳ **{i + 1}/{total}** — Reunião {num}: `{title}`")
 
             try:
-                entities = rec.extract(transcript)
+                entities, tokens = extract_entities(
+                    transcript,
+                    project_id=project_id,
+                    client_info=client_info,
+                    provider_cfg=provider_cfg,
+                )
                 n_saved, err = save_entities(mid, project_id, entities)
 
                 by_type = {}
@@ -234,6 +249,7 @@ with tab_extract:
                     "Áreas":     by_type.get("AREA", 0),
                     "Unidades":  by_type.get("UNIDADE", 0),
                     "Cargos":    by_type.get("CARGO", 0),
+                    "Tokens":    tokens,
                 })
 
             except Exception as exc:
@@ -246,6 +262,7 @@ with tab_extract:
                     "Áreas":    0,
                     "Unidades": 0,
                     "Cargos":   0,
+                    "Tokens":   0,
                 })
 
             progress_bar.progress((i + 1) / total)
@@ -261,8 +278,12 @@ with tab_extract:
         c1.metric("✅ Reuniões processadas", n_ok)
         c2.metric("❌ Erros",               n_err)
         c3.metric("🔍 Entidades salvas",    total_ent)
-        if n_dict:
-            st.caption(f"ℹ️ Dicionário do projeto: {n_dict} entidade(s) conhecida(s) usadas na extração.")
+
+        total_tokens = sum(r.get("Tokens", 0) for r in results if isinstance(r.get("Tokens"), int))
+        if total_tokens:
+            st.caption(f"ℹ️ {total_tokens:,} tokens usados (extração via LLM).")
+        else:
+            st.caption("ℹ️ Extração via spaCy + regex (fallback — configure API key para usar LLM).")
 
         st.dataframe(pd.DataFrame(results), use_container_width=True, hide_index=True)
 
@@ -287,7 +308,7 @@ with tab_view:
     with col_src:
         filter_src = st.selectbox(
             "Fonte",
-            ["TODAS", "spacy", "regex", "dictionary"],
+            ["TODAS", "llm", "spacy", "regex", "dictionary"],
             key="er_vsrc",
         )
     with col_search:
