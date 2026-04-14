@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Process2Diagram — Roadmap de Autenticação</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap');
+
+  :root {
+    --navy:   #0B1E3D;
+    --navy2:  #0F2A4A;
+    --amber:  #C97B1A;
+    --amber2: #E8941A;
+    --blue:   #1A6BCC;
+    --green:  #16A34A;
+    --purple: #7C3AED;
+    --red:    #DC2626;
+    --slate:  #8899AA;
+    --text:   #E8EDF2;
+    --border: #1E3A55;
+    --card:   #0D2040;
+    --done:   #064E3B;
+    --done-b: #10B981;
+    --inprog: #1E3A6B;
+    --inprog-b:#3B82F6;
+    --future: #2D1A4A;
+    --future-b:#A78BFA;
+    --warn:   #451A03;
+    --warn-b: #F59E0B;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--navy);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── Header ──────────────────────────────────────────────────────────────── */
+  .header {
+    background: linear-gradient(135deg, var(--navy) 0%, #1A3A6B 100%);
+    border-bottom: 3px solid var(--amber);
+    padding: 2.5rem 2rem 2rem;
+    text-align: center;
+  }
+  .header .icon { font-size: 3rem; margin-bottom: .5rem; }
+  .header h1 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.8rem;
+    color: #FAFAF8;
+    letter-spacing: -.02em;
+  }
+  .header .sub {
+    color: var(--slate);
+    font-size: .8rem;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    margin-top: .4rem;
+  }
+  .header .version {
+    display: inline-block;
+    margin-top: .8rem;
+    background: rgba(201,123,26,.15);
+    border: 1px solid rgba(201,123,26,.4);
+    color: var(--amber2);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: .75rem;
+    padding: .2rem .7rem;
+    border-radius: 20px;
+    letter-spacing: .05em;
+  }
+
+  /* ── Layout ──────────────────────────────────────────────────────────────── */
+  .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+  /* ── Section title ───────────────────────────────────────────────────────── */
+  .section-title {
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--slate);
+    margin: 2.5rem 0 1rem;
+    padding-bottom: .4rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── Timeline ────────────────────────────────────────────────────────────── */
+  .timeline { position: relative; }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 22px;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--amber), var(--border));
+  }
+
+  .phase {
+    position: relative;
+    padding-left: 60px;
+    margin-bottom: 1.5rem;
+  }
+
+  .phase-dot {
+    position: absolute;
+    left: 12px;
+    top: 16px;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .65rem; font-weight: 700;
+    z-index: 1;
+  }
+
+  .phase-card {
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .phase-header {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .85rem 1.2rem;
+    cursor: pointer;
+    user-select: none;
+  }
+  .phase-header:hover { filter: brightness(1.08); }
+
+  .phase-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: .7rem;
+    font-weight: 600;
+    padding: .2rem .55rem;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  .phase-title {
+    flex: 1;
+    font-weight: 600;
+    font-size: .95rem;
+  }
+
+  .phase-tag {
+    font-size: .7rem;
+    padding: .15rem .5rem;
+    border-radius: 4px;
+    letter-spacing: .04em;
+    font-weight: 600;
+  }
+
+  .phase-body {
+    padding: 1.2rem 1.4rem;
+    border-top: 1px solid var(--border);
+    display: none;
+  }
+  .phase-body.open { display: block; }
+
+  /* Status colors */
+  .s-baseline { background: var(--card); }
+  .s-baseline .phase-header { background: rgba(30,58,85,.6); }
+  .s-baseline .phase-dot { background: var(--slate); border: 2px solid #445566; }
+  .s-baseline .phase-badge { background: rgba(136,153,170,.15); color: var(--slate); border: 1px solid #445566; }
+
+  .s-done { background: var(--done); }
+  .s-done .phase-header { background: rgba(6,78,59,.8); }
+  .s-done .phase-dot { background: var(--done-b); border: 2px solid #34D399; color: #fff; }
+  .s-done .phase-badge { background: rgba(16,185,129,.15); color: var(--done-b); border: 1px solid rgba(16,185,129,.4); }
+  .s-done .phase-tag { background: rgba(16,185,129,.15); color: var(--done-b); }
+
+  .s-active { background: var(--inprog); }
+  .s-active .phase-header { background: rgba(30,58,107,.8); }
+  .s-active .phase-dot { background: var(--inprog-b); border: 2px solid #60A5FA; color: #fff; }
+  .s-active .phase-badge { background: rgba(59,130,246,.15); color: #60A5FA; border: 1px solid rgba(59,130,246,.4); }
+  .s-active .phase-tag { background: rgba(59,130,246,.15); color: #60A5FA; }
+
+  .s-next { background: var(--card); }
+  .s-next .phase-header { background: rgba(15,32,64,.8); }
+  .s-next .phase-dot { background: var(--amber); border: 2px solid var(--amber2); color: #fff; }
+  .s-next .phase-badge { background: rgba(201,123,26,.15); color: var(--amber2); border: 1px solid rgba(201,123,26,.4); }
+  .s-next .phase-tag { background: rgba(201,123,26,.15); color: var(--amber2); }
+
+  .s-future { background: var(--future); }
+  .s-future .phase-header { background: rgba(45,26,74,.7); }
+  .s-future .phase-dot { background: var(--future-b); border: 2px solid #C4B5FD; color: #fff; }
+  .s-future .phase-badge { background: rgba(167,139,250,.15); color: #C4B5FD; border: 1px solid rgba(167,139,250,.4); }
+  .s-future .phase-tag { background: rgba(167,139,250,.15); color: #C4B5FD; }
+
+  .s-security { background: var(--warn); }
+  .s-security .phase-header { background: rgba(69,26,3,.8); }
+  .s-security .phase-dot { background: var(--warn-b); border: 2px solid #FCD34D; color: #000; }
+  .s-security .phase-badge { background: rgba(245,158,11,.15); color: #FCD34D; border: 1px solid rgba(245,158,11,.4); }
+  .s-security .phase-tag { background: rgba(245,158,11,.15); color: #FCD34D; }
+
+  /* ── Content elements ────────────────────────────────────────────────────── */
+  .item-list { list-style: none; }
+  .item-list li {
+    padding: .35rem 0 .35rem 1.4rem;
+    position: relative;
+    font-size: .88rem;
+    border-bottom: 1px solid rgba(255,255,255,.04);
+  }
+  .item-list li:last-child { border-bottom: none; }
+  .item-list li::before {
+    content: '▸';
+    position: absolute; left: 0;
+    color: var(--amber);
+    font-size: .7rem;
+    top: .45rem;
+  }
+
+  .check-list { list-style: none; }
+  .check-list li {
+    padding: .3rem 0 .3rem 1.6rem;
+    position: relative;
+    font-size: .88rem;
+  }
+  .check-list li::before {
+    position: absolute; left: 0;
+    font-size: .85rem;
+    top: .28rem;
+  }
+  .check-list li.done::before   { content: '✅'; }
+  .check-list li.active::before { content: '🔵'; }
+  .check-list li.todo::before   { content: '⬜'; }
+  .check-list li.future::before { content: '🔮'; }
+  .check-list li.warn::before   { content: '⚠️'; }
+
+  .code-block {
+    background: #050D1A;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--amber);
+    border-radius: 6px;
+    padding: .9rem 1rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: .78rem;
+    color: #A8C4E0;
+    overflow-x: auto;
+    margin: .8rem 0;
+    white-space: pre;
+  }
+
+  .diagram {
+    background: #050D1A;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: .78rem;
+    color: #A8C4E0;
+    overflow-x: auto;
+    margin: .8rem 0;
+    white-space: pre;
+  }
+
+  .cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: .8rem 0; }
+  @media (max-width: 600px) { .cols-2 { grid-template-columns: 1fr; } }
+
+  .info-box {
+    background: rgba(26,107,204,.12);
+    border: 1px solid rgba(26,107,204,.3);
+    border-radius: 6px;
+    padding: .7rem .9rem;
+    font-size: .83rem;
+    color: #93C5FD;
+    margin: .8rem 0;
+  }
+
+  .warn-box {
+    background: rgba(245,158,11,.1);
+    border: 1px solid rgba(245,158,11,.3);
+    border-radius: 6px;
+    padding: .7rem .9rem;
+    font-size: .83rem;
+    color: #FCD34D;
+    margin: .8rem 0;
+  }
+
+  .table-wrap { overflow-x: auto; margin: .8rem 0; }
+  table { width: 100%; border-collapse: collapse; font-size: .83rem; }
+  th {
+    background: rgba(201,123,26,.15);
+    color: var(--amber2);
+    text-align: left;
+    padding: .5rem .8rem;
+    font-weight: 600;
+    font-size: .75rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    border-bottom: 1px solid rgba(201,123,26,.3);
+  }
+  td {
+    padding: .45rem .8rem;
+    border-bottom: 1px solid rgba(255,255,255,.05);
+    color: #C8D8E8;
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,.03); }
+
+  .pill {
+    display: inline-block;
+    padding: .1rem .5rem;
+    border-radius: 20px;
+    font-size: .7rem;
+    font-weight: 600;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .pill-green  { background: rgba(16,185,129,.15); color: #34D399; border: 1px solid rgba(16,185,129,.3); }
+  .pill-blue   { background: rgba(59,130,246,.15);  color: #60A5FA; border: 1px solid rgba(59,130,246,.3); }
+  .pill-amber  { background: rgba(201,123,26,.15);  color: #FCD34D; border: 1px solid rgba(201,123,26,.3); }
+  .pill-purple { background: rgba(167,139,250,.15); color: #C4B5FD; border: 1px solid rgba(167,139,250,.3); }
+  .pill-red    { background: rgba(220,38,38,.15);   color: #FCA5A5; border: 1px solid rgba(220,38,38,.3); }
+  .pill-slate  { background: rgba(136,153,170,.15); color: #8899AA; border: 1px solid #445566; }
+
+  h3 { font-size: .9rem; color: #C8D8E8; margin: 1rem 0 .4rem; font-weight: 600; }
+  p  { font-size: .88rem; color: #8899AA; margin: .4rem 0; }
+
+  /* ── Summary bar ─────────────────────────────────────────────────────────── */
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: .75rem;
+    margin: 1.5rem 0 2rem;
+  }
+  .summary-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .8rem;
+    text-align: center;
+  }
+  .summary-card .num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.6rem;
+    font-weight: 600;
+    line-height: 1;
+    margin-bottom: .2rem;
+  }
+  .summary-card .lbl { font-size: .7rem; color: var(--slate); text-transform: uppercase; letter-spacing: .06em; }
+
+  /* ── Footer ──────────────────────────────────────────────────────────────── */
+  .footer {
+    text-align: center;
+    padding: 2rem;
+    font-size: .72rem;
+    color: var(--slate);
+    border-top: 1px solid var(--border);
+    margin-top: 3rem;
+  }
+
+  /* ── Toggle ──────────────────────────────────────────────────────────────── */
+  .toggle-icon { font-size: .75rem; color: var(--slate); transition: transform .2s; }
+  .toggle-icon.open { transform: rotate(90deg); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="icon">🔐</div>
+  <h1>Roadmap de Autenticação</h1>
+  <div class="sub">Process2Diagram · Camada de Acesso Multi-Tenant</div>
+  <div class="version">v4.12 → v5.x · Elaborado em 14 Abr 2026</div>
+</div>
+
+<div class="container">
+
+  <!-- Summary -->
+  <div class="section-title">Visão Geral do Progresso</div>
+  <div class="summary">
+    <div class="summary-card">
+      <div class="num" style="color:#10B981">1</div>
+      <div class="lbl">Concluída</div>
+    </div>
+    <div class="summary-card">
+      <div class="num" style="color:#3B82F6">1</div>
+      <div class="lbl">Em Progresso</div>
+    </div>
+    <div class="summary-card">
+      <div class="num" style="color:#F59E0B">2</div>
+      <div class="lbl">Próximas</div>
+    </div>
+    <div class="summary-card">
+      <div class="num" style="color:#A78BFA">3</div>
+      <div class="lbl">Futuras</div>
+    </div>
+    <div class="summary-card">
+      <div class="num" style="color:#FCD34D">2</div>
+      <div class="lbl">Segurança</div>
+    </div>
+  </div>
+
+  <!-- Architecture Overview -->
+  <div class="section-title">Arquitetura Alvo</div>
+  <div class="diagram">Login (domínio + usuário + senha)
+        │
+        ▼
+  tenant_auth.login_tenant()
+        │
+        ├─► Supabase: tenants [domain_slug]
+        │         └─► tenant_users [login + hash]
+        │                   │
+        │                   └─► tenant_config [API keys, prefs]
+        │                               │
+        │                               ▼
+        │                   st.session_state ← API keys carregadas
+        │
+        └─► Fallback: auth.login_valido()  ← admin local sem Supabase
+                (credenciais hardcoded — desenvolvimento/emergência)</div>
+
+  <!-- Timeline -->
+  <div class="section-title">Fases de Implementação</div>
+  <div class="timeline">
+
+    <!-- Baseline -->
+    <div class="phase">
+      <div class="phase-dot s-baseline">0</div>
+      <div class="phase-card s-baseline">
+        <div class="phase-header" onclick="toggle(this)">
+          <span class="phase-badge s-baseline">BASELINE</span>
+          <span class="phase-title">Estado Atual — Autenticação Local (v4.12)</span>
+          <span class="phase-tag s-baseline">CONCLUÍDO</span>
+          <span class="toggle-icon">▶</span>
+        </div>
+        <div class="phase-body">
+          <p>Camada de autenticação atual: credenciais hardcoded com SHA-256. Funcional para uso interno, mas não escala para múltiplas empresas.</p>
+          <h3>Características</h3>
+          <ul class="item-list">
+            <li>Credenciais em <code>modules/auth.py → USUARIOS</code> — dict com hash SHA-256 hardcoded</li>
+            <li>Login único: usuário + senha (sem domínio)</li>
+            <li>API keys exclusivamente em <code>st.session_state</code> — nunca persistidas</li>
+            <li>Funciona sem Supabase — nenhuma dependência externa</li>
+            <li>Dois usuários: <em>admin</em> e <em>demo</em></li>
+          </ul>
+          <h3>Arquivos</h3>
+          <div class="code-block">modules/auth.py          # login_valido(), is_authenticated(), USUARIOS
+ui/auth_gate.py          # render_login_page(), apply_auth_gate()
+core/session_state.py    # init_session_state()</div>
+          <div class="warn-box">⚠️ Limitação: adicionar um novo usuário exige editar e fazer deploy do código-fonte.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fase A -->
+    <div class="phase">
+      <div class="phase-dot s-active">A</div>
+      <div class="phase-card s-active">
+        <div class="phase-header" onclick="toggle(this)">
+          <span class="phase-badge s-active">FASE A</span>
+          <span class="phase-title">Schema Supabase + Módulos de Tenant</span>
+          <span class="phase-tag s-active">EM PROGRESSO</span>
+          <span class="toggle-icon">▶</span>
+        </div>
+        <div class="phase-body open">
+          <p>Infraestrutura de dados e módulos Python para autenticação multi-tenant. Ainda <strong>não altera a tela de login</strong> — apenas prepara o backend.</p>
+          <h3>Entregas</h3>
+          <ul class="check-list">
+            <li class="done">SQL executado no Supabase: tabelas <code>tenants</code>, <code>tenant_users</code>, <code>tenant_config</code></li>
+            <li class="active">Módulo <code>modules/tenant_auth.py</code> — <code>login_tenant()</code>, <code>tenant_auth_available()</code></li>
+            <li class="active">Módulo <code>modules/tenant_config.py</code> — <code>load_all_config()</code>, <code>save_config()</code>, <code>apply_config_to_session()</code></li>
+            <li class="todo">Inserir primeiro tenant de teste no Supabase</li>
+            <li class="todo">Inserir primeiro usuário admin no tenant de teste</li>
+          </ul>
+          <h3>Tabelas criadas</h3>
+          <div class="table-wrap">
+            <table>
+              <tr><th>Tabela</th><th>Colunas principais</th><th>Propósito</th></tr>
+              <tr><td><code>tenants</code></td><td>domain_slug, display_name, active</td><td>Empresas / domínios</td></tr>
+              <tr><td><code>tenant_users</code></td><td>tenant_id, login, password_hash, role</td><td>Usuários por empresa</td></tr>
+              <tr><td><code>tenant_config</code></td><td>tenant_id, config_key, config_value</td><td>API keys e preferências</td></tr>
+            </table>
+          </div>
+          <h3>Inserir primeiro tenant (SQL de exemplo)</h3>
+          <div class="code-block">-- Criar tenant
+INSERT INTO tenants (domain_slug, display_name)
+VALUES ('fgv', 'FGV');
+
+-- Criar usuário admin (senha: trocar pelo hash SHA-256 da senha real)
+-- python -c "import hashlib; print(hashlib.sha256(b'sua_senha').hexdigest())"
+INSERT INTO tenant_users (tenant_id, login, password_hash, display_name, role)
+SELECT id, 'pedroregato',
+       'HASH_SHA256_AQUI',
+       'Pedro Regato', 'admin'
+FROM tenants WHERE domain_slug = 'fgv';
+
+-- Salvar API key DeepSeek para o tenant
+INSERT INTO tenant_config (tenant_id, config_key, config_value)
+SELECT id, 'deepseek_key', 'sk-sua-chave-aqui'
+FROM tenants WHERE domain_slug = 'fgv';</div>
+          <h3>Arquivos criados/alterados</h3>
+          <div class="code-block">setup/supabase_schema_tenant_auth.sql   ← DDL das 3 tabelas (CRIADO)
+modules/tenant_auth.py                  ← login_tenant(), fallback (CRIADO)
+modules/tenant_config.py                ← load/save/apply API keys (CRIADO)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fase B -->
+    <div class="phase">
+      <div class="phase-dot s-next">B</div>
+      <div class="phase-card s-next">
+        <div class="phase-header" onclick="toggle(this)">
+          <span class="phase-badge s-next">FASE B</span>
+          <span class="phase-title">Tela de Login com Campo Domínio</span>
+          <span class="phase-tag s-next">PRÓXIMA</span>
+          <span class="toggle-icon">▶</span>
+        </div>
+        <div class="phase-body">
+          <p>Atualizar <code>ui/auth_gate.py</code> para exibir o campo <strong>Domínio</strong> e roteiar pelo <code>tenant_auth</code>. Fallback local preservado.</p>
+          <h3>Lógica de roteamento</h3>
+          <div class="diagram">Supabase configurado AND tenant_auth_available()?
+  ├── SIM → formulário: Domínio + Usuário + Senha
+  │          └─► login_tenant(domain, user, pass)
+  │                   ✓ → carrega tenant_config → session_state
+  │                   ✗ → "Domínio, usuário ou senha incorretos"
+  └── NÃO → formulário: Usuário + Senha  (comportamento atual)
+             └─► auth.login_valido(user, pass)</div>
+          <h3>Alterações em session_state após login tenant</h3>
+          <div class="code-block">st.session_state["_autenticado"]   = True
+st.session_state["_usuario_login"] = user_login
+st.session_state["_usuario_nome"]  = display_name
+st.session_state["_tenant_id"]     = tenant_id
+st.session_state["_domain"]        = domain_slug
+st.session_state["_role"]          = role           # 'admin' | 'user'
+
+# API keys carregadas automaticamente
+st.session_state["api_key_DeepSeek"]  = config.get("deepseek_key", "")
+st.session_state["api_key_OpenAI"]    = config.get("openai_key", "")
+st.session_state["api_key_Gemini"]    = config.get("gemini_key", "")
+# ... demais provedores</div>
+          <h3>Arquivos alterados</h3>
+          <div class="code-block">ui/auth_gate.py       ← novo campo Domínio + roteamento tenant vs local
+modules/auth.py       ← logout() limpa _tenant_id, _domain, _role</div>
+          <div class="info-box">ℹ️ O sidebar já lê <code>st.session_state["api_key_{Provider}"]</code> — nenhuma alteração no sidebar é necessária. As chaves aparecem pré-preenchidas automaticamente.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fase C -->
+    <div class="phase">
+      <div class="phase-dot s-next">C</div>
+      <div class="phase-card s-next">
+        <div class="phase-header" onclick="toggle(this)">
+          <span class="phase-badge s-next">FASE C</span>
+          <span class="phase-title">Painel Admin — Gerenciar API Keys do Domínio</span>
+          <span class="phase-tag s-next">PRÓXIMA</span>
+          <span class="toggle-icon">▶</span>
+        </div>
+        <div class="phase-body">
+          <p>Seção na página <strong>Settings</strong> para usuários com <code>role == 'admin'</code> salvarem e atualizarem as API keys do seu domínio no Supabase.</p>
+          <h3>UI proposta (Settings → API Keys do Domínio)</h3>
+          <div class="diagram">┌───────────────────────────────────────────────────────┐
+│  🔑 API Keys do Domínio: FGV          (role: admin)   │
+│                                                       │
+│  DeepSeek Key:  [sk-•••••••••••••••]   [💾 Salvar]   │
+│  OpenAI Key:    [sk-•••••••••••••••]   [💾 Salvar]   │
+│  Gemini Key:    [AIza•••••••••••••]    [💾 Salvar]   │
+│  Groq Key:      [gsk_•••••••••••••]   [💾 Salvar]   │
+│  Anthropic Key: [sk-ant-••••••••••]   [💾 Salvar]   │
+│                                                       │
+│  ⚠ Salvo no banco — compartilhado com todos os       │
+│    usuários do domínio FGV                            │
+└───────────────────────────────────────────────────────┘</div>
+          <h3>Regras</h3>
+          <ul class="item-list">
+            <li>Visível apenas para <code>_role == 'admin'</code> na session</li>
+            <li>Leitura: campos mostram os primeiros 4 e últimos 4 chars mascarados (<code>sk-a...1234</code>)</li>
+            <li>Escrita: upsert em <code>tenant_config</code> via <code>save_config()</code></li>
+            <li>Usuários <code>role == 'user'</code> veem a seção em modo somente-leitura (keys mascaradas)</li>
+          </ul>
+          <h3>Arquivos alterados</h3>
+          <div class="code-block">pages/Settings.py     ← nova seção "API Keys do Domínio" (condicional ao role)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fase D -->
+    <div class="phase">
+      <div class="phase-dot s-future">D</div>
+      <div class="phase-card s-future">
+        <div class="phase-header" onclick="toggle(this)">
+          <span class="phase-badge s-future">FASE D</span>
+          <span class="phase-title">Isolamento de Dados por Tenant</span>
+          <span class="phase-tag s-future">FUTURO</span>
+          <span class="toggle-icon">▶</span>
+        </div>
+        <div class="phase-body">
+          <p>Filtrar projetos, reuniões e artefatos pelo <code>tenant_id</code> do usuário logado. Sem esta fase, todos os tenants compartilham os mesmos dados — aceitável para POC colaborativa.</p>
+          <h3>SQL de migração</h3>
+          <div class="code-block">ALTER TABLE projects
+  ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES tenants(id);
+
+-- Associar projetos existentes ao tenant admin
+UPDATE projects SET tenant_id = (
+  SELECT id FROM tenants WHERE domain_slug = 'fgv' LIMIT 1
+)
+WHERE tenant_id IS NULL;</div>
+          <h3>Mudanças na aplicação</h3>
+          <ul class="item-list">
+            <li><code>core/project_store.list_projects()</code> — adicionar filtro <code>eq("tenant_id", tenant_id)</code></li>
+            <li><code>core/project_store.save_meeting()</code> — passar <code>tenant_id</code> automaticamente na criação</li>
+            <li><code>ui/project_selector.py</code> — lê <code>_tenant_id</code> do session_state e repassa ao store</li>
+          </ul>
+          <div class="warn-box">⚠️ Esta fase requer migração de dados. Coordenar momento de deploy para evitar perda de registros sem tenant_id.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fase E -->
+    <div class="phase">
+      <div class="phase-dot s-future">E</div>
+      <div class="phase-card s-future">
+        <div class="phase-header" onclick="toggle(this)">
+          <span class="phase-badge s-future">FASE E</span>
+          <span class="phase-title">Auto-cadastro de Tenant (Self-Service)</span>
+          <span class="phase-tag s-future">FUTURO</span>
+          <span class="toggle-icon">▶</span>
+        </div>
+        <div class="phase-body">
+          <p>Página pública de cadastro onde um representante da empresa cria seu domínio e conta admin sem intervenção manual no banco.</p>
+          <h3>Fluxo</h3>
+          <div class="diagram">Página /cadastro
+  1. Formulário: Empresa, Domínio desejado, Nome, E-mail, Senha
+  2. Validação: domain_slug único, e-mail corporativo (opcional)
+  3. Criação: INSERT tenants + INSERT tenant_users (role=admin)
+  4. Confirmação: "Domínio 'acme' criado. Use no campo Domínio ao entrar."</div>
+          <h3>Arquivos</h3>
+          <div class="code-block">pages/Cadastro.py        ← nova página (fora do auth gate)
+app.py                   ← adicionar Cadastro ao st.navigation() sem auth gate</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fase F — Security: encryption -->
+    <div class="phase">
+      <div class="phase-dot s-security">S1</div>
+      <div class="phase-card s-security">
+        <div class="phase-header" onclick="toggle(this)">
+          <span class="phase-badge s-security">SEGURANÇA 1</span>
+          <span class="phase-title">Criptografia de API Keys (AES-256)</span>
+          <span class="phase-tag s-security">QUANDO ABRIR AO PÚBLICO</span>
+          <span class="toggle-icon">▶</span>
+        </div>
+        <div class="phase-body">
+          <p>Atualmente as API keys ficam em plaintext no Supabase. Para produção pública, criptografar com AES-256 usando uma chave armazenada em <code>st.secrets</code>.</p>
+          <h3>Implementação</h3>
+          <div class="code-block">pip install cryptography
+
+# st.secrets["enc_key"] = base64 de 32 bytes aleatórios
+# Geração: python -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"
+
+from cryptography.fernet import Fernet
+
+def _cipher():
+    import streamlit as st, base64
+    key = base64.b64decode(st.secrets["enc_key"])
+    return Fernet(base64.urlsafe_b64encode(key))
+
+def encrypt(value: str) -> str:
+    return _cipher().encrypt(value.encode()).decode()
+
+def decrypt(value: str) -> str:
+    return _cipher().decrypt(value.encode()).decode()</div>
+          <p>Mudança isolada em <code>modules/tenant_config.py</code> — uma linha em <code>save_config()</code> e <code>load_all_config()</code>.</p>
+          <div class="info-box">ℹ️ Alternativa: <strong>Supabase Vault</strong> (plano Pro) — criptografia gerenciada nativamente, sem código extra.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fase F — Security: bcrypt -->
+    <div class="phase">
+      <div class="phase-dot s-security">S2</div>
+      <div class="phase-card s-security">
+        <div class="phase-header" onclick="toggle(this)">
+          <span class="phase-badge s-security">SEGURANÇA 2</span>
+          <span class="phase-title">Senhas com bcrypt + Rate Limiting</span>
+          <span class="phase-tag s-security">QUANDO ABRIR AO PÚBLICO</span>
+          <span class="toggle-icon">▶</span>
+        </div>
+        <div class="phase-body">
+          <p>SHA-256 puro sem salt é vulnerável a tabelas arco-íris. Para produção pública, migrar para bcrypt (ou Argon2).</p>
+          <h3>Migração SHA-256 → bcrypt</h3>
+          <div class="code-block">pip install bcrypt
+
+import bcrypt
+
+def hash_password(senha: str) -> str:
+    return bcrypt.hashpw(senha.encode(), bcrypt.gensalt(rounds=12)).decode()
+
+def verify_password(senha: str, stored_hash: str) -> bool:
+    return bcrypt.checkpw(senha.encode(), stored_hash.encode())</div>
+          <h3>Rate limiting de login</h3>
+          <ul class="item-list">
+            <li>Contar tentativas falhas em <code>tenant_users.failed_attempts</code> + <code>locked_until TIMESTAMPTZ</code></li>
+            <li>Bloquear conta por 15 min após 5 tentativas consecutivas</li>
+            <li>Log de auditoria em tabela <code>auth_events (tenant_id, login, event, ip, ts)</code></li>
+          </ul>
+          <div class="warn-box">⚠️ Streamlit não expõe IP do cliente nativamente. Considerar proxy/header <code>X-Forwarded-For</code> se hospedado atrás de load balancer.</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end timeline -->
+
+  <!-- Decision Table -->
+  <div class="section-title">Guia de Decisão — Quando Implementar Cada Fase</div>
+  <div class="table-wrap">
+    <table>
+      <tr>
+        <th>Fase</th>
+        <th>Gatilho</th>
+        <th>Complexidade</th>
+        <th>Status</th>
+      </tr>
+      <tr>
+        <td><strong>A</strong> — Schema + módulos</td>
+        <td>Antes de convidar primeiros usuários externos</td>
+        <td><span class="pill pill-green">Baixa</span></td>
+        <td><span class="pill pill-blue">Em progresso</span></td>
+      </tr>
+      <tr>
+        <td><strong>B</strong> — Tela de login com domínio</td>
+        <td>Assim que Fase A validada no banco</td>
+        <td><span class="pill pill-green">Baixa</span></td>
+        <td><span class="pill pill-amber">Próxima</span></td>
+      </tr>
+      <tr>
+        <td><strong>C</strong> — Painel admin API keys</td>
+        <td>Primeiro usuário externo cadastrado</td>
+        <td><span class="pill pill-green">Baixa</span></td>
+        <td><span class="pill pill-amber">Próxima</span></td>
+      </tr>
+      <tr>
+        <td><strong>D</strong> — Isolamento de dados</td>
+        <td>≥ 2 empresas distintas com dados sensíveis</td>
+        <td><span class="pill pill-amber">Média</span></td>
+        <td><span class="pill pill-purple">Futuro</span></td>
+      </tr>
+      <tr>
+        <td><strong>E</strong> — Auto-cadastro</td>
+        <td>Crescimento orgânico, sem curadoria manual</td>
+        <td><span class="pill pill-amber">Média</span></td>
+        <td><span class="pill pill-purple">Futuro</span></td>
+      </tr>
+      <tr>
+        <td><strong>S1</strong> — Criptografia AES</td>
+        <td>Antes de expor publicamente (domínio aberto)</td>
+        <td><span class="pill pill-amber">Média</span></td>
+        <td><span class="pill pill-red">Segurança</span></td>
+      </tr>
+      <tr>
+        <td><strong>S2</strong> — bcrypt + rate limit</td>
+        <td>Antes de expor publicamente (domínio aberto)</td>
+        <td><span class="pill pill-red">Alta</span></td>
+        <td><span class="pill pill-red">Segurança</span></td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Notes -->
+  <div class="section-title">Notas de Compatibilidade</div>
+  <div class="info-box">
+    <strong>Backward compatibility:</strong> o módulo <code>modules/auth.py</code> (login hardcoded) é preservado em todas as fases. Enquanto o Supabase não estiver configurado ou <code>tenant_auth_available()</code> retornar False, o login local continua funcionando — útil para desenvolvimento, emergências e deploy em ambientes sem Supabase.
+  </div>
+  <div class="info-box">
+    <strong>Nenhuma alteração no sidebar:</strong> as API keys do tenant são carregadas em <code>st.session_state["api_key_{Provider}"]</code> no momento do login — o mesmo namespace que o sidebar já usa. Zero mudanças no <code>ui/sidebar.py</code>.
+  </div>
+  <div class="info-box">
+    <strong>Dados compartilhados (POC):</strong> sem a Fase D, todos os projetos e reuniões são visíveis para todos os tenants. Para uma POC colaborativa onde o compartilhamento é intencional, isso é uma funcionalidade, não um bug.
+  </div>
+
+</div><!-- end container -->
+
+<div class="footer">
+  Process2Diagram · Roadmap de Autenticação · Gerado em 14 Abr 2026<br>
+  Mantido em <code>docs/auth_evolution_roadmap.html</code>
+</div>
+
+<script>
+function toggle(header) {
+  const body = header.nextElementSibling;
+  const icon = header.querySelector('.toggle-icon');
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  icon.classList.toggle('open', !isOpen);
+}
+// Initialize icons for open bodies
+document.querySelectorAll('.phase-body.open').forEach(body => {
+  const icon = body.previousElementSibling.querySelector('.toggle-icon');
+  if (icon) icon.classList.add('open');
+});
+</script>
+</body>
+</html>
