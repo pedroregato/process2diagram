@@ -50,6 +50,9 @@ def get_current_name() -> str | None:
 
 
 def logout() -> None:
-    for key in ("_autenticado", "_usuario_login", "_usuario_nome", "_login_erro"):
+    for key in (
+        "_autenticado", "_usuario_login", "_usuario_nome", "_login_erro",
+        "_tenant_id", "_domain", "_tenant_name", "_role",
+    ):
         st.session_state.pop(key, None)
     st.rerun()

@@ -1,9 +1,21 @@
 # ui/auth_gate.py
 # ─────────────────────────────────────────────────────────────────────────────
-# Tela de login e gate de autenticação — padrão DataJudMonitor.
+# Tela de login e gate de autenticação.
 #
-# Usa st.button (não st.form), erro via session_state, st.stop() dentro
-# da própria função. Sem dependência de arquivos externos.
+# Dois modos (selecionados automaticamente):
+#
+#   Modo TENANT  — quando tenant_auth_available() é True (Supabase configurado
+#                  e tabela tenants existe): exibe campo Domínio + Usuário + Senha.
+#                  Credenciais validadas via modules/tenant_auth.login_tenant().
+#                  API keys do domínio carregadas automaticamente no session_state.
+#
+#   Modo LOCAL   — fallback quando Supabase não está disponível: exibe apenas
+#                  Usuário + Senha. Valida via modules/auth.login_valido()
+#                  (credenciais hardcoded — desenvolvimento/emergência).
+#
+# Pitfall HTML: nenhum conteúdo pode estar indentado >= 4 espaços após linha em
+# branco dentro de st.markdown(unsafe_allow_html=True) — Markdown o trata como
+# bloco de código. Manter HTML com zero indentação na f-string.
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
@@ -84,10 +96,26 @@ div[data-testid="stButton"] button {
 """
 
 
+def _is_tenant_mode() -> bool:
+    """True quando tenant_auth está disponível (Supabase + tabela tenants)."""
+    try:
+        from modules.tenant_auth import tenant_auth_available
+        return tenant_auth_available()
+    except Exception:
+        return False
+
+
 def render_login_page() -> None:
-    """Renderiza a tela de login completa e chama st.stop()."""
-    erro = st.session_state.get("_login_erro", False)
-    erro_html = '<div class="l-err">⚠️ Usuário ou senha incorretos.</div>' if erro else ""
+    """Renderiza a tela de login e chama st.stop()."""
+    tenant_mode = _is_tenant_mode()
+    erro        = st.session_state.get("_login_erro", False)
+
+    if erro == "tenant":
+        erro_html = '<div class="l-err">⚠️ Domínio, usuário ou senha incorretos.</div>'
+    elif erro == "local":
+        erro_html = '<div class="l-err">⚠️ Usuário ou senha incorretos.</div>'
+    else:
+        erro_html = ""
 
     st.markdown(_LOGIN_CSS, unsafe_allow_html=True)
     st.markdown(f"""
@@ -102,32 +130,76 @@ def render_login_page() -> None:
 </div></div>
 """, unsafe_allow_html=True)
 
+    if tenant_mode:
+        st.markdown('<div class="l-label">Domínio</div>', unsafe_allow_html=True)
+        domain = st.text_input(
+            "Domínio", label_visibility="collapsed",
+            key="_l_domain", placeholder="ex: fgv"
+        )
+
     st.markdown('<div class="l-label">Usuário</div>', unsafe_allow_html=True)
-    usuario = st.text_input("Usuário", label_visibility="collapsed",
-                            key="_l_user", placeholder="seu.usuario")
+    usuario = st.text_input(
+        "Usuário", label_visibility="collapsed",
+        key="_l_user", placeholder="seu.usuario"
+    )
+
     st.markdown('<div class="l-label" style="margin-top:.8rem">Senha</div>',
                 unsafe_allow_html=True)
-    senha = st.text_input("Senha", type="password", label_visibility="collapsed",
-                          key="_l_pass", placeholder="••••••••")
+    senha = st.text_input(
+        "Senha", type="password", label_visibility="collapsed",
+        key="_l_pass", placeholder="••••••••"
+    )
 
     if st.button("Entrar →", use_container_width=True, key="_l_btn"):
-        uname = usuario.lower().strip()
-        if login_valido(uname, senha):
-            st.session_state["_autenticado"]   = True
-            st.session_state["_usuario_login"] = uname
-            st.session_state["_usuario_nome"]  = USUARIOS[uname]["nome"]
-            st.session_state["_login_erro"]    = False
-            st.rerun()
+        if tenant_mode:
+            _handle_tenant_login(domain, usuario, senha)
         else:
-            st.session_state["_login_erro"] = True
-            st.rerun()
+            _handle_local_login(usuario, senha)
 
-    st.markdown("""
-      <div class="l-foot">Process2Diagram v4.6 · Acesso restrito</div>
-      </div></div>
-    """, unsafe_allow_html=True)
+    mode_label = "Acesso por domínio" if tenant_mode else "Acesso restrito"
+    st.markdown(f"""
+<div class="l-foot">Process2Diagram · {mode_label}</div>
+</div></div>
+""", unsafe_allow_html=True)
 
     st.stop()
+
+
+def _handle_tenant_login(domain: str, usuario: str, senha: str) -> None:
+    """Valida via Supabase tenant_auth. Em caso de falha exibe erro."""
+    from modules.tenant_auth   import login_tenant
+    from modules.tenant_config import load_all_config, apply_config_to_session
+
+    result = login_tenant(domain, usuario, senha)
+    if result:
+        config = load_all_config(result["tenant_id"])
+        st.session_state["_autenticado"]   = True
+        st.session_state["_usuario_login"] = result["user_name"]
+        st.session_state["_usuario_nome"]  = result["display_name"]
+        st.session_state["_tenant_id"]     = result["tenant_id"]
+        st.session_state["_domain"]        = result["domain"]
+        st.session_state["_tenant_name"]   = result["tenant_name"]
+        st.session_state["_role"]          = result["role"]
+        st.session_state["_login_erro"]    = False
+        apply_config_to_session(config)
+        st.rerun()
+    else:
+        st.session_state["_login_erro"] = "tenant"
+        st.rerun()
+
+
+def _handle_local_login(usuario: str, senha: str) -> None:
+    """Valida via credenciais hardcoded (fallback local)."""
+    uname = usuario.lower().strip()
+    if login_valido(uname, senha):
+        st.session_state["_autenticado"]   = True
+        st.session_state["_usuario_login"] = uname
+        st.session_state["_usuario_nome"]  = USUARIOS[uname]["nome"]
+        st.session_state["_login_erro"]    = False
+        st.rerun()
+    else:
+        st.session_state["_login_erro"] = "local"
+        st.rerun()
 
 
 def apply_auth_gate() -> None:
