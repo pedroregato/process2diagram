@@ -627,9 +627,27 @@ class AgentAssistant(BaseAgent):
                 # No DSML — clean any stray tags and return as final answer
                 return _strip_dsml(content) or content, total_tk, called
 
-            # Execute each tool call and append results
-            msgs.append(choice.message)
-            for tc in choice.message.tool_calls:
+            # Execute each tool call and append results.
+            # Convert choice.message to a plain dict — newer OpenAI SDK versions
+            # include a `refusal` field (and other extras) in ChatCompletionMessage
+            # that DeepSeek's API rejects as "Bad message format".
+            _tc_list = choice.message.tool_calls or []
+            msgs.append({
+                "role": "assistant",
+                "content": choice.message.content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": tc.type,
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in _tc_list
+                ],
+            })
+            for tc in _tc_list:
                 if cancel_event and cancel_event.is_set():
                     return "⏹ Processamento interrompido pelo usuário.", total_tk, called
                 fn_name = tc.function.name

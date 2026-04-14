@@ -30,8 +30,7 @@ def get_supabase_client():
         from supabase import create_client
         _client = create_client(url, key)
         return _client
-    except Exception as exc:
-        st.warning(f"⚠️ Supabase indisponível: {exc}")
+    except Exception:
         return None
 
 
