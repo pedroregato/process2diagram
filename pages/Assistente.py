@@ -32,7 +32,7 @@ from core.project_store import (
 )
 from agents.agent_assistant import AgentAssistant
 from ui.components.copy_button import copy_button
-from modules.session_security import render_session_key_readonly
+
 
 # ── Page config ───────────────────────────────────────────────────────────────
 apply_auth_gate()
@@ -59,117 +59,6 @@ with st.sidebar:
         st.info("Nenhum projeto disponível.")
         project_id = None
         project_name = ""
-
-    st.markdown("---")
-
-    # ── LLM provider + API key ────────────────────────────────────────────────
-    st.markdown("#### ⚙️ Configuração LLM")
-    selected_provider = st.selectbox(
-        "Provedor LLM",
-        list(AVAILABLE_PROVIDERS.keys()),
-        key="asst_provider",
-    )
-    provider_cfg = AVAILABLE_PROVIDERS[selected_provider]
-    api_key = render_session_key_readonly("asst_api_key", "Chave do Assistente")
-
-    st.markdown("---")
-
-    # ── Busca semântica ───────────────────────────────────────────────────────
-    st.markdown("#### 🔍 Busca Semântica (pgvector)")
-
-    # Detecta se a tabela existe
-    _chunks_table_ok = supabase_configured() and transcript_chunks_table_exists()
-
-    if not _chunks_table_ok and supabase_configured():
-        st.caption(
-            "⚠️ Tabela `transcript_chunks` não encontrada. "
-            "Execute `setup/supabase_schema_transcript_chunks.sql` para habilitar a busca semântica."
-        )
-
-    use_semantic = st.checkbox(
-        "Usar busca semântica",
-        value=False,
-        key="asst_use_semantic",
-        disabled=not _chunks_table_ok,
-        help="Substitui a busca por palavras-chave por busca vetorial (pgvector). "
-             "Requer que os embeddings das transcrições tenham sido gerados.",
-    )
-
-    if _chunks_table_ok and project_id:
-        # Cobertura de embeddings
-        coverage = get_embedding_coverage(project_id)
-        total = coverage.get("total_meetings", 0)
-        indexed = coverage.get("indexed_meetings", 0)
-        n_chunks = coverage.get("total_chunks", 0)
-        if total > 0:
-            pct = int(100 * indexed / total)
-            st.caption(
-                f"📊 Cobertura: **{indexed}/{total}** reuniões indexadas "
-                f"({pct}%) · {n_chunks:,} chunks"
-            )
-        else:
-            st.caption("📊 Nenhuma reunião indexada ainda.")
-
-        # Seção de geração de embeddings
-        with st.expander("⚡ Gerar Embeddings", expanded=(indexed == 0)):
-            st.caption(
-                "Gera embeddings das transcrições para habilitar a busca semântica. "
-                "Execute uma vez por projeto (ou novamente quando adicionar reuniões)."
-            )
-            st.info(
-                "💡 A API pública do DeepSeek não possui endpoint de embeddings. "
-                "Use **Google Gemini** (tier gratuito) ou **OpenAI**.",
-                icon=None,
-            )
-            embed_provider = st.selectbox(
-                "Provedor de Embedding",
-                list(EMBEDDING_PROVIDERS.keys()),
-                key="asst_embed_provider",
-                help="Google Gemini text-embedding-004 (gratuito) ou OpenAI text-embedding-3-small (768 dims)",
-            )
-            embed_cfg = EMBEDDING_PROVIDERS[embed_provider]
-            embed_api_key = render_session_key_readonly("asst_embed_key", "Chave de Embedding")
-            col_btn, col_diag = st.columns([2, 1])
-            with col_btn:
-                if st.button("⚡ Gerar Embeddings", key="asst_gen_embeddings", type="secondary", use_container_width=True):
-                    if not embed_api_key:
-                        st.warning("Configure a chave de embedding em ⚙️ Configurações.")
-                    else:
-                        st.session_state["_trigger_embed"] = {
-                            "provider": embed_provider,
-                            "api_key":  embed_api_key,
-                            "project_id": project_id,
-                        }
-            with col_diag:
-                if st.button("🔍 Testar chave", key="asst_diag_models", use_container_width=True,
-                             help="Lista os modelos de embedding disponíveis para esta chave"):
-                    if not embed_api_key:
-                        st.warning("Configure a chave de embedding em ⚙️ Configurações.")
-                    elif embed_provider == "Google Gemini":
-                        with st.spinner("Consultando modelos disponíveis..."):
-                            try:
-                                models = list_gemini_embedding_models(embed_api_key)
-                                if models:
-                                    st.success(f"✅ {len(models)} modelo(s) de embedding disponíveis:")
-                                    for m in models:
-                                        st.code(m["name"])
-                                else:
-                                    st.error(
-                                        "❌ Nenhum modelo de embedding encontrado para esta chave. "
-                                        "Verifique se a 'Generative Language API' está habilitada em "
-                                        "console.cloud.google.com para o projeto desta chave."
-                                    )
-                            except Exception as exc:
-                                st.error(f"❌ Erro ao consultar modelos: {exc}")
-                    else:
-                        st.info("Diagnóstico disponível apenas para Google Gemini.")
-
-    if use_semantic:
-        embed_provider_sel = st.session_state.get("asst_embed_provider", list(EMBEDDING_PROVIDERS.keys())[0])
-        embed_key_sel = st.session_state.get("asst_embed_key", "")
-        st.caption(f"Provedor ativo: **{embed_provider_sel}**")
-        if not embed_key_sel:
-            st.warning("Configure a chave de embedding em ⚙️ Configurações para a busca semântica funcionar.")
 
     st.markdown("---")
 
@@ -257,6 +146,14 @@ with st.sidebar:
         st.session_state["assistant_history"] = []
         st.rerun()
 
+# ── Config from Settings (silent reads — managed in ⚙️ Configurações) ────────
+selected_provider = st.session_state.get("asst_provider", "DeepSeek")
+provider_cfg      = AVAILABLE_PROVIDERS.get(selected_provider, AVAILABLE_PROVIDERS.get("DeepSeek", {}))
+api_key           = st.session_state.get("asst_api_key", "")
+_chunks_table_ok  = supabase_configured() and transcript_chunks_table_exists()
+embed_provider    = st.session_state.get("asst_embed_provider", list(EMBEDDING_PROVIDERS.keys())[0])
+embed_api_key     = st.session_state.get("asst_embed_key", "")
+
 # ── Main area ─────────────────────────────────────────────────────────────────
 st.markdown("# 💬 Assistente de Reuniões")
 st.caption(
@@ -336,9 +233,61 @@ if "_embed_error" in st.session_state:
 if "_embed_success" in st.session_state:
     st.success(st.session_state.pop("_embed_success"))
 
+# ── Gerar Embeddings (body) — disponível quando a tabela de chunks existe ─────
+if _chunks_table_ok and project_id:
+    _emb_cov  = get_embedding_coverage(project_id)
+    _emb_tot  = _emb_cov.get("total_meetings", 0)
+    _emb_idx  = _emb_cov.get("indexed_meetings", 0)
+    _emb_chk  = _emb_cov.get("total_chunks", 0)
+    with st.expander(
+        f"⚡ Gerar Embeddings  ·  {_emb_idx}/{_emb_tot} reuniões indexadas · {_emb_chk:,} chunks",
+        expanded=(_emb_idx == 0 and _emb_tot > 0),
+    ):
+        st.caption(
+            "Gera embeddings das transcrições para habilitar a busca semântica. "
+            "Execute uma vez por projeto (ou novamente quando adicionar reuniões). "
+            "Configure o provedor e a chave em **⚙️ Configurações → Embeddings & Busca**."
+        )
+        _ep_label = embed_provider or "—"
+        _ek_masked = (embed_api_key[:6] + "••••" + embed_api_key[-4:]) if len(embed_api_key) > 10 else ("✅ configurada" if embed_api_key else "❌ não configurada")
+        st.caption(f"Provedor: **{_ep_label}** · Chave: `{_ek_masked}`")
+        col_btn, col_diag = st.columns([2, 1])
+        with col_btn:
+            if st.button("⚡ Gerar Embeddings", key="asst_gen_embeddings", type="secondary", use_container_width=True):
+                if not embed_api_key:
+                    st.warning("Configure a chave de embedding em ⚙️ Configurações → Embeddings & Busca.")
+                else:
+                    st.session_state["_trigger_embed"] = {
+                        "provider":   embed_provider,
+                        "api_key":    embed_api_key,
+                        "project_id": project_id,
+                    }
+        with col_diag:
+            if st.button("🔍 Testar chave", key="asst_diag_models", use_container_width=True,
+                         help="Lista os modelos de embedding disponíveis para esta chave"):
+                if not embed_api_key:
+                    st.warning("Configure a chave de embedding em ⚙️ Configurações.")
+                elif embed_provider == "Google Gemini":
+                    with st.spinner("Consultando modelos disponíveis..."):
+                        try:
+                            models = list_gemini_embedding_models(embed_api_key)
+                            if models:
+                                st.success(f"✅ {len(models)} modelo(s) disponíveis:")
+                                for m in models:
+                                    st.code(m["name"])
+                            else:
+                                st.error(
+                                    "❌ Nenhum modelo encontrado. Verifique se a "
+                                    "'Generative Language API' está habilitada para esta chave."
+                                )
+                        except Exception as exc:
+                            st.error(f"❌ Erro: {exc}")
+                else:
+                    st.info("Diagnóstico disponível apenas para Google Gemini.")
+
 # ── Guard: LLM API key (somente para o chat — embeddings independem disso) ───
 if not api_key:
-    st.warning("👈 Insira a API key na sidebar antes de fazer perguntas.")
+    st.warning("⚙️ Configure a chave de API em **Configurações → LLM Assistente** antes de fazer perguntas.")
     st.stop()
 
 # ── Status badges ────────────────────────────────────────────────────────────
