@@ -337,6 +337,52 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ── Tool catalog ──────────────────────────────────────────────────────────────
+if st.session_state.get("asst_use_tools", True):
+    from core.assistant_tools import get_tool_catalog
+    _catalog = get_tool_catalog()
+    _cat_groups = {}
+    for _t in _catalog:
+        _cat_groups.setdefault(_t["category"], []).append(_t)
+
+    _cat_labels = {
+        "consulta": ("🔍 Consulta", "#1A4B8C", "Somente leitura — busca e exibe dados do projeto"),
+        "escrita":  ("✏️ Escrita", "#7C2D12", "Modifica dados — requer confirmação do usuário"),
+        "geração":  ("🤖 Geração", "#166534", "Chama o LLM para gerar conteúdo e salva no banco"),
+    }
+
+    with st.expander(f"📖 Catálogo de Ferramentas  ·  {len(_catalog)} disponíveis", expanded=False):
+        st.caption(
+            "Ferramentas que o Assistente pode chamar automaticamente durante uma conversa. "
+            "O LLM decide qual(is) usar com base na pergunta."
+        )
+        for _cat_key in ("consulta", "escrita", "geração"):
+            _tools_in_cat = _cat_groups.get(_cat_key, [])
+            if not _tools_in_cat:
+                continue
+            _cat_label, _cat_color, _cat_desc = _cat_labels[_cat_key]
+            st.markdown(
+                f'<span style="display:inline-block;background:{_cat_color};color:#fff;'
+                f'border-radius:6px;padding:2px 10px;font-size:0.78rem;font-weight:600;'
+                f'margin-bottom:4px">{_cat_label} · {len(_tools_in_cat)} ferramentas</span>  '
+                f'<span style="color:#64748b;font-size:0.78rem">{_cat_desc}</span>',
+                unsafe_allow_html=True,
+            )
+            for _t in _tools_in_cat:
+                _params_str = (
+                    f"`({'`, `'.join(_t['params'])})`" if _t["params"] else "*(sem parâmetros)*"
+                )
+                _req_str = (
+                    f"  · obrigatórios: `{'`, `'.join(_t['required'])}`" if _t["required"] else ""
+                )
+                st.markdown(
+                    f"**`{_t['name']}`**{_req_str}  \n"
+                    f"{_t['description'][:160]}{'…' if len(_t['description']) > 160 else ''}  \n"
+                    f"<span style='color:#94a3b8;font-size:0.75rem'>parâmetros: {_params_str}</span>",
+                    unsafe_allow_html=True,
+                )
+            st.markdown("")
+
 _DSML_SAFETY_RE = re.compile(r'<[|\uff5c]DSML[|\uff5c][^>]*>.*?<[|\uff5c]DSML[|\uff5c][^>]*>', re.DOTALL)
 _DSML_CUT_RE    = re.compile(r'<[|\uff5c]DSML[|\uff5c]')
 

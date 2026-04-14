@@ -548,6 +548,45 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "generate_missing_minutes",
+                "description": (
+                    "Gera atas de reunião (AgentMinutes) para todas as reuniões do projeto "
+                    "que possuem transcrição armazenada mas ainda não têm ata (minutes_md). "
+                    "Usa o LLM para extrair participantes, pauta, decisões e encaminhamentos. "
+                    "Salva o resultado em minutes_md no Supabase. "
+                    "USE quando o usuário pedir para gerar atas faltantes, completar atas pendentes, "
+                    "ou criar atas das reuniões sem ata."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_numbers": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": (
+                                "Lista de números de reunião específicos a processar. "
+                                "Omita para processar todas as reuniões elegíveis."
+                            ),
+                        },
+                        "force_regenerate": {
+                            "type": "boolean",
+                            "description": (
+                                "Se true, regenera a ata mesmo para reuniões que já possuem minutes_md. "
+                                "Padrão: false (pula reuniões já com ata)."
+                            ),
+                        },
+                        "output_language": {
+                            "type": "string",
+                            "description": "Idioma das atas geradas. Padrão: 'Auto-detect'.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
     ]
 
 
@@ -558,6 +597,54 @@ def get_tool_schemas_anthropic() -> list[dict]:
             "name": t["function"]["name"],
             "description": t["function"]["description"],
             "input_schema": t["function"]["parameters"],
+        }
+        for t in get_tool_schemas_openai()
+    ]
+
+
+# ── Tool catalog metadata (for UI display) ────────────────────────────────────
+
+_TOOL_CATEGORIES: dict[str, str] = {
+    # Consulta (read-only)
+    "get_meeting_list":             "consulta",
+    "get_meeting_participants":     "consulta",
+    "get_meeting_decisions":        "consulta",
+    "get_meeting_action_items":     "consulta",
+    "get_meeting_summary":          "consulta",
+    "search_transcript":            "consulta",
+    "get_requirements":             "consulta",
+    "list_bpmn_processes":          "consulta",
+    "get_sbvr_terms":               "consulta",
+    "get_sbvr_rules":               "consulta",
+    "calculate_meeting_roi":        "consulta",
+    "get_recurring_topics":         "consulta",
+    "get_meeting_metadata":         "consulta",
+    "preview_meeting_deletion":     "consulta",
+    "preview_text_correction":      "consulta",
+    # Escrita / Modificação
+    "add_sbvr_term":                "escrita",
+    "update_sbvr_term":             "escrita",
+    "add_sbvr_rule":                "escrita",
+    "apply_text_correction":        "escrita",
+    "delete_meeting":               "escrita",
+    # Geração (LLM-powered)
+    "generate_missing_minutes":     "geração",
+    "reprocess_meeting_requirements": "geração",
+}
+
+
+def get_tool_catalog() -> list[dict]:
+    """
+    Return all tools with display metadata: name, description, parameters, category.
+    Used by the Assistente UI to render a dynamic tool catalog — NOT sent to any LLM.
+    """
+    return [
+        {
+            "name":        t["function"]["name"],
+            "description": t["function"]["description"],
+            "params":      list(t["function"]["parameters"].get("properties", {}).keys()),
+            "required":    t["function"]["parameters"].get("required", []),
+            "category":    _TOOL_CATEGORIES.get(t["function"]["name"], "consulta"),
         }
         for t in get_tool_schemas_openai()
     ]
@@ -1778,6 +1865,116 @@ class AssistantToolExecutor:
             + footer
         )
 
+    def generate_missing_minutes(
+        self,
+        meeting_numbers: list[int] | None = None,
+        force_regenerate: bool = False,
+        output_language: str = "Auto-detect",
+    ) -> str:
+        """Generate minutes (AgentMinutes) for meetings that have transcripts but no minutes_md."""
+        if not self.llm_config:
+            return (
+                "❌ Configuração LLM não disponível. "
+                "Certifique-se de que a chave de API está configurada no Assistente."
+            )
+
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "❌ Supabase não disponível."
+
+        # Fetch candidates
+        try:
+            q = (
+                db.table("meetings")
+                .select("id, meeting_number, title, transcript_clean, transcript_raw, minutes_md")
+                .eq("project_id", self.project_id)
+                .order("meeting_number")
+            )
+            all_meetings = q.execute().data or []
+        except Exception as exc:
+            return f"❌ Erro ao listar reuniões: {exc}"
+
+        # Filter
+        candidates = []
+        for m in all_meetings:
+            n          = m.get("meeting_number")
+            transcript = m.get("transcript_clean") or m.get("transcript_raw") or ""
+            has_minutes = bool((m.get("minutes_md") or "").strip())
+
+            if not transcript.strip():
+                continue  # no transcript — skip
+            if has_minutes and not force_regenerate:
+                continue  # already has minutes and not forcing
+            if meeting_numbers is not None and n not in meeting_numbers:
+                continue  # not in the requested list
+
+            candidates.append(m)
+
+        if not candidates:
+            return (
+                "Nenhuma reunião elegível encontrada.\n"
+                "• Todas as reuniões já possuem ata, ou\n"
+                "• Nenhuma reunião possui transcrição armazenada.\n"
+                "Use `force_regenerate: true` para regenerar atas existentes."
+            )
+
+        from core.knowledge_hub import KnowledgeHub
+        from agents.agent_minutes import AgentMinutes
+
+        provider_cfg = self.llm_config.get("provider_cfg", {})
+        client_info  = {"api_key": self.llm_config.get("api_key", "")}
+
+        successes: list[str] = []
+        failures:  list[str] = []
+
+        for m in candidates:
+            mid        = m.get("id", "")
+            n          = m.get("meeting_number", "?")
+            title      = m.get("title") or f"Reunião {n}"
+            transcript = m.get("transcript_clean") or m.get("transcript_raw") or ""
+
+            try:
+                hub = KnowledgeHub.new()
+                hub.transcript_clean = transcript
+                hub.transcript_raw   = transcript
+
+                agent   = AgentMinutes(client_info, provider_cfg)
+                hub     = agent.run(hub, output_language=output_language)
+
+                if not hub.minutes.ready:
+                    failures.append(f"  • Reunião {n} — '{title}': AgentMinutes não retornou resultado.")
+                    continue
+
+                minutes_md = AgentMinutes.to_markdown(hub.minutes)
+                db.table("meetings").update({"minutes_md": minutes_md}).eq("id", mid).execute()
+
+                # Invalidate cache so subsequent tool calls see the new minutes
+                self._meeting_cache = None
+
+                successes.append(
+                    f"  • Reunião {n} — '{title}': {len(minutes_md):,} chars"
+                )
+            except Exception as exc:
+                failures.append(f"  • Reunião {n} — '{title}': {exc}")
+
+        lines = [
+            f"Geração de atas concluída — {len(successes)} sucesso(s), {len(failures)} falha(s).",
+            "",
+        ]
+        if successes:
+            lines.append(f"✅ Atas geradas ({len(successes)}):")
+            lines.extend(successes)
+        if failures:
+            lines.append(f"\n❌ Falhas ({len(failures)}):")
+            lines.extend(failures)
+        if successes:
+            lines.append(
+                "\nAs atas foram salvas em `minutes_md` no Supabase. "
+                "Use `get_meeting_summary` para visualizar qualquer ata gerada."
+            )
+        return "\n".join(lines)
+
     # ── Dispatcher ────────────────────────────────────────────────────────────
 
     def execute(self, tool_name: str, tool_input: dict) -> str:
@@ -1851,6 +2048,11 @@ class AssistantToolExecutor:
                 ),
                 "reprocess_meeting_requirements": lambda: self.reprocess_meeting_requirements(
                     tool_input["meeting_number"],
+                    tool_input.get("output_language", "Auto-detect"),
+                ),
+                "generate_missing_minutes":       lambda: self.generate_missing_minutes(
+                    tool_input.get("meeting_numbers"),
+                    bool(tool_input.get("force_regenerate", False)),
                     tool_input.get("output_language", "Auto-detect"),
                 ),
             }
