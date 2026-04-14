@@ -613,6 +613,14 @@ if active_question and not _asst_running:
                     _result_box["error"]        = str(_exc2)
 
         _thread = threading.Thread(target=_run_tools_thread, daemon=True)
+        # Propagate Streamlit script-run context to the worker thread so that
+        # st.session_state writes from _status() don't raise
+        # "Tried to use SessionInfo before it was initialized".
+        try:
+            from streamlit.runtime.scriptrunner import add_script_run_ctx
+            add_script_run_ctx(_thread)
+        except Exception:
+            pass  # older Streamlit versions — context not required
         st.session_state["_asst_running"]      = True
         st.session_state["_asst_thread"]       = _thread
         st.session_state["_asst_cancel_event"] = _cancel_ev
