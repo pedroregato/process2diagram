@@ -12,6 +12,16 @@ def copy_button(text: str, key: str, label: str = "📋 Copy to Clipboard", comp
         label:   Button label (shown and restored after 2 s).
         compact: If True, renders a smaller pill-style button (height=28).
                  Use compact=True inside st.chat_message to avoid whitespace.
+
+    Strategy (most-reliable first):
+      1. navigator.clipboard.writeText()  — works in HTTPS when the component
+         iframe has allow="clipboard-write" (Streamlit sets this) and the click
+         is the active user gesture in the SAME iframe document.
+      2. Parent-document execCommand     — creates a hidden textarea in the
+         same-origin parent frame and uses execCommand('copy') there; works in
+         local HTTP dev where navigator.clipboard requires a secure context.
+      3. Iframe execCommand              — last resort; deprecated but broadly
+         supported in most browsers as of 2025.
     """
     safe = json.dumps(text)
     if compact:
@@ -47,30 +57,41 @@ def copy_button(text: str, key: str, label: str = "📋 Copy to Clipboard", comp
                 b.style.color = '{restore_color}';
               }}, 2000);
             }}
-            function _fallback() {{
-              var el = document.createElement('textarea');
-              el.value = text;
-              el.style.position = 'fixed';
-              el.style.left = '-9999px';
-              document.body.appendChild(el);
-              el.focus(); el.select();
-              try {{ document.execCommand('copy'); _ok(); }} catch(e) {{}}
-              document.body.removeChild(el);
+            // Strategy 2: parent-document execCommand (same-origin, HTTP-safe)
+            function _parent_exec() {{
+              try {{
+                var pd = window.parent && window.parent.document;
+                if (!pd) return false;
+                var ta = pd.createElement('textarea');
+                ta.value = text;
+                ta.style.cssText = 'position:fixed;left:-9999px;opacity:0;pointer-events:none;';
+                pd.body.appendChild(ta);
+                ta.focus(); ta.select();
+                var ok = pd.execCommand('copy');
+                pd.body.removeChild(ta);
+                if (ok) {{ _ok(); return true; }}
+              }} catch(e) {{}}
+              return false;
             }}
-            // Prefer parent-frame clipboard: Streamlit iframes have allow-same-origin
-            // so window.parent.navigator.clipboard is reachable and has clipboard-write
-            // permission from the top-level user gesture.
-            try {{
-              var _cb = (window.parent && window.parent.navigator && window.parent.navigator.clipboard)
-                ? window.parent.navigator.clipboard
-                : (navigator.clipboard && window.isSecureContext ? navigator.clipboard : null);
-              if (_cb) {{
-                _cb.writeText(text).then(_ok, _fallback);
-              }} else {{
-                _fallback();
-              }}
-            }} catch(_e) {{
-              _fallback();
+            // Strategy 3: in-iframe execCommand (last resort)
+            function _iframe_exec() {{
+              var ta = document.createElement('textarea');
+              ta.value = text;
+              ta.style.cssText = 'position:fixed;left:-9999px;opacity:0;';
+              document.body.appendChild(ta);
+              ta.focus(); ta.select();
+              try {{ document.execCommand('copy'); _ok(); }} catch(e) {{}}
+              document.body.removeChild(ta);
+            }}
+            // Strategy 1: navigator.clipboard (HTTPS + allow="clipboard-write")
+            // Must be called on the SAME document that has focus (the iframe),
+            // NOT window.parent.navigator.clipboard — Chrome v102+ rejects that.
+            if (navigator.clipboard && window.isSecureContext) {{
+              navigator.clipboard.writeText(text).then(_ok, function() {{
+                if (!_parent_exec()) _iframe_exec();
+              }});
+            }} else {{
+              if (!_parent_exec()) _iframe_exec();
             }}
           }})()"
           style="{style}">
