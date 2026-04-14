@@ -154,6 +154,11 @@ _chunks_table_ok  = supabase_configured() and transcript_chunks_table_exists()
 embed_provider    = st.session_state.get("asst_embed_provider", list(EMBEDDING_PROVIDERS.keys())[0])
 embed_api_key     = st.session_state.get("asst_embed_key", "")
 
+# Auto-enable semantic search when embed key is configured.
+# Only sets the default on first load (key absent); respects explicit user toggle.
+if "asst_use_semantic" not in st.session_state:
+    st.session_state["asst_use_semantic"] = bool(embed_api_key and _chunks_table_ok)
+
 # ── Main area ─────────────────────────────────────────────────────────────────
 st.markdown("# 💬 Assistente de Reuniões")
 st.caption(
