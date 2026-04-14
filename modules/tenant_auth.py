@@ -99,6 +99,75 @@ def login_tenant(domain: str, login: str, password: str) -> dict | None:
     }
 
 
+def login_tenant_debug(domain: str, login: str, password: str) -> tuple[dict | None, str]:
+    """Versão diagnóstica de login_tenant — retorna (resultado, motivo_falha).
+    Usar apenas para debug; remover após resolver o problema.
+    """
+    client = get_supabase_client()
+    if client is None:
+        return None, "Supabase client é None (credenciais não configuradas)"
+
+    domain_slug = domain.lower().strip()
+    login_norm  = login.lower().strip()
+
+    try:
+        resp = (
+            client.table("tenants")
+            .select("id, display_name, active")
+            .eq("domain_slug", domain_slug)
+            .limit(1)
+            .execute()
+        )
+        rows = resp.data or []
+    except Exception as e:
+        return None, f"Erro na query tenants: {e}"
+
+    if not rows:
+        return None, f"Tenant não encontrado para domain_slug='{domain_slug}'"
+
+    tenant = rows[0]
+    if not tenant.get("active", True):
+        return None, "Tenant inativo"
+
+    tenant_id = tenant["id"]
+
+    try:
+        resp = (
+            client.table("tenant_users")
+            .select("id, display_name, role, active, password_hash")
+            .eq("tenant_id", tenant_id)
+            .eq("login", login_norm)
+            .limit(1)
+            .execute()
+        )
+        rows = resp.data or []
+    except Exception as e:
+        return None, f"Erro na query tenant_users: {e}"
+
+    if not rows:
+        return None, f"Usuário '{login_norm}' não encontrado no tenant {tenant_id}"
+
+    user = rows[0]
+    if not user.get("active", True):
+        return None, "Usuário inativo"
+
+    stored = user.get("password_hash", "")
+    computed = _hash(password)
+    if stored != computed:
+        return None, f"Hash não confere. Armazenado={stored[:12]}… Calculado={computed[:12]}…"
+
+    result = {
+        "tenant_id":    tenant_id,
+        "domain":       domain_slug,
+        "tenant_name":  tenant["display_name"],
+        "user_id":      user["id"],
+        "user_name":    login_norm,
+        "display_name": user["display_name"],
+        "role":         user.get("role", "user"),
+    }
+    return result, "OK"
+
+
 def tenant_auth_available() -> bool:
     """True quando o Supabase está configurado e a tabela tenants existe."""
     client = get_supabase_client()

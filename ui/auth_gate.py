@@ -110,7 +110,10 @@ def render_login_page() -> None:
     tenant_mode = _is_tenant_mode()
     erro        = st.session_state.get("_login_erro", False)
 
-    if erro == "tenant":
+    if isinstance(erro, str) and erro.startswith("tenant:"):
+        motivo_diag = erro[7:]
+        erro_html = f'<div class="l-err">⚠️ Falha no login. Diagnóstico: {motivo_diag}</div>'
+    elif erro == "tenant":
         erro_html = '<div class="l-err">⚠️ Domínio, usuário ou senha incorretos.</div>'
     elif erro == "local":
         erro_html = '<div class="l-err">⚠️ Usuário ou senha incorretos.</div>'
@@ -167,10 +170,10 @@ def render_login_page() -> None:
 
 def _handle_tenant_login(domain: str, usuario: str, senha: str) -> None:
     """Valida via Supabase tenant_auth. Em caso de falha exibe erro."""
-    from modules.tenant_auth   import login_tenant
+    from modules.tenant_auth   import login_tenant_debug
     from modules.tenant_config import load_all_config, apply_config_to_session
 
-    result = login_tenant(domain, usuario, senha)
+    result, motivo = login_tenant_debug(domain, usuario, senha)
     if result:
         config = load_all_config(result["tenant_id"])
         st.session_state["_autenticado"]   = True
@@ -184,7 +187,7 @@ def _handle_tenant_login(domain: str, usuario: str, senha: str) -> None:
         apply_config_to_session(config)
         st.rerun()
     else:
-        st.session_state["_login_erro"] = "tenant"
+        st.session_state["_login_erro"] = f"tenant:{motivo}"
         st.rerun()
 
 
