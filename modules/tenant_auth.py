@@ -85,7 +85,7 @@ def login_tenant(domain: str, login: str, password: str) -> dict | None:
         return None
 
     # ── 3. Verifica senha ─────────────────────────────────────────────────────
-    if user.get("password_hash", "") != _hash(password):
+    if user.get("password_hash", "").strip() != _hash(password):
         return None
 
     return {
@@ -151,7 +151,7 @@ def login_tenant_debug(domain: str, login: str, password: str) -> tuple[dict | N
     if not user.get("active", True):
         return None, "Usuário inativo"
 
-    stored = user.get("password_hash", "")
+    stored = user.get("password_hash", "").strip()
     computed = _hash(password)
     if stored != computed:
         return None, f"Hash não confere. Armazenado={stored[:12]}… Calculado={computed[:12]}…"
