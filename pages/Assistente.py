@@ -11,6 +11,7 @@ root_dir = Path(__file__).parent.parent.absolute()
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
+import re
 import threading
 import time
 
@@ -387,6 +388,19 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+_DSML_SAFETY_RE = re.compile(r'<[|\uff5c]DSML[|\uff5c][^>]*>.*?<[|\uff5c]DSML[|\uff5c][^>]*>', re.DOTALL)
+_DSML_CUT_RE    = re.compile(r'<[|\uff5c]DSML[|\uff5c]')
+
+
+def _clean_response(text: str) -> str:
+    """Safety-net: strip any DSML markup that leaked through the agent layer."""
+    m = _DSML_CUT_RE.search(text)
+    if m:
+        text = text[:m.start()].rstrip()
+    text = _DSML_SAFETY_RE.sub('', text)
+    return text.strip()
+
+
 # ── Session history ───────────────────────────────────────────────────────────
 if "assistant_history" not in st.session_state:
     st.session_state["assistant_history"] = []
@@ -478,6 +492,7 @@ if _asst_running:
         if error and not result_box.get("response"):
             response_text = f"❌ Erro: {error}"
 
+        response_text = _clean_response(response_text) or response_text
         history = st.session_state["assistant_history"]
         history.append({"role": "assistant", "content": response_text})
         st.session_state["assistant_history"] = history
@@ -681,6 +696,7 @@ if active_question and not _asst_running:
                 tokens_used = 0
 
         # 4. Append and render
+        response_text = _clean_response(response_text) or response_text
         history.append({"role": "assistant", "content": response_text})
         st.session_state["assistant_history"] = history
 

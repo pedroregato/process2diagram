@@ -593,7 +593,9 @@ class AgentAssistant(BaseAgent):
                     dsml_calls = _parse_dsml_tool_calls(content)
                     if dsml_calls:
                         # Execute the DSML-encoded tool calls
-                        msgs.append({"role": "assistant", "content": _strip_dsml(content) or content})
+                        # Use stripped content for history; if nothing remains (pure DSML),
+                        # use a neutral placeholder — never store raw DSML in conversation history.
+                        msgs.append({"role": "assistant", "content": _strip_dsml(content) or "…"})
                         for dc in dsml_calls:
                             called.append(dc["name"])
                             if status_fn:
@@ -620,7 +622,8 @@ class AgentAssistant(BaseAgent):
                         )
                         total_tk += final_resp.usage.total_tokens if final_resp.usage else 0
                         final_text = final_resp.choices[0].message.content or ""
-                        return _strip_dsml(final_text) or final_text, total_tk, called
+                        # If DSML persists in the final answer, strip it; never return raw DSML.
+                        return _strip_dsml(final_text) or "✅ Consulta realizada. Verifique os dados.", total_tk, called
                 # No DSML — clean any stray tags and return as final answer
                 return _strip_dsml(content) or content, total_tk, called
 
@@ -654,7 +657,7 @@ class AgentAssistant(BaseAgent):
         )
         total_tk += resp.usage.total_tokens if resp.usage else 0
         raw = resp.choices[0].message.content or ""
-        return _strip_dsml(raw) or raw, total_tk, called
+        return _strip_dsml(raw) or "✅ Consulta realizada. Verifique os dados.", total_tk, called
 
     # ── Tool-use loop — Anthropic ─────────────────────────────────────────────
 
