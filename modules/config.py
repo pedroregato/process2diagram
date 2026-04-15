@@ -74,7 +74,7 @@ AVAILABLE_PROVIDERS: dict = {
 
     # ── Grok (xAI) ─────────────────────────────────────────────────────
     "Grok (xAI)": {
-        "default_model": "grok-4-1-fast-reasoning",   # Recomendado para começar (melhor custo + 2M contexto)
+        "default_model": "grok-4-1-fast-reasoning",   # Recomendado para começar (bom custo + contexto 2M)
         "base_url": "https://api.x.ai/v1",
         "api_key_label": "xAI Grok API Key",
         "api_key_help": "Get your key at console.x.ai",
@@ -103,8 +103,5 @@ AVAILABLE_PROVIDERS: dict = {
 
 }
 
-# Default provider shown on startup (mude se quiser começar com Grok)
-DEFAULT_PROVIDER = "Grok (xAI)"
-
 # Default provider shown on startup
-DEFAULT_PROVIDER = "DeepSeek"
+DEFAULT_PROVIDER = "Grok (xAI)"

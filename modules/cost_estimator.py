@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Estimativa de custos LLM para o Process2Diagram.
 #
-# Dados de preço são aproximados e atualizados até jun/2025.
+# Dados de preço são aproximados e atualizados até abril/2026.
 # Fonte: páginas de preço oficiais de cada provedor.
 #
 # Não faz chamadas LLM — cálculo puramente Python.
@@ -57,21 +57,24 @@ PROVIDER_PRICING: dict[str, dict] = {
         "free_tier":  True,
         "source":     "ai.google.dev/pricing",
     },
+
+    # ── Grok (xAI) ─────────────────────────────────────────────────────
     "Grok (xAI)": {
-        "model": "grok-4-1-fast-reasoning",
-        "input_usd": 0.20,
+        "model":      "grok-4-1-fast-reasoning (2M context)",
+        "input_usd":  0.20,
         "output_usd": 0.50,
-        "note": "Contexto 2M tokens - ótimo para transcrições longas",
-        "free_tier": False,
-        "source": "docs.x.ai",
+        "note":       "Contexto gigante de 2M tokens - excelente para transcrições longas",
+        "free_tier":  False,
+        "source":     "docs.x.ai/developers/models",
     },
+
     "Grok 4.20 Multi-Agent (xAI)": {
-        "model": "grok-4.20-multi-agent",
-        "input_usd": 2.00,
+        "model":      "grok-4.20-multi-agent",
+        "input_usd":  2.00,
         "output_usd": 6.00,
-        "note": "Multi-agente nativo - melhor para interpretação complexa de reuniões",
-        "free_tier": False,
-        "source": "docs.x.ai",
+        "note":       "Suporte nativo a multi-agente - ideal para análise complexa de reuniões",
+        "free_tier":  False,
+        "source":     "docs.x.ai/developers/models",
     },
 }
 
@@ -87,6 +90,8 @@ EMBEDDING_PRICING: dict[str, dict] = {
         "usd_per_1m": 0.02,
         "note":      "$0.02 por 1M tokens",
     },
+    # Grok embeddings ainda não tem preço público claro em 2026 (pode ser pay-per-use)
+    # Por enquanto deixamos sem inclusão aqui. Podemos adicionar depois quando tiver preço oficial.
 }
 
 # ── Perfil de consumo de tokens por agente ────────────────────────────────────
@@ -161,15 +166,6 @@ def estimate_scenario(
     """
     Estima custo total para processar `n_meetings` reuniões com os agentes
     e configurações especificadas.
-
-    Args:
-        provider:       Nome do provedor (chave em PROVIDER_PRICING)
-        n_meetings:     Número de transcrições a processar
-        agents_enabled: Lista de agentes ativos (chaves em AGENT_TOKEN_PROFILE)
-        n_bpmn_passes:  Número de passes BPMN (1, 3 ou 5)
-
-    Returns:
-        ScenarioEstimate com custo total e breakdown por agente.
     """
     pricing = PROVIDER_PRICING.get(provider, {})
     breakdown: list[AgentCostBreakdown] = []
@@ -224,14 +220,6 @@ def estimate_embedding_cost(
 ) -> float:
     """
     Estima custo de geração de embeddings para um projeto.
-
-    Args:
-        n_meetings:     Total de reuniões a indexar
-        avg_chars:      Tamanho médio de transcrição em caracteres
-        embed_provider: "Google Gemini" ou "OpenAI"
-
-    Returns:
-        Custo estimado em USD (total, operação única).
     """
     pricing = EMBEDDING_PRICING.get(embed_provider)
     if not pricing:
@@ -258,7 +246,7 @@ def compare_providers(
             "Modelo":            pricing["model"],
             "Custo total (USD)": est.total_cost_usd,
             "Por reunião (USD)": est.cost_per_meeting,
-            "Tier gratuito":     "✅" if pricing["free_tier"] else "—",
+            "Tier gratuito":     "✅" if pricing.get("free_tier", False) else "—",
             "Observação":        pricing["note"],
         })
     results.sort(key=lambda x: x["Custo total (USD)"])
