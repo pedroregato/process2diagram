@@ -666,21 +666,27 @@ class AgentAssistant(BaseAgent):
                 # to act but made no tool call — push the model to actually call it.
                 _DECLARED_INTENT_RE = re.compile(
                     r'^(?:vou\s+(?:verificar|buscar|consultar|analisar|checar|obter|acessar|'
-                    r'pesquisar|investigar|examinar)|deixa\s+(?:eu|me)\s+(?:verificar|buscar|'
-                    r'consultar)|vamos\s+(?:ver|buscar|verificar))[^.!?]{0,120}[:.]\s*$',
+                    r'pesquisar|investigar|examinar|procurar|localizar|identificar|'
+                    r'carregar|recuperar)|'
+                    r'deixa\s+(?:eu|me)\s+(?:verificar|buscar|consultar|checar)|'
+                    r'vamos\s+(?:ver|buscar|verificar|checar)|'
+                    r'preciso\s+(?:verificar|buscar|consultar|checar)|'
+                    r'primeiro\s+(?:vou|preciso|deixa)|'
+                    r'para\s+responder.{0,30}preciso)',
                     re.IGNORECASE | re.DOTALL,
                 )
                 if _DECLARED_INTENT_RE.match(content.strip()) and round_n < MAX_TOOL_ROUNDS - 1:
                     # Model declared what it will do but didn't call a tool.
-                    # Push it to actually call the right tool in the next round.
+                    # Push with increasing urgency each round.
+                    push_msg = (
+                        "EXECUTE AGORA: chame a ferramenta imediatamente. "
+                        "Use search_transcript para buscar o conteúdo pedido. "
+                        "Não escreva texto — apenas chame a ferramenta."
+                    ) if round_n >= 1 else (
+                        "Chame a ferramenta agora. Não descreva o que vai fazer."
+                    )
                     msgs.append({"role": "assistant", "content": content})
-                    msgs.append({
-                        "role": "user",
-                        "content": (
-                            "Prossiga: chame a ferramenta apropriada agora para obter os dados. "
-                            "Não descreva o que vai fazer — apenas chame a ferramenta."
-                        ),
-                    })
+                    msgs.append({"role": "user", "content": push_msg})
                     continue  # next round
 
                 # Check if DeepSeek leaked tool calls in DSML format inside the text
