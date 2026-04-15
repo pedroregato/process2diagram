@@ -25,9 +25,11 @@ from core.knowledge_hub import KnowledgeHub
 from agents.base_agent import BaseAgent
 
 MAX_TOOL_ROUNDS = 5       # max LLM ↔ tool iterations before forcing final answer
-_MAX_TOOL_RESULT_CHARS = 6_000   # truncate individual tool results above this (~1500 tokens)
-_MAX_HISTORY_TURNS     = 8       # max user+assistant pairs kept from prior history
-_MAX_MSGS_CHARS        = 80_000  # emergency: trim oldest tool results when msgs exceeds this
+_MAX_TOOL_RESULT_CHARS = 5_000   # truncate individual tool results above this (~1250 tokens)
+_MAX_HISTORY_TURNS     = 3       # max user+assistant pairs kept from prior history
+_MAX_HISTORY_MSG_CHARS = 1_500   # truncate individual history messages above this
+# Budget: 131 072 token limit × ~3 chars/tok; reserve 12 k tokens for completion+system
+_MAX_INPUT_CHARS       = 240_000
 
 
 def _truncate_tool_result(result: str, label: str = "") -> str:
@@ -36,19 +38,27 @@ def _truncate_tool_result(result: str, label: str = "") -> str:
         return result
     kept = result[: _MAX_TOOL_RESULT_CHARS]
     omitted = len(result) - _MAX_TOOL_RESULT_CHARS
-    suffix = f"\n\n[… resultado truncado — {omitted} caracteres omitidos para caber no contexto]"
+    suffix = f"\n\n[… resultado truncado — {omitted} caracteres omitidos]"
     return kept.rstrip() + suffix
 
 
-def _trim_history(history: list[dict], max_turns: int = _MAX_HISTORY_TURNS) -> list[dict]:
-    """Keep only the last max_turns user+assistant pairs from prior history."""
+def _trim_history(history: list[dict]) -> list[dict]:
+    """
+    Keep only the last _MAX_HISTORY_TURNS user+assistant pairs AND
+    truncate each individual message to _MAX_HISTORY_MSG_CHARS.
+    """
     if not history:
-        return history
-    # Each "turn" = 1 user + 1 assistant message; keep the tail
-    pairs_needed = max_turns * 2
-    if len(history) <= pairs_needed:
-        return history
-    return history[-pairs_needed:]
+        return []
+    pairs_needed = _MAX_HISTORY_TURNS * 2
+    trimmed = history[-pairs_needed:] if len(history) > pairs_needed else list(history)
+    result = []
+    for msg in trimmed:
+        c = msg.get("content", "")
+        if isinstance(c, str) and len(c) > _MAX_HISTORY_MSG_CHARS:
+            c = c[:_MAX_HISTORY_MSG_CHARS] + " [… truncado]"
+            msg = {**msg, "content": c}
+        result.append(msg)
+    return result
 
 
 def _msgs_total_chars(msgs: list[dict]) -> int:
@@ -66,27 +76,50 @@ def _msgs_total_chars(msgs: list[dict]) -> int:
     return total
 
 
-def _trim_msgs_if_needed(msgs: list[dict]) -> list[dict]:
+def _enforce_budget(msgs: list[dict]) -> list[dict]:
     """
-    If msgs exceeds _MAX_MSGS_CHARS, remove the oldest tool/tool_result pairs
-    (keeping system + first user message + recent turns intact).
+    Hard guardrail called before every API call.
+    If total chars exceed _MAX_INPUT_CHARS:
+      1. Replace tool/tool_result content with placeholder (oldest first).
+      2. Remove old assistant messages entirely.
+      3. As last resort, truncate remaining long messages.
+    Always preserves msgs[0] (system) and msgs[-1] (current user question).
     """
-    if _msgs_total_chars(msgs) <= _MAX_MSGS_CHARS:
+    if _msgs_total_chars(msgs) <= _MAX_INPUT_CHARS:
         return msgs
-    # Identify and drop the oldest tool-result message (role="tool") to free space.
-    # Repeat until under budget or nothing left to drop.
+
     result = list(msgs)
-    for i in range(len(result) - 1, -1, -1):
-        if _msgs_total_chars(result) <= _MAX_MSGS_CHARS:
-            break
+
+    # Pass 1 — blank out tool results (least important, oldest first)
+    for i in range(1, len(result) - 1):
+        if _msgs_total_chars(result) <= _MAX_INPUT_CHARS:
+            return result
         role = result[i].get("role", "")
         if role == "tool":
             result[i] = {
                 "role": "tool",
                 "tool_call_id": result[i].get("tool_call_id", ""),
-                "content": "[resultado omitido — contexto muito grande]",
+                "content": "[omitido]",
             }
+
+    # Pass 2 — remove oldest non-system/non-current messages entirely
+    while len(result) > 3 and _msgs_total_chars(result) > _MAX_INPUT_CHARS:
+        result.pop(1)
+
+    # Pass 3 — truncate any remaining long content
+    for i in range(1, len(result)):
+        if _msgs_total_chars(result) <= _MAX_INPUT_CHARS:
+            break
+        c = result[i].get("content", "")
+        if isinstance(c, str) and len(c) > 500:
+            result[i] = {**result[i], "content": c[:500] + " [… truncado]"}
+
     return result
+
+
+def _trim_msgs_if_needed(msgs: list[dict]) -> list[dict]:
+    """Alias to _enforce_budget for post-tool-call trimming."""
+    return _enforce_budget(msgs)
 
 # ── DeepSeek DSML tool-call format parser ─────────────────────────────────────
 # DeepSeek sometimes outputs tool calls using its internal DSML XML format in the
@@ -603,7 +636,7 @@ class AgentAssistant(BaseAgent):
 
         client   = OpenAI(api_key=api_key, base_url=self.provider_cfg.get("base_url"))
         tools    = get_tool_schemas_openai()
-        msgs     = [{"role": "system", "content": system}] + list(messages)
+        msgs     = _enforce_budget([{"role": "system", "content": system}] + list(messages))
         total_tk = 0
         called: list[str] = []
 
@@ -616,7 +649,7 @@ class AgentAssistant(BaseAgent):
 
             resp = client.chat.completions.create(
                 model=model,
-                messages=msgs,
+                messages=_enforce_budget(msgs),
                 tools=tools,
                 tool_choice="auto",
                 max_tokens=self.provider_cfg.get("max_tokens", 2048),
@@ -678,7 +711,7 @@ class AgentAssistant(BaseAgent):
                             return "⏹ Processamento interrompido pelo usuário.", total_tk, called
                         final_resp = client.chat.completions.create(
                             model=model,
-                            messages=msgs,
+                            messages=_enforce_budget(msgs),
                             max_tokens=self.provider_cfg.get("max_tokens", 2048),
                             temperature=0.3,
                             # No tools= → DeepSeek returns plain text, no DSML
@@ -733,7 +766,7 @@ class AgentAssistant(BaseAgent):
             status_fn("🧠 Elaborando resposta final…")
         resp = client.chat.completions.create(
             model=model,
-            messages=msgs,
+            messages=_enforce_budget(msgs),
             max_tokens=self.provider_cfg.get("max_tokens", 2048),
             temperature=0.3,
         )
@@ -764,7 +797,7 @@ class AgentAssistant(BaseAgent):
 
         client   = anthropic.Anthropic(api_key=api_key)
         tools    = get_tool_schemas_anthropic()
-        msgs     = list(messages)
+        msgs     = _enforce_budget(list(messages))
         total_tk = 0
         called: list[str] = []
 
@@ -779,7 +812,7 @@ class AgentAssistant(BaseAgent):
                 model=model,
                 system=system,
                 tools=tools,
-                messages=msgs,
+                messages=_enforce_budget(msgs),
                 max_tokens=self.provider_cfg.get("max_tokens", 2048),
                 temperature=0.3,
             )
@@ -820,7 +853,7 @@ class AgentAssistant(BaseAgent):
         resp = client.messages.create(
             model=model,
             system=system,
-            messages=msgs,
+            messages=_enforce_budget(msgs),
             max_tokens=self.provider_cfg.get("max_tokens", 2048),
             temperature=0.3,
         )
