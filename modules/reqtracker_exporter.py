@@ -75,6 +75,83 @@ _PDF_MAP = {
 }
 
 
+def _md_to_html(md: str) -> str:
+    """Minimal Markdown → HTML converter for meeting minutes."""
+    import re
+    lines = md.splitlines()
+    out = []
+    in_ul = False
+    in_table = False
+
+    def close_ul():
+        nonlocal in_ul
+        if in_ul:
+            out.append("</ul>")
+            in_ul = False
+
+    def close_table():
+        nonlocal in_table
+        if in_table:
+            out.append("</tbody></table>")
+            in_table = False
+
+    def inline(text: str) -> str:
+        text = _html_lib.escape(text)
+        text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+        text = re.sub(r'\*(.+?)\*',     r'<em>\1</em>',          text)
+        return text
+
+    for line in lines:
+        stripped = line.rstrip()
+
+        # Table row
+        if stripped.startswith("|"):
+            close_ul()
+            cells = [c.strip() for c in stripped.strip("|").split("|")]
+            if all(re.match(r'^[-:]+$', c) for c in cells if c):
+                # separator row — skip, but mark as header done
+                continue
+            if not in_table:
+                out.append('<table class="minutes-table"><tbody>')
+                in_table = True
+            tds = "".join(f"<td>{inline(c)}</td>" for c in cells)
+            out.append(f"<tr>{tds}</tr>")
+            continue
+
+        close_table()
+
+        # Headers
+        if stripped.startswith("### "):
+            close_ul()
+            out.append(f'<h5 class="min-h5">{inline(stripped[4:])}</h5>')
+        elif stripped.startswith("## "):
+            close_ul()
+            out.append(f'<h4 class="min-h4">{inline(stripped[3:])}</h4>')
+        elif stripped.startswith("# "):
+            close_ul()
+            out.append(f'<h3 class="min-h3">{inline(stripped[2:])}</h3>')
+        # List items
+        elif re.match(r'^[-*] ', stripped):
+            if not in_ul:
+                out.append("<ul>")
+                in_ul = True
+            out.append(f"<li>{inline(stripped[2:])}</li>")
+        elif re.match(r'^\d+\. ', stripped):
+            close_ul()
+            out.append(f"<li>{inline(re.sub(r'^\d+\. ', '', stripped))}</li>")
+        # Blank line
+        elif not stripped:
+            close_ul()
+            out.append("<br>")
+        else:
+            close_ul()
+            out.append(f"<p>{inline(stripped)}</p>")
+
+    close_ul()
+    close_table()
+    return "\n".join(out)
+
+
 def _p(text: object) -> str:
     t = str(text or "")
     for src, dst in _PDF_MAP.items():
@@ -189,6 +266,42 @@ def to_html(
 
     if not rules_rows:
         rules_rows = '<tr><td colspan="5" class="empty-td">Nenhuma regra registrada.</td></tr>'
+
+    # ── Minutes cards (one collapsible card per meeting) ─────────────────────
+    n_minutes = sum(1 for m in meetings if m.get("minutes_md"))
+    minutes_cards = ""
+    for m in meetings:
+        num      = m.get("meeting_number", "?")
+        dt       = m.get("meeting_date") or "—"
+        md_text  = m.get("minutes_md") or ""
+        body_id  = f"min-body-{num}"
+        if md_text:
+            body_html = _md_to_html(md_text)
+            minutes_cards += f"""
+        <div class="minutes-card">
+          <div class="minutes-card-header" onclick="toggleMinutes('{body_id}',this)">
+            <div class="minutes-card-num">{num}</div>
+            <div class="minutes-card-title">{_esc(m.get('title',''))}</div>
+            <div class="minutes-card-meta">{_esc(str(dt))}</div>
+            <span class="minutes-toggle">▼</span>
+          </div>
+          <div id="{body_id}" class="minutes-body">{body_html}</div>
+        </div>"""
+        else:
+            minutes_cards += f"""
+        <div class="minutes-card">
+          <div class="minutes-card-header">
+            <div class="minutes-card-num">{num}</div>
+            <div class="minutes-card-title">{_esc(m.get('title',''))}</div>
+            <div class="minutes-card-meta">{_esc(str(dt))}</div>
+          </div>
+          <div class="minutes-body open">
+            <p class="minutes-no-data">Ata não disponível para esta reunião.</p>
+          </div>
+        </div>"""
+
+    if not minutes_cards:
+        minutes_cards = '<div class="empty-msg">Nenhuma ata disponível.</div>'
 
     # ── Meetings cards ────────────────────────────────────────────────────────
     meet_cards = ""
@@ -358,6 +471,33 @@ a{{color:var(--accent2);text-decoration:none}}
 .req-list{{list-style:none;margin-top:.5rem;display:flex;flex-direction:column;gap:.2rem}}
 .req-list li{{font-size:.82rem;color:var(--muted)}}
 
+/* ── Minutes cards ── */
+.minutes-card{{background:var(--navy2);border:1px solid var(--border);border-radius:10px;
+  margin-bottom:1.2rem;overflow:hidden}}
+.minutes-card-header{{display:flex;align-items:center;gap:1rem;padding:.8rem 1.2rem;
+  background:var(--navy);border-bottom:1px solid var(--border);cursor:pointer;user-select:none}}
+.minutes-card-num{{width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.9rem;flex-shrink:0}}
+.minutes-card-title{{font-weight:600;color:var(--white);font-size:.9rem;flex:1}}
+.minutes-card-meta{{color:var(--muted);font-size:.78rem}}
+.minutes-toggle{{color:var(--muted);font-size:.8rem;transition:transform .25s}}
+.minutes-body{{padding:1.2rem 1.4rem;display:none}}
+.minutes-body.open{{display:block}}
+.minutes-body h3.min-h3,.minutes-body h3{{font-size:1rem;color:var(--accent2);margin:.8rem 0 .3rem;border-bottom:1px solid var(--border);padding-bottom:.2rem}}
+.minutes-body h4.min-h4,.minutes-body h4{{font-size:.9rem;color:var(--accent2);margin:.6rem 0 .2rem}}
+.minutes-body h5.min-h5,.minutes-body h5{{font-size:.85rem;color:var(--muted);margin:.4rem 0 .1rem}}
+.minutes-body p{{font-size:.85rem;margin:.2rem 0;color:var(--text)}}
+.minutes-body ul{{padding-left:1.2rem;margin:.2rem 0}}
+.minutes-body li{{font-size:.85rem;color:var(--text);margin:.1rem 0}}
+.minutes-body table.minutes-table{{width:100%;border-collapse:collapse;font-size:.8rem;margin:.4rem 0}}
+.minutes-body table.minutes-table td{{padding:.35rem .6rem;border:1px solid var(--border);vertical-align:top}}
+.minutes-body table.minutes-table tr:first-child td{{background:var(--navy);color:var(--muted);font-weight:600}}
+.minutes-no-data{{color:var(--muted);font-style:italic;font-size:.85rem;padding:1rem}}
+@media print{{
+  .minutes-body{{display:block!important}}
+  .minutes-card-header .minutes-toggle{{display:none}}
+}}
+
 /* ── Print CSS ── */
 @media print{{
   body{{background:#fff;color:#1a2a3a;font-size:11pt}}
@@ -389,6 +529,7 @@ a{{color:var(--accent2);text-decoration:none}}
   <a class="nav-link" data-target="sec-contra">⚠️ Contradições ({n_contr})</a>
   <a class="nav-link" data-target="sec-sbvr">📖 SBVR ({n_terms}T · {n_rules}R)</a>
   <a class="nav-link" data-target="sec-meetings">🗓️ Reuniões ({n_meet})</a>
+  <a class="nav-link" data-target="sec-minutes">📄 Atas ({n_minutes})</a>
   <div class="sidebar-footer">
     Gerado em {now}<br>
     Process2Diagram ReqTracker
@@ -530,9 +671,28 @@ a{{color:var(--accent2);text-decoration:none}}
     </div>
   </div>
 
+  <!-- Minutes -->
+  <div id="sec-minutes" class="section">
+    <div class="section-title" onclick="toggleSection('body-minutes')">
+      📄 Atas das Reuniões
+      <span class="chev">▼</span>
+    </div>
+    <div id="body-minutes" class="section-body">
+      {minutes_cards}
+    </div>
+  </div>
+
 </main>
 
 <script>
+function toggleMinutes(bodyId, header) {{
+  const body   = document.getElementById(bodyId);
+  const toggle = header.querySelector('.minutes-toggle');
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  if (toggle) toggle.style.transform = isOpen ? '' : 'rotate(180deg)';
+}}
+
 function toggleSection(bodyId) {{
   const body  = document.getElementById(bodyId);
   const title = body.previousElementSibling;
@@ -939,5 +1099,54 @@ def to_pdf(
                 pdf.cell(W, 4.5, _p(f"... e mais {len(reqs_here)-6} requisito(s)"), ln=True)
 
         pdf.ln(4)
+
+    # ── Atas das Reuniões ─────────────────────────────────────────────────────
+    meetings_with_minutes = [m for m in meetings if m.get("minutes_md")]
+    if meetings_with_minutes:
+        import re as _re
+        pdf.add_page()
+        section_header(f"Atas das Reunioes ({len(meetings_with_minutes)})")
+
+        def _strip_md(text: str) -> str:
+            """Remove markdown markers for plain-text PDF rendering."""
+            t = _re.sub(r'^#{1,6}\s+', '', text, flags=_re.MULTILINE)
+            t = _re.sub(r'\*\*(.+?)\*\*', r'\1', t)
+            t = _re.sub(r'\*(.+?)\*',     r'\1', t)
+            t = _re.sub(r'^\|.+\|$', '', t, flags=_re.MULTILINE)   # table rows
+            t = _re.sub(r'^[-|:]+$', '', t, flags=_re.MULTILINE)    # table separators
+            t = _re.sub(r'\n{3,}', '\n\n', t)
+            return t.strip()
+
+        for m in meetings_with_minutes:
+            num   = m.get("meeting_number", "?")
+            title = _p(m.get("title", ""))
+            dt    = _p(m.get("meeting_date") or "—")
+
+            # Meeting header
+            pdf.set_fill_color(15, 32, 64)
+            pdf.set_font("Helvetica", "B", 10)
+            set_accent()
+            pdf.cell(10, 7, str(num), fill=True, border=0)
+            set_white()
+            pdf.cell(W - 10, 7, f"  {title[:80]}", fill=True, border=0, ln=True)
+            pdf.set_font("Helvetica", "", 8)
+            set_muted()
+            pdf.set_x(20)
+            pdf.cell(W, 5, _p(f"   Data: {dt}"), ln=True)
+            pdf.ln(1)
+
+            # Minutes content — iterate lines
+            clean_text = _strip_md(m["minutes_md"])
+            for line in clean_text.splitlines():
+                line = line.rstrip()
+                if not line:
+                    pdf.ln(2)
+                    continue
+                pdf.set_font("Helvetica", "", 8)
+                set_body()
+                pdf.set_x(20)
+                pdf.multi_cell(W, 4.5, _p(line))
+
+            pdf.ln(6)
 
     return bytes(pdf.output())

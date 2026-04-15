@@ -185,6 +185,30 @@ def apply_config_to_session(config: dict[str, str]) -> None:
     _apply_prefs_to_session(config)
 
 
+# Mapeamento business_key → (widget_key_em_Settings, transform_fn)
+# Necessário porque Streamlit ignora value= quando o widget_key já existe no
+# session_state. Ao carregar preferências do banco, precisamos setar AMBAS as
+# chaves para que o widget reflita o valor correto na próxima renderização.
+_WIDGET_KEY_MAP: dict[str, tuple[str, object]] = {
+    "asst_use_semantic":   ("settings_use_semantic",   None),
+    "asst_use_tools":      ("settings_asst_tools",     None),
+    "output_language":     ("settings_output_lang",    None),
+    "prefix":              ("settings_prefix",         lambda v: v.rstrip("_")),
+    "suffix":              ("settings_suffix",         None),
+    "n_bpmn_runs":         ("settings_n_bpmn",         None),
+    "run_quality":         ("settings_rq",             None),
+    "run_bpmn":            ("settings_rb",             None),
+    "run_minutes":         ("settings_rm",             None),
+    "run_requirements":    ("settings_rr",             None),
+    "run_sbvr":            ("settings_rs",             None),
+    "run_bmm":             ("settings_rbm",            None),
+    "run_synthesizer":     ("settings_rsy",            None),
+    "selected_provider":   ("settings_llm_provider",   None),
+    "asst_provider":       ("settings_asst_provider",  None),
+    "asst_embed_provider": ("settings_emb_provider",   None),
+}
+
+
 def _apply_prefs_to_session(config: dict[str, str]) -> None:
     """Carrega preferências persistidas no banco de volta ao session_state."""
     import streamlit as st
@@ -193,14 +217,24 @@ def _apply_prefs_to_session(config: dict[str, str]) -> None:
         if not raw:
             continue
         if type_ == "bool":
-            st.session_state[state_key] = raw.lower() == "true"
+            value = raw.lower() == "true"
         elif type_ == "int":
             try:
-                st.session_state[state_key] = int(raw)
+                value = int(raw)
             except ValueError:
-                pass
+                continue
         else:
-            st.session_state[state_key] = raw
+            value = raw
+
+        # Seta a chave de negócio (usada por sidebar e pipeline)
+        st.session_state[state_key] = value
+
+        # Seta também a chave do widget em Settings.py (evita que value= seja
+        # ignorado quando o widget_key já existe no session_state)
+        if state_key in _WIDGET_KEY_MAP:
+            widget_key, transform = _WIDGET_KEY_MAP[state_key]
+            widget_value = transform(value) if transform else value
+            st.session_state[widget_key] = widget_value
 
 
 def mask_key(value: str) -> str:

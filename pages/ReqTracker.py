@@ -399,6 +399,26 @@ with tab_meet:
                 if terms_here or rules_here:
                     st.markdown(f"**SBVR:** {len(terms_here)} termo(s) · {len(rules_here)} regra(s)")
 
+                # Ata da reunião
+                minutes_md = m.get("minutes_md") or ""
+                if minutes_md:
+                    st.markdown("**📄 Ata da Reunião**")
+                    col_view, col_dl = st.columns([3, 1])
+                    with col_view:
+                        with st.expander("Ver ata completa", expanded=False):
+                            st.markdown(minutes_md)
+                    with col_dl:
+                        st.download_button(
+                            "⬇️ Download (.md)",
+                            data=minutes_md.encode("utf-8"),
+                            file_name=f"ata_reuniao_{num}.md",
+                            mime="text/markdown",
+                            key=f"dl_minutes_{m['id']}",
+                            use_container_width=True,
+                        )
+                else:
+                    st.caption("_Ata não disponível para esta reunião._")
+
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 5 — SBVR
 # ════════════════════════════════════════════════════════════════════════════

@@ -176,7 +176,7 @@ with st.expander("➕ Novo Projeto", expanded=False):
                                 placeholder="Mapeamento de Processos RH")
     proj_sigla = pb.text_input("Sigla (máx 10)", key="m_proj_sigla",
                                 placeholder="RH", max_chars=10)
-    proj_desc  = st.text_area("Descrição (opcional)", key="m_proj_desc", height=60)
+    proj_desc  = st.text_area("Descrição (opcional)", key="m_proj_desc", height=68)
     if st.button("Criar projeto", key="m_create_proj", type="primary"):
         if proj_name.strip():
             result = create_project(proj_name.strip(), proj_desc.strip(), proj_sigla.strip())
