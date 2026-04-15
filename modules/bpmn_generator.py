@@ -32,15 +32,15 @@ DC  = "{%s}" % _NS["dc"]
 DDI = "{%s}" % _NS["di"]
 
 # ── Layout constants ──────────────────────────────────────────────────────────
-TASK_W,  TASK_H   = 120, 60
+TASK_W,  TASK_H   = 150, 80   # wider+taller so bpmn-js word-wrap fits ~4 lines
 GW_W,    GW_H     = 50,  50
 EV_W,    EV_H     = 36,  36
 H_GAP             = 70
-V_PAD             = 55
+V_PAD             = 70    # increased to prevent row overlap with taller tasks
 LANE_HEADER_W     = 100
 POOL_HEADER_W     = 100
 FIRST_X           = 80
-MIN_LANE_H        = 180
+MIN_LANE_H        = 210   # increased proportionally with taller tasks
 POOL_GAP          = 50    # vertical gap between pools in a collaboration
 
 
@@ -200,7 +200,7 @@ def _detect_crossings(flows, shapes, lane_assignment=None, pool=None):
     # Threshold: target is ≥ 2 column-widths (≈ 320 px) to the right of the
     # source's RIGHT edge. This means the flow is not a simple adjacent-column
     # hop but a genuine long-range connection.
-    LONG_CROSS_PX = 320   # ≈ 2 × (TASK_W=160) + some H_GAP
+    LONG_CROSS_PX = 370   # ≈ 2 × TASK_W + H_GAP
     if lane_assignment and pool:
         for f in candidate_flows:
             if f.id in crossing_ids:
@@ -376,6 +376,18 @@ def _ev_def(etype):
     }.get(etype)
 
 
+_TASK_NAME_MAX = 65   # chars before truncation — ~4 lines in a 150×80 task box
+
+def _task_name(name: str) -> str:
+    """Truncate task names that would overflow even a larger box."""
+    if not name:
+        return ""
+    name = name.strip()
+    if len(name) > _TASK_NAME_MAX:
+        return name[: _TASK_NAME_MAX - 1].rstrip() + "…"
+    return name
+
+
 def _el_size(el):
     t = el.type
     if t in ("startEvent", "endEvent", "intermediateThrowEvent",
@@ -483,12 +495,12 @@ def _build_el(parent, el):
 
     elif t == "subProcess":
         node = _sub(parent, B + "subProcess",
-                    {"id": el.id, "name": el.name, "triggeredByEvent": "false"})
+                    {"id": el.id, "name": _task_name(el.name), "triggeredByEvent": "false"})
         for child in el.children:
             _build_el(node, child)
 
     elif t == "callActivity":
-        attrs = {"id": el.id, "name": el.name}
+        attrs = {"id": el.id, "name": _task_name(el.name)}
         if el.called_element:
             attrs["calledElement"] = el.called_element
         _sub(parent, B + "callActivity", attrs)
@@ -496,7 +508,7 @@ def _build_el(parent, el):
     else:
         tag = t if t in ("userTask", "serviceTask", "scriptTask", "sendTask",
                          "receiveTask", "manualTask", "businessRuleTask") else "task"
-        node = _sub(parent, B + tag, {"id": el.id, "name": el.name})
+        node = _sub(parent, B + tag, {"id": el.id, "name": _task_name(el.name)})
         if el.is_loop:
             _sub(node, B + "standardLoopCharacteristics", {"id": el.id + "_loop"})
         elif el.is_parallel_multi:
