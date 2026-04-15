@@ -81,12 +81,13 @@ def _render_api_key_section(
 # ══════════════════════════════════════════════════════════════════════════════
 # TABS
 # ══════════════════════════════════════════════════════════════════════════════
-tab_llm, tab_asst, tab_embed, tab_db, tab_pref = st.tabs([
+tab_llm, tab_asst, tab_embed, tab_db, tab_pref, tab_domain = st.tabs([
     "🤖 LLM Principal",
     "💬 LLM Assistente",
     "🔮 Embeddings & Busca",
     "🗄️ Banco de Dados",
     "🌐 Preferências",
+    "🔑 Domínio",
 ])
 
 # ╔══════════════════════════════════════════════════════╗
@@ -607,10 +608,160 @@ with tab_pref:
     )
     st.session_state["n_bpmn_runs"] = n_runs
 
+# ╔══════════════════════════════════════════════════════╗
+# ║  TAB 6 — API Keys do Domínio (multi-tenant)         ║
+# ╚══════════════════════════════════════════════════════╝
+with tab_domain:
+    tenant_id   = st.session_state.get("_tenant_id")
+    role        = st.session_state.get("_role", "user")
+    domain_name = st.session_state.get("_tenant_name", st.session_state.get("_domain", ""))
+    user_nome   = st.session_state.get("_usuario_nome", "")
+
+    if not tenant_id:
+        st.info(
+            "Esta seção está disponível apenas para usuários autenticados via **domínio**.\n\n"
+            "Faça login informando o campo **Domínio** para acessar as configurações compartilhadas."
+        )
+    else:
+        from modules.tenant_config import (
+            load_all_config, save_config, delete_config,
+            mask_key, PROVIDER_KEY_MAP, EXTRA_KEY_MAP,
+        )
+        from modules.session_security import _session_key
+
+        # ── Cabeçalho ─────────────────────────────────────────────────────────
+        c_info, c_role = st.columns([4, 1])
+        c_info.markdown(f"**Domínio:** {domain_name} &nbsp;&nbsp; **Usuário:** {user_nome}")
+        c_role.markdown(
+            f"{'🟢 `admin`' if role == 'admin' else '🔵 `user`'}",
+            unsafe_allow_html=False,
+        )
+        st.markdown(
+            "Keys salvas aqui são **carregadas automaticamente** para todos os usuários "
+            "do domínio ao fazer login — nenhuma configuração manual necessária."
+        )
+        st.markdown("---")
+
+        # Mensagem de sucesso persistida (sobrevive ao st.rerun())
+        if "_domain_save_ok" in st.session_state:
+            st.success(f"✅ {st.session_state.pop('_domain_save_ok')}")
+
+        # Carrega config atual do banco (uma vez por renderização)
+        current_cfg = load_all_config(tenant_id)
+
+        # ── Modo leitura (role != admin) ──────────────────────────────────────
+        if role != "admin":
+            st.markdown("#### 🔑 API Keys do Domínio")
+            st.caption("Somente administradores do domínio podem alterar estas chaves.")
+            all_keys = {**PROVIDER_KEY_MAP, **{"Embedding": "embedding_key", "Assistente": "assistant_key"}}
+            for label, key_name in all_keys.items():
+                val = current_cfg.get(key_name, "")
+                status = f"`{mask_key(val)}`" if val else "❌ Não configurada"
+                st.markdown(f"**{label}:** {status}")
+
+        # ── Modo admin ────────────────────────────────────────────────────────
+        else:
+            st.markdown("#### 🤖 Provedores LLM")
+
+            for provider, key_name in PROVIDER_KEY_MAP.items():
+                pcfg    = AVAILABLE_PROVIDERS.get(provider, {})
+                cur_val = current_cfg.get(key_name, "")
+                icon    = "✅" if cur_val else "⬜"
+
+                with st.expander(f"{icon} {provider}", expanded=not bool(cur_val)):
+                    if cur_val:
+                        st.success(f"Chave ativa: `{mask_key(cur_val)}`")
+
+                    col_inp, col_save, col_del = st.columns([5, 1, 1])
+                    new_val = col_inp.text_input(
+                        provider,
+                        type="password",
+                        placeholder=(
+                            f"{pcfg.get('api_key_prefix', '')}..."
+                            + (" (vazio = manter atual)" if cur_val else "")
+                        ),
+                        key=f"dom_inp_{key_name}",
+                        label_visibility="collapsed",
+                    )
+                    with col_save:
+                        if st.button("💾", key=f"dom_save_{key_name}",
+                                     use_container_width=True, type="primary",
+                                     help="Salvar no domínio"):
+                            v = new_val.strip()
+                            if not v:
+                                st.warning("Digite a chave antes de salvar.")
+                            elif len(v) < 10:
+                                st.error("Chave muito curta.")
+                            elif save_config(tenant_id, key_name, v):
+                                st.session_state[_session_key(provider)] = v
+                                st.session_state["_domain_save_ok"] = f"✅ {provider} salva no domínio."
+                                st.rerun()
+                            else:
+                                st.error("Erro ao salvar no banco.")
+                    with col_del:
+                        if cur_val and st.button("🗑", key=f"dom_del_{key_name}",
+                                                  use_container_width=True,
+                                                  help="Remover do domínio"):
+                            if delete_config(tenant_id, key_name):
+                                st.session_state.pop(_session_key(provider), None)
+                                st.session_state["_domain_save_ok"] = f"🗑 {provider} removida do domínio."
+                                st.rerun()
+
+            st.markdown("---")
+            st.markdown("#### 🔮 Embedding & Assistente")
+
+            _extra_labels = {
+                "embedding_key": ("Google Gemini / OpenAI Embedding", "asst_embed_key", "AIza..."),
+                "assistant_key": ("LLM do Assistente (asst_api_key)", "asst_api_key", "sk-..."),
+            }
+            for cfg_key, (label, state_key, ph) in _extra_labels.items():
+                cur_val = current_cfg.get(cfg_key, "")
+                icon    = "✅" if cur_val else "⬜"
+                with st.expander(f"{icon} {label}", expanded=not bool(cur_val)):
+                    if cur_val:
+                        st.success(f"Chave ativa: `{mask_key(cur_val)}`")
+                    col_i, col_s, col_d = st.columns([5, 1, 1])
+                    nv = col_i.text_input(
+                        label, type="password",
+                        placeholder=ph + (" (vazio = manter)" if cur_val else ""),
+                        key=f"dom_inp_{cfg_key}", label_visibility="collapsed",
+                    )
+                    with col_s:
+                        if st.button("💾", key=f"dom_save_{cfg_key}",
+                                     use_container_width=True, type="primary",
+                                     help="Salvar no domínio"):
+                            v = nv.strip()
+                            if not v:
+                                st.warning("Digite a chave antes de salvar.")
+                            elif len(v) < 10:
+                                st.error("Chave muito curta.")
+                            elif save_config(tenant_id, cfg_key, v):
+                                st.session_state[state_key] = v
+                                st.session_state["_domain_save_ok"] = f"✅ {label} salva no domínio."
+                                st.rerun()
+                            else:
+                                st.error("Erro ao salvar no banco.")
+                    with col_d:
+                        if cur_val and st.button("🗑", key=f"dom_del_{cfg_key}",
+                                                  use_container_width=True,
+                                                  help="Remover do domínio"):
+                            if delete_config(tenant_id, cfg_key):
+                                st.session_state.pop(state_key, None)
+                                st.session_state["_domain_save_ok"] = f"🗑 {label} removida do domínio."
+                                st.rerun()
+
+            st.markdown("---")
+            st.caption(
+                "⚠️ Keys salvas no domínio ficam em texto claro no Supabase. "
+                "Para produção pública, habilite a criptografia AES-256 "
+                "(ver `docs/auth_evolution_roadmap.html` — Segurança 1)."
+            )
+
 # ── Rodapé ────────────────────────────────────────────────────────────────────
 st.markdown("---")
 st.caption(
     "💡 As configurações são mantidas enquanto a aba do navegador estiver aberta. "
     "Ao fechar ou recarregar a página, as chaves de API precisam ser inseridas novamente "
-    "(por segurança, nunca são persistidas em disco)."
+    "(por segurança, nunca são persistidas em disco). "
+    "Usuários autenticados via domínio têm as chaves carregadas automaticamente no login."
 )
