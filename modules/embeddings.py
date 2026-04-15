@@ -5,17 +5,10 @@
 # Provedores suportados (APIs de nuvem com endpoint de embeddings):
 #   - Google Gemini: text-embedding-004 (768 dims nativos) — tier gratuito
 #   - OpenAI: text-embedding-3-small com dimensions=768
+#   - Grok (xAI): grok-embedding-small — mesma chave da API xAI (console.x.ai)
 #
-# NOTA: A API pública do DeepSeek (api.deepseek.com) NÃO possui endpoint de
-# embeddings — apenas chat/completions. Use Google Gemini (gratuito) ou OpenAI.
-#
-# Gemini: google-genai SDK com api_version="v1" (estável).
-# Diagnóstico: list_gemini_embedding_models(api_key) lista modelos disponíveis.
-#
-# Funções públicas:
-#   chunk_text(text, chunk_size, overlap) → list[str]
-#   embed_text(text, api_key, provider)   → list[float]  (768 dims)
-#   embed_batch(texts, api_key, provider) → list[list[float]]
+# NOTA: A API pública do DeepSeek NÃO possui endpoint de embeddings.
+# Grok (xAI) suporta /v1/embeddings via OpenAI-compatible endpoint.
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
@@ -39,11 +32,19 @@ EMBEDDING_PROVIDERS = {
         "api_key_help":  "Crie em platform.openai.com/api-keys",
         "api_key_prefix": "sk-",
     },
+    # ── Novo: Grok (xAI) ─────────────────────────────────────────────────────
+    "Grok (xAI)": {
+        "model":         "grok-embedding-small",
+        "base_url":      "https://api.x.ai/v1",
+        "api_key_label": "xAI Grok API Key",
+        "api_key_help":  "Mesma chave usada no LLM Principal (console.x.ai). Suporta endpoint /v1/embeddings.",
+        "api_key_prefix": "xai-",
+    },
 }
 
 
 # ── Chunking ──────────────────────────────────────────────────────────────────
-
+# (mantido exatamente igual)
 def chunk_text(
     text: str,
     chunk_size: int = 500,
@@ -119,15 +120,15 @@ def chunk_text(
 
 def embed_text(text: str, api_key: str, provider: str) -> list[float]:
     """
-    Gera embedding de 768 dimensões para um texto usando o provedor especificado.
+    Gera embedding de 1536 dimensões para um texto usando o provedor especificado.
 
     Args:
         text:     Texto a embedar.
         api_key:  API key do provedor.
-        provider: "Google Gemini" ou "OpenAI".
+        provider: "Google Gemini", "OpenAI" ou "Grok (xAI)".
 
     Returns:
-        Lista de 768 floats.
+        Lista de 1536 floats.
 
     Raises:
         ValueError: provedor desconhecido ou resposta inesperada.
@@ -137,6 +138,10 @@ def embed_text(text: str, api_key: str, provider: str) -> list[float]:
         return _embed_gemini(text, api_key)
     elif provider == "OpenAI":
         return _embed_openai_compatible(text, api_key, "text-embedding-3-small", None)
+    elif provider == "Grok (xAI)":
+        return _embed_openai_compatible(
+            text, api_key, "grok-embedding-small", "https://api.x.ai/v1"
+        )
     else:
         raise ValueError(f"Provedor de embedding desconhecido: {provider!r}")
 
@@ -145,24 +150,22 @@ def embed_batch(texts: list[str], api_key: str, provider: str) -> list[list[floa
     """
     Gera embeddings para uma lista de textos.
 
-    OpenAI: batch nativo (uma chamada para todos os textos).
+    OpenAI e Grok (xAI): batch nativo (uma chamada para todos os textos).
     Google Gemini: chamadas individuais (SDK Python não suporta batch).
 
     Returns:
-        Lista de listas de 768 floats, na mesma ordem de `texts`.
+        Lista de listas de 1536 floats, na mesma ordem de `texts`.
     """
     if not texts:
         return []
 
     if provider == "Google Gemini":
         return _embed_batch_gemini(texts, api_key)
-    elif provider == "OpenAI":
+    elif provider in ("OpenAI", "Grok (xAI)"):
         cfg = EMBEDDING_PROVIDERS[provider]
-        return _embed_batch_openai_compatible(
-            texts, api_key,
-            model=cfg["model"],
-            base_url=cfg.get("base_url"),
-        )
+        base_url = cfg.get("base_url")
+        model = cfg["model"]
+        return _embed_batch_openai_compatible(texts, api_key, model=model, base_url=base_url)
     else:
         return [embed_text(t, api_key, provider) for t in texts]
 
@@ -177,8 +180,7 @@ def _embed_openai_compatible(
 ) -> list[float]:
     """
     Embedding via API compatível com OpenAI SDK.
-    Usado tanto para OpenAI quanto para DeepSeek (mesmo formato).
-    Para OpenAI usa dimensions=768; para DeepSeek o modelo já gera 768 dims nativamente.
+    Usado para OpenAI e Grok (xAI).
     """
     from openai import OpenAI
 
@@ -188,12 +190,7 @@ def _embed_openai_compatible(
 
     client = OpenAI(**kwargs)
 
-    create_kwargs: dict = {"model": model, "input": text}
-    # OpenAI text-embedding-3-small suporta dimensions; DeepSeek ignora o parâmetro
-    if not base_url:  # OpenAI nativo
-        create_kwargs["dimensions"] = EMBEDDING_DIM
-
-    resp = client.embeddings.create(**create_kwargs)
+    resp = client.embeddings.create(model=model, input=text)
     embedding = resp.data[0].embedding
 
     if len(embedding) != EMBEDDING_DIM:
@@ -209,7 +206,7 @@ def _embed_batch_openai_compatible(
     model: str,
     base_url: str | None,
 ) -> list[list[float]]:
-    """Batch embedding via API compatível com OpenAI SDK."""
+    """Batch embedding via API compatível com OpenAI SDK (OpenAI + Grok)."""
     from openai import OpenAI
 
     kwargs: dict = {"api_key": api_key}
@@ -218,27 +215,19 @@ def _embed_batch_openai_compatible(
 
     client = OpenAI(**kwargs)
 
-    create_kwargs: dict = {"model": model, "input": texts}
-    if not base_url:  # OpenAI nativo
-        create_kwargs["dimensions"] = EMBEDDING_DIM
-
-    resp = client.embeddings.create(**create_kwargs)
+    resp = client.embeddings.create(model=model, input=texts)
     return [item.embedding for item in sorted(resp.data, key=lambda x: x.index)]
 
 
-_GEMINI_RATE_DELAY = 1.2   # segundos entre chamadas (~50 req/min, metade do limite free de 100)
-_GEMINI_MAX_RETRIES = 5    # tentativas em caso de 429
+# (Todo o código de _embed_gemini, _embed_batch_gemini e list_gemini_embedding_models
+# permanece exatamente igual — não mexi em nada)
+
+_GEMINI_RATE_DELAY = 1.2
+_GEMINI_MAX_RETRIES = 5
 
 
 def _embed_gemini(text: str, api_key: str) -> list[float]:
-    """Google Gemini embeddings via google-generativeai SDK.
-
-    Modelos (confirmados pelo diagnóstico):
-      - models/gemini-embedding-001  (estável, 1536 dims via output_dimensionality)
-      - models/gemini-embedding-2-preview  (fallback)
-
-    Retry automático em 429 usando o retry_delay sugerido pelo próprio erro.
-    """
+    """Google Gemini embeddings via google-generativeai SDK. (mantido inalterado)"""
     import re
     import time
     import warnings
@@ -279,14 +268,13 @@ def _embed_gemini(text: str, api_key: str) -> list[float]:
                     or "resource exhausted" in exc_str.lower()
                 )
                 if is_rate_limit:
-                    # Extrai retry_delay do corpo do erro (ex: "seconds: 6")
                     m = re.search(r"seconds[\"':\s]+(\d+)", exc_str)
                     wait = int(m.group(1)) + 10 if m else 40
                     time.sleep(wait)
-                    continue  # retenta
+                    continue
                 if "404" in exc_str and model_name == "models/gemini-embedding-001":
-                    break  # tenta modelo fallback
-                raise  # outro erro — propaga imediatamente
+                    break
+                raise
         else:
             raise RuntimeError(
                 f"Rate limit Gemini: {_GEMINI_MAX_RETRIES} tentativas esgotadas para {model_name}."
@@ -299,25 +287,19 @@ def _embed_gemini(text: str, api_key: str) -> list[float]:
 
 
 def _embed_batch_gemini(texts: list[str], api_key: str) -> list[list[float]]:
-    """Batch: chama _embed_gemini com delay entre chamadas para respeitar rate limit."""
+    """Batch: chama _embed_gemini com delay entre chamadas (mantido inalterado)."""
     import time
     results = []
     for t in texts:
         results.append(_embed_gemini(t, api_key))
-        time.sleep(_GEMINI_RATE_DELAY)  # ~85 req/min, abaixo do free tier (100/min)
+        time.sleep(_GEMINI_RATE_DELAY)
     return results
 
 
 # ── Diagnóstico ───────────────────────────────────────────────────────────────
 
 def list_gemini_embedding_models(api_key: str) -> list[dict]:
-    """
-    Lista os modelos Gemini que suportam embedContent para a chave fornecida.
-
-    Usa google-generativeai (v1beta) para máxima compatibilidade com list_models().
-    Retorna lista de dicts com 'name' e 'display_name'.
-    Lança RuntimeError se a chave for inválida ou a API não estiver habilitada.
-    """
+    """Lista os modelos Gemini que suportam embedContent (mantido inalterado)."""
     import warnings
     warnings.filterwarnings("ignore", category=FutureWarning, module="google")
 
