@@ -651,6 +651,7 @@ with tab_domain:
 
         # ── Modo leitura (role != admin) ──────────────────────────────────────
         if role != "admin":
+            from modules.tenant_config import PREFS_MAP, PREFS_LABELS
             st.markdown("#### 🔑 API Keys do Domínio")
             st.caption("Somente administradores do domínio podem alterar estas chaves.")
             all_keys = {**PROVIDER_KEY_MAP, **{"Embedding": "embedding_key", "Assistente": "assistant_key"}}
@@ -658,9 +659,17 @@ with tab_domain:
                 val = current_cfg.get(key_name, "")
                 status = f"`{mask_key(val)}`" if val else "❌ Não configurada"
                 st.markdown(f"**{label}:** {status}")
+            st.markdown("---")
+            st.markdown("#### ⚙️ Preferências do Domínio")
+            for state_key, (config_key, _) in PREFS_MAP.items():
+                val = current_cfg.get(config_key, "")
+                if val:
+                    lbl = PREFS_LABELS.get(state_key, state_key)
+                    st.markdown(f"**{lbl}:** `{val}`")
 
         # ── Modo admin ────────────────────────────────────────────────────────
         else:
+            from modules.tenant_config import save_all_prefs, PREFS_MAP, PREFS_LABELS
             st.markdown("#### 🤖 Provedores LLM")
 
             for provider, key_name in PROVIDER_KEY_MAP.items():
@@ -749,6 +758,48 @@ with tab_domain:
                                 st.session_state.pop(state_key, None)
                                 st.session_state["_domain_save_ok"] = f"🗑 {label} removida do domínio."
                                 st.rerun()
+
+            # ── Preferências do domínio ───────────────────────────────────────
+            st.markdown("---")
+            st.markdown("#### ⚙️ Preferências do Domínio")
+            st.markdown(
+                "Configure as preferências nos outros tabs "
+                "(**LLM Principal**, **LLM Assistente**, **Embeddings & Busca**, **Preferências**) "
+                "e clique no botão abaixo para persistir o estado atual para todos do domínio."
+            )
+
+            # Prévia: o que será salvo
+            with st.expander("📋 Prévia — o que será salvo", expanded=False):
+                import pandas as pd
+                preview_rows = []
+                for state_key, (config_key, _) in PREFS_MAP.items():
+                    val = st.session_state.get(state_key)
+                    saved_val = current_cfg.get(config_key, "")
+                    lbl = PREFS_LABELS.get(state_key, state_key)
+                    preview_rows.append({
+                        "Preferência": lbl,
+                        "Valor atual (sessão)": str(val) if val is not None else "—",
+                        "Salvo no domínio": str(saved_val) if saved_val else "—",
+                    })
+                st.dataframe(pd.DataFrame(preview_rows), use_container_width=True, hide_index=True)
+
+            if st.button(
+                "💾 Salvar preferências atuais no domínio",
+                key="dom_save_all_prefs",
+                type="primary",
+                use_container_width=True,
+            ):
+                saved, failed = save_all_prefs(tenant_id)
+                if failed == 0:
+                    st.session_state["_domain_save_ok"] = (
+                        f"{saved} preferências salvas no domínio {domain_name}. "
+                        "Serão carregadas automaticamente no próximo login."
+                    )
+                else:
+                    st.session_state["_domain_save_ok"] = (
+                        f"{saved} preferências salvas, {failed} falharam."
+                    )
+                st.rerun()
 
             st.markdown("---")
             st.caption(
