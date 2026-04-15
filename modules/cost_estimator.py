@@ -57,6 +57,22 @@ PROVIDER_PRICING: dict[str, dict] = {
         "free_tier":  True,
         "source":     "ai.google.dev/pricing",
     },
+    "Grok (xAI)": {
+        "model": "grok-4-1-fast-reasoning",
+        "input_usd": 0.20,
+        "output_usd": 0.50,
+        "note": "Contexto 2M tokens - ótimo para transcrições longas",
+        "free_tier": False,
+        "source": "docs.x.ai",
+    },
+    "Grok 4.20 Multi-Agent (xAI)": {
+        "model": "grok-4.20-multi-agent",
+        "input_usd": 2.00,
+        "output_usd": 6.00,
+        "note": "Multi-agente nativo - melhor para interpretação complexa de reuniões",
+        "free_tier": False,
+        "source": "docs.x.ai",
+    },
 }
 
 # Preços de embedding (USD por 1 000 000 tokens/chars)
