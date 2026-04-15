@@ -1,4 +1,4 @@
-# agents/agent_assistant.py  (v12 — declared-intent detection + copy button fix)
+# agents/agent_assistant.py  (v13 — tool_choice="required" round 0 + regex interceptor)
 # ─────────────────────────────────────────────────────────────────────────────
 # AgentAssistant — conversational RAG agent for meeting/project Q&A.
 #

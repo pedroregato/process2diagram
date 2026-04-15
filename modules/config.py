@@ -72,6 +72,24 @@ AVAILABLE_PROVIDERS: dict = {
         "max_tokens": 8192,
     },
 
+    "Grok (xAI)": {
+        "model": "grok-4-1-fast-reasoning (2M context)",
+        "input_usd": 0.20,
+        "output_usd": 0.50,
+        "note": "Melhor custo-benefício + contexto gigante (2M tokens). Ideal para transcrições longas.",
+        "free_tier": False,
+        "source": "docs.x.ai/developers/models",
+    },
+
+    "Grok 4.20 Multi-Agent (xAI)": {
+        "model": "grok-4.20-multi-agent",
+        "input_usd": 2.00,
+        "output_usd": 6.00,
+        "note": "Modelo com orquestração nativa de múltiplos agentes. Mais caro, mas excelente em raciocínio complexo.",
+        "free_tier": False,
+        "source": "docs.x.ai/developers/models",
+    },
+
 }
 
 # Default provider shown on startup

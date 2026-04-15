@@ -24,7 +24,15 @@
       "Bash(find D:/PythonProjects/process2diagram -name \"*.pyc\" -path \"*/auth*\" -delete)",
       "Bash(find D:/PythonProjects/process2diagram -name \"*.pyc\" -path \"*/auth_gate*\" -delete)",
       "Bash(find D:/PythonProjects/process2diagram -name auth*.pyc -o -name auth_gate*.pyc)",
-      "Bash(find D:/PythonProjects/process2diagram/modules/__pycache__ D:/PythonProjects/process2diagram/ui/__pycache__ -name *.pyc)"
+      "Bash(find D:/PythonProjects/process2diagram/modules/__pycache__ D:/PythonProjects/process2diagram/ui/__pycache__ -name *.pyc)",
+      "Bash(com tokens registrados\" even for projects with processed meetings.:*)",
+      "Bash(SBVR como Y\" patterns; SBVR-add pre-flight block injects context so LLM calls:*)",
+      "Bash(do NOT ask the user\" — LLM infers definition from project context:*)",
+      "Bash(termo X para Assistente\" patterns; pre-flight executes update_sbvr_term directly:*)",
+      "Bash(grep -rn .full_text D:/PythonProjects/process2diagram/modules/ D:/PythonProjects/process2diagram/core/ --include=*.py)",
+      "Bash(grep -rn full_text D:/PythonProjects/process2diagram/ui/tabs/ D:/PythonProjects/process2diagram/pages/ --include=*.py)",
+      "Bash(grep -rn .full_texts*= D:/PythonProjects/process2diagram/ --include=*.py)",
+      "Bash(grep -rn full_text D:/PythonProjects/process2diagram/ --include=*.py)"
     ]
   }
 }
