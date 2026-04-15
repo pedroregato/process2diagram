@@ -402,20 +402,25 @@ with tab_meet:
                 # Ata da reunião
                 minutes_md = m.get("minutes_md") or ""
                 if minutes_md:
-                    st.markdown("**📄 Ata da Reunião**")
-                    col_view, col_dl = st.columns([3, 1])
-                    with col_view:
-                        with st.expander("Ver ata completa", expanded=False):
-                            st.markdown(minutes_md)
+                    st.markdown("---")
+                    toggle_key = f"_show_minutes_{m['id']}"
+                    col_btn, col_dl = st.columns([2, 1])
+                    with col_btn:
+                        label = "🙈 Ocultar Ata" if st.session_state.get(toggle_key) else "📄 Ver Ata Completa"
+                        if st.button(label, key=f"btn_minutes_{m['id']}", use_container_width=True):
+                            st.session_state[toggle_key] = not st.session_state.get(toggle_key, False)
+                            st.rerun()
                     with col_dl:
                         st.download_button(
-                            "⬇️ Download (.md)",
+                            "⬇️ Download Ata (.md)",
                             data=minutes_md.encode("utf-8"),
                             file_name=f"ata_reuniao_{num}.md",
                             mime="text/markdown",
                             key=f"dl_minutes_{m['id']}",
                             use_container_width=True,
                         )
+                    if st.session_state.get(toggle_key):
+                        st.markdown(minutes_md)
                 else:
                     st.caption("_Ata não disponível para esta reunião._")
 
