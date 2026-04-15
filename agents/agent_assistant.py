@@ -24,7 +24,69 @@ from typing import Callable
 from core.knowledge_hub import KnowledgeHub
 from agents.base_agent import BaseAgent
 
-MAX_TOOL_ROUNDS = 5  # max LLM ↔ tool iterations before forcing final answer
+MAX_TOOL_ROUNDS = 5       # max LLM ↔ tool iterations before forcing final answer
+_MAX_TOOL_RESULT_CHARS = 6_000   # truncate individual tool results above this (~1500 tokens)
+_MAX_HISTORY_TURNS     = 8       # max user+assistant pairs kept from prior history
+_MAX_MSGS_CHARS        = 80_000  # emergency: trim oldest tool results when msgs exceeds this
+
+
+def _truncate_tool_result(result: str, label: str = "") -> str:
+    """Cap a tool result to _MAX_TOOL_RESULT_CHARS to avoid context overflow."""
+    if len(result) <= _MAX_TOOL_RESULT_CHARS:
+        return result
+    kept = result[: _MAX_TOOL_RESULT_CHARS]
+    omitted = len(result) - _MAX_TOOL_RESULT_CHARS
+    suffix = f"\n\n[… resultado truncado — {omitted} caracteres omitidos para caber no contexto]"
+    return kept.rstrip() + suffix
+
+
+def _trim_history(history: list[dict], max_turns: int = _MAX_HISTORY_TURNS) -> list[dict]:
+    """Keep only the last max_turns user+assistant pairs from prior history."""
+    if not history:
+        return history
+    # Each "turn" = 1 user + 1 assistant message; keep the tail
+    pairs_needed = max_turns * 2
+    if len(history) <= pairs_needed:
+        return history
+    return history[-pairs_needed:]
+
+
+def _msgs_total_chars(msgs: list[dict]) -> int:
+    total = 0
+    for m in msgs:
+        c = m.get("content") or ""
+        if isinstance(c, list):
+            for block in c:
+                if isinstance(block, dict):
+                    total += len(str(block.get("content", "")))
+        else:
+            total += len(str(c))
+        for tc in (m.get("tool_calls") or []):
+            total += len(str(tc))
+    return total
+
+
+def _trim_msgs_if_needed(msgs: list[dict]) -> list[dict]:
+    """
+    If msgs exceeds _MAX_MSGS_CHARS, remove the oldest tool/tool_result pairs
+    (keeping system + first user message + recent turns intact).
+    """
+    if _msgs_total_chars(msgs) <= _MAX_MSGS_CHARS:
+        return msgs
+    # Identify and drop the oldest tool-result message (role="tool") to free space.
+    # Repeat until under budget or nothing left to drop.
+    result = list(msgs)
+    for i in range(len(result) - 1, -1, -1):
+        if _msgs_total_chars(result) <= _MAX_MSGS_CHARS:
+            break
+        role = result[i].get("role", "")
+        if role == "tool":
+            result[i] = {
+                "role": "tool",
+                "tool_call_id": result[i].get("tool_call_id", ""),
+                "content": "[resultado omitido — contexto muito grande]",
+            }
+    return result
 
 # ── DeepSeek DSML tool-call format parser ─────────────────────────────────────
 # DeepSeek sometimes outputs tool calls using its internal DSML XML format in the
@@ -605,8 +667,9 @@ class AgentAssistant(BaseAgent):
                             result = executor.execute(dc["name"], dc["args"])
                             msgs.append({
                                 "role": "user",
-                                "content": f"[Resultado de {dc['name']}]:\n{result}",
+                                "content": f"[Resultado de {dc['name']}]:\n{_truncate_tool_result(result, dc['name'])}",
                             })
+                            msgs = _trim_msgs_if_needed(msgs)
                         # Force a text-only final answer WITHOUT tools parameter
                         # (avoids another DSML cycle from DeepSeek)
                         if status_fn:
@@ -659,8 +722,9 @@ class AgentAssistant(BaseAgent):
                 msgs.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
-                    "content": result,
+                    "content": _truncate_tool_result(result, fn_name),
                 })
+            msgs = _trim_msgs_if_needed(msgs)
 
         # Force a final answer after MAX_TOOL_ROUNDS
         if cancel_event and cancel_event.is_set():
@@ -743,9 +807,10 @@ class AgentAssistant(BaseAgent):
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": tb.id,
-                    "content": result,
+                    "content": _truncate_tool_result(result, tb.name),
                 })
             msgs.append({"role": "user", "content": tool_results})
+            msgs = _trim_msgs_if_needed(msgs)
 
         # Force final answer
         if cancel_event and cancel_event.is_set():
@@ -784,7 +849,7 @@ class AgentAssistant(BaseAgent):
             (response_text, tokens_used)
         """
         system = self._build_system_prompt(context_text)
-        messages = list(history) + [{"role": "user", "content": question}]
+        messages = _trim_history(list(history)) + [{"role": "user", "content": question}]
 
         client_type = self.provider_cfg["client_type"]
         api_key = self.client_info["api_key"]
@@ -831,7 +896,7 @@ class AgentAssistant(BaseAgent):
         from core.assistant_tools import AssistantToolExecutor
 
         system   = self._build_system_prompt_tools(project_name, project_id)
-        messages = list(history) + [{"role": "user", "content": question}]
+        messages = _trim_history(list(history)) + [{"role": "user", "content": question}]
         executor = AssistantToolExecutor(
             project_id,
             llm_config={
