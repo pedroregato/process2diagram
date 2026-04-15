@@ -178,3 +178,121 @@ def tenant_auth_available() -> bool:
         return True
     except Exception:
         return False
+
+
+# ── Master admin CRUD ──────────────────────────────────────────────────────────
+
+def list_all_tenants() -> list[dict]:
+    """Lista todos os tenants cadastrados."""
+    client = get_supabase_client()
+    if client is None:
+        return []
+    try:
+        resp = client.table("tenants").select("id, domain_slug, display_name, active, created_at").order("domain_slug").execute()
+        return resp.data or []
+    except Exception:
+        return []
+
+
+def list_users_by_tenant(tenant_id: str) -> list[dict]:
+    """Lista usuários de um tenant (sem expor password_hash)."""
+    client = get_supabase_client()
+    if client is None:
+        return []
+    try:
+        resp = (
+            client.table("tenant_users")
+            .select("id, login, display_name, role, active, created_at")
+            .eq("tenant_id", tenant_id)
+            .order("login")
+            .execute()
+        )
+        return resp.data or []
+    except Exception:
+        return []
+
+
+def create_tenant(domain_slug: str, display_name: str) -> tuple[bool, str]:
+    """Cria um novo tenant. Retorna (sucesso, mensagem)."""
+    client = get_supabase_client()
+    if client is None:
+        return False, "Supabase não configurado."
+    slug = domain_slug.lower().strip().replace(" ", "_")
+    if not slug:
+        return False, "Slug do domínio não pode ser vazio."
+    try:
+        client.table("tenants").insert({"domain_slug": slug, "display_name": display_name.strip()}).execute()
+        return True, f"Domínio '{slug}' criado com sucesso."
+    except Exception as e:
+        return False, f"Erro: {e}"
+
+
+def create_user(tenant_id: str, login: str, password: str, display_name: str, role: str) -> tuple[bool, str]:
+    """Cria um usuário em um tenant. Retorna (sucesso, mensagem)."""
+    client = get_supabase_client()
+    if client is None:
+        return False, "Supabase não configurado."
+    login_norm = login.lower().strip()
+    if not login_norm or not password or not display_name:
+        return False, "Login, senha e nome são obrigatórios."
+    try:
+        client.table("tenant_users").insert({
+            "tenant_id":     tenant_id,
+            "login":         login_norm,
+            "password_hash": _hash(password),
+            "display_name":  display_name.strip(),
+            "role":          role,
+        }).execute()
+        return True, f"Usuário '{login_norm}' criado com sucesso."
+    except Exception as e:
+        return False, f"Erro: {e}"
+
+
+def toggle_tenant_active(tenant_id: str, active: bool) -> bool:
+    """Ativa ou desativa um tenant."""
+    client = get_supabase_client()
+    if client is None:
+        return False
+    try:
+        client.table("tenants").update({"active": active}).eq("id", tenant_id).execute()
+        return True
+    except Exception:
+        return False
+
+
+def toggle_user_active(user_id: str, active: bool) -> bool:
+    """Ativa ou desativa um usuário."""
+    client = get_supabase_client()
+    if client is None:
+        return False
+    try:
+        client.table("tenant_users").update({"active": active}).eq("id", user_id).execute()
+        return True
+    except Exception:
+        return False
+
+
+def update_user_role(user_id: str, role: str) -> bool:
+    """Altera o perfil de um usuário."""
+    client = get_supabase_client()
+    if client is None:
+        return False
+    if role not in ("user", "admin", "master"):
+        return False
+    try:
+        client.table("tenant_users").update({"role": role}).eq("id", user_id).execute()
+        return True
+    except Exception:
+        return False
+
+
+def reset_user_password(user_id: str, new_password: str) -> bool:
+    """Redefine a senha de um usuário (SHA-256)."""
+    client = get_supabase_client()
+    if client is None:
+        return False
+    try:
+        client.table("tenant_users").update({"password_hash": _hash(new_password)}).eq("id", user_id).execute()
+        return True
+    except Exception:
+        return False

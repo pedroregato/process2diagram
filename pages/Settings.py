@@ -649,26 +649,31 @@ with tab_domain:
         # Carrega config atual do banco (uma vez por renderização)
         current_cfg = load_all_config(tenant_id)
 
-        # ── Modo leitura (role != admin) ──────────────────────────────────────
-        if role != "admin":
+        # ── Perfil user: sem acesso ────────────────────────────────────────────
+        if role == "user":
+            st.info(
+                "🔒 Acesso restrito. "
+                "Configurações do domínio são gerenciadas pelo administrador."
+            )
+
+        # ── Perfil master: redireciona para MasterAdmin ────────────────────────
+        elif role == "master":
             from modules.tenant_config import PREFS_MAP, PREFS_LABELS
-            st.markdown("#### 🔑 API Keys do Domínio")
-            st.caption("Somente administradores do domínio podem alterar estas chaves.")
+            st.info(
+                "🛡️ Você tem perfil **master**. "
+                "Gerencie domínios, usuários e configurações de todos os tenants na página dedicada."
+            )
+            st.page_link("pages/MasterAdmin.py", label="Abrir Master Admin →", icon="🛡️")
+            st.markdown("---")
+            st.markdown("#### Configurações do seu domínio (leitura)")
             all_keys = {**PROVIDER_KEY_MAP, **{"Embedding": "embedding_key", "Assistente": "assistant_key"}}
             for label, key_name in all_keys.items():
                 val = current_cfg.get(key_name, "")
                 status = f"`{mask_key(val)}`" if val else "❌ Não configurada"
                 st.markdown(f"**{label}:** {status}")
-            st.markdown("---")
-            st.markdown("#### ⚙️ Preferências do Domínio")
-            for state_key, (config_key, _) in PREFS_MAP.items():
-                val = current_cfg.get(config_key, "")
-                if val:
-                    lbl = PREFS_LABELS.get(state_key, state_key)
-                    st.markdown(f"**{lbl}:** `{val}`")
 
         # ── Modo admin ────────────────────────────────────────────────────────
-        else:
+        elif role == "admin":
             from modules.tenant_config import save_all_prefs, PREFS_MAP, PREFS_LABELS
             st.markdown("#### 🤖 Provedores LLM")
 
