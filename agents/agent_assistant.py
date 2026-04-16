@@ -281,6 +281,53 @@ _DELETE_MEETING_RE = re.compile(
 
 # Confirmation starters — when the message begins with these words it's a
 # reply to a previous preview, not a fresh delete request; skip the interceptor.
+# ── Declared-intent detector (module-level — reused across rounds) ────────────
+# Matches responses like "Vou verificar a ata..." that declare intent to call a
+# tool without actually calling one.  Used in _chat_with_tools_openai to trigger
+# either the regex interceptor (Strategy 4) or a forced retry (Strategy 3).
+
+_DECLARED_INTENT_RE = re.compile(
+    r'^(?:vou\s+(?:verificar|buscar|consultar|analisar|checar|obter|acessar|'
+    r'pesquisar|investigar|examinar|procurar|localizar|identificar|'
+    r'carregar|recuperar)|'
+    r'deixa\s+(?:eu|me)\s+(?:verificar|buscar|consultar|checar)|'
+    r'vamos\s+(?:ver|buscar|verificar|checar)|'
+    r'preciso\s+(?:verificar|buscar|consultar|checar)|'
+    r'primeiro\s+(?:vou|preciso|deixa)|'
+    r'para\s+responder.{0,30}preciso)',
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _extract_query_from_intent(content: str) -> str | None:
+    """
+    Extract a search query from a declared-intent message.
+
+    "Vou verificar a ata da reunião 3 sobre..." → "ata da reunião 3 sobre..."
+    "Vou buscar informações sobre X" → "X"
+    Returns None if nothing useful can be extracted (< 3 chars).
+    """
+    m = re.search(
+        r'(?:vou\s+(?:verificar|buscar|consultar|checar|analisar|procurar|acessar)|'
+        r'deixa\s+(?:eu|me)\s+(?:verificar|buscar|consultar)|'
+        r'preciso\s+(?:verificar|buscar|consultar))'
+        r'\s+(?:(?:as?\s+)?informações?\s+(?:sobre|de|a\s+respeito\s+de)\s+|'
+        r'(?:a[so]?\s+|os?\s+))?'
+        r'(.{5,120}?)(?:\.{3}|[.!?]\s|$)',
+        content, re.IGNORECASE,
+    )
+    if m:
+        extracted = m.group(1).strip()
+        # Drop trailing fillers
+        extracted = re.sub(
+            r'\s+(?:para\s+(?:responder|isso)|agora|primeiro|a\s+seguir|em\s+seguida).*$',
+            '', extracted, flags=re.IGNORECASE,
+        ).strip()
+        if len(extracted) >= 3:
+            return extracted
+    return None
+
+
 _DELETE_CONFIRM_RE = re.compile(
     r'^\s*(?:sim|s[íi]|confirme?|confirmo|autorizo|autoriza[çc][aã]o|'
     r'pode|ok|yes|prossiga|execute|pode\s+excluir|pode\s+deletar|'
@@ -412,6 +459,16 @@ Você é um assistente especializado em análise de reuniões e projetos.
 ═══ PROJETO: {project_name} ═══
 {data_summary}
 ═══ FIM DO RESUMO ═══
+
+════════════════════════════════════════════════════════════════
+PROIBIÇÃO — DECLARAÇÃO DE INTENÇÃO SEM AÇÃO:
+════════════════════════════════════════════════════════════════
+❌ NUNCA escreva frases como:
+   "Vou verificar...", "Vou buscar...", "Deixa eu verificar...",
+   "Vou consultar...", "Primeiro vou...", "Para responder, preciso..."
+   ANTES de chamar a ferramenta.  Declarar intenção sem agir é proibido.
+✅ Em vez disso: chame a ferramenta IMEDIATAMENTE, sem aviso prévio.
+════════════════════════════════════════════════════════════════
 
 INSTRUÇÕES DE USO DAS FERRAMENTAS:
 - Use as ferramentas disponíveis para obter dados precisos antes de responder.
@@ -639,6 +696,7 @@ class AgentAssistant(BaseAgent):
         msgs     = _enforce_budget([{"role": "system", "content": system}] + list(messages))
         total_tk = 0
         called: list[str] = []
+        _force_required = False  # Strategy 3: force "required" on the very next round
 
         for round_n in range(MAX_TOOL_ROUNDS):
             if cancel_event and cancel_event.is_set():
@@ -647,11 +705,21 @@ class AgentAssistant(BaseAgent):
             if status_fn:
                 status_fn(f"🧠 Analisando pergunta (rodada {round_n + 1}/{MAX_TOOL_ROUNDS})…")
 
+            # Strategy 1: force a tool call on round 0 — eliminates "Vou verificar..."
+            # on the very first response.  Subsequent rounds use "auto" so the model
+            # can return a final text answer when it has enough data.
+            # _force_required overrides to "required" for one round (Strategy 3 retry).
+            if round_n == 0 or _force_required:
+                effective_tool_choice = "required"
+                _force_required = False
+            else:
+                effective_tool_choice = "auto"
+
             resp = client.chat.completions.create(
                 model=model,
                 messages=_enforce_budget(msgs),
                 tools=tools,
-                tool_choice="auto",
+                tool_choice=effective_tool_choice,
                 max_tokens=self.provider_cfg.get("max_tokens", 2048),
                 temperature=0.3,
             )
@@ -661,33 +729,36 @@ class AgentAssistant(BaseAgent):
             content = choice.message.content or ""
 
             if choice.finish_reason != "tool_calls" or not choice.message.tool_calls:
-                # ── Declared-intent detection ──────────────────────────────────
-                # Detect responses like "Vou verificar a ata..." that declare intent
-                # to act but made no tool call — push the model to actually call it.
-                _DECLARED_INTENT_RE = re.compile(
-                    r'^(?:vou\s+(?:verificar|buscar|consultar|analisar|checar|obter|acessar|'
-                    r'pesquisar|investigar|examinar|procurar|localizar|identificar|'
-                    r'carregar|recuperar)|'
-                    r'deixa\s+(?:eu|me)\s+(?:verificar|buscar|consultar|checar)|'
-                    r'vamos\s+(?:ver|buscar|verificar|checar)|'
-                    r'preciso\s+(?:verificar|buscar|consultar|checar)|'
-                    r'primeiro\s+(?:vou|preciso|deixa)|'
-                    r'para\s+responder.{0,30}preciso)',
-                    re.IGNORECASE | re.DOTALL,
-                )
+                # ── Strategy 4: Regex interceptor for declared-intent ──────────
+                # If the model still managed to return a plain-text intent declaration
+                # (edge case on round > 0), extract the query and call search_transcript
+                # directly — bypass the model entirely instead of pushing text.
                 if _DECLARED_INTENT_RE.match(content.strip()) and round_n < MAX_TOOL_ROUNDS - 1:
-                    # Model declared what it will do but didn't call a tool.
-                    # Push with increasing urgency each round.
-                    push_msg = (
-                        "EXECUTE AGORA: chame a ferramenta imediatamente. "
-                        "Use search_transcript para buscar o conteúdo pedido. "
-                        "Não escreva texto — apenas chame a ferramenta."
-                    ) if round_n >= 1 else (
-                        "Chame a ferramenta agora. Não descreva o que vai fazer."
-                    )
-                    msgs.append({"role": "assistant", "content": content})
-                    msgs.append({"role": "user", "content": push_msg})
-                    continue  # next round
+                    query = _extract_query_from_intent(content)
+                    if query:
+                        if status_fn:
+                            status_fn("🔧 Executando `search_transcript` (interceptor)…")
+                        result = executor.execute("search_transcript", {"query": query})
+                        called.append("search_transcript")
+                        msgs.append({"role": "assistant", "content": content})
+                        msgs.append({
+                            "role": "user",
+                            "content": (
+                                f"[Resultado de search_transcript (query: {query!r})]:\n"
+                                f"{_truncate_tool_result(result, 'search_transcript')}"
+                            ),
+                        })
+                        msgs = _trim_msgs_if_needed(msgs)
+                        continue  # proceed to next round with real data
+                    else:
+                        # Strategy 3: no extractable query — retry with tool_choice="required"
+                        msgs.append({"role": "assistant", "content": content})
+                        msgs.append({
+                            "role": "user",
+                            "content": "Chame a ferramenta agora. Não descreva o que vai fazer.",
+                        })
+                        _force_required = True  # next round will use tool_choice="required"
+                        continue
 
                 # Check if DeepSeek leaked tool calls in DSML format inside the text
                 if _DSML_DETECT_RE.search(content):
