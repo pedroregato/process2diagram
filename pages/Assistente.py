@@ -229,6 +229,18 @@ if _chunks_table_ok and project_id:
     st.markdown("---")
     st.markdown("### 🔄 Reprocessar Embeddings Individualmente")
 
+    # Exibe resultado persistido do último embedding individual (sobrevive ao rerun)
+    if "_single_embed_result" in st.session_state:
+        _lvl, _msg = st.session_state.pop("_single_embed_result")
+        if _lvl == "success":
+            st.success(_msg)
+        elif _lvl == "warning":
+            st.warning(_msg)
+        elif _lvl == "error":
+            st.error(_msg)
+        else:
+            st.info(_msg)
+
     try:
         db = get_supabase_client()
 
@@ -278,7 +290,9 @@ if _chunks_table_ok and project_id:
                         with st.spinner(f"Processando Reunião {number}..."):
                             try:
                                 if len(transcript) < 100:
-                                    st.warning("Transcrição muito curta.")
+                                    st.session_state["_single_embed_result"] = (
+                                        "warning", f"Reunião {number}: transcrição muito curta."
+                                    )
                                 else:
                                     n_saved = save_transcript_embeddings(
                                         meeting_id=meeting_id,
@@ -288,16 +302,27 @@ if _chunks_table_ok and project_id:
                                         provider=embed_provider,
                                     )
                                     if n_saved > 0:
-                                        st.success(f"✅ {n_saved} chunks gerados!")
+                                        st.session_state["_single_embed_result"] = (
+                                            "success",
+                                            f"✅ Reunião {number}: {n_saved} chunks gerados com sucesso.",
+                                        )
                                     else:
-                                        st.info("Nenhum chunk gerado.")
+                                        st.session_state["_single_embed_result"] = (
+                                            "info", f"Reunião {number}: nenhum chunk gerado."
+                                        )
                                 st.rerun()
                             except Exception as e:
                                 error_msg = str(e)
                                 if any(x in error_msg.lower() for x in ["429", "quota", "rate limit", "too many"]):
-                                    st.error(f"❌ Rate limit ({embed_provider}). Aguarde alguns minutos.")
+                                    st.session_state["_single_embed_result"] = (
+                                        "error",
+                                        f"❌ Reunião {number}: rate limit ({embed_provider}). Aguarde alguns minutos.",
+                                    )
                                 else:
-                                    st.error(f"❌ Erro: {error_msg[:180]}")
+                                    st.session_state["_single_embed_result"] = (
+                                        "error", f"❌ Reunião {number}: {error_msg[:200]}"
+                                    )
+                                st.rerun()
 
     except Exception as e:
         st.error(f"Erro ao carregar lista de reuniões: {e}")

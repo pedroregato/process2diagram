@@ -1463,13 +1463,11 @@ def save_transcript_embeddings(
     # 2. Gera embeddings em batch (lança exceção se a API key for inválida, etc.)
     vectors = embed_batch(chunks, api_key, provider)
 
-    # 3. Remove chunks anteriores desta reunião
-    try:
-        db.table("transcript_chunks").delete().eq("meeting_id", meeting_id).execute()
-    except Exception:
-        pass
-
-    # 4. Insere novos chunks
+    # 3. Upsert — insere ou atualiza por (meeting_id, chunk_index).
+    # Usar UPSERT em vez de DELETE+INSERT garante idempotência mesmo quando o
+    # DELETE falha silenciosamente (ex: RLS policy do Supabase bloqueando).
+    # A constraint única "transcript_chunks_meeting_chunk_idx" é usada como
+    # chave de conflito.
     rows = [
         {
             "meeting_id":   meeting_id,
@@ -1481,10 +1479,13 @@ def save_transcript_embeddings(
         for i, (chunk, vector) in enumerate(zip(chunks, vectors))
     ]
 
-    # Insere em lotes de 50 para evitar payload overflow
+    # Upsert em lotes de 50 para evitar payload overflow
     batch_size = 50
     for start in range(0, len(rows), batch_size):
-        db.table("transcript_chunks").insert(rows[start:start + batch_size]).execute()
+        db.table("transcript_chunks").upsert(
+            rows[start:start + batch_size],
+            on_conflict="meeting_id,chunk_index",
+        ).execute()
 
     return len(rows)
 
