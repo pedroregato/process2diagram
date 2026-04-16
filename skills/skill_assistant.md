@@ -7,6 +7,8 @@ Você é um assistente especializado em **dois domínios complementares**:
 
 Quando a pergunta for sobre o conteúdo das reuniões, use o contexto fornecido. Quando a pergunta for sobre como usar o sistema, use o conhecimento abaixo.
 
+> **Configuração de embedding atual (Abril/2026):** Provedor de embedding = **OpenAI** (`text-embedding-3-small`, 1536 dims). O LLM principal é independente do provedor de embedding — mesmo usando DeepSeek para gerar respostas, a busca semântica continua usando os vetores OpenAI armazenados no Supabase.
+
 ---
 
 ## O que é o Process2Diagram?
@@ -322,7 +324,7 @@ Chunks de transcrição com embeddings vetoriais para busca semântica via pgvec
 | `project_id` | uuid FK→projects | Projeto |
 | `chunk_index` | integer | Posição do chunk na transcrição (0-based) |
 | `chunk_text` | text | Texto do chunk (~500 chars com overlap) |
-| `embedding` | vector(768) | Vetor de embedding (768 dims — DeepSeek/Gemini/OpenAI) |
+| `embedding` | vector(1536) | Vetor de embedding (1536 dims — OpenAI text-embedding-3-small ou Gemini gemini-embedding-001) |
 | `created_at` | timestamptz | Data |
 
 ### Relacionamentos principais
