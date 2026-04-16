@@ -497,22 +497,31 @@ if _chunks_table_ok and project_id:
 
     try:
         db = get_supabase_client()
+
+        # Busca todas as reuniões do projeto
         meetings = db.table("meetings") \
             .select("id, meeting_number, title, transcript_clean, transcript_raw") \
             .eq("project_id", project_id) \
             .order("meeting_number") \
             .execute().data or []
 
-        # Busca quantidade de chunks por reunião
-        meeting_ids = [m["id"] for m in meetings]
+        # Conta quantos chunks cada reunião tem (forma correta e compatível)
+        meeting_ids = [m["id"] for m in meetings if m.get("id")]
         chunk_counts = {}
+
         if meeting_ids:
-            chunk_data = db.table("transcript_chunks") \
-                .select("meeting_id, count=count(*)") \
-                .in_("meeting_id", meeting_ids) \
-                .execute().data or []
-            for row in chunk_data:
-                chunk_counts[row["meeting_id"]] = row["count"]
+            try:
+                chunk_data = db.table("transcript_chunks") \
+                    .select("meeting_id") \
+                    .in_("meeting_id", meeting_ids) \
+                    .execute().data or []
+
+                # Conta manualmente usando Counter
+                from collections import Counter
+                count_dict = Counter(row["meeting_id"] for row in chunk_data)
+                chunk_counts = dict(count_dict)
+            except Exception:
+                chunk_counts = {}  # se falhar, mostramos 0 chunks
 
         for m in meetings:
             meeting_id = m["id"]
@@ -522,19 +531,25 @@ if _chunks_table_ok and project_id:
             chunk_qty = chunk_counts.get(meeting_id, 0)
 
             status_icon = "✅" if chunk_qty > 0 else "❌"
-            status_text = "Indexada" if chunk_qty > 0 else "Não indexada"
 
-            with st.expander(f"{status_icon} Reunião {number} — {title[:65]}{'...' if len(title) > 65 else ''}", expanded=False):
+            with st.expander(
+                f"{status_icon} Reunião {number} — {title[:68]}{'...' if len(title) > 68 else ''}",
+                expanded=False
+            ):
                 col_info, col_btn = st.columns([3, 1])
+
                 with col_info:
                     st.caption(f"**Título:** {title}")
                     st.caption(f"**Tamanho da transcrição:** {len(transcript):,} caracteres")
                     st.metric("Chunks gerados", chunk_qty)
+
                 with col_btn:
-                    if st.button("🔄 Gerar Embeddings",
-                                 key=f"embed_single_{meeting_id}",
-                                 use_container_width=True,
-                                 type="secondary"):
+                    if st.button(
+                        "🔄 Gerar Embeddings",
+                        key=f"embed_single_{meeting_id}",
+                        use_container_width=True,
+                        type="secondary"
+                    ):
                         with st.spinner(f"Processando Reunião {number}: {title[:50]}..."):
                             try:
                                 if len(transcript) < 100:
@@ -554,10 +569,10 @@ if _chunks_table_ok and project_id:
                                 st.rerun()
                             except Exception as e:
                                 error_msg = str(e)
-                                if "429" in error_msg or "quota" in error_msg.lower():
+                                if any(x in error_msg.lower() for x in ["429", "quota", "rate limit", "resource exhausted"]):
                                     st.error("❌ Rate limit / Quota esgotada do Gemini. Aguarde alguns minutos e tente novamente.")
                                 else:
-                                    st.error(f"❌ Erro: {error_msg[:200]}")
+                                    st.error(f"❌ Erro ao gerar embeddings: {error_msg[:180]}")
 
     except Exception as e:
         st.error(f"Erro ao carregar lista de reuniões para reprocessamento: {e}")
