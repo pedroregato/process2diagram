@@ -45,8 +45,13 @@ def _render_api_key_section(
     save_btn_key: str,
     clear_btn_key: str,
     input_key: str,
+    persist_key: str = "",   # config_key in tenant_config — set to auto-persist on save
 ) -> None:
-    """Renders a reusable API key input: show masked value + clear, or input + save."""
+    """Renders a reusable API key input: show masked value + clear, or input + save.
+
+    When persist_key is provided and _tenant_id is in session_state, the key is
+    also saved/deleted in the tenant_config table so it survives browser refreshes.
+    """
     stored: str = st.session_state.get(state_key, "")
 
     if stored:
@@ -57,6 +62,11 @@ def _render_api_key_section(
         with col_clear:
             if st.button("🗑 Limpar", key=clear_btn_key, use_container_width=True):
                 st.session_state.pop(state_key, None)
+                if persist_key:
+                    tid = st.session_state.get("_tenant_id")
+                    if tid:
+                        from modules.tenant_config import delete_config
+                        delete_config(tid, persist_key)
                 st.rerun()
     else:
         col_inp, col_save = st.columns([4, 1])
@@ -72,7 +82,13 @@ def _render_api_key_section(
         with col_save:
             if st.button("💾 Salvar", key=save_btn_key, type="primary", use_container_width=True):
                 if entered and len(entered.strip()) > 10:
-                    st.session_state[state_key] = entered.strip()
+                    value = entered.strip()
+                    st.session_state[state_key] = value
+                    if persist_key:
+                        tid = st.session_state.get("_tenant_id")
+                        if tid:
+                            from modules.tenant_config import save_config
+                            save_config(tid, persist_key, value)
                     st.rerun()
                 else:
                     st.error("Chave muito curta.")
@@ -262,6 +278,7 @@ with tab_embed:
         save_btn_key="settings_save_emb_key",
         clear_btn_key="settings_clear_emb_key",
         input_key="settings_input_emb_key",
+        persist_key="embedding_key",
     )
 
     st.markdown("---")
@@ -299,6 +316,29 @@ with tab_embed:
                 )
     else:
         st.info("🔑 Modo Keyword ativo — sem necessidade de API key de embedding.")
+
+    # ── Persistência do provedor e do toggle ──────────────────────────────────
+    st.markdown("---")
+    if "_settings_emb_saved" in st.session_state:
+        st.success(st.session_state.pop("_settings_emb_saved"))
+
+    tid = st.session_state.get("_tenant_id")
+    if tid:
+        if st.button("💾 Salvar configurações de embedding", key="settings_save_emb_prefs", type="primary"):
+            from modules.tenant_config import save_config, PREFS_MAP
+            ok = 0
+            for k in ("asst_embed_provider", "asst_use_semantic"):
+                v = st.session_state.get(k)
+                if v is not None:
+                    cfg_key, _ = PREFS_MAP[k]
+                    if save_config(tid, cfg_key, str(v)):
+                        ok += 1
+            st.session_state["_settings_emb_saved"] = (
+                f"✅ Configurações de embedding salvas ({ok}/2 itens)."
+            )
+            st.rerun()
+    else:
+        st.caption("ℹ️ Faça login com domínio para persistir estas configurações entre sessões.")
 
 # ╔══════════════════════════════════════════════════════╗
 # ║  TAB 4 — Banco de Dados                             ║
