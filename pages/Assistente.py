@@ -33,6 +33,8 @@ from core.project_store import (
 from agents.agent_assistant import AgentAssistant
 from ui.components.copy_button import copy_button
 
+from modules.supabase_client import supabase_configured, get_supabase_client
+
 
 # ── Page config ───────────────────────────────────────────────────────────────
 apply_auth_gate()
