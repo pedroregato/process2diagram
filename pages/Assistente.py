@@ -731,3 +731,193 @@ if active_question and not _asst_running:
         st.caption(
             f"🔢 {tokens_used} tokens · {n_meetings} reunião(ões) · {mode_badge}"
         )
+        
+# Aceita pergunta nova ou pergunta reeditada
+active_question: str | None = (
+    st.session_state.pop("_resubmit_question", None)
+    or question
+)
+
+if active_question and not _asst_running:
+    # ── Separate display question (stored in history) from LLM question ──────
+    display_question = active_question
+    _file_ctx = st.session_state.get("_asst_file_ctx", "")
+    _file_name = st.session_state.get("_asst_file_name", "")
+
+    if _file_ctx:
+        _n_words = len(_file_ctx.split())
+        llm_question = (
+            f"[ARQUIVO ANEXADO: {_file_name} — {_n_words:,} palavras]\n"
+            f"{'─' * 50}\n"
+            f"{_file_ctx}\n"
+            f"{'─' * 50}\n\n"
+            f"{display_question}"
+        )
+    else:
+        llm_question = display_question
+
+    question = display_question  # usado para exibição / histórico
+
+    # Reload history (caso tenha sido truncado por reedição)
+    history = st.session_state["assistant_history"]
+
+    # 1. Adiciona e renderiza a mensagem do usuário (sempre limpa)
+    history.append({"role": "user", "content": display_question})
+    with st.chat_message("user"):
+        st.markdown(display_question)
+
+    use_tools_now = st.session_state.get("asst_use_tools", True)
+
+    # ── Caminho A: Tool-use com thread ───────────────────────────────────────
+    if use_tools_now:
+        _cancel_ev = threading.Event()
+        _result_box: dict = {}
+
+        _api_key = api_key
+        _provider_cfg = provider_cfg
+        _history_snap = list(history[:-1])   # exclui a pergunta atual
+        _question = llm_question
+        _project_id = project_id
+        _project_name = project_name
+
+        def _run_tools_thread() -> None:
+            def _status(msg: str) -> None:
+                st.session_state["_asst_status"] = msg
+
+            try:
+                _status("🔧 Iniciando consulta…")
+                _agent = AgentAssistant({"api_key": _api_key}, _provider_cfg)
+                resp_text, tok, tools = _agent.chat_with_tools(
+                    history=_history_snap,
+                    question=_question,
+                    project_id=_project_id,
+                    project_name=_project_name,
+                    cancel_event=_cancel_ev,
+                    status_fn=_status,
+                )
+                _result_box["response"] = resp_text
+                _result_box["tokens"] = tok
+                _result_box["tools_called"] = tools
+            except Exception as _exc:
+                _status("⚠️ Tool-use falhou — usando busca por keyword…")
+                try:
+                    _ctx = retrieve_context_for_question(_project_id, _question)
+                    _ctxt = format_context(_ctx, _project_name)
+                    _agent2 = AgentAssistant({"api_key": _api_key}, _provider_cfg)
+                    resp_text, tok = _agent2.chat(
+                        history=_history_snap,
+                        context_text=_ctxt,
+                        question=_question,
+                    )
+                    _result_box["response"] = resp_text
+                    _result_box["tokens"] = tok
+                    _result_box["tools_called"] = []
+                    _result_box["error"] = f"tool-use falhou: {_exc}"
+                except Exception as _exc2:
+                    _result_box["response"] = f"❌ Erro ao gerar resposta: {_exc2}"
+                    _result_box["tokens"] = 0
+                    _result_box["tools_called"] = []
+                    _result_box["error"] = str(_exc2)
+
+        _thread = threading.Thread(target=_run_tools_thread, daemon=True)
+        try:
+            from streamlit.runtime.scriptrunner import add_script_run_ctx
+            add_script_run_ctx(_thread)
+        except Exception:
+            pass
+
+        st.session_state["_asst_running"] = True
+        st.session_state["_asst_thread"] = _thread
+        st.session_state["_asst_cancel_event"] = _cancel_ev
+        st.session_state["_asst_result_box"] = _result_box
+        st.session_state["_asst_status"] = "🔧 Iniciando consulta…"
+        st.session_state["assistant_history"] = history
+        _thread.start()
+        st.rerun()
+
+    # ── Caminho B: RAG clássico (keyword / semântico) ────────────────────────
+    else:
+        use_semantic_now = (
+            st.session_state.get("asst_use_semantic", False) and _chunks_table_ok
+        )
+
+        if use_semantic_now:
+            embed_key_now = st.session_state.get("asst_embed_key", "")
+            embed_provider_now = st.session_state.get("asst_embed_provider", list(EMBEDDING_PROVIDERS.keys())[0])
+            if not embed_key_now:
+                st.warning("⚠️ Busca semântica ativa mas sem chave de embedding. Usando keyword.")
+                use_semantic_now = False
+
+        with st.spinner("🔍 Pesquisando nas fontes de dados..."):
+            if use_semantic_now:
+                ctx = retrieve_context_semantic(
+                    project_id=project_id,
+                    question=display_question,
+                    api_key=embed_key_now,
+                    provider=embed_provider_now,
+                )
+            else:
+                ctx = retrieve_context_for_question(project_id, display_question)
+
+            context_text = format_context(ctx, project_name)
+
+            if _file_ctx:
+                _n_words = len(_file_ctx.split())
+                context_text = (
+                    f"## Arquivo Anexado: {_file_name} ({_n_words:,} palavras)\n\n"
+                    f"{_file_ctx}\n\n"
+                    f"---\n\n"
+                    + context_text
+                )
+
+        meetings_passages = ctx.get("meetings_passages") or []
+        no_transcript = ctx.get("meetings_without_transcript") or []
+        search_mode = ctx.get("search_mode", "keyword")
+
+        if search_mode == "keyword_fallback":
+            st.info(
+                "ℹ️ Embeddings ainda não gerados — usando busca por **keyword**. "
+                "Gere os embeddings na sidebar para ativar a busca semântica.",
+                icon=None,
+            )
+        if not meetings_passages and no_transcript:
+            st.warning(
+                "⚠️ Nenhum trecho relevante encontrado. "
+                "Reuniões sem correspondência: " + ", ".join(no_transcript)
+            )
+
+        # Gera resposta
+        with st.spinner("🤖 Gerando resposta..."):
+            client_info = {"api_key": api_key}
+            agent = AgentAssistant(client_info, provider_cfg)
+            try:
+                response_text, tokens_used = agent.chat(
+                    history=history[:-1],
+                    context_text=context_text,
+                    question=question,
+                )
+            except Exception as exc:
+                response_text = f"❌ Erro ao gerar resposta: {exc}"
+                tokens_used = 0
+
+        # Adiciona e renderiza resposta
+        response_text = _clean_response(response_text) or response_text
+        history.append({"role": "assistant", "content": response_text})
+        st.session_state["assistant_history"] = history
+
+        with st.chat_message("assistant"):
+            st.markdown(response_text)
+
+        # Caption final
+        n_meetings = len(meetings_passages)
+        if search_mode == "semantic":
+            mode_badge = "🔮 semântica"
+        elif search_mode == "keyword_fallback":
+            mode_badge = "🔑 keyword (fallback)"
+        else:
+            mode_badge = "🔑 keyword"
+
+        st.caption(
+            f"🔢 {tokens_used} tokens · {n_meetings} reunião(ões) · {mode_badge}"
+        )        
+        
