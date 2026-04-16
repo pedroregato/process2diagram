@@ -143,7 +143,9 @@ if "_trigger_embed" in st.session_state:
                     continue
 
                 try:
-                    if i > 0:
+                    # Gemini free tier: 1.2 s between calls to stay under 100 req/min.
+                    # OpenAI / Grok: no rate delay needed for embedding calls.
+                    if i > 0 and trigger["provider"] == "Google Gemini":
                         time.sleep(1.8)
                     n_saved = save_transcript_embeddings(
                         meeting_id=meeting_id,
@@ -155,8 +157,8 @@ if "_trigger_embed" in st.session_state:
                     total_gen += n_saved
                 except Exception as exc:
                     error_str = str(exc)
-                    if any(x in error_str.lower() for x in ["429", "quota", "rate limit"]):
-                        errors.append(f"{title} → Rate limit do Gemini")
+                    if any(x in error_str.lower() for x in ["429", "quota", "rate limit", "too many"]):
+                        errors.append(f"{title} → Rate limit ({trigger['provider']})")
                         time.sleep(10)
                     else:
                         errors.append(f"{title}: {error_str[:150]}")
@@ -243,6 +245,7 @@ if _chunks_table_ok and project_id:
             chunk_data = db.table("transcript_chunks") \
                 .select("meeting_id") \
                 .in_("meeting_id", meeting_ids) \
+                .limit(10000) \
                 .execute().data or []
             count_dict = Counter(row["meeting_id"] for row in chunk_data)
             chunk_counts = dict(count_dict)
@@ -291,8 +294,8 @@ if _chunks_table_ok and project_id:
                                 st.rerun()
                             except Exception as e:
                                 error_msg = str(e)
-                                if any(x in error_msg.lower() for x in ["429", "quota", "rate limit"]):
-                                    st.error("❌ Rate limit do Gemini. Aguarde alguns minutos.")
+                                if any(x in error_msg.lower() for x in ["429", "quota", "rate limit", "too many"]):
+                                    st.error(f"❌ Rate limit ({embed_provider}). Aguarde alguns minutos.")
                                 else:
                                     st.error(f"❌ Erro: {error_msg[:180]}")
 

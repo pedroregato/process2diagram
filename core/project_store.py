@@ -1753,13 +1753,26 @@ def get_embedding_coverage(project_id: str) -> dict:
             .eq("project_id", project_id)
             .execute()
         ))
+        # Use count="exact" for accurate total_chunks (avoids the 1 000-row
+        # default Supabase limit that would truncate the count for large projects).
+        count_resp = (
+            db.table("transcript_chunks")
+            .select("*", count="exact")
+            .eq("project_id", project_id)
+            .limit(1)
+            .execute()
+        )
+        total_chunks = count_resp.count or 0
+
+        # Fetch meeting_ids with a generous limit — we only need the distinct set.
+        # 10 000 should cover any realistic project (≈100 meetings × 100 chunks).
         chunk_rows = _ok(
             db.table("transcript_chunks")
             .select("meeting_id")
             .eq("project_id", project_id)
+            .limit(10000)
             .execute()
         )
-        total_chunks = len(chunk_rows)
         indexed_meetings = len({r["meeting_id"] for r in chunk_rows})
         return {
             "total_meetings":   total_meetings,
