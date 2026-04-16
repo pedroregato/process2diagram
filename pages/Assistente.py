@@ -58,12 +58,37 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # Contexto adicional (mantido)
+    # Contexto adicional
     uploaded_ctx_file = st.file_uploader("Arquivo de contexto", type=["txt", "docx", "pdf", "csv", "xlsx"], key="asst_context_file")
-    # ... (seu código de processamento de arquivo pode ficar aqui - mantive simplificado por brevidade)
+    
+    if uploaded_ctx_file:
+        try:
+            # Processamento simplificado do arquivo
+            import io
+            content = ""
+            if uploaded_ctx_file.type == "text/plain":
+                content = uploaded_ctx_file.read().decode("utf-8")
+            elif uploaded_ctx_file.type == "application/pdf":
+                try:
+                    import PyPDF2
+                    pdf_reader = PyPDF2.PdfReader(io.BytesIO(uploaded_ctx_file.read()))
+                    content = " ".join([page.extract_text() for page in pdf_reader.pages])
+                except ImportError:
+                    content = "PDF import não disponível"
+            else:
+                content = uploaded_ctx_file.read().decode("utf-8", errors="ignore")[:50000]
+            
+            if content:
+                st.session_state["_asst_file_ctx"] = content
+                st.session_state["_asst_file_name"] = uploaded_ctx_file.name
+                st.success(f"✅ {uploaded_ctx_file.name} carregado ({len(content):,} caracteres)")
+        except Exception as e:
+            st.error(f"Erro ao processar arquivo: {e}")
 
     if st.button("🗑️ Limpar conversa", key="asst_clear"):
         st.session_state["assistant_history"] = []
+        st.session_state.pop("_asst_file_ctx", None)
+        st.session_state.pop("_asst_file_name", None)
         st.rerun()
 
 # ── Configurações ─────────────────────────────────────────────────────────────
@@ -88,8 +113,7 @@ if not project_id:
     st.warning("👈 Selecione um projeto na sidebar.")
     st.stop()
 
-
-# ── Trigger: geração de embeddings em batch ───────────────────────────────────
+# ── Trigger: geração de embeddings em batch (APENAS UMA VEZ) ───────────────────
 if "_trigger_embed" in st.session_state:
     trigger = st.session_state.pop("_trigger_embed")
     if trigger["project_id"] == project_id:
@@ -150,8 +174,7 @@ if "_trigger_embed" in st.session_state:
             st.session_state["_embed_result"] = msg
             st.rerun()
 
-
-# ── Feedback do processamento ────────────────────────────────────────────────
+# ── Feedback do processamento (APENAS UMA VEZ) ────────────────────────────────
 if "_embed_result" in st.session_state:
     result = st.session_state.pop("_embed_result")
     if "❌" in result:
@@ -161,8 +184,7 @@ if "_embed_result" in st.session_state:
     else:
         st.success(result)
 
-
-# ── Gerar Embeddings em Lote ─────────────────────────────────────────────────
+# ── Gerar Embeddings em Lote (APENAS UMA VEZ) ─────────────────────────────────
 if _chunks_table_ok and project_id:
     _emb_cov = get_embedding_coverage(project_id)
     _emb_idx = _emb_cov.get("indexed_meetings", 0)
@@ -173,25 +195,34 @@ if _chunks_table_ok and project_id:
         f"⚡ Gerar Embeddings em Lote · {_emb_idx}/{_emb_tot} reuniões · {_emb_chk:,} chunks",
         expanded=(_emb_idx == 0 and _emb_tot > 0),
     ):
-        st.caption("Gera embeddings para todas as reuniões de uma vez.")
-        if st.button(
-            "⚡ Gerar para Todas as Reuniões",
-            key="asst_gen_embeddings_batch",   # chave única
-            type="primary",
-            use_container_width=True
-        ):
-            if not embed_api_key:
-                st.warning("Configure a chave de embedding em Configurações → Embeddings & Busca.")
-            else:
-                st.session_state["_trigger_embed"] = {
-                    "provider": embed_provider,
-                    "api_key": embed_api_key,
-                    "project_id": project_id,
-                }
-                st.rerun()
+        st.caption(
+            "Gera embeddings para **todas** as reuniões do projeto de uma vez. "
+            "Recomendado quando o projeto ainda não tem embeddings ou após adicionar várias reuniões."
+        )
+        st.caption(f"Provedor atual: **{embed_provider}**")
 
+        col_btn, col_info = st.columns([2, 3])
+        with col_btn:
+            if st.button(
+                "⚡ Gerar para Todas as Reuniões",
+                key="asst_gen_embeddings_batch",  # Chave única
+                type="primary",
+                use_container_width=True
+            ):
+                if not embed_api_key:
+                    st.warning("Configure a chave de embedding em Configurações → Embeddings & Busca.")
+                else:
+                    st.session_state["_trigger_embed"] = {
+                        "provider": embed_provider,
+                        "api_key": embed_api_key,
+                        "project_id": project_id,
+                    }
+                    st.rerun()
 
-# ── Reprocessamento Individual por Reunião ───────────────────────────────────
+        with col_info:
+            st.caption("⚠️ Pode demorar bastante em projetos com reuniões longas devido ao limite do Gemini Free Tier.")
+
+# ── Reprocessamento Individual por Reunião (APENAS UMA VEZ) ───────────────────
 if _chunks_table_ok and project_id:
     st.markdown("---")
     st.markdown("### 🔄 Reprocessar Embeddings Individualmente")
@@ -237,7 +268,7 @@ if _chunks_table_ok and project_id:
                 with col_btn:
                     if st.button(
                         "🔄 Gerar Embeddings",
-                        key=f"embed_single_{meeting_id}",   # chave única por reunião
+                        key=f"embed_single_{meeting_id}",
                         use_container_width=True,
                         type="secondary"
                     ):
@@ -268,577 +299,9 @@ if _chunks_table_ok and project_id:
     except Exception as e:
         st.error(f"Erro ao carregar lista de reuniões: {e}")
 
-# ── Feedback ─────────────────────────────────────────────────────────────────
-if "_embed_result" in st.session_state:
-    result = st.session_state.pop("_embed_result")
-    if "❌" in result:
-        st.error(result)
-    elif "⚠️" in result:
-        st.warning(result)
-    else:
-        st.success(result)
-
-# ── Gerar Embeddings em Lote ─────────────────────────────────────────────────
-if _chunks_table_ok and project_id:
-    _emb_cov = get_embedding_coverage(project_id)
-    _emb_idx = _emb_cov.get("indexed_meetings", 0)
-    _emb_tot = _emb_cov.get("total_meetings", 0)
-    _emb_chk = _emb_cov.get("total_chunks", 0)
-
-    with st.expander(
-        f"⚡ Gerar Embeddings em Lote · {_emb_idx}/{_emb_tot} reuniões · {_emb_chk:,} chunks",
-        expanded=(_emb_idx == 0 and _emb_tot > 0),
-    ):
-        st.caption("Gera embeddings para todas as reuniões de uma vez.")
-        if st.button("⚡ Gerar para Todas as Reuniões", key="asst_gen_embeddings_batch", type="primary", use_container_width=True):
-            if not embed_api_key:
-                st.warning("Configure a chave de embedding em Configurações.")
-            else:
-                st.session_state["_trigger_embed"] = {
-                    "provider": embed_provider,
-                    "api_key": embed_api_key,
-                    "project_id": project_id,
-                }
-                st.rerun()
-
-# ── Reprocessamento Individual ───────────────────────────────────────────────
-if _chunks_table_ok and project_id:
-    st.markdown("---")
-    st.markdown("### 🔄 Reprocessar Embeddings Individualmente")
-
-    try:
-        db = get_supabase_client()
-        meetings = db.table("meetings") \
-            .select("id, meeting_number, title, transcript_clean, transcript_raw") \
-            .eq("project_id", project_id) \
-            .order("meeting_number") \
-            .execute().data or []
-
-        meeting_ids = [m["id"] for m in meetings if m.get("id")]
-        chunk_counts = {}
-        if meeting_ids:
-            chunk_data = db.table("transcript_chunks") \
-                .select("meeting_id") \
-                .in_("meeting_id", meeting_ids) \
-                .execute().data or []
-            count_dict = Counter(row["meeting_id"] for row in chunk_data)
-            chunk_counts = dict(count_dict)
-
-        for m in meetings:
-            meeting_id = m["id"]
-            number = m.get("meeting_number")
-            title = m.get("title") or f"Reunião {number}"
-            transcript = (m.get("transcript_clean") or m.get("transcript_raw") or "").strip()
-            chunk_qty = chunk_counts.get(meeting_id, 0)
-
-            status_icon = "✅" if chunk_qty > 0 else "❌"
-
-            with st.expander(
-                f"{status_icon} Reunião {number} — {title[:68]}{'...' if len(title) > 68 else ''}",
-                expanded=False
-            ):
-                col_info, col_btn = st.columns([3, 1])
-                with col_info:
-                    st.caption(f"**Título:** {title}")
-                    st.caption(f"**Tamanho:** {len(transcript):,} caracteres")
-                    st.metric("Chunks", chunk_qty)
-                with col_btn:
-                    if st.button("🔄 Gerar Embeddings", key=f"embed_single_{meeting_id}", use_container_width=True, type="secondary"):
-                        with st.spinner(f"Processando Reunião {number}..."):
-                            try:
-                                if len(transcript) < 100:
-                                    st.warning("Transcrição muito curta.")
-                                else:
-                                    n_saved = save_transcript_embeddings(
-                                        meeting_id=meeting_id,
-                                        project_id=project_id,
-                                        transcript=transcript,
-                                        api_key=embed_api_key,
-                                        provider=embed_provider,
-                                    )
-                                    if n_saved > 0:
-                                        st.success(f"✅ {n_saved} chunks gerados!")
-                                    else:
-                                        st.info("Nenhum chunk gerado.")
-                                st.rerun()
-                            except Exception as e:
-                                error_msg = str(e)
-                                if any(x in error_msg.lower() for x in ["429", "quota", "rate limit"]):
-                                    st.error("❌ Rate limit do Gemini. Aguarde alguns minutos.")
-                                else:
-                                    st.error(f"❌ Erro: {error_msg[:180]}")
-
-    except Exception as e:
-        st.error(f"Erro ao carregar reuniões: {e}")
-
 # ── Guard: LLM API key ───────────────────────────────────────────────────────
 if not api_key:
     st.warning("⚙️ Configure a chave de API em Configurações → LLM Assistente.")
-    st.stop()
-
-if not project_id:
-    st.warning("👈 Selecione um projeto na sidebar para começar.")
-    st.stop()
-
-# ── Trigger: geração de embeddings (antes do guard de api_key LLM) ──────────
-# Processado aqui para não depender da chave LLM — usa a chave de embedding.
-# ── Trigger: geração de embeddings em batch (mantido e melhorado) ─────────────
-
-# ── Trigger: geração de embeddings em batch ───────────────────────────────────
-if "_trigger_embed" in st.session_state:
-    trigger = st.session_state.pop("_trigger_embed")
-    if trigger["project_id"] == project_id:
-        from modules.supabase_client import get_supabase_client
-        db = get_supabase_client()
-        if db:
-            with st.spinner("⚡ Gerando embeddings em lote... (pode demorar em reuniões longas)"):
-                meeting_rows = db.table("meetings") \
-                    .select("id, title, meeting_number, transcript_clean, transcript_raw") \
-                    .eq("project_id", project_id) \
-                    .order("meeting_number") \
-                    .execute().data or []
-
-            total_gen = 0
-            errors = []
-            skipped = []
-            prog = st.progress(0.0)
-            n_total = len(meeting_rows)
-
-            for i, m in enumerate(meeting_rows):
-                meeting_id = m["id"]
-                title = m.get("title") or f"Reunião {m.get('meeting_number', '?')}"
-                transcript = (m.get("transcript_clean") or m.get("transcript_raw") or "").strip()
-
-                if len(transcript) < 100:
-                    skipped.append(title)
-                    prog.progress((i + 1) / n_total if n_total else 1.0)
-                    continue
-
-                try:
-                    if i > 0:
-                        time.sleep(1.8)  # Delay para evitar rate limit do Gemini
-
-                    n_saved = save_transcript_embeddings(
-                        meeting_id=meeting_id,
-                        project_id=project_id,
-                        transcript=transcript,
-                        api_key=trigger["api_key"],
-                        provider=trigger["provider"],
-                    )
-                    total_gen += n_saved
-                except Exception as exc:
-                    error_str = str(exc)
-                    if any(x in error_str.lower() for x in ["429", "quota", "rate limit"]):
-                        errors.append(f"{title} → Rate limit / Quota esgotada do Gemini")
-                        time.sleep(10)
-                    else:
-                        errors.append(f"{title}: {error_str[:150]}")
-
-                prog.progress((i + 1) / n_total if n_total else 1.0)
-
-            prog.empty()
-
-            msg = f"✅ **{total_gen:,} chunks** gerados com sucesso em lote."
-            if skipped:
-                msg += f"\n\n⚠️ **{len(skipped)} reuniões puladas** (transcrição muito curta)."
-            if errors:
-                msg += f"\n\n❌ **Falhas em {len(errors)} reuniões**:\n" + "\n".join(errors[:15])
-
-            st.session_state["_embed_result"] = msg
-            st.rerun()
-
-
-# ── Feedback do processamento (batch ou individual) ───────────────────────────
-if "_embed_result" in st.session_state:
-    result = st.session_state.pop("_embed_result")
-    if "❌" in result:
-        st.error(result)
-    elif "⚠️" in result:
-        st.warning(result)
-    else:
-        st.success(result)
-
-
-# ── Gerar Embeddings em Lote ─────────────────────────────────────────────────
-if _chunks_table_ok and project_id:
-    _emb_cov = get_embedding_coverage(project_id)
-    _emb_idx = _emb_cov.get("indexed_meetings", 0)
-    _emb_tot = _emb_cov.get("total_meetings", 0)
-    _emb_chk = _emb_cov.get("total_chunks", 0)
-
-    with st.expander(
-        f"⚡ Gerar Embeddings em Lote  ·  {_emb_idx}/{_emb_tot} reuniões indexadas · {_emb_chk:,} chunks",
-        expanded=(_emb_idx == 0 and _emb_tot > 0),
-    ):
-        st.caption(
-            "Gera embeddings para **todas** as reuniões do projeto de uma vez. "
-            "Recomendado quando o projeto ainda não tem embeddings ou após adicionar várias reuniões."
-        )
-        st.caption(f"Provedor atual: **{embed_provider}**")
-
-        col_btn, col_info = st.columns([2, 3])
-        with col_btn:
-            if st.button("⚡ Gerar Embeddings para Todas as Reuniões",
-                         key="asst_gen_embeddings_batch",
-                         type="primary",
-                         use_container_width=True):
-                if not embed_api_key:
-                    st.warning("Configure a chave de embedding em Configurações → Embeddings & Busca.")
-                else:
-                    st.session_state["_trigger_embed"] = {
-                        "provider": embed_provider,
-                        "api_key": embed_api_key,
-                        "project_id": project_id,
-                    }
-                    st.rerun()
-
-        with col_info:
-            st.caption("⚠️ Pode demorar bastante em projetos com reuniões longas devido ao limite do Gemini Free Tier.")
-
-
-# ── Reprocessamento Individual por Reunião ───────────────────────────────────
-if _chunks_table_ok and project_id:
-    st.markdown("---")
-    st.markdown("### 🔄 Reprocessar Embeddings Individualmente")
-
-    try:
-        db = get_supabase_client()
-
-        # Busca todas as reuniões do projeto
-        meetings = db.table("meetings") \
-            .select("id, meeting_number, title, transcript_clean, transcript_raw") \
-            .eq("project_id", project_id) \
-            .order("meeting_number") \
-            .execute().data or []
-
-        # Conta quantos chunks cada reunião tem
-        meeting_ids = [m["id"] for m in meetings if m.get("id")]
-        chunk_counts = {}
-
-        if meeting_ids:
-            try:
-                chunk_data = db.table("transcript_chunks") \
-                    .select("meeting_id") \
-                    .in_("meeting_id", meeting_ids) \
-                    .execute().data or []
-
-                from collections import Counter
-                count_dict = Counter(row["meeting_id"] for row in chunk_data)
-                chunk_counts = dict(count_dict)
-            except Exception:
-                chunk_counts = {}
-
-        for m in meetings:
-            meeting_id = m["id"]
-            number = m.get("meeting_number")
-            title = m.get("title") or f"Reunião {number}"
-            transcript = (m.get("transcript_clean") or m.get("transcript_raw") or "").strip()
-            chunk_qty = chunk_counts.get(meeting_id, 0)
-
-            status_icon = "✅" if chunk_qty > 0 else "❌"
-
-            with st.expander(
-                f"{status_icon} Reunião {number} — {title[:68]}{'...' if len(title) > 68 else ''}",
-                expanded=False
-            ):
-                col_info, col_btn = st.columns([3, 1])
-
-                with col_info:
-                    st.caption(f"**Título:** {title}")
-                    st.caption(f"**Tamanho da transcrição:** {len(transcript):,} caracteres")
-                    st.metric("Chunks gerados", chunk_qty)
-
-                with col_btn:
-                    if st.button(
-                        "🔄 Gerar Embeddings",
-                        key=f"embed_single_{meeting_id}",
-                        use_container_width=True,
-                        type="secondary"
-                    ):
-                        with st.spinner(f"Processando Reunião {number}: {title[:50]}..."):
-                            try:
-                                if len(transcript) < 100:
-                                    st.warning("Transcrição muito curta. Nada foi processado.")
-                                else:
-                                    n_saved = save_transcript_embeddings(
-                                        meeting_id=meeting_id,
-                                        project_id=project_id,
-                                        transcript=transcript,
-                                        api_key=embed_api_key,
-                                        provider=embed_provider,
-                                    )
-                                    if n_saved > 0:
-                                        st.success(f"✅ {n_saved} chunks gerados com sucesso!")
-                                    else:
-                                        st.info("Nenhum chunk novo foi gerado.")
-                                st.rerun()
-                            except Exception as e:
-                                error_msg = str(e)
-                                if any(x in error_msg.lower() for x in ["429", "quota", "rate limit", "resource exhausted"]):
-                                    st.error("❌ Rate limit / Quota esgotada do Gemini. Aguarde alguns minutos e tente novamente.")
-                                else:
-                                    st.error(f"❌ Erro ao gerar embeddings: {error_msg[:180]}")
-
-    except Exception as e:
-        st.error(f"Erro ao carregar lista de reuniões para reprocessamento: {e}")
-    trigger = st.session_state.pop("_trigger_embed")
-    if trigger["project_id"] == project_id:
-        from modules.supabase_client import get_supabase_client
-        db = get_supabase_client()
-        if db:
-            with st.spinner("⚡ Gerando embeddings em lote... (pode demorar em reuniões longas)"):
-                meeting_rows = db.table("meetings") \
-                    .select("id, title, meeting_number, transcript_clean, transcript_raw") \
-                    .eq("project_id", project_id) \
-                    .order("meeting_number") \
-                    .execute().data or []
-
-            total_gen = 0
-            errors = []
-            skipped = []
-            prog = st.progress(0.0)
-            n_total = len(meeting_rows)
-
-            for i, m in enumerate(meeting_rows):
-                meeting_id = m["id"]
-                title = m.get("title") or f"Reunião {m.get('meeting_number', '?')}"
-                transcript = (m.get("transcript_clean") or m.get("transcript_raw") or "").strip()
-
-                if len(transcript) < 100:
-                    skipped.append(title)
-                    prog.progress((i + 1) / n_total if n_total else 1.0)
-                    continue
-
-                try:
-                    if i > 0:
-                        time.sleep(1.8)  # Delay para evitar rate limit do Gemini Free Tier
-
-                    n_saved = save_transcript_embeddings(
-                        meeting_id=meeting_id,
-                        project_id=project_id,
-                        transcript=transcript,
-                        api_key=trigger["api_key"],
-                        provider=trigger["provider"],
-                    )
-                    total_gen += n_saved
-                except Exception as exc:
-                    error_str = str(exc)
-                    if "429" in error_str or "quota" in error_str.lower() or "rate limit" in error_str.lower():
-                        errors.append(f"{title} → Rate limit / Quota esgotada do Gemini")
-                        time.sleep(10)
-                    else:
-                        errors.append(f"{title}: {error_str[:150]}")
-
-                prog.progress((i + 1) / n_total if n_total else 1.0)
-
-            prog.empty()
-
-            msg = f"✅ **{total_gen:,} chunks** gerados com sucesso em lote."
-            if skipped:
-                msg += f"\n\n⚠️ **{len(skipped)} reuniões puladas** (transcrição muito curta)."
-            if errors:
-                msg += f"\n\n❌ **Falhas em {len(errors)} reuniões**:\n" + "\n".join(errors[:15])
-
-            st.session_state["_embed_result"] = msg
-            st.rerun()
-
-
-# ── Feedback do processamento (batch ou individual) ───────────────────────────
-if "_embed_result" in st.session_state:
-    result = st.session_state.pop("_embed_result")
-    if "❌" in result:
-        st.error(result)
-    elif "⚠️" in result:
-        st.warning(result)
-    else:
-        st.success(result)
-
-
-# ── Gerar Embeddings em Batch ─────────────────────────────────────────────────
-if _chunks_table_ok and project_id:
-    _emb_cov = get_embedding_coverage(project_id)
-    _emb_idx = _emb_cov.get("indexed_meetings", 0)
-    _emb_tot = _emb_cov.get("total_meetings", 0)
-    _emb_chk = _emb_cov.get("total_chunks", 0)
-
-    with st.expander(
-        f"⚡ Gerar Embeddings em Lote  ·  {_emb_idx}/{_emb_tot} reuniões indexadas · {_emb_chk:,} chunks",
-        expanded=(_emb_idx == 0 and _emb_tot > 0),
-    ):
-        st.caption(
-            "Gera embeddings para **todas** as reuniões do projeto de uma vez. "
-            "Recomendado quando o projeto ainda não tem embeddings ou após adicionar várias reuniões."
-        )
-        st.caption(f"Provedor atual: **{embed_provider}**")
-
-        col_btn, col_info = st.columns([2, 3])
-        with col_btn:
-            if st.button("⚡ Gerar Embeddings para Todas as Reuniões",
-                         key="asst_gen_embeddings_batch",
-                         type="primary",
-                         use_container_width=True):
-                if not embed_api_key:
-                    st.warning("Configure a chave de embedding em Configurações → Embeddings & Busca.")
-                else:
-                    st.session_state["_trigger_embed"] = {
-                        "provider": embed_provider,
-                        "api_key": embed_api_key,
-                        "project_id": project_id,
-                    }
-                    st.rerun()
-
-        with col_info:
-            st.caption("⚠️ Pode demorar bastante em projetos com reuniões longas devido ao limite do Gemini Free Tier.")
-
-
-# ── Reprocessamento Individual por Reunião ───────────────────────────────────
-if _chunks_table_ok and project_id:
-    st.markdown("---")
-    st.markdown("### 🔄 Reprocessar Embeddings Individualmente")
-
-    try:
-        db = get_supabase_client()
-
-        # Busca todas as reuniões do projeto
-        meetings = db.table("meetings") \
-            .select("id, meeting_number, title, transcript_clean, transcript_raw") \
-            .eq("project_id", project_id) \
-            .order("meeting_number") \
-            .execute().data or []
-
-        # Conta quantos chunks cada reunião tem (forma correta e compatível)
-        meeting_ids = [m["id"] for m in meetings if m.get("id")]
-        chunk_counts = {}
-
-        if meeting_ids:
-            try:
-                chunk_data = db.table("transcript_chunks") \
-                    .select("meeting_id") \
-                    .in_("meeting_id", meeting_ids) \
-                    .execute().data or []
-
-                # Conta manualmente usando Counter
-                from collections import Counter
-                count_dict = Counter(row["meeting_id"] for row in chunk_data)
-                chunk_counts = dict(count_dict)
-            except Exception:
-                chunk_counts = {}  # se falhar, mostramos 0 chunks
-
-        for m in meetings:
-            meeting_id = m["id"]
-            number = m.get("meeting_number")
-            title = m.get("title") or f"Reunião {number}"
-            transcript = (m.get("transcript_clean") or m.get("transcript_raw") or "").strip()
-            chunk_qty = chunk_counts.get(meeting_id, 0)
-
-            status_icon = "✅" if chunk_qty > 0 else "❌"
-
-            with st.expander(
-                f"{status_icon} Reunião {number} — {title[:68]}{'...' if len(title) > 68 else ''}",
-                expanded=False
-            ):
-                col_info, col_btn = st.columns([3, 1])
-
-                with col_info:
-                    st.caption(f"**Título:** {title}")
-                    st.caption(f"**Tamanho da transcrição:** {len(transcript):,} caracteres")
-                    st.metric("Chunks gerados", chunk_qty)
-
-                with col_btn:
-                    if st.button(
-                        "🔄 Gerar Embeddings",
-                        key=f"embed_single_{meeting_id}",
-                        use_container_width=True,
-                        type="secondary"
-                    ):
-                        with st.spinner(f"Processando Reunião {number}: {title[:50]}..."):
-                            try:
-                                if len(transcript) < 100:
-                                    st.warning("Transcrição muito curta. Nada foi processado.")
-                                else:
-                                    n_saved = save_transcript_embeddings(
-                                        meeting_id=meeting_id,
-                                        project_id=project_id,
-                                        transcript=transcript,
-                                        api_key=embed_api_key,
-                                        provider=embed_provider,
-                                    )
-                                    if n_saved > 0:
-                                        st.success(f"✅ {n_saved} chunks gerados com sucesso!")
-                                    else:
-                                        st.info("Nenhum chunk novo foi gerado.")
-                                st.rerun()
-                            except Exception as e:
-                                error_msg = str(e)
-                                if any(x in error_msg.lower() for x in ["429", "quota", "rate limit", "resource exhausted"]):
-                                    st.error("❌ Rate limit / Quota esgotada do Gemini. Aguarde alguns minutos e tente novamente.")
-                                else:
-                                    st.error(f"❌ Erro ao gerar embeddings: {error_msg[:180]}")
-
-    except Exception as e:
-        st.error(f"Erro ao carregar lista de reuniões para reprocessamento: {e}")
-
-# ── Feedback de geração de embeddings (persiste entre reruns) ────────────────
-if "_embed_error" in st.session_state:
-    st.error(st.session_state.pop("_embed_error"))
-if "_embed_success" in st.session_state:
-    st.success(st.session_state.pop("_embed_success"))
-
-# ── Gerar Embeddings (body) — disponível quando a tabela de chunks existe ─────
-if _chunks_table_ok and project_id:
-    _emb_cov  = get_embedding_coverage(project_id)
-    _emb_tot  = _emb_cov.get("total_meetings", 0)
-    _emb_idx  = _emb_cov.get("indexed_meetings", 0)
-    _emb_chk  = _emb_cov.get("total_chunks", 0)
-    with st.expander(
-        f"⚡ Gerar Embeddings  ·  {_emb_idx}/{_emb_tot} reuniões indexadas · {_emb_chk:,} chunks",
-        expanded=(_emb_idx == 0 and _emb_tot > 0),
-    ):
-        st.caption(
-            "Gera embeddings das transcrições para habilitar a busca semântica. "
-            "Execute uma vez por projeto (ou novamente quando adicionar reuniões). "
-            "Configure o provedor e a chave em **⚙️ Configurações → Embeddings & Busca**."
-        )
-        _ep_label = embed_provider or "—"
-        _ek_masked = (embed_api_key[:6] + "••••" + embed_api_key[-4:]) if len(embed_api_key) > 10 else ("✅ configurada" if embed_api_key else "❌ não configurada")
-        st.caption(f"Provedor: **{_ep_label}** · Chave: `{_ek_masked}`")
-        col_btn, col_diag = st.columns([2, 1])
-        with col_btn:
-            if st.button("⚡ Gerar Embeddings", key="asst_gen_embeddings", type="secondary", use_container_width=True):
-                if not embed_api_key:
-                    st.warning("Configure a chave de embedding em ⚙️ Configurações → Embeddings & Busca.")
-                else:
-                    st.session_state["_trigger_embed"] = {
-                        "provider":   embed_provider,
-                        "api_key":    embed_api_key,
-                        "project_id": project_id,
-                    }
-        with col_diag:
-            if st.button("🔍 Testar chave", key="asst_diag_models", use_container_width=True,
-                         help="Lista os modelos de embedding disponíveis para esta chave"):
-                if not embed_api_key:
-                    st.warning("Configure a chave de embedding em ⚙️ Configurações.")
-                elif embed_provider == "Google Gemini":
-                    with st.spinner("Consultando modelos disponíveis..."):
-                        try:
-                            models = list_gemini_embedding_models(embed_api_key)
-                            if models:
-                                st.success(f"✅ {len(models)} modelo(s) disponíveis:")
-                                for m in models:
-                                    st.code(m["name"])
-                            else:
-                                st.error(
-                                    "❌ Nenhum modelo encontrado. Verifique se a "
-                                    "'Generative Language API' está habilitada para esta chave."
-                                )
-                        except Exception as exc:
-                            st.error(f"❌ Erro: {exc}")
-                else:
-                    st.info("Diagnóstico disponível apenas para Google Gemini.")
-
-# ── Guard: LLM API key (somente para o chat — embeddings independem disso) ───
-if not api_key:
-    st.warning("⚙️ Configure a chave de API em **Configurações → LLM Assistente** antes de fazer perguntas.")
     st.stop()
 
 # ── Status badges ────────────────────────────────────────────────────────────
