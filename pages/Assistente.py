@@ -183,54 +183,67 @@ if "_trigger_embed" in st.session_state:
     trigger = st.session_state.pop("_trigger_embed")
     if trigger["project_id"] == project_id:
         from modules.supabase_client import get_supabase_client
+
         db = get_supabase_client()
         if db:
             with st.spinner("⚡ Gerando embeddings das transcrições..."):
                 try:
-                    meeting_rows_raw = db.table("meetings") \
-                        .select("id, title, meeting_number, transcript_clean, transcript_raw") \
-                        .eq("project_id", project_id) \
-                        .execute().data or []
-                except Exception:
-                    meeting_rows_raw = []
+                    meeting_rows = db.table("meetings") \
+                                       .select("id, title, meeting_number, transcript_clean, transcript_raw") \
+                                       .eq("project_id", project_id) \
+                                       .execute().data or []
+                except Exception as e:
+                    st.error(f"Erro ao buscar reuniões: {e}")
+                    meeting_rows = []
 
             total_gen = 0
             errors = []
+            skipped = []
             prog = st.progress(0.0)
-            n_total = len(meeting_rows_raw)
+            n_total = len(meeting_rows)
 
-            first_error_msg: str | None = None
-            for i, m in enumerate(meeting_rows_raw):
-                transcript = m.get("transcript_clean") or m.get("transcript_raw") or ""
-                title = m.get("title") or f"Reunião {m.get('meeting_number','?')}"
-                if transcript.strip():
-                    try:
-                        n_saved = save_transcript_embeddings(
-                            meeting_id=m["id"],
-                            project_id=project_id,
-                            transcript=transcript,
-                            api_key=trigger["api_key"],
-                            provider=trigger["provider"],
-                        )
-                        total_gen += n_saved
-                    except Exception as exc:
-                        errors.append(title)
-                        if first_error_msg is None:
-                            first_error_msg = str(exc)
+            for i, m in enumerate(meeting_rows):
+                meeting_id = m["id"]
+                title = m.get("title") or f"Reunião {m.get('meeting_number', '?')}"
+                transcript = (m.get("transcript_clean") or m.get("transcript_raw") or "").strip()
+
+                if not transcript:
+                    skipped.append(title)
+                    prog.progress((i + 1) / n_total)
+                    continue
+
+                try:
+                    n_saved = save_transcript_embeddings(
+                        meeting_id=meeting_id,
+                        project_id=project_id,
+                        transcript=transcript,
+                        api_key=trigger["api_key"],
+                        provider=trigger["provider"],
+                    )
+                    total_gen += n_saved
+                except Exception as exc:
+                    errors.append(f"{title}: {str(exc)[:100]}")
+
                 prog.progress((i + 1) / n_total if n_total else 1.0)
 
             prog.empty()
+
+            # Feedback claro
+            msg = f"✅ **{total_gen} chunks** gerados em {n_total} reuniões."
+            if skipped:
+                msg += f"\n\n⚠️ **{len(skipped)} reuniões puladas** (sem transcrição): {', '.join(skipped[:5])}{'...' if len(skipped) > 5 else ''}"
             if errors:
-                detail = f"\n\n**Erro:** `{first_error_msg}`" if first_error_msg else ""
-                # Persiste o erro no session_state — rerun apagaria o st.error imediatamente
-                st.session_state["_embed_error"] = (
-                    f"❌ Falha ao gerar embeddings para: {', '.join(errors)}.{detail}"
-                )
-            else:
-                st.session_state["_embed_success"] = (
-                    f"✅ {total_gen} chunks indexados em {n_total} reuniões."
-                )
+                msg += f"\n\n❌ **Erros em {len(errors)} reuniões**: \n" + "\n".join(errors[:10])
+
+            st.session_state["_embed_result"] = msg
             st.rerun()
+
+if "_embed_result" in st.session_state:
+    result = st.session_state.pop("_embed_result")
+    if "❌" in result or "⚠️" in result:
+        st.warning(result)
+    else:
+        st.success(result)
 
 # ── Feedback de geração de embeddings (persiste entre reruns) ────────────────
 if "_embed_error" in st.session_state:
