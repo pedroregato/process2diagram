@@ -281,6 +281,53 @@ with tab_embed:
         persist_key="embedding_key",
     )
 
+    # ── Botão de teste do modelo de embedding ─────────────────────────────────
+    st.markdown("---")
+    st.markdown("#### 🧪 Testar Modelo de Embedding")
+
+    # Feedback persistido (sobrevive ao rerun)
+    if "_emb_test_result" in st.session_state:
+        lvl, msg = st.session_state.pop("_emb_test_result")
+        if lvl == "ok":
+            st.success(msg)
+        else:
+            st.error(msg)
+
+    emb_key_for_test = st.session_state.get("asst_embed_key", "").strip()
+    if not emb_key_for_test:
+        st.caption("Configure e salve a API key acima para habilitar o teste.")
+    else:
+        if st.button("🧪 Testar modelo agora", key="settings_test_emb_model"):
+            with st.spinner(f"Testando {sel_emb} — {ecfg.get('model', '?')}…"):
+                try:
+                    import time as _time
+                    t0 = _time.perf_counter()
+                    from modules.embeddings import embed_text, EMBEDDING_DIM
+                    vec = embed_text(
+                        "Teste de embedding Process2Diagram — verificação de modelo.",
+                        emb_key_for_test,
+                        sel_emb,
+                    )
+                    elapsed = _time.perf_counter() - t0
+                    if len(vec) == EMBEDDING_DIM:
+                        st.session_state["_emb_test_result"] = (
+                            "ok",
+                            f"✅ **{sel_emb}** — modelo `{ecfg.get('model','?')}` funcionando. "
+                            f"{len(vec)} dimensões · {elapsed:.2f}s",
+                        )
+                    else:
+                        st.session_state["_emb_test_result"] = (
+                            "err",
+                            f"❌ Dimensão inesperada: {len(vec)} (esperado {EMBEDDING_DIM}). "
+                            f"Verifique o modelo configurado.",
+                        )
+                except Exception as exc:
+                    st.session_state["_emb_test_result"] = (
+                        "err",
+                        f"❌ **Falha no teste** ({sel_emb}): {str(exc)[:400]}",
+                    )
+            st.rerun()
+
     st.markdown("---")
     st.markdown("#### 🔍 Modo de Busca Padrão")
 

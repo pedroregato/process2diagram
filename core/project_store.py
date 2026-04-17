@@ -1469,21 +1469,28 @@ def save_transcript_embeddings(
         source_text = normalize_for_embedding(fallback_text)
 
     if not source_text.strip():
-        return 0
+        raise ValueError(
+            f"Texto vazio após normalização "
+            f"(transcript={len(transcript or '')} chars, fallback={len(fallback_text)} chars)."
+        )
 
     # 3. Gera chunks
     chunks = chunk_text(source_text)
     if not chunks:
-        return 0
+        raise ValueError(
+            f"chunk_text retornou 0 chunks para texto de {len(source_text)} chars. "
+            f"Verifique se a transcrição contém texto real."
+        )
 
-    # 2. Gera embeddings em batch (lança exceção se a API key for inválida, etc.)
+    # 4. Gera embeddings em batch (lança exceção se a API key for inválida, etc.)
     vectors = embed_batch(chunks, api_key, provider)
 
-    # 3. Upsert — insere ou atualiza por (meeting_id, chunk_index).
-    # Usar UPSERT em vez de DELETE+INSERT garante idempotência mesmo quando o
-    # DELETE falha silenciosamente (ex: RLS policy do Supabase bloqueando).
-    # A constraint única "transcript_chunks_meeting_chunk_idx" é usada como
-    # chave de conflito.
+    if len(vectors) != len(chunks):
+        raise ValueError(
+            f"Mismatch embed_batch: {len(chunks)} chunks → {len(vectors)} vetores."
+        )
+
+    # 5. Upsert — idempotente por (meeting_id, chunk_index).
     rows = [
         {
             "meeting_id":   meeting_id,
@@ -1498,10 +1505,16 @@ def save_transcript_embeddings(
     # Upsert em lotes de 50 para evitar payload overflow
     batch_size = 50
     for start in range(0, len(rows), batch_size):
-        db.table("transcript_chunks").upsert(
+        resp = db.table("transcript_chunks").upsert(
             rows[start:start + batch_size],
             on_conflict="meeting_id,chunk_index",
         ).execute()
+        # Supabase retorna lista vazia quando RLS bloqueia sem levantar exceção
+        if resp.data is not None and len(resp.data) == 0 and len(rows[start:start + batch_size]) > 0:
+            raise RuntimeError(
+                f"Upsert retornou 0 linhas para lote [{start}:{start+batch_size}]. "
+                f"Verifique as políticas RLS da tabela transcript_chunks no Supabase."
+            )
 
     return len(rows)
 
