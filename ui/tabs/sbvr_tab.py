@@ -71,9 +71,26 @@ def render(hub, prefix, suffix):
             for r in sbvr.rules
         ],
     }
-    st.download_button(
-        "⬇️ Exportar SBVR (.json)",
-        data=json.dumps(sbvr_dict, ensure_ascii=False, indent=2),
-        file_name=make_filename("sbvr", "json", prefix, suffix),
-        key="export_sbvr_json",
-    )
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button(
+            "⬇️ Exportar SBVR (.json)",
+            data=json.dumps(sbvr_dict, ensure_ascii=False, indent=2),
+            file_name=make_filename("sbvr", "json", prefix, suffix),
+            key="export_sbvr_json",
+        )
+    with col2:
+        try:
+            from modules.sbvr_lexicon import generate_sbvr_lexicon
+            project_name = getattr(hub, "_project_name", "") or ""
+            lexicon_html = generate_sbvr_lexicon(sbvr, project_name)
+            st.download_button(
+                "📖 Exportar Léxico HTML",
+                data=lexicon_html.encode("utf-8"),
+                file_name=make_filename("sbvr_lexico", "html", prefix, suffix),
+                mime="text/html",
+                key="export_sbvr_lexicon",
+            )
+        except Exception:
+            pass
