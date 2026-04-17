@@ -275,10 +275,14 @@ def next_req_number(project_id: str) -> int:
     if not db:
         return 1
     try:
-        rows = _ok(
-            db.rpc("next_req_number", {"p_project_id": project_id}).execute()
-        )
-        return rows[0] if isinstance(rows, list) and rows else 1
+        data = db.rpc("next_req_number", {"p_project_id": project_id}).execute().data
+        # PostgREST returns a scalar int for RETURNS INTEGER functions;
+        # some client versions may wrap it in a list — handle both.
+        if isinstance(data, int):
+            return data
+        if isinstance(data, list) and data:
+            return data[0] if isinstance(data[0], int) else 1
+        return 1
     except Exception:
         return 1
 
