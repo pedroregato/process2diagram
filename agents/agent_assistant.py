@@ -24,7 +24,7 @@ from typing import Callable
 from core.knowledge_hub import KnowledgeHub
 from agents.base_agent import BaseAgent
 
-MAX_TOOL_ROUNDS = 5       # max LLM ↔ tool iterations before forcing final answer
+MAX_TOOL_ROUNDS = 8       # max LLM ↔ tool iterations before forcing final answer
 _MAX_TOOL_RESULT_CHARS = 5_000   # truncate individual tool results above this (~1250 tokens)
 _MAX_HISTORY_TURNS     = 3       # max user+assistant pairs kept from prior history
 _MAX_HISTORY_MSG_CHARS = 1_500   # truncate individual history messages above this
@@ -786,17 +786,37 @@ class AgentAssistant(BaseAgent):
                             status_fn("🧠 Elaborando resposta final…")
                         if cancel_event and cancel_event.is_set():
                             return "⏹ Processamento interrompido pelo usuário.", total_tk, called
+                        final_msgs = _enforce_budget(msgs) + [{
+                            "role": "user",
+                            "content": (
+                                "Com base nos dados coletados acima, escreva agora a resposta "
+                                "completa em Português do Brasil. Use texto simples, sem XML, "
+                                "sem tags, sem DSML. Apenas a resposta final."
+                            ),
+                        }]
                         final_resp = client.chat.completions.create(
                             model=model,
-                            messages=_enforce_budget(msgs),
+                            messages=final_msgs,
                             max_tokens=self.provider_cfg.get("max_tokens", 2048),
                             temperature=0.3,
                             # No tools= → DeepSeek returns plain text, no DSML
                         )
                         total_tk += final_resp.usage.total_tokens if final_resp.usage else 0
-                        final_text = final_resp.choices[0].message.content or ""
-                        # If DSML persists in the final answer, strip it; never return raw DSML.
-                        return _strip_dsml(final_text) or "✅ Consulta realizada. Verifique os dados.", total_tk, called
+                        final_text = _strip_dsml(final_resp.choices[0].message.content or "")
+                        if not final_text:
+                            # Last-resort retry with even more explicit instruction
+                            retry_resp = client.chat.completions.create(
+                                model=model,
+                                messages=_enforce_budget(msgs) + [{
+                                    "role": "user",
+                                    "content": "Responda em texto corrido, sem ferramentas.",
+                                }],
+                                max_tokens=self.provider_cfg.get("max_tokens", 2048),
+                                temperature=0.0,
+                            )
+                            total_tk += retry_resp.usage.total_tokens if retry_resp.usage else 0
+                            final_text = _strip_dsml(retry_resp.choices[0].message.content or "")
+                        return final_text or "Não foi possível sintetizar a resposta com os dados coletados.", total_tk, called
                 # No DSML — clean any stray tags and return as final answer
                 return _strip_dsml(content) or content, total_tk, called
 
@@ -841,15 +861,34 @@ class AgentAssistant(BaseAgent):
             return "⏹ Processamento interrompido pelo usuário.", total_tk, called
         if status_fn:
             status_fn("🧠 Elaborando resposta final…")
+        final_msgs = _enforce_budget(msgs) + [{
+            "role": "user",
+            "content": (
+                "Com base em todos os dados coletados, escreva agora a resposta completa "
+                "em Português do Brasil. Use texto simples, sem XML, sem tags, sem DSML."
+            ),
+        }]
         resp = client.chat.completions.create(
             model=model,
-            messages=_enforce_budget(msgs),
+            messages=final_msgs,
             max_tokens=self.provider_cfg.get("max_tokens", 2048),
             temperature=0.3,
         )
         total_tk += resp.usage.total_tokens if resp.usage else 0
-        raw = resp.choices[0].message.content or ""
-        return _strip_dsml(raw) or "✅ Consulta realizada. Verifique os dados.", total_tk, called
+        raw = _strip_dsml(resp.choices[0].message.content or "")
+        if not raw:
+            retry_resp = client.chat.completions.create(
+                model=model,
+                messages=_enforce_budget(msgs) + [{
+                    "role": "user",
+                    "content": "Responda em texto corrido, sem ferramentas.",
+                }],
+                max_tokens=self.provider_cfg.get("max_tokens", 2048),
+                temperature=0.0,
+            )
+            total_tk += retry_resp.usage.total_tokens if retry_resp.usage else 0
+            raw = _strip_dsml(retry_resp.choices[0].message.content or "")
+        return raw or "Não foi possível sintetizar a resposta com os dados coletados.", total_tk, called
 
     # ── Tool-use loop — Anthropic ─────────────────────────────────────────────
 
