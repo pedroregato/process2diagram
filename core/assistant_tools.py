@@ -655,13 +655,12 @@ def get_tool_schemas_openai() -> list[dict]:
             "function": {
                 "name": "get_speaker_contributions",
                 "description": (
-                    "Busca TODAS as falas e menções de um participante específico nas transcrições, "
-                    "varrendo todos os chunks armazenados em ordem cronológica. "
-                    "Muito mais completo que search_transcript para perguntas sobre contribuições, "
-                    "papel ou posição de uma pessoa específica ao longo do projeto. "
-                    "Também retorna requisitos atribuídos ao participante via cited_by. "
-                    "USE quando o usuário perguntar: contribuições de alguém, o que X disse/propôs/"
-                    "defendeu, papel/posição de uma pessoa, participação de X em reuniões."
+                    "Busca TODAS as contribuições de um participante: trechos de transcrição, "
+                    "requisitos propostos (cited_by) e regras de negócio SBVR (source). "
+                    "Aceita nome completo, primeiro nome ou iniciais — resolve automaticamente "
+                    "o nome para iniciais (ex: 'Maria de Fátima' → 'MF'). "
+                    "USE para: contribuições/papel/falas de alguém, o que X disse/propôs/defendeu, "
+                    "requisitos ou regras propostos por X, participação de X em reuniões."
                 ),
                 "parameters": {
                     "type": "object",
@@ -669,9 +668,10 @@ def get_tool_schemas_openai() -> list[dict]:
                         "participant_name": {
                             "type": "string",
                             "description": (
-                                "Nome do participante a buscar. Pode ser nome completo "
-                                "(ex: 'Pedro Gentil') ou apenas o primeiro nome (ex: 'Pedro'). "
-                                "Use o nome exatamente como aparece nas transcrições."
+                                "Nome do participante. Pode ser nome completo "
+                                "(ex: 'Maria de Fátima Duarte Miranda'), primeiro nome "
+                                "(ex: 'Maria') ou iniciais (ex: 'MFDM'). "
+                                "A ferramenta resolve automaticamente para iniciais."
                             ),
                         },
                         "meeting_number": {
@@ -1065,7 +1065,33 @@ class AssistantToolExecutor:
             lines.append(f"• [{rule_id}] {nucleo}: {statement}")
         return "\n".join(lines)
 
+    def _resolve_search_terms(self, db, name: str) -> list[str]:
+        """Build a deduplicated list of search terms for a participant name.
+
+        Returns: [original_name, computed_initials, first_name_only]
+        Only includes terms that actually differ and are non-empty.
+
+        Example: 'Maria de Fátima Duarte Miranda' → ['Maria de Fátima Duarte Miranda', 'MFDM', 'Maria']
+        """
+        name = name.strip()
+        seen: list[str] = []
+
+        def _add(t: str) -> None:
+            t = t.strip()
+            if t and t not in seen:
+                seen.append(t)
+
+        _add(name)
+        _add(_compute_initials(name))
+
+        parts = name.split()
+        if len(parts) > 1:
+            _add(parts[0])  # first name only
+
+        return seen
+
     def _get_fallback_meeting_id(self, db) -> str | None:
+
         """Return any meeting_id from this project — used when meeting_id NOT NULL constraint exists."""
         try:
             rows = db.table("meetings").select("id") \
@@ -2324,9 +2350,11 @@ class AssistantToolExecutor:
         if not participant_name or not participant_name.strip():
             return "Nome do participante não fornecido."
 
-        search_term = participant_name.strip()
+        # Build list of search terms: full name + computed initials + first name
+        search_terms = self._resolve_search_terms(db, participant_name)
 
         # ── Build meeting maps ─────────────────────────────────────────────────
+
         meetings = self._get_meetings()
         if not meetings:
             return "Nenhuma reunião encontrada no projeto."
@@ -2353,22 +2381,31 @@ class AssistantToolExecutor:
         else:
             target_mids = set(mid_to_num.keys())
 
-        # ── 1. Search transcript_chunks ───────────────────────────────────────
+        # ── 1. Search transcript_chunks (all search terms) ────────────────────
         chunks_by_meeting: dict[int, list[str]] = {}
         mids_with_chunks:  set[str]             = set()
 
-        try:
-            q = (
-                db.table("transcript_chunks")
-                .select("meeting_id, chunk_index, chunk_text")
-                .eq("project_id", self.project_id)
-                .ilike("chunk_text", f"%{search_term}%")
-                .order("meeting_id")
-                .order("chunk_index")
-            )
-            raw_chunks = q.execute().data or []
-        except Exception as exc:
-            raw_chunks = []
+        raw_chunks: list[dict] = []
+        seen_chunk_keys: set[tuple] = set()
+        for term in search_terms:
+            try:
+                rows = (
+                    db.table("transcript_chunks")
+                    .select("meeting_id, chunk_index, chunk_text")
+                    .eq("project_id", self.project_id)
+                    .ilike("chunk_text", f"%{term}%")
+                    .order("meeting_id")
+                    .order("chunk_index")
+                    .execute().data or []
+                )
+                for row in rows:
+                    key = (row.get("meeting_id"), row.get("chunk_index"))
+                    if key not in seen_chunk_keys:
+                        seen_chunk_keys.add(key)
+                        raw_chunks.append(row)
+            except Exception:
+                pass
+
 
         for c in raw_chunks:
             mid = c.get("meeting_id")
@@ -2392,72 +2429,121 @@ class AssistantToolExecutor:
             transcript = m.get("transcript_clean") or m.get("transcript_raw") or ""
             if not transcript:
                 continue
-            # Manual passage extraction around participant name occurrences
             passages: list[str] = []
-            text = transcript
-            idx  = 0
-            while len(passages) < 12:
-                pos = text.lower().find(search_term.lower(), idx)
-                if pos == -1:
-                    break
-                start    = max(0, pos - 200)
-                end      = min(len(text), pos + 400)
-                snippet  = text[start:end].strip()
-                if start > 0:
-                    snippet = "…" + snippet
-                if end < len(text):
-                    snippet += "…"
-                passages.append(snippet)
-                idx = pos + len(search_term)
+            seen_positions: set[int] = set()
+            for term in search_terms:
+                text = transcript
+                idx  = 0
+                while len(passages) < 12:
+                    pos = text.lower().find(term.lower(), idx)
+                    if pos == -1:
+                        break
+                    # Avoid overlapping passages from different terms
+                    if not any(abs(pos - p) < 300 for p in seen_positions):
+                        start   = max(0, pos - 200)
+                        end     = min(len(text), pos + 400)
+                        snippet = text[start:end].strip()
+                        if start > 0:
+                            snippet = "…" + snippet
+                        if end < len(text):
+                            snippet += "…"
+                        passages.append(snippet)
+                        seen_positions.add(pos)
+                    idx = pos + len(term)
             if passages:
                 chunks_by_meeting[n] = passages
 
-        # ── 3. Requirements with cited_by matching the participant ────────────
+        # ── 3. Requirements with cited_by matching any search term ───────────
         reqs_by_meeting: dict[int, list[str]] = {}
-        try:
-            req_rows = (
-                db.table("requirements")
-                .select("req_number, title, cited_by, first_meeting_id")
-                .eq("project_id", self.project_id)
-                .ilike("cited_by", f"%{search_term}%")
-                .execute().data or []
-            )
-            for r in req_rows:
-                mid = r.get("first_meeting_id")
-                n   = mid_to_num.get(mid) if mid else None
-                if meeting_number is not None and n != meeting_number:
-                    continue
-                key = n or 0
-                if key not in reqs_by_meeting:
-                    reqs_by_meeting[key] = []
-                rn     = r.get("req_number")
-                req_id = f"REQ-{rn:03d}" if isinstance(rn, int) else "REQ-???"
-                cited  = r.get("cited_by") or ""
-                reqs_by_meeting[key].append(
-                    f"  {req_id}: {r.get('title', '')}  [citado por: {cited}]"
+        seen_req_ids: set = set()
+        for term in search_terms:
+            try:
+                req_rows = (
+                    db.table("requirements")
+                    .select("req_number, title, cited_by, first_meeting_id")
+                    .eq("project_id", self.project_id)
+                    .ilike("cited_by", f"%{term}%")
+                    .execute().data or []
                 )
-        except Exception:
-            pass
+                for r in req_rows:
+                    rn = r.get("req_number")
+                    if rn in seen_req_ids:
+                        continue
+                    seen_req_ids.add(rn)
+                    mid = r.get("first_meeting_id")
+                    n   = mid_to_num.get(mid) if mid else None
+                    if meeting_number is not None and n != meeting_number:
+                        continue
+                    key = n or 0
+                    if key not in reqs_by_meeting:
+                        reqs_by_meeting[key] = []
+                    req_id = f"REQ-{rn:03d}" if isinstance(rn, int) else "REQ-???"
+                    cited  = r.get("cited_by") or ""
+                    reqs_by_meeting[key].append(
+                        f"  {req_id}: {r.get('title', '')}  [citado por: {cited}]"
+                    )
+            except Exception:
+                pass
 
-        # ── 4. Format output ──────────────────────────────────────────────────
+        # ── 4. SBVR rules with source matching any search term ────────────────
+        sbvr_by_meeting: dict[int, list[str]] = {}
+        seen_rule_ids: set = set()
+        for term in search_terms:
+            try:
+                rule_rows = (
+                    db.table("sbvr_rules")
+                    .select("rule_id, statement, source, meeting_id")
+                    .eq("project_id", self.project_id)
+                    .ilike("source", f"%{term}%")
+                    .execute().data or []
+                )
+                for r in rule_rows:
+                    rid = r.get("rule_id")
+                    if rid in seen_rule_ids:
+                        continue
+                    seen_rule_ids.add(rid)
+                    mid = r.get("meeting_id")
+                    n   = mid_to_num.get(mid) if mid else None
+                    if meeting_number is not None and n != meeting_number:
+                        continue
+                    key = n or 0
+                    if key not in sbvr_by_meeting:
+                        sbvr_by_meeting[key] = []
+                    statement = r.get("statement") or ""
+                    source    = r.get("source") or ""
+                    display   = statement[:120] + ("…" if len(statement) > 120 else "")
+                    sbvr_by_meeting[key].append(
+                        f"  {rid}: {display}  [fonte: {source}]"
+                    )
+            except Exception:
+                pass
+
+        # ── 5. Format output ──────────────────────────────────────────────────
         all_meeting_nums = sorted(
-            set(list(chunks_by_meeting.keys()) + list(reqs_by_meeting.keys()))
+            set(list(chunks_by_meeting.keys())
+                + list(reqs_by_meeting.keys())
+                + list(sbvr_by_meeting.keys()))
         )
         if not all_meeting_nums:
             scope_str = f" na Reunião {meeting_number}" if meeting_number else " no projeto"
+            terms_str = " / ".join(search_terms)
             return (
-                f"Nenhuma contribuição de '{search_term}' encontrada{scope_str}.\n"
-                "Dica: verifique a grafia exata do nome como aparece nas transcrições. "
-                "Tente variações como primeiro nome apenas, abreviações ou iniciais."
+                f"Nenhuma contribuição encontrada para '{terms_str}'{scope_str}.\n"
+                "Dica: verifique a grafia do nome como aparece nas transcrições ou atas."
             )
 
+        terms_display = search_terms[0]
+        if len(search_terms) > 1:
+            terms_display += f" (iniciais: {', '.join(search_terms[1:])})"
+
         lines = [
-            f"=== Contribuições de '{search_term}' ===",
+            f"=== Contribuições de '{terms_display}' ===",
             "",
         ]
 
         total_chunks = 0
         total_reqs   = 0
+        total_sbvr   = 0
 
         for n in all_meeting_nums:
             mid   = num_to_mid.get(n)
@@ -2477,16 +2563,24 @@ class AssistantToolExecutor:
             meeting_reqs = reqs_by_meeting.get(n, [])
             total_reqs  += len(meeting_reqs)
             if meeting_reqs:
-                lines.append(f"  Requisitos atribuídos ({len(meeting_reqs)}):")
+                lines.append(f"  Requisitos propostos ({len(meeting_reqs)}):")
                 lines.extend(meeting_reqs[:8])
                 if len(meeting_reqs) > 8:
                     lines.append(f"  … e mais {len(meeting_reqs) - 8} requisito(s)")
+
+            meeting_sbvr = sbvr_by_meeting.get(n, [])
+            total_sbvr  += len(meeting_sbvr)
+            if meeting_sbvr:
+                lines.append(f"  Regras de negócio propostas ({len(meeting_sbvr)}):")
+                lines.extend(meeting_sbvr[:8])
+                if len(meeting_sbvr) > 8:
+                    lines.append(f"  … e mais {len(meeting_sbvr) - 8} regra(s)")
 
             lines.append("")
 
         lines.append(
             f"Resumo: {total_chunks} trecho(s) de transcrição + "
-            f"{total_reqs} requisito(s) atribuído(s) em "
+            f"{total_reqs} requisito(s) + {total_sbvr} regra(s) SBVR em "
             f"{len(all_meeting_nums)} reunião(ões)."
         )
         return "\n".join(lines)
