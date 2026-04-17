@@ -299,8 +299,12 @@ def save_new_requirement(
     source_quote — frase verbatim da transcrição que motivou o requisito.
     cited_by     — iniciais do participante que originou a afirmação (ex: "PG").
 
-    Tenta salvar com os novos campos; se as colunas ainda não existirem na
-    tabela (migration pendente), salva sem eles para não bloquear o pipeline.
+    Tenta salvar com os novos campos primeiro; se as colunas ainda não
+    existirem na tabela (migration pendente), salva sem eles para não
+    bloquear o pipeline.
+
+    NOTA: NÃO usa _ok() internamente — deixa exceções propagarem para que
+    o bloco de fallback possa capturá-las corretamente.
     """
     db = _db()
     if not db:
@@ -327,33 +331,48 @@ def save_new_requirement(
         "change_type": "new",
     }
 
-    def _insert_req(payload: dict) -> dict | None:
-        rows = _ok(db.table("requirements").insert(payload).execute())
-        return rows[0] if rows else None
+    req_row: dict | None = None
 
-    def _insert_ver(req_id: str, payload: dict) -> None:
-        db.table("requirement_versions").insert(
-            {"requirement_id": req_id, **payload}
-        ).execute()
-
-    # Try with new traceability fields first; fall back if columns missing
-    for req_payload, ver_payload in [
-        (
-            {**base_req, "source_quote": source_quote or None, "cited_by": cited_by or None},
-            {**base_ver, "source_quote": source_quote or None, "cited_by": cited_by or None},
-        ),
-        (base_req, base_ver),
-    ]:
+    # ── Attempt 1: with traceability fields; Attempt 2: without (fallback) ────
+    for use_new_fields in (True, False):
+        req_payload = dict(base_req)
+        if use_new_fields:
+            req_payload["source_quote"] = source_quote or None
+            req_payload["cited_by"]     = cited_by or None
         try:
-            req = _insert_req(req_payload)
-            if not req:
-                return None
-            _insert_ver(req["id"], ver_payload)
-            return req
+            # Do NOT wrap in _ok() — let PostgREST errors raise so the except
+            # below can trigger the fallback instead of silently returning None.
+            result = db.table("requirements").insert(req_payload).execute()
+            rows   = result.data or []
+            if rows:
+                req_row = rows[0]
+                break   # inserted successfully
+            # Empty data: shouldn't happen with Supabase, but try fallback
         except Exception:
+            if not use_new_fields:
+                return None  # both attempts failed
+            # First attempt failed (likely missing columns) — try fallback
             continue
 
-    return None
+    if not req_row:
+        return None
+
+    # ── Insert the corresponding version record ────────────────────────────────
+    for use_new_fields in (True, False):
+        ver_payload = dict(base_ver)
+        ver_payload["requirement_id"] = req_row["id"]
+        if use_new_fields:
+            ver_payload["source_quote"] = source_quote or None
+            ver_payload["cited_by"]     = cited_by or None
+        try:
+            db.table("requirement_versions").insert(ver_payload).execute()
+            break   # version saved
+        except Exception:
+            if not use_new_fields:
+                break  # version failed on both — requirement still saved; acceptable
+            continue
+
+    return req_row
 
 
 def list_requirements(project_id: str) -> list[dict]:

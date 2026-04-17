@@ -1680,24 +1680,26 @@ class AssistantToolExecutor:
 
             db = get_supabase_client()
 
-            # Delete existing requirements for this meeting if force_replace
-            deleted = 0
+            # ── Step 1: delete existing requirements ─────────────────────────
+            deleted   = 0
+            del_error = ""
             if force_replace and db and mid:
                 try:
-                    rows = (
+                    existing = (
                         db.table("requirements").select("id")
                         .eq("project_id", self.project_id)
                         .eq("first_meeting_id", mid)
                         .execute().data or []
                     )
-                    if rows:
+                    deleted = len(existing)
+                    if deleted:
                         db.table("requirements").delete() \
                             .eq("project_id", self.project_id) \
                             .eq("first_meeting_id", mid).execute()
-                        deleted = len(rows)
-                except Exception:
-                    pass  # safe to continue even if deletion fails
+                except Exception as exc:
+                    del_error = str(exc)[:200]
 
+            # ── Step 2: re-extract ────────────────────────────────────────────
             hub = KnowledgeHub.new()
             hub.transcript_clean = transcript
             hub.transcript_raw   = transcript
@@ -1714,19 +1716,34 @@ class AssistantToolExecutor:
                     "Verifique a transcrição ou tente outro provedor LLM."
                 )
 
+            # ── Step 3: save ──────────────────────────────────────────────────
             n_reqs = len(hub.requirements.requirements)
             saved  = save_requirements_from_hub(mid, self.project_id, hub)
 
             lines = [
-                f"✅ Reprocessamento concluído — Reunião {meeting_number} — '{title}'",
+                "══════════════════════════════════════════════",
+                f"  Reunião {meeting_number} — '{title}'",
+                "══════════════════════════════════════════════",
             ]
-            if force_replace and deleted > 0:
-                lines.append(f"• Requisitos anteriores excluídos: {deleted}")
+            if del_error:
+                lines.append(f"  ⚠️ Erro ao excluir anteriores: {del_error}")
+            elif deleted:
+                lines.append(f"  Requisitos excluídos    : {deleted}")
             lines += [
-                f"• Requisitos extraídos: {n_reqs}",
-                f"• Requisitos salvos (com source_quote e cited_by): {saved}",
-                "• Acesse o ReqTracker para visualizar os novos requisitos.",
+                f"  Requisitos extraídos    : {n_reqs}",
+                f"  Requisitos salvos       : {saved}",
             ]
+            if saved == 0 and n_reqs > 0:
+                lines += [
+                    "  ❌ Nenhum salvo — execute a migration SQL:",
+                    "     ALTER TABLE requirements",
+                    "       ADD COLUMN IF NOT EXISTS source_quote TEXT,",
+                    "       ADD COLUMN IF NOT EXISTS cited_by TEXT;",
+                ]
+            else:
+                lines.append(
+                    "  ✅ source_quote e cited_by incluídos."
+                )
             return "\n".join(lines)
 
         except Exception as exc:
@@ -1793,6 +1810,10 @@ class AssistantToolExecutor:
         successes: list[str] = []
         failures:  list[str] = []
 
+        total_extracted = 0
+        total_saved     = 0
+        total_deleted   = 0
+
         for m in candidates:
             mid        = m.get("id", "")
             n          = m.get("meeting_number", "?")
@@ -1800,24 +1821,26 @@ class AssistantToolExecutor:
             transcript = m.get("transcript_clean") or m.get("transcript_raw") or ""
 
             try:
-                # Delete existing requirements for this meeting if force_replace
-                deleted = 0
+                # ── Step 1: delete existing requirements for this meeting ──────
+                deleted   = 0
+                del_error = ""
                 if force_replace and mid:
                     try:
-                        rows = (
+                        existing = (
                             db.table("requirements").select("id")
                             .eq("project_id", self.project_id)
                             .eq("first_meeting_id", mid)
                             .execute().data or []
                         )
-                        if rows:
+                        deleted = len(existing)
+                        if deleted:
                             db.table("requirements").delete() \
                                 .eq("project_id", self.project_id) \
                                 .eq("first_meeting_id", mid).execute()
-                            deleted = len(rows)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        del_error = str(exc)[:120]
 
+                # ── Step 2: run AgentRequirements ─────────────────────────────
                 hub = KnowledgeHub.new()
                 hub.transcript_clean = transcript
                 hub.transcript_raw   = transcript
@@ -1832,33 +1855,62 @@ class AssistantToolExecutor:
                     )
                     continue
 
-                n_extracted = len(hub.requirements.requirements)
-                saved       = save_requirements_from_hub(mid, self.project_id, hub)
+                n_extracted  = len(hub.requirements.requirements)
+                total_extracted += n_extracted
 
-                del_note = f" (excluídos {deleted} anteriores)" if deleted else ""
+                # ── Step 3: save new requirements ─────────────────────────────
+                saved = save_requirements_from_hub(mid, self.project_id, hub)
+                total_saved   += saved
+                total_deleted += deleted
+
+                status_parts = [f"{saved}/{n_extracted} salvo(s)"]
+                if deleted:
+                    status_parts.append(f"{deleted} anterior(es) excluído(s)")
+                if del_error:
+                    status_parts.append(f"⚠️ erro ao excluir: {del_error}")
+                if saved == 0 and n_extracted > 0:
+                    status_parts.append("❌ nenhum salvo — verifique a migration SQL")
+
                 successes.append(
-                    f"  • Reunião {n} — '{title}': "
-                    f"{saved} requisito(s) salvos{del_note}"
+                    f"  • Reunião {n} — '{title}': {', '.join(status_parts)}"
                 )
 
             except Exception as exc:
                 failures.append(f"  • Reunião {n} — '{title}': {exc}")
 
         lines = [
-            f"Reprocessamento de requisitos concluído — "
-            f"{len(successes)} sucesso(s), {len(failures)} falha(s).",
+            "══════════════════════════════════════════════",
+            "  Reprocessamento de Requisitos — Resultado",
+            "══════════════════════════════════════════════",
+            f"  Reuniões processadas : {len(successes)}",
+            f"  Reuniões com falha   : {len(failures)}",
+            f"  Requisitos extraídos : {total_extracted}",
+            f"  Requisitos salvos    : {total_saved}",
+            f"  Requisitos excluídos : {total_deleted}",
+            "══════════════════════════════════════════════",
             "",
         ]
         if successes:
-            lines.append(f"✅ Reuniões processadas ({len(successes)}):")
+            lines.append("Detalhes por reunião:")
             lines.extend(successes)
         if failures:
             lines.append(f"\n❌ Falhas ({len(failures)}):")
             lines.extend(failures)
-        if successes:
+        if total_saved > 0:
             lines.append(
-                "\nTodos os requisitos agora incluem source_quote (frase motivadora) "
-                "e cited_by (autor). Use `get_requirements` para verificar."
+                "\n✅ Requisitos salvos com source_quote (frase motivadora) "
+                "e cited_by (autor)."
+            )
+        elif total_extracted > 0 and total_saved == 0:
+            lines.append(
+                "\n⚠️ Requisitos foram extraídos mas não salvos.\n"
+                "Execute a migration SQL em Configurações → Banco de Dados:\n"
+                "  ALTER TABLE requirements "
+                "ADD COLUMN IF NOT EXISTS source_quote TEXT, "
+                "ADD COLUMN IF NOT EXISTS cited_by TEXT;\n"
+                "  ALTER TABLE requirement_versions "
+                "ADD COLUMN IF NOT EXISTS source_quote TEXT, "
+                "ADD COLUMN IF NOT EXISTS cited_by TEXT;"
             )
         return "\n".join(lines)
 
