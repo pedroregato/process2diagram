@@ -325,8 +325,8 @@ if _chunks_table_ok and project_id:
                                 st.caption("❌ Transcrição muito curta e sem ata disponível")
                         # Preview dos primeiros 300 chars normalizados
                         if norm_text.strip():
-                            with st.expander("🔍 Preview (300 chars)", expanded=False):
-                                st.code(norm_text.strip()[:300], language=None)
+                            st.caption("🔍 Preview do texto normalizado:")
+                            st.code(norm_text.strip()[:300], language=None)
                     elif has_fallback:
                         st.caption(f"ℹ️ Sem transcrição — usará `minutes_md` ({len(minutes_md_text):,} chars) como fallback")
                     st.metric("Chunks gerados", chunk_qty)
