@@ -2,6 +2,7 @@
 from __future__ import annotations
 import html
 import re
+import types 
 import unicodedata
 
 
@@ -383,3 +384,36 @@ function highlightTerm(slugId) {{
 </script>
 </body>
 </html>"""
+
+def generate_sbvr_lexicon_from_dicts(
+    terms: list[dict],
+    rules: list[dict],
+    project_name: str = "",
+    domain: str = "",
+) -> str:
+    """Adapter for Supabase dict data (ReqTracker) → same HTML as generate_sbvr_lexicon."""
+
+    def _term_ns(d: dict) -> types.SimpleNamespace:
+        return types.SimpleNamespace(
+            term=d.get("term") or "",
+            definition=d.get("definition") or "",
+            category=d.get("category") or "concept",
+        )
+
+    def _rule_ns(d: dict) -> types.SimpleNamespace:
+        return types.SimpleNamespace(
+            id=d.get("rule_id") or "",
+            statement=d.get("statement") or "",
+            rule_type=d.get("rule_type") or "constraint",
+            source=d.get("source") or "",
+            nucleo_nominal=d.get("nucleo_nominal") or "",
+            short_title="",
+        )
+
+    mock_model = types.SimpleNamespace(
+        domain=domain,
+        vocabulary=[_term_ns(t) for t in terms],
+        rules=[_rule_ns(r) for r in rules],
+    )
+    return generate_sbvr_lexicon(mock_model, project_name)
+
