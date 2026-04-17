@@ -141,12 +141,17 @@ class AgentReqReconciler(BaseAgent):
     ) -> str:
         """Processa um único requisito. Retorna o change_type aplicado."""
 
+        # Traceability fields extracted by AgentRequirements
+        _source_quote = getattr(item, "source_quote", "") or ""
+        _cited_by     = getattr(item, "speaker", "") or ""
+
         # Sem histórico → sempre novo
         if not existing:
             save_new_requirement(
                 project_id, meeting_id, next_num,
                 item.title, item.description,
                 getattr(item, "type", ""), getattr(item, "priority", ""),
+                source_quote=_source_quote, cited_by=_cited_by,
             )
             return "new"
 
@@ -165,6 +170,7 @@ class AgentReqReconciler(BaseAgent):
                 project_id, meeting_id, next_num,
                 item.title, item.description,
                 getattr(item, "type", ""), getattr(item, "priority", ""),
+                source_quote=_source_quote, cited_by=_cited_by,
             )
             return "new"
 
@@ -178,6 +184,7 @@ class AgentReqReconciler(BaseAgent):
                 project_id, meeting_id, next_num,
                 item.title, item.description,
                 getattr(item, "type", ""), getattr(item, "priority", ""),
+                source_quote=_source_quote, cited_by=_cited_by,
             )
             return "new"
 
@@ -198,6 +205,8 @@ class AgentReqReconciler(BaseAgent):
             change_summary=classification.get("change_summary", ""),
             contradiction_flag=(change_type == "contradicted"),
             contradiction_detail=classification.get("contradiction_detail", ""),
+            source_quote=_source_quote,
+            cited_by=_cited_by,
         )
         update_requirement(
             requirement_id=best["id"],

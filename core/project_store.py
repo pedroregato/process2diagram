@@ -408,28 +408,49 @@ def add_requirement_version(
     change_summary: str = "",
     contradiction_flag: bool = False,
     contradiction_detail: str = "",
+    source_quote: str = "",
+    cited_by: str = "",
 ) -> bool:
-    """Adiciona uma nova versão a um requisito existente."""
+    """Adiciona uma nova versão a um requisito existente.
+
+    source_quote — frase verbatim da transcrição que motivou esta versão.
+    cited_by     — iniciais do participante que originou a afirmação.
+
+    Tenta salvar com os novos campos primeiro; se as colunas ainda não
+    existirem na tabela (migration pendente), salva sem eles.
+    """
     db = _db()
     if not db:
         return False
-    try:
-        db.table("requirement_versions").insert({
-            "requirement_id":      requirement_id,
-            "meeting_id":          meeting_id,
-            "version":             version,
-            "title":               title,
-            "description":         description,
-            "req_type":            req_type,
-            "priority":            priority,
-            "change_type":         change_type,
-            "change_summary":      change_summary,
-            "contradiction_flag":  contradiction_flag,
-            "contradiction_detail": contradiction_detail,
-        }).execute()
-        return True
-    except Exception:
-        return False
+
+    base_payload = {
+        "requirement_id":       requirement_id,
+        "meeting_id":           meeting_id,
+        "version":              version,
+        "title":                title,
+        "description":          description,
+        "req_type":             req_type,
+        "priority":             priority,
+        "change_type":          change_type,
+        "change_summary":       change_summary,
+        "contradiction_flag":   contradiction_flag,
+        "contradiction_detail": contradiction_detail,
+    }
+
+    for use_new_fields in (True, False):
+        payload = dict(base_payload)
+        if use_new_fields:
+            payload["source_quote"] = source_quote or None
+            payload["cited_by"]     = cited_by or None
+        try:
+            db.table("requirement_versions").insert(payload).execute()
+            return True
+        except Exception:
+            if not use_new_fields:
+                return False
+            continue
+
+    return False
 
 
 def update_requirement(
