@@ -1440,23 +1440,39 @@ def save_transcript_embeddings(
     transcript: str,
     api_key: str,
     provider: str,
+    fallback_text: str = "",
 ) -> int:
     """
-    Divide a transcrição em chunks, gera embeddings e salva na tabela transcript_chunks.
+    Normaliza, divide em chunks, gera embeddings e salva na tabela transcript_chunks.
 
-    Apaga os chunks anteriores da reunião antes de inserir novos (idempotente).
+    Fluxo:
+      1. Normaliza `transcript` (remove lixo ASR/SRT).
+      2. Se normalizado for vazio/curto (< 80 chars), tenta `fallback_text`
+         (geralmente `minutes_md`) com a mesma normalização.
+      3. Gera embeddings em batch.
+      4. Upsert idempotente por (meeting_id, chunk_index).
 
     Returns:
-        Número de chunks salvos (0 em caso de erro).
+        Número de chunks salvos (0 quando fonte é inviável ou API falha).
     """
     db = _db()
-    if not db or not transcript or not transcript.strip():
+    if not db:
         return 0
 
-    from modules.embeddings import chunk_text, embed_batch
+    from modules.embeddings import chunk_text, embed_batch, normalize_for_embedding
 
-    # 1. Gera chunks
-    chunks = chunk_text(transcript)
+    # 1. Normaliza a transcrição principal
+    source_text = normalize_for_embedding(transcript or "")
+
+    # 2. Fallback para minutes_md se transcrição for insuficiente após normalização
+    if len(source_text.strip()) < 80 and fallback_text:
+        source_text = normalize_for_embedding(fallback_text)
+
+    if not source_text.strip():
+        return 0
+
+    # 3. Gera chunks
+    chunks = chunk_text(source_text)
     if not chunks:
         return 0
 

@@ -121,24 +121,31 @@ if "_trigger_embed" in st.session_state:
         if db:
             with st.spinner("⚡ Gerando embeddings em lote... (pode demorar em reuniões longas)"):
                 meeting_rows = db.table("meetings") \
-                    .select("id, title, meeting_number, transcript_clean, transcript_raw") \
+                    .select("id, title, meeting_number, transcript_clean, transcript_raw, minutes_md") \
                     .eq("project_id", project_id) \
                     .order("meeting_number") \
                     .execute().data or []
 
             total_gen = 0
             errors = []
-            skipped = []
+            skipped_null = []      # sem transcrição nem ata
+            skipped_short = []     # muito curta após normalização
+            zero_chunks = []       # normalizou mas chunk_text devolveu []
+
             prog = st.progress(0.0)
             n_total = len(meeting_rows)
+
+            from modules.embeddings import normalize_for_embedding
 
             for i, m in enumerate(meeting_rows):
                 meeting_id = m["id"]
                 title = m.get("title") or f"Reunião {m.get('meeting_number', '?')}"
-                transcript = (m.get("transcript_clean") or m.get("transcript_raw") or "").strip()
+                raw_transcript = (m.get("transcript_clean") or m.get("transcript_raw") or "").strip()
+                minutes_md_text = (m.get("minutes_md") or "").strip()
 
-                if len(transcript) < 100:
-                    skipped.append(title)
+                # Diagnóstico precoce: sem fonte alguma
+                if not raw_transcript and not minutes_md_text:
+                    skipped_null.append(title)
                     prog.progress((i + 1) / n_total if n_total else 1.0)
                     continue
 
@@ -150,10 +157,13 @@ if "_trigger_embed" in st.session_state:
                     n_saved = save_transcript_embeddings(
                         meeting_id=meeting_id,
                         project_id=project_id,
-                        transcript=transcript,
+                        transcript=raw_transcript,
                         api_key=trigger["api_key"],
                         provider=trigger["provider"],
+                        fallback_text=minutes_md_text,
                     )
+                    if n_saved == 0:
+                        zero_chunks.append(title)
                     total_gen += n_saved
                 except Exception as exc:
                     error_str = str(exc)
@@ -168,8 +178,18 @@ if "_trigger_embed" in st.session_state:
             prog.empty()
 
             msg = f"✅ **{total_gen:,} chunks** gerados com sucesso em lote."
-            if skipped:
-                msg += f"\n\n⚠️ **{len(skipped)} reuniões puladas** (transcrição curta)."
+            if skipped_null:
+                msg += (
+                    f"\n\n⚠️ **{len(skipped_null)} reuniões sem conteúdo** "
+                    f"(transcrição e ata ausentes no banco):\n"
+                    + "\n".join(f"  • {t}" for t in skipped_null[:10])
+                )
+            if zero_chunks:
+                msg += (
+                    f"\n\n⚠️ **{len(zero_chunks)} reuniões com 0 chunks** "
+                    f"(texto presente mas sem conteúdo aproveitável após normalização):\n"
+                    + "\n".join(f"  • {t}" for t in zero_chunks[:10])
+                )
             if errors:
                 msg += f"\n\n❌ **Falhas em {len(errors)} reuniões**:\n" + "\n".join(errors[:15])
 
@@ -245,7 +265,7 @@ if _chunks_table_ok and project_id:
         db = get_supabase_client()
 
         meetings = db.table("meetings") \
-            .select("id, meeting_number, title, transcript_clean, transcript_raw") \
+            .select("id, meeting_number, title, transcript_clean, transcript_raw, minutes_md") \
             .eq("project_id", project_id) \
             .order("meeting_number") \
             .execute().data or []
@@ -262,14 +282,31 @@ if _chunks_table_ok and project_id:
             count_dict = Counter(row["meeting_id"] for row in chunk_data)
             chunk_counts = dict(count_dict)
 
+        from modules.embeddings import normalize_for_embedding
+
         for m in meetings:
             meeting_id = m["id"]
             number = m.get("meeting_number")
             title = m.get("title") or f"Reunião {number}"
-            transcript = (m.get("transcript_clean") or m.get("transcript_raw") or "").strip()
+            raw_clean  = (m.get("transcript_clean") or "").strip()
+            raw_raw    = (m.get("transcript_raw")   or "").strip()
+            minutes_md_text = (m.get("minutes_md")  or "").strip()
+            transcript = (raw_clean or raw_raw)
             chunk_qty = chunk_counts.get(meeting_id, 0)
 
-            status_icon = "✅" if chunk_qty > 0 else "❌"
+            # Diagnóstico de fonte
+            if raw_clean:
+                fonte = f"transcript_clean ({len(raw_clean):,} chars)"
+            elif raw_raw:
+                fonte = f"transcript_raw ({len(raw_raw):,} chars)"
+            else:
+                fonte = "❌ ausente no banco"
+
+            norm_text = normalize_for_embedding(transcript)
+            norm_len  = len(norm_text.strip())
+            has_fallback = bool(minutes_md_text)
+
+            status_icon = "✅" if chunk_qty > 0 else ("⚠️" if (not transcript and has_fallback) else "❌")
 
             with st.expander(
                 f"{status_icon} Reunião {number} — {title[:68]}{'...' if len(title) > 68 else ''}",
@@ -278,7 +315,20 @@ if _chunks_table_ok and project_id:
                 col_info, col_btn = st.columns([3, 1])
                 with col_info:
                     st.caption(f"**Título:** {title}")
-                    st.caption(f"**Tamanho da transcrição:** {len(transcript):,} caracteres")
+                    st.caption(f"**Fonte:** {fonte}")
+                    if transcript:
+                        st.caption(f"**Após normalização:** {norm_len:,} chars")
+                        if norm_len < 80:
+                            if has_fallback:
+                                st.caption(f"⚠️ Transcrição muito curta — usará `minutes_md` ({len(minutes_md_text):,} chars) como fallback")
+                            else:
+                                st.caption("❌ Transcrição muito curta e sem ata disponível")
+                        # Preview dos primeiros 300 chars normalizados
+                        if norm_text.strip():
+                            with st.expander("🔍 Preview (300 chars)", expanded=False):
+                                st.code(norm_text.strip()[:300], language=None)
+                    elif has_fallback:
+                        st.caption(f"ℹ️ Sem transcrição — usará `minutes_md` ({len(minutes_md_text):,} chars) como fallback")
                     st.metric("Chunks gerados", chunk_qty)
                 with col_btn:
                     if st.button(
@@ -300,6 +350,7 @@ if _chunks_table_ok and project_id:
                                         transcript=transcript,
                                         api_key=embed_api_key,
                                         provider=embed_provider,
+                                        fallback_text=minutes_md_text,
                                     )
                                     if n_saved > 0:
                                         st.session_state["_single_embed_result"] = (

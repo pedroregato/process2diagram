@@ -43,8 +43,75 @@ EMBEDDING_PROVIDERS = {
 }
 
 
-# ── Chunking ──────────────────────────────────────────────────────────────────
-# (mantido exatamente igual)
+# ── Normalização para embedding ───────────────────────────────────────────────
+
+def normalize_for_embedding(text: str) -> str:
+    """
+    Limpa lixo de ASR / SRT antes de chunking.
+
+    Remove:
+      • Timestamps SRT/VTT  (00:00:15,000 --> 00:00:18,000, [00:15:30], etc.)
+      • Números de sequência SRT (linhas só com dígitos)
+      • Marcadores de ruído  ([inaudível], (risos), [noise], etc.)
+      • Tags HTML e entidades comuns
+      • Separadores decorativos (-----, =====, .....)
+      • Linhas com menos de 4 caracteres não-espaço (puro ruído)
+
+    Preserva:
+      • Nomes de falantes  ("PEDRO:", "Maria:")
+      • Conteúdo das falas
+      • Parágrafos/quebras de linha (importantes para chunk_text)
+    """
+    import re
+
+    if not text:
+        return ""
+
+    # Tags HTML
+    text = re.sub(r'<[^>]+>', ' ', text)
+
+    # Entidades HTML comuns
+    for ent, ch in (('&amp;', '&'), ('&lt;', '<'), ('&gt;', '>'), ('&nbsp;', ' '), ('&quot;', '"')):
+        text = text.replace(ent, ch)
+
+    # Timestamps SRT/VTT completos: "00:00:15,000 --> 00:00:18,000"
+    text = re.sub(
+        r'\d{1,2}:\d{2}:\d{2}[,\.]\d{1,3}\s*-->\s*\d{1,2}:\d{2}:\d{2}[,\.]\d{1,3}',
+        ' ', text,
+    )
+    # Timestamps isolados: [00:15:30] ou 0:15:30
+    text = re.sub(r'\[?\d{1,2}:\d{2}:\d{2}\]?', ' ', text)
+    # Timestamps mm:ss isolados (só antes de espaço para não capturar "às 9:30 a reunião")
+    text = re.sub(r'\[?\d{1,2}:\d{2}\]?(?=\s|$)', ' ', text)
+
+    # Números de sequência SRT (linhas contendo apenas dígitos)
+    text = re.sub(r'^\s*\d+\s*$', '', text, flags=re.MULTILINE)
+
+    # Marcadores de ruído / inaudível (PT e EN)
+    text = re.sub(
+        r'[\[\(]'
+        r'(?:inaudível|inaudible|inaud\.?|ruído|noise|risos?|laughter|'
+        r'aplausos?|applause|música|music|silêncio|silence|corte|cut|'
+        r'trecho\s+inaudível|unintelligible)'
+        r'[\]\)]',
+        ' ', text, flags=re.IGNORECASE,
+    )
+
+    # Separadores decorativos: ----, ====, ....
+    text = re.sub(r'[-=_\.~]{4,}', ' ', text)
+
+    # Colapsa espaços múltiplos dentro de cada linha
+    lines_out: list[str] = []
+    for line in text.splitlines():
+        line = re.sub(r'[ \t]+', ' ', line).strip()
+        # Descarta linhas com menos de 4 caracteres não-espaço (ruído puro)
+        if len(line.replace(' ', '')) >= 4:
+            lines_out.append(line)
+
+    return '\n'.join(lines_out)
+
+
+# ── Chunking ───────────────────────────────────────────────────────────────────
 def chunk_text(
     text: str,
     chunk_size: int = 500,
