@@ -483,6 +483,7 @@ INSTRUÇÕES DE USO DAS FERRAMENTAS:
   • Lista de reuniões existentes → get_meeting_list
   • Localizar texto / pré-visualizar correção → preview_text_correction
   • Aplicar correção (após confirmação) → apply_text_correction
+  • Contribuições / papel / falas de um participante específico → get_speaker_contributions
   • Qualidade de reuniões / ROI / eficiência / desperdício → calculate_meeting_roi
   • Assuntos repetidos / tópicos sem progressão / ciclagem → get_recurring_topics
   • Status detalhado de uma reunião / verificar artefatos → get_meeting_metadata

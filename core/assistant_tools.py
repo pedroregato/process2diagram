@@ -587,6 +587,42 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_speaker_contributions",
+                "description": (
+                    "Busca TODAS as falas e menções de um participante específico nas transcrições, "
+                    "varrendo todos os chunks armazenados em ordem cronológica. "
+                    "Muito mais completo que search_transcript para perguntas sobre contribuições, "
+                    "papel ou posição de uma pessoa específica ao longo do projeto. "
+                    "Também retorna requisitos atribuídos ao participante via cited_by. "
+                    "USE quando o usuário perguntar: contribuições de alguém, o que X disse/propôs/"
+                    "defendeu, papel/posição de uma pessoa, participação de X em reuniões."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "participant_name": {
+                            "type": "string",
+                            "description": (
+                                "Nome do participante a buscar. Pode ser nome completo "
+                                "(ex: 'Pedro Gentil') ou apenas o primeiro nome (ex: 'Pedro'). "
+                                "Use o nome exatamente como aparece nas transcrições."
+                            ),
+                        },
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": (
+                                "Limitar a busca a uma reunião específica (opcional). "
+                                "Omita para buscar em todas as reuniões do projeto."
+                            ),
+                        },
+                    },
+                    "required": ["participant_name"],
+                },
+            },
+        },
     ]
 
 
@@ -627,6 +663,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "add_sbvr_rule":                "escrita",
     "apply_text_correction":        "escrita",
     "delete_meeting":               "escrita",
+    "get_speaker_contributions":    "consulta",
     # Geração (LLM-powered)
     "generate_missing_minutes":     "geração",
     "reprocess_meeting_requirements": "geração",
@@ -1975,6 +2012,196 @@ class AssistantToolExecutor:
             )
         return "\n".join(lines)
 
+    # ── Speaker contributions ─────────────────────────────────────────────────
+
+    def get_speaker_contributions(
+        self,
+        participant_name: str,
+        meeting_number: int | None = None,
+    ) -> str:
+        """
+        Find ALL transcript chunks and requirements attributed to a specific participant.
+
+        Strategy:
+        1. Search transcript_chunks table (most complete — all chunks in order).
+        2. For meetings without chunks, fall back to full transcript keyword search.
+        3. Also pull requirements where cited_by contains the participant name.
+        """
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        if not participant_name or not participant_name.strip():
+            return "Nome do participante não fornecido."
+
+        search_term = participant_name.strip()
+
+        # ── Build meeting maps ─────────────────────────────────────────────────
+        meetings = self._get_meetings()
+        if not meetings:
+            return "Nenhuma reunião encontrada no projeto."
+
+        mid_to_num:   dict[str, int]  = {}
+        mid_to_title: dict[str, str]  = {}
+        num_to_mid:   dict[int, str]  = {}
+        num_to_m:     dict[int, dict] = {}
+
+        for m in meetings:
+            mid = m.get("id")
+            n   = m.get("meeting_number")
+            if mid and n is not None:
+                mid_to_num[mid]   = n
+                mid_to_title[mid] = m.get("title") or f"Reunião {n}"
+                num_to_mid[n]     = mid
+                num_to_m[n]       = m
+
+        # ── Restrict by meeting_number if given ───────────────────────────────
+        if meeting_number is not None:
+            if meeting_number not in num_to_mid:
+                return f"Reunião {meeting_number} não encontrada no projeto."
+            target_mids = {num_to_mid[meeting_number]}
+        else:
+            target_mids = set(mid_to_num.keys())
+
+        # ── 1. Search transcript_chunks ───────────────────────────────────────
+        chunks_by_meeting: dict[int, list[str]] = {}
+        mids_with_chunks:  set[str]             = set()
+
+        try:
+            q = (
+                db.table("transcript_chunks")
+                .select("meeting_id, chunk_index, chunk_text")
+                .eq("project_id", self.project_id)
+                .ilike("chunk_text", f"%{search_term}%")
+                .order("meeting_id")
+                .order("chunk_index")
+            )
+            raw_chunks = q.execute().data or []
+        except Exception as exc:
+            raw_chunks = []
+
+        for c in raw_chunks:
+            mid = c.get("meeting_id")
+            if mid not in target_mids:
+                continue
+            mids_with_chunks.add(mid)
+            n = mid_to_num.get(mid)
+            if n is None:
+                continue
+            if n not in chunks_by_meeting:
+                chunks_by_meeting[n] = []
+            chunks_by_meeting[n].append(c.get("chunk_text", ""))
+
+        # ── 2. Fallback: full-transcript search for meetings without chunks ────
+        for n, m in num_to_m.items():
+            if meeting_number is not None and n != meeting_number:
+                continue
+            mid = num_to_mid.get(n, "")
+            if mid in mids_with_chunks:
+                continue  # already covered by chunk search
+            transcript = m.get("transcript_clean") or m.get("transcript_raw") or ""
+            if not transcript:
+                continue
+            # Manual passage extraction around participant name occurrences
+            passages: list[str] = []
+            text = transcript
+            idx  = 0
+            while len(passages) < 12:
+                pos = text.lower().find(search_term.lower(), idx)
+                if pos == -1:
+                    break
+                start    = max(0, pos - 200)
+                end      = min(len(text), pos + 400)
+                snippet  = text[start:end].strip()
+                if start > 0:
+                    snippet = "…" + snippet
+                if end < len(text):
+                    snippet += "…"
+                passages.append(snippet)
+                idx = pos + len(search_term)
+            if passages:
+                chunks_by_meeting[n] = passages
+
+        # ── 3. Requirements with cited_by matching the participant ────────────
+        reqs_by_meeting: dict[int, list[str]] = {}
+        try:
+            req_rows = (
+                db.table("requirements")
+                .select("req_number, title, cited_by, first_meeting_id")
+                .eq("project_id", self.project_id)
+                .ilike("cited_by", f"%{search_term}%")
+                .execute().data or []
+            )
+            for r in req_rows:
+                mid = r.get("first_meeting_id")
+                n   = mid_to_num.get(mid) if mid else None
+                if meeting_number is not None and n != meeting_number:
+                    continue
+                key = n or 0
+                if key not in reqs_by_meeting:
+                    reqs_by_meeting[key] = []
+                rn     = r.get("req_number")
+                req_id = f"REQ-{rn:03d}" if isinstance(rn, int) else "REQ-???"
+                cited  = r.get("cited_by") or ""
+                reqs_by_meeting[key].append(
+                    f"  {req_id}: {r.get('title', '')}  [citado por: {cited}]"
+                )
+        except Exception:
+            pass
+
+        # ── 4. Format output ──────────────────────────────────────────────────
+        all_meeting_nums = sorted(
+            set(list(chunks_by_meeting.keys()) + list(reqs_by_meeting.keys()))
+        )
+        if not all_meeting_nums:
+            scope_str = f" na Reunião {meeting_number}" if meeting_number else " no projeto"
+            return (
+                f"Nenhuma contribuição de '{search_term}' encontrada{scope_str}.\n"
+                "Dica: verifique a grafia exata do nome como aparece nas transcrições. "
+                "Tente variações como primeiro nome apenas, abreviações ou iniciais."
+            )
+
+        lines = [
+            f"=== Contribuições de '{search_term}' ===",
+            "",
+        ]
+
+        total_chunks = 0
+        total_reqs   = 0
+
+        for n in all_meeting_nums:
+            mid   = num_to_mid.get(n)
+            title = mid_to_title.get(mid, f"Reunião {n}") if mid else f"Reunião {n}"
+            lines.append(f"── Reunião {n} — {title} ──")
+
+            meeting_chunks = chunks_by_meeting.get(n, [])
+            total_chunks  += len(meeting_chunks)
+            if meeting_chunks:
+                lines.append(f"  Trechos da transcrição ({len(meeting_chunks)} passagem(ns)):")
+                for i, txt in enumerate(meeting_chunks[:10]):
+                    display = txt[:450] + ("…" if len(txt) > 450 else "")
+                    lines.append(f"  [{i + 1}] {display}")
+                if len(meeting_chunks) > 10:
+                    lines.append(f"  … e mais {len(meeting_chunks) - 10} passagem(ns) omitida(s)")
+
+            meeting_reqs = reqs_by_meeting.get(n, [])
+            total_reqs  += len(meeting_reqs)
+            if meeting_reqs:
+                lines.append(f"  Requisitos atribuídos ({len(meeting_reqs)}):")
+                lines.extend(meeting_reqs[:8])
+                if len(meeting_reqs) > 8:
+                    lines.append(f"  … e mais {len(meeting_reqs) - 8} requisito(s)")
+
+            lines.append("")
+
+        lines.append(
+            f"Resumo: {total_chunks} trecho(s) de transcrição + "
+            f"{total_reqs} requisito(s) atribuído(s) em "
+            f"{len(all_meeting_nums)} reunião(ões)."
+        )
+        return "\n".join(lines)
+
     # ── Dispatcher ────────────────────────────────────────────────────────────
 
     def execute(self, tool_name: str, tool_input: dict) -> str:
@@ -2054,6 +2281,10 @@ class AssistantToolExecutor:
                     tool_input.get("meeting_numbers"),
                     bool(tool_input.get("force_regenerate", False)),
                     tool_input.get("output_language", "Auto-detect"),
+                ),
+                "get_speaker_contributions":      lambda: self.get_speaker_contributions(
+                    tool_input["participant_name"],
+                    tool_input.get("meeting_number"),
                 ),
             }
             if tool_name not in dispatch:
