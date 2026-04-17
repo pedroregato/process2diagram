@@ -489,7 +489,8 @@ INSTRUÇÕES DE USO DAS FERRAMENTAS:
   • Status detalhado de uma reunião / verificar artefatos → get_meeting_metadata
   • Ver o que seria excluído de uma reunião → preview_meeting_deletion
   • Excluir reunião (após preview + confirmação) → delete_meeting
-  • Reprocessar requisitos de reunião já armazenada → reprocess_meeting_requirements
+  • Reprocessar requisitos de uma reunião (com source_quote/cited_by) → reprocess_meeting_requirements
+  • Reprocessar requisitos de todas as reuniões em lote → batch_reprocess_requirements
 - Você pode encadear múltiplas ferramentas quando necessário.
 - Após obter os dados, sintetize uma resposta clara e objetiva.
 

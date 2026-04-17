@@ -291,43 +291,69 @@ def save_new_requirement(
     description: str,
     req_type: str = "",
     priority: str = "",
+    source_quote: str = "",
+    cited_by: str = "",
 ) -> dict | None:
-    """Insere um requisito novo (primeira aparição) e sua versão inicial."""
+    """Insere um requisito novo (primeira aparição) e sua versão inicial.
+
+    source_quote — frase verbatim da transcrição que motivou o requisito.
+    cited_by     — iniciais do participante que originou a afirmação (ex: "PG").
+
+    Tenta salvar com os novos campos; se as colunas ainda não existirem na
+    tabela (migration pendente), salva sem eles para não bloquear o pipeline.
+    """
     db = _db()
     if not db:
         return None
-    try:
-        req_rows = _ok(
-            db.table("requirements").insert({
-                "project_id":      project_id,
-                "req_number":      req_number,
-                "title":           title,
-                "description":     description,
-                "req_type":        req_type,
-                "priority":        priority,
-                "status":          "active",
-                "first_meeting_id": meeting_id,
-                "last_meeting_id": meeting_id,
-            }).execute()
-        )
-        if not req_rows:
-            return None
-        req = req_rows[0]
 
-        db.table("requirement_versions").insert({
-            "requirement_id": req["id"],
-            "meeting_id":     meeting_id,
-            "version":        1,
-            "title":          title,
-            "description":    description,
-            "req_type":       req_type,
-            "priority":       priority,
-            "change_type":    "new",
-        }).execute()
+    base_req = {
+        "project_id":       project_id,
+        "req_number":       req_number,
+        "title":            title,
+        "description":      description,
+        "req_type":         req_type,
+        "priority":         priority,
+        "status":           "active",
+        "first_meeting_id": meeting_id,
+        "last_meeting_id":  meeting_id,
+    }
+    base_ver = {
+        "meeting_id":  meeting_id,
+        "version":     1,
+        "title":       title,
+        "description": description,
+        "req_type":    req_type,
+        "priority":    priority,
+        "change_type": "new",
+    }
 
-        return req
-    except Exception:
-        return None
+    def _insert_req(payload: dict) -> dict | None:
+        rows = _ok(db.table("requirements").insert(payload).execute())
+        return rows[0] if rows else None
+
+    def _insert_ver(req_id: str, payload: dict) -> None:
+        db.table("requirement_versions").insert(
+            {"requirement_id": req_id, **payload}
+        ).execute()
+
+    # Try with new traceability fields first; fall back if columns missing
+    for req_payload, ver_payload in [
+        (
+            {**base_req, "source_quote": source_quote or None, "cited_by": cited_by or None},
+            {**base_ver, "source_quote": source_quote or None, "cited_by": cited_by or None},
+        ),
+        (base_req, base_ver),
+    ]:
+        try:
+            req = _insert_req(req_payload)
+            if not req:
+                return None
+            _insert_ver(req["id"], ver_payload)
+            return req
+        except Exception:
+            continue
+
+    return None
 
 
 def list_requirements(project_id: str) -> list[dict]:
@@ -438,6 +464,8 @@ def save_requirements_from_hub(meeting_id: str, project_id: str, hub) -> int:
             description=item.description,
             req_type=getattr(item, "type", ""),
             priority=getattr(item, "priority", ""),
+            source_quote=getattr(item, "source_quote", "") or "",
+            cited_by=getattr(item, "speaker", "") or "",
         )
         if result:
             next_num += 1

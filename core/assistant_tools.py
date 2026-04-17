@@ -528,9 +528,10 @@ def get_tool_schemas_openai() -> list[dict]:
                 "name": "reprocess_meeting_requirements",
                 "description": (
                     "Re-executa o AgentRequirements sobre a transcrição armazenada de uma reunião "
-                    "e salva os novos requisitos no banco. Útil para reuniões que não tiveram "
-                    "requisitos extraídos ou que precisam de reextração (ex: Reunião 6 com discussão "
-                    "sobre legado e patinação). Requer transcrição armazenada no Supabase."
+                    "e salva os novos requisitos com source_quote (frase motivadora) e cited_by "
+                    "(autor). Por padrão exclui os requisitos existentes antes de reinserir "
+                    "(force_replace=true) para evitar duplicatas e recuperar a rastreabilidade. "
+                    "Requer transcrição armazenada no Supabase."
                 ),
                 "parameters": {
                     "type": "object",
@@ -542,6 +543,13 @@ def get_tool_schemas_openai() -> list[dict]:
                         "output_language": {
                             "type": "string",
                             "description": "Idioma dos requisitos extraídos. Padrão: 'Auto-detect'.",
+                        },
+                        "force_replace": {
+                            "type": "boolean",
+                            "description": (
+                                "Se true (padrão), exclui os requisitos existentes desta reunião "
+                                "antes de inserir os novos. Use false para adicionar sem remover."
+                            ),
                         },
                     },
                     "required": ["meeting_number"],
@@ -581,6 +589,45 @@ def get_tool_schemas_openai() -> list[dict]:
                         "output_language": {
                             "type": "string",
                             "description": "Idioma das atas geradas. Padrão: 'Auto-detect'.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "batch_reprocess_requirements",
+                "description": (
+                    "Reprocessa os requisitos de múltiplas reuniões em lote, extraindo "
+                    "novamente com AgentRequirements e salvando source_quote (frase que motivou "
+                    "o requisito) e cited_by (autor/iniciais). "
+                    "Por padrão substitui os requisitos existentes (force_replace=true). "
+                    "USE quando o usuário pedir para reprocessar requisitos de todas as reuniões, "
+                    "recuperar autores/frases motivadoras, ou atualizar a rastreabilidade dos requisitos."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_numbers": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": (
+                                "Lista de números de reunião a processar. "
+                                "Omita para processar todas as reuniões com transcrição."
+                            ),
+                        },
+                        "force_replace": {
+                            "type": "boolean",
+                            "description": (
+                                "Se true (padrão), exclui os requisitos existentes de cada "
+                                "reunião antes de reinserir. Use false para adicionar sem remover."
+                            ),
+                        },
+                        "output_language": {
+                            "type": "string",
+                            "description": "Idioma dos requisitos extraídos. Padrão: 'Auto-detect'.",
                         },
                     },
                     "required": [],
@@ -665,8 +712,9 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "delete_meeting":               "escrita",
     "get_speaker_contributions":    "consulta",
     # Geração (LLM-powered)
-    "generate_missing_minutes":     "geração",
+    "generate_missing_minutes":       "geração",
     "reprocess_meeting_requirements": "geração",
+    "batch_reprocess_requirements":   "geração",
 }
 
 
@@ -901,7 +949,10 @@ class AssistantToolExecutor:
         try:
             q = (
                 db.table("requirements")
-                .select("req_number, title, description, req_type, status, priority")
+                .select(
+                    "req_number, title, description, req_type, status, priority, "
+                    "source_quote, cited_by"
+                )
                 .eq("project_id", self.project_id)
                 .order("req_number")
             )
@@ -932,12 +983,20 @@ class AssistantToolExecutor:
             rstatus  = r.get("status") or "—"
             rprio    = r.get("priority") or "—"
             title    = r.get("title") or ""
-            desc     = (r.get("description") or "")[:150]
-            if len(r.get("description") or "") > 150:
+            desc     = (r.get("description") or "")[:200]
+            if len(r.get("description") or "") > 200:
                 desc += "..."
+            cited    = r.get("cited_by") or ""
+            quote    = r.get("source_quote") or ""
             lines.append(f"• {req_id} [{rtype} | {rstatus} | prioridade: {rprio}]: {title}")
             if desc:
                 lines.append(f"  {desc}")
+            if cited or quote:
+                attr = f"[{cited}] " if cited else ""
+                if quote:
+                    lines.append(f'  > {attr}"{quote}"')
+                elif cited:
+                    lines.append(f"  Autor: {cited}")
         return "\n".join(lines)
 
     def list_bpmn_processes(self) -> str:
@@ -1585,8 +1644,14 @@ class AssistantToolExecutor:
         self,
         meeting_number: int,
         output_language: str = "Auto-detect",
+        force_replace: bool = True,
     ) -> str:
-        """Re-run AgentRequirements on a stored transcript and save new requirements."""
+        """Re-run AgentRequirements on a stored transcript and save new requirements.
+
+        force_replace=True (padrão): exclui os requisitos existentes desta reunião
+        antes de inserir os novos — garante que source_quote e cited_by sejam
+        salvos sem gerar duplicatas.
+        """
         if not self.llm_config:
             return (
                 "❌ Configuração LLM não disponível no executor. "
@@ -1608,9 +1673,30 @@ class AssistantToolExecutor:
             )
 
         try:
+            from modules.supabase_client import get_supabase_client
             from core.knowledge_hub import KnowledgeHub
             from agents.agent_requirements import AgentRequirements
             from core.project_store import save_requirements_from_hub
+
+            db = get_supabase_client()
+
+            # Delete existing requirements for this meeting if force_replace
+            deleted = 0
+            if force_replace and db and mid:
+                try:
+                    rows = (
+                        db.table("requirements").select("id")
+                        .eq("project_id", self.project_id)
+                        .eq("first_meeting_id", mid)
+                        .execute().data or []
+                    )
+                    if rows:
+                        db.table("requirements").delete() \
+                            .eq("project_id", self.project_id) \
+                            .eq("first_meeting_id", mid).execute()
+                        deleted = len(rows)
+                except Exception:
+                    pass  # safe to continue even if deletion fails
 
             hub = KnowledgeHub.new()
             hub.transcript_clean = transcript
@@ -1631,15 +1717,150 @@ class AssistantToolExecutor:
             n_reqs = len(hub.requirements.requirements)
             saved  = save_requirements_from_hub(mid, self.project_id, hub)
 
-            return (
-                f"✅ Reprocessamento concluído — Reunião {meeting_number} — '{title}'\n"
-                f"• Requisitos extraídos: {n_reqs}\n"
-                f"• Requisitos salvos no banco: {saved}\n"
-                f"• Acesse o ReqTracker para visualizar os novos requisitos."
-            )
+            lines = [
+                f"✅ Reprocessamento concluído — Reunião {meeting_number} — '{title}'",
+            ]
+            if force_replace and deleted > 0:
+                lines.append(f"• Requisitos anteriores excluídos: {deleted}")
+            lines += [
+                f"• Requisitos extraídos: {n_reqs}",
+                f"• Requisitos salvos (com source_quote e cited_by): {saved}",
+                "• Acesse o ReqTracker para visualizar os novos requisitos.",
+            ]
+            return "\n".join(lines)
 
         except Exception as exc:
             return f"❌ Erro ao reprocessar Reunião {meeting_number}: {exc}"
+
+    def batch_reprocess_requirements(
+        self,
+        meeting_numbers: list[int] | None = None,
+        force_replace: bool = True,
+        output_language: str = "Auto-detect",
+    ) -> str:
+        """Reprocess AgentRequirements for multiple meetings (batch version).
+
+        Mirrors generate_missing_minutes but for requirements.
+        force_replace=True (padrão): exclui os requisitos existentes de cada
+        reunião antes de reinserir — necessário para recuperar source_quote/cited_by.
+        """
+        if not self.llm_config:
+            return (
+                "❌ Configuração LLM não disponível. "
+                "Certifique-se de que a chave de API está configurada no Assistente."
+            )
+
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "❌ Supabase não disponível."
+
+        # Fetch candidates
+        try:
+            all_meetings = (
+                db.table("meetings")
+                .select("id, meeting_number, title, transcript_clean, transcript_raw")
+                .eq("project_id", self.project_id)
+                .order("meeting_number")
+                .execute().data or []
+            )
+        except Exception as exc:
+            return f"❌ Erro ao listar reuniões: {exc}"
+
+        candidates = []
+        for m in all_meetings:
+            n          = m.get("meeting_number")
+            transcript = m.get("transcript_clean") or m.get("transcript_raw") or ""
+            if not transcript.strip():
+                continue
+            if meeting_numbers is not None and n not in meeting_numbers:
+                continue
+            candidates.append(m)
+
+        if not candidates:
+            return (
+                "Nenhuma reunião elegível encontrada.\n"
+                "Verifique se as reuniões possuem transcrição armazenada."
+            )
+
+        from core.knowledge_hub import KnowledgeHub
+        from agents.agent_requirements import AgentRequirements
+        from core.project_store import save_requirements_from_hub
+
+        provider_cfg = self.llm_config.get("provider_cfg", {})
+        client_info  = {"api_key": self.llm_config.get("api_key", "")}
+
+        successes: list[str] = []
+        failures:  list[str] = []
+
+        for m in candidates:
+            mid        = m.get("id", "")
+            n          = m.get("meeting_number", "?")
+            title      = m.get("title") or f"Reunião {n}"
+            transcript = m.get("transcript_clean") or m.get("transcript_raw") or ""
+
+            try:
+                # Delete existing requirements for this meeting if force_replace
+                deleted = 0
+                if force_replace and mid:
+                    try:
+                        rows = (
+                            db.table("requirements").select("id")
+                            .eq("project_id", self.project_id)
+                            .eq("first_meeting_id", mid)
+                            .execute().data or []
+                        )
+                        if rows:
+                            db.table("requirements").delete() \
+                                .eq("project_id", self.project_id) \
+                                .eq("first_meeting_id", mid).execute()
+                            deleted = len(rows)
+                    except Exception:
+                        pass
+
+                hub = KnowledgeHub.new()
+                hub.transcript_clean = transcript
+                hub.transcript_raw   = transcript
+
+                agent = AgentRequirements(client_info, provider_cfg)
+                hub   = agent.run(hub, output_language=output_language)
+
+                if not hub.requirements.ready:
+                    failures.append(
+                        f"  • Reunião {n} — '{title}': "
+                        "AgentRequirements não retornou resultado."
+                    )
+                    continue
+
+                n_extracted = len(hub.requirements.requirements)
+                saved       = save_requirements_from_hub(mid, self.project_id, hub)
+
+                del_note = f" (excluídos {deleted} anteriores)" if deleted else ""
+                successes.append(
+                    f"  • Reunião {n} — '{title}': "
+                    f"{saved} requisito(s) salvos{del_note}"
+                )
+
+            except Exception as exc:
+                failures.append(f"  • Reunião {n} — '{title}': {exc}")
+
+        lines = [
+            f"Reprocessamento de requisitos concluído — "
+            f"{len(successes)} sucesso(s), {len(failures)} falha(s).",
+            "",
+        ]
+        if successes:
+            lines.append(f"✅ Reuniões processadas ({len(successes)}):")
+            lines.extend(successes)
+        if failures:
+            lines.append(f"\n❌ Falhas ({len(failures)}):")
+            lines.extend(failures)
+        if successes:
+            lines.append(
+                "\nTodos os requisitos agora incluem source_quote (frase motivadora) "
+                "e cited_by (autor). Use `get_requirements` para verificar."
+            )
+        return "\n".join(lines)
 
     # ── Cross-meeting recurring topics ───────────────────────────────────────
 
@@ -2275,6 +2496,12 @@ class AssistantToolExecutor:
                 ),
                 "reprocess_meeting_requirements": lambda: self.reprocess_meeting_requirements(
                     tool_input["meeting_number"],
+                    tool_input.get("output_language", "Auto-detect"),
+                    bool(tool_input.get("force_replace", True)),
+                ),
+                "batch_reprocess_requirements":   lambda: self.batch_reprocess_requirements(
+                    tool_input.get("meeting_numbers"),
+                    bool(tool_input.get("force_replace", True)),
                     tool_input.get("output_language", "Auto-detect"),
                 ),
                 "generate_missing_minutes":       lambda: self.generate_missing_minutes(
