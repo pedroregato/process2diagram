@@ -1505,18 +1505,29 @@ def save_transcript_embeddings(
     # Upsert em lotes de 50 para evitar payload overflow
     batch_size = 50
     for start in range(0, len(rows), batch_size):
-        resp = db.table("transcript_chunks").upsert(
+        db.table("transcript_chunks").upsert(
             rows[start:start + batch_size],
             on_conflict="meeting_id,chunk_index",
         ).execute()
-        # Supabase retorna lista vazia quando RLS bloqueia sem levantar exceção
-        if resp.data is not None and len(resp.data) == 0 and len(rows[start:start + batch_size]) > 0:
-            raise RuntimeError(
-                f"Upsert retornou 0 linhas para lote [{start}:{start+batch_size}]. "
-                f"Verifique as políticas RLS da tabela transcript_chunks no Supabase."
-            )
 
-    return len(rows)
+    # Verificação real: conta o que efetivamente foi gravado no banco.
+    # Retornar len(rows) seria otimista — o upsert pode completar sem erro
+    # mas não gravar nada quando RLS bloqueia silenciosamente.
+    verify = db.table("transcript_chunks") \
+        .select("chunk_index", count="exact") \
+        .eq("meeting_id", meeting_id) \
+        .execute()
+    actual = verify.count or 0
+
+    if actual == 0 and len(rows) > 0:
+        raise RuntimeError(
+            f"Upsert aparentemente bem-sucedido ({len(rows)} chunks gerados) mas "
+            f"0 linhas encontradas no banco após a gravação. "
+            f"Verifique as políticas RLS da tabela transcript_chunks no Supabase "
+            f"(permissões INSERT/UPDATE para o role anon ou authenticated)."
+        )
+
+    return actual
 
 
 def search_semantic(
