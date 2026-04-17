@@ -1434,6 +1434,67 @@ def transcript_chunks_table_exists() -> bool:
         return False
 
 
+def test_db_chunk_insert(meeting_id: str, project_id: str) -> dict:
+    """
+    Insere uma linha dummy em transcript_chunks (embedding zerado, chunk_index=-1),
+    verifica se foi persistida e apaga a linha de teste.
+
+    Usado para diagnosticar problemas de permissão/serialização sem chamar nenhuma API.
+
+    Returns:
+        dict com campos: insert_ok, verify_count, delete_ok, error
+    """
+    from modules.embeddings import EMBEDDING_DIM
+
+    db = _db()
+    if not db:
+        return {"insert_ok": False, "verify_count": 0, "delete_ok": False,
+                "error": "Supabase não configurado."}
+
+    dummy_row = {
+        "meeting_id":  meeting_id,
+        "project_id":  project_id,
+        "chunk_index": -1,
+        "chunk_text":  "__TEST_CHUNK__",
+        "embedding":   [0.0] * EMBEDDING_DIM,
+    }
+
+    result = {"insert_ok": False, "verify_count": 0, "delete_ok": False, "error": None}
+
+    try:
+        db.table("transcript_chunks").upsert(
+            dummy_row, on_conflict="meeting_id,chunk_index"
+        ).execute()
+        result["insert_ok"] = True
+    except Exception as exc:
+        result["error"] = f"INSERT falhou: {exc}"
+        return result
+
+    try:
+        resp = (
+            db.table("transcript_chunks")
+            .select("id", count="exact")
+            .eq("meeting_id", meeting_id)
+            .eq("chunk_index", -1)
+            .execute()
+        )
+        result["verify_count"] = resp.count or 0
+    except Exception as exc:
+        result["error"] = f"SELECT de verificação falhou: {exc}"
+
+    try:
+        db.table("transcript_chunks") \
+            .delete() \
+            .eq("meeting_id", meeting_id) \
+            .eq("chunk_index", -1) \
+            .execute()
+        result["delete_ok"] = True
+    except Exception as exc:
+        result["error"] = (result["error"] or "") + f" | DELETE falhou: {exc}"
+
+    return result
+
+
 def save_transcript_embeddings(
     meeting_id: str,
     project_id: str,

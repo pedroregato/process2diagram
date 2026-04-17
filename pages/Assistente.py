@@ -24,6 +24,7 @@ from core.project_store import (
     transcript_chunks_table_exists,
     save_transcript_embeddings,
     get_embedding_coverage,
+    test_db_chunk_insert,
 )
 from agents.agent_assistant import AgentAssistant
 from ui.components.copy_button import copy_button
@@ -270,19 +271,24 @@ if _chunks_table_ok and project_id:
             .order("meeting_number") \
             .execute().data or []
 
-        # Conta chunks por reunião
-        meeting_ids = [m["id"] for m in meetings if m.get("id")]
-        chunk_counts = {}
-        if meeting_ids:
-            chunk_data = db.table("transcript_chunks") \
-                .select("meeting_id") \
-                .in_("meeting_id", meeting_ids) \
-                .limit(10000) \
-                .execute().data or []
-            count_dict = Counter(row["meeting_id"] for row in chunk_data)
-            chunk_counts = dict(count_dict)
+        # Conta chunks por reunião — count="exact" por meeting_id.
+        # Mesma abordagem usada na verificação pós-upsert de save_transcript_embeddings,
+        # que retorna contagens corretas. Queries em batch (1 por reunião, ≤ 10 meetings).
+        chunk_counts: dict = {}
+        for _m in meetings:
+            _mid = _m.get("id")
+            if not _mid:
+                continue
+            try:
+                _resp = db.table("transcript_chunks") \
+                    .select("chunk_index", count="exact") \
+                    .eq("meeting_id", _mid) \
+                    .execute()
+                chunk_counts[_mid] = _resp.count or 0
+            except Exception:
+                chunk_counts[_mid] = 0
 
-        from modules.embeddings import normalize_for_embedding
+        from modules.embeddings import normalize_for_embedding, chunk_text
 
         for m in meetings:
             meeting_id = m["id"]
@@ -306,23 +312,33 @@ if _chunks_table_ok and project_id:
             norm_len  = len(norm_text.strip())
             has_fallback = bool(minutes_md_text)
 
+            # Compute expected chunks from norm_text (pure Python, fast)
+            expected_chunks = len(chunk_text(norm_text)) if norm_text.strip() else 0
+
             status_icon = "✅" if chunk_qty > 0 else ("⚠️" if (not transcript and has_fallback) else "❌")
 
             with st.expander(
                 f"{status_icon} Reunião {number} — {title[:68]}{'...' if len(title) > 68 else ''}",
                 expanded=False
             ):
+                # Show persisted per-meeting error (survives rerun)
+                _per_err_key = f"_embed_err_{meeting_id}"
+                if _per_err_key in st.session_state:
+                    st.error(st.session_state[_per_err_key])
+
                 col_info, col_btn = st.columns([3, 1])
                 with col_info:
                     st.caption(f"**Título:** {title}")
                     st.caption(f"**Fonte:** {fonte}")
                     if transcript:
-                        st.caption(f"**Após normalização:** {norm_len:,} chars")
+                        st.caption(f"**Após normalização:** {norm_len:,} chars  ·  **Chunks esperados:** {expected_chunks}")
                         if norm_len < 80:
                             if has_fallback:
                                 st.caption(f"⚠️ Transcrição muito curta — usará `minutes_md` ({len(minutes_md_text):,} chars) como fallback")
                             else:
                                 st.caption("❌ Transcrição muito curta e sem ata disponível")
+                        elif expected_chunks == 0:
+                            st.caption("❌ chunk_text retornou 0 — texto pode conter apenas ruído após normalização")
                         # Preview dos primeiros 300 chars normalizados
                         if norm_text.strip():
                             st.caption("🔍 Preview do texto normalizado:")
@@ -357,6 +373,8 @@ if _chunks_table_ok and project_id:
                                             "success",
                                             f"✅ Reunião {number}: {n_saved} chunks gerados com sucesso.",
                                         )
+                                        # Clear any persisted error for this meeting
+                                        st.session_state.pop(f"_embed_err_{meeting_id}", None)
                                     else:
                                         st.session_state["_single_embed_result"] = (
                                             "info", f"Reunião {number}: nenhum chunk gerado."
@@ -365,15 +383,33 @@ if _chunks_table_ok and project_id:
                             except Exception as e:
                                 error_msg = str(e)
                                 if any(x in error_msg.lower() for x in ["429", "quota", "rate limit", "too many"]):
-                                    st.session_state["_single_embed_result"] = (
-                                        "error",
-                                        f"❌ Reunião {number}: rate limit ({embed_provider}). Aguarde alguns minutos.",
-                                    )
+                                    friendly = f"❌ Reunião {number}: rate limit ({embed_provider}). Aguarde alguns minutos."
                                 else:
-                                    st.session_state["_single_embed_result"] = (
-                                        "error", f"❌ Reunião {number}: {error_msg[:200]}"
-                                    )
+                                    friendly = f"❌ Reunião {number}: {error_msg[:300]}"
+                                st.session_state["_single_embed_result"] = ("error", friendly)
+                                # Also persist inside the expander so it survives reruns
+                                st.session_state[f"_embed_err_{meeting_id}"] = friendly
                                 st.rerun()
+
+                # ── Diagnóstico de banco (linha separada, sempre visível) ───────
+                st.markdown("---")
+                if st.button(
+                    "🧪 Testar gravação no banco (sem API de embedding)",
+                    key=f"dbtest_{meeting_id}",
+                    use_container_width=True,
+                    help="Insere uma linha dummy com vetor zerado para verificar se o Supabase aceita INSERT nesta tabela.",
+                ):
+                    with st.spinner("Testando INSERT → SELECT → DELETE…"):
+                        _t = test_db_chunk_insert(meeting_id, project_id)
+                    if _t["error"]:
+                        st.error(f"❌ Erro no teste: {_t['error']}")
+                    elif _t["verify_count"] > 0:
+                        st.success("✅ Banco OK — INSERT persistiu e SELECT confirmou. O problema está na API de embedding.")
+                    else:
+                        st.error(
+                            "❌ INSERT executou sem erro mas linha não foi encontrada (verify_count=0). "
+                            "Provável problema de permissão na chave Supabase — verifique se a anon key tem INSERT em transcript_chunks."
+                        )
 
     except Exception as e:
         st.error(f"Erro ao carregar lista de reuniões: {e}")
@@ -667,7 +703,10 @@ if active_question and not _asst_running:
 
         def _run_tools_thread() -> None:
             def _status(msg: str) -> None:
-                st.session_state["_asst_status"] = msg
+                try:
+                    st.session_state["_asst_status"] = msg
+                except Exception:
+                    pass  # session context not available in this thread — safe to ignore
 
             try:
                 _status("🔧 Iniciando consulta…")
@@ -861,7 +900,10 @@ if active_question and not _asst_running:
 
         def _run_tools_thread() -> None:
             def _status(msg: str) -> None:
-                st.session_state["_asst_status"] = msg
+                try:
+                    st.session_state["_asst_status"] = msg
+                except Exception:
+                    pass  # session context not available in this thread — safe to ignore
 
             try:
                 _status("🔧 Iniciando consulta…")
