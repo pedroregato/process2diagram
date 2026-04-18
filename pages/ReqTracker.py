@@ -27,13 +27,6 @@ from core.project_store import (
     list_bpmn_processes, list_bpmn_versions, bpmn_tables_exist,
 )
 
-st.set_page_config(
-    page_title="ReqTracker — Process2Diagram",
-    page_icon="📋",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
-
 apply_auth_gate()
 
 # ── Estilos ───────────────────────────────────────────────────────────────────
