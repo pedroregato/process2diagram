@@ -27,6 +27,13 @@ from core.project_store import (
     list_bpmn_processes, list_bpmn_versions, bpmn_tables_exist,
 )
 
+st.set_page_config(
+    page_title="ReqTracker — Process2Diagram",
+    page_icon="📋",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
 apply_auth_gate()
 
 # ── Estilos ───────────────────────────────────────────────────────────────────
@@ -241,6 +248,10 @@ with tab_req:
                     st.markdown(f'<span class="badge {badge_cls}">{badge_txt}</span>',
                                 unsafe_allow_html=True)
                     st.markdown(f"**Descrição:** {req.get('description', '—')}")
+                    if req.get("cited_by"):
+                        st.caption(f"👤 Proponente: **{req['cited_by']}**")
+                    if req.get("source_quote"):
+                        st.caption(f'💬 *"{req["source_quote"]}"*')
                 with col_m:
                     st.caption(f"🏁 {meet_label(req.get('first_meeting_id'))}")
                     st.caption(f"🔄 {meet_label(req.get('last_meeting_id'))}")
@@ -260,6 +271,10 @@ with tab_req:
                         )
                         if v.get("change_summary"):
                             st.caption(f"   ↳ {v['change_summary']}")
+                        if v.get("cited_by"):
+                            st.caption(f"   👤 {v['cited_by']}")
+                        if v.get("source_quote"):
+                            st.caption(f'   💬 *"{v["source_quote"]}"*')
                         if v.get("contradiction_detail"):
                             st.error(v["contradiction_detail"])
 
@@ -339,6 +354,16 @@ with tab_hist:
                 if v.get("change_summary"):
                     st.markdown(
                         f'<span style="color:#fbbf24">↳ {v["change_summary"]}</span>',
+                        unsafe_allow_html=True,
+                    )
+                if v.get("cited_by"):
+                    st.markdown(
+                        f'<span style="color:#93c5fd">👤 Proponente: <strong>{v["cited_by"]}</strong></span>',
+                        unsafe_allow_html=True,
+                    )
+                if v.get("source_quote"):
+                    st.markdown(
+                        f'<span style="color:#d1d5db">💬 <em>"{v["source_quote"]}"</em></span>',
                         unsafe_allow_html=True,
                     )
                 if v.get("contradiction_detail"):
