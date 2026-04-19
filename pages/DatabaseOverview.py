@@ -249,11 +249,12 @@ st.markdown("---")
 # ══════════════════════════════════════════════════════════════════════════════
 # TABS
 # ══════════════════════════════════════════════════════════════════════════════
-tab_proj, tab_meet, tab_req, tab_art, tab_int = st.tabs([
+tab_proj, tab_meet, tab_req, tab_art, tab_emb, tab_int = st.tabs([
     "📊 Por Projeto",
     "📅 Reuniões",
     "📋 Requisitos",
     "🔧 Artefatos",
+    "🔮 Embeddings",
     "⚠️ Integridade",
 ])
 
@@ -565,7 +566,322 @@ with tab_art:
         )
 
 # ╔══════════════════════════════════════════════════════╗
-# ║  TAB 5 — Integridade de Dados                       ║
+# ║  TAB 5 — Embeddings                                 ║
+# ╚══════════════════════════════════════════════════════╝
+with tab_emb:
+    st.markdown(
+        "Gerencie os embeddings de transcrição usados pela **busca semântica** do Assistente. "
+        "Configure o provedor de embedding em **Configurações → Embeddings & Busca**."
+    )
+    st.markdown("---")
+
+    if not chunks_ok:
+        st.warning(
+            "⚠️ Tabela `transcript_chunks` não encontrada. "
+            "Execute o script SQL em `setup/supabase_schema_transcript_chunks.sql` para criá-la."
+        )
+    else:
+        # ── Coverage summary ──────────────────────────────────────────────────
+        st.markdown("#### 📊 Cobertura por Projeto")
+        _cov_rows = []
+        for _p in projects:
+            _pid = _p["id"]
+            _p_meetings = [m for m in meetings if m.get("project_id") == _pid]
+            _indexed = sum(1 for m in _p_meetings if m["id"] in meeting_ids_with_chunks)
+            _total = len(_p_meetings)
+            _chunks_count = sum(1 for c in transcript_chunks if c.get("project_id") == _pid)
+            _cov_rows.append({
+                "Projeto": _p.get("name", "—"),
+                "Reuniões": _total,
+                "Indexadas": _indexed,
+                "% Cobertura": f"{100*_indexed//_total if _total else 0}%",
+                "Chunks": _chunks_count,
+            })
+        if _cov_rows:
+            st.dataframe(pd.DataFrame(_cov_rows), use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+
+        # ── Project selector for embedding actions ────────────────────────────
+        st.markdown("#### ⚡ Gerenciar Embeddings")
+        _emb_proj_names = [p["name"] for p in projects]
+        _emb_proj_map   = {p["name"]: p for p in projects}
+        _emb_sel_name   = st.selectbox(
+            "Projeto", _emb_proj_names, key="emb_tab_proj_sel",
+            help="Selecione o projeto para gerenciar embeddings.",
+        )
+        _emb_proj = _emb_proj_map.get(_emb_sel_name, {})
+        _emb_proj_id = _emb_proj.get("id")
+
+        _emb_prov_options = ["Google Gemini", "OpenAI"]
+        # Pre-fill from Settings if available
+        _saved_prov = st.session_state.get("asst_embed_provider", _emb_prov_options[0])
+        _emb_prov_sel = st.selectbox(
+            "Provedor de embedding",
+            _emb_prov_options,
+            index=_emb_prov_options.index(_saved_prov) if _saved_prov in _emb_prov_options else 0,
+            key="emb_tab_prov",
+        )
+        _emb_api_key = st.text_input(
+            "API Key do provedor de embedding",
+            type="password",
+            key="emb_tab_api_key",
+            value=st.session_state.get("asst_embed_key", ""),
+            help="Google AI Studio key (Gemini) ou OpenAI key.",
+        )
+
+        st.markdown("---")
+
+        # ── Feedback (survives rerun) ─────────────────────────────────────────
+        if "_emb_tab_result" in st.session_state:
+            _res = st.session_state.pop("_emb_tab_result")
+            if "❌" in _res:
+                st.error(_res)
+            elif "⚠️" in _res:
+                st.warning(_res)
+            else:
+                st.success(_res)
+
+        if "_emb_tab_single_result" in st.session_state:
+            _lvl, _msg = st.session_state.pop("_emb_tab_single_result")
+            {"success": st.success, "warning": st.warning, "error": st.error}.get(
+                _lvl, st.info
+            )(_msg)
+
+        # ── Batch generation ──────────────────────────────────────────────────
+        if _emb_proj_id:
+            _proj_meetings = [m for m in meetings if m.get("project_id") == _emb_proj_id]
+            _not_indexed   = [m for m in _proj_meetings if m["id"] not in meeting_ids_with_chunks]
+            _indexed_count = len(_proj_meetings) - len(_not_indexed)
+
+            with st.expander(
+                f"⚡ Gerar em Lote · {_indexed_count}/{len(_proj_meetings)} reuniões indexadas",
+                expanded=(len(_not_indexed) > 0 and _indexed_count == 0),
+            ):
+                st.caption(
+                    "Gera embeddings para **todas** as reuniões do projeto. "
+                    "Reuniões já indexadas são re-processadas (upsert)."
+                )
+                if _not_indexed:
+                    st.caption(f"**{len(_not_indexed)}** reunião(ões) ainda sem embedding:")
+                    st.dataframe(
+                        pd.DataFrame([
+                            {"Nº": m.get("meeting_number") or "—", "Reunião": m.get("title") or "(sem título)"}
+                            for m in _not_indexed
+                        ]),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                else:
+                    st.success("✅ Todas as reuniões deste projeto já estão indexadas.")
+
+                if st.button(
+                    f"⚡ Gerar para todas as {len(_proj_meetings)} reuniões",
+                    key="emb_tab_batch_btn",
+                    type="primary",
+                    disabled=not _emb_api_key.strip(),
+                    use_container_width=True,
+                ):
+                    try:
+                        import time as _time
+                        from modules.embeddings import normalize_for_embedding
+                        from core.project_store import save_transcript_embeddings
+                    except ImportError as _ie:
+                        st.error(f"Módulo de embeddings não disponível: {_ie}")
+                        st.stop()
+
+                    _total_gen = 0
+                    _errors = []
+                    _skipped = []
+                    _zero_chunks = []
+                    _prog = st.progress(0.0)
+                    _n = len(_proj_meetings)
+
+                    for _i, _m in enumerate(_proj_meetings):
+                        _title = _m.get("title") or f"Reunião {_m.get('meeting_number', '?')}"
+                        _raw = (_m.get("transcript_clean") or _m.get("transcript_raw") or "").strip()
+                        _minutes_text = (_m.get("minutes_md") or "").strip()
+
+                        if not _raw and not _minutes_text:
+                            _skipped.append(_title)
+                            _prog.progress((_i + 1) / _n if _n else 1.0)
+                            continue
+
+                        try:
+                            if _i > 0 and _emb_prov_sel == "Google Gemini":
+                                _time.sleep(1.8)
+                            _n_saved = save_transcript_embeddings(
+                                meeting_id=_m["id"],
+                                project_id=_emb_proj_id,
+                                transcript=_raw,
+                                api_key=_emb_api_key.strip(),
+                                provider=_emb_prov_sel,
+                                fallback_text=_minutes_text,
+                            )
+                            if _n_saved == 0:
+                                _zero_chunks.append(_title)
+                            _total_gen += _n_saved
+                        except Exception as _exc:
+                            _err_str = str(_exc)
+                            if any(x in _err_str.lower() for x in ["429", "quota", "rate limit"]):
+                                _errors.append(f"{_title} → Rate limit ({_emb_prov_sel})")
+                                _time.sleep(10)
+                            else:
+                                _errors.append(f"{_title}: {_err_str[:150]}")
+
+                        _prog.progress((_i + 1) / _n if _n else 1.0)
+
+                    _prog.empty()
+                    _msg = f"✅ **{_total_gen:,} chunks** gerados com sucesso."
+                    if _skipped:
+                        _msg += f"\n\n⚠️ **{len(_skipped)}** reuniões sem conteúdo (transcrição e ata ausentes)."
+                    if _zero_chunks:
+                        _msg += f"\n\n⚠️ **{len(_zero_chunks)}** reuniões com 0 chunks após normalização."
+                    if _errors:
+                        _msg += f"\n\n❌ **{len(_errors)}** falhas:\n" + "\n".join(_errors[:10])
+                    st.session_state["_emb_tab_result"] = _msg
+                    st.rerun()
+
+            # ── Per-meeting management ────────────────────────────────────────
+            st.markdown("#### 🔄 Gerenciamento Individual")
+
+            try:
+                from modules.embeddings import normalize_for_embedding, chunk_text
+
+                # Load chunk counts per meeting
+                _chunk_counts: dict = {}
+                for _m in _proj_meetings:
+                    _mid = _m.get("id")
+                    if not _mid:
+                        continue
+                    try:
+                        _resp = db.table("transcript_chunks") \
+                            .select("chunk_index", count="exact") \
+                            .eq("meeting_id", _mid) \
+                            .execute()
+                        _chunk_counts[_mid] = _resp.count or 0
+                    except Exception:
+                        _chunk_counts[_mid] = 0
+
+                for _m in _proj_meetings:
+                    _mid     = _m["id"]
+                    _number  = _m.get("meeting_number")
+                    _title   = _m.get("title") or f"Reunião {_number}"
+                    _clean   = (_m.get("transcript_clean") or "").strip()
+                    _raw     = (_m.get("transcript_raw") or "").strip()
+                    _minutes = (_m.get("minutes_md") or "").strip()
+                    _transcript = (_clean or _raw)
+                    _qty     = _chunk_counts.get(_mid, 0)
+
+                    if _clean:
+                        _fonte = f"transcript_clean ({len(_clean):,} chars)"
+                    elif _raw:
+                        _fonte = f"transcript_raw ({len(_raw):,} chars)"
+                    else:
+                        _fonte = "❌ ausente no banco"
+
+                    _norm = normalize_for_embedding(_transcript)
+                    _norm_len = len(_norm.strip())
+                    _expected = len(chunk_text(_norm)) if _norm.strip() else 0
+                    _status_icon = "✅" if _qty > 0 else ("⚠️" if (not _transcript and _minutes) else "❌")
+
+                    with st.expander(
+                        f"{_status_icon} Reunião {_number} — {_title[:68]}{'...' if len(_title) > 68 else ''}",
+                        expanded=False,
+                    ):
+                        _per_err_key = f"_emb_tab_err_{_mid}"
+                        if _per_err_key in st.session_state:
+                            st.error(st.session_state[_per_err_key])
+
+                        _ci, _cb = st.columns([3, 1])
+                        with _ci:
+                            st.caption(f"**Título:** {_title}")
+                            st.caption(f"**Fonte:** {_fonte}")
+                            if _transcript:
+                                st.caption(f"**Após normalização:** {_norm_len:,} chars  ·  **Chunks esperados:** {_expected}")
+                                if _norm_len < 80:
+                                    if _minutes:
+                                        st.caption(f"⚠️ Transcrição muito curta — usará `minutes_md` ({len(_minutes):,} chars) como fallback")
+                                    else:
+                                        st.caption("❌ Transcrição muito curta e sem ata disponível")
+                                elif _expected == 0:
+                                    st.caption("❌ chunk_text retornou 0 — texto pode conter apenas ruído")
+                                if _norm.strip():
+                                    st.caption("🔍 Preview (normalizado):")
+                                    st.code(_norm.strip()[:300], language=None)
+                            elif _minutes:
+                                st.caption(f"ℹ️ Sem transcrição — usará `minutes_md` ({len(_minutes):,} chars) como fallback")
+                            st.metric("Chunks gerados", _qty)
+                        with _cb:
+                            if st.button(
+                                "🔄 Gerar",
+                                key=f"emb_tab_single_{_mid}",
+                                use_container_width=True,
+                                type="secondary",
+                                disabled=not _emb_api_key.strip(),
+                            ):
+                                with st.spinner(f"Processando Reunião {_number}…"):
+                                    try:
+                                        from core.project_store import save_transcript_embeddings as _ste
+                                        if len(_transcript) < 100 and not _minutes:
+                                            st.session_state["_emb_tab_single_result"] = (
+                                                "warning", f"Reunião {_number}: transcrição muito curta e sem ata."
+                                            )
+                                        else:
+                                            _n_s = _ste(
+                                                meeting_id=_mid,
+                                                project_id=_emb_proj_id,
+                                                transcript=_transcript,
+                                                api_key=_emb_api_key.strip(),
+                                                provider=_emb_prov_sel,
+                                                fallback_text=_minutes,
+                                            )
+                                            if _n_s > 0:
+                                                st.session_state["_emb_tab_single_result"] = (
+                                                    "success", f"✅ Reunião {_number}: {_n_s} chunks gerados."
+                                                )
+                                                st.session_state.pop(_per_err_key, None)
+                                            else:
+                                                st.session_state["_emb_tab_single_result"] = (
+                                                    "info", f"Reunião {_number}: nenhum chunk gerado."
+                                                )
+                                        st.rerun()
+                                    except Exception as _e:
+                                        _em = str(_e)
+                                        _friendly = (
+                                            f"❌ Reunião {_number}: rate limit ({_emb_prov_sel}). Aguarde."
+                                            if any(x in _em.lower() for x in ["429", "quota", "rate limit"])
+                                            else f"❌ Reunião {_number}: {_em[:300]}"
+                                        )
+                                        st.session_state["_emb_tab_single_result"] = ("error", _friendly)
+                                        st.session_state[_per_err_key] = _friendly
+                                        st.rerun()
+
+                        st.markdown("---")
+                        if st.button(
+                            "🧪 Testar gravação no banco",
+                            key=f"emb_tab_dbtest_{_mid}",
+                            use_container_width=True,
+                            help="Insere uma linha dummy para verificar permissões no Supabase.",
+                        ):
+                            from core.project_store import test_db_chunk_insert
+                            with st.spinner("Testando INSERT → SELECT → DELETE…"):
+                                _t = test_db_chunk_insert(_mid, _emb_proj_id)
+                            if _t["error"]:
+                                st.error(f"❌ Erro no teste: {_t['error']}")
+                            elif _t["verify_count"] > 0:
+                                st.success("✅ Banco OK — INSERT persistiu. O problema está na API de embedding.")
+                            else:
+                                st.error(
+                                    "❌ INSERT executou sem erro mas linha não foi encontrada. "
+                                    "Verifique permissões da anon key no Supabase."
+                                )
+
+            except Exception as _emb_exc:
+                st.error(f"Erro ao carregar reuniões: {_emb_exc}")
+
+# ╔══════════════════════════════════════════════════════╗
+# ║  TAB 6 — Integridade de Dados                       ║
 # ╚══════════════════════════════════════════════════════╝
 with tab_int:
 

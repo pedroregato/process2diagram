@@ -15,16 +15,14 @@ import streamlit as st
 from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured, get_supabase_client
 from modules.config import AVAILABLE_PROVIDERS
-from modules.embeddings import EMBEDDING_PROVIDERS, list_gemini_embedding_models
+from modules.embeddings import EMBEDDING_PROVIDERS
 from core.project_store import (
     list_projects,
     retrieve_context_for_question,
     retrieve_context_semantic,
     format_context,
     transcript_chunks_table_exists,
-    save_transcript_embeddings,
     get_embedding_coverage,
-    test_db_chunk_insert,
 )
 from agents.agent_assistant import AgentAssistant
 from ui.components.copy_button import copy_button
@@ -55,16 +53,18 @@ with st.sidebar:
     st.markdown("#### 🔧 Modo Ferramentas")
     use_tools = st.checkbox("Ativar tool-use", value=True, key="asst_use_tools")
     if use_tools:
-        st.caption("🔢 21 ferramentas disponíveis")
+        st.caption("🔢 21 ferramentas · catálogo em Configurações")
 
     st.markdown("---")
 
     # Contexto adicional
-    uploaded_ctx_file = st.file_uploader("Arquivo de contexto", type=["txt", "docx", "pdf", "csv", "xlsx"], key="asst_context_file")
-    
+    uploaded_ctx_file = st.file_uploader(
+        "Arquivo de contexto", type=["txt", "docx", "pdf", "csv", "xlsx"],
+        key="asst_context_file",
+    )
+
     if uploaded_ctx_file:
         try:
-            # Processamento simplificado do arquivo
             import io
             content = ""
             if uploaded_ctx_file.type == "text/plain":
@@ -78,7 +78,7 @@ with st.sidebar:
                     content = "PDF import não disponível"
             else:
                 content = uploaded_ctx_file.read().decode("utf-8", errors="ignore")[:50000]
-            
+
             if content:
                 st.session_state["_asst_file_ctx"] = content
                 st.session_state["_asst_file_name"] = uploaded_ctx_file.name
@@ -97,11 +97,11 @@ selected_provider = st.session_state.get("asst_provider", "DeepSeek")
 provider_cfg = AVAILABLE_PROVIDERS.get(selected_provider, AVAILABLE_PROVIDERS.get("DeepSeek", {}))
 api_key = st.session_state.get("asst_api_key", "")
 _chunks_table_ok = supabase_configured() and transcript_chunks_table_exists()
-embed_provider = st.session_state.get("asst_embed_provider", list(EMBEDDING_PROVIDERS.keys())[0])
-embed_api_key = st.session_state.get("asst_embed_key", "")
 
 if "asst_use_semantic" not in st.session_state:
-    st.session_state["asst_use_semantic"] = bool(embed_api_key and _chunks_table_ok)
+    st.session_state["asst_use_semantic"] = bool(
+        st.session_state.get("asst_embed_key", "") and _chunks_table_ok
+    )
 
 # ── Main Area ─────────────────────────────────────────────────────────────────
 st.markdown("# 💬 Assistente de Reuniões")
@@ -113,306 +113,6 @@ if not supabase_configured():
 if not project_id:
     st.warning("👈 Selecione um projeto na sidebar.")
     st.stop()
-
-# ── Trigger: geração de embeddings em batch (APENAS UMA VEZ) ───────────────────
-if "_trigger_embed" in st.session_state:
-    trigger = st.session_state.pop("_trigger_embed")
-    if trigger["project_id"] == project_id:
-        db = get_supabase_client()
-        if db:
-            with st.spinner("⚡ Gerando embeddings em lote... (pode demorar em reuniões longas)"):
-                meeting_rows = db.table("meetings") \
-                    .select("id, title, meeting_number, transcript_clean, transcript_raw, minutes_md") \
-                    .eq("project_id", project_id) \
-                    .order("meeting_number") \
-                    .execute().data or []
-
-            total_gen = 0
-            errors = []
-            skipped_null = []      # sem transcrição nem ata
-            skipped_short = []     # muito curta após normalização
-            zero_chunks = []       # normalizou mas chunk_text devolveu []
-
-            prog = st.progress(0.0)
-            n_total = len(meeting_rows)
-
-            from modules.embeddings import normalize_for_embedding
-
-            for i, m in enumerate(meeting_rows):
-                meeting_id = m["id"]
-                title = m.get("title") or f"Reunião {m.get('meeting_number', '?')}"
-                raw_transcript = (m.get("transcript_clean") or m.get("transcript_raw") or "").strip()
-                minutes_md_text = (m.get("minutes_md") or "").strip()
-
-                # Diagnóstico precoce: sem fonte alguma
-                if not raw_transcript and not minutes_md_text:
-                    skipped_null.append(title)
-                    prog.progress((i + 1) / n_total if n_total else 1.0)
-                    continue
-
-                try:
-                    # Gemini free tier: 1.2 s between calls to stay under 100 req/min.
-                    # OpenAI / Grok: no rate delay needed for embedding calls.
-                    if i > 0 and trigger["provider"] == "Google Gemini":
-                        time.sleep(1.8)
-                    n_saved = save_transcript_embeddings(
-                        meeting_id=meeting_id,
-                        project_id=project_id,
-                        transcript=raw_transcript,
-                        api_key=trigger["api_key"],
-                        provider=trigger["provider"],
-                        fallback_text=minutes_md_text,
-                    )
-                    if n_saved == 0:
-                        zero_chunks.append(title)
-                    total_gen += n_saved
-                except Exception as exc:
-                    error_str = str(exc)
-                    if any(x in error_str.lower() for x in ["429", "quota", "rate limit", "too many"]):
-                        errors.append(f"{title} → Rate limit ({trigger['provider']})")
-                        time.sleep(10)
-                    else:
-                        errors.append(f"{title}: {error_str[:150]}")
-
-                prog.progress((i + 1) / n_total if n_total else 1.0)
-
-            prog.empty()
-
-            msg = f"✅ **{total_gen:,} chunks** gerados com sucesso em lote."
-            if skipped_null:
-                msg += (
-                    f"\n\n⚠️ **{len(skipped_null)} reuniões sem conteúdo** "
-                    f"(transcrição e ata ausentes no banco):\n"
-                    + "\n".join(f"  • {t}" for t in skipped_null[:10])
-                )
-            if zero_chunks:
-                msg += (
-                    f"\n\n⚠️ **{len(zero_chunks)} reuniões com 0 chunks** "
-                    f"(texto presente mas sem conteúdo aproveitável após normalização):\n"
-                    + "\n".join(f"  • {t}" for t in zero_chunks[:10])
-                )
-            if errors:
-                msg += f"\n\n❌ **Falhas em {len(errors)} reuniões**:\n" + "\n".join(errors[:15])
-
-            st.session_state["_embed_result"] = msg
-            st.rerun()
-
-# ── Feedback do processamento (APENAS UMA VEZ) ────────────────────────────────
-if "_embed_result" in st.session_state:
-    result = st.session_state.pop("_embed_result")
-    if "❌" in result:
-        st.error(result)
-    elif "⚠️" in result:
-        st.warning(result)
-    else:
-        st.success(result)
-
-# ── Gerar Embeddings em Lote (APENAS UMA VEZ) ─────────────────────────────────
-if _chunks_table_ok and project_id:
-    _emb_cov = get_embedding_coverage(project_id)
-    _emb_idx = _emb_cov.get("indexed_meetings", 0)
-    _emb_tot = _emb_cov.get("total_meetings", 0)
-    _emb_chk = _emb_cov.get("total_chunks", 0)
-
-    with st.expander(
-        f"⚡ Gerar Embeddings em Lote · {_emb_idx}/{_emb_tot} reuniões · {_emb_chk:,} chunks",
-        expanded=(_emb_idx == 0 and _emb_tot > 0),
-    ):
-        st.caption(
-            "Gera embeddings para **todas** as reuniões do projeto de uma vez. "
-            "Recomendado quando o projeto ainda não tem embeddings ou após adicionar várias reuniões."
-        )
-        st.caption(f"Provedor atual: **{embed_provider}**")
-
-        col_btn, col_info = st.columns([2, 3])
-        with col_btn:
-            if st.button(
-                "⚡ Gerar para Todas as Reuniões",
-                key="asst_gen_embeddings_batch",  # Chave única
-                type="primary",
-                use_container_width=True
-            ):
-                if not embed_api_key:
-                    st.warning("Configure a chave de embedding em Configurações → Embeddings & Busca.")
-                else:
-                    st.session_state["_trigger_embed"] = {
-                        "provider": embed_provider,
-                        "api_key": embed_api_key,
-                        "project_id": project_id,
-                    }
-                    st.rerun()
-
-        with col_info:
-            st.caption("⚠️ Pode demorar bastante em projetos com reuniões longas devido ao limite do Gemini Free Tier.")
-
-# ── Reprocessamento Individual por Reunião (APENAS UMA VEZ) ───────────────────
-if _chunks_table_ok and project_id:
-    st.markdown("---")
-    st.markdown("### 🔄 Reprocessar Embeddings Individualmente")
-
-    # Exibe resultado persistido do último embedding individual (sobrevive ao rerun)
-    if "_single_embed_result" in st.session_state:
-        _lvl, _msg = st.session_state.pop("_single_embed_result")
-        if _lvl == "success":
-            st.success(_msg)
-        elif _lvl == "warning":
-            st.warning(_msg)
-        elif _lvl == "error":
-            st.error(_msg)
-        else:
-            st.info(_msg)
-
-    try:
-        db = get_supabase_client()
-
-        meetings = db.table("meetings") \
-            .select("id, meeting_number, title, transcript_clean, transcript_raw, minutes_md") \
-            .eq("project_id", project_id) \
-            .order("meeting_number") \
-            .execute().data or []
-
-        # Conta chunks por reunião — count="exact" por meeting_id.
-        # Mesma abordagem usada na verificação pós-upsert de save_transcript_embeddings,
-        # que retorna contagens corretas. Queries em batch (1 por reunião, ≤ 10 meetings).
-        chunk_counts: dict = {}
-        for _m in meetings:
-            _mid = _m.get("id")
-            if not _mid:
-                continue
-            try:
-                _resp = db.table("transcript_chunks") \
-                    .select("chunk_index", count="exact") \
-                    .eq("meeting_id", _mid) \
-                    .execute()
-                chunk_counts[_mid] = _resp.count or 0
-            except Exception:
-                chunk_counts[_mid] = 0
-
-        from modules.embeddings import normalize_for_embedding, chunk_text
-
-        for m in meetings:
-            meeting_id = m["id"]
-            number = m.get("meeting_number")
-            title = m.get("title") or f"Reunião {number}"
-            raw_clean  = (m.get("transcript_clean") or "").strip()
-            raw_raw    = (m.get("transcript_raw")   or "").strip()
-            minutes_md_text = (m.get("minutes_md")  or "").strip()
-            transcript = (raw_clean or raw_raw)
-            chunk_qty = chunk_counts.get(meeting_id, 0)
-
-            # Diagnóstico de fonte
-            if raw_clean:
-                fonte = f"transcript_clean ({len(raw_clean):,} chars)"
-            elif raw_raw:
-                fonte = f"transcript_raw ({len(raw_raw):,} chars)"
-            else:
-                fonte = "❌ ausente no banco"
-
-            norm_text = normalize_for_embedding(transcript)
-            norm_len  = len(norm_text.strip())
-            has_fallback = bool(minutes_md_text)
-
-            # Compute expected chunks from norm_text (pure Python, fast)
-            expected_chunks = len(chunk_text(norm_text)) if norm_text.strip() else 0
-
-            status_icon = "✅" if chunk_qty > 0 else ("⚠️" if (not transcript and has_fallback) else "❌")
-
-            with st.expander(
-                f"{status_icon} Reunião {number} — {title[:68]}{'...' if len(title) > 68 else ''}",
-                expanded=False
-            ):
-                # Show persisted per-meeting error (survives rerun)
-                _per_err_key = f"_embed_err_{meeting_id}"
-                if _per_err_key in st.session_state:
-                    st.error(st.session_state[_per_err_key])
-
-                col_info, col_btn = st.columns([3, 1])
-                with col_info:
-                    st.caption(f"**Título:** {title}")
-                    st.caption(f"**Fonte:** {fonte}")
-                    if transcript:
-                        st.caption(f"**Após normalização:** {norm_len:,} chars  ·  **Chunks esperados:** {expected_chunks}")
-                        if norm_len < 80:
-                            if has_fallback:
-                                st.caption(f"⚠️ Transcrição muito curta — usará `minutes_md` ({len(minutes_md_text):,} chars) como fallback")
-                            else:
-                                st.caption("❌ Transcrição muito curta e sem ata disponível")
-                        elif expected_chunks == 0:
-                            st.caption("❌ chunk_text retornou 0 — texto pode conter apenas ruído após normalização")
-                        # Preview dos primeiros 300 chars normalizados
-                        if norm_text.strip():
-                            st.caption("🔍 Preview do texto normalizado:")
-                            st.code(norm_text.strip()[:300], language=None)
-                    elif has_fallback:
-                        st.caption(f"ℹ️ Sem transcrição — usará `minutes_md` ({len(minutes_md_text):,} chars) como fallback")
-                    st.metric("Chunks gerados", chunk_qty)
-                with col_btn:
-                    if st.button(
-                        "🔄 Gerar Embeddings",
-                        key=f"embed_single_{meeting_id}",
-                        use_container_width=True,
-                        type="secondary"
-                    ):
-                        with st.spinner(f"Processando Reunião {number}..."):
-                            try:
-                                if len(transcript) < 100:
-                                    st.session_state["_single_embed_result"] = (
-                                        "warning", f"Reunião {number}: transcrição muito curta."
-                                    )
-                                else:
-                                    n_saved = save_transcript_embeddings(
-                                        meeting_id=meeting_id,
-                                        project_id=project_id,
-                                        transcript=transcript,
-                                        api_key=embed_api_key,
-                                        provider=embed_provider,
-                                        fallback_text=minutes_md_text,
-                                    )
-                                    if n_saved > 0:
-                                        st.session_state["_single_embed_result"] = (
-                                            "success",
-                                            f"✅ Reunião {number}: {n_saved} chunks gerados com sucesso.",
-                                        )
-                                        # Clear any persisted error for this meeting
-                                        st.session_state.pop(f"_embed_err_{meeting_id}", None)
-                                    else:
-                                        st.session_state["_single_embed_result"] = (
-                                            "info", f"Reunião {number}: nenhum chunk gerado."
-                                        )
-                                st.rerun()
-                            except Exception as e:
-                                error_msg = str(e)
-                                if any(x in error_msg.lower() for x in ["429", "quota", "rate limit", "too many"]):
-                                    friendly = f"❌ Reunião {number}: rate limit ({embed_provider}). Aguarde alguns minutos."
-                                else:
-                                    friendly = f"❌ Reunião {number}: {error_msg[:300]}"
-                                st.session_state["_single_embed_result"] = ("error", friendly)
-                                # Also persist inside the expander so it survives reruns
-                                st.session_state[f"_embed_err_{meeting_id}"] = friendly
-                                st.rerun()
-
-                # ── Diagnóstico de banco (linha separada, sempre visível) ───────
-                st.markdown("---")
-                if st.button(
-                    "🧪 Testar gravação no banco (sem API de embedding)",
-                    key=f"dbtest_{meeting_id}",
-                    use_container_width=True,
-                    help="Insere uma linha dummy com vetor zerado para verificar se o Supabase aceita INSERT nesta tabela.",
-                ):
-                    with st.spinner("Testando INSERT → SELECT → DELETE…"):
-                        _t = test_db_chunk_insert(meeting_id, project_id)
-                    if _t["error"]:
-                        st.error(f"❌ Erro no teste: {_t['error']}")
-                    elif _t["verify_count"] > 0:
-                        st.success("✅ Banco OK — INSERT persistiu e SELECT confirmou. O problema está na API de embedding.")
-                    else:
-                        st.error(
-                            "❌ INSERT executou sem erro mas linha não foi encontrada (verify_count=0). "
-                            "Provável problema de permissão na chave Supabase — verifique se a anon key tem INSERT em transcript_chunks."
-                        )
-
-    except Exception as e:
-        st.error(f"Erro ao carregar lista de reuniões: {e}")
 
 # ── Guard: LLM API key ───────────────────────────────────────────────────────
 if not api_key:
@@ -429,7 +129,7 @@ def _badge(icon: str, label: str, value: str, color: str) -> str:
         f'</span>'
     )
 
-_use_sem   = st.session_state.get("asst_use_semantic", False) and _chunks_table_ok
+_use_sem    = st.session_state.get("asst_use_semantic", False) and _chunks_table_ok
 _embed_prov = st.session_state.get("asst_embed_provider", "")
 _embed_key  = st.session_state.get("asst_embed_key", "")
 _model      = provider_cfg.get("default_model", "")
@@ -465,52 +165,6 @@ st.markdown(
     + "</div>",
     unsafe_allow_html=True,
 )
-
-# ── Tool catalog ──────────────────────────────────────────────────────────────
-if st.session_state.get("asst_use_tools", True):
-    from core.assistant_tools import get_tool_catalog
-    _catalog = get_tool_catalog()
-    _cat_groups = {}
-    for _t in _catalog:
-        _cat_groups.setdefault(_t["category"], []).append(_t)
-
-    _cat_labels = {
-        "consulta": ("🔍 Consulta", "#1A4B8C", "Somente leitura — busca e exibe dados do projeto"),
-        "escrita":  ("✏️ Escrita", "#7C2D12", "Modifica dados — requer confirmação do usuário"),
-        "geração":  ("🤖 Geração", "#166534", "Chama o LLM para gerar conteúdo e salva no banco"),
-    }
-
-    with st.expander(f"📖 Catálogo de Ferramentas  ·  {len(_catalog)} disponíveis", expanded=False):
-        st.caption(
-            "Ferramentas que o Assistente pode chamar automaticamente durante uma conversa. "
-            "O LLM decide qual(is) usar com base na pergunta."
-        )
-        for _cat_key in ("consulta", "escrita", "geração"):
-            _tools_in_cat = _cat_groups.get(_cat_key, [])
-            if not _tools_in_cat:
-                continue
-            _cat_label, _cat_color, _cat_desc = _cat_labels[_cat_key]
-            st.markdown(
-                f'<span style="display:inline-block;background:{_cat_color};color:#fff;'
-                f'border-radius:6px;padding:2px 10px;font-size:0.78rem;font-weight:600;'
-                f'margin-bottom:4px">{_cat_label} · {len(_tools_in_cat)} ferramentas</span>  '
-                f'<span style="color:#64748b;font-size:0.78rem">{_cat_desc}</span>',
-                unsafe_allow_html=True,
-            )
-            for _t in _tools_in_cat:
-                _params_str = (
-                    f"`({'`, `'.join(_t['params'])})`" if _t["params"] else "*(sem parâmetros)*"
-                )
-                _req_str = (
-                    f"  · obrigatórios: `{'`, `'.join(_t['required'])}`" if _t["required"] else ""
-                )
-                st.markdown(
-                    f"**`{_t['name']}`**{_req_str}  \n"
-                    f"{_t['description'][:160]}{'…' if len(_t['description']) > 160 else ''}  \n"
-                    f"<span style='color:#94a3b8;font-size:0.75rem'>parâmetros: {_params_str}</span>",
-                    unsafe_allow_html=True,
-                )
-            st.markdown("")
 
 _DSML_SAFETY_RE = re.compile(r'<[|\uff5c]DSML[|\uff5c][^>]*>.*?<[|\uff5c]DSML[|\uff5c][^>]*>', re.DOTALL)
 _DSML_CUT_RE    = re.compile(r'<[|\uff5c]DSML[|\uff5c]')
@@ -586,7 +240,6 @@ if _asst_running:
     result_box: dict = st.session_state.get("_asst_result_box", {})
 
     if thread and thread.is_alive():
-        # Show live status + stop button
         status_msg = st.session_state.get("_asst_status", "🔧 Consultando ferramentas…")
         with st.chat_message("assistant"):
             st.markdown(f"_{status_msg}_")
@@ -599,12 +252,10 @@ if _asst_running:
                 cancel_ev.set()
                 st.session_state["_asst_status"] = "⏹ Interrompendo…"
 
-        # Poll — sleep briefly then rerun to check thread again
         time.sleep(0.6)
         st.rerun()
 
     else:
-        # Thread finished (or never started) — collect result
         if thread:
             thread.join(timeout=2)
 
@@ -621,14 +272,12 @@ if _asst_running:
         history.append({"role": "assistant", "content": response_text})
         st.session_state["assistant_history"] = history
 
-        # Store caption info for display after rerun
         st.session_state["_asst_last_caption"] = {
             "tokens": tokens_used,
             "tools": tools_called,
             "mode": "tools",
         }
 
-        # Clear running state
         for _k in ("_asst_running", "_asst_thread", "_asst_cancel_event",
                    "_asst_result_box", "_asst_status"):
             st.session_state.pop(_k, None)
@@ -659,9 +308,7 @@ active_question: str | None = (
 )
 
 if active_question and not _asst_running:
-    # ── Separate display question (stored in history) from LLM question ──────
-    # File context is injected into the LLM question but NOT shown in the chat
-    # UI or stored in history — so re-editing, copy and display stay clean.
+    # File context is injected into the LLM question but NOT shown in chat UI
     display_question = active_question
     _file_ctx  = st.session_state.get("_asst_file_ctx", "")
     _file_name = st.session_state.get("_asst_file_name", "")
@@ -677,11 +324,9 @@ if active_question and not _asst_running:
     else:
         llm_question = display_question
 
-    question = display_question  # used for display / history
-    # Reload history (may have been truncated by resubmit)
+    question = display_question
     history = st.session_state["assistant_history"]
 
-    # 1. Append and render user message (always shows clean question)
     history.append({"role": "user", "content": display_question})
     with st.chat_message("user"):
         st.markdown(display_question)
@@ -693,11 +338,10 @@ if active_question and not _asst_running:
         _cancel_ev  = threading.Event()
         _result_box: dict = {}
 
-        # Capture values needed by the thread
         _api_key       = api_key
         _provider_cfg  = provider_cfg
-        _history_snap  = list(history[:-1])   # excludes the current question
-        _question      = llm_question          # includes file context when present
+        _history_snap  = list(history[:-1])
+        _question      = llm_question
         _project_id    = project_id
         _project_name  = project_name
 
@@ -706,7 +350,7 @@ if active_question and not _asst_running:
                 try:
                     st.session_state["_asst_status"] = msg
                 except Exception:
-                    pass  # session context not available in this thread — safe to ignore
+                    pass
 
             try:
                 _status("🔧 Iniciando consulta…")
@@ -723,7 +367,6 @@ if active_question and not _asst_running:
                 _result_box["tokens"]       = tok
                 _result_box["tools_called"] = tools
             except Exception as _exc:
-                # Fallback to keyword RAG
                 _status("⚠️ Tool-use falhou — usando busca por keyword…")
                 try:
                     _ctx  = retrieve_context_for_question(_project_id, _question)
@@ -745,14 +388,11 @@ if active_question and not _asst_running:
                     _result_box["error"]        = str(_exc2)
 
         _thread = threading.Thread(target=_run_tools_thread, daemon=True)
-        # Propagate Streamlit script-run context to the worker thread so that
-        # st.session_state writes from _status() don't raise
-        # "Tried to use SessionInfo before it was initialized".
         try:
             from streamlit.runtime.scriptrunner import add_script_run_ctx
             add_script_run_ctx(_thread)
         except Exception:
-            pass  # older Streamlit versions — context not required
+            pass
         st.session_state["_asst_running"]      = True
         st.session_state["_asst_thread"]       = _thread
         st.session_state["_asst_cancel_event"] = _cancel_ev
@@ -764,7 +404,6 @@ if active_question and not _asst_running:
 
     # ── Caminho B: RAG clássico (keyword / semântico) ─────────────────────────
     else:
-        # 2. Retrieve context
         use_semantic_now = (
             st.session_state.get("asst_use_semantic", False)
             and _chunks_table_ok
@@ -772,7 +411,9 @@ if active_question and not _asst_running:
 
         if use_semantic_now:
             embed_key_now = st.session_state.get("asst_embed_key", "")
-            embed_provider_now = st.session_state.get("asst_embed_provider", list(EMBEDDING_PROVIDERS.keys())[0])
+            embed_provider_now = st.session_state.get(
+                "asst_embed_provider", list(EMBEDDING_PROVIDERS.keys())[0]
+            )
             if not embed_key_now:
                 st.warning("⚠️ Busca semântica ativa mas sem API key de embedding. Usando keyword.")
                 use_semantic_now = False
@@ -790,7 +431,6 @@ if active_question and not _asst_running:
 
             context_text = format_context(ctx, project_name)
 
-            # Prepend file context when available (placed before meeting data)
             if _file_ctx:
                 _n_words = len(_file_ctx.split())
                 context_text = (
@@ -807,7 +447,7 @@ if active_question and not _asst_running:
         if search_mode == "keyword_fallback":
             st.info(
                 "ℹ️ Embeddings ainda não gerados — usando busca por **keyword**. "
-                "Gere os embeddings na sidebar (⚡) para ativar a busca semântica.",
+                "Gere os embeddings em Banco de Dados → Embeddings para ativar a busca semântica.",
                 icon=None,
             )
         if not meetings_passages and no_transcript:
@@ -816,7 +456,6 @@ if active_question and not _asst_running:
                 "Reuniões sem correspondência: " + ", ".join(no_transcript)
             )
 
-        # 3. Generate response
         with st.spinner("🤖 Gerando resposta..."):
             client_info = {"api_key": api_key}
             agent = AgentAssistant(client_info, provider_cfg)
@@ -830,7 +469,6 @@ if active_question and not _asst_running:
                 response_text = f"❌ Erro ao gerar resposta: {exc}"
                 tokens_used = 0
 
-        # 4. Append and render
         response_text = _clean_response(response_text) or response_text
         history.append({"role": "assistant", "content": response_text})
         st.session_state["assistant_history"] = history
@@ -838,7 +476,6 @@ if active_question and not _asst_running:
         with st.chat_message("assistant"):
             st.markdown(response_text)
 
-        # 5. Info caption
         n_meetings = len(meetings_passages)
         if search_mode == "semantic":
             mode_badge = "🔮 semântica"
@@ -849,196 +486,3 @@ if active_question and not _asst_running:
         st.caption(
             f"🔢 {tokens_used} tokens · {n_meetings} reunião(ões) · {mode_badge}"
         )
-        
-# Aceita pergunta nova ou pergunta reeditada
-active_question: str | None = (
-    st.session_state.pop("_resubmit_question", None)
-    or question
-)
-
-if active_question and not _asst_running:
-    # ── Separate display question (stored in history) from LLM question ──────
-    display_question = active_question
-    _file_ctx = st.session_state.get("_asst_file_ctx", "")
-    _file_name = st.session_state.get("_asst_file_name", "")
-
-    if _file_ctx:
-        _n_words = len(_file_ctx.split())
-        llm_question = (
-            f"[ARQUIVO ANEXADO: {_file_name} — {_n_words:,} palavras]\n"
-            f"{'─' * 50}\n"
-            f"{_file_ctx}\n"
-            f"{'─' * 50}\n\n"
-            f"{display_question}"
-        )
-    else:
-        llm_question = display_question
-
-    question = display_question  # usado para exibição / histórico
-
-    # Reload history (caso tenha sido truncado por reedição)
-    history = st.session_state["assistant_history"]
-
-    # 1. Adiciona e renderiza a mensagem do usuário (sempre limpa)
-    history.append({"role": "user", "content": display_question})
-    with st.chat_message("user"):
-        st.markdown(display_question)
-
-    use_tools_now = st.session_state.get("asst_use_tools", True)
-
-    # ── Caminho A: Tool-use com thread ───────────────────────────────────────
-    if use_tools_now:
-        _cancel_ev = threading.Event()
-        _result_box: dict = {}
-
-        _api_key = api_key
-        _provider_cfg = provider_cfg
-        _history_snap = list(history[:-1])   # exclui a pergunta atual
-        _question = llm_question
-        _project_id = project_id
-        _project_name = project_name
-
-        def _run_tools_thread() -> None:
-            def _status(msg: str) -> None:
-                try:
-                    st.session_state["_asst_status"] = msg
-                except Exception:
-                    pass  # session context not available in this thread — safe to ignore
-
-            try:
-                _status("🔧 Iniciando consulta…")
-                _agent = AgentAssistant({"api_key": _api_key}, _provider_cfg)
-                resp_text, tok, tools = _agent.chat_with_tools(
-                    history=_history_snap,
-                    question=_question,
-                    project_id=_project_id,
-                    project_name=_project_name,
-                    cancel_event=_cancel_ev,
-                    status_fn=_status,
-                )
-                _result_box["response"] = resp_text
-                _result_box["tokens"] = tok
-                _result_box["tools_called"] = tools
-            except Exception as _exc:
-                _status("⚠️ Tool-use falhou — usando busca por keyword…")
-                try:
-                    _ctx = retrieve_context_for_question(_project_id, _question)
-                    _ctxt = format_context(_ctx, _project_name)
-                    _agent2 = AgentAssistant({"api_key": _api_key}, _provider_cfg)
-                    resp_text, tok = _agent2.chat(
-                        history=_history_snap,
-                        context_text=_ctxt,
-                        question=_question,
-                    )
-                    _result_box["response"] = resp_text
-                    _result_box["tokens"] = tok
-                    _result_box["tools_called"] = []
-                    _result_box["error"] = f"tool-use falhou: {_exc}"
-                except Exception as _exc2:
-                    _result_box["response"] = f"❌ Erro ao gerar resposta: {_exc2}"
-                    _result_box["tokens"] = 0
-                    _result_box["tools_called"] = []
-                    _result_box["error"] = str(_exc2)
-
-        _thread = threading.Thread(target=_run_tools_thread, daemon=True)
-        try:
-            from streamlit.runtime.scriptrunner import add_script_run_ctx
-            add_script_run_ctx(_thread)
-        except Exception:
-            pass
-
-        st.session_state["_asst_running"] = True
-        st.session_state["_asst_thread"] = _thread
-        st.session_state["_asst_cancel_event"] = _cancel_ev
-        st.session_state["_asst_result_box"] = _result_box
-        st.session_state["_asst_status"] = "🔧 Iniciando consulta…"
-        st.session_state["assistant_history"] = history
-        _thread.start()
-        st.rerun()
-
-    # ── Caminho B: RAG clássico (keyword / semântico) ────────────────────────
-    else:
-        use_semantic_now = (
-            st.session_state.get("asst_use_semantic", False) and _chunks_table_ok
-        )
-
-        if use_semantic_now:
-            embed_key_now = st.session_state.get("asst_embed_key", "")
-            embed_provider_now = st.session_state.get("asst_embed_provider", list(EMBEDDING_PROVIDERS.keys())[0])
-            if not embed_key_now:
-                st.warning("⚠️ Busca semântica ativa mas sem chave de embedding. Usando keyword.")
-                use_semantic_now = False
-
-        with st.spinner("🔍 Pesquisando nas fontes de dados..."):
-            if use_semantic_now:
-                ctx = retrieve_context_semantic(
-                    project_id=project_id,
-                    question=display_question,
-                    api_key=embed_key_now,
-                    provider=embed_provider_now,
-                )
-            else:
-                ctx = retrieve_context_for_question(project_id, display_question)
-
-            context_text = format_context(ctx, project_name)
-
-            if _file_ctx:
-                _n_words = len(_file_ctx.split())
-                context_text = (
-                    f"## Arquivo Anexado: {_file_name} ({_n_words:,} palavras)\n\n"
-                    f"{_file_ctx}\n\n"
-                    f"---\n\n"
-                    + context_text
-                )
-
-        meetings_passages = ctx.get("meetings_passages") or []
-        no_transcript = ctx.get("meetings_without_transcript") or []
-        search_mode = ctx.get("search_mode", "keyword")
-
-        if search_mode == "keyword_fallback":
-            st.info(
-                "ℹ️ Embeddings ainda não gerados — usando busca por **keyword**. "
-                "Gere os embeddings na sidebar para ativar a busca semântica.",
-                icon=None,
-            )
-        if not meetings_passages and no_transcript:
-            st.warning(
-                "⚠️ Nenhum trecho relevante encontrado. "
-                "Reuniões sem correspondência: " + ", ".join(no_transcript)
-            )
-
-        # Gera resposta
-        with st.spinner("🤖 Gerando resposta..."):
-            client_info = {"api_key": api_key}
-            agent = AgentAssistant(client_info, provider_cfg)
-            try:
-                response_text, tokens_used = agent.chat(
-                    history=history[:-1],
-                    context_text=context_text,
-                    question=question,
-                )
-            except Exception as exc:
-                response_text = f"❌ Erro ao gerar resposta: {exc}"
-                tokens_used = 0
-
-        # Adiciona e renderiza resposta
-        response_text = _clean_response(response_text) or response_text
-        history.append({"role": "assistant", "content": response_text})
-        st.session_state["assistant_history"] = history
-
-        with st.chat_message("assistant"):
-            st.markdown(response_text)
-
-        # Caption final
-        n_meetings = len(meetings_passages)
-        if search_mode == "semantic":
-            mode_badge = "🔮 semântica"
-        elif search_mode == "keyword_fallback":
-            mode_badge = "🔑 keyword (fallback)"
-        else:
-            mode_badge = "🔑 keyword"
-
-        st.caption(
-            f"🔢 {tokens_used} tokens · {n_meetings} reunião(ões) · {mode_badge}"
-        )        
-        
