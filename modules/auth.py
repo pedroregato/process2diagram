@@ -52,20 +52,24 @@ def get_current_name() -> str | None:
 
 
 def is_admin() -> bool:
-    """Returns True if the current session user has admin role.
+    """Returns True if the current session user has admin-level access.
+
+    Hierarchy (highest → lowest): master > admin > user
+    Both 'master' and 'admin' grant access to admin tools.
 
     Checks _role from session_state first (set by both tenant and local login).
     Falls back to USUARIOS dict lookup for sessions that predate role storage.
     """
+    _ADMIN_ROLES = {"admin", "master"}
     role = st.session_state.get("_role")
     if role:
-        return role == "admin"
+        return role.lower() in _ADMIN_ROLES
     # Fallback: derive from USUARIOS for existing sessions
     user = get_current_user()
     if not user:
         return False
     u = USUARIOS.get(user.lower().strip())
-    return u is not None and u.get("role") == "admin"
+    return u is not None and u.get("role", "user").lower() in _ADMIN_ROLES
 
 
 def logout() -> None:
