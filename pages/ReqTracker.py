@@ -170,8 +170,9 @@ with st.expander("📦 Exportar Relatório", expanded=False):
 st.markdown("---")
 
 # ── Abas principais ───────────────────────────────────────────────────────────
-tab_req, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn = st.tabs([
+tab_req, tab_mindmap, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn = st.tabs([
     "📝 Requisitos",
+    "🗺️ Mind Map",
     f"⚠️ Contradições ({len(contradictions)})",
     "📅 Histórico",
     "🗓️ Reuniões",
@@ -272,7 +273,46 @@ with tab_req:
                             st.error(v["contradiction_detail"])
 
 # ════════════════════════════════════════════════════════════════════════════
-# TAB 2 — CONTRADIÇÕES
+# TAB 2 — MIND MAP
+# ════════════════════════════════════════════════════════════════════════════
+with tab_mindmap:
+    if not requirements:
+        st.info("Nenhum requisito registrado para este projeto.")
+    else:
+        from modules.requirements_mindmap import build_mindmap_tree_from_dicts
+        from modules.mindmap_interactive import render_interactive_mindmap
+
+        # Filtros opcionais do mind map
+        col_mm1, col_mm2, col_mm3 = st.columns([2, 2, 2])
+        with col_mm1:
+            mm_status = st.selectbox(
+                "Filtrar por status", ["Todos", "active", "revised", "contradicted", "deprecated"],
+                key="mm_status",
+            )
+        with col_mm2:
+            mm_types = sorted({r.get("req_type", "") for r in requirements if r.get("req_type")})
+            mm_type = st.selectbox("Filtrar por tipo", ["Todos"] + mm_types, key="mm_type")
+        with col_mm3:
+            mm_height = st.slider("Altura (px)", 500, 1200, 700, 50, key="mm_height")
+
+        mm_reqs = requirements
+        if mm_status != "Todos":
+            mm_reqs = [r for r in mm_reqs if r.get("status") == mm_status]
+        if mm_type != "Todos":
+            mm_reqs = [r for r in mm_reqs if r.get("req_type") == mm_type]
+
+        if not mm_reqs:
+            st.info("Nenhum requisito corresponde aos filtros selecionados.")
+        else:
+            st.caption(f"Exibindo {len(mm_reqs)} requisito(s) no mind map.")
+            tree = build_mindmap_tree_from_dicts(mm_reqs, selected_name)
+            if tree.get("children"):
+                render_interactive_mindmap(tree, height=mm_height)
+            else:
+                st.info("Não foi possível gerar o mind map para os requisitos selecionados.")
+
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 3 — CONTRADIÇÕES
 # ════════════════════════════════════════════════════════════════════════════
 with tab_contra:
     if not contradictions:

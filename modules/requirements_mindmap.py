@@ -79,6 +79,75 @@ def build_mindmap_tree(model, session_title: str = "") -> dict:
     return root
 
 
+def build_mindmap_tree_from_dicts(reqs: list[dict], project_name: str = "") -> dict:
+    """
+    Build a hierarchical dict for the interactive mindmap renderer
+    from a list of raw Supabase requirement dicts.
+
+    Input dict keys expected:
+        req_number, title, req_type, priority, status
+    """
+    root: dict = {
+        "kind": "root",
+        "id": "root",
+        "label": project_name or "Requisitos",
+        "children": [],
+    }
+
+    grouped: dict = defaultdict(list)
+    for r in reqs:
+        t = r.get("req_type") or "functional"
+        grouped[t].append(r)
+
+    for t_key, t_label in _TYPE_LABELS.items():
+        items = grouped.get(t_key, [])
+        if not items:
+            continue
+        type_node: dict = {
+            "kind": "type",
+            "id": f"type_{t_key}",
+            "label": t_label,
+            "colorKey": t_key,
+            "children": [
+                {
+                    "kind": "req",
+                    "id": f"REQ-{r.get('req_number', 0):03d}",
+                    "title": r.get("title", ""),
+                    "priority": r.get("priority", "unspecified") or "unspecified",
+                    "status": r.get("status", "active"),
+                }
+                for r in items
+            ],
+        }
+        root["children"].append(type_node)
+
+    # Types not in _TYPE_LABELS (catch-all)
+    known = set(_TYPE_LABELS.keys())
+    for t_key, items in grouped.items():
+        if t_key in known:
+            continue
+        label = t_key.replace("_", " ").title() if t_key else "Outros"
+        type_node = {
+            "kind": "type",
+            "id": f"type_{t_key or 'other'}",
+            "label": label,
+            "colorKey": "functional",
+            "children": [
+                {
+                    "kind": "req",
+                    "id": f"REQ-{r.get('req_number', 0):03d}",
+                    "title": r.get("title", ""),
+                    "priority": r.get("priority", "unspecified") or "unspecified",
+                    "status": r.get("status", "active"),
+                }
+                for r in items
+            ],
+        }
+        root["children"].append(type_node)
+
+    return root
+
+
 def generate_requirements_mindmap(model) -> str:
     """
     Generate a Mermaid mindmap string from a RequirementsModel.
