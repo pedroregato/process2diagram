@@ -568,19 +568,18 @@ with tab_art:
 # ║  TAB 5 — Integridade de Dados                       ║
 # ╚══════════════════════════════════════════════════════╝
 with tab_int:
-    st.markdown(
-        "Reuniões com campos ausentes que podem afetar o funcionamento do pipeline ou do Assistente."
-    )
+
+    # ── Build issues ──────────────────────────────────────────────────────────
+    _FIELDS = ["transcrição", "ata", "embeddings", "BPMN", "tokens", "provedor LLM"]
+    _N_FIELDS = len(_FIELDS)
 
     issues: list[dict] = []
+    _meeting_issues: dict[str, list[str]] = {}   # meeting_id → missing list
     for m in meetings:
-        pid    = m.get("project_id")
-        pname  = (proj_map.get(pid) or {}).get("name") or "—"
-        n      = m.get("meeting_number") or "?"
-        title  = m.get("title") or "(sem título)"
-        mid    = m["id"]
-
-        missing = []
+        pid   = m.get("project_id")
+        pname = (proj_map.get(pid) or {}).get("name") or "—"
+        mid   = m["id"]
+        missing: list[str] = []
         if not (m.get("transcript_clean") or m.get("transcript_raw")):
             missing.append("transcrição")
         if not m.get("minutes_md"):
@@ -593,66 +592,261 @@ with tab_int:
             missing.append("tokens")
         if not (m.get("llm_provider") or "").strip():
             missing.append("provedor LLM")
-
+        _meeting_issues[mid] = missing
         if missing:
             issues.append({
+                "_mid":      mid,
+                "_missing":  missing,
                 "Projeto":   pname,
-                "Nº":        n,
-                "Reunião":   title,
+                "Nº":        m.get("meeting_number") or "?",
+                "Reunião":   m.get("title") or "(sem título)",
                 "Data":      str(m.get("meeting_date") or "—"),
                 "Ausentes":  ", ".join(missing),
-                "Score":     f"{6 - len(missing)}/6",
+                "Score":     f"{_N_FIELDS - len(missing)}/{_N_FIELDS}",
             })
+
+    field_counts: dict[str, int] = defaultdict(int)
+    for row in issues:
+        for fld in row["_missing"]:
+            field_counts[fld] += 1
+
+    # ── Health Score ──────────────────────────────────────────────────────────
+    _total_slots   = total_meetings * _N_FIELDS
+    _missing_slots = sum(len(v) for v in _meeting_issues.values())
+    _health_pct    = round(100 * (1 - _missing_slots / _total_slots)) if _total_slots else 100
+    _complete       = sum(1 for v in _meeting_issues.values() if not v)
+
+    st.markdown("#### 📊 Saúde Geral")
+    _hc1, _hc2, _hc3, _hc4 = st.columns(4)
+    _hc1.metric("Saúde geral",        f"{_health_pct}%",
+                delta=None, help="% dos campos preenchidos em todas as reuniões")
+    _hc2.metric("Reuniões completas", f"{_complete}/{total_meetings}")
+    _hc3.metric("Com problemas",      len(issues))
+    _hc4.metric("Campos ausentes",    _missing_slots)
+
+    _bar_filled = "█" * (_health_pct // 5)
+    _bar_empty  = "░" * (20 - _health_pct // 5)
+    _bar_color  = "🟢" if _health_pct >= 90 else ("🟡" if _health_pct >= 70 else "🔴")
+    st.markdown(
+        f"{_bar_color} `{_bar_filled}{_bar_empty}` **{_health_pct}%** integridade"
+    )
+
+    st.markdown("---")
 
     if not issues:
         st.success("✅ Todas as reuniões possuem os campos principais preenchidos.")
     else:
-        c_warn, _ = st.columns([4, 2])
-        with c_warn:
-            st.warning(
-                f"⚠️ {len(issues)} reunião(ões) com dados ausentes "
-                f"de {total_meetings} no total."
-            )
-
-        df_issues = pd.DataFrame(issues)
-        st.dataframe(df_issues, use_container_width=True, hide_index=True)
-
-        # Summary by missing field
-        st.markdown("#### Frequência por campo ausente")
-        field_counts: dict[str, int] = defaultdict(int)
-        for row in issues:
-            for fld in row["Ausentes"].split(", "):
-                field_counts[fld.strip()] += 1
-
-        df_fc = pd.DataFrame(
-            [{"Campo ausente": k, "Reuniões afetadas": v}
-             for k, v in sorted(field_counts.items(), key=lambda x: -x[1])]
+        st.warning(
+            f"⚠️ **{len(issues)} reunião(ões) com dados ausentes** de {total_meetings} no total."
         )
-        st.dataframe(df_fc, use_container_width=True, hide_index=True)
 
-        # Recommendations
-        st.markdown("#### Recomendações")
-        if field_counts.get("transcrição", 0):
-            st.info(
-                f"📝 **{field_counts['transcrição']} reunião(ões) sem transcrição** — "
-                "use **Transcript Backfill** para adicionar as transcrições ausentes."
+        # Campo × contagem
+        st.markdown("#### Campos ausentes por frequência")
+        _fc_cols = st.columns(min(len(field_counts), 6))
+        _fc_items = sorted(field_counts.items(), key=lambda x: -x[1])
+        for _i, (_fld, _cnt) in enumerate(_fc_items):
+            _icon = {"transcrição":"📝","ata":"📋","embeddings":"🔮",
+                     "BPMN":"🔧","tokens":"🔢","provedor LLM":"⚙️"}.get(_fld, "❓")
+            _fc_cols[_i % len(_fc_cols)].metric(f"{_icon} {_fld.capitalize()}", _cnt)
+
+        # Detalhe por reunião
+        with st.expander("📋 Detalhes por reunião", expanded=False):
+            df_issues = pd.DataFrame(
+                [{k: v for k, v in r.items() if not k.startswith("_")} for r in issues]
             )
-        if field_counts.get("embeddings", 0):
-            st.info(
-                f"🔮 **{field_counts['embeddings']} reunião(ões) sem embeddings** — "
-                "gere os embeddings em **Assistente → ⚡ Gerar Embeddings**."
-            )
-        if field_counts.get("BPMN", 0):
-            st.info(
-                f"🔧 **{field_counts['BPMN']} reunião(ões) sem BPMN** — "
-                "use **BPMN Backfill** para gerar os diagramas retroativamente."
-            )
+            st.dataframe(df_issues, use_container_width=True, hide_index=True)
+
+        # ══════════════════════════════════════════════════════════════════════
+        # AÇÕES DE CORREÇÃO
+        # ══════════════════════════════════════════════════════════════════════
+        st.markdown("---")
+        st.markdown("### 🔧 Corrigir Problemas")
+
+        # ── Fix 1: Provedor LLM ───────────────────────────────────────────────
         if field_counts.get("provedor LLM", 0):
-            st.info(
-                f"⚙️ **{field_counts['provedor LLM']} reunião(ões) sem provedor LLM registrado** — "
-                "processadas antes do registro de `llm_provider`. "
-                "O Estimador de Custos permite selecionar um provedor de fallback."
-            )
+            with st.expander(
+                f"⚙️ Definir provedor LLM ausente · {field_counts['provedor LLM']} reunião(ões)",
+                expanded=True,
+            ):
+                _affected_prov = [
+                    m for m in meetings
+                    if not (m.get("llm_provider") or "").strip()
+                ]
+                st.caption(
+                    "Reuniões processadas antes do campo `llm_provider` ser registrado. "
+                    "Definir o provedor correto melhora a estimativa de custo."
+                )
+                _prov_names = list(PROVIDER_PRICING.keys())
+                _chosen_prov = st.selectbox(
+                    "Provedor a atribuir", _prov_names, key="fix_prov_sel"
+                )
+                _prov_preview = [
+                    {
+                        "Nº": m.get("meeting_number") or "—",
+                        "Reunião": m.get("title") or "(sem título)",
+                        "Data": str(m.get("meeting_date") or "—"),
+                    }
+                    for m in _affected_prov
+                ]
+                st.dataframe(
+                    pd.DataFrame(_prov_preview), use_container_width=True, hide_index=True
+                )
+                if st.button(
+                    f"✅ Atribuir '{_chosen_prov}' a {len(_affected_prov)} reunião(ões)",
+                    key="fix_prov_btn",
+                ):
+                    _ok_count = 0
+                    for _m in _affected_prov:
+                        try:
+                            db.table("meetings").update(
+                                {"llm_provider": _chosen_prov}
+                            ).eq("id", _m["id"]).execute()
+                            _ok_count += 1
+                        except Exception as _e:
+                            st.error(f"Erro ao atualizar reunião {_m.get('title')}: {_e}")
+                    if _ok_count:
+                        st.success(f"✅ {_ok_count} reunião(ões) atualizadas.")
+                        st.rerun()
+
+        # ── Fix 2: Embeddings ─────────────────────────────────────────────────
+        if field_counts.get("embeddings", 0):
+            with st.expander(
+                f"🔮 Gerar embeddings ausentes · {field_counts['embeddings']} reunião(ões)",
+                expanded=True,
+            ):
+                _affected_emb = [
+                    m for m in meetings
+                    if chunks_ok
+                    and m["id"] not in meeting_ids_with_chunks
+                    and (m.get("transcript_clean") or m.get("transcript_raw"))
+                ]
+                _no_transcript = field_counts.get("embeddings", 0) - len(_affected_emb)
+                if _no_transcript:
+                    st.warning(
+                        f"{_no_transcript} reunião(ões) não têm transcrição armazenada "
+                        "e não podem ser indexadas."
+                    )
+                if not _affected_emb:
+                    st.info("Nenhuma reunião indexável sem embedding encontrada.")
+                else:
+                    st.caption(
+                        f"{len(_affected_emb)} reunião(ões) com transcrição mas sem embedding. "
+                        "Informe a chave do provedor de embedding para gerar."
+                    )
+                    _emb_provider = st.selectbox(
+                        "Provedor de embedding",
+                        ["Google Gemini", "OpenAI"],
+                        key="fix_emb_prov",
+                    )
+                    _emb_key = st.text_input(
+                        "API Key", type="password", key="fix_emb_key",
+                        help="Google AI Studio key (Gemini) ou OpenAI key.",
+                    )
+                    _emb_preview = [
+                        {
+                            "Nº": m.get("meeting_number") or "—",
+                            "Reunião": m.get("title") or "(sem título)",
+                            "Projeto": (proj_map.get(m.get("project_id")) or {}).get("name") or "—",
+                        }
+                        for m in _affected_emb
+                    ]
+                    st.dataframe(
+                        pd.DataFrame(_emb_preview), use_container_width=True, hide_index=True
+                    )
+
+                    if st.button(
+                        f"⚡ Gerar embeddings para {len(_affected_emb)} reunião(ões)",
+                        key="fix_emb_btn",
+                        disabled=not _emb_key.strip(),
+                    ):
+                        try:
+                            from modules.embeddings import chunk_text, embed_text
+                            from core.project_store import save_transcript_embeddings
+                        except ImportError as _ie:
+                            st.error(f"Módulo de embeddings não disponível: {_ie}")
+                            st.stop()
+
+                        _emb_ok = 0
+                        _emb_fail = 0
+                        _prog = st.progress(0, text="Iniciando…")
+                        for _i, _m in enumerate(_affected_emb):
+                            _title = _m.get("title") or f"Reunião {_i+1}"
+                            _prog.progress(
+                                (_i) / len(_affected_emb),
+                                text=f"Processando: {_title} ({_i+1}/{len(_affected_emb)})",
+                            )
+                            _text = _m.get("transcript_clean") or _m.get("transcript_raw") or ""
+                            try:
+                                _chunks = chunk_text(_text)
+                                if not _chunks:
+                                    st.warning(f"⚠️ {_title}: nenhum chunk gerado.")
+                                    _emb_fail += 1
+                                    continue
+                                _embeddings = [
+                                    embed_text(_c, _emb_key.strip(), _emb_provider)
+                                    for _c in _chunks
+                                ]
+                                save_transcript_embeddings(
+                                    _m["id"],
+                                    _m.get("project_id"),
+                                    _chunks,
+                                    _embeddings,
+                                )
+                                _emb_ok += 1
+                            except Exception as _e:
+                                st.error(f"❌ {_title}: {_e}")
+                                _emb_fail += 1
+                        _prog.progress(1.0, text="Concluído.")
+                        if _emb_ok:
+                            st.success(
+                                f"✅ Embeddings gerados para {_emb_ok} reunião(ões)."
+                                + (f" · {_emb_fail} falha(s)." if _emb_fail else "")
+                            )
+                            st.rerun()
+                        else:
+                            st.error("Nenhum embedding gerado. Verifique a chave e tente novamente.")
+
+        # ── Fix 3: Ata ausente → MinutesBackfill ─────────────────────────────
+        if field_counts.get("ata", 0):
+            with st.expander(
+                f"📋 Gerar atas ausentes · {field_counts['ata']} reunião(ões)",
+                expanded=False,
+            ):
+                st.info(
+                    f"**{field_counts['ata']} reunião(ões) sem ata gerada.** "
+                    "Use a página Minutes Backfill para gerar as atas retroativamente "
+                    "(requer API key LLM e transcrição armazenada)."
+                )
+                st.page_link("pages/MinutesBackfill.py", label="→ Ir para Minutes Backfill", icon="📝")
+
+        # ── Fix 4: BPMN ausente → BpmnBackfill ───────────────────────────────
+        if field_counts.get("BPMN", 0):
+            with st.expander(
+                f"🔧 Gerar BPMN ausente · {field_counts['BPMN']} reunião(ões)",
+                expanded=False,
+            ):
+                st.info(
+                    f"**{field_counts['BPMN']} reunião(ões) sem diagrama BPMN.** "
+                    "Use a página BPMN Backfill para gerar os diagramas retroativamente "
+                    "(requer API key LLM e transcrição armazenada)."
+                )
+                st.page_link("pages/BpmnBackfill.py", label="→ Ir para BPMN Backfill", icon="🔧")
+
+        # ── Fix 5: Transcrição ausente → TranscriptBackfill ───────────────────
+        if field_counts.get("transcrição", 0):
+            with st.expander(
+                f"📝 Transcrições ausentes · {field_counts['transcrição']} reunião(ões)",
+                expanded=False,
+            ):
+                st.info(
+                    f"**{field_counts['transcrição']} reunião(ões) sem transcrição armazenada.** "
+                    "Use a página Transcript Backfill para fazer o upload dos arquivos originais."
+                )
+                st.page_link(
+                    "pages/TranscriptBackfill.py",
+                    label="→ Ir para Transcript Backfill",
+                    icon="📑",
+                )
 
     # ── Batch log summary ──────────────────────────────────────────────────────
     if batch_log:
@@ -670,5 +864,5 @@ with tab_int:
 st.markdown("---")
 st.caption(
     "🗄️ Dados lidos diretamente do Supabase. Clique em **🔄 Atualizar** para recarregar. "
-    "Esta página não modifica nenhum dado."
+    "As ações de correção na aba Integridade modificam dados no banco."
 )
