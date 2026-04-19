@@ -18,10 +18,12 @@ USUARIOS = {
     "admin": {
         "hash": "b5cda95e2e42318a9d2ab8d0f77d77d8f2319d4cf09f73219efe9d716b30caf6",
         "nome": "Administrador",
+        "role": "admin",
     },
     "demo": {
         "hash": "2c3749eab531cf5fd3f8fca77f80b1b2a4c2efab51c3a66badff46fca754f8fa",
         "nome": "Usuário Demo",
+        "role": "user",
     },
 }
 
@@ -47,6 +49,23 @@ def get_current_user() -> str | None:
 
 def get_current_name() -> str | None:
     return st.session_state.get("_usuario_nome")
+
+
+def is_admin() -> bool:
+    """Returns True if the current session user has admin role.
+
+    Checks _role from session_state first (set by both tenant and local login).
+    Falls back to USUARIOS dict lookup for sessions that predate role storage.
+    """
+    role = st.session_state.get("_role")
+    if role:
+        return role == "admin"
+    # Fallback: derive from USUARIOS for existing sessions
+    user = get_current_user()
+    if not user:
+        return False
+    u = USUARIOS.get(user.lower().strip())
+    return u is not None and u.get("role") == "admin"
 
 
 def logout() -> None:

@@ -653,6 +653,93 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "get_database_integrity",
+                "description": (
+                    "Retorna um relatório completo de integridade do banco de dados do projeto: "
+                    "saúde geral (%), reuniões completas vs. com problemas, e lista de campos "
+                    "ausentes por reunião (transcrição, ata, embeddings, BPMN, tokens, provedor LLM). "
+                    "Inclui ações recomendadas para cada tipo de problema. "
+                    "USE quando o usuário perguntar sobre integridade, saúde, completude ou "
+                    "problemas nos dados do banco. "
+                    "🔒 Requer perfil administrador."
+                ),
+                "parameters": {"type": "object", "properties": {}, "required": []},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "fix_missing_llm_provider",
+                "description": (
+                    "Atribui um provedor LLM a todas as reuniões do projeto que não têm "
+                    "llm_provider registrado (processadas antes deste campo existir). "
+                    "Necessário para que o Estimador de Custos calcule corretamente. "
+                    "USE quando o usuário pedir para corrigir o provedor ausente, definir o "
+                    "provedor das reuniões antigas, ou corrigir integridade de provedor LLM. "
+                    "🔒 Requer perfil administrador."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "provider": {
+                            "type": "string",
+                            "description": (
+                                "Nome do provedor LLM a atribuir. "
+                                "Exemplos: 'DeepSeek', 'Claude (Anthropic)', 'OpenAI', 'Groq', 'Google Gemini'. "
+                                "Infira com base no contexto do projeto se não informado."
+                            ),
+                        }
+                    },
+                    "required": ["provider"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "generate_meeting_embeddings",
+                "description": (
+                    "Gera embeddings de transcrição para reuniões que ainda não foram indexadas "
+                    "(sem chunks em transcript_chunks). Requer API key do provedor de embedding "
+                    "(Google Gemini — gratuito — ou OpenAI). "
+                    "USE quando o usuário pedir para gerar embeddings, indexar transcrições, "
+                    "ou corrigir reuniões sem embeddings para o Assistente de busca semântica. "
+                    "🔒 Requer perfil administrador."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "api_key": {
+                            "type": "string",
+                            "description": (
+                                "Chave de API do provedor de embedding. "
+                                "Google AI Studio key para Gemini, ou OpenAI API key. "
+                                "Peça ao usuário antes de chamar esta ferramenta."
+                            ),
+                        },
+                        "embedding_provider": {
+                            "type": "string",
+                            "description": (
+                                "Provedor de embedding: 'Google Gemini' (padrão, gratuito) "
+                                "ou 'OpenAI'."
+                            ),
+                        },
+                        "meeting_numbers": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": (
+                                "Lista de números de reunião a indexar. "
+                                "Omita para indexar todas as elegíveis (com transcrição, sem embedding)."
+                            ),
+                        },
+                    },
+                    "required": ["api_key"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "get_speaker_contributions",
                 "description": (
                     "Busca TODAS as contribuições de um participante: trechos de transcrição, "
@@ -720,18 +807,34 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "get_meeting_metadata":         "consulta",
     "preview_meeting_deletion":     "consulta",
     "preview_text_correction":      "consulta",
+    "get_speaker_contributions":    "consulta",
     # Escrita / Modificação
     "add_sbvr_term":                "escrita",
     "update_sbvr_term":             "escrita",
     "add_sbvr_rule":                "escrita",
-    "apply_text_correction":        "escrita",
-    "delete_meeting":               "escrita",
-    "get_speaker_contributions":    "consulta",
-    # Geração (LLM-powered)
-    "generate_missing_minutes":       "geração",
-    "reprocess_meeting_requirements": "geração",
-    "batch_reprocess_requirements":   "geração",
+    # Admin — escrita privilegiada
+    "apply_text_correction":        "admin",
+    "delete_meeting":               "admin",
+    "fix_missing_llm_provider":     "admin",
+    "generate_meeting_embeddings":  "admin",
+    "get_database_integrity":       "admin",
+    # Geração (LLM-powered) — admin
+    "generate_missing_minutes":       "admin",
+    "reprocess_meeting_requirements": "admin",
+    "batch_reprocess_requirements":   "admin",
 }
+
+# Ferramentas que exigem perfil administrador
+_ADMIN_TOOLS: frozenset[str] = frozenset({
+    "get_database_integrity",
+    "fix_missing_llm_provider",
+    "generate_meeting_embeddings",
+    "delete_meeting",
+    "apply_text_correction",
+    "reprocess_meeting_requirements",
+    "batch_reprocess_requirements",
+    "generate_missing_minutes",
+})
 
 
 def get_tool_catalog() -> list[dict]:
@@ -2585,10 +2688,262 @@ class AssistantToolExecutor:
         )
         return "\n".join(lines)
 
+    # ── Admin: integrity & fix tools ─────────────────────────────────────────
+
+    def get_database_integrity(self) -> str:
+        """Full integrity report for the project: health %, missing fields per meeting."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        try:
+            meetings = (
+                db.table("meetings")
+                .select(
+                    "id, meeting_number, title, meeting_date, "
+                    "transcript_clean, transcript_raw, minutes_md, "
+                    "llm_provider, total_tokens"
+                )
+                .eq("project_id", self.project_id)
+                .order("meeting_number")
+                .execute().data or []
+            )
+        except Exception as exc:
+            return f"❌ Erro ao carregar reuniões: {exc}"
+
+        # Embeddings
+        try:
+            chunks = (
+                db.table("transcript_chunks").select("meeting_id")
+                .eq("project_id", self.project_id).execute().data or []
+            )
+            mids_with_chunks = {c["meeting_id"] for c in chunks}
+            chunks_ok = True
+        except Exception:
+            mids_with_chunks = set()
+            chunks_ok = False
+
+        # BPMN
+        try:
+            bversions = db.table("bpmn_versions").select("meeting_id").execute().data or []
+            mids_with_bpmn = {v["meeting_id"] for v in bversions if v.get("meeting_id")}
+            bpmn_ok = True
+        except Exception:
+            mids_with_bpmn = set()
+            bpmn_ok = False
+
+        _ACTIONS = {
+            "transcrição": "→ use Manutenção > Transcript Backfill",
+            "ata":         "→ use generate_missing_minutes()",
+            "embeddings":  "→ use generate_meeting_embeddings() [requer API key]",
+            "BPMN":        "→ use Manutenção > BPMN Backfill",
+            "tokens":      "→ registrado em versão anterior sem contagem de tokens",
+            "provedor LLM": "→ use fix_missing_llm_provider(provider)",
+        }
+
+        issues: list[tuple] = []
+        field_counts: dict[str, int] = {}
+        for m in meetings:
+            mid = m["id"]
+            missing: list[str] = []
+            if not (m.get("transcript_clean") or m.get("transcript_raw")):
+                missing.append("transcrição")
+            if not m.get("minutes_md"):
+                missing.append("ata")
+            if chunks_ok and mid not in mids_with_chunks:
+                missing.append("embeddings")
+            if bpmn_ok and mid not in mids_with_bpmn:
+                missing.append("BPMN")
+            if not (m.get("total_tokens") or 0):
+                missing.append("tokens")
+            if not (m.get("llm_provider") or "").strip():
+                missing.append("provedor LLM")
+            if missing:
+                issues.append((m.get("meeting_number"), m.get("title"), missing))
+                for f in missing:
+                    field_counts[f] = field_counts.get(f, 0) + 1
+
+        n_total    = len(meetings)
+        n_slots    = n_total * 6
+        n_missing  = sum(len(i[2]) for i in issues)
+        health_pct = round(100 * (1 - n_missing / n_slots)) if n_slots else 100
+
+        lines = [
+            "=== Integridade do Banco — Projeto ===",
+            f"Saúde geral       : {health_pct}%",
+            f"Reuniões total    : {n_total}",
+            f"Reuniões completas: {n_total - len(issues)}",
+            f"Com problemas     : {len(issues)}",
+            f"Campos ausentes   : {n_missing}",
+            "",
+        ]
+        if not issues:
+            lines.append("✅ Todas as reuniões possuem todos os campos preenchidos.")
+        else:
+            lines.append("Campos ausentes (por frequência):")
+            for f, c in sorted(field_counts.items(), key=lambda x: -x[1]):
+                lines.append(f"  • {f}: {c} reunião(ões)  {_ACTIONS.get(f, '')}")
+            lines += ["", "Detalhes por reunião:"]
+            for n, title, missing in issues:
+                lines.append(
+                    f"  Reunião {n} — {title or '(sem título)'}: "
+                    f"falta {', '.join(missing)}"
+                )
+        return "\n".join(lines)
+
+    def fix_missing_llm_provider(self, provider: str) -> str:
+        """Update llm_provider for all project meetings that have it null/empty."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        try:
+            rows = (
+                db.table("meetings")
+                .select("id, meeting_number, title, llm_provider")
+                .eq("project_id", self.project_id)
+                .execute().data or []
+            )
+        except Exception as exc:
+            return f"❌ Erro ao buscar reuniões: {exc}"
+
+        affected = [m for m in rows if not (m.get("llm_provider") or "").strip()]
+        if not affected:
+            return "✅ Todas as reuniões já possuem provedor LLM registrado. Nada a corrigir."
+
+        ok = 0
+        errors: list[str] = []
+        for m in affected:
+            try:
+                db.table("meetings").update({"llm_provider": provider}).eq("id", m["id"]).execute()
+                ok += 1
+            except Exception as exc:
+                errors.append(
+                    f"  • Reunião {m.get('meeting_number')} — "
+                    f"{m.get('title') or '(sem título)'}: {exc}"
+                )
+
+        lines = [
+            f"fix_missing_llm_provider — provider: '{provider}'",
+            f"✅ {ok} reunião(ões) atualizadas.",
+        ]
+        if errors:
+            lines.append(f"❌ {len(errors)} erro(s):")
+            lines.extend(errors)
+        return "\n".join(lines)
+
+    def generate_meeting_embeddings(
+        self,
+        api_key: str,
+        embedding_provider: str = "Google Gemini",
+        meeting_numbers: list[int] | None = None,
+    ) -> str:
+        """Generate transcript embeddings for meetings that have transcript but no chunks."""
+        if not api_key or not api_key.strip():
+            return (
+                "❌ API key não fornecida. "
+                "Por favor informe a chave do provedor de embedding (Google Gemini ou OpenAI)."
+            )
+
+        from modules.supabase_client import get_supabase_client
+        try:
+            from modules.embeddings import chunk_text, embed_text
+            from core.project_store import save_transcript_embeddings
+        except ImportError as exc:
+            return f"❌ Módulo de embeddings não disponível: {exc}"
+
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        try:
+            all_meetings = (
+                db.table("meetings")
+                .select("id, meeting_number, title, transcript_clean, transcript_raw")
+                .eq("project_id", self.project_id)
+                .order("meeting_number")
+                .execute().data or []
+            )
+        except Exception as exc:
+            return f"❌ Erro ao buscar reuniões: {exc}"
+
+        try:
+            chunks_rows = (
+                db.table("transcript_chunks").select("meeting_id")
+                .eq("project_id", self.project_id).execute().data or []
+            )
+            mids_with_chunks = {c["meeting_id"] for c in chunks_rows}
+        except Exception:
+            mids_with_chunks = set()
+
+        candidates = [
+            m for m in all_meetings
+            if (m.get("transcript_clean") or m.get("transcript_raw") or "").strip()
+            and m["id"] not in mids_with_chunks
+            and (meeting_numbers is None or m.get("meeting_number") in meeting_numbers)
+        ]
+
+        if not candidates:
+            return "✅ Todas as reuniões elegíveis já possuem embeddings. Nada a gerar."
+
+        successes: list[str] = []
+        failures:  list[str] = []
+
+        for m in candidates:
+            n     = m.get("meeting_number", "?")
+            title = m.get("title") or f"Reunião {n}"
+            text  = m.get("transcript_clean") or m.get("transcript_raw") or ""
+            try:
+                chunks_list = chunk_text(text)
+                if not chunks_list:
+                    failures.append(f"  • Reunião {n} — '{title}': nenhum chunk gerado.")
+                    continue
+                embeddings = [
+                    embed_text(c, api_key.strip(), embedding_provider)
+                    for c in chunks_list
+                ]
+                save_transcript_embeddings(m["id"], self.project_id, chunks_list, embeddings)
+                successes.append(
+                    f"  • Reunião {n} — '{title}': {len(chunks_list)} chunks indexados."
+                )
+            except Exception as exc:
+                failures.append(f"  • Reunião {n} — '{title}': {exc}")
+
+        lines = [
+            f"generate_meeting_embeddings — provider: {embedding_provider}",
+            f"✅ {len(successes)} reunião(ões) indexadas · ❌ {len(failures)} falha(s).",
+            "",
+        ]
+        if successes:
+            lines.append("Indexadas:")
+            lines.extend(successes)
+        if failures:
+            lines.append("Falhas:")
+            lines.extend(failures)
+        if successes:
+            lines.append(
+                "\nAs transcrições estão disponíveis para busca semântica no Assistente."
+            )
+        return "\n".join(lines)
+
     # ── Dispatcher ────────────────────────────────────────────────────────────
 
     def execute(self, tool_name: str, tool_input: dict) -> str:
         """Route a tool call by name to the appropriate implementation."""
+        # ── Permission gate: admin-only tools ─────────────────────────────────
+        if tool_name in _ADMIN_TOOLS:
+            try:
+                from modules.auth import is_admin
+                if not is_admin():
+                    return (
+                        f"⛔ A ferramenta '{tool_name}' requer perfil **administrador**. "
+                        "Faça login com uma conta admin para usar esta funcionalidade."
+                    )
+            except Exception:
+                pass  # if auth module unavailable, allow (fail-open for safety)
+
         try:
             dispatch = {
                 "get_meeting_list":         lambda: self.get_meeting_list(),
@@ -2674,6 +3029,15 @@ class AssistantToolExecutor:
                 "get_speaker_contributions":      lambda: self.get_speaker_contributions(
                     tool_input["participant_name"],
                     tool_input.get("meeting_number"),
+                ),
+                "get_database_integrity":         lambda: self.get_database_integrity(),
+                "fix_missing_llm_provider":       lambda: self.fix_missing_llm_provider(
+                    tool_input["provider"],
+                ),
+                "generate_meeting_embeddings":    lambda: self.generate_meeting_embeddings(
+                    tool_input["api_key"],
+                    tool_input.get("embedding_provider", "Google Gemini"),
+                    tool_input.get("meeting_numbers"),
                 ),
             }
             if tool_name not in dispatch:

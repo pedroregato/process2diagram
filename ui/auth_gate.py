@@ -198,6 +198,7 @@ def _handle_local_login(usuario: str, senha: str) -> None:
         st.session_state["_autenticado"]   = True
         st.session_state["_usuario_login"] = uname
         st.session_state["_usuario_nome"]  = USUARIOS[uname]["nome"]
+        st.session_state["_role"]          = USUARIOS[uname].get("role", "user")
         st.session_state["_login_erro"]    = False
         st.rerun()
     else:
