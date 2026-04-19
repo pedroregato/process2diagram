@@ -7,106 +7,142 @@ from modules.auth import get_current_name, logout
 
 def render_sidebar():
     with st.sidebar:
-        st.markdown("⚡ Process2Diagram", unsafe_allow_html=True)
+        st.markdown("⚡ **Process2Diagram**")
 
         # ── Usuário autenticado ────────────────────────────────────────────────
-        if True:  # autenticação sempre ativa
-            name = get_current_name() or "Usuário"
-            col_usr, col_out = st.columns([3, 1])
-            with col_usr:
-                st.caption(f"👤 {name}")
-            with col_out:
-                if st.button("Sair", key="logout_btn", help="Encerrar sessão"):
-                    logout()
+        name = get_current_name() or "Usuário"
+        col_usr, col_out = st.columns([3, 1])
+        with col_usr:
+            st.caption(f"👤 {name}")
+        with col_out:
+            if st.button("Sair", key="logout_btn", help="Encerrar sessão"):
+                logout()
 
         st.markdown("---")
-        st.markdown("### 🤖 LLM Engine")
+
+        # ══════════════════════════════════════════════════════════════════════
+        # CONFIGURAÇÃO RÁPIDA — sempre visível
+        # ══════════════════════════════════════════════════════════════════════
+        st.markdown("### 🤖 Provedor LLM")
         provider_names = list(AVAILABLE_PROVIDERS.keys())
-        sel = st.selectbox("Provider", provider_names,
-                           index=provider_names.index(st.session_state.selected_provider),
-                           key="provider_select")
+        sel = st.selectbox(
+            "Provider",
+            provider_names,
+            index=provider_names.index(st.session_state.selected_provider),
+            key="provider_select",
+        )
         st.session_state.selected_provider = sel
         st.session_state.provider_cfg = AVAILABLE_PROVIDERS[sel]
-        st.code(st.session_state.provider_cfg['default_model'])
+        st.code(st.session_state.provider_cfg["default_model"])
         render_api_key_gate(sel, st.session_state.provider_cfg)
 
-        st.markdown("### ⚙️ Configuration")
-        out_lang = st.selectbox("Output Language",
-                                ["Auto-detect", "Portuguese (BR)", "English"],
-                                index=["Auto-detect","Portuguese (BR)","English"].index(st.session_state.output_language),
-                                key="out_lang")
-        st.session_state.output_language = {"Auto-detect":"Auto-detect","Portuguese (BR)":"Portuguese (BR)","English":"English"}[out_lang]
+        out_lang = st.selectbox(
+            "Idioma de saída",
+            ["Auto-detect", "Portuguese (BR)", "English"],
+            index=["Auto-detect", "Portuguese (BR)", "English"].index(
+                st.session_state.output_language
+            ),
+            key="out_lang",
+        )
+        st.session_state.output_language = out_lang
 
-        col_pref, col_suf = st.columns(2)
-        with col_pref:
-            pref = st.text_input("Prefix (max 11 chars)", value=st.session_state.prefix.rstrip("_"), max_chars=11)
-        with col_suf:
-            suf = st.text_input("Suffix (max 11 chars)", value=st.session_state.suffix, max_chars=11)
-        st.session_state.prefix = (pref.strip() + "_") if pref.strip() else "P2D_"
-        st.session_state.suffix = suf.strip() if suf.strip() else date.today().isoformat()
+        # ══════════════════════════════════════════════════════════════════════
+        # CONFIGURAÇÃO AVANÇADA — expander fechado por padrão
+        # ══════════════════════════════════════════════════════════════════════
+        with st.expander("⚙️ Configuração Avançada"):
 
-        st.markdown("### 🤖 Active Agents")
-        st.session_state.run_quality = st.checkbox("Quality Inspector", value=st.session_state.run_quality)
-        st.session_state.run_bpmn = st.checkbox("BPMN Architect", value=st.session_state.run_bpmn)
-        if st.session_state.run_bpmn:
-            st.session_state.n_bpmn_runs = st.select_slider("Optimization Passes", [1,3,5], value=st.session_state.n_bpmn_runs)
-            if st.session_state.n_bpmn_runs > 1:
-                with st.expander("Selection Weights"):
-                    st.session_state.bpmn_weights = {
-                        "granularity": st.slider("Granularity", 0, 10, st.session_state.bpmn_weights.get("granularity", 5)),
-                        "task_type":   st.slider("Task Type",   0, 10, st.session_state.bpmn_weights.get("task_type",   5)),
-                        "gateways":    st.slider("Gateways",    0, 10, st.session_state.bpmn_weights.get("gateways",    5)),
-                        "structural":  st.slider("Structural",  0, 10, st.session_state.bpmn_weights.get("structural",  5)),
-                    }
-            if st.session_state.n_bpmn_runs == 1:
-                st.session_state.use_langgraph = st.checkbox(
-                    "🔄 Adaptive Retry (LangGraph)",
-                    value=st.session_state.use_langgraph,
-                    help="Automatically retries BPMN extraction if quality score is below the threshold.",
+            # ── Nomenclatura de arquivos ───────────────────────────────────────
+            st.markdown("**📁 Arquivos exportados**")
+            col_pref, col_suf = st.columns(2)
+            with col_pref:
+                pref = st.text_input(
+                    "Prefixo (máx 11)",
+                    value=st.session_state.prefix.rstrip("_"),
+                    max_chars=11,
                 )
-                if st.session_state.use_langgraph:
-                    st.session_state.validation_threshold = st.slider(
-                        "Quality Threshold", 0.0, 10.0,
-                        value=float(st.session_state.validation_threshold),
-                        step=0.5,
-                        help="Retry until the validation score reaches this value (0–10).",
-                    )
-                    st.session_state.max_bpmn_retries = st.selectbox(
-                        "Max Retries", [1, 2, 3, 5],
-                        index=[1, 2, 3, 5].index(st.session_state.max_bpmn_retries)
-                        if st.session_state.max_bpmn_retries in [1, 2, 3, 5] else 2,
-                        help="Maximum number of BPMN extraction attempts.",
-                    )
-        st.session_state.run_minutes = st.checkbox("Meeting Minutes", value=st.session_state.run_minutes)
-        st.session_state.run_requirements = st.checkbox("Requirements", value=st.session_state.run_requirements)
-        st.session_state.run_sbvr = st.checkbox("Business Vocabulary & Rules (SBVR)", value=st.session_state.run_sbvr)
-        st.session_state.run_bmm = st.checkbox("Business Motivation Model (BMM)", value=st.session_state.run_bmm)
-        st.session_state.run_synthesizer = st.checkbox("Executive Report", value=st.session_state.run_synthesizer)
+            with col_suf:
+                suf = st.text_input(
+                    "Sufixo (máx 11)",
+                    value=st.session_state.suffix,
+                    max_chars=11,
+                )
+            st.session_state.prefix = (pref.strip() + "_") if pref.strip() else "P2D_"
+            st.session_state.suffix = suf.strip() if suf.strip() else date.today().isoformat()
 
-        st.markdown("---")
-        st.caption("🔒 API keys are session-only.")
-        st.session_state.show_dev_tools = st.checkbox("Developer Mode", value=st.session_state.show_dev_tools)
-        if st.session_state.show_dev_tools:
-            st.session_state.show_raw_json = st.checkbox("Show Raw JSON", value=st.session_state.show_raw_json)
+            st.markdown("---")
 
-        # ── SEÇÃO DE REEXECUÇÃO (diagnóstico incluído) ──
+            # ── Agentes ───────────────────────────────────────────────────────
+            st.markdown("**🤖 Agentes ativos**")
+            st.session_state.run_quality = st.checkbox(
+                "Inspetor de Qualidade", value=st.session_state.run_quality
+            )
+            st.session_state.run_bpmn = st.checkbox(
+                "Arquiteto BPMN", value=st.session_state.run_bpmn
+            )
+            if st.session_state.run_bpmn:
+                st.session_state.n_bpmn_runs = st.select_slider(
+                    "Passes de Otimização", [1, 3, 5], value=st.session_state.n_bpmn_runs
+                )
+                if st.session_state.n_bpmn_runs > 1:
+                    with st.expander("Pesos de Seleção"):
+                        st.session_state.bpmn_weights = {
+                            "granularity": st.slider("Granularidade", 0, 10, st.session_state.bpmn_weights.get("granularity", 5)),
+                            "task_type":   st.slider("Tipo de Tarefa", 0, 10, st.session_state.bpmn_weights.get("task_type",   5)),
+                            "gateways":    st.slider("Gateways",       0, 10, st.session_state.bpmn_weights.get("gateways",    5)),
+                            "structural":  st.slider("Estrutural",     0, 10, st.session_state.bpmn_weights.get("structural",  5)),
+                        }
+                if st.session_state.n_bpmn_runs == 1:
+                    st.session_state.use_langgraph = st.checkbox(
+                        "🔄 Retry Adaptativo (LangGraph)",
+                        value=st.session_state.use_langgraph,
+                        help="Reexecuta o BPMN automaticamente se a pontuação ficar abaixo do limiar.",
+                    )
+                    if st.session_state.use_langgraph:
+                        st.session_state.validation_threshold = st.slider(
+                            "Limiar de Qualidade", 0.0, 10.0,
+                            value=float(st.session_state.validation_threshold),
+                            step=0.5,
+                        )
+                        st.session_state.max_bpmn_retries = st.selectbox(
+                            "Máx. Retentativas", [1, 2, 3, 5],
+                            index=[1, 2, 3, 5].index(st.session_state.max_bpmn_retries)
+                            if st.session_state.max_bpmn_retries in [1, 2, 3, 5] else 2,
+                        )
+            st.session_state.run_minutes      = st.checkbox("Ata de Reunião",                   value=st.session_state.run_minutes)
+            st.session_state.run_requirements = st.checkbox("Requisitos",                       value=st.session_state.run_requirements)
+            st.session_state.run_sbvr         = st.checkbox("Vocabulário & Regras (SBVR)",      value=st.session_state.run_sbvr)
+            st.session_state.run_bmm          = st.checkbox("Motivação do Negócio (BMM)",       value=st.session_state.run_bmm)
+            st.session_state.run_synthesizer  = st.checkbox("Relatório Executivo",              value=st.session_state.run_synthesizer)
+
+            st.markdown("---")
+
+            # ── Modo desenvolvedor ─────────────────────────────────────────────
+            st.caption("🔒 Chaves de API armazenadas apenas na sessão.")
+            st.session_state.show_dev_tools = st.checkbox(
+                "Modo Desenvolvedor", value=st.session_state.show_dev_tools
+            )
+            if st.session_state.show_dev_tools:
+                st.session_state.show_raw_json = st.checkbox(
+                    "Exibir JSON bruto", value=st.session_state.show_raw_json
+                )
+
+        # ══════════════════════════════════════════════════════════════════════
+        # REEXECUÇÃO DE AGENTES — só aparece após o primeiro pipeline
+        # ══════════════════════════════════════════════════════════════════════
         if "hub" in st.session_state:
             st.markdown("---")
-            st.markdown("### 🔄 Re‑run Agents")
-            st.caption("Run any agent again on the current transcript.")
+            st.markdown("### 🔄 Reexecutar Agente")
+            st.caption("Reprocessa um agente individualmente.")
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("🔬 Quality", key="rr_q"):
+                if st.button("🔬 Qualidade",  key="rr_q"):
                     st.session_state.rerun_agent = "quality"
-                if st.button("📐 BPMN", key="rr_b"):
+                if st.button("📐 BPMN",       key="rr_b"):
                     st.session_state.rerun_agent = "bpmn"
-                if st.button("📋 Minutes", key="rr_m"):
+                if st.button("📋 Ata",        key="rr_m"):
                     st.session_state.rerun_agent = "minutes"
             with col2:
-                if st.button("📝 Requirements", key="rr_r"):
+                if st.button("📝 Requisitos", key="rr_r"):
                     st.session_state.rerun_agent = "requirements"
-                if st.button("📄 Report", key="rr_s"):
+                if st.button("📄 Relatório",  key="rr_s"):
                     st.session_state.rerun_agent = "synthesizer"
-        else:
-            # Mensagem de diagnóstico (opcional)
-            st.caption("(Execute o pipeline primeiro para ver os botões de reexecução)")

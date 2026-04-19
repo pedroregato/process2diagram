@@ -4,11 +4,10 @@
 # Código aqui roda em TODAS as páginas antes de pg.run().
 #
 # Estrutura de seções:
-#   Sistema      → Configurações (provedores, API keys, busca, preferências)
-#   Orientações  → Como Iniciar, Arquiteturas
 #   Pipeline     → Processar Transcrição, Diagramas
-#   Análise & Dados → Assistente, Req. Tracker
-#   Operações    → Batch Runner, BPMN Backfill, Transcript Backfill, Custo, Visão do Banco
+#   Análise      → Assistente, Req. Tracker, Qualidade ROI-TR, Entidades
+#   Sistema      → Configurações, Admin, Banco, Custo, Orientações
+#   Manutenção   → Batch Runner, Backfills (ferramentas de manutenção)
 # ─────────────────────────────────────────────────────────────────────────────
 
 import streamlit as st
@@ -32,31 +31,29 @@ init_session_state()
 # não-autenticadas), caso contrário o roteamento não é inicializado e
 # Streamlit trata cada navegação de página como nova sessão → login repetido.
 pages = {
-    "Sistema": [
-        st.Page("pages/Settings.py",    title="Configurações",  icon="⚙️"),
-        st.Page("pages/MasterAdmin.py", title="Master Admin",   icon="🛡️"),
-    ],
-    "Orientações": [
-        st.Page("pages/Orientacoes_ComoIniciar.py",   title="Como Iniciar",   icon="📖"),
-        st.Page("pages/Orientacoes_Arquiteturas.py",  title="Arquiteturas",   icon="🏗️"),
-    ],
     "Pipeline": [
-        st.Page("pages/Pipeline.py",   title="Processar Transcrição", icon="🚀", default=True),
-        st.Page("pages/Diagramas.py",  title="Diagramas",             icon="📐"),
+        st.Page("pages/Pipeline.py",  title="Processar Transcrição", icon="🚀", default=True),
+        st.Page("pages/Diagramas.py", title="Diagramas",             icon="📐"),
     ],
-    "Análise & Dados": [
-        st.Page("pages/Assistente.py",        title="Assistente",         icon="💬"),
-        st.Page("pages/ReqTracker.py",        title="Req. Tracker",       icon="📋"),
-        st.Page("pages/MeetingROI.py",        title="Qualidade ROI-TR",   icon="📊"),
-        st.Page("pages/EntityRecognition.py", title="Entidades (NER)",    icon="🔍"),
+    "Análise": [
+        st.Page("pages/Assistente.py",        title="Assistente",       icon="💬"),
+        st.Page("pages/ReqTracker.py",        title="Req. Tracker",     icon="📋"),
+        st.Page("pages/MeetingROI.py",        title="Qualidade ROI-TR", icon="📊"),
+        st.Page("pages/EntityRecognition.py", title="Entidades (NER)",  icon="🔍"),
     ],
-    "Operações": [
-        st.Page("pages/BatchRunner.py",         title="Batch Runner",        icon="🔄"),
-        st.Page("pages/BpmnBackfill.py",        title="BPMN Backfill",       icon="🔧"),
-        st.Page("pages/MinutesBackfill.py",     title="Minutes Backfill",    icon="📋"),
-        st.Page("pages/TranscriptBackfill.py",  title="Transcript Backfill", icon="📝"),
-        st.Page("pages/CostEstimator.py",       title="Estimativa de Custo", icon="💰"),
-        st.Page("pages/DatabaseOverview.py",    title="Visão do Banco",      icon="🗄️"),
+    "Sistema": [
+        st.Page("pages/Settings.py",                  title="Configurações",       icon="⚙️"),
+        st.Page("pages/MasterAdmin.py",               title="Master Admin",        icon="🛡️"),
+        st.Page("pages/DatabaseOverview.py",          title="Banco de Dados",      icon="🗄️"),
+        st.Page("pages/CostEstimator.py",             title="Estimativa de Custo", icon="💰"),
+        st.Page("pages/Orientacoes_ComoIniciar.py",   title="Como Iniciar",        icon="📖"),
+        st.Page("pages/Orientacoes_Arquiteturas.py",  title="Arquiteturas",        icon="🏗️"),
+    ],
+    "Manutenção": [
+        st.Page("pages/BatchRunner.py",        title="Batch Runner",        icon="🔄"),
+        st.Page("pages/BpmnBackfill.py",       title="BPMN Backfill",       icon="🔧"),
+        st.Page("pages/MinutesBackfill.py",    title="Minutes Backfill",    icon="📝"),
+        st.Page("pages/TranscriptBackfill.py", title="Transcript Backfill", icon="📑"),
     ],
 }
 pg = st.navigation(pages)

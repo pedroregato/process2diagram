@@ -158,38 +158,6 @@ if start_process and st.session_state.transcript_text.strip():
             st.warning(f"⚠️ Erro ao salvar no Supabase: {e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# REEXECUÇÃO DE AGENTES
-# ─────────────────────────────────────────────────────────────────────────────
-if "hub" in st.session_state:
-    st.markdown("---")
-    st.markdown("### 🔄 Re‑executar Agentes")
-    st.caption("Execute novamente um agente individualmente (sobrescreve o resultado anterior).")
-    col1, col2, col3, col4, col5 = st.columns(5)
-    with col1:
-        if st.button("🔬 Qualidade", key="rr_quality_body"):
-            st.session_state.rerun_agent = "quality"
-    with col2:
-        if st.button("📐 BPMN", key="rr_bpmn_body"):
-            st.session_state.rerun_agent = "bpmn"
-    with col3:
-        if st.button("📋 Ata", key="rr_minutes_body"):
-            st.session_state.rerun_agent = "minutes"
-    with col4:
-        if st.button("📝 Requisitos", key="rr_req_body"):
-            st.session_state.rerun_agent = "requirements"
-    with col5:
-        if st.button("📄 Relatório", key="rr_synth_body"):
-            st.session_state.rerun_agent = "synthesizer"
-    col6, col7, _ = st.columns([1, 1, 3])
-    with col6:
-        if st.button("📖 SBVR", key="rr_sbvr_body"):
-            st.session_state.rerun_agent = "sbvr"
-    with col7:
-        if st.button("🎯 BMM", key="rr_bmm_body"):
-            st.session_state.rerun_agent = "bmm"
-    st.markdown("---")
-
-# ─────────────────────────────────────────────────────────────────────────────
 # HANDLER DE REEXECUÇÃO
 # ─────────────────────────────────────────────────────────────────────────────
 if "rerun_agent" in st.session_state:
@@ -212,74 +180,79 @@ if "rerun_agent" in st.session_state:
         st.error("Nenhuma sessão ativa. Execute o pipeline primeiro.")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# EXIBIÇÃO DOS RESULTADOS (abas)
+# EXIBIÇÃO DOS RESULTADOS
 # ─────────────────────────────────────────────────────────────────────────────
 if "hub" in st.session_state:
     hub = st.session_state.hub
     prefix = st.session_state.prefix
     suffix = st.session_state.suffix
 
-    tabs_to_show = []
-    if hub.transcript_quality.ready:
-        tabs_to_show.append("quality")
-    if hub.bpmn.ready:
-        tabs_to_show.append("bpmn")
-        tabs_to_show.append("mermaid")
-        if hub.validation.ready and hub.validation.n_bpmn_runs > 1:
-            tabs_to_show.append("validation")
+    # ── Abas primárias (resultados principais) ────────────────────────────────
+    primary = []
     if hub.minutes.ready:
-        tabs_to_show.append("minutes")
+        primary.append("minutes")
     if hub.requirements.ready:
-        tabs_to_show.append("requirements")
-    if hub.sbvr.ready:
-        tabs_to_show.append("sbvr")
-    if hub.bmm.ready:
-        tabs_to_show.append("bmm")
+        primary.append("requirements")
+    if hub.bpmn.ready:
+        primary.append("bpmn")
+        primary.append("mermaid")
     if hub.synthesizer.ready:
-        tabs_to_show.append("synthesizer")
-    tabs_to_show.append("export")
+        primary.append("synthesizer")
+    primary.append("export")
+
+    # ── Abas avançadas (análise complementar) ─────────────────────────────────
+    advanced = []
+    if hub.transcript_quality.ready:
+        advanced.append("quality")
+    if hub.sbvr.ready:
+        advanced.append("sbvr")
+    if hub.bmm.ready:
+        advanced.append("bmm")
+    if hub.validation.ready and hub.validation.n_bpmn_runs > 1:
+        advanced.append("validation")
     if st.session_state.show_dev_tools:
-        tabs_to_show.append("devtools")
+        advanced.append("devtools")
 
     tab_labels = {
-        "quality":    "🔬 Qualidade",
-        "bpmn":       "📐 BPMN 2.0",
-        "mermaid":    "📊 Mermaid",
-        "validation": "🏆 Validação BPMN",
-        "minutes":    "📋 Ata de Reunião",
+        "minutes":      "📋 Ata de Reunião",
         "requirements": "📝 Requisitos",
-        "sbvr":       "📖 SBVR",
-        "bmm":        "🎯 BMM",
-        "synthesizer": "📄 Relatório Executivo",
-        "export":     "📦 Exportar",
-        "devtools":   "🔍 Dev Tools",
+        "bpmn":         "📐 BPMN 2.0",
+        "mermaid":      "📊 Mermaid",
+        "synthesizer":  "📄 Relatório Executivo",
+        "export":       "📦 Exportar",
+        "quality":      "🔬 Qualidade da Transcrição",
+        "sbvr":         "📖 SBVR",
+        "bmm":          "🎯 BMM",
+        "validation":   "🏆 Validação BPMN",
+        "devtools":     "🔍 Dev Tools",
     }
 
-    tabs = st.tabs([tab_labels[t] for t in tabs_to_show])
-    for idx, tab_id in enumerate(tabs_to_show):
+    def _render_tab(tab_id):
+        if tab_id == "minutes":       render_minutes(hub, prefix, suffix)
+        elif tab_id == "requirements": render_requirements(hub, prefix, suffix)
+        elif tab_id == "bpmn":        render_bpmn(hub, prefix, suffix)
+        elif tab_id == "mermaid":     render_mermaid(hub, prefix, suffix)
+        elif tab_id == "synthesizer": render_synthesizer(hub, prefix, suffix)
+        elif tab_id == "export":      render_export(hub, prefix, suffix)
+        elif tab_id == "quality":     render_quality(hub, prefix, suffix)
+        elif tab_id == "sbvr":        render_sbvr(hub, prefix, suffix)
+        elif tab_id == "bmm":         render_bmm(hub, prefix, suffix)
+        elif tab_id == "validation":  render_validation(hub)
+        elif tab_id == "devtools":    render_dev_tools(hub, st.session_state.show_raw_json)
+
+    # Renderiza abas primárias
+    tabs = st.tabs([tab_labels[t] for t in primary])
+    for idx, tab_id in enumerate(primary):
         with tabs[idx]:
-            if tab_id == "quality":
-                render_quality(hub, prefix, suffix)
-            elif tab_id == "bpmn":
-                render_bpmn(hub, prefix, suffix)
-            elif tab_id == "mermaid":
-                render_mermaid(hub, prefix, suffix)
-            elif tab_id == "validation":
-                render_validation(hub)
-            elif tab_id == "minutes":
-                render_minutes(hub, prefix, suffix)
-            elif tab_id == "requirements":
-                render_requirements(hub, prefix, suffix)
-            elif tab_id == "sbvr":
-                render_sbvr(hub, prefix, suffix)
-            elif tab_id == "bmm":
-                render_bmm(hub, prefix, suffix)
-            elif tab_id == "synthesizer":
-                render_synthesizer(hub, prefix, suffix)
-            elif tab_id == "export":
-                render_export(hub, prefix, suffix)
-            elif tab_id == "devtools":
-                render_dev_tools(hub, st.session_state.show_raw_json)
+            _render_tab(tab_id)
+
+    # Renderiza abas avançadas em expander, se houver conteúdo
+    if advanced:
+        with st.expander("🔬 Análise Avançada", expanded=False):
+            adv_tabs = st.tabs([tab_labels[t] for t in advanced])
+            for idx, tab_id in enumerate(advanced):
+                with adv_tabs[idx]:
+                    _render_tab(tab_id)
 
 # Rodapé
 st.markdown("---")
