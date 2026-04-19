@@ -296,8 +296,13 @@ with tab_mindmap:
     if not requirements:
         st.info("Nenhum requisito registrado para este projeto.")
     else:
-        from modules.requirements_mindmap import build_mindmap_tree_from_dicts
-        from modules.mindmap_interactive import render_interactive_mindmap
+        try:
+            from modules.requirements_mindmap import build_mindmap_tree_from_dicts
+            from modules.mindmap_interactive import render_interactive_mindmap
+            _mindmap_ok = True
+        except Exception as _mm_err:
+            st.error(f"Erro ao carregar módulo de mind map: {_mm_err}")
+            _mindmap_ok = False
 
         # Filtros opcionais do mind map
         col_mm1, col_mm2, col_mm3 = st.columns([2, 2, 2])
@@ -322,7 +327,7 @@ with tab_mindmap:
 
         if not mm_reqs:
             st.info("Nenhum requisito corresponde aos filtros selecionados.")
-        else:
+        elif _mindmap_ok:
             st.caption(f"Exibindo {len(mm_reqs)} requisito(s) no mind map.")
             tree = build_mindmap_tree_from_dicts(mm_reqs, selected_name)
             if tree.get("children"):

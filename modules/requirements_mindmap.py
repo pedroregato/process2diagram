@@ -1,6 +1,7 @@
 # modules/requirements_mindmap.py
 # ─────────────────────────────────────────────────────────────────────────────
 # Pure-Python generator for a Mermaid mindmap from a RequirementsModel.
+# Exports: generate_requirements_mindmap, build_mindmap_tree, build_mindmap_tree_from_dicts
 #
 # Hierarchy:
 #   root((Process Name))
