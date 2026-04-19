@@ -459,25 +459,47 @@ def update_requirement(
     last_meeting_id: str | None = None,
     title: str | None = None,
     description: str | None = None,
+    owner: str | None = None,
+    status_note: str | None = None,
 ) -> bool:
-    """Atualiza campos do registro mestre de um requisito."""
+    """Atualiza campos do registro mestre de um requisito.
+
+    owner       — responsável pelo requisito (pessoa ou equipe).
+    status_note — nota sobre a mudança de status atual.
+
+    Tenta salvar com os novos campos; se as colunas ainda não existirem
+    (migration pendente), salva apenas os campos legados.
+    """
     db = _db()
     if not db:
         return False
-    payload: dict[str, Any] = {"updated_at": "NOW()"}
+
+    base_payload: dict[str, Any] = {"updated_at": "NOW()"}
     if status is not None:
-        payload["status"] = status
+        base_payload["status"] = status
     if last_meeting_id is not None:
-        payload["last_meeting_id"] = last_meeting_id
+        base_payload["last_meeting_id"] = last_meeting_id
     if title is not None:
-        payload["title"] = title
+        base_payload["title"] = title
     if description is not None:
-        payload["description"] = description
-    try:
-        db.table("requirements").update(payload).eq("id", requirement_id).execute()
-        return True
-    except Exception:
-        return False
+        base_payload["description"] = description
+
+    for use_new_fields in (True, False):
+        payload = dict(base_payload)
+        if use_new_fields:
+            if owner is not None:
+                payload["owner"] = owner
+            if status_note is not None:
+                payload["status_note"] = status_note
+        try:
+            db.table("requirements").update(payload).eq("id", requirement_id).execute()
+            return True
+        except Exception:
+            if not use_new_fields:
+                return False
+            continue
+
+    return False
 
 
 def save_requirements_from_hub(meeting_id: str, project_id: str, hub) -> int:

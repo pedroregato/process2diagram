@@ -42,10 +42,15 @@ st.markdown("""
     display: inline-block; padding: 2px 10px; border-radius: 20px;
     font-size: .72rem; font-weight: 600; letter-spacing: .04em;
 }
+.badge-backlog      { background:#1e293b; color:#94a3b8; }
 .badge-active       { background:#0d4f2e; color:#4ade80; }
+.badge-approved     { background:#064e3b; color:#6ee7b7; }
+.badge-in-progress  { background:#1e3a6e; color:#93c5fd; }
+.badge-implemented  { background:#134e4a; color:#5eead4; }
 .badge-revised      { background:#4a3000; color:#fbbf24; }
 .badge-contradicted { background:#4a0d0d; color:#f87171; }
 .badge-deprecated   { background:#2a2a2a; color:#9ca3af; }
+.badge-rejected     { background:#3b0f1f; color:#fda4af; }
 .badge-new          { background:#0d2f4f; color:#60a5fa; }
 .badge-confirmed    { background:#0d3f1f; color:#34d399; }
 .contradiction-box {
@@ -190,7 +195,10 @@ with tab_req:
         # Filtros
         col_f1, col_f2, col_f3 = st.columns(3)
         with col_f1:
-            status_opts = ["Todos", "active", "revised", "contradicted", "deprecated"]
+            status_opts = [
+                "Todos", "backlog", "active", "approved", "in_progress",
+                "implemented", "revised", "contradicted", "deprecated", "rejected",
+            ]
             sel_status = st.selectbox("Status", status_opts, key="rt_status")
         with col_f2:
             types = sorted({r.get("req_type", "") for r in requirements if r.get("req_type")})
@@ -212,10 +220,15 @@ with tab_req:
         st.markdown("")
 
         _STATUS_BADGE = {
+            "backlog":      ("badge-backlog",      "Backlog"),
             "active":       ("badge-active",       "Ativo"),
-            "revised":      ("badge-revised",       "Revisado"),
-            "contradicted": ("badge-contradicted",  "Contradição"),
-            "deprecated":   ("badge-deprecated",    "Depreciado"),
+            "approved":     ("badge-approved",     "Aprovado"),
+            "in_progress":  ("badge-in-progress",  "Em Desenvolvimento"),
+            "implemented":  ("badge-implemented",  "Implementado"),
+            "revised":      ("badge-revised",      "Revisado"),
+            "contradicted": ("badge-contradicted", "Contradição"),
+            "deprecated":   ("badge-deprecated",   "Depreciado"),
+            "rejected":     ("badge-rejected",     "Rejeitado"),
         }
         _DOT_COLOR = {
             "new":          "#60a5fa",
@@ -250,6 +263,10 @@ with tab_req:
                     st.caption(f"🏁 {meet_label(req.get('first_meeting_id'))}")
                     st.caption(f"🔄 {meet_label(req.get('last_meeting_id'))}")
                     st.caption(f"📌 {n_ver} versão(ões)")
+                    if req.get("owner"):
+                        st.caption(f"🙋 {req['owner']}")
+                    if req.get("status_note"):
+                        st.caption(f"📝 {req['status_note']}")
 
                 if versions:
                     st.markdown("**Versões:**")
@@ -286,7 +303,9 @@ with tab_mindmap:
         col_mm1, col_mm2, col_mm3 = st.columns([2, 2, 2])
         with col_mm1:
             mm_status = st.selectbox(
-                "Filtrar por status", ["Todos", "active", "revised", "contradicted", "deprecated"],
+                "Filtrar por status",
+                ["Todos", "backlog", "active", "approved", "in_progress",
+                 "implemented", "revised", "contradicted", "deprecated", "rejected"],
                 key="mm_status",
             )
         with col_mm2:
