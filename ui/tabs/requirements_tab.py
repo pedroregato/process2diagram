@@ -21,6 +21,18 @@ _TYPE_BADGE_COLOR = {
     "ui_field":       "#134e4a",
 }
 
+_STATUS_BADGE = {
+    "active":       ("#0d4f2e", "#4ade80",  "Ativo"),
+    "backlog":      ("#1e293b", "#94a3b8",  "Backlog"),
+    "approved":     ("#064e3b", "#6ee7b7",  "Aprovado"),
+    "in_progress":  ("#1e3a6e", "#93c5fd",  "Em Desenvolvimento"),
+    "implemented":  ("#134e4a", "#5eead4",  "Implementado"),
+    "revised":      ("#4a3000", "#fbbf24",  "Revisado"),
+    "contradicted": ("#4a0d0d", "#f87171",  "Contradição"),
+    "deprecated":   ("#2a2a2a", "#9ca3af",  "Depreciado"),
+    "rejected":     ("#3b0f1f", "#fda4af",  "Rejeitado"),
+}
+
 
 def render(hub, prefix, suffix):
     req = hub.requirements
@@ -61,10 +73,13 @@ def render(hub, prefix, suffix):
     # ── Grid resumo ───────────────────────────────────────────────────────────
     rows = []
     for r in filtered:
+        status = getattr(r, "status", "active")
+        _, _, status_label = _STATUS_BADGE.get(status, ("#1e293b", "#94a3b8", status.capitalize()))
         rows.append({
             "ID":          r.id,
             "Tipo":        _TYPE_LABELS.get(r.type, r.type),
             "Prioridade":  _PRIORITY_ICON.get(r.priority, "⚪"),
+            "Status":      status_label,
             "Título":      r.title,
             "Proponente":  r.speaker or (r.actor or "—"),
         })
@@ -75,16 +90,20 @@ def render(hub, prefix, suffix):
     st.markdown("### Detalhes")
     for r in filtered:
         type_label = _TYPE_LABELS.get(r.type, r.type)
-        color = _TYPE_BADGE_COLOR.get(r.type, "#1e293b")
-        badge_html = (
+        type_color = _TYPE_BADGE_COLOR.get(r.type, "#1e293b")
+        status = getattr(r, "status", "active")
+        st_bg, st_fg, st_label = _STATUS_BADGE.get(status, ("#1e293b", "#94a3b8", status.capitalize()))
+        badges_html = (
             f'<span style="display:inline-block;padding:2px 10px;border-radius:20px;'
-            f'font-size:.72rem;font-weight:600;background:{color};color:#e2e8f0;'
-            f'margin-bottom:6px">{type_label}</span>'
+            f'font-size:.72rem;font-weight:600;background:{type_color};color:#e2e8f0;'
+            f'margin-right:6px">{type_label}</span>'
+            f'<span style="display:inline-block;padding:2px 10px;border-radius:20px;'
+            f'font-size:.72rem;font-weight:600;background:{st_bg};color:{st_fg}">{st_label}</span>'
         )
         prio_icon = _PRIORITY_ICON.get(r.priority, "⚪")
 
         with st.expander(f"{r.id} — {r.title}  ·  {prio_icon} {r.priority.capitalize()}"):
-            st.markdown(badge_html, unsafe_allow_html=True)
+            st.markdown(badges_html, unsafe_allow_html=True)
             st.markdown(f"**Descrição:** {r.description}")
 
             meta_parts = []

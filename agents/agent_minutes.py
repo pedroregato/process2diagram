@@ -184,6 +184,7 @@ class AgentMinutes(BaseAgent):
 
         hub.minutes = self._build_model(data)
         hub.minutes.ready = True
+        hub.minutes.minutes_md = AgentMinutes.to_markdown(hub.minutes)
         hub.mark_agent_run(self.name)
         hub.bump()
         return hub

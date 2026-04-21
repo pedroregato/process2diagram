@@ -178,7 +178,7 @@ def load_meeting_as_hub(meeting_id: str, project_id: str):
         .select(
             "id, title, meeting_date, meeting_number, "
             "transcript_clean, transcript_raw, minutes_md, "
-            "bpmn_xml, mermaid_code, report_html, "
+            "bpmn_xml, mermaid_code, report_html, bmm_json, "
             "total_tokens, llm_provider"
         )
         .eq("id", meeting_id)
@@ -252,7 +252,7 @@ def load_meeting_as_hub(meeting_id: str, project_id: str):
     try:
         req_rows = _ok(
             db.table("requirements")
-            .select("req_number, title, description, req_type, priority, status, cited_by, source_quote")
+            .select("req_number, title, description, req_type, priority, status, cited_by, source_quote, actor, process_step")
             .eq("project_id", project_id)
             .or_(f"first_meeting_id.eq.{meeting_id},last_meeting_id.eq.{meeting_id}")
             .order("req_number")
@@ -266,8 +266,11 @@ def load_meeting_as_hub(meeting_id: str, project_id: str):
                     description=r.get("description") or "",
                     type=r.get("req_type") or "functional",
                     priority=r.get("priority") or "unspecified",
+                    status=r.get("status") or "active",
                     source_quote=r.get("source_quote") or "",
                     speaker=r.get("cited_by") or None,
+                    actor=r.get("actor") or None,
+                    process_step=r.get("process_step") or None,
                 )
                 for i, r in enumerate(req_rows)
             ]
@@ -313,6 +316,22 @@ def load_meeting_as_hub(meeting_id: str, project_id: str):
             hub.sbvr.ready = True
     except Exception:
         pass
+
+    # ── BMM ───────────────────────────────────────────────────────────────────
+    bmm_raw = (m.get("bmm_json") or "").strip()
+    if bmm_raw:
+        try:
+            import json as _json
+            from core.knowledge_hub import BMMGoal, BMMStrategy, BMMPolicy, BMMModel
+            bmm_data = _json.loads(bmm_raw)
+            hub.bmm.vision     = bmm_data.get("vision", "")
+            hub.bmm.mission    = bmm_data.get("mission", "")
+            hub.bmm.goals      = [BMMGoal(**g)      for g in bmm_data.get("goals", [])]
+            hub.bmm.strategies = [BMMStrategy(**s)  for s in bmm_data.get("strategies", [])]
+            hub.bmm.policies   = [BMMPolicy(**p)    for p in bmm_data.get("policies", [])]
+            hub.bmm.ready      = True
+        except Exception:
+            pass
 
     # ── Relatório HTML ────────────────────────────────────────────────────────
     report_html = (m.get("report_html") or "").strip()
@@ -417,10 +436,16 @@ def save_meeting_artifacts(meeting_id: str, hub) -> bool:
             "total_tokens": getattr(hub.meta, "total_tokens_used", 0) if hasattr(hub, "meta") else 0,
         }
         if hasattr(hub, "bpmn") and hub.bpmn.ready:
-            payload1["bpmn_xml"]     = hub.bpmn.xml
+            payload1["bpmn_xml"]     = hub.bpmn.bpmn_xml
             payload1["mermaid_code"] = hub.bpmn.mermaid
         if hasattr(hub, "minutes") and hub.minutes.ready:
-            payload1["minutes_md"] = hub.minutes.full_text
+            payload1["minutes_md"] = hub.minutes.minutes_md or ""
+        if hasattr(hub, "bmm") and hub.bmm.ready:
+            import json, dataclasses
+            try:
+                payload1["bmm_json"] = json.dumps(dataclasses.asdict(hub.bmm))
+            except Exception:
+                pass
         db.table("meetings").update(payload1).eq("id", meeting_id).execute()
     except Exception:
         return False
@@ -467,6 +492,8 @@ def save_new_requirement(
     priority: str = "",
     source_quote: str = "",
     cited_by: str = "",
+    actor: str = "",
+    process_step: str = "",
 ) -> dict | None:
     """Insere um requisito novo (primeira aparição) e sua versão inicial.
 
@@ -513,6 +540,8 @@ def save_new_requirement(
         if use_new_fields:
             req_payload["source_quote"] = source_quote or None
             req_payload["cited_by"]     = cited_by or None
+            req_payload["actor"]        = actor or None
+            req_payload["process_step"] = process_step or None
         try:
             # Do NOT wrap in _ok() — let PostgREST errors raise so the except
             # below can trigger the fallback instead of silently returning None.
@@ -702,6 +731,8 @@ def save_requirements_from_hub(meeting_id: str, project_id: str, hub) -> int:
             priority=getattr(item, "priority", ""),
             source_quote=getattr(item, "source_quote", "") or "",
             cited_by=getattr(item, "speaker", "") or "",
+            actor=getattr(item, "actor", "") or "",
+            process_step=getattr(item, "process_step", "") or "",
         )
         if result:
             next_num += 1

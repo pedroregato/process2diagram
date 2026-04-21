@@ -154,6 +154,7 @@ class RequirementItem:
     process_step: Optional[str] = None
     source_quote: str = ""
     speaker: Optional[str] = None  # initials of who said source_quote (e.g. "MF")
+    status: str = "active"         # active | backlog | approved | in_progress | implemented | revised | contradicted | deprecated | rejected
 
 
 @dataclass
@@ -491,6 +492,11 @@ class KnowledgeHub:
         for req in hub.requirements.requirements:
             if not hasattr(req, 'speaker'):
                 req.speaker = None
+
+        # ── v4.13: RequirementItem.status ─────────────────────────────────────
+        for req in hub.requirements.requirements:
+            if not hasattr(req, 'status'):
+                req.status = "active"
 
         return hub
 
