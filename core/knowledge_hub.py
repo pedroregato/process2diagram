@@ -137,6 +137,8 @@ class MinutesModel:
     action_items: list[ActionItem] = field(default_factory=list)
     next_meeting: Optional[str] = None
     ready: bool = False
+    # Raw markdown — populated when loading from DB (structured fields may be empty)
+    minutes_md: str = ""
 
 
 # ── Requirements Model ────────────────────────────────────────────────────
@@ -364,6 +366,8 @@ class KnowledgeHub:
     version: int = 0
     transcript_raw: str = ""
     transcript_clean: str = ""
+    # Set to True when hub was reconstructed from DB (not from a live pipeline run)
+    loaded_from_db: bool = False
     transcript_quality: TranscriptQualityModel = field(default_factory=TranscriptQualityModel)
     preprocessing: PreprocessingModel = field(default_factory=PreprocessingModel)
     nlp: NLPEnvelope = field(default_factory=NLPEnvelope)
@@ -465,6 +469,14 @@ class KnowledgeHub:
         # ── v3.2: drawio_xml removed from BPMNModel ───────────────────────────
         if hasattr(hub.bpmn, 'drawio_xml'):
             del hub.bpmn.__dict__['drawio_xml']
+
+        # ── v4.13: minutes_md raw fallback field ─────────────────────────────────
+        if not hasattr(hub.minutes, 'minutes_md'):
+            hub.minutes.minutes_md = ""
+
+        # ── v4.13: loaded_from_db flag ────────────────────────────────────────
+        if not hasattr(hub, 'loaded_from_db'):
+            hub.loaded_from_db = False
 
         # ── v3.3: ActionItem.raised_by ────────────────────────────────────────
         for ai in hub.minutes.action_items:

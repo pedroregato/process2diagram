@@ -154,6 +154,174 @@ def save_meeting_tokens(meeting_id: str, total_tokens: int, llm_provider: str) -
         return False
 
 
+def load_meeting_as_hub(meeting_id: str, project_id: str):
+    """Reconstrói um KnowledgeHub a partir dos artefatos salvos de uma reunião.
+
+    Popula os campos disponíveis no banco — transcript, minutes (markdown),
+    BPMN XML + Mermaid, requirements, SBVR, synthesizer HTML.
+    Campos que não são persistidos (quality scores, NLP, BMM) ficam vazios.
+
+    Retorna None se a reunião não for encontrada ou Supabase não estiver
+    configurado.
+    """
+    from core.knowledge_hub import (
+        KnowledgeHub, MinutesModel, RequirementsModel, RequirementItem,
+        BPMNModel, SBVRModel, BusinessTerm, BusinessRule,
+    )
+    db = _db()
+    if not db:
+        return None
+
+    # ── 1. Reunião base ───────────────────────────────────────────────────────
+    rows = _ok(
+        db.table("meetings")
+        .select(
+            "id, title, meeting_date, meeting_number, "
+            "transcript_clean, transcript_raw, minutes_md, "
+            "bpmn_xml, mermaid_code, report_html, "
+            "total_tokens, llm_provider"
+        )
+        .eq("id", meeting_id)
+        .limit(1)
+        .execute()
+    )
+    if not rows:
+        return None
+    m = rows[0]
+
+    hub = KnowledgeHub.new()
+    hub.loaded_from_db = True
+
+    # ── Transcrição ───────────────────────────────────────────────────────────
+    hub.transcript_raw   = (m.get("transcript_raw")   or "").strip()
+    hub.transcript_clean = (m.get("transcript_clean") or "").strip() or hub.transcript_raw
+
+    # ── Metadados ─────────────────────────────────────────────────────────────
+    hub.meta.llm_provider      = m.get("llm_provider") or ""
+    hub.meta.total_tokens_used = m.get("total_tokens") or 0
+
+    # ── Ata (minutes) ─────────────────────────────────────────────────────────
+    minutes_md_text = (m.get("minutes_md") or "").strip()
+    if minutes_md_text:
+        hub.minutes.minutes_md = minutes_md_text
+        hub.minutes.title      = m.get("title") or ""
+        hub.minutes.date       = str(m.get("meeting_date") or "")
+        hub.minutes.ready      = True
+
+    # ── BPMN — prefere bpmn_versions (mais recente), fallback meetings.bpmn_xml ─
+    bpmn_xml     = ""
+    mermaid_code = ""
+    proc_name    = ""
+    try:
+        bv_rows = _ok(
+            db.table("bpmn_versions")
+            .select("bpmn_xml, mermaid_code, bpmn_processes(name)")
+            .eq("meeting_id", meeting_id)
+            .eq("is_current", True)
+            .limit(1)
+            .execute()
+        )
+        if not bv_rows:
+            # fallback: latest version by number
+            bv_rows = _ok(
+                db.table("bpmn_versions")
+                .select("bpmn_xml, mermaid_code, bpmn_processes(name)")
+                .eq("meeting_id", meeting_id)
+                .order("version", desc=True)
+                .limit(1)
+                .execute()
+            )
+        if bv_rows:
+            bpmn_xml     = (bv_rows[0].get("bpmn_xml")     or "").strip()
+            mermaid_code = (bv_rows[0].get("mermaid_code") or "").strip()
+            proc_name    = ((bv_rows[0].get("bpmn_processes") or {}).get("name") or "").strip()
+    except Exception:
+        pass
+
+    if not bpmn_xml:
+        bpmn_xml     = (m.get("bpmn_xml")     or "").strip()
+        mermaid_code = (m.get("mermaid_code") or "").strip()
+
+    if bpmn_xml:
+        hub.bpmn.bpmn_xml = bpmn_xml
+        hub.bpmn.mermaid  = mermaid_code
+        hub.bpmn.name     = proc_name or (m.get("title") or "")
+        hub.bpmn.ready    = True
+
+    # ── Requisitos ────────────────────────────────────────────────────────────
+    try:
+        req_rows = _ok(
+            db.table("requirements")
+            .select("req_number, title, description, req_type, priority, status")
+            .eq("project_id", project_id)
+            .or_(f"first_meeting_id.eq.{meeting_id},last_meeting_id.eq.{meeting_id}")
+            .order("req_number")
+            .execute()
+        )
+        if req_rows:
+            hub.requirements.requirements = [
+                RequirementItem(
+                    id=f"REQ-{r.get('req_number', i + 1):03d}",
+                    title=r.get("title") or "",
+                    description=r.get("description") or "",
+                    type=r.get("req_type") or "functional",
+                    priority=r.get("priority") or "unspecified",
+                )
+                for i, r in enumerate(req_rows)
+            ]
+            hub.requirements.name          = m.get("title") or ""
+            hub.requirements.session_title = m.get("title") or ""
+            hub.requirements.ready         = True
+    except Exception:
+        pass
+
+    # ── SBVR ──────────────────────────────────────────────────────────────────
+    try:
+        term_rows = _ok(
+            db.table("sbvr_terms")
+            .select("term, definition, category")
+            .eq("meeting_id", meeting_id)
+            .execute()
+        )
+        rule_rows = _ok(
+            db.table("sbvr_rules")
+            .select("rule_id, statement, nucleo_nominal, rule_type, source")
+            .eq("meeting_id", meeting_id)
+            .execute()
+        )
+        if term_rows or rule_rows:
+            hub.sbvr.vocabulary = [
+                BusinessTerm(
+                    term=t.get("term", ""),
+                    definition=t.get("definition", ""),
+                    category=t.get("category", "concept"),
+                )
+                for t in term_rows
+            ]
+            hub.sbvr.rules = [
+                BusinessRule(
+                    id=r.get("rule_id", ""),
+                    statement=r.get("statement", ""),
+                    short_title=r.get("nucleo_nominal", ""),
+                    rule_type=r.get("rule_type", "constraint"),
+                    source=r.get("source", ""),
+                )
+                for r in rule_rows
+            ]
+            hub.sbvr.ready = True
+    except Exception:
+        pass
+
+    # ── Relatório HTML ────────────────────────────────────────────────────────
+    report_html = (m.get("report_html") or "").strip()
+    if report_html:
+        hub.synthesizer.html  = report_html
+        hub.synthesizer.ready = True
+
+    hub.bump()
+    return hub
+
+
 def save_transcript(meeting_id: str, hub) -> bool:
     """Persiste apenas as transcrições da reunião — chamada leve e isolada.
 

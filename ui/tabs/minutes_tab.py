@@ -5,6 +5,22 @@ from services.export_service import make_filename
 
 def render(hub, prefix, suffix):
     m = hub.minutes
+
+    # When loaded from DB, structured fields may be empty — render raw markdown
+    _has_structured = bool(m.decisions or m.action_items or m.participants or m.summary)
+    if not _has_structured and getattr(m, "minutes_md", ""):
+        st.markdown(m.minutes_md)
+        st.markdown("---")
+        st.markdown("### Export")
+        _md = m.minutes_md
+        from services.export_service import make_filename
+        st.download_button(
+            "⬇️ .md", data=_md,
+            file_name=make_filename("minutes", "md", prefix, suffix),
+            key="minutes_md_raw",
+        )
+        return
+
     st.markdown(f"## {m.title}")
     col1, col2, col3 = st.columns(3)
     col1.markdown(f"**Date:** {m.date or 'N/A'}")
