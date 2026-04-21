@@ -2196,3 +2196,41 @@ def list_contradictions(project_id: str) -> list[dict]:
         )
     except Exception:
         return []
+
+
+# ── Validação de artefatos ────────────────────────────────────────────────────
+
+def validate_artifact(table: str, artifact_id: str, validation_status: str,
+                      validated_by: str = "", notes: str = "") -> bool:
+    """Atualiza validation_status de qualquer artefato.
+
+    Para status finais (validado/ajustado/rejeitado) grava também
+    validated_by e validated_at com o timestamp atual.
+    """
+    db = _db()
+    if not db:
+        return False
+    try:
+        from datetime import datetime, timezone
+        payload: dict = {"validation_status": validation_status}
+        if validation_status in ("validado", "ajustado", "rejeitado"):
+            payload["validated_by"] = validated_by or None
+            payload["validated_at"] = datetime.now(timezone.utc).isoformat()
+        if notes:
+            payload["validation_notes"] = notes
+        db.table(table).update(payload).eq("id", artifact_id).execute()
+        return True
+    except Exception:
+        return False
+
+
+def update_artifact_content(table: str, artifact_id: str, updates: dict) -> bool:
+    """Edição inline de campos de conteúdo (title, description, statement, etc.)."""
+    db = _db()
+    if not db:
+        return False
+    try:
+        db.table(table).update(updates).eq("id", artifact_id).execute()
+        return True
+    except Exception:
+        return False
