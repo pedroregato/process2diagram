@@ -184,7 +184,7 @@ def _quick_actions(table: str, art_id: str, current_vs: str | None, key_pfx: str
 
 
 def _edit_form_req(req: dict) -> None:
-    with st.expander("✏️ Editar conteúdo", expanded=False):
+    with st.popover("✏️ Editar conteúdo"):
         with st.form(f"form_req_{req['id']}"):
             new_title = st.text_input("Título", value=req.get("title") or "")
             new_desc  = st.text_area("Descrição", value=req.get("description") or "", height=100)
@@ -206,7 +206,7 @@ def _edit_form_req(req: dict) -> None:
 
 
 def _edit_form_term(term: dict) -> None:
-    with st.expander("✏️ Editar conteúdo", expanded=False):
+    with st.popover("✏️ Editar conteúdo"):
         with st.form(f"form_term_{term['id']}"):
             new_term = st.text_input("Termo", value=term.get("term") or "")
             new_def  = st.text_area("Definição", value=term.get("definition") or "", height=100)
@@ -228,7 +228,7 @@ def _edit_form_term(term: dict) -> None:
 
 
 def _edit_form_rule(rule: dict) -> None:
-    with st.expander("✏️ Editar conteúdo", expanded=False):
+    with st.popover("✏️ Editar conteúdo"):
         with st.form(f"form_rule_{rule['id']}"):
             new_stmt  = st.text_area("Enunciado da regra", value=rule.get("statement") or "", height=100)
             new_notes = st.text_input("Nota de validação", value=rule.get("validation_notes") or "")
@@ -249,7 +249,7 @@ def _edit_form_rule(rule: dict) -> None:
 
 
 def _edit_form_bpmn(proc: dict) -> None:
-    with st.expander("✏️ Editar nome do processo", expanded=False):
+    with st.popover("✏️ Editar nome do processo"):
         with st.form(f"form_bpmn_{proc['id']}"):
             new_name  = st.text_input("Nome do processo", value=proc.get("name") or "")
             new_notes = st.text_input("Nota de validação", value=proc.get("validation_notes") or "")
