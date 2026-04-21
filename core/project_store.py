@@ -252,7 +252,7 @@ def load_meeting_as_hub(meeting_id: str, project_id: str):
     try:
         req_rows = _ok(
             db.table("requirements")
-            .select("req_number, title, description, req_type, priority, status")
+            .select("req_number, title, description, req_type, priority, status, cited_by, source_quote")
             .eq("project_id", project_id)
             .or_(f"first_meeting_id.eq.{meeting_id},last_meeting_id.eq.{meeting_id}")
             .order("req_number")
@@ -266,6 +266,8 @@ def load_meeting_as_hub(meeting_id: str, project_id: str):
                     description=r.get("description") or "",
                     type=r.get("req_type") or "functional",
                     priority=r.get("priority") or "unspecified",
+                    source_quote=r.get("source_quote") or "",
+                    speaker=r.get("cited_by") or None,
                 )
                 for i, r in enumerate(req_rows)
             ]
