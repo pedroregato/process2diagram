@@ -281,15 +281,18 @@ def _bulk_validate(table: str, items: list[dict], key: str) -> None:
 
 
 def _render_group(items: list[dict], pending: bool, render_fn) -> None:
-    """Renderiza um grupo (pendentes ou concluídos) com expander."""
+    """Renderiza um grupo (pendentes ou concluídos) com cabeçalho simples."""
     label = "⏳ Aguardando Validação" if pending else "✅ Concluídos"
     group = [i for i in items if ((i.get("validation_status") or "proposto") in ("proposto", "em_revisão")) == pending]
     if not group:
         return
-    with st.expander(f"**{label}** ({len(group)})", expanded=pending):
-        for item in group:
-            render_fn(item)
-            st.divider()
+    icon = "⏳" if pending else "✅"
+    st.markdown(f"#### {icon} {label} ({len(group)})")
+    for item in group:
+        render_fn(item)
+        st.divider()
+    if not pending:
+        st.markdown("")  # espaço visual após grupo de concluídos
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
