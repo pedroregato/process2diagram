@@ -10,7 +10,7 @@
 - **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown / Word / PDF), requirements analysis (JSON/Markdown), executive HTML report, interactive requirements mind map
 - **Deploy:** Streamlit Cloud — auto-deploy on push to `main` branch (`github.com/pedroregato/process2diagram`)
 - **Dev environment:** PyCharm on Windows; Python 3.13
-- **Current version:** v4.12
+- **Current version:** v4.13
 
 Supported LLM providers: DeepSeek (default), Claude (Anthropic), OpenAI, Groq, Google Gemini.
 
@@ -36,19 +36,21 @@ No build step, no test suite, no Makefile.
 
 ```
 process2diagram/
-├── app.py                        # Streamlit entry point — slim orchestrator; delegates to ui/ and core/
+├── app.py                        # Streamlit entry point — st.navigation() with 4 groups: Pipeline | Análise | Sistema | Manutenção
 │
 ├── pages/
-│   ├── Settings.py               # ⚙️ Central settings — LLM providers, API keys, embedding, search, preferences
+│   ├── Pipeline.py               # 🚀 Main pipeline page (default) — transcript input, agent run, result tabs
 │   ├── Diagramas.py              # Full-screen multi-page diagram viewer (BPMN, Mermaid, Mind Map)
-│   ├── Assistente.py             # RAG-powered assistant — semantic Q&A over meeting transcripts
-│   ├── MeetingROI.py             # 📊 ROI-TR dashboard — type-aware quality indicators (v2)
-│   ├── BatchRunner.py            # Batch pipeline — runs the full pipeline on multiple transcripts
-│   ├── BpmnBackfill.py           # Backfill BPMN XML for meetings stored in Supabase (no re-transcription)
+│   ├── Assistente.py             # RAG-powered assistant — conversational Q&A over meeting transcripts
 │   ├── ReqTracker.py             # Requirements tracker — Supabase-backed requirement status board
-│   ├── TranscriptBackfill.py     # Backfill transcript embeddings for existing meetings in Supabase
+│   ├── MeetingROI.py             # 📊 ROI-TR dashboard — type-aware quality indicators (v2)
+│   ├── Settings.py               # ⚙️ Central settings — LLM providers, API keys, embedding, search, tool catalog
+│   ├── DatabaseOverview.py       # Database health dashboard — record counts, embeddings management, integrity fixes
 │   ├── CostEstimator.py          # LLM cost estimator — interactive breakdown per provider/agent
-│   └── DatabaseOverview.py       # Database health dashboard — consolidated record counts and integrity check
+│   ├── BatchRunner.py            # Batch pipeline — runs the full pipeline on multiple transcripts (Manutenção)
+│   ├── BpmnBackfill.py           # Backfill BPMN XML for meetings stored in Supabase (Manutenção)
+│   ├── TranscriptBackfill.py     # Backfill transcript embeddings for existing meetings (Manutenção)
+│   └── MinutesBackfill.py        # Backfill meeting minutes for existing meetings (Manutenção)
 │
 ├── core/
 │   ├── knowledge_hub.py          # KnowledgeHub: central session state shared by all agents
@@ -94,7 +96,7 @@ process2diagram/
 │   ├── ingest.py                 # .txt/.docx/.pdf file loader
 │   ├── preprocess.py             # Basic text cleaning
 │   ├── utils.py                  # Helpers (process_to_json, etc.)
-│   ├── auth.py                   # Session-based login — SHA-256 credential validation, is_authenticated()
+│   ├── auth.py                   # Session-based login — SHA-256 credential validation, is_authenticated(), is_admin()
 │   ├── supabase_client.py        # get_supabase_client() — singleton Supabase client from st.secrets
 │   ├── reqtracker_exporter.py    # Export RequirementsModel to Excel/CSV for ReqTracker page
 │   ├── text_utils.py             # rule_keyword_pt() — Portuguese keyword normalisation helpers
@@ -206,19 +208,20 @@ AgentSynthesizer         ← LLM (optional); reads all hub artifacts incl. SBVR 
    KnowledgeHub          ← fully populated; stored in st.session_state["hub"]
 ```
 
-### App.py — Slim Entry Point
+### App.py — Navigation Entry Point
 
-`app.py` (v4.12) no longer contains UI rendering logic. It delegates to:
+`app.py` (v4.13) uses `st.navigation()` to define all pages in 4 groups:
 
-- `ui.auth_gate.apply_auth_gate()` — login wall; called immediately after `st.set_page_config()`; calls `st.stop()` if unauthenticated
-- `core.session_state.init_session_state()` — initializes all `st.session_state` keys with defaults
-- `ui.sidebar.render_sidebar()` — sidebar panel (always visible)
-- `ui.input_area.render_input_area()` — transcript input + file upload + pre-processing
-- `core.pipeline.run_pipeline(hub, config, callback)` — executes the full pipeline
-- `core.rerun_handlers.handle_rerun(agent, hub, …)` — re-executes a named agent
-- `ui.tabs.*` — renders each result tab by delegating to dedicated tab modules
+| Group | Pages |
+|---|---|
+| **Pipeline** | Pipeline.py (default), Diagramas.py |
+| **Análise** | Assistente.py, ReqTracker.py, MeetingROI.py |
+| **Sistema** | Settings.py, DatabaseOverview.py, CostEstimator.py, guide pages |
+| **Manutenção** | BatchRunner.py, BpmnBackfill.py, MinutesBackfill.py, TranscriptBackfill.py |
 
-The re-run pattern (sidebar + main body buttons) writes `st.session_state.rerun_agent` which is then consumed by `handle_rerun()` on the next Streamlit run cycle.
+`app.py` itself renders no content — it only calls `st.navigation(pages).run()`. All pipeline logic lives in `pages/Pipeline.py`.
+
+**Important:** `st.page_link()` arguments must reference registered page files (e.g. `"pages/Pipeline.py"`), not `"app.py"` — `app.py` is not a registered navigation page and will raise `StreamlitPageNotFoundError`.
 
 ### KnowledgeHub — Central State
 
@@ -473,21 +476,25 @@ AgentAssistant.chat_with_tools(history, question, project_id)
            ┌────────────────────────────────────────────────┐
            │  Tool calls from LLM                           │
            │  AssistantToolExecutor.execute(name, args)     │
-           │                                                │
-           │  get_meeting_list()                            │
-           │  get_meeting_participants(meeting_number)      │
-           │  get_meeting_decisions(meeting_number)         │
-           │  get_meeting_action_items(meeting_number)      │
-           │  get_meeting_summary(meeting_number)           │
-           │  search_transcript(query, meeting_number?)     │
-           │  get_requirements(keyword?, req_type?, status?)│
-           │  list_bpmn_processes()                         │
-           │  get_sbvr_terms(keyword?)                      │
-           │  get_sbvr_rules(keyword?)                      │
+           │  ─── admin gate ────────────────────────────── │
+           │  Non-admin tools (always available):           │
+           │    get_meeting_list()                          │
+           │    get_meeting_participants(meeting_number)    │
+           │    get_meeting_decisions(meeting_number)       │
+           │    get_meeting_action_items(meeting_number)    │
+           │    get_meeting_summary(meeting_number)         │
+           │    search_transcript(query, meeting_number?)   │
+           │    get_requirements(keyword?, req_type?, ...)  │
+           │    list_bpmn_processes()                       │
+           │    get_sbvr_terms(keyword?)                    │
+           │    get_sbvr_rules(keyword?)                    │
+           │  Admin-only tools (role = admin | master):     │
+           │    get_database_integrity()                    │
+           │    fix_missing_llm_provider(provider)          │
+           │    generate_meeting_embeddings(api_key, ...)   │
+           │    + other write/generate tools                │
            │         │                                      │
            │         └─► direct Supabase queries            │
-           │             meetings · requirements ·          │
-           │             bpmn_processes · sbvr_*            │
            └────────────────────────────────────────────────┘
                 │
                 ▼  stop_reason = "end_turn" / "stop"
@@ -497,6 +504,10 @@ AgentAssistant.chat_with_tools(history, question, project_id)
 **Tool schemas** live in `core/assistant_tools.py` in two formats:
 - `get_tool_schemas_openai()` — OpenAI/DeepSeek/Groq function-calling format
 - `get_tool_schemas_anthropic()` — Anthropic `tool_use` format (derived from OpenAI schemas)
+
+**Admin gate:** `AssistantToolExecutor.execute()` checks `is_admin()` before running any tool in `_ADMIN_TOOLS` frozenset. Returns `"⛔ A ferramenta '...' requer perfil administrador."` if role is insufficient.
+
+**Tool catalog:** visible in **Configurações → aba Assistente → "📖 Catálogo de Ferramentas"** expander. Previously was shown inline in Assistente.py (removed in v4.13).
 
 **Message format differences:**
 - OpenAI: `finish_reason == "tool_calls"` → tool results as `{"role": "tool", "tool_call_id": id, "content": text}`
@@ -541,14 +552,19 @@ Users can edit a previous question via the `✏️` button on any user message:
 - Chunks created by `chunk_text(transcript, chunk_size=500, overlap=80)`
 - Each chunk embedded via `embed_text(chunk, api_key, provider)`
 - Embeddings stored in `transcript_chunks` table (`vector(1536)`)
-- `save_transcript_embeddings(meeting_id, project_id, chunks, embeddings)` — upserts by `(meeting_id, chunk_index)`
+- `save_transcript_embeddings(meeting_id, project_id, transcript, api_key, provider, fallback_text)` — upserts by `(meeting_id, chunk_index)`
 - Provider: **Google Gemini** (`models/gemini-embedding-001`, `output_dimensionality=1536`) — free tier; 1.2s delay between calls; auto-retry on 429
 - Fallback model: `models/gemini-embedding-2-preview` (tried if 404 on primary)
-- Diagnostic: "🔍 Testar chave" button calls `list_gemini_embedding_models(api_key)` to list available models
+
+**Embedding management UI** lives in **Banco de Dados → aba 🔮 Embeddings** (moved from Assistente.py in v4.13):
+- Coverage table per project
+- Batch generation with progress bar (all meetings in selected project)
+- Per-meeting drill-down: normalization preview, chunk count, individual "🔄 Gerar" button
+- "🧪 Testar gravação no banco" — INSERT/SELECT/DELETE probe without embedding API call
 
 ### Error handling
 
-Errors and success messages from the embedding generation flow are persisted in `st.session_state["_embed_error"]` / `["_embed_success"]` before `st.rerun()` and displayed+popped immediately after rerun — prevents the instant-disappear bug caused by `st.error()` before `st.rerun()`.
+Errors and success messages from the embedding generation flow are persisted in `st.session_state` before `st.rerun()` and displayed+popped immediately after rerun — prevents the instant-disappear bug caused by `st.error()` before `st.rerun()`. Keys used: `_emb_tab_result`, `_emb_tab_single_result`, `_emb_tab_err_{meeting_id}`.
 
 ---
 
@@ -594,14 +610,18 @@ TRC          = min(100, (n_cycle_signals / (word_count / 500)) × 20)
 All Streamlit UI code lives in `ui/` — `app.py` only coordinates flow.
 
 ### `ui/sidebar.py` — `render_sidebar()`
+Always visible:
 - Provider selector + API key gate
 - Output language selector
+
+Inside `st.expander("⚙️ Configuração Avançada")` (collapsed by default):
 - Prefix/suffix for file naming
 - Agent enable/disable checkboxes (Quality, BPMN, Minutes, Requirements, SBVR, BMM, Executive Report)
 - BPMN optimization passes slider (1/3/5) + weight sliders (only when n > 1)
 - **🔄 Adaptive Retry (LangGraph)** checkbox + Quality Threshold slider + Max Retries selector (only when n_bpmn_runs == 1)
 - Developer Mode toggle (shows Dev Tools tab + Raw JSON option)
-- Re-run buttons for all agents (appear after first pipeline run)
+
+Re-run buttons for all agents appear below the expander after a pipeline run (sidebar-only; body re-run buttons were removed).
 
 ### `ui/input_area.py` — `render_input_area()`
 - `st.text_area` for pasting transcript
@@ -616,6 +636,16 @@ All Streamlit UI code lives in `ui/` — `app.py` only coordinates flow.
 - Pan/zoom/fit viewer injected via `components.html`. No external CDN inside the iframe.
 - Shown in `st.expander` that starts **expanded** when no pipeline results exist yet (`"hub"` not in session state) and collapsed automatically afterwards — no UX friction for repeat users.
 - `ARCHITECTURE_DIAGRAM` constant: `flowchart TD` with nested subgraphs, `classDef` palette matching brand colours (navy=input, amber=LLM, blue=core agents, purple=optional, green=outputs).
+
+### `pages/Pipeline.py` — main pipeline page
+
+Result tabs are split into two groups:
+
+**Primary tabs** (always shown when data is available):
+`📋 Ata de Reunião · 📝 Requisitos · 📐 BPMN 2.0 · 📊 Mermaid · 📄 Relatório Executivo · 📦 Exportar`
+
+**Secondary tabs** inside `st.expander("🔬 Análise Avançada", expanded=False)`:
+`🔬 Qualidade · 📖 SBVR · 🎯 BMM · 🏆 Validação BPMN · 🔍 Dev Tools`
 
 ### `ui/tabs/`
 Each tab is a standalone module with a `render(hub, prefix, suffix)` function (or variant):
@@ -723,7 +753,7 @@ if "hub" in st.session_state:
 ## Dependencies
 
 ```
-streamlit==1.42.0
+streamlit==1.45.1
 anthropic==0.49.0
 openai==1.65.0
 python-docx==1.1.2          # Word export (pure Python)
@@ -866,7 +896,7 @@ This is required because Streamlit multi-page apps run page files in a different
 
 ### Gemini embedding model availability per API key
 
-Not all `text-embedding-*` models are available to every AI Studio key. The model namespace varies silently — `text-embedding-004` may return 404 even though Google documentation mentions it. Use the diagnostic button "🔍 Testar chave" in `pages/Assistente.py` which calls `list_gemini_embedding_models(api_key)` to enumerate models that actually respond to `embedContent` for the provided key.
+Not all `text-embedding-*` models are available to every AI Studio key. The model namespace varies silently — `text-embedding-004` may return 404 even though Google documentation mentions it. Use the diagnostic button "🔍 Testar chave" in **Configurações → Embeddings & Busca** which calls `list_gemini_embedding_models(api_key)` to enumerate models that actually respond to `embedContent` for the provided key.
 
 **Confirmed working models (for keys that don't have text-embedding-004):**
 - `models/gemini-embedding-001` — 1536 dims via `output_dimensionality=1536` (primary)
@@ -886,6 +916,18 @@ The free AI Studio tier allows 100 requests/minute for `gemini-embedding-1.0`. W
 ### pgvector dimension limit (ivfflat ≤ 2000 dims)
 
 PostgreSQL `ivfflat` index cannot handle vectors with more than 2000 dimensions. `gemini-embedding-001` natively produces 3072 dims. Always use `output_dimensionality=1536` when calling the Gemini embedding API, and create the Supabase column as `vector(1536)`. The SQL schema is in `setup/supabase_schema_transcript_chunks.sql`.
+
+### st.page_link() with app.py raises StreamlitPageNotFoundError
+
+`st.page_link("app.py", ...)` raises `StreamlitPageNotFoundError` because `app.py` is the navigation host, not a registered page. All `page_link` calls must reference actual page files:
+
+```python
+# Wrong — app.py is not a registered page
+st.page_link("app.py", label="← Voltar")
+
+# Correct — reference the actual page file
+st.page_link("pages/Pipeline.py", label="← Voltar")
+```
 
 ### Login page HTML rendered as code block
 
@@ -918,9 +960,12 @@ API keys are stored exclusively in `st.session_state` (server-side, per-session 
 All pages begin with `ui.auth_gate.apply_auth_gate()` immediately after `st.set_page_config()`. If the user is not authenticated, `render_login_page()` is called and `st.stop()` prevents the rest of the page from rendering.
 
 - Credentials are SHA-256 hashed in `modules/auth.py → USUARIOS` (hardcoded — no `secrets.toml` dependency)
-- Session state keys: `_autenticado` (bool), `_usuario_login` (str), `_usuario_nome` (str)
+- Session state keys: `_autenticado` (bool), `_usuario_login` (str), `_usuario_nome` (str), `_role` (str)
 - `is_authenticated()` checks `st.session_state.get("_autenticado", False)`
 - `login_valido(uname, senha)` hashes the input with SHA-256 and compares against stored hash
+- `is_admin()` returns `True` if `_role` in `{"admin", "master"}` — checks session_state first, falls back to USUARIOS dict for pre-role sessions
+- Role hierarchy: `master > admin > user`. Both master and admin pass the `is_admin()` gate.
+- `_handle_local_login()` in `auth_gate.py` stores `_role` from `USUARIOS[uname]["role"]` on successful login
 - Login page HTML pitfall: any content indented ≥ 4 spaces after a blank line inside an `st.markdown(unsafe_allow_html=True)` block is rendered as a Markdown code block — keep HTML zero-indented in the f-string.
 
 ### Supabase Secrets
@@ -993,6 +1038,19 @@ All pages begin with `ui.auth_gate.apply_auth_gate()` immediately after `st.set_
 - [x] **`modules/text_utils.py`** — `rule_keyword_pt()` and other Portuguese text utilities
 - [x] **`modules/reqtracker_exporter.py`** — Excel/CSV export for ReqTracker
 - [x] **Google Gemini SDK migration** — use `google-generativeai` (stable) for `embed_content()` + `list_models()`; `google-genai` kept as secondary dependency
+
+### PC6 — Concluído (v4.13)
+- [x] **Navegação reestruturada** — `app.py` migrado para `st.navigation()` com 4 grupos: Pipeline | Análise | Sistema | Manutenção; pipeline principal movido para `pages/Pipeline.py`
+- [x] **Sidebar simplificada** — opções avançadas (agentes, BPMN, LangGraph, dev mode) movidas para `st.expander("⚙️ Configuração Avançada")` colapsável; apenas provider + API key + idioma sempre visíveis
+- [x] **Tabs do Pipeline reorganizadas** — abas primárias (Ata, Requisitos, BPMN, Mermaid, Relatório, Exportar) + grupo "🔬 Análise Avançada" em expander (Qualidade, SBVR, BMM, Validação, DevTools); re-run buttons movidos exclusivamente para sidebar
+- [x] **DatabaseOverview — Integridade melhorada** — health score panel (%), KPI cards de frequência por campo, 5 expanders de correção inline: llm_provider (SELECT + UPDATE), embeddings (gera inline), ata/BPMN/transcrição (page_link para backfill)
+- [x] **DatabaseOverview — aba 🔮 Embeddings** — gestão completa de embeddings: tabela de cobertura por projeto, geração em lote com progress bar, drill-down por reunião (preview, chunk count, botão individual), teste de gravação no banco
+- [x] **RBAC no Assistente** — `is_admin()` em `modules/auth.py` aceita `admin` e `master`; `_role` persistido no session_state no login; admin gate em `AssistantToolExecutor.execute()` para ferramentas destrutivas/write
+- [x] **3 novas ferramentas admin no Assistente** — `get_database_integrity()`, `fix_missing_llm_provider(provider)`, `generate_meeting_embeddings(api_key, provider, meeting_numbers?)`; categoria "admin" adicionada ao catálogo
+- [x] **Assistente.py limpo** — embedding management UI removido (~600 → ~330 linhas); tool catalog removido; bloco duplicado de handling de perguntas removido; aponta para DatabaseOverview e Configurações para funcionalidades admin
+- [x] **Tool catalog em Configurações** — expander "📖 Catálogo de Ferramentas" na aba Assistente com 4 categorias (consulta, escrita, geração, admin)
+- [x] **Streamlit 1.42.0 → 1.45.1** — fix para "Bad message format" popup interno do Streamlit
+- [x] **Fix `st.page_link("app.py")`** — corrigido em `pages/Diagramas.py` para `pages/Pipeline.py`; `app.py` não é uma página registrada no `st.navigation()`
 
 ### PC5 — Concluído (v4.12)
 - [x] **ROI-TR sensível ao tipo de reunião** — `modules/meeting_roi_calculator.py` v2; `MEETING_TYPES` (11 tipos), `TYPE_WEIGHTS` (matriz de pesos por tipo), `TYPE_ICONS`; DC ponderado substitui fórmula linear fixa
