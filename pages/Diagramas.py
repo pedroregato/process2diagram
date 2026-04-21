@@ -41,7 +41,7 @@ hub: KnowledgeHub | None = st.session_state.get("hub")
 
 if hub is None:
     st.info("Nenhum resultado disponível. Processe uma transcrição na página principal primeiro.")
-    st.page_link("app.py", label="← Voltar para Process2Diagram", icon="⚙️")
+    st.page_link("pages/Pipeline.py", label="← Voltar para Process2Diagram", icon="⚙️")
     st.stop()
 
 hub = KnowledgeHub.migrate(hub)
@@ -52,7 +52,7 @@ st.caption(
     f"Processo: **{hub.bpmn.name or hub.requirements.name or '—'}**  ·  "
     f"Hub v{hub.version}  ·  Provider: `{hub.meta.llm_provider}`"
 )
-st.page_link("app.py", label="← Voltar para o pipeline", icon="⚙️")
+st.page_link("pages/Pipeline.py", label="← Voltar para o pipeline", icon="⚙️")
 st.divider()
 
 # ── Build tab list dynamically ────────────────────────────────────────────────
