@@ -264,3 +264,79 @@ if pref_rows:
     st.dataframe(pd.DataFrame(pref_rows), use_container_width=True, hide_index=True)
 else:
     st.caption("Nenhuma preferência salva para este domínio.")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SEÇÃO 5 — Logs de Acesso
+# ══════════════════════════════════════════════════════════════════════════════
+st.markdown("---")
+st.markdown("### 📋 Logs de Acesso")
+
+from core.project_store import list_login_logs
+
+col_lf1, col_lf2, col_lf3 = st.columns(3)
+with col_lf1:
+    log_domain = st.selectbox(
+        "Domínio",
+        ["Todos"] + sorted({t.get("slug", "") for t in tenants if t.get("slug")}) + ["local"],
+        key="m_log_domain",
+    )
+with col_lf2:
+    log_status = st.selectbox(
+        "Status",
+        ["Todos", "✅ Sucesso", "❌ Falha"],
+        key="m_log_status",
+    )
+with col_lf3:
+    log_limit = st.selectbox("Últimos", [50, 100, 200, 500], key="m_log_limit")
+
+_domain_filter  = None if log_domain == "Todos" else log_domain
+_success_filter = None
+if log_status == "✅ Sucesso":
+    _success_filter = True
+elif log_status == "❌ Falha":
+    _success_filter = False
+
+logs = list_login_logs(domain=_domain_filter, success=_success_filter, limit=log_limit)
+
+if not logs:
+    st.info("Nenhum evento de login registrado com os filtros selecionados.")
+else:
+    n_ok  = sum(1 for l in logs if l.get("success"))
+    n_fail = len(logs) - n_ok
+    mc1, mc2, mc3 = st.columns(3)
+    mc1.metric("Total exibidos", len(logs))
+    mc2.metric("✅ Sucessos",    n_ok)
+    mc3.metric("❌ Falhas",     n_fail)
+
+    rows = []
+    for ev in logs:
+        ts = (ev.get("logged_at") or "")
+        # Formata: "2026-04-22 14:35:07" → separa data e hora
+        date_part = ts[:10] if len(ts) >= 10 else ts
+        time_part = ts[11:19] if len(ts) >= 19 else ""
+        rows.append({
+            "Data":     date_part,
+            "Hora":     time_part,
+            "Login":    ev.get("login", "—"),
+            "Domínio":  ev.get("domain", "—"),
+            "Perfil":   ev.get("role") or "—",
+            "Status":   "✅ Sucesso" if ev.get("success") else "❌ Falha",
+            "Motivo":   ev.get("fail_reason") or "",
+        })
+
+    import pandas as pd
+    st.dataframe(
+        pd.DataFrame(rows),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    # Export CSV
+    csv = pd.DataFrame(rows).to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "⬇️ Exportar CSV",
+        data=csv,
+        file_name="login_logs.csv",
+        mime="text/csv",
+        key="m_log_csv",
+    )

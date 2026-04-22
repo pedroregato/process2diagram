@@ -172,6 +172,7 @@ def _handle_tenant_login(domain: str, usuario: str, senha: str) -> None:
     """Valida via Supabase tenant_auth. Em caso de falha exibe erro."""
     from modules.tenant_auth   import login_tenant_debug
     from modules.tenant_config import load_all_config, apply_config_to_session
+    from core.project_store    import log_login_event
 
     result, motivo = login_tenant_debug(domain, usuario, senha)
     if result:
@@ -184,24 +185,42 @@ def _handle_tenant_login(domain: str, usuario: str, senha: str) -> None:
         st.session_state["_tenant_name"]   = result["tenant_name"]
         st.session_state["_role"]          = result["role"]
         st.session_state["_login_erro"]    = False
+        log_login_event(
+            login=result["user_name"],
+            domain=result["domain"],
+            tenant_id=result["tenant_id"],
+            role=result["role"],
+            success=True,
+        )
         apply_config_to_session(config)
         st.rerun()
     else:
+        log_login_event(
+            login=usuario.strip(),
+            domain=domain.strip(),
+            success=False,
+            fail_reason=motivo or "credenciais inválidas",
+        )
         st.session_state["_login_erro"] = f"tenant:{motivo}"
         st.rerun()
 
 
 def _handle_local_login(usuario: str, senha: str) -> None:
     """Valida via credenciais hardcoded (fallback local)."""
+    from core.project_store import log_login_event
     uname = usuario.lower().strip()
     if login_valido(uname, senha):
+        role = USUARIOS[uname].get("role", "user")
         st.session_state["_autenticado"]   = True
         st.session_state["_usuario_login"] = uname
         st.session_state["_usuario_nome"]  = USUARIOS[uname]["nome"]
-        st.session_state["_role"]          = USUARIOS[uname].get("role", "user")
+        st.session_state["_role"]          = role
         st.session_state["_login_erro"]    = False
+        log_login_event(login=uname, domain="local", role=role, success=True)
         st.rerun()
     else:
+        log_login_event(login=uname, domain="local", success=False,
+                        fail_reason="senha inválida")
         st.session_state["_login_erro"] = "local"
         st.rerun()
 

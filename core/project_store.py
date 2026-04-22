@@ -2234,3 +2234,51 @@ def update_artifact_content(table: str, artifact_id: str, updates: dict) -> bool
         return True
     except Exception:
         return False
+
+
+# ── Auditoria de login ────────────────────────────────────────────────────────
+
+def log_login_event(
+    login: str,
+    domain: str = "local",
+    tenant_id: str | None = None,
+    role: str | None = None,
+    success: bool = True,
+    fail_reason: str = "",
+) -> None:
+    """Registra um evento de login (sucesso ou falha). Fire-and-forget — nunca lança exceção."""
+    db = _db()
+    if not db:
+        return
+    try:
+        payload: dict = {
+            "login":       login or "?",
+            "domain":      domain or "local",
+            "tenant_id":   tenant_id or None,
+            "role":        role or None,
+            "success":     success,
+            "fail_reason": fail_reason or None,
+        }
+        db.table("login_logs").insert(payload).execute()
+    except Exception:
+        pass  # auditoria nunca deve bloquear o fluxo de login
+
+
+def list_login_logs(
+    domain: str | None = None,
+    success: bool | None = None,
+    limit: int = 200,
+) -> list[dict]:
+    """Retorna eventos de login mais recentes, opcionalmente filtrados."""
+    db = _db()
+    if not db:
+        return []
+    try:
+        q = db.table("login_logs").select("*").order("logged_at", desc=True).limit(limit)
+        if domain:
+            q = q.eq("domain", domain)
+        if success is not None:
+            q = q.eq("success", success)
+        return _ok(q.execute())
+    except Exception:
+        return []
