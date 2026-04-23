@@ -1802,6 +1802,70 @@ def retrieve_data_summary(project_id: str) -> dict:
     return summary
 
 
+def get_global_stats() -> dict:
+    """Retorna contagens globais (todos os projetos) para o dashboard inicial.
+
+    Sempre retorna um dict com chaves definidas — nunca lança exceção.
+    """
+    base: dict = {
+        "n_projects":  0,
+        "n_meetings":  0,
+        "n_reqs":      0,
+        "n_bpmn_procs": 0,
+        "available":   False,
+    }
+    db = _db()
+    if not db:
+        return base
+    try:
+        base["n_projects"] = len(_ok(db.table("projects").select("id").execute()))
+        base["n_meetings"] = len(_ok(db.table("meetings").select("id").execute()))
+        base["available"]  = True
+    except Exception:
+        return base
+    try:
+        base["n_reqs"] = len(_ok(db.table("requirements").select("id").execute()))
+    except Exception:
+        pass
+    try:
+        base["n_bpmn_procs"] = len(_ok(db.table("bpmn_processes").select("id").execute()))
+    except Exception:
+        pass
+    return base
+
+
+def list_recent_meetings(limit: int = 6) -> list[dict]:
+    """Retorna as N reuniões mais recentes de todos os projetos.
+
+    Cada item inclui project_name para exibição contextual.
+    """
+    db = _db()
+    if not db:
+        return []
+    try:
+        rows = _ok(
+            db.table("meetings")
+            .select("id, title, meeting_date, meeting_number, project_id, projects(name)")
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        result = []
+        for r in rows:
+            proj = r.get("projects") or {}
+            result.append({
+                "id":            r.get("id"),
+                "title":         r.get("title") or "(sem título)",
+                "meeting_date":  str(r.get("meeting_date") or "—"),
+                "meeting_number": r.get("meeting_number"),
+                "project_id":    r.get("project_id"),
+                "project_name":  proj.get("name") or "—",
+            })
+        return result
+    except Exception:
+        return []
+
+
 # ── Embeddings / Busca Semântica ──────────────────────────────────────────────
 
 def transcript_chunks_table_exists() -> bool:

@@ -4,8 +4,9 @@
 # Código aqui roda em TODAS as páginas antes de pg.run().
 #
 # Estrutura de seções:
-#   Pipeline     → Processar Transcrição, Diagramas
-#   Análise      → Assistente, Req. Tracker, Qualidade ROI-TR, Entidades
+#   (default)    → Home (Central de Operações)
+#   Pipeline     → Processar Transcrição, Diagramas, Editor BPMN
+#   Análise      → Assistente, Req. Tracker, Validação, ROI-TR, Entidades
 #   Sistema      → Configurações, Admin, Banco, Custo, Orientações
 #   Manutenção   → Batch Runner, Backfills (ferramentas de manutenção)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -31,8 +32,11 @@ init_session_state()
 # não-autenticadas), caso contrário o roteamento não é inicializado e
 # Streamlit trata cada navegação de página como nova sessão → login repetido.
 pages = {
+    "Início": [
+        st.Page("pages/Home.py", title="Central de Operações", icon="🏠", default=True),
+    ],
     "Pipeline": [
-        st.Page("pages/Pipeline.py",    title="Processar Transcrição", icon="🚀", default=True),
+        st.Page("pages/Pipeline.py",    title="Processar Transcrição", icon="🚀"),
         st.Page("pages/Diagramas.py",   title="Diagramas",             icon="📐"),
         st.Page("pages/BpmnEditor.py",  title="Editor BPMN",           icon="✏️"),
     ],
