@@ -294,7 +294,7 @@ with st.expander("⌨️ Alternativa: colar XML manualmente", expanded=False):
     )
     manual_notes = st.text_area(
         "Notas (manual)",
-        height=60,
+        height=68,
         key="bpme_manual_notes",
         placeholder="Ajuste manual...",
     )
