@@ -32,8 +32,9 @@ init_session_state()
 # Streamlit trata cada navegação de página como nova sessão → login repetido.
 pages = {
     "Pipeline": [
-        st.Page("pages/Pipeline.py",  title="Processar Transcrição", icon="🚀", default=True),
-        st.Page("pages/Diagramas.py", title="Diagramas",             icon="📐"),
+        st.Page("pages/Pipeline.py",    title="Processar Transcrição", icon="🚀", default=True),
+        st.Page("pages/Diagramas.py",   title="Diagramas",             icon="📐"),
+        st.Page("pages/BpmnEditor.py",  title="Editor BPMN",           icon="✏️"),
     ],
     "Análise": [
         st.Page("pages/Assistente.py",        title="Assistente",       icon="💬"),

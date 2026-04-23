@@ -1114,6 +1114,93 @@ def save_bpmn_from_hub(
         return None
 
 
+def save_bpmn_new_version(
+    process_id: str,
+    meeting_id: str,
+    project_id: str,
+    bpmn_xml: str,
+    mermaid_code: str = "",
+    version_notes: str = "",
+    created_by: str = "",
+) -> bool:
+    """Salva o XML editado manualmente como nova versão de um processo BPMN.
+
+    Desmarca ``is_current`` em todas as versões anteriores do processo e
+    insere uma nova versão com ``is_current=True``.  Atualiza ``version_count``
+    e ``updated_at`` no registro de ``bpmn_processes``.
+
+    Retorna ``True`` em caso de sucesso, ``False`` em caso de erro.
+    """
+    if not bpmn_xml or not bpmn_xml.strip():
+        return False
+
+    db = _db()
+    if not db:
+        return False
+
+    try:
+        proc = get_bpmn_process(process_id)
+        if not proc:
+            return False
+
+        version = (proc.get("version_count") or 0) + 1
+
+        # Desmarca versão atual
+        db.table("bpmn_versions").update({"is_current": False}).eq("process_id", process_id).execute()
+
+        # Insere nova versão
+        change_note_text = version_notes.strip() if version_notes else ""
+        if created_by:
+            change_note_text = f"[{created_by.strip()}] {change_note_text}".strip()
+
+        payload: dict = {
+            "process_id":   process_id,
+            "meeting_id":   meeting_id,
+            "project_id":   project_id,
+            "version":      version,
+            "bpmn_xml":     bpmn_xml.strip(),
+            "mermaid_code": mermaid_code or "",
+            "is_current":   True,
+        }
+        if change_note_text:
+            payload["change_notes"] = change_note_text
+
+        try:
+            db.table("bpmn_versions").insert(payload).execute()
+        except Exception:
+            # Retry without optional columns that may not exist yet
+            payload.pop("change_notes", None)
+            db.table("bpmn_versions").insert(payload).execute()
+
+        # Atualiza metadados do processo
+        db.table("bpmn_processes").update({
+            "version_count":   version,
+            "last_meeting_id": meeting_id,
+        }).eq("id", process_id).execute()
+
+        return True
+    except Exception:
+        return False
+
+
+def get_bpmn_version(version_id: str) -> dict | None:
+    """Retorna uma versão BPMN pelo ID."""
+    db = _db()
+    if not db:
+        return None
+    try:
+        rows = _ok(
+            db.table("bpmn_versions")
+            .select("*, bpmn_processes(name, project_id), meetings(title, meeting_number)")
+            .eq("id", version_id)
+            .limit(1)
+            .execute()
+        )
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
 # ── RAG context retrieval ─────────────────────────────────────────────────────
 
 _PT_STOPWORDS = {
