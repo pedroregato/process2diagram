@@ -137,93 +137,114 @@ st.info(
 editor_html = editor_from_xml(base_xml, height=620)
 components.html(editor_html, height=620 + 260, scrolling=False)
 
-# ── Área de recebimento do XML editado ───────────────────────────────────────
+# ── Salvar nova versão ────────────────────────────────────────────────────────
 st.markdown("---")
 st.subheader("💾 Salvar nova versão")
 
-col_xml, col_meta = st.columns([3, 1])
+user_login = st.session_state.get("_usuario_login", "")
 
-with col_xml:
-    edited_xml = st.text_area(
-        "XML editado (cole aqui o conteúdo exportado do editor acima)",
-        value="",
-        height=200,
-        key="bpme_edited_xml",
-        placeholder="<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions ...>",
-        help="Cole aqui o XML exportado pelo botão '📋 Exportar XML' dentro do editor.",
+# ── Passo 1: Capturar XML do clipboard ───────────────────────────────────────
+st.markdown(
+    "**Passo 1:** No editor acima, clique **📋 Exportar XML** para copiar o diagrama. "
+    "Depois clique o botão abaixo para capturá-lo diretamente."
+)
+
+col_cap, col_status = st.columns([2, 3])
+with col_cap:
+    if st.button("📥 Capturar XML do Editor", use_container_width=True, key="bpme_capture_btn"):
+        st.session_state["_bpme_capture"] = True
+
+# ── Leitura do clipboard via st_javascript ────────────────────────────────────
+if st.session_state.get("_bpme_capture"):
+    from streamlit_javascript import st_javascript
+    result = st_javascript(
+        "await (async () => { try { return await navigator.clipboard.readText(); }"
+        " catch(e) { return '__CLIPBOARD_ERROR__: ' + e.message; } })()"
     )
-
-with col_meta:
-    change_notes = st.text_area(
-        "Notas da versão",
-        height=100,
-        key="bpme_notes",
-        placeholder="Ex.: Ajuste nas lanes, correção de gateway...",
-    )
-    user_login = st.session_state.get("_usuario_login", "")
-    st.caption(f"Registrado por: **{user_login}**")
-
-# Indicador de diferenças
-if edited_xml.strip() and edited_xml.strip() != base_xml.strip():
-    orig_lines = len(base_xml.splitlines())
-    new_lines  = len(edited_xml.splitlines())
-    delta = new_lines - orig_lines
-    sign  = "+" if delta >= 0 else ""
-    st.caption(
-        f"📝 XML modificado detectado — original: {orig_lines} linhas, novo: {new_lines} linhas ({sign}{delta})"
-    )
-elif edited_xml.strip() == base_xml.strip() and edited_xml.strip():
-    st.caption("⚠️ O XML colado é idêntico à versão base — nenhuma alteração detectada.")
-
-# ── Validação prévia opcional ─────────────────────────────────────────────────
-if edited_xml.strip() and edited_xml.strip() != base_xml.strip():
-    with st.expander("🔍 Validar XML antes de salvar", expanded=False):
-        try:
-            import xml.etree.ElementTree as ET
-            ET.fromstring(edited_xml.strip())
-            # Basic BPMN checks
-            has_process = "<bpmn:process" in edited_xml or "<process " in edited_xml
-            has_start   = "startEvent" in edited_xml
-            has_end     = "endEvent" in edited_xml
-            issues = []
-            if not has_process:
-                issues.append("⚠️ Nenhum elemento `<bpmn:process>` encontrado.")
-            if not has_start:
-                issues.append("⚠️ Nenhum `startEvent` encontrado.")
-            if not has_end:
-                issues.append("⚠️ Nenhum `endEvent` encontrado.")
-            if not issues:
-                st.success("✅ XML válido e elementos BPMN essenciais presentes.")
-            else:
-                st.success("✅ XML bem formado.")
-                for iss in issues:
-                    st.warning(iss)
-        except ET.ParseError as e:
-            st.error(f"❌ XML inválido: {e}")
-        except Exception as e:
-            st.warning(f"Não foi possível validar: {e}")
-
-# ── Botão de salvar ───────────────────────────────────────────────────────────
-col_btn, col_prev = st.columns([1, 2])
-
-with col_btn:
-    save_disabled = not edited_xml.strip()
-    if st.button(
-        "💾 Salvar nova versão",
-        type="primary",
-        use_container_width=True,
-        disabled=save_disabled,
-        key="bpme_save_btn",
-    ):
-        if not edited_xml.strip():
-            st.session_state["_bpme_err"] = "Cole o XML exportado antes de salvar."
+    # result == 0 → JS ainda resolvendo (st_javascript retorna 0 enquanto aguarda)
+    if result != 0:
+        st.session_state.pop("_bpme_capture", None)
+        if isinstance(result, str) and result.startswith("__CLIPBOARD_ERROR__"):
+            st.session_state["_bpme_err"] = (
+                "❌ Não foi possível ler a área de transferência. "
+                "Verifique as permissões do browser ou use o campo manual abaixo."
+            )
+            st.rerun()
+        elif isinstance(result, str) and ("<bpmn" in result or "<?xml" in result):
+            st.session_state["_bpme_captured_xml"] = result.strip()
             st.rerun()
         else:
+            st.session_state["_bpme_err"] = (
+                "⚠️ Clipboard não contém XML BPMN válido. "
+                "Certifique-se de clicar '📋 Exportar XML' no editor antes de capturar."
+            )
+            st.rerun()
+    else:
+        with col_status:
+            st.info("⏳ Lendo área de transferência…")
+
+# ── Passo 2: XML capturado — mostrar e confirmar ──────────────────────────────
+captured_xml = st.session_state.get("_bpme_captured_xml", "")
+
+if captured_xml:
+    orig_lines = len(base_xml.splitlines())
+    new_lines  = len(captured_xml.splitlines())
+    delta      = new_lines - orig_lines
+    sign       = "+" if delta >= 0 else ""
+
+    if captured_xml.strip() == base_xml.strip():
+        st.warning("⚠️ O XML capturado é idêntico à versão base — nenhuma alteração detectada.")
+    else:
+        st.success(
+            f"✅ XML capturado — {new_lines} linhas "
+            f"(base: {orig_lines}, diferença: {sign}{delta})"
+        )
+
+    # Validação estrutural rápida
+    import xml.etree.ElementTree as ET
+    try:
+        ET.fromstring(captured_xml)
+        issues = []
+        if "<bpmn:process" not in captured_xml and "<process " not in captured_xml:
+            issues.append("⚠️ Nenhum `<bpmn:process>` encontrado.")
+        if "startEvent" not in captured_xml:
+            issues.append("⚠️ Nenhum `startEvent` encontrado.")
+        if "endEvent" not in captured_xml:
+            issues.append("⚠️ Nenhum `endEvent` encontrado.")
+        for iss in issues:
+            st.warning(iss)
+    except ET.ParseError as parse_err:
+        st.error(f"❌ XML inválido — não será possível salvar: {parse_err}")
+        captured_xml = ""   # bloqueia o save
+
+# ── Passo 3: Notas e salvar ───────────────────────────────────────────────────
+if captured_xml:
+    st.markdown("**Passo 2:** Adicione notas e salve como nova versão.")
+    col_notes, col_actions = st.columns([3, 2])
+
+    with col_notes:
+        change_notes = st.text_area(
+            "Notas da versão",
+            height=90,
+            key="bpme_notes",
+            placeholder="Ex.: Ajuste nas lanes, correção de gateway XOR...",
+        )
+        st.caption(f"Registrado por: **{user_login}**")
+
+    with col_actions:
+        st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+        if st.button(
+            "💾 Salvar nova versão",
+            type="primary",
+            use_container_width=True,
+            key="bpme_save_btn",
+            disabled=(captured_xml.strip() == base_xml.strip()),
+        ):
             ok = save_bpmn_new_version(
                 process_id=process_id,
                 meeting_id=meeting_id_for_version,
                 project_id=project_id,
-                bpmn_xml=edited_xml.strip(),
+                bpmn_xml=captured_xml,
                 mermaid_code="",
                 version_notes=change_notes.strip(),
                 created_by=user_login,
@@ -233,30 +254,68 @@ with col_btn:
                     "✅ Nova versão salva com sucesso! "
                     "A versão anterior foi marcada como não-atual."
                 )
-                # Limpa os campos de entrada
-                st.session_state["bpme_edited_xml"] = ""
-                st.session_state["bpme_notes"]       = ""
+                st.session_state.pop("_bpme_captured_xml", None)
                 st.session_state.pop("bpme_show_preview", None)
+                st.session_state["bpme_notes"] = ""
                 st.rerun()
             else:
                 st.session_state["_bpme_err"] = (
-                    "❌ Falha ao salvar a versão. Verifique a conexão com o banco de dados."
+                    "❌ Falha ao salvar. Verifique a conexão com o banco de dados."
                 )
                 st.rerun()
 
-with col_prev:
-    if edited_xml.strip():
-        if st.button("👁️ Prévia do XML colado", use_container_width=True, key="bpme_preview_btn"):
+        if st.button("👁️ Prévia", use_container_width=True, key="bpme_preview_btn"):
             st.session_state["bpme_show_preview"] = not st.session_state.get("bpme_show_preview", False)
 
-# ── Prévia do XML editado ─────────────────────────────────────────────────────
-if st.session_state.get("bpme_show_preview") and edited_xml.strip():
-    st.markdown("##### Prévia do XML editado")
+        if st.button("🗑️ Descartar XML capturado", use_container_width=True, key="bpme_discard_btn"):
+            st.session_state.pop("_bpme_captured_xml", None)
+            st.rerun()
+
+# ── Prévia do XML capturado ───────────────────────────────────────────────────
+if st.session_state.get("bpme_show_preview") and captured_xml:
+    st.markdown("##### Prévia do XML capturado")
     try:
-        preview_html = preview_from_xml(edited_xml.strip())
+        preview_html = preview_from_xml(captured_xml)
         components.html(preview_html, height=500, scrolling=False)
     except Exception as e:
         st.error(f"Erro ao gerar prévia: {e}")
+
+# ── Fallback: entrada manual por cole/colar ───────────────────────────────────
+with st.expander("⌨️ Alternativa: colar XML manualmente", expanded=False):
+    st.caption(
+        "Use esta opção se o botão de captura não funcionar no seu browser "
+        "(alguns ambientes bloqueiam a leitura do clipboard)."
+    )
+    manual_xml = st.text_area(
+        "Cole o XML aqui",
+        height=160,
+        key="bpme_manual_xml",
+        placeholder="<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions ...>",
+    )
+    manual_notes = st.text_area(
+        "Notas (manual)",
+        height=60,
+        key="bpme_manual_notes",
+        placeholder="Ajuste manual...",
+    )
+    if st.button("💾 Salvar (manual)", key="bpme_save_manual", disabled=not manual_xml.strip()):
+        ok = save_bpmn_new_version(
+            process_id=process_id,
+            meeting_id=meeting_id_for_version,
+            project_id=project_id,
+            bpmn_xml=manual_xml.strip(),
+            mermaid_code="",
+            version_notes=manual_notes.strip(),
+            created_by=user_login,
+        )
+        if ok:
+            st.session_state["_bpme_ok"] = "✅ Nova versão salva com sucesso (entrada manual)."
+            st.session_state["bpme_manual_xml"]   = ""
+            st.session_state["bpme_manual_notes"] = ""
+            st.rerun()
+        else:
+            st.session_state["_bpme_err"] = "❌ Falha ao salvar. Verifique a conexão com o banco de dados."
+            st.rerun()
 
 # ── Histórico — XML bruto da versão base ─────────────────────────────────────
 with st.expander("📄 XML da versão selecionada (referência)", expanded=False):

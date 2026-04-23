@@ -30,6 +30,9 @@ lxml>=5.0                       # validação do BPMN XML contra XSD da OMG
 # ── Utilitários ───────────────────────────────────────────────────────────────
 python-dateutil>=2.9            # parsing de datas nos action items
 
+# ── Componentes Streamlit extras ─────────────────────────────────────────────
+streamlit-javascript==0.1.5     # executa JS no browser e retorna valor ao Python (BpmnEditor)
+
 # ── Orquestração com grafo (LangGraph) ───────────────────────────────────────
 langgraph>=1.0                  # adaptive BPMN retry loop (core/lg_pipeline.py)
 

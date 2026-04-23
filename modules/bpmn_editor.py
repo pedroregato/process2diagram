@@ -109,9 +109,9 @@ _EDITOR_TEMPLATE = """\
 </div>
 
 <div id="xml-panel">
-  <label>XML exportado — copie e cole no campo abaixo do editor:</label>
+  <label>XML exportado (referência — use "📥 Capturar XML do Editor" abaixo para salvar):</label>
   <textarea id="xml-output" readonly spellcheck="false"></textarea>
-  <div id="xml-hint">✅ Selecione todo o texto (Ctrl+A) e copie (Ctrl+C), depois cole no campo "XML editado" abaixo.</div>
+  <div id="xml-hint">⏳ Copiando para a área de transferência…</div>
 </div>
 
 <div id="err-panel"></div>
@@ -159,8 +159,21 @@ _EDITOR_TEMPLATE = """\
       const {{ xml: exportedXml }} = await modeler.saveXML({{ format: true }});
       xmlOut.value = exportedXml;
       xmlPanel.style.display = 'block';
-      xmlOut.focus();
-      xmlOut.select();
+
+      // Tenta auto-copiar para a área de transferência do SO
+      try {{
+        await navigator.clipboard.writeText(exportedXml);
+        document.getElementById('xml-hint').innerHTML =
+          '✅ <strong>XML copiado para a área de transferência.</strong> '
+          + 'Clique em "📥 Capturar XML do Editor" abaixo para salvar direto.';
+      }} catch (_clipErr) {{
+        // Fallback: seleciona textarea para cópia manual
+        xmlOut.focus();
+        xmlOut.select();
+        document.getElementById('xml-hint').textContent =
+          '⚠️ Auto-cópia bloqueada pelo browser — selecione tudo (Ctrl+A) e '
+          + 'copie (Ctrl+C), depois clique "📥 Capturar XML do Editor".';
+      }}
     }} catch(err) {{
       errPanel.style.display = 'block';
       errPanel.textContent = '❌ Erro ao exportar XML: ' + err.message;
