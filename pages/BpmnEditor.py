@@ -122,14 +122,35 @@ if not base_xml.strip():
     st.error("Esta versão não possui XML BPMN armazenado.")
     st.stop()
 
-# Limpa XML capturado se o usuário trocou de processo ou versão
+# ── Limpa XML capturado ao trocar processo/versão ─────────────────────────────
 _version_key = f"{process_id}:{selected_version.get('id')}"
 if st.session_state.get("_bpme_version_key") != _version_key:
     st.session_state.pop("_bpme_captured_xml", None)
     st.session_state["_bpme_version_key"] = _version_key
 
-# O modeler exibe o XML capturado (editado) se já houver captura,
-# ou o XML base caso contrário — evita perder edições no rerun.
+# ── st_javascript — escuta postMessage do modeler ANTES de renderizá-lo ──────
+# O modeler envia window.parent.postMessage({type:'bpmn_p2d_export', xml:...})
+# ao clicar "Exportar XML". st_javascript captura e devolve o XML ao Python
+# no mesmo rerun em que o modeler seria re-renderizado — sem duplo-rerun.
+from streamlit_javascript import st_javascript
+
+_js_xml = st_javascript("""
+    await new Promise((resolve) => {
+        const _h = (e) => {
+            if (e.data && e.data.type === 'bpmn_p2d_export' && e.data.xml) {
+                window.parent.removeEventListener('message', _h);
+                resolve(e.data.xml);
+            }
+        };
+        window.parent.addEventListener('message', _h);
+    });
+""")
+
+if _js_xml and _js_xml != 0 and isinstance(_js_xml, str) and len(_js_xml) > 50:
+    st.session_state["_bpme_captured_xml"] = _js_xml.strip()
+    # sem st.rerun() — o código continua no mesmo ciclo com o valor já no session_state
+
+# O modeler carrega com o XML capturado (editado) se existir, senão com o base
 _display_xml = st.session_state.get("_bpme_captured_xml") or base_xml
 
 # ── Editor ────────────────────────────────────────────────────────────────────
@@ -138,9 +159,8 @@ st.subheader("🎨 Editor visual")
 st.info(
     "**Como usar:**  \n"
     "1. Edite os elementos do diagrama usando a paleta à esquerda  \n"
-    "2. Clique **📋 Exportar XML** na barra do editor (copia para clipboard)  \n"
-    "3. Clique **📥 Capturar XML do Editor** abaixo  \n"
-    "4. Adicione notas e clique **💾 Salvar nova versão**"
+    "2. Clique **📋 Exportar XML** na barra do editor  \n"
+    "3. O XML é capturado automaticamente — aparece a seção de salvar abaixo"
 )
 
 editor_html = editor_from_xml(_display_xml, height=620)
@@ -152,48 +172,10 @@ st.subheader("💾 Salvar nova versão")
 
 user_login = st.session_state.get("_usuario_login", "")
 
-# ── Passo 1: Capturar XML do clipboard ───────────────────────────────────────
-st.markdown(
-    "**Passo 1:** No editor acima, clique **📋 Exportar XML** para copiar o diagrama. "
-    "Depois clique o botão abaixo para capturá-lo diretamente."
-)
-
-col_cap, col_status = st.columns([2, 3])
-with col_cap:
-    if st.button("📥 Capturar XML do Editor", use_container_width=True, key="bpme_capture_btn"):
-        st.session_state["_bpme_capture"] = True
-
-# ── Leitura do clipboard via st_javascript ────────────────────────────────────
-if st.session_state.get("_bpme_capture"):
-    from streamlit_javascript import st_javascript
-    result = st_javascript(
-        "await (async () => { try { return await navigator.clipboard.readText(); }"
-        " catch(e) { return '__CLIPBOARD_ERROR__: ' + e.message; } })()"
-    )
-    # result == 0 → JS ainda resolvendo (st_javascript retorna 0 enquanto aguarda)
-    if result != 0:
-        st.session_state.pop("_bpme_capture", None)
-        if isinstance(result, str) and result.startswith("__CLIPBOARD_ERROR__"):
-            st.session_state["_bpme_err"] = (
-                "❌ Não foi possível ler a área de transferência. "
-                "Verifique as permissões do browser ou use o campo manual abaixo."
-            )
-            st.rerun()
-        elif isinstance(result, str) and ("<bpmn" in result or "<?xml" in result):
-            st.session_state["_bpme_captured_xml"] = result.strip()
-            st.rerun()
-        else:
-            st.session_state["_bpme_err"] = (
-                "⚠️ Clipboard não contém XML BPMN válido. "
-                "Certifique-se de clicar '📋 Exportar XML' no editor antes de capturar."
-            )
-            st.rerun()
-    else:
-        with col_status:
-            st.info("⏳ Lendo área de transferência…")
-
-# ── Passo 2: XML capturado — mostrar e confirmar ──────────────────────────────
 captured_xml = st.session_state.get("_bpme_captured_xml", "")
+
+if not captured_xml:
+    st.info("⏳ Aguardando exportação do editor — clique **📋 Exportar XML** no editor acima.")
 
 if captured_xml:
     orig_lines = len(base_xml.splitlines())
@@ -292,8 +274,8 @@ if st.session_state.get("bpme_show_preview") and captured_xml:
 # ── Fallback: entrada manual por cole/colar ───────────────────────────────────
 with st.expander("⌨️ Alternativa: colar XML manualmente", expanded=False):
     st.caption(
-        "Use esta opção se o botão de captura não funcionar no seu browser "
-        "(alguns ambientes bloqueiam a leitura do clipboard)."
+        "Use esta opção se a captura automática via postMessage não funcionar "
+        "(ex.: browser bloqueia comunicação entre iframes)."
     )
     manual_xml = st.text_area(
         "Cole o XML aqui",

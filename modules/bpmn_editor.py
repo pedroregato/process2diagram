@@ -160,20 +160,12 @@ _EDITOR_TEMPLATE = """\
       xmlOut.value = exportedXml;
       xmlPanel.style.display = 'block';
 
-      // Tenta auto-copiar para a área de transferência do SO
-      try {{
-        await navigator.clipboard.writeText(exportedXml);
-        document.getElementById('xml-hint').innerHTML =
-          '✅ <strong>XML copiado para a área de transferência.</strong> '
-          + 'Clique em "📥 Capturar XML do Editor" abaixo para salvar direto.';
-      }} catch (_clipErr) {{
-        // Fallback: seleciona textarea para cópia manual
-        xmlOut.focus();
-        xmlOut.select();
-        document.getElementById('xml-hint').textContent =
-          '⚠️ Auto-cópia bloqueada pelo browser — selecione tudo (Ctrl+A) e '
-          + 'copie (Ctrl+C), depois clique "📥 Capturar XML do Editor".';
-      }}
+      // Envia o XML para a página Streamlit via postMessage —
+      // capturado pelo st_javascript listener (sem clipboard, sem permissões)
+      window.parent.postMessage({{ type: 'bpmn_p2d_export', xml: exportedXml }}, '*');
+      document.getElementById('xml-hint').innerHTML =
+        '✅ <strong>XML enviado para a página.</strong> '
+        + 'Aguarde a captura automática abaixo ou use o fallback manual se necessário.';
     }} catch(err) {{
       errPanel.style.display = 'block';
       errPanel.textContent = '❌ Erro ao exportar XML: ' + err.message;
