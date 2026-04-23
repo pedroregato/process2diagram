@@ -122,19 +122,28 @@ if not base_xml.strip():
     st.error("Esta versão não possui XML BPMN armazenado.")
     st.stop()
 
+# Limpa XML capturado se o usuário trocou de processo ou versão
+_version_key = f"{process_id}:{selected_version.get('id')}"
+if st.session_state.get("_bpme_version_key") != _version_key:
+    st.session_state.pop("_bpme_captured_xml", None)
+    st.session_state["_bpme_version_key"] = _version_key
+
+# O modeler exibe o XML capturado (editado) se já houver captura,
+# ou o XML base caso contrário — evita perder edições no rerun.
+_display_xml = st.session_state.get("_bpme_captured_xml") or base_xml
+
 # ── Editor ────────────────────────────────────────────────────────────────────
 st.markdown("---")
 st.subheader("🎨 Editor visual")
 st.info(
     "**Como usar:**  \n"
     "1. Edite os elementos do diagrama usando a paleta à esquerda  \n"
-    "2. Clique **📋 Exportar XML** na barra do editor  \n"
-    "3. Selecione todo o texto (Ctrl+A) e copie (Ctrl+C)  \n"
-    "4. Cole no campo **XML editado** abaixo  \n"
-    "5. Preencha as notas e salve"
+    "2. Clique **📋 Exportar XML** na barra do editor (copia para clipboard)  \n"
+    "3. Clique **📥 Capturar XML do Editor** abaixo  \n"
+    "4. Adicione notas e clique **💾 Salvar nova versão**"
 )
 
-editor_html = editor_from_xml(base_xml, height=620)
+editor_html = editor_from_xml(_display_xml, height=620)
 components.html(editor_html, height=620 + 260, scrolling=False)
 
 # ── Salvar nova versão ────────────────────────────────────────────────────────
