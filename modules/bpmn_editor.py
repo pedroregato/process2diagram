@@ -109,7 +109,7 @@ _EDITOR_TEMPLATE = """\
 </div>
 
 <div id="xml-panel">
-  <label>XML exportado (referência — use "📥 Capturar XML do Editor" abaixo para salvar):</label>
+  <label>XML exportado — copie tudo (Ctrl+A → Ctrl+C) e cole no campo abaixo:</label>
   <textarea id="xml-output" readonly spellcheck="false"></textarea>
   <div id="xml-hint">⏳ Copiando para a área de transferência…</div>
 </div>
@@ -159,13 +159,15 @@ _EDITOR_TEMPLATE = """\
       const {{ xml: exportedXml }} = await modeler.saveXML({{ format: true }});
       xmlOut.value = exportedXml;
       xmlPanel.style.display = 'block';
+      xmlOut.select();
 
-      // Envia o XML para a página Streamlit via postMessage —
-      // capturado pelo st_javascript listener (sem clipboard, sem permissões)
-      window.parent.postMessage({{ type: 'bpmn_p2d_export', xml: exportedXml }}, '*');
-      document.getElementById('xml-hint').innerHTML =
-        '✅ <strong>XML enviado para a página.</strong> '
-        + 'Aguarde a captura automática abaixo ou use o fallback manual se necessário.';
+      let hint = document.getElementById('xml-hint');
+      try {{
+        await navigator.clipboard.writeText(exportedXml);
+        hint.innerHTML = '✅ <strong>XML copiado para a área de transferência.</strong> Cole no campo abaixo (Ctrl+V).';
+      }} catch(_) {{
+        hint.innerHTML = '📋 Selecione tudo (Ctrl+A) e copie (Ctrl+C), depois cole no campo abaixo.';
+      }}
     }} catch(err) {{
       errPanel.style.display = 'block';
       errPanel.textContent = '❌ Erro ao exportar XML: ' + err.message;
