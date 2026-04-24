@@ -10,7 +10,7 @@
 - **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown / Word / PDF), requirements analysis (JSON/Markdown), executive HTML report, interactive requirements mind map
 - **Deploy:** Streamlit Cloud — auto-deploy on push to `main` branch (`github.com/pedroregato/process2diagram`)
 - **Dev environment:** PyCharm on Windows; Python 3.13
-- **Current version:** v4.13
+- **Current version:** v4.14
 
 Supported LLM providers: DeepSeek (default), Claude (Anthropic), OpenAI, Groq, Google Gemini.
 
@@ -36,11 +36,13 @@ No build step, no test suite, no Makefile.
 
 ```
 process2diagram/
-├── app.py                        # Streamlit entry point — st.navigation() with 4 groups: Pipeline | Análise | Sistema | Manutenção
+├── app.py                        # Streamlit entry point — st.navigation() with 5 groups: Início | Pipeline | Análise | Sistema | Manutenção
 │
 ├── pages/
-│   ├── Pipeline.py               # 🚀 Main pipeline page (default) — transcript input, agent run, result tabs
+│   ├── Home.py                   # 🏠 Landing page (default) — welcome header, KPI strip, workflow guide, quick access, recent meetings
+│   ├── Pipeline.py               # 🚀 Main pipeline page — transcript input, agent run, result tabs
 │   ├── Diagramas.py              # Full-screen multi-page diagram viewer (BPMN, Mermaid, Mind Map)
+│   ├── BpmnEditor.py             # ✏️ BPMN editor — bpmn-js Modeler, version history, save new version to Supabase
 │   ├── Assistente.py             # RAG-powered assistant — conversational Q&A over meeting transcripts
 │   ├── ReqTracker.py             # Requirements tracker — Supabase-backed requirement status board
 │   ├── MeetingROI.py             # 📊 ROI-TR dashboard — type-aware quality indicators (v2)
@@ -79,7 +81,8 @@ process2diagram/
 │   ├── config.py                 # LLM provider registry — add new providers here
 │   ├── session_security.py       # API keys in st.session_state only, never persisted
 │   ├── bpmn_generator.py         # OMG BPMN 2.0 XML generator (absolute coordinates layout)
-│   ├── bpmn_viewer.py            # BPMN viewer component (bpmn-js 17 injected inline)
+│   ├── bpmn_viewer.py            # BPMN viewer component (bpmn-js 17 injected inline, read-only)
+│   ├── bpmn_editor.py            # editor_from_xml() — bpmn-js Modeler HTML template (editable, export XML)
 │   ├── bpmn_auto_repair.py       # repair_bpmn() — 4-pass deterministic repair engine (no LLM)
 │   ├── bpmn_structural_validator.py  # validate_bpmn_structure() — 6 structural checks, severity levels
 │   ├── bpmn_diagnostics.py       # render_bpmn_diagnostics() — BPMN diagnostic panel for Streamlit
@@ -210,13 +213,14 @@ AgentSynthesizer         ← LLM (optional); reads all hub artifacts incl. SBVR 
 
 ### App.py — Navigation Entry Point
 
-`app.py` (v4.13) uses `st.navigation()` to define all pages in 4 groups:
+`app.py` (v4.14) uses `st.navigation()` to define all pages in 5 groups:
 
 | Group | Pages |
 |---|---|
-| **Pipeline** | Pipeline.py (default), Diagramas.py |
-| **Análise** | Assistente.py, ReqTracker.py, MeetingROI.py |
-| **Sistema** | Settings.py, DatabaseOverview.py, CostEstimator.py, guide pages |
+| **Início** | Home.py (default) |
+| **Pipeline** | Pipeline.py, Diagramas.py, BpmnEditor.py |
+| **Análise** | Assistente.py, ReqTracker.py, MeetingROI.py, EntityRecognition.py |
+| **Sistema** | Settings.py, MasterAdmin.py, DatabaseOverview.py, CostEstimator.py, guide pages |
 | **Manutenção** | BatchRunner.py, BpmnBackfill.py, MinutesBackfill.py, TranscriptBackfill.py |
 
 `app.py` itself renders no content — it only calls `st.navigation(pages).run()`. All pipeline logic lives in `pages/Pipeline.py`.
@@ -674,7 +678,7 @@ Thin wrappers that decouple `ui/` from `modules/`:
 - `pipeline.run_pipeline(hub, config, progress_callback)` — single entry point for pipeline execution. Three paths: (1) multi-run tournament (`n_bpmn_runs > 1`), (2) LangGraph adaptive retry (`use_langgraph=True`), (3) standard single-run. Raises on error (caller catches).
 - `lg_pipeline.LGBPMNRunner` — LangGraph `StateGraph` with BPMN→validate→(retry|proceed) loop. `@st.cache_data` not used here; graph is compiled per run instance. `hub.bpmn.lg_attempts` and `hub.bpmn.lg_final_score` written after completion.
 - `rerun_handlers.handle_rerun(agent_name, hub, client_info, provider_cfg, output_language)` — re-executes one named agent (`"quality"`, `"bpmn"`, `"minutes"`, `"requirements"`, `"sbvr"`, `"bmm"`, `"synthesizer"`). When BPMN is re-run, invalidates `hub.synthesizer`.
-- `project_store` — Supabase CRUD for projects, meetings, requirements, and transcript embeddings. Functions: `list_projects()`, `list_meetings(project_id)`, `save_transcript_embeddings(meeting_id, project_id, chunks, embeddings)`, `search_transcript_chunks(project_id, query_embedding, match_count)`. Fail-open: returns `[]`/`None` when Supabase is unconfigured.
+- `project_store` — Supabase CRUD for projects, meetings, requirements, and transcript embeddings. Key functions: `list_projects()`, `list_meetings(project_id)`, `get_global_stats()` (KPI counts for Home page), `list_recent_meetings(limit)` (last N meetings across all projects), `list_bpmn_processes(project_id)`, `list_bpmn_versions(process_id)`, `save_bpmn_new_version(process_id, meeting_id, project_id, bpmn_xml, mermaid_code, version_notes, created_by)` (saves edited XML, demotes previous current version), `get_bpmn_version(version_id)`, `save_transcript_embeddings(meeting_id, project_id, chunks, embeddings)`, `search_transcript_chunks(project_id, query_embedding, match_count)`. Fail-open: returns `[]`/`None` when Supabase is unconfigured.
 - `batch_pipeline.run_batch(transcripts, config, callback)` — runs the full pipeline on a list of transcripts sequentially, accumulating results.
 
 ---
@@ -1038,6 +1042,13 @@ All pages begin with `ui.auth_gate.apply_auth_gate()` immediately after `st.set_
 - [x] **`modules/text_utils.py`** — `rule_keyword_pt()` and other Portuguese text utilities
 - [x] **`modules/reqtracker_exporter.py`** — Excel/CSV export for ReqTracker
 - [x] **Google Gemini SDK migration** — use `google-generativeai` (stable) for `embed_content()` + `list_models()`; `google-genai` kept as secondary dependency
+
+### PC7 — Concluído (v4.14)
+- [x] **`pages/Home.py`** — tela inicial padrão (default) com header de boas-vindas (nome, role badge, tenant, data), 4 KPIs globais (`get_global_stats()`), guia visual de 4 etapas, acesso rápido por área (Pipeline / Análise / Sistema / Orientações), reuniões recentes com links contextuais para Assistente + Validação + Editor BPMN; `@st.cache_data(ttl=60)` para chamadas DB
+- [x] **`pages/BpmnEditor.py`** — editor visual BPMN com bpmn-js Modeler; seletores projeto/processo/versão; histórico de versões em dataframe; session-state-first paste pattern (read `bpme_paste_xml` antes de renderizar o modeler — elimina revert ao base XML); validação estrutural com `xml.etree.ElementTree`; salva nova versão via `save_bpmn_new_version()`; preview e descarte de edições; reset automático ao trocar processo/versão
+- [x] **`modules/bpmn_editor.py`** — `editor_from_xml(xml, height)` → HTML self-contained com bpmn-js Modeler 17 (CDN); toolbar com Ajustar/Desfazer/Refazer/Exportar XML; export button tenta `navigator.clipboard.writeText()` (auto-copy) com fallback para instrução manual (Ctrl+A → Ctrl+C); sem postMessage
+- [x] **`core/project_store.py` — novas funções** — `get_global_stats()`, `list_recent_meetings(limit)`, `list_bpmn_processes()`, `list_bpmn_versions()`, `save_bpmn_new_version()`, `get_bpmn_version()`
+- [x] **Navegação atualizada** — grupo "Início" adicionado como primeiro grupo (default=Home.py); BpmnEditor.py movido para grupo Pipeline
 
 ### PC6 — Concluído (v4.13)
 - [x] **Navegação reestruturada** — `app.py` migrado para `st.navigation()` com 4 grupos: Pipeline | Análise | Sistema | Manutenção; pipeline principal movido para `pages/Pipeline.py`
