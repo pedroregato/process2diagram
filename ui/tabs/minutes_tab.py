@@ -13,7 +13,6 @@ def render(hub, prefix, suffix):
         st.markdown("---")
         st.markdown("### Export")
         _md = m.minutes_md
-        from services.export_service import make_filename
         st.download_button(
             "⬇️ .md", data=_md,
             file_name=make_filename("minutes", "md", prefix, suffix),
