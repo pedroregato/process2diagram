@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "claude_ai_Google_Calendar": {
+      "command": "python",
+      "args": ["mcp/google_calendar_server.py"],
+      "cwd": "D:\\PythonProjects\\process2diagram"
+    }
+  }
+}

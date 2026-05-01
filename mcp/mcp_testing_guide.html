@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Guia de Testes — MCP Google Calendar</title>
+  <style>
+    :root {
+      --navy:   #1a2744;
+      --navy2:  #243358;
+      --amber:  #f59e0b;
+      --amber2: #fbbf24;
+      --green:  #10b981;
+      --red:    #ef4444;
+      --blue:   #3b82f6;
+      --purple: #8b5cf6;
+      --gray:   #f3f4f6;
+      --gray2:  #e5e7eb;
+      --text:   #111827;
+      --muted:  #6b7280;
+      --code-bg:#1e293b;
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f8fafc;
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    header {
+      background: var(--navy);
+      color: #fff;
+      padding: 32px 40px 28px;
+      border-bottom: 4px solid var(--amber);
+    }
+    header h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -.3px; }
+    header p  { margin-top: 6px; color: #94a3b8; font-size: .95rem; }
+    .badge {
+      display: inline-block;
+      background: var(--amber);
+      color: var(--navy);
+      font-size: .72rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 99px;
+      vertical-align: middle;
+      margin-left: 8px;
+      letter-spacing: .5px;
+    }
+
+    /* ── Layout ──────────────────────────────────────────────── */
+    .layout { display: flex; max-width: 1180px; margin: 0 auto; padding: 32px 24px; gap: 28px; }
+
+    /* ── Sidebar nav ─────────────────────────────────────────── */
+    nav {
+      width: 220px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 24px;
+      align-self: flex-start;
+    }
+    nav ul { list-style: none; }
+    nav ul li + li { margin-top: 2px; }
+    nav a {
+      display: block;
+      padding: 7px 12px;
+      border-radius: var(--radius);
+      color: var(--navy);
+      text-decoration: none;
+      font-size: .88rem;
+      font-weight: 500;
+      transition: background .15s;
+    }
+    nav a:hover { background: var(--gray2); }
+    nav .nav-section {
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: .8px;
+      color: var(--muted);
+      text-transform: uppercase;
+      padding: 16px 12px 4px;
+    }
+    nav .nav-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 7px;
+      vertical-align: middle;
+    }
+
+    /* ── Main content ────────────────────────────────────────── */
+    main { flex: 1; min-width: 0; }
+
+    section { margin-bottom: 36px; }
+    section h2 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--navy);
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--gray2);
+      margin-bottom: 16px;
+    }
+    section h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--navy2);
+      margin: 20px 0 8px;
+    }
+    p { margin-bottom: 10px; color: #374151; }
+
+    /* ── Cards ───────────────────────────────────────────────── */
+    .card {
+      background: #fff;
+      border: 1px solid var(--gray2);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-bottom: 12px;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .card-title { font-weight: 700; font-size: .95rem; color: var(--navy); }
+    .card-sub   { font-size: .82rem; color: var(--muted); margin-top: 2px; }
+    .method-badge {
+      font-size: .72rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: var(--navy);
+      color: #fff;
+      letter-spacing: .3px;
+    }
+
+    /* ── Code blocks ─────────────────────────────────────────── */
+    pre {
+      background: var(--code-bg);
+      color: #e2e8f0;
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      font-size: .83rem;
+      line-height: 1.55;
+      overflow-x: auto;
+      margin: 8px 0 4px;
+    }
+    code { font-family: "JetBrains Mono", "Fira Code", Consolas, monospace; }
+    pre code { color: inherit; }
+    .hl-prompt { color: #fbbf24; }
+    .hl-tool   { color: #86efac; }
+    .hl-param  { color: #93c5fd; }
+    .hl-string { color: #fca5a5; }
+    .hl-comment{ color: #64748b; font-style: italic; }
+
+    /* ── Inline code ─────────────────────────────────────────── */
+    :not(pre) > code {
+      background: var(--gray);
+      color: var(--navy2);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: .87em;
+    }
+
+    /* ── Checklist ───────────────────────────────────────────── */
+    .checklist { list-style: none; }
+    .checklist li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 6px 0;
+      font-size: .92rem;
+    }
+    .check-icon {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      font-size: .75rem;
+      font-weight: 700;
+      margin-top: 1px;
+    }
+    .check-ok   { background: #d1fae5; color: #059669; }
+    .check-warn { background: #fef3c7; color: #d97706; }
+
+    /* ── Alert boxes ─────────────────────────────────────────── */
+    .alert {
+      border-left: 4px solid;
+      padding: 10px 14px;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      margin: 12px 0;
+      font-size: .88rem;
+    }
+    .alert-info  { background: #eff6ff; border-color: var(--blue);   color: #1e40af; }
+    .alert-warn  { background: #fffbeb; border-color: var(--amber);  color: #92400e; }
+    .alert-ok    { background: #f0fdf4; border-color: var(--green);  color: #065f46; }
+
+    /* ── Tool grid ───────────────────────────────────────────── */
+    .tool-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .tool-card {
+      background: #fff;
+      border: 1px solid var(--gray2);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+    .tool-name { font-weight: 700; font-size: .9rem; color: var(--navy); margin-bottom: 4px; }
+    .tool-desc { font-size: .82rem; color: var(--muted); }
+    .dot-r { background: var(--red);    }
+    .dot-g { background: var(--green);  }
+    .dot-b { background: var(--blue);   }
+    .dot-p { background: var(--purple); }
+    .dot-a { background: var(--amber);  }
+
+    /* ── Params table ────────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    th {
+      background: var(--navy);
+      color: #fff;
+      text-align: left;
+      padding: 8px 12px;
+      font-weight: 600;
+    }
+    td { padding: 7px 12px; border-bottom: 1px solid var(--gray2); }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) td { background: var(--gray); }
+    .req  { color: var(--red);  font-weight: 700; font-size: .8rem; }
+    .opt  { color: var(--muted); font-size: .8rem; }
+
+    /* ── Footer ──────────────────────────────────────────────── */
+    footer {
+      background: var(--navy);
+      color: #64748b;
+      text-align: center;
+      padding: 16px;
+      font-size: .8rem;
+      margin-top: 24px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>MCP Google Calendar <span class="badge">POC</span></h1>
+  <p>Guia de testes dos recursos disponíveis via Claude Code &nbsp;·&nbsp; Process2Diagram v4.14</p>
+</header>
+
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <nav>
+    <div class="nav-section">Inicio</div>
+    <ul>
+      <li><a data-target="sec-overview" href="javascript:void(0)">Visao Geral</a></li>
+      <li><a data-target="sec-setup" href="javascript:void(0)">Pre-requisitos</a></li>
+      <li><a data-target="sec-architecture" href="javascript:void(0)">Arquitetura</a></li>
+    </ul>
+    <div class="nav-section">Ferramentas</div>
+    <ul>
+      <li><a data-target="sec-tools" href="javascript:void(0)"><span class="nav-dot dot-b"></span>Catalogo</a></li>
+      <li><a data-target="sec-list-events" href="javascript:void(0)"><span class="nav-dot dot-g"></span>list_events</a></li>
+      <li><a data-target="sec-get-event" href="javascript:void(0)"><span class="nav-dot dot-g"></span>get_event</a></li>
+      <li><a data-target="sec-create-event" href="javascript:void(0)"><span class="nav-dot dot-a"></span>create_event</a></li>
+      <li><a data-target="sec-update-event" href="javascript:void(0)"><span class="nav-dot dot-a"></span>update_event</a></li>
+      <li><a data-target="sec-delete-event" href="javascript:void(0)"><span class="nav-dot dot-r"></span>delete_event</a></li>
+      <li><a data-target="sec-list-calendars" href="javascript:void(0)"><span class="nav-dot dot-g"></span>list_calendars</a></li>
+      <li><a data-target="sec-respond" href="javascript:void(0)"><span class="nav-dot dot-p"></span>respond_to_event</a></li>
+      <li><a data-target="sec-suggest" href="javascript:void(0)"><span class="nav-dot dot-p"></span>suggest_time</a></li>
+    </ul>
+    <div class="nav-section">Referencia</div>
+    <ul>
+      <li><a data-target="sec-troubleshoot" href="javascript:void(0)">Solucao de Problemas</a></li>
+    </ul>
+  </nav>
+
+  <!-- ── Main ── -->
+  <main>
+
+    <!-- Visao Geral -->
+    <section id="sec-overview">
+      <h2>Visao Geral</h2>
+      <p>
+        O servidor MCP (<strong>Model Context Protocol</strong>) expoe operacoes do Google Calendar
+        diretamente ao Claude Code. Ao conversar com o Claude, basta descrever o que quer fazer
+        em linguagem natural — o Claude seleciona e executa a ferramenta adequada automaticamente.
+      </p>
+      <div class="alert alert-info">
+        <strong>Como funciona:</strong> o arquivo <code>.mcp.json</code> na raiz do projeto registra
+        o servidor. Quando o Claude Code inicia, ele lanca o processo
+        <code>python mcp/google_calendar_server.py</code> e disponibiliza as 8 ferramentas
+        na sessao ativa.
+      </div>
+
+      <h3>Ferramentas disponíveis</h3>
+      <div class="tool-grid">
+        <div class="tool-card"><div class="tool-name">list_events</div><div class="tool-desc">Lista proximos eventos com filtros de data e busca por texto</div></div>
+        <div class="tool-card"><div class="tool-name">get_event</div><div class="tool-desc">Retorna detalhes completos de um evento pelo ID</div></div>
+        <div class="tool-card"><div class="tool-name">create_event</div><div class="tool-desc">Cria novo evento com titulo, horario, local e participantes</div></div>
+        <div class="tool-card"><div class="tool-name">update_event</div><div class="tool-desc">Atualiza campos de um evento existente (patch parcial)</div></div>
+        <div class="tool-card"><div class="tool-name">delete_event</div><div class="tool-desc">Remove um evento e envia notificacao aos participantes</div></div>
+        <div class="tool-card"><div class="tool-name">list_calendars</div><div class="tool-desc">Lista todas as agendas acessiveis pela Service Account</div></div>
+        <div class="tool-card"><div class="tool-name">respond_to_event</div><div class="tool-desc">Atualiza o RSVP de um participante (aceito/recusado/tentativo)</div></div>
+        <div class="tool-card"><div class="tool-name">suggest_time</div><div class="tool-desc">Sugere horarios livres usando a API freebusy do Google</div></div>
+      </div>
+    </section>
+
+    <!-- Pre-requisitos -->
+    <section id="sec-setup">
+      <h2>Pre-requisitos</h2>
+      <ul class="checklist">
+        <li>
+          <span class="check-icon check-ok">&#10003;</span>
+          <div>
+            <strong>Servidor MCP configurado</strong><br>
+            <span style="color:var(--muted);font-size:.85rem;">
+              <code>.mcp.json</code> aponta para <code>mcp/google_calendar_server.py</code>
+            </span>
+          </div>
+        </li>
+        <li>
+          <span class="check-icon check-ok">&#10003;</span>
+          <div>
+            <strong>Service Account JSON presente</strong><br>
+            <span style="color:var(--muted);font-size:.85rem;">
+              <code>mcp/google_console/process2diagram-*.json</code> — ignorado pelo git
+            </span>
+          </div>
+        </li>
+        <li>
+          <span class="check-icon check-ok">&#10003;</span>
+          <div>
+            <strong>Calendar ID configurado</strong><br>
+            <span style="color:var(--muted);font-size:.85rem;">
+              <code>mcp/google_console/.google-calendar</code> — ignorado pelo git
+            </span>
+          </div>
+        </li>
+        <li>
+          <span class="check-icon check-warn">!</span>
+          <div>
+            <strong>Dependencias instaladas</strong><br>
+            <span style="color:var(--muted);font-size:.85rem;">
+              Execute: <code>pip install -r mcp/requirements.txt</code>
+            </span>
+          </div>
+        </li>
+        <li>
+          <span class="check-icon check-warn">!</span>
+          <div>
+            <strong>Service Account com acesso ao calendario</strong><br>
+            <span style="color:var(--muted);font-size:.85rem;">
+              No Google Calendar, compartilhe a agenda com o e-mail da Service Account
+              com permissao "Fazer alteracoes nos eventos"
+            </span>
+          </div>
+        </li>
+      </ul>
+
+      <h3>Instalando as dependencias</h3>
+      <pre><code><span class="hl-comment"># No terminal, dentro do diretorio do projeto</span>
+pip install -r mcp/requirements.txt</code></pre>
+
+      <h3>Verificando se o servidor esta ativo</h3>
+      <p>No chat do Claude Code, pergunte:</p>
+      <pre><code><span class="hl-prompt">Voce</span>: Quais ferramentas MCP de calendario estao disponiveis?</code></pre>
+      <p>O Claude deve listar as 8 ferramentas. Se nao listar, o servidor nao foi iniciado corretamente — verifique a secao <a data-target="sec-troubleshoot" href="javascript:void(0)" style="color:var(--blue)">Solucao de Problemas</a>.</p>
+    </section>
+
+    <!-- Arquitetura -->
+    <section id="sec-architecture">
+      <h2>Arquitetura</h2>
+      <pre><code>Claude Code (CLI)
+    |
+    |-- le .mcp.json
+    |
+    v
+python mcp/google_calendar_server.py   &lt;-- FastMCP via stdio
+    |
+    |-- Carrega credenciais: mcp/google_console/*.json
+    |-- Le calendar ID:      mcp/google_console/.google-calendar
+    |
+    v
+Google Calendar API v3
+    |
+    v
+Agenda compartilhada com a Service Account</code></pre>
+
+      <div class="alert alert-info">
+        O servidor MCP roda como processo filho do Claude Code, comunicando via <strong>stdio</strong>
+        (stdin/stdout). Nao ha porta de rede aberta. As credenciais nunca trafegam pela rede local.
+      </div>
+    </section>
+
+    <!-- Catalogo -->
+    <section id="sec-tools">
+      <h2>Catalogo de Ferramentas</h2>
+      <p>Cada ferramenta pode ser invocada diretamente no chat do Claude Code. Os exemplos abaixo
+         mostram tanto o prompt em linguagem natural quanto o equivalente tecnico para referencia.</p>
+    </section>
+
+    <!-- list_events -->
+    <section id="sec-list-events">
+      <h2>list_events</h2>
+      <p>Lista proximos eventos da agenda. Suporta filtros de periodo e busca por texto.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="method-badge">GET</span>
+          <span class="card-title">Parametros</span>
+        </div>
+        <table>
+          <tr><th>Parametro</th><th>Tipo</th><th>Obrigatorio</th><th>Descricao</th></tr>
+          <tr><td><code>max_results</code></td><td>int</td><td><span class="opt">opcional</span></td><td>Maximo de eventos (padrao 10, max 250)</td></tr>
+          <tr><td><code>time_min</code></td><td>string</td><td><span class="opt">opcional</span></td><td>Inicio do periodo (ISO 8601). Padrao: agora</td></tr>
+          <tr><td><code>time_max</code></td><td>string</td><td><span class="opt">opcional</span></td><td>Fim do periodo (ISO 8601)</td></tr>
+          <tr><td><code>query</code></td><td>string</td><td><span class="opt">opcional</span></td><td>Filtro por texto livre no titulo/descricao</td></tr>
+          <tr><td><code>calendar_id</code></td><td>string</td><td><span class="opt">opcional</span></td><td>ID da agenda. Padrao: agenda do projeto</td></tr>
+        </table>
+      </div>
+
+      <h3>Exemplos de uso</h3>
+
+      <div class="card">
+        <div class="card-sub">Proximos 10 eventos</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Quais sao os proximos eventos do calendario?</code></pre>
+      </div>
+
+      <div class="card">
+        <div class="card-sub">Filtrar por periodo</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Liste os eventos de maio de 2026.</code></pre>
+      </div>
+
+      <div class="card">
+        <div class="card-sub">Busca por texto</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Tem algum evento de "reuniao de sprint" agendado?</code></pre>
+      </div>
+
+      <div class="card">
+        <div class="card-sub">Quantidade especifica</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Mostre os proximos 3 eventos do calendario.</code></pre>
+      </div>
+    </section>
+
+    <!-- get_event -->
+    <section id="sec-get-event">
+      <h2>get_event</h2>
+      <p>Retorna todos os detalhes de um evento especifico pelo seu ID. O ID e obtido via <code>list_events</code>.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="method-badge">GET</span>
+          <span class="card-title">Parametros</span>
+        </div>
+        <table>
+          <tr><th>Parametro</th><th>Tipo</th><th>Obrigatorio</th><th>Descricao</th></tr>
+          <tr><td><code>event_id</code></td><td>string</td><td><span class="req">obrigatorio</span></td><td>ID do evento (obtido via list_events)</td></tr>
+          <tr><td><code>calendar_id</code></td><td>string</td><td><span class="opt">opcional</span></td><td>ID da agenda. Padrao: agenda do projeto</td></tr>
+        </table>
+      </div>
+
+      <h3>Exemplos de uso</h3>
+
+      <div class="card">
+        <div class="card-sub">Fluxo tipico: listar e depois detalhar</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Liste os proximos eventos e me mostre os detalhes do primeiro.
+
+<span class="hl-comment">-- Claude lista os eventos e chama get_event automaticamente --</span></code></pre>
+      </div>
+
+      <div class="card">
+        <div class="card-sub">Direto pelo ID</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Busque os detalhes do evento com ID <span class="hl-string">"abc123xyz"</span>.</code></pre>
+      </div>
+    </section>
+
+    <!-- create_event -->
+    <section id="sec-create-event">
+      <h2>create_event</h2>
+      <p>Cria um novo evento no calendario. Envia convites por e-mail quando participantes sao informados.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="method-badge">POST</span>
+          <span class="card-title">Parametros</span>
+        </div>
+        <table>
+          <tr><th>Parametro</th><th>Tipo</th><th>Obrigatorio</th><th>Descricao</th></tr>
+          <tr><td><code>summary</code></td><td>string</td><td><span class="req">obrigatorio</span></td><td>Titulo do evento</td></tr>
+          <tr><td><code>start_datetime</code></td><td>string</td><td><span class="req">obrigatorio</span></td><td>Inicio — ISO 8601 (ex: "2026-05-15T14:00:00")</td></tr>
+          <tr><td><code>end_datetime</code></td><td>string</td><td><span class="req">obrigatorio</span></td><td>Fim — ISO 8601 (ex: "2026-05-15T15:00:00")</td></tr>
+          <tr><td><code>description</code></td><td>string</td><td><span class="opt">opcional</span></td><td>Descricao ou pauta do evento</td></tr>
+          <tr><td><code>location</code></td><td>string</td><td><span class="opt">opcional</span></td><td>Local ou link do Meet/Teams</td></tr>
+          <tr><td><code>attendees</code></td><td>string</td><td><span class="opt">opcional</span></td><td>Emails separados por virgula</td></tr>
+          <tr><td><code>calendar_id</code></td><td>string</td><td><span class="opt">opcional</span></td><td>ID da agenda. Padrao: agenda do projeto</td></tr>
+        </table>
+      </div>
+
+      <div class="alert alert-warn">
+        <strong>Atencao:</strong> horarios sem fuso horario sao interpretados como
+        <strong>America/Sao_Paulo</strong>. Exemplo: "2026-05-15T14:00:00" cria um evento as 14h no
+        horario de Brasilia.
+      </div>
+
+      <h3>Exemplos de uso</h3>
+
+      <div class="card">
+        <div class="card-sub">Evento simples</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Crie um evento "Reuniao de Sprint" amanha as 10h com duracao de 1 hora.</code></pre>
+      </div>
+
+      <div class="card">
+        <div class="card-sub">Com participantes e descricao</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Agende uma "Revisao de Requisitos" para 20/05/2026 das 14h as 16h,
+local "Sala 3 - Bloco A", com os participantes joao@empresa.com e
+ana@empresa.com. Pauta: validacao dos requisitos do modulo de relatorios.</code></pre>
+      </div>
+
+      <div class="card">
+        <div class="card-sub">Reuniao recorrente (descricao livre)</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Crie uma reuniao diaria de standup para 19/05/2026 as 09h15,
+com 15 minutos de duracao. Participantes: time@empresa.com</code></pre>
+      </div>
+    </section>
+
+    <!-- update_event -->
+    <section id="sec-update-event">
+      <h2>update_event</h2>
+      <p>Atualiza campos de um evento existente. Somente os campos fornecidos sao alterados (patch parcial) — os demais permanecem intactos.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="method-badge">PATCH</span>
+          <span class="card-title">Parametros</span>
+        </div>
+        <table>
+          <tr><th>Parametro</th><th>Tipo</th><th>Obrigatorio</th><th>Descricao</th></tr>
+          <tr><td><code>event_id</code></td><td>string</td><td><span class="req">obrigatorio</span></td><td>ID do evento a atualizar</td></tr>
+          <tr><td><code>summary</code></td><td>string</td><td><span class="opt">opcional</span></td><td>Novo titulo</td></tr>
+          <tr><td><code>start_datetime</code></td><td>string</td><td><span class="opt">opcional</span></td><td>Novo horario de inicio</td></tr>
+          <tr><td><code>end_datetime</code></td><td>string</td><td><span class="opt">opcional</span></td><td>Novo horario de fim</td></tr>
+          <tr><td><code>description</code></td><td>string</td><td><span class="opt">opcional</span></td><td>Nova descricao</td></tr>
+          <tr><td><code>location</code></td><td>string</td><td><span class="opt">opcional</span></td><td>Novo local</td></tr>
+          <tr><td><code>calendar_id</code></td><td>string</td><td><span class="opt">opcional</span></td><td>ID da agenda. Padrao: agenda do projeto</td></tr>
+        </table>
+      </div>
+
+      <h3>Exemplos de uso</h3>
+
+      <div class="card">
+        <div class="card-sub">Reagendar evento</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Encontre a reuniao "Revisao de Requisitos" e reagende para 21/05/2026
+no mesmo horario.</code></pre>
+      </div>
+
+      <div class="card">
+        <div class="card-sub">Atualizar apenas o local</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Altere o local da "Reuniao de Sprint" de amanha para
+"https://meet.google.com/abc-defg-hij".</code></pre>
+      </div>
+
+      <div class="card">
+        <div class="card-sub">Renomear evento</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Renomeie o evento com ID <span class="hl-string">"xyz789"</span> para "Sprint Review — Ciclo 12".</code></pre>
+      </div>
+    </section>
+
+    <!-- delete_event -->
+    <section id="sec-delete-event">
+      <h2>delete_event</h2>
+      <p>Remove permanentemente um evento do calendario e notifica os participantes.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="method-badge" style="background:var(--red);">DELETE</span>
+          <span class="card-title">Parametros</span>
+        </div>
+        <table>
+          <tr><th>Parametro</th><th>Tipo</th><th>Obrigatorio</th><th>Descricao</th></tr>
+          <tr><td><code>event_id</code></td><td>string</td><td><span class="req">obrigatorio</span></td><td>ID do evento a remover</td></tr>
+          <tr><td><code>calendar_id</code></td><td>string</td><td><span class="opt">opcional</span></td><td>ID da agenda. Padrao: agenda do projeto</td></tr>
+        </table>
+      </div>
+
+      <div class="alert alert-warn">
+        <strong>Atencao:</strong> a exclusao e permanente e nao pode ser desfeita via API.
+        Sempre confirme o ID do evento antes de deletar.
+      </div>
+
+      <h3>Exemplos de uso</h3>
+
+      <div class="card">
+        <div class="card-sub">Fluxo seguro: listar, confirmar e deletar</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Liste os eventos de hoje, depois delete o evento "Teste de Carga" se existir.
+
+<span class="hl-comment">-- Claude lista, identifica o ID e pede confirmacao antes de deletar --</span></code></pre>
+      </div>
+
+      <div class="card">
+        <div class="card-sub">Direto pelo ID</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Delete o evento com ID <span class="hl-string">"evento123"</span>.</code></pre>
+      </div>
+    </section>
+
+    <!-- list_calendars -->
+    <section id="sec-list-calendars">
+      <h2>list_calendars</h2>
+      <p>Lista todas as agendas do Google Calendar acessiveis pela Service Account do projeto.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="method-badge">GET</span>
+          <span class="card-title">Sem parametros</span>
+        </div>
+        <p style="padding: 8px 0 0; color:var(--muted); font-size:.88rem;">
+          Nenhum parametro necessario. Retorna id, nome, papel de acesso e flag de agenda primaria.
+        </p>
+      </div>
+
+      <h3>Exemplos de uso</h3>
+
+      <div class="card">
+        <div class="card-sub">Listar todas as agendas</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Quais agendas a Service Account tem acesso?</code></pre>
+      </div>
+
+      <div class="card">
+        <div class="card-sub">Uso para obter IDs</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Me mostre os IDs de todas as agendas disponiveis para eu poder usar
+em outros comandos.</code></pre>
+      </div>
+    </section>
+
+    <!-- respond_to_event -->
+    <section id="sec-respond">
+      <h2>respond_to_event</h2>
+      <p>Atualiza o status RSVP de um participante em um evento.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="method-badge">PATCH</span>
+          <span class="card-title">Parametros</span>
+        </div>
+        <table>
+          <tr><th>Parametro</th><th>Tipo</th><th>Obrigatorio</th><th>Descricao</th></tr>
+          <tr><td><code>event_id</code></td><td>string</td><td><span class="req">obrigatorio</span></td><td>ID do evento</td></tr>
+          <tr><td><code>response</code></td><td>string</td><td><span class="req">obrigatorio</span></td><td><code>accepted</code> | <code>declined</code> | <code>tentative</code> | <code>needsAction</code></td></tr>
+          <tr><td><code>attendee_email</code></td><td>string</td><td><span class="opt">opcional</span></td><td>Email do participante. Padrao: conta da Service Account</td></tr>
+          <tr><td><code>calendar_id</code></td><td>string</td><td><span class="opt">opcional</span></td><td>ID da agenda. Padrao: agenda do projeto</td></tr>
+        </table>
+      </div>
+
+      <h3>Exemplos de uso</h3>
+
+      <div class="card">
+        <div class="card-sub">Aceitar convite</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Aceite o convite do evento "Reuniao de Sprint" para joao@empresa.com.</code></pre>
+      </div>
+
+      <div class="card">
+        <div class="card-sub">Recusar com e-mail especifico</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Recuse o evento com ID <span class="hl-string">"evt456"</span> para maria@empresa.com.</code></pre>
+      </div>
+
+      <div class="card">
+        <div class="card-sub">Marcar como tentativo</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Marque minha participacao no evento "Workshop BPMN" como tentativa.</code></pre>
+      </div>
+    </section>
+
+    <!-- suggest_time -->
+    <section id="sec-suggest">
+      <h2>suggest_time</h2>
+      <p>Consulta a API <em>freebusy</em> do Google Calendar para encontrar horarios livres para os participantes informados.</p>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="method-badge">POST</span>
+          <span class="card-title">Parametros</span>
+        </div>
+        <table>
+          <tr><th>Parametro</th><th>Tipo</th><th>Obrigatorio</th><th>Descricao</th></tr>
+          <tr><td><code>duration_minutes</code></td><td>int</td><td><span class="opt">opcional</span></td><td>Duracao necessaria em minutos (padrao 60)</td></tr>
+          <tr><td><code>attendees</code></td><td>string</td><td><span class="opt">opcional</span></td><td>Emails separados por virgula</td></tr>
+          <tr><td><code>time_min</code></td><td>string</td><td><span class="opt">opcional</span></td><td>Inicio da janela de busca (ISO 8601). Padrao: agora</td></tr>
+          <tr><td><code>time_max</code></td><td>string</td><td><span class="opt">opcional</span></td><td>Fim da janela de busca. Padrao: +7 dias</td></tr>
+          <tr><td><code>max_suggestions</code></td><td>int</td><td><span class="opt">opcional</span></td><td>Numero de sugestoes a retornar (padrao 3)</td></tr>
+        </table>
+      </div>
+
+      <div class="alert alert-info">
+        <strong>Limitacao:</strong> a API freebusy so retorna disponibilidade de calendarios que a
+        Service Account tem acesso. Participantes externos cujos calendarios nao foram compartilhados
+        nao sao verificados.
+      </div>
+
+      <h3>Exemplos de uso</h3>
+
+      <div class="card">
+        <div class="card-sub">Busca basica</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Qual o proximo horario livre de 1 hora na proxima semana?</code></pre>
+      </div>
+
+      <div class="card">
+        <div class="card-sub">Com multiplos participantes</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Encontre 3 opcoes de horario de 90 minutos esta semana que funcionem
+para joao@empresa.com e ana@empresa.com.</code></pre>
+      </div>
+
+      <div class="card">
+        <div class="card-sub">Fluxo completo: sugerir e criar</div>
+        <pre><code><span class="hl-prompt">Voce</span>: Sugira um horario de 1 hora para esta semana e, se eu aprovar,
+crie um evento "Alinhamento P2D" com joao@empresa.com.</code></pre>
+      </div>
+    </section>
+
+    <!-- Solucao de Problemas -->
+    <section id="sec-troubleshoot">
+      <h2>Solucao de Problemas</h2>
+
+      <h3>Ferramentas nao aparecem no Claude Code</h3>
+      <div class="card">
+        <p><strong>Causa mais comum:</strong> dependencias nao instaladas ou <code>.mcp.json</code> invalido.</p>
+        <pre><code><span class="hl-comment"># Teste o servidor manualmente:</span>
+cd D:\PythonProjects\process2diagram
+python mcp/google_calendar_server.py
+
+<span class="hl-comment"># Deve iniciar sem erros. Ctrl+C para sair.</span></code></pre>
+        <p style="margin-top:8px;">Se houver <code>ModuleNotFoundError</code>, instale as dependencias:</p>
+        <pre><code>pip install -r mcp/requirements.txt</code></pre>
+      </div>
+
+      <h3>Erro 403 ao chamar a API</h3>
+      <div class="card">
+        <p>A Service Account nao tem permissao para acessar a agenda. Verifique:</p>
+        <ul style="margin: 8px 0 0 20px; font-size:.88rem; color:#374151;">
+          <li>A agenda foi compartilhada com o e-mail da Service Account?</li>
+          <li>A permissao e <strong>"Fazer alteracoes nos eventos"</strong> (nao apenas leitura)?</li>
+          <li>A Google Calendar API esta habilitada no projeto do Google Cloud?</li>
+        </ul>
+      </div>
+
+      <h3>Erro ao carregar <code>.google-calendar</code></h3>
+      <div class="card">
+        <p>O arquivo foi removido do git mas precisa existir localmente. Recrie-o:</p>
+        <pre><code><span class="hl-comment"># Crie o arquivo com o ID da agenda (substitua pelo ID real)</span>
+echo id-da-agenda=SEU_CALENDAR_ID@group.calendar.google.com > mcp/google_console/.google-calendar</code></pre>
+        <p style="margin-top:8px; font-size:.85rem; color:var(--muted);">
+          O ID da agenda pode ser encontrado em Google Calendar → Configuracoes da agenda →
+          "Endereco da agenda no formato iCal".
+        </p>
+      </div>
+
+      <h3>Eventos criados com horario errado</h3>
+      <div class="alert alert-ok">
+        <strong>Corrigido na versao atual.</strong> Horarios sem fuso horario agora sao interpretados
+        como <code>America/Sao_Paulo</code> (anteriormente eram tratados como UTC, causando
+        desvio de 3 horas).
+      </div>
+
+      <h3>Erro <code>FileNotFoundError</code> para o JSON de credenciais</h3>
+      <div class="card">
+        <p>O arquivo JSON da Service Account foi removido do git mas deve existir localmente em
+           <code>mcp/google_console/</code>. Faca o download novamente no Google Cloud Console:</p>
+        <ul style="margin: 8px 0 0 20px; font-size:.88rem; color:#374151;">
+          <li>IAM e Administrador → Contas de servico → Selecione a conta</li>
+          <li>Aba "Chaves" → Adicionar chave → JSON</li>
+          <li>Salve em <code>mcp/google_console/</code></li>
+        </ul>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  Process2Diagram &mdash; MCP Google Calendar &mdash; POC &mdash; 2026
+</footer>
+
+<script>
+  document.querySelectorAll('a[data-target]').forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const target = document.getElementById(link.dataset.target);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+</script>
+
+</body>
+</html>

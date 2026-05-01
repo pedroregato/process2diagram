@@ -10,7 +10,7 @@
 - **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown / Word / PDF), requirements analysis (JSON/Markdown), executive HTML report, interactive requirements mind map
 - **Deploy:** Streamlit Cloud — auto-deploy on push to `main` branch (`github.com/pedroregato/process2diagram`)
 - **Dev environment:** PyCharm on Windows; Python 3.13
-- **Current version:** v4.14
+- **Current version:** v4.15
 
 Supported LLM providers: DeepSeek (default), Claude (Anthropic), OpenAI, Groq, Google Gemini.
 
@@ -106,7 +106,8 @@ process2diagram/
 │   ├── cost_estimator.py         # Pure-Python LLM cost calculator — PROVIDER_PRICING table, estimate_cost()
 │   ├── embeddings.py             # chunk_text(), embed_text(), embed_batch() — Gemini/OpenAI embeddings (1536 dims)
 │   ├── meeting_roi_calculator.py # ROI-TR v2 — MEETING_TYPES, TYPE_WEIGHTS matrix, classify_meeting_type() LLM, MeetingROIData, compute_project_roi()
-│   └── cross_meeting_analyzer.py # find_recurring_topics() — semantic (pgvector) + keyword fallback; save_project_scores(); load_score_history()
+│   ├── cross_meeting_analyzer.py # find_recurring_topics() — semantic (pgvector) + keyword fallback; save_project_scores(); load_score_history()
+│   └── calendar_client.py        # Google Calendar API client — list_events(), get_event(), create_event(), suggest_time(), schedule_action_items(); reads credentials from st.secrets[google_calendar] with local-file fallback
 │
 ├── ui/
 │   ├── sidebar.py                # render_sidebar() — provider, config, agent toggles, re-run buttons
@@ -976,6 +977,23 @@ All pages begin with `ui.auth_gate.apply_auth_gate()` immediately after `st.set_
 
 `modules/supabase_client.py` reads `st.secrets["supabase"]["url"]` and `st.secrets["supabase"]["key"]`. If secrets are absent (local dev without `.streamlit/secrets.toml`), `get_supabase_client()` returns `None` and all `project_store` functions fail-open.
 
+### Google Calendar Secrets
+
+`modules/calendar_client.py` reads from `st.secrets["google_calendar"]`:
+
+```toml
+# .streamlit/secrets.toml
+[google_calendar]
+calendar_id      = "...@group.calendar.google.com"
+credentials_json = '{"type": "service_account", ...}'  # full JSON as string
+```
+
+**Local dev fallback:** if secrets are absent, `calendar_client.py` looks for `*.json` in `mcp/google_console/` and `.google-calendar` in the same directory. Both files are `.gitignore`d.
+
+`calendar_configured()` returns `True` when credentials are available. All 5 calendar tools in `AssistantToolExecutor` call this guard and return a friendly message when unconfigured — fail-open, no exception.
+
+**Write tools** (`calendar_create_event`, `calendar_schedule_action_items`) are gated by `is_admin()` in `_ADMIN_TOOLS`.
+
 ---
 
 ## Roadmap
@@ -1042,6 +1060,13 @@ All pages begin with `ui.auth_gate.apply_auth_gate()` immediately after `st.set_
 - [x] **`modules/text_utils.py`** — `rule_keyword_pt()` and other Portuguese text utilities
 - [x] **`modules/reqtracker_exporter.py`** — Excel/CSV export for ReqTracker
 - [x] **Google Gemini SDK migration** — use `google-generativeai` (stable) for `embed_content()` + `list_models()`; `google-genai` kept as secondary dependency
+
+### PC8 — Concluído (v4.15)
+- [x] **`modules/calendar_client.py`** — cliente Google Calendar API v3 para o Assistente P2D; credenciais via `st.secrets[google_calendar]` (Streamlit Cloud) com fallback para arquivo local (dev); `calendar_configured()` guard; 5 funções públicas: `list_events()`, `get_event()`, `create_event()`, `suggest_time()`, `schedule_action_items()`; fuso horário `America/Sao_Paulo` por padrão para datetimes sem tzinfo
+- [x] **5 novas ferramentas de calendário no Assistente** — `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time` (consulta, todos os perfis); `calendar_create_event`, `calendar_schedule_action_items` (admin-only); integradas ao `AssistantToolExecutor` + schemas OpenAI/Anthropic + `_TOOL_CATEGORIES` + `_ADMIN_TOOLS`
+- [x] **`calendar_schedule_action_items`** — ferramenta P2D-nativa: lê automaticamente os itens de ação da ata de uma reunião do Supabase e cria um evento no Google Calendar por item, usando `default_date` como data base para itens sem prazo explícito
+- [x] **MCP Google Calendar** (`mcp/google_calendar_server.py`) — servidor MCP para Claude Code CLI (8 tools via FastMCP/stdio); `.gitignore` atualizado para proteger `mcp/google_console/*.json` e `.google-calendar`; bug de fuso horário corrigido (`timezone.utc` → `ZoneInfo("America/Sao_Paulo")`)
+- [x] **Secrets structure** — `st.secrets[google_calendar][calendar_id]` + `[credentials_json]` (string JSON da Service Account)
 
 ### PC7 — Concluído (v4.14)
 - [x] **`pages/Home.py`** — tela inicial padrão (default) com header de boas-vindas (nome, role badge, tenant, data), 4 KPIs globais (`get_global_stats()`), guia visual de 4 etapas, acesso rápido por área (Pipeline / Análise / Sistema / Orientações), reuniões recentes com links contextuais para Assistente + Validação + Editor BPMN; `@st.cache_data(ttl=60)` para chamadas DB

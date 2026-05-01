@@ -107,6 +107,28 @@ Agente conversacional que responde perguntas sobre:
 
 ---
 
+## Integração Google Calendar
+
+O Process2Diagram possui integração nativa com o **Google Calendar** via Service Account. As operações disponíveis são:
+
+| Ferramenta | Perfil | O que faz |
+|---|---|---|
+| `calendar_list_events` | todos | Lista os próximos eventos da agenda do projeto |
+| `calendar_get_event` | todos | Retorna detalhes completos de um evento pelo ID |
+| `calendar_suggest_time` | todos | Sugere horários livres usando a API freebusy |
+| `calendar_create_event` | admin | Cria novo evento com título, horário, local e participantes |
+| `calendar_schedule_action_items` | admin | Lê a ata de uma reunião e cria um evento por item de ação |
+
+**Exemplos de uso:**
+- "Quais eventos temos esta semana?" → `calendar_list_events`
+- "Quando estamos livres para uma reunião de 1 hora?" → `calendar_suggest_time`
+- "Agende um follow-up para sexta às 14h com joao@empresa.com" → `calendar_create_event`
+- "Crie eventos no calendário para os encaminhamentos da Reunião 3, com data base 20/05/2026 às 10h" → `calendar_schedule_action_items`
+
+**Requisito:** a agenda deve estar compartilhada com a Service Account do projeto. A integração é configurada via `st.secrets[google_calendar]`.
+
+---
+
 ## Pipeline de processamento (ordem dos agentes)
 
 ```

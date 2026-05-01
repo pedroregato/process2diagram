@@ -1,5 +1,7 @@
 # Secrets — never commit credentials
 .streamlit/secrets.toml
+mcp/google_console/*.json
+mcp/google_console/.google-calendar
 
 # Python bytecode
 __pycache__/

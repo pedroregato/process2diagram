@@ -740,6 +740,191 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "get_system_capabilities",
+                "description": (
+                    "Retorna a lista completa de funcionalidades, integrações e operações "
+                    "disponíveis no Process2Diagram (P2D). "
+                    "USE SEMPRE que o usuário perguntar sobre: o que o sistema faz, "
+                    "quais integrações existem, quais operações estão disponíveis, "
+                    "funcionalidades do Google Calendar, MCP, ferramentas do assistente, "
+                    "ou qualquer variação de 'o que você pode fazer'."
+                ),
+                "parameters": {"type": "object", "properties": {}, "required": []},
+            },
+        },
+        # ── Google Calendar tools ──────────────────────────────────────────────
+        {
+            "type": "function",
+            "function": {
+                "name": "calendar_list_events",
+                "description": (
+                    "Lista os próximos eventos do Google Calendar do projeto. "
+                    "Pode filtrar por período (time_min/time_max em ISO 8601) e por texto (query). "
+                    "USE quando o usuário perguntar sobre reuniões agendadas, agenda, "
+                    "próximos eventos ou compromissos do projeto."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Número máximo de eventos a retornar (padrão 10, max 50)",
+                        },
+                        "time_min": {
+                            "type": "string",
+                            "description": "Início do período (ISO 8601, ex: '2026-05-01T00:00:00'). Padrão: agora.",
+                        },
+                        "time_max": {
+                            "type": "string",
+                            "description": "Fim do período (ISO 8601). Opcional.",
+                        },
+                        "query": {
+                            "type": "string",
+                            "description": "Filtro por texto livre no título ou descrição do evento. Opcional.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "calendar_get_event",
+                "description": (
+                    "Retorna os detalhes completos de um evento do Google Calendar pelo seu ID. "
+                    "USE quando o usuário quiser ver os detalhes de um evento específico. "
+                    "O ID é obtido via calendar_list_events."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "event_id": {
+                            "type": "string",
+                            "description": "ID do evento (obtido via calendar_list_events)",
+                        },
+                    },
+                    "required": ["event_id"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "calendar_suggest_time",
+                "description": (
+                    "Sugere horários livres para uma reunião consultando a API freebusy do Google Calendar. "
+                    "USE quando o usuário quiser encontrar um horário disponível, verificar disponibilidade "
+                    "ou planejar uma reunião de acompanhamento."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "duration_minutes": {
+                            "type": "integer",
+                            "description": "Duração necessária em minutos (padrão 60)",
+                        },
+                        "attendees": {
+                            "type": "string",
+                            "description": "E-mails dos participantes separados por vírgula (opcional)",
+                        },
+                        "time_min": {
+                            "type": "string",
+                            "description": "Início da janela de busca (ISO 8601). Padrão: agora.",
+                        },
+                        "time_max": {
+                            "type": "string",
+                            "description": "Fim da janela de busca (ISO 8601). Padrão: +7 dias.",
+                        },
+                        "max_suggestions": {
+                            "type": "integer",
+                            "description": "Número de sugestões a retornar (padrão 3)",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "calendar_create_event",
+                "description": (
+                    "Cria um novo evento no Google Calendar do projeto. "
+                    "USE quando o usuário pedir para agendar uma reunião, criar um evento ou "
+                    "marcar um follow-up após análise de uma reunião do P2D. "
+                    "Horários sem fuso horário são tratados como America/Sao_Paulo. "
+                    "🔒 Requer perfil administrador."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "summary": {
+                            "type": "string",
+                            "description": "Título do evento",
+                        },
+                        "start_datetime": {
+                            "type": "string",
+                            "description": "Início — ISO 8601 (ex: '2026-05-20T14:00:00')",
+                        },
+                        "end_datetime": {
+                            "type": "string",
+                            "description": "Fim — ISO 8601 (ex: '2026-05-20T15:00:00')",
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Descrição ou pauta do evento (opcional)",
+                        },
+                        "location": {
+                            "type": "string",
+                            "description": "Local ou link de videoconferência (opcional)",
+                        },
+                        "attendees": {
+                            "type": "string",
+                            "description": "E-mails dos participantes separados por vírgula (opcional)",
+                        },
+                    },
+                    "required": ["summary", "start_datetime", "end_datetime"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "calendar_schedule_action_items",
+                "description": (
+                    "Cria eventos no Google Calendar para os itens de ação de uma reunião do P2D. "
+                    "Lê automaticamente os itens de ação da ata da reunião e cria um evento por item. "
+                    "USE quando o usuário pedir para agendar os encaminhamentos, criar lembretes "
+                    "para os itens de ação, ou transferir as tarefas da ata para o calendário. "
+                    "🔒 Requer perfil administrador."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Número da reunião cujos itens de ação serão agendados",
+                        },
+                        "default_date": {
+                            "type": "string",
+                            "description": (
+                                "Data/hora base para os eventos (ISO 8601, ex: '2026-05-20T10:00:00'). "
+                                "Usada para itens sem prazo explícito na ata."
+                            ),
+                        },
+                        "duration_minutes": {
+                            "type": "integer",
+                            "description": "Duração de cada evento em minutos (padrão 30)",
+                        },
+                    },
+                    "required": ["meeting_number", "default_date"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "get_speaker_contributions",
                 "description": (
                     "Busca TODAS as contribuições de um participante: trechos de transcrição, "
@@ -808,6 +993,13 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "preview_meeting_deletion":     "consulta",
     "preview_text_correction":      "consulta",
     "get_speaker_contributions":    "consulta",
+    "get_system_capabilities":          "consulta",
+    # Google Calendar
+    "calendar_list_events":             "consulta",
+    "calendar_get_event":               "consulta",
+    "calendar_suggest_time":            "consulta",
+    "calendar_create_event":            "admin",
+    "calendar_schedule_action_items":   "admin",
     # Escrita / Modificação
     "add_sbvr_term":                "escrita",
     "update_sbvr_term":             "escrita",
@@ -834,6 +1026,8 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "reprocess_meeting_requirements",
     "batch_reprocess_requirements",
     "generate_missing_minutes",
+    "calendar_create_event",
+    "calendar_schedule_action_items",
 })
 
 
@@ -915,6 +1109,70 @@ class AssistantToolExecutor:
         return ""
 
     # ── Tool implementations ──────────────────────────────────────────────────
+
+    def get_system_capabilities(self) -> str:
+        """Return a static description of all P2D capabilities and integrations."""
+        from modules.calendar_client import calendar_configured
+        cal_status = "✅ configurado" if calendar_configured() else "⚙️ não configurado neste ambiente"
+
+        return """\
+=== Funcionalidades do Process2Diagram (P2D) ===
+
+## Pipeline principal
+Converte transcrições de reuniões em artefatos profissionais usando múltiplos LLMs:
+  • Diagrama BPMN 2.0 (XML + visualização interativa bpmn-js)
+  • Fluxograma Mermaid (flowchart LR com pan/zoom)
+  • Ata de Reunião (Markdown, Word .docx, PDF)
+  • Requisitos IEEE 830 (tabela com REQ-XXX, tipos, prioridades)
+  • Vocabulário SBVR (termos de domínio + regras de negócio OMG)
+  • BMM — Modelo de Motivação do Negócio (visão, missão, objetivos, estratégias)
+  • Relatório Executivo HTML (interativo, auto-contido)
+  • Mapa Mental de Requisitos (interativo, colapsável)
+
+## Persistência (Supabase)
+  • Projetos, reuniões, requisitos, BPMN, SBVR, embeddings vetoriais
+  • Busca semântica nas transcrições via pgvector (1536 dims)
+
+## Ferramentas do Assistente (este chat)
+  Consulta (todos os perfis):
+    get_meeting_list, get_meeting_participants, get_meeting_decisions,
+    get_meeting_action_items, get_meeting_summary, search_transcript,
+    get_requirements, list_bpmn_processes, get_sbvr_terms, get_sbvr_rules,
+    calculate_meeting_roi, get_recurring_topics, get_meeting_metadata,
+    preview_meeting_deletion, preview_text_correction, get_speaker_contributions
+
+  Escrita (todos os perfis):
+    add_sbvr_term, update_sbvr_term, add_sbvr_rule
+
+  Admin (perfil admin/master):
+    apply_text_correction, delete_meeting, reprocess_meeting_requirements,
+    batch_reprocess_requirements, generate_missing_minutes,
+    get_database_integrity, fix_missing_llm_provider, generate_meeting_embeddings
+
+## Integração Google Calendar ({cal_status})
+  Consulta (todos os perfis):
+    calendar_list_events          — lista próximos eventos da agenda do projeto
+    calendar_get_event            — detalhes de um evento pelo ID
+    calendar_suggest_time         — horários livres via API freebusy
+
+  Admin (perfil admin/master):
+    calendar_create_event         — cria evento (título, horário, local, participantes)
+    calendar_schedule_action_items — cria eventos para cada item de ação de uma reunião
+
+  Configuração: credenciais via st.secrets[google_calendar][credentials_json] + [calendar_id].
+  Em dev local: mcp/google_console/*.json e .google-calendar (ignorados pelo git).
+
+## Outras páginas
+  • BpmnEditor       — editor visual BPMN com histórico de versões
+  • ReqTracker       — rastreamento de requisitos ao longo das reuniões
+  • MeetingROI       — dashboard ROI-TR por tipo de reunião
+  • DatabaseOverview — saúde do banco + gestão de embeddings
+  • BatchRunner      — processamento em lote de múltiplas transcrições
+  • BpmnBackfill     — gera BPMN para reuniões já salvas sem diagrama
+
+## Provedores LLM suportados
+  DeepSeek (padrão), Claude (Anthropic), OpenAI, Groq (Llama), Google Gemini
+""".format(cal_status=cal_status)
 
     def get_meeting_list(self) -> str:
         meetings = self._get_meetings()
@@ -2688,6 +2946,109 @@ class AssistantToolExecutor:
         )
         return "\n".join(lines)
 
+    # ── Google Calendar tools ─────────────────────────────────────────────────
+
+    def calendar_list_events(
+        self,
+        max_results: int = 10,
+        time_min: str | None = None,
+        time_max: str | None = None,
+        query: str | None = None,
+    ) -> str:
+        from modules.calendar_client import list_events, calendar_configured
+        if not calendar_configured():
+            return (
+                "⚙️ Google Calendar não configurado neste ambiente. "
+                "Configure st.secrets[google_calendar] para habilitar esta funcionalidade."
+            )
+        return list_events(
+            max_results=max_results,
+            time_min=time_min,
+            time_max=time_max,
+            query=query,
+        )
+
+    def calendar_get_event(self, event_id: str) -> str:
+        from modules.calendar_client import get_event, calendar_configured
+        if not calendar_configured():
+            return "⚙️ Google Calendar não configurado neste ambiente."
+        return get_event(event_id)
+
+    def calendar_suggest_time(
+        self,
+        duration_minutes: int = 60,
+        attendees: str | None = None,
+        time_min: str | None = None,
+        time_max: str | None = None,
+        max_suggestions: int = 3,
+    ) -> str:
+        from modules.calendar_client import suggest_time, calendar_configured
+        if not calendar_configured():
+            return "⚙️ Google Calendar não configurado neste ambiente."
+        return suggest_time(
+            duration_minutes=duration_minutes,
+            attendees=attendees,
+            time_min=time_min,
+            time_max=time_max,
+            max_suggestions=max_suggestions,
+        )
+
+    def calendar_create_event(
+        self,
+        summary: str,
+        start_datetime: str,
+        end_datetime: str,
+        description: str | None = None,
+        location: str | None = None,
+        attendees: str | None = None,
+    ) -> str:
+        from modules.calendar_client import create_event, calendar_configured
+        if not calendar_configured():
+            return "⚙️ Google Calendar não configurado neste ambiente."
+        return create_event(
+            summary=summary,
+            start_datetime=start_datetime,
+            end_datetime=end_datetime,
+            description=description,
+            location=location,
+            attendees=attendees,
+        )
+
+    def calendar_schedule_action_items(
+        self,
+        meeting_number: int,
+        default_date: str,
+        duration_minutes: int = 30,
+    ) -> str:
+        from modules.calendar_client import schedule_action_items, calendar_configured
+        if not calendar_configured():
+            return "⚙️ Google Calendar não configurado neste ambiente."
+
+        m = self._find_meeting(meeting_number)
+        if not m:
+            return f"Reunião {meeting_number} não encontrada no projeto."
+
+        minutes_md = m.get("minutes_md") or ""
+        if not minutes_md:
+            return (
+                f"Reunião {meeting_number} não possui ata armazenada. "
+                "Gere a ata primeiro via pipeline ou pela ferramenta generate_missing_minutes."
+            )
+
+        action_items_text = self._section(
+            minutes_md, "Itens de Ação", "Action Items", "Ações"
+        )
+        if not action_items_text.strip():
+            return f"Reunião {meeting_number}: nenhum item de ação encontrado na ata."
+
+        meeting_title = m.get("title") or f"Reunião {meeting_number}"
+        return schedule_action_items(
+            action_items_text=action_items_text,
+            meeting_title=meeting_title,
+            default_date=default_date,
+            duration_minutes=duration_minutes,
+        )
+
     # ── Admin: integrity & fix tools ─────────────────────────────────────────
 
     def get_database_integrity(self) -> str:
@@ -2946,6 +3307,7 @@ class AssistantToolExecutor:
 
         try:
             dispatch = {
+                "get_system_capabilities":   lambda: self.get_system_capabilities(),
                 "get_meeting_list":         lambda: self.get_meeting_list(),
                 "get_meeting_participants":  lambda: self.get_meeting_participants(tool_input["meeting_number"]),
                 "get_meeting_decisions":     lambda: self.get_meeting_decisions(tool_input["meeting_number"]),
@@ -3029,6 +3391,35 @@ class AssistantToolExecutor:
                 "get_speaker_contributions":      lambda: self.get_speaker_contributions(
                     tool_input["participant_name"],
                     tool_input.get("meeting_number"),
+                ),
+                "calendar_list_events":            lambda: self.calendar_list_events(
+                    max_results=int(tool_input.get("max_results", 10)),
+                    time_min=tool_input.get("time_min"),
+                    time_max=tool_input.get("time_max"),
+                    query=tool_input.get("query"),
+                ),
+                "calendar_get_event":              lambda: self.calendar_get_event(
+                    tool_input["event_id"],
+                ),
+                "calendar_suggest_time":           lambda: self.calendar_suggest_time(
+                    duration_minutes=int(tool_input.get("duration_minutes", 60)),
+                    attendees=tool_input.get("attendees"),
+                    time_min=tool_input.get("time_min"),
+                    time_max=tool_input.get("time_max"),
+                    max_suggestions=int(tool_input.get("max_suggestions", 3)),
+                ),
+                "calendar_create_event":           lambda: self.calendar_create_event(
+                    tool_input["summary"],
+                    tool_input["start_datetime"],
+                    tool_input["end_datetime"],
+                    tool_input.get("description"),
+                    tool_input.get("location"),
+                    tool_input.get("attendees"),
+                ),
+                "calendar_schedule_action_items":  lambda: self.calendar_schedule_action_items(
+                    tool_input["meeting_number"],
+                    tool_input["default_date"],
+                    int(tool_input.get("duration_minutes", 30)),
                 ),
                 "get_database_integrity":         lambda: self.get_database_integrity(),
                 "fix_missing_llm_provider":       lambda: self.fix_missing_llm_provider(
