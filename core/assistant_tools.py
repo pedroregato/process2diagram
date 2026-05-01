@@ -756,6 +756,21 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "calendar_diagnose",
+                "description": (
+                    "Executa diagnóstico passo a passo da integração Google Calendar: "
+                    "verifica carregamento de credenciais, formato da chave privada, "
+                    "calendar ID, conectividade com a API e acesso à agenda. "
+                    "USE quando houver erros de autenticação (invalid_grant, 403) ou "
+                    "quando o usuário perguntar por que o calendário não está funcionando. "
+                    "🔒 Requer perfil administrador."
+                ),
+                "parameters": {"type": "object", "properties": {}, "required": []},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "calendar_list_events",
                 "description": (
                     "Lista os próximos eventos do Google Calendar do projeto. "
@@ -994,6 +1009,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "preview_text_correction":      "consulta",
     "get_speaker_contributions":    "consulta",
     "get_system_capabilities":          "consulta",
+    "calendar_diagnose":                "admin",
     # Google Calendar
     "calendar_list_events":             "consulta",
     "calendar_get_event":               "consulta",
@@ -1028,6 +1044,7 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "generate_missing_minutes",
     "calendar_create_event",
     "calendar_schedule_action_items",
+    "calendar_diagnose",
 })
 
 
@@ -2948,6 +2965,10 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
 
     # ── Google Calendar tools ─────────────────────────────────────────────────
 
+    def calendar_diagnose(self) -> str:
+        from modules.calendar_client import diagnose_calendar
+        return diagnose_calendar()
+
     def calendar_list_events(
         self,
         max_results: int = 10,
@@ -3392,6 +3413,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     tool_input["participant_name"],
                     tool_input.get("meeting_number"),
                 ),
+                "calendar_diagnose":               lambda: self.calendar_diagnose(),
                 "calendar_list_events":            lambda: self.calendar_list_events(
                     max_results=int(tool_input.get("max_results", 10)),
                     time_min=tool_input.get("time_min"),

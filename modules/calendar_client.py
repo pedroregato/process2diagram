@@ -35,7 +35,17 @@ def _load_credentials_info() -> dict | None:
     try:
         import streamlit as st
         raw = st.secrets["google_calendar"]["credentials_json"]
-        return json.loads(raw) if isinstance(raw, str) else dict(raw)
+        if not isinstance(raw, str):
+            # Streamlit parsed the TOML value as a nested dict/AttrDict
+            info = json.loads(json.dumps(dict(raw)))
+        else:
+            info = json.loads(raw)
+        # Ensure private_key has actual newlines (TOML literal strings preserve \n as two chars;
+        # json.loads converts them correctly, but guard against edge cases)
+        pk = info.get("private_key", "")
+        if pk and "\\n" in pk and "\n" not in pk:
+            info["private_key"] = pk.replace("\\n", "\n")
+        return info
     except Exception:
         pass
 
@@ -48,6 +58,92 @@ def _load_credentials_info() -> dict | None:
         pass
 
     return None
+
+
+def diagnose_calendar() -> str:
+    """Step-by-step diagnostic of the Google Calendar configuration.
+    Returns a human-readable report with pass/fail for each check.
+    """
+    lines = ["=== Diagnóstico Google Calendar ===\n"]
+
+    # Step 1: credentials loading
+    info = _load_credentials_info()
+    if info is None:
+        lines.append("❌ [1] Credenciais: não encontradas (secrets não configurados ou JSON inválido)")
+        return "\n".join(lines)
+    lines.append(f"✅ [1] Credenciais carregadas — project_id: {info.get('project_id')}, "
+                 f"client_email: {info.get('client_email')}, "
+                 f"private_key_id: {info.get('private_key_id', '')[:8]}...")
+
+    # Step 2: private key format
+    pk = info.get("private_key", "")
+    if not pk.strip().startswith("-----BEGIN"):
+        lines.append("❌ [2] Chave privada: formato inválido (não começa com -----BEGIN)")
+        return "\n".join(lines)
+    newline_count = pk.count("\n")
+    lines.append(f"✅ [2] Chave privada: formato PEM detectado ({newline_count} quebras de linha)")
+
+    # Step 3: calendar ID
+    cal_id = _load_calendar_id()
+    if cal_id == "primary":
+        lines.append("⚠️  [3] Calendar ID: usando 'primary' (fallback) — configure calendar_id nos secrets")
+    else:
+        lines.append(f"✅ [3] Calendar ID: {cal_id[:30]}...")
+
+    # Step 4: service build
+    try:
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build as _build
+        creds = service_account.Credentials.from_service_account_info(info, scopes=_SCOPES)
+        lines.append("✅ [4] Credenciais instanciadas com sucesso")
+    except Exception as exc:
+        lines.append(f"❌ [4] Falha ao instanciar credenciais: {exc}")
+        return "\n".join(lines)
+
+    # Step 5: API call (list calendars — lightweight)
+    try:
+        svc = _build("calendar", "v3", credentials=creds, cache_discovery=False)
+        result = svc.calendarList().list(maxResults=1).execute()
+        n = len(result.get("items", []))
+        lines.append(f"✅ [5] API Google Calendar: conectada ({n} agenda(s) visível(is))")
+    except Exception as exc:
+        err = str(exc)
+        if "invalid_grant" in err:
+            lines.append(
+                "❌ [5] API Google Calendar: invalid_grant\n"
+                "   Causas mais comuns:\n"
+                "   a) Chave revogada ou ainda propagando (aguarde 2 min e tente novamente)\n"
+                "   b) Relógio do servidor fora de sincronismo\n"
+                "   c) API Google Calendar não habilitada no projeto Cloud\n"
+                "   d) JSON no secrets.toml mistura private_key_id de uma chave com "
+                "private_key de outra\n"
+                f"   Erro completo: {err}"
+            )
+        elif "403" in err or "forbidden" in err.lower():
+            lines.append(f"❌ [5] Permissão negada — Service Account sem acesso à agenda: {err}")
+        else:
+            lines.append(f"❌ [5] Erro na API: {err}")
+        return "\n".join(lines)
+
+    # Step 6: access to the configured calendar
+    try:
+        svc2 = _build("calendar", "v3", credentials=creds, cache_discovery=False)
+        svc2.events().list(calendarId=cal_id, maxResults=1).execute()
+        lines.append(f"✅ [6] Acesso à agenda configurada: OK")
+    except Exception as exc:
+        err = str(exc)
+        if "404" in err:
+            lines.append(
+                "❌ [6] Agenda não encontrada — a agenda não está compartilhada com a Service Account\n"
+                f"   Compartilhe a agenda com: {info.get('client_email')}\n"
+                "   (Google Calendar → Configurações da agenda → Compartilhar → adicionar o e-mail acima)"
+            )
+        else:
+            lines.append(f"❌ [6] Erro ao acessar agenda: {err}")
+        return "\n".join(lines)
+
+    lines.append("\n✅ Todos os checks passaram — integração Google Calendar operacional.")
+    return "\n".join(lines)
 
 
 def _load_calendar_id() -> str:
