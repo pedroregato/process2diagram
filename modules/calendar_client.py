@@ -75,13 +75,27 @@ def diagnose_calendar() -> str:
                  f"client_email: {info.get('client_email')}, "
                  f"private_key_id: {info.get('private_key_id', '')[:8]}...")
 
-    # Step 2: private key format
+    # Step 2: private key deep validation
     pk = info.get("private_key", "")
     if not pk.strip().startswith("-----BEGIN"):
         lines.append("❌ [2] Chave privada: formato inválido (não começa com -----BEGIN)")
         return "\n".join(lines)
     newline_count = pk.count("\n")
-    lines.append(f"✅ [2] Chave privada: formato PEM detectado ({newline_count} quebras de linha)")
+    lines.append(f"✅ [2] Chave privada: formato PEM ({newline_count} quebras de linha)")
+
+    # Step 2b: try loading the RSA key with cryptography library
+    try:
+        from cryptography.hazmat.primitives.serialization import load_pem_private_key
+        load_pem_private_key(pk.encode("utf-8"), password=None)
+        lines.append("✅ [2b] Chave RSA: carregada e validada pela biblioteca cryptography")
+    except Exception as exc:
+        lines.append(
+            f"❌ [2b] Chave RSA inválida: {exc}\n"
+            "   O conteúdo da chave privada está corrompido ou com encoding errado.\n"
+            "   Solução: baixe novamente o JSON da chave no Cloud Console e coloque\n"
+            "   o conteúdo completo em credentials_json usando ''' (aspas simples triplas)."
+        )
+        return "\n".join(lines)
 
     # Step 3: calendar ID
     cal_id = _load_calendar_id()
@@ -98,6 +112,23 @@ def diagnose_calendar() -> str:
         lines.append("✅ [4] Credenciais instanciadas com sucesso")
     except Exception as exc:
         lines.append(f"❌ [4] Falha ao instanciar credenciais: {exc}")
+        return "\n".join(lines)
+
+    # Step 4b: explicit token refresh (isolates JWT signing from API availability)
+    try:
+        import google.auth.transport.requests as _greq
+        req = _greq.Request()
+        creds.refresh(req)
+        lines.append(f"✅ [4b] Token OAuth obtido com sucesso (expira: {creds.expiry})")
+    except Exception as exc:
+        err = str(exc)
+        lines.append(
+            f"❌ [4b] Falha ao obter token OAuth: {err}\n"
+            "   O JWT foi criado mas o Google rejeitou a assinatura.\n"
+            "   Causa mais provável: private_key não corresponde ao private_key_id registrado.\n"
+            "   Solução: baixe um novo JSON completo da chave (IAM → Service Accounts → Chaves\n"
+            "   → Add Key → Create new key → JSON) e substitua TODO o conteúdo no secrets.toml."
+        )
         return "\n".join(lines)
 
     # Step 5: API call (list calendars — lightweight)
