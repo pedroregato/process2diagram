@@ -202,7 +202,7 @@ def list_users_by_tenant(tenant_id: str) -> list[dict]:
     try:
         resp = (
             client.table("tenant_users")
-            .select("id, login, display_name, role, active, created_at")
+            .select("id, login, display_name, role, active, google_account, ms_teams_account, created_at")
             .eq("tenant_id", tenant_id)
             .order("login")
             .execute()
@@ -281,6 +281,21 @@ def update_user_role(user_id: str, role: str) -> bool:
         return False
     try:
         client.table("tenant_users").update({"role": role}).eq("id", user_id).execute()
+        return True
+    except Exception:
+        return False
+
+
+def update_user_accounts(user_id: str, google_account: str, ms_teams_account: str) -> bool:
+    """Atualiza as contas Google e Microsoft Teams de um usuário."""
+    client = get_supabase_client()
+    if client is None:
+        return False
+    try:
+        client.table("tenant_users").update({
+            "google_account":   google_account.strip() or None,
+            "ms_teams_account": ms_teams_account.strip() or None,
+        }).eq("id", user_id).execute()
         return True
     except Exception:
         return False

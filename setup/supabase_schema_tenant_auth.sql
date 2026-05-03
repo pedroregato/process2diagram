@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS tenants (
 
 CREATE INDEX IF NOT EXISTS tenants_domain_idx ON tenants (domain_slug);
 
-ALTER TABLE tenants DISABLE ROW LEVEL SECURITY;
+-- RLS habilitado; service_role (backend) ignora RLS automaticamente.
+ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
 
 COMMENT ON TABLE tenants IS
     'Empresas ou dominios que acessam o Process2Diagram (ex: FGV, ACME).';
@@ -28,21 +29,23 @@ COMMENT ON COLUMN tenants.domain_slug IS
 
 -- 2. Usuarios por tenant
 CREATE TABLE IF NOT EXISTS tenant_users (
-    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id     UUID        NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    login         TEXT        NOT NULL,
-    password_hash TEXT        NOT NULL,
-    display_name  TEXT        NOT NULL,
-    role          TEXT        NOT NULL DEFAULT 'user',
-    active        BOOLEAN     NOT NULL DEFAULT true,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id        UUID        NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    login            TEXT        NOT NULL,
+    password_hash    TEXT        NOT NULL,
+    display_name     TEXT        NOT NULL,
+    role             TEXT        NOT NULL DEFAULT 'user',
+    active           BOOLEAN     NOT NULL DEFAULT true,
+    google_account   TEXT        DEFAULT NULL,
+    ms_teams_account TEXT        DEFAULT NULL,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (tenant_id, login)
 );
 
 CREATE INDEX IF NOT EXISTS tenant_users_tenant_idx ON tenant_users (tenant_id);
 CREATE INDEX IF NOT EXISTS tenant_users_login_idx  ON tenant_users (tenant_id, login);
 
-ALTER TABLE tenant_users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE tenant_users ENABLE ROW LEVEL SECURITY;
 
 COMMENT ON TABLE tenant_users IS
     'Usuarios cadastrados por tenant. Login unico dentro de cada dominio.';
@@ -50,6 +53,10 @@ COMMENT ON COLUMN tenant_users.password_hash IS
     'SHA-256 hex da senha (mesmo padrao do modulo auth.py atual).';
 COMMENT ON COLUMN tenant_users.role IS
     'Perfil do usuario: ''admin'' pode salvar API keys do dominio; ''user'' so le.';
+COMMENT ON COLUMN tenant_users.google_account IS
+    'Conta Google do usuário (ex: pedro@gmail.com). Usada para compartilhamento de agenda.';
+COMMENT ON COLUMN tenant_users.ms_teams_account IS
+    'Conta Microsoft 365 do usuário (ex: pedro@empresa.com). Usada para agendamento no Teams.';
 
 
 -- 3. Configuracoes do tenant (API keys e preferencias)
@@ -64,7 +71,7 @@ CREATE TABLE IF NOT EXISTS tenant_config (
 
 CREATE INDEX IF NOT EXISTS tenant_config_tenant_idx ON tenant_config (tenant_id);
 
-ALTER TABLE tenant_config DISABLE ROW LEVEL SECURITY;
+ALTER TABLE tenant_config ENABLE ROW LEVEL SECURITY;
 
 COMMENT ON TABLE tenant_config IS
     'Configuracoes por tenant: API keys dos provedores de IA, preferencias, etc.';

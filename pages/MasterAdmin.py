@@ -30,6 +30,7 @@ from modules.tenant_auth import (
     create_tenant, create_user,
     toggle_tenant_active, toggle_user_active,
     update_user_role, reset_user_password,
+    update_user_accounts,
 )
 from modules.tenant_config import (
     load_all_config, save_config, delete_config,
@@ -157,6 +158,39 @@ for u in users:
                 st.session_state["_master_ok"] = f"Usuário '{u['login']}' {lbl_u.lower()}do."
             else:
                 st.session_state["_master_err"] = "Erro ao alterar status."
+            st.rerun()
+
+        # ── Contas de integração ──────────────────────────────────────────────
+        st.markdown(
+            "<div style='font-size:.78rem;color:#8899AA;margin-top:.6rem'>"
+            "Contas de integração</div>",
+            unsafe_allow_html=True,
+        )
+        acc1, acc2, acc_save = st.columns([3, 3, 1])
+        goog_val  = u.get("google_account")   or ""
+        teams_val = u.get("ms_teams_account") or ""
+        new_goog  = acc1.text_input(
+            "Conta Google",
+            value=goog_val,
+            placeholder="usuario@gmail.com",
+            key=f"m_goog_{u['id']}",
+        )
+        new_teams = acc2.text_input(
+            "Conta Microsoft Teams",
+            value=teams_val,
+            placeholder="usuario@empresa.com",
+            key=f"m_teams_{u['id']}",
+        )
+        acc_save.write(""); acc_save.write("")
+        if acc_save.button("💾", key=f"m_save_acc_{u['id']}",
+                           help="Salvar contas de integração", type="primary",
+                           use_container_width=True):
+            if update_user_accounts(u["id"], new_goog, new_teams):
+                st.session_state["_master_ok"] = (
+                    f"Contas de integração de '{u['login']}' atualizadas."
+                )
+            else:
+                st.session_state["_master_err"] = "Erro ao salvar contas de integração."
             st.rerun()
 
 st.markdown("---")
