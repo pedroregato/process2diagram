@@ -294,10 +294,34 @@ with col_recent:
                     use_container_width=True,
                 )
 
+# ── 5. Agenda do Projeto ──────────────────────────────────────────────────────
+st.markdown('<div class="section-hdr">📅 Agenda do Projeto</div>', unsafe_allow_html=True)
+
+try:
+    from urllib.parse import quote
+    from modules.calendar_client import _load_calendar_id, calendar_configured
+    if calendar_configured():
+        cal_id   = _load_calendar_id()
+        cal_url  = (
+            "https://calendar.google.com/calendar/embed"
+            f"?src={quote(cal_id)}&ctz=America%2FSao_Paulo"
+            "&showTitle=0&showNav=1&showPrint=0&showTabs=1&showCalendars=0"
+        )
+        import streamlit.components.v1 as _components
+        _components.html(
+            f'<iframe src="{cal_url}" style="border:0;width:100%;height:600px" '
+            f'frameborder="0" scrolling="no"></iframe>',
+            height=620,
+        )
+    else:
+        st.caption("📅 Agenda não configurada. Configure Google Calendar em **Sistema → Configurações**.")
+except Exception as _cal_exc:
+    st.caption(f"📅 Agenda indisponível: {_cal_exc}")
+
 # ── Rodapé ────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div style="margin-top:2rem;padding-top:.8rem;border-top:1px solid #1e3a55;
 text-align:center;font-size:.7rem;color:#445566">
-Process2Diagram v4.14 · Multi-agent process intelligence platform
+Process2Diagram v4.15 · Multi-agent process intelligence platform
 </div>
 """, unsafe_allow_html=True)
