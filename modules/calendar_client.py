@@ -490,6 +490,84 @@ def suggest_time(
         return f"❌ Erro ao consultar disponibilidade: {exc}"
 
 
+def share_calendar(
+    email: str,
+    role: str = "writer",
+    calendar_id: Optional[str] = None,
+) -> str:
+    """Share the project calendar with a Google account via the ACL API.
+
+    role: "reader" (visualizar), "writer" (editar), "owner" (gerenciar)
+    """
+    valid_roles = {"reader", "writer", "owner"}
+    role = role.lower()
+    if role not in valid_roles:
+        return f"❌ Papel inválido '{role}'. Use: reader, writer ou owner."
+
+    try:
+        svc    = _get_service()
+        cal_id = calendar_id or _load_calendar_id()
+
+        rule = {
+            "scope": {"type": "user", "value": email},
+            "role":  role,
+        }
+        result = svc.acl().insert(calendarId=cal_id, body=rule).execute()
+
+        role_label = {"reader": "Visualizar", "writer": "Editar", "owner": "Gerenciar"}[role]
+        return (
+            f"✅ Acesso concedido!\n"
+            f"  E-mail:    {email}\n"
+            f"  Permissão: {role_label} ({role})\n"
+            f"  Agenda:    {cal_id}\n"
+            f"  ID da regra ACL: {result.get('id')}"
+        )
+    except RuntimeError as exc:
+        return f"❌ Configuração: {exc}"
+    except Exception as exc:
+        err = str(exc)
+        if "404" in err:
+            return f"❌ Agenda não encontrada (calendar_id={cal_id}). Verifique os secrets."
+        if "403" in err:
+            return (
+                f"❌ Permissão negada — a Service Account não tem permissão para "
+                f"gerenciar o compartilhamento desta agenda.\n"
+                f"   Solução: no Google Calendar, conceda à Service Account o papel "
+                f"'Fazer alterações e gerenciar compartilhamento'."
+            )
+        return f"❌ Erro ao compartilhar agenda: {err}"
+
+
+def revoke_calendar_access(
+    email: str,
+    calendar_id: Optional[str] = None,
+) -> str:
+    """Remove a previously granted ACL rule for the given email."""
+    try:
+        svc    = _get_service()
+        cal_id = calendar_id or _load_calendar_id()
+
+        # List ACL rules to find the rule ID for this email
+        acl = svc.acl().list(calendarId=cal_id).execute()
+        rule_id = None
+        for item in acl.get("items", []):
+            scope = item.get("scope", {})
+            if scope.get("type") == "user" and scope.get("value", "").lower() == email.lower():
+                rule_id = item["id"]
+                break
+
+        if rule_id is None:
+            return f"⚠️ Nenhuma regra de acesso encontrada para '{email}' nesta agenda."
+
+        svc.acl().delete(calendarId=cal_id, ruleId=rule_id).execute()
+        return f"✅ Acesso de '{email}' removido da agenda com sucesso."
+
+    except RuntimeError as exc:
+        return f"❌ Configuração: {exc}"
+    except Exception as exc:
+        return f"❌ Erro ao revogar acesso: {exc}"
+
+
 def schedule_action_items(
     action_items_text: str,
     meeting_title: str,

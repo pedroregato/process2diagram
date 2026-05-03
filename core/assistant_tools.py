@@ -940,6 +940,60 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "calendar_share_with_user",
+                "description": (
+                    "Compartilha a agenda do Google Calendar do projeto com um e-mail Google. "
+                    "USE quando o usuário pedir para dar acesso ao calendário, compartilhar a agenda "
+                    "com alguém, adicionar permissão de visualização ou edição no Google Calendar. "
+                    "🔒 Requer perfil administrador."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "email": {
+                            "type": "string",
+                            "description": "E-mail Google da pessoa que receberá acesso (ex: pedro.regato@gmail.com)",
+                        },
+                        "role": {
+                            "type": "string",
+                            "enum": ["reader", "writer", "owner"],
+                            "description": (
+                                "Nível de acesso: "
+                                "'reader' = apenas visualizar, "
+                                "'writer' = criar e editar eventos (padrão), "
+                                "'owner' = gerenciar agenda e compartilhamento"
+                            ),
+                        },
+                    },
+                    "required": ["email"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "calendar_revoke_access",
+                "description": (
+                    "Remove o acesso de um e-mail Google à agenda do projeto. "
+                    "USE quando o usuário pedir para revogar acesso, remover permissão "
+                    "ou descompartilhar a agenda com alguém. "
+                    "🔒 Requer perfil administrador."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "email": {
+                            "type": "string",
+                            "description": "E-mail Google cujo acesso será removido",
+                        },
+                    },
+                    "required": ["email"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "get_speaker_contributions",
                 "description": (
                     "Busca TODAS as contribuições de um participante: trechos de transcrição, "
@@ -1016,6 +1070,8 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "calendar_suggest_time":            "consulta",
     "calendar_create_event":            "admin",
     "calendar_schedule_action_items":   "admin",
+    "calendar_share_with_user":         "admin",
+    "calendar_revoke_access":           "admin",
     # Escrita / Modificação
     "add_sbvr_term":                "escrita",
     "update_sbvr_term":             "escrita",
@@ -1044,6 +1100,8 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "generate_missing_minutes",
     "calendar_create_event",
     "calendar_schedule_action_items",
+    "calendar_share_with_user",
+    "calendar_revoke_access",
     "calendar_diagnose",
 })
 
@@ -3070,6 +3128,18 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             duration_minutes=duration_minutes,
         )
 
+    def calendar_share_with_user(self, email: str, role: str = "writer") -> str:
+        from modules.calendar_client import share_calendar, calendar_configured
+        if not calendar_configured():
+            return "⚙️ Google Calendar não configurado neste ambiente."
+        return share_calendar(email=email, role=role)
+
+    def calendar_revoke_access(self, email: str) -> str:
+        from modules.calendar_client import revoke_calendar_access, calendar_configured
+        if not calendar_configured():
+            return "⚙️ Google Calendar não configurado neste ambiente."
+        return revoke_calendar_access(email=email)
+
     # ── Admin: integrity & fix tools ─────────────────────────────────────────
 
     def get_database_integrity(self) -> str:
@@ -3442,6 +3512,13 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     tool_input["meeting_number"],
                     tool_input["default_date"],
                     int(tool_input.get("duration_minutes", 30)),
+                ),
+                "calendar_share_with_user":        lambda: self.calendar_share_with_user(
+                    tool_input["email"],
+                    tool_input.get("role", "writer"),
+                ),
+                "calendar_revoke_access":          lambda: self.calendar_revoke_access(
+                    tool_input["email"],
                 ),
                 "get_database_integrity":         lambda: self.get_database_integrity(),
                 "fix_missing_llm_provider":       lambda: self.fix_missing_llm_provider(
