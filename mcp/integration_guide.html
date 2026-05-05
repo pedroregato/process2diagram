@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P2D — Guia de Integrações (Google Calendar + MS365)</title>
+<style>
+  :root {
+    --navy:   #0B1E3D;
+    --blue:   #1A3A6B;
+    --gold:   #C97B1A;
+    --teal:   #0EA5A0;
+    --green:  #22C55E;
+    --red:    #EF4444;
+    --yellow: #F59E0B;
+    --text:   #E2E8F0;
+    --muted:  #8899AA;
+    --card:   #0F2040;
+    --border: #1e3a55;
+    --code-bg:#071428;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--navy);
+    color: var(--text);
+    line-height: 1.65;
+  }
+
+  /* ── Layout ── */
+  .wrapper { display: flex; min-height: 100vh; }
+
+  nav {
+    width: 260px; min-width: 260px;
+    background: #070f1e;
+    border-right: 1px solid var(--border);
+    padding: 1.5rem 0;
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  }
+  nav .logo {
+    padding: 0 1.2rem 1.2rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1rem;
+  }
+  nav .logo h1 { font-size: 1rem; font-weight: 700; color: var(--gold); }
+  nav .logo p  { font-size: .72rem; color: var(--muted); margin-top: .2rem; }
+
+  nav ul { list-style: none; padding: 0 .6rem; }
+  nav ul li a {
+    display: block; padding: .45rem .8rem;
+    border-radius: 6px;
+    color: var(--muted); text-decoration: none;
+    font-size: .82rem; transition: all .15s;
+  }
+  nav ul li a:hover, nav ul li a.active {
+    background: var(--border); color: var(--text);
+  }
+  nav .nav-section {
+    font-size: .68rem; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: #445566;
+    padding: .8rem 1.4rem .3rem;
+  }
+
+  main {
+    flex: 1; padding: 2.5rem 2rem;
+    max-width: 920px;
+  }
+
+  /* ── Typography ── */
+  h1 { font-size: 1.9rem; font-weight: 800; color: var(--gold); margin-bottom: .4rem; }
+  h2 { font-size: 1.3rem; font-weight: 700; color: var(--text);
+       margin: 2.5rem 0 .8rem; padding-bottom: .4rem;
+       border-bottom: 1px solid var(--border); }
+  h3 { font-size: 1rem; font-weight: 700; color: var(--gold); margin: 1.4rem 0 .5rem; }
+  p  { margin-bottom: .8rem; color: #c8d8e8; }
+  a  { color: var(--teal); }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1.2rem 1.4rem; margin-bottom: 1.2rem;
+  }
+  .card-title {
+    font-size: .78rem; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--gold); margin-bottom: .6rem;
+  }
+
+  /* ── Status badges ── */
+  .badge {
+    display: inline-block; padding: 2px 10px; border-radius: 20px;
+    font-size: .72rem; font-weight: 700; letter-spacing: .05em;
+  }
+  .badge-ok     { background: #14532d44; color: var(--green); border: 1px solid #22c55e44; }
+  .badge-warn   { background: #78350f44; color: var(--yellow); border: 1px solid #f59e0b44; }
+  .badge-block  { background: #7f1d1d44; color: var(--red); border: 1px solid #ef444444; }
+  .badge-admin  { background: #1e3a6b44; color: #60a5fa; border: 1px solid #3b82f644; }
+  .badge-all    { background: #0d3d3844; color: var(--teal); border: 1px solid #0ea5a044; }
+
+  /* ── Code ── */
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1rem 1.2rem; overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: .82rem;
+    line-height: 1.6; margin: .6rem 0 1rem;
+  }
+  code { font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: .85em; }
+  p code, li code {
+    background: #0d1f38; border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 6px; color: #93c5fd;
+  }
+
+  /* ── Tables ── */
+  table { width: 100%; border-collapse: collapse; margin: .6rem 0 1.2rem; font-size: .85rem; }
+  th { background: var(--blue); color: var(--text); text-align: left;
+       padding: .55rem .8rem; font-size: .75rem; letter-spacing: .05em; }
+  td { padding: .5rem .8rem; border-bottom: 1px solid var(--border); color: #c8d8e8; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #0d1f38; }
+
+  /* ── Steps ── */
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    counter-increment: step;
+    display: flex; gap: .8rem; margin-bottom: .9rem; align-items: flex-start;
+  }
+  .steps li::before {
+    content: counter(step);
+    min-width: 26px; height: 26px; line-height: 26px; text-align: center;
+    background: var(--gold); color: #000; border-radius: 50%;
+    font-size: .75rem; font-weight: 800; flex-shrink: 0;
+  }
+
+  /* ── Alerts ── */
+  .alert {
+    border-radius: 8px; padding: .8rem 1rem; margin: .8rem 0;
+    font-size: .88rem; display: flex; gap: .7rem; align-items: flex-start;
+  }
+  .alert-warn  { background: #78350f22; border: 1px solid #f59e0b55; color: #fcd34d; }
+  .alert-info  { background: #0d3d3822; border: 1px solid #0ea5a055; color: #5eead4; }
+  .alert-block { background: #7f1d1d22; border: 1px solid #ef444455; color: #fca5a5; }
+  .alert-ok    { background: #14532d22; border: 1px solid #22c55e55; color: #86efac; }
+
+  /* ── Misc ── */
+  .divider { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+  ul li { margin-bottom: .3rem; padding-left: .3rem; }
+  ul { padding-left: 1.4rem; color: #c8d8e8; }
+
+  .hero-sub {
+    color: var(--muted); font-size: .92rem; margin-bottom: 1.5rem;
+    padding-bottom: 1.2rem; border-bottom: 1px solid var(--border);
+  }
+  .tool-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; margin-bottom: 1rem;
+  }
+  .tool-card {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: .8rem 1rem;
+  }
+  .tool-card .t-name { font-family: monospace; font-size: .82rem; color: #93c5fd; font-weight: 600; }
+  .tool-card .t-desc { font-size: .78rem; color: var(--muted); margin-top: .25rem; }
+  .tool-card .t-badge { margin-top: .4rem; }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+
+<!-- ── Sidebar ── -->
+<nav>
+  <div class="logo">
+    <h1>P2D Integrations</h1>
+    <p>Guia de Implementação v4.15</p>
+  </div>
+  <ul>
+    <li class="nav-section">Visão Geral</li>
+    <li><a href="#overview">O que foi implementado</a></li>
+    <li><a href="#architecture">Arquitetura</a></li>
+
+    <li class="nav-section">Google Calendar</li>
+    <li><a href="#cal-setup">Setup inicial</a></li>
+    <li><a href="#cal-tools">Ferramentas disponíveis</a></li>
+    <li><a href="#cal-multiprojeto">Multi-projeto</a></li>
+    <li><a href="#cal-share">Compartilhamento</a></li>
+    <li><a href="#cal-diagnostic">Diagnóstico</a></li>
+
+    <li class="nav-section">Usuários</li>
+    <li><a href="#users-accounts">Contas de integração</a></li>
+
+    <li class="nav-section">Microsoft 365</li>
+    <li><a href="#ms365-status">Status da integração</a></li>
+    <li><a href="#ms365-it">Solicitação ao TI</a></li>
+    <li><a href="#ms365-impl">O que será implementado</a></li>
+
+    <li class="nav-section">SQL Migrations</li>
+    <li><a href="#sql">Scripts obrigatórios</a></li>
+  </ul>
+</nav>
+
+<!-- ── Main ── -->
+<main>
+
+  <!-- Hero -->
+  <h1>Guia de Integrações P2D</h1>
+  <p class="hero-sub">
+    Documentação técnica das integrações externas implementadas no Process2Diagram v4.15.
+    Cobre Google Calendar (operacional), contas de integração por usuário, e Microsoft 365 (pendente).
+  </p>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <h2 id="overview">O que foi implementado</h2>
+
+  <table>
+    <tr>
+      <th>Funcionalidade</th><th>Status</th><th>Onde configurar</th>
+    </tr>
+    <tr>
+      <td>Google Calendar — autenticação e ferramentas básicas</td>
+      <td><span class="badge badge-ok">✅ Operacional</span></td>
+      <td>Streamlit Cloud → Secrets</td>
+    </tr>
+    <tr>
+      <td>Google Calendar — multi-projeto (calendar_id por projeto)</td>
+      <td><span class="badge badge-ok">✅ Operacional</span></td>
+      <td>Configurações → Banco de Dados → 📅</td>
+    </tr>
+    <tr>
+      <td>Compartilhamento de agenda pelo Assistente</td>
+      <td><span class="badge badge-ok">✅ Operacional</span></td>
+      <td>Chat do Assistente (perfil admin)</td>
+    </tr>
+    <tr>
+      <td>Contas Google e Teams por usuário</td>
+      <td><span class="badge badge-ok">✅ Operacional</span></td>
+      <td>Master Admin → Usuários</td>
+    </tr>
+    <tr>
+      <td>Microsoft Outlook — envio de ata por e-mail</td>
+      <td><span class="badge badge-block">⛔ Bloqueado — aguarda TI</span></td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td>Microsoft Teams — agendamento de reuniões</td>
+      <td><span class="badge badge-block">⛔ Bloqueado — aguarda TI</span></td>
+      <td>—</td>
+    </tr>
+  </table>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <h2 id="architecture">Arquitetura</h2>
+
+  <div class="card">
+    <div class="card-title">Fluxo de autenticação Google Calendar</div>
+    <pre>st.secrets[google_calendar]
+  ├── credentials_json  →  Service Account JSON (string)
+  └── calendar_id       →  ID global da agenda (fallback)
+
+project_calendar_config (Supabase)
+  └── project_id → calendar_id   (sobrescreve o global por projeto)
+
+modules/calendar_client.py
+  └── _load_calendar_id(project_id)
+        1. Supabase: project_calendar_config WHERE project_id = ?
+        2. st.secrets["google_calendar"]["calendar_id"]
+        3. mcp/google_console/.google-calendar  (dev local)
+        4. "primary"  (fallback final)</pre>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Fluxo das ferramentas no Assistente</div>
+    <pre>Usuário faz pergunta
+  └── AgentAssistant.chat_with_tools()
+        └── AssistantToolExecutor(project_id)
+              └── execute("calendar_list_events", {...})
+                    └── self.calendar_list_events(..., project_id=self.project_id)
+                          └── calendar_client.list_events(..., project_id=project_id)
+                                └── _load_calendar_id(project_id)  →  agenda correta</pre>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <h2 id="cal-setup">Google Calendar — Setup inicial</h2>
+
+  <div class="alert alert-warn">
+    ⚠️ Execute os dois scripts SQL de migração no Supabase <strong>antes</strong> de usar
+    qualquer funcionalidade de calendário. Veja a seção <a href="#sql">SQL Migrations</a>.
+  </div>
+
+  <h3>1. Service Account no Google Cloud</h3>
+  <ol class="steps">
+    <li>Acesse <strong>console.cloud.google.com</strong> → IAM &amp; Admin → Service Accounts</li>
+    <li>Crie ou use a conta <code>p2d-calendar-sa@process2diagram.iam.gserviceaccount.com</code></li>
+    <li>Aba <strong>Chaves</strong> → Adicionar chave → Criar nova chave → <strong>JSON</strong></li>
+    <li>Baixe o arquivo <code>.json</code> gerado</li>
+    <li>Verifique se a <strong>Google Calendar API</strong> está habilitada no projeto Cloud</li>
+  </ol>
+
+  <h3>2. Configurar Secrets no Streamlit Cloud</h3>
+  <pre>[google_calendar]
+calendar_id      = "xxx@group.calendar.google.com"
+credentials_json = '''COLE_AQUI_TODO_O_CONTEÚDO_DO_JSON_BAIXADO'''</pre>
+
+  <div class="alert alert-warn">
+    ⚠️ Use <strong>''' (três aspas simples)</strong> para envolver o JSON —
+    nunca <code>"""</code>. Aspas duplas processam <code>\n</code> e corrompem a chave privada.
+  </div>
+
+  <h3>3. Compartilhar a agenda com a Service Account</h3>
+  <ol class="steps">
+    <li>Abra <strong>calendar.google.com</strong></li>
+    <li>Localize a agenda → três pontos → <strong>Configurações e compartilhamento</strong></li>
+    <li>Adicione <code>p2d-calendar-sa@process2diagram.iam.gserviceaccount.com</code></li>
+    <li>Permissão: <strong>"Fazer alterações e gerenciar compartilhamento"</strong> (necessário para as ferramentas de ACL)</li>
+  </ol>
+
+  <h3>4. Verificar com o diagnóstico</h3>
+  <p>No Assistente P2D (qualquer perfil), diga:</p>
+  <pre>Execute o diagnóstico do Google Calendar</pre>
+  <p>Resultado esperado: todos os 7 passos ✅ (incluindo 2b RSA e 4b token OAuth).</p>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <h2 id="cal-tools">Ferramentas disponíveis no Assistente</h2>
+
+  <div class="tool-grid">
+    <div class="tool-card">
+      <div class="t-name">calendar_list_events</div>
+      <div class="t-desc">Lista eventos futuros da agenda do projeto. Aceita filtros de data e busca por texto.</div>
+      <div class="t-badge"><span class="badge badge-all">todos os perfis</span></div>
+    </div>
+    <div class="tool-card">
+      <div class="t-name">calendar_get_event</div>
+      <div class="t-desc">Retorna detalhes completos de um evento pelo ID.</div>
+      <div class="t-badge"><span class="badge badge-all">todos os perfis</span></div>
+    </div>
+    <div class="tool-card">
+      <div class="t-name">calendar_suggest_time</div>
+      <div class="t-desc">Consulta freebusy e sugere horários livres para reunião com duração configurável.</div>
+      <div class="t-badge"><span class="badge badge-all">todos os perfis</span></div>
+    </div>
+    <div class="tool-card">
+      <div class="t-name">calendar_create_event</div>
+      <div class="t-desc">Cria um evento com título, horário, local e lista de participantes.</div>
+      <div class="t-badge"><span class="badge badge-admin">admin / master</span></div>
+    </div>
+    <div class="tool-card">
+      <div class="t-name">calendar_schedule_action_items</div>
+      <div class="t-desc">Lê a ata de uma reunião no Supabase e cria um evento por item de ação.</div>
+      <div class="t-badge"><span class="badge badge-admin">admin / master</span></div>
+    </div>
+    <div class="tool-card">
+      <div class="t-name">calendar_share_with_user</div>
+      <div class="t-desc">Concede acesso à agenda para um e-mail Google (reader / writer / owner).</div>
+      <div class="t-badge"><span class="badge badge-admin">admin / master</span></div>
+    </div>
+    <div class="tool-card">
+      <div class="t-name">calendar_revoke_access</div>
+      <div class="t-desc">Remove o acesso de um e-mail da agenda via API ACL.</div>
+      <div class="t-badge"><span class="badge badge-admin">admin / master</span></div>
+    </div>
+    <div class="tool-card">
+      <div class="t-name">calendar_diagnose</div>
+      <div class="t-desc">Diagnóstico passo a passo (7 etapas) da integração. Identifica falhas de credencial, chave RSA, token OAuth e acesso à agenda.</div>
+      <div class="t-badge"><span class="badge badge-admin">admin / master</span></div>
+    </div>
+  </div>
+
+  <h3>Exemplos de uso no chat</h3>
+  <pre># Consulta
+"Liste os próximos 5 eventos da agenda"
+"Tem alguma reunião agendada para essa semana?"
+"Sugira 3 horários livres de 1 hora para amanhã"
+
+# Criação (admin)
+"Crie uma reunião 'Revisão de Requisitos' para amanhã às 14h, 1 hora de duração"
+"Agende os itens de ação da reunião 3 para a próxima segunda às 9h"
+
+# Compartilhamento (admin)
+"Compartilhe a agenda com pedro.regato@gmail.com com permissão de edição"
+"Remova o acesso de usuario@empresa.com da agenda"</pre>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <h2 id="cal-multiprojeto">Google Calendar — Multi-projeto</h2>
+
+  <p>
+    Cada projeto pode ter seu próprio <code>calendar_id</code> armazenado no Supabase.
+    Quando o Assistente opera no contexto de um projeto, a agenda específica daquele
+    projeto é usada automaticamente. Se não houver configuração, usa o <code>calendar_id</code>
+    global dos <code>st.secrets</code>.
+  </p>
+
+  <div class="card">
+    <div class="card-title">Como configurar um calendar_id por projeto</div>
+    <ol class="steps" style="margin-top:.5rem">
+      <li>Acesse <strong>Configurações → aba Banco de Dados</strong></li>
+      <li>Role até a seção <strong>📅 Google Calendar por Projeto</strong> (visível apenas para admin)</li>
+      <li>Clique em <strong>➕ Associar / Atualizar calendar_id</strong></li>
+      <li>Selecione o projeto e cole o Calendar ID da agenda desejada</li>
+      <li>Clique em <strong>💾 Salvar</strong></li>
+    </ol>
+  </div>
+
+  <div class="alert alert-info">
+    💡 O Calendar ID está em Google Calendar → Configurações da agenda →
+    Integrar agenda → "ID da agenda" (formato: <code>xxx@group.calendar.google.com</code>).
+  </div>
+
+  <h3>Resolução de precedência</h3>
+  <table>
+    <tr><th>Prioridade</th><th>Fonte</th><th>Quando aplicado</th></tr>
+    <tr><td>1 (maior)</td><td><code>project_calendar_config</code> no Supabase</td><td>Projeto tem calendar_id específico</td></tr>
+    <tr><td>2</td><td><code>st.secrets[google_calendar][calendar_id]</code></td><td>Fallback global</td></tr>
+    <tr><td>3</td><td>Arquivo <code>mcp/google_console/.google-calendar</code></td><td>Dev local sem secrets.toml</td></tr>
+    <tr><td>4 (menor)</td><td><code>"primary"</code></td><td>Fallback final (agenda da service account)</td></tr>
+  </table>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <h2 id="cal-share">Compartilhamento de agenda</h2>
+
+  <p>
+    As ferramentas <code>calendar_share_with_user</code> e <code>calendar_revoke_access</code>
+    usam a <strong>Google Calendar ACL API</strong> para gerenciar permissões diretamente
+    pelo chat do Assistente.
+  </p>
+
+  <div class="alert alert-warn">
+    ⚠️ A Service Account precisa ter permissão <strong>"Fazer alterações e gerenciar compartilhamento"</strong>
+    na agenda (não apenas "Fazer alterações nos eventos"). Sem isso, a ferramenta retorna erro 403.
+  </div>
+
+  <table>
+    <tr><th>Role</th><th>O que permite</th></tr>
+    <tr><td><code>reader</code></td><td>Apenas visualizar eventos</td></tr>
+    <tr><td><code>writer</code></td><td>Criar, editar e excluir eventos (padrão)</td></tr>
+    <tr><td><code>owner</code></td><td>Gerenciar agenda e compartilhamento</td></tr>
+  </table>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <h2 id="cal-diagnostic">Diagnóstico — etapas e significados</h2>
+
+  <table>
+    <tr><th>Etapa</th><th>O que verifica</th><th>Falha indica</th></tr>
+    <tr><td>[1]</td><td>Carregamento das credenciais</td><td>secrets não configurados ou JSON inválido</td></tr>
+    <tr><td>[2]</td><td>Formato PEM da chave privada</td><td>JSON corrompido ou incompleto</td></tr>
+    <tr><td>[2b]</td><td>Validação RSA via biblioteca <code>cryptography</code></td><td>Chave privada corrompida no encoding</td></tr>
+    <tr><td>[3]</td><td>Presença do calendar_id</td><td>Campo ausente nos secrets</td></tr>
+    <tr><td>[4]</td><td>Instanciação das credenciais OAuth2</td><td>Dependências Python não instaladas</td></tr>
+    <tr><td>[4b]</td><td>Refresh do token OAuth (chamada real ao Google)</td><td><code>invalid_grant</code> — chave revogada ou private_key_id inconsistente</td></tr>
+    <tr><td>[5]</td><td>Listagem de calendários via API</td><td>API não habilitada no Cloud, rate limit</td></tr>
+    <tr><td>[6]</td><td>Acesso à agenda configurada</td><td>Agenda não compartilhada com a service account</td></tr>
+  </table>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <h2 id="users-accounts">Contas de integração por usuário</h2>
+
+  <p>
+    Cada usuário cadastrado no sistema pode ter sua conta Google e sua conta Microsoft Teams
+    associadas ao perfil. Esses campos são utilizados pelas ferramentas de integração
+    para identificar destinatários e participantes automaticamente.
+  </p>
+
+  <div class="card">
+    <div class="card-title">Como cadastrar as contas</div>
+    <ol class="steps" style="margin-top:.5rem">
+      <li>Acesse <strong>Master Admin</strong> (perfil master)</li>
+      <li>Selecione o domínio</li>
+      <li>Na seção <strong>Usuários</strong>, expanda o usuário desejado</li>
+      <li>Role até a linha <strong>Contas de integração</strong></li>
+      <li>Preencha <strong>Conta Google</strong> e/ou <strong>Conta Microsoft Teams</strong></li>
+      <li>Clique em <strong>💾</strong> para salvar</li>
+    </ol>
+  </div>
+
+  <table>
+    <tr><th>Campo</th><th>Coluna no Supabase</th><th>Exemplo</th><th>Uso futuro</th></tr>
+    <tr>
+      <td>Conta Google</td>
+      <td><code>tenant_users.google_account</code></td>
+      <td><code>pedro@gmail.com</code></td>
+      <td>Compartilhamento automático de agenda via <code>calendar_share_with_user</code></td>
+    </tr>
+    <tr>
+      <td>Conta Microsoft Teams</td>
+      <td><code>tenant_users.ms_teams_account</code></td>
+      <td><code>pedro@empresa.com</code></td>
+      <td>Agendamento Teams e envio de ata via Outlook (quando MS365 for habilitado)</td>
+    </tr>
+  </table>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <h2 id="ms365-status">Microsoft 365 — Status da integração</h2>
+
+  <div class="alert alert-block">
+    ⛔ <strong>BLOQUEADO</strong> — A integração com Outlook e Teams está planejada e documentada,
+    mas requer criação de um App Registration no Azure AD com consentimento administrativo.
+    A organização usa contas corporativas sem perfil de admin disponível no projeto.
+  </div>
+
+  <p>Quando desbloqueado, serão implementadas duas ferramentas admin no Assistente:</p>
+
+  <div class="tool-grid">
+    <div class="tool-card">
+      <div class="t-name">outlook_send_email</div>
+      <div class="t-desc">Envia ata ou relatório executivo por e-mail via Microsoft Graph API. Suporta anexos HTML.</div>
+      <div class="t-badge"><span class="badge badge-admin">admin / master</span></div>
+    </div>
+    <div class="tool-card">
+      <div class="t-name">teams_schedule_meeting</div>
+      <div class="t-desc">Cria reunião no Microsoft Teams com link de participação e convites para lista de e-mails.</div>
+      <div class="t-badge"><span class="badge badge-admin">admin / master</span></div>
+    </div>
+  </div>
+
+  <p>O plano completo de implementação está em <code>CLAUDE_MS365.md</code> na raiz do projeto.</p>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <h2 id="ms365-it">Solicitação ao TI — texto pronto</h2>
+
+  <div class="card">
+    <div class="card-title">Assunto: Criação de App Registration no Azure AD para integração Microsoft Graph</div>
+    <p style="margin-top:.5rem">
+      O sistema <strong>Process2Diagram</strong> precisa integrar o envio automático de atas
+      por Outlook e o agendamento de reuniões no Teams, via Microsoft Graph API.<br><br>
+      Solicitamos a criação de um <strong>App Registration</strong> no Microsoft Entra ID com:
+    </p>
+    <ul style="margin:.6rem 0">
+      <li>Nome: <code>p2d-ms365-integration</code></li>
+      <li>Tipo de conta: somente contas deste diretório organizacional</li>
+      <li>Tipo de credencial: Client Secret (sem redirect URI)</li>
+    </ul>
+    <p><strong>Permissões de aplicativo necessárias</strong> (Microsoft Graph → Application permissions):</p>
+    <table style="margin:.4rem 0 .8rem">
+      <tr><th>Permissão</th><th>Justificativa</th></tr>
+      <tr><td><code>Mail.Send</code></td><td>Enviar atas de reunião por e-mail</td></tr>
+      <tr><td><code>Calendars.ReadWrite</code></td><td>Criar eventos no calendário corporativo</td></tr>
+      <tr><td><code>OnlineMeetings.ReadWrite</code></td><td>Agendar reuniões com link Teams</td></tr>
+    </table>
+    <p>
+      Após adicionar as permissões, solicitar <strong>"Grant admin consent"</strong>.<br>
+      Precisamos receber: <code>client_id</code>, <code>client_secret</code> e <code>tenant_id</code>
+      via canal seguro.
+    </p>
+    <div class="alert alert-info" style="margin-top:.8rem">
+      💡 A aplicação agirá como serviço (app-only), sem impersonar usuários. Credenciais
+      armazenadas exclusivamente em variáveis de ambiente seguras (Streamlit Secrets).
+      Escopo mínimo: apenas as 3 permissões listadas.
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <h2 id="ms365-impl">MS365 — O que será implementado quando desbloqueado</h2>
+
+  <ol class="steps">
+    <li>
+      <div>
+        <strong>Adicionar secrets ao Streamlit Cloud</strong><br>
+        <pre style="margin:.3rem 0">[microsoft_365]
+client_id      = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+client_secret  = "xxxxxxxxxxxxxxxxxxxxxxxxxx"
+tenant_id      = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+default_sender = "usuario@dominio.com.br"</pre>
+      </div>
+    </li>
+    <li>
+      <div>
+        <strong>Criar <code>modules/office_client.py</code></strong><br>
+        <span style="color:var(--muted);font-size:.85rem">
+          Funções: <code>ms365_configured()</code>, <code>send_outlook_email()</code>,
+          <code>schedule_teams_meeting()</code>, <code>diagnose_ms365()</code>
+        </span>
+      </div>
+    </li>
+    <li>
+      <div>
+        <strong>Adicionar <code>msal==1.31.0</code> ao <code>requirements.txt</code></strong>
+      </div>
+    </li>
+    <li>
+      <div>
+        <strong>Registrar ferramentas em <code>core/assistant_tools.py</code></strong><br>
+        <span style="color:var(--muted);font-size:.85rem">
+          Schemas OpenAI/Anthropic, categorias admin, métodos executor, dispatch
+        </span>
+      </div>
+    </li>
+    <li>
+      <div>
+        <strong>Atualizar <code>_SYSTEM_TOOLS_TEMPLATE</code> em <code>agent_assistant.py</code></strong><br>
+        <span style="color:var(--muted);font-size:.85rem">
+          Adicionar bloco "CAPACIDADES MICROSOFT 365" ao prompt do Assistente
+        </span>
+      </div>
+    </li>
+  </ol>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <h2 id="sql">SQL Migrations — scripts obrigatórios</h2>
+
+  <div class="alert alert-warn">
+    ⚠️ Execute estes scripts no <strong>SQL Editor do Supabase</strong> antes de usar as funcionalidades.
+    Cada script é idempotente (<code>IF NOT EXISTS</code> / <code>ADD COLUMN IF NOT EXISTS</code>).
+  </div>
+
+  <h3>1. Contas de integração por usuário</h3>
+  <p>Arquivo: <code>setup/supabase_migration_user_accounts.sql</code></p>
+  <pre>ALTER TABLE tenant_users
+    ADD COLUMN IF NOT EXISTS google_account   TEXT DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS ms_teams_account TEXT DEFAULT NULL;</pre>
+
+  <h3>2. Calendar ID por projeto</h3>
+  <p>Arquivo: <code>setup/supabase_migration_project_calendar.sql</code></p>
+  <pre>CREATE TABLE IF NOT EXISTS project_calendar_config (
+    project_id  UUID PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+    calendar_id TEXT NOT NULL,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE project_calendar_config ENABLE ROW LEVEL SECURITY;</pre>
+
+  <hr class="divider">
+  <p style="font-size:.75rem;color:var(--muted);text-align:center">
+    Process2Diagram v4.15 · Gerado automaticamente · Manter sincronizado com CLAUDE.md
+  </p>
+
+</main>
+</div>
+
+<script>
+  // Highlight active nav link on scroll
+  const sections = document.querySelectorAll('h2[id], h3[id]');
+  const navLinks = document.querySelectorAll('nav a');
+  window.addEventListener('scroll', () => {
+    let current = '';
+    sections.forEach(s => {
+      if (window.scrollY >= s.offsetTop - 80) current = s.id;
+    });
+    navLinks.forEach(a => {
+      a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+    });
+  }, {passive: true});
+</script>
+</body>
+</html>
