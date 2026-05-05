@@ -3033,6 +3033,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         time_min: str | None = None,
         time_max: str | None = None,
         query: str | None = None,
+        project_id: str | None = None,
     ) -> str:
         from modules.calendar_client import list_events, calendar_configured
         if not calendar_configured():
@@ -3045,13 +3046,14 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             time_min=time_min,
             time_max=time_max,
             query=query,
+            project_id=project_id,
         )
 
-    def calendar_get_event(self, event_id: str) -> str:
+    def calendar_get_event(self, event_id: str, project_id: str | None = None) -> str:
         from modules.calendar_client import get_event, calendar_configured
         if not calendar_configured():
             return "⚙️ Google Calendar não configurado neste ambiente."
-        return get_event(event_id)
+        return get_event(event_id, project_id=project_id)
 
     def calendar_suggest_time(
         self,
@@ -3060,6 +3062,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         time_min: str | None = None,
         time_max: str | None = None,
         max_suggestions: int = 3,
+        project_id: str | None = None,
     ) -> str:
         from modules.calendar_client import suggest_time, calendar_configured
         if not calendar_configured():
@@ -3070,6 +3073,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             time_min=time_min,
             time_max=time_max,
             max_suggestions=max_suggestions,
+            project_id=project_id,
         )
 
     def calendar_create_event(
@@ -3080,6 +3084,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         description: str | None = None,
         location: str | None = None,
         attendees: str | None = None,
+        project_id: str | None = None,
     ) -> str:
         from modules.calendar_client import create_event, calendar_configured
         if not calendar_configured():
@@ -3091,6 +3096,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             description=description,
             location=location,
             attendees=attendees,
+            project_id=project_id,
         )
 
     def calendar_schedule_action_items(
@@ -3098,6 +3104,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         meeting_number: int,
         default_date: str,
         duration_minutes: int = 30,
+        project_id: str | None = None,
     ) -> str:
         from modules.calendar_client import schedule_action_items, calendar_configured
         if not calendar_configured():
@@ -3126,19 +3133,20 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             meeting_title=meeting_title,
             default_date=default_date,
             duration_minutes=duration_minutes,
+            project_id=project_id,
         )
 
-    def calendar_share_with_user(self, email: str, role: str = "writer") -> str:
+    def calendar_share_with_user(self, email: str, role: str = "writer", project_id: str | None = None) -> str:
         from modules.calendar_client import share_calendar, calendar_configured
         if not calendar_configured():
             return "⚙️ Google Calendar não configurado neste ambiente."
-        return share_calendar(email=email, role=role)
+        return share_calendar(email=email, role=role, project_id=project_id)
 
-    def calendar_revoke_access(self, email: str) -> str:
+    def calendar_revoke_access(self, email: str, project_id: str | None = None) -> str:
         from modules.calendar_client import revoke_calendar_access, calendar_configured
         if not calendar_configured():
             return "⚙️ Google Calendar não configurado neste ambiente."
-        return revoke_calendar_access(email=email)
+        return revoke_calendar_access(email=email, project_id=project_id)
 
     # ── Admin: integrity & fix tools ─────────────────────────────────────────
 
@@ -3489,9 +3497,11 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     time_min=tool_input.get("time_min"),
                     time_max=tool_input.get("time_max"),
                     query=tool_input.get("query"),
+                    project_id=self.project_id,
                 ),
                 "calendar_get_event":              lambda: self.calendar_get_event(
                     tool_input["event_id"],
+                    project_id=self.project_id,
                 ),
                 "calendar_suggest_time":           lambda: self.calendar_suggest_time(
                     duration_minutes=int(tool_input.get("duration_minutes", 60)),
@@ -3499,6 +3509,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     time_min=tool_input.get("time_min"),
                     time_max=tool_input.get("time_max"),
                     max_suggestions=int(tool_input.get("max_suggestions", 3)),
+                    project_id=self.project_id,
                 ),
                 "calendar_create_event":           lambda: self.calendar_create_event(
                     tool_input["summary"],
@@ -3507,18 +3518,22 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     tool_input.get("description"),
                     tool_input.get("location"),
                     tool_input.get("attendees"),
+                    project_id=self.project_id,
                 ),
                 "calendar_schedule_action_items":  lambda: self.calendar_schedule_action_items(
                     tool_input["meeting_number"],
                     tool_input["default_date"],
                     int(tool_input.get("duration_minutes", 30)),
+                    project_id=self.project_id,
                 ),
                 "calendar_share_with_user":        lambda: self.calendar_share_with_user(
                     tool_input["email"],
                     tool_input.get("role", "writer"),
+                    project_id=self.project_id,
                 ),
                 "calendar_revoke_access":          lambda: self.calendar_revoke_access(
                     tool_input["email"],
+                    project_id=self.project_id,
                 ),
                 "get_database_integrity":         lambda: self.get_database_integrity(),
                 "fix_missing_llm_provider":       lambda: self.fix_missing_llm_provider(

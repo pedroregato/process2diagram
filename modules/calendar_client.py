@@ -177,16 +177,33 @@ def diagnose_calendar() -> str:
     return "\n".join(lines)
 
 
-def _load_calendar_id() -> str:
-    """Return the calendar ID or 'primary' as fallback."""
-    # 1) Streamlit secrets
+def _load_calendar_id(project_id: Optional[str] = None) -> str:
+    """Return the calendar ID for the given project, or the global default.
+
+    Resolution order:
+      1. project_calendar_config table in Supabase (if project_id provided)
+      2. st.secrets["google_calendar"]["calendar_id"]
+      3. Local .google-calendar file (dev fallback)
+      4. "primary"
+    """
+    # 1) Per-project override from Supabase
+    if project_id:
+        try:
+            from core.project_store import get_project_calendar_id
+            pid_cal = get_project_calendar_id(project_id)
+            if pid_cal:
+                return pid_cal
+        except Exception:
+            pass
+
+    # 2) Streamlit secrets
     try:
         import streamlit as st
         return st.secrets["google_calendar"]["calendar_id"]
     except Exception:
         pass
 
-    # 2) Local file fallback
+    # 3) Local file fallback
     try:
         cal_file = Path(__file__).parent.parent / "mcp" / "google_console" / ".google-calendar"
         for line in cal_file.read_text(encoding="utf-8").splitlines():
@@ -299,11 +316,12 @@ def list_events(
     time_max: Optional[str] = None,
     query: Optional[str] = None,
     calendar_id: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> str:
     """List upcoming calendar events as formatted text."""
     try:
         svc    = _get_service()
-        cal_id = calendar_id or _load_calendar_id()
+        cal_id = calendar_id or _load_calendar_id(project_id)
         t_min  = time_min or _now_iso()
 
         params: dict = {
@@ -337,11 +355,11 @@ def list_events(
         return f"❌ Erro ao listar eventos: {exc}"
 
 
-def get_event(event_id: str, calendar_id: Optional[str] = None) -> str:
+def get_event(event_id: str, calendar_id: Optional[str] = None, project_id: Optional[str] = None) -> str:
     """Return full details of a single calendar event as formatted text."""
     try:
         svc    = _get_service()
-        cal_id = calendar_id or _load_calendar_id()
+        cal_id = calendar_id or _load_calendar_id(project_id)
         event  = svc.events().get(calendarId=cal_id, eventId=event_id).execute()
         ev     = _event_summary(event)
         return f"Evento encontrado:\n{_format_event_text(ev)}"
@@ -359,11 +377,12 @@ def create_event(
     location: Optional[str] = None,
     attendees: Optional[str] = None,
     calendar_id: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> str:
     """Create a new Google Calendar event and return confirmation text."""
     try:
         svc    = _get_service()
-        cal_id = calendar_id or _load_calendar_id()
+        cal_id = calendar_id or _load_calendar_id(project_id)
 
         body: dict = {
             "summary": summary,
@@ -400,6 +419,7 @@ def suggest_time(
     time_min: Optional[str] = None,
     time_max: Optional[str] = None,
     max_suggestions: int = 3,
+    project_id: Optional[str] = None,
 ) -> str:
     """Find available time slots via freebusy API, returned as formatted text."""
     try:
@@ -423,7 +443,7 @@ def suggest_time(
                 if email:
                     items.append({"id": email})
         if not items:
-            items.append({"id": _load_calendar_id()})
+            items.append({"id": _load_calendar_id(project_id)})
 
         body = {
             "timeMin": t_min.isoformat(),
@@ -494,6 +514,7 @@ def share_calendar(
     email: str,
     role: str = "writer",
     calendar_id: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> str:
     """Share the project calendar with a Google account via the ACL API.
 
@@ -506,7 +527,7 @@ def share_calendar(
 
     try:
         svc    = _get_service()
-        cal_id = calendar_id or _load_calendar_id()
+        cal_id = calendar_id or _load_calendar_id(project_id)
 
         rule = {
             "scope": {"type": "user", "value": email},
@@ -541,11 +562,12 @@ def share_calendar(
 def revoke_calendar_access(
     email: str,
     calendar_id: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> str:
     """Remove a previously granted ACL rule for the given email."""
     try:
         svc    = _get_service()
-        cal_id = calendar_id or _load_calendar_id()
+        cal_id = calendar_id or _load_calendar_id(project_id)
 
         # List ACL rules to find the rule ID for this email
         acl = svc.acl().list(calendarId=cal_id).execute()
@@ -574,6 +596,7 @@ def schedule_action_items(
     default_date: str,
     duration_minutes: int = 30,
     calendar_id: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> str:
     """Create one calendar event per action item that has a responsible person.
 
@@ -630,6 +653,7 @@ def schedule_action_items(
             end_datetime   = default_end_dt,
             description    = description,
             calendar_id    = calendar_id,
+            project_id     = project_id,
         )
         if result.startswith("✅"):
             created.append(f"  ✅ {text[:80]}")

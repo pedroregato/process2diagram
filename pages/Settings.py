@@ -688,6 +688,83 @@ $$;
     )
     st.page_link("pages/DatabaseOverview.py", label="Abrir Visão do Banco →", icon="🗄️")
 
+    # ── Google Calendar por Projeto (admin) ───────────────────────────────────
+    from modules.auth import is_admin
+    if is_admin():
+        st.markdown("---")
+        st.markdown("#### 📅 Google Calendar por Projeto")
+        st.caption(
+            "Associe um calendar_id específico a cada projeto. "
+            "Quando configurado, o Assistente usará essa agenda ao executar ferramentas de calendário "
+            "no contexto do projeto selecionado. "
+            "A service account global (st.secrets) é sempre usada para autenticação."
+        )
+
+        from modules.auth import is_admin as _ia
+        from core.project_store import (
+            list_projects, list_project_calendar_configs,
+            set_project_calendar_id, delete_project_calendar_id,
+        )
+
+        if "_cal_proj_ok" in st.session_state:
+            st.success(st.session_state.pop("_cal_proj_ok"))
+        if "_cal_proj_err" in st.session_state:
+            st.error(st.session_state.pop("_cal_proj_err"))
+
+        # Tabela de configurações existentes
+        cal_configs = list_project_calendar_configs()
+        if cal_configs:
+            import pandas as pd
+            df_cal = pd.DataFrame([{
+                "Projeto":      c["project_name"],
+                "Calendar ID":  c["calendar_id"],
+                "Atualizado":   (c.get("updated_at") or "")[:10],
+            } for c in cal_configs])
+            st.dataframe(df_cal, use_container_width=True, hide_index=True)
+        else:
+            st.caption("Nenhum projeto com calendar_id específico configurado.")
+
+        # Formulário para adicionar/atualizar
+        with st.expander("➕ Associar / Atualizar calendar_id", expanded=False):
+            projects = list_projects()
+            if not projects:
+                st.caption("Nenhum projeto cadastrado.")
+            else:
+                proj_opts = {p["name"]: p["id"] for p in projects}
+                sel_proj_name = st.selectbox("Projeto", list(proj_opts.keys()),
+                                             key="s_cal_proj_sel")
+                new_cal_id = st.text_input(
+                    "Calendar ID",
+                    placeholder="xxx@group.calendar.google.com",
+                    key="s_cal_id_inp",
+                )
+                if st.button("💾 Salvar", key="s_cal_save", type="primary"):
+                    pid = proj_opts[sel_proj_name]
+                    cid = new_cal_id.strip()
+                    if not cid:
+                        st.session_state["_cal_proj_err"] = "Calendar ID não pode ser vazio."
+                    elif set_project_calendar_id(pid, cid):
+                        st.session_state["_cal_proj_ok"] = (
+                            f"✅ Calendar ID salvo para '{sel_proj_name}'."
+                        )
+                    else:
+                        st.session_state["_cal_proj_err"] = "Erro ao salvar. Verifique se a tabela project_calendar_config existe no Supabase."
+                    st.rerun()
+
+        # Formulário para remover
+        if cal_configs:
+            with st.expander("🗑 Remover configuração", expanded=False):
+                cfg_opts = {c["project_name"]: c["project_id"] for c in cal_configs}
+                sel_rm = st.selectbox("Projeto", list(cfg_opts.keys()), key="s_cal_rm_sel")
+                if st.button("Remover", key="s_cal_rm", type="secondary"):
+                    if delete_project_calendar_id(cfg_opts[sel_rm]):
+                        st.session_state["_cal_proj_ok"] = (
+                            f"Calendar ID de '{sel_rm}' removido (voltará ao padrão global)."
+                        )
+                    else:
+                        st.session_state["_cal_proj_err"] = "Erro ao remover."
+                    st.rerun()
+
 # ╔══════════════════════════════════════════════════════╗
 # ║  TAB 5 — Preferências Gerais                        ║
 # ╚══════════════════════════════════════════════════════╝

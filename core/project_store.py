@@ -2415,6 +2415,80 @@ def log_login_event(
         pass  # auditoria nunca deve bloquear o fluxo de login
 
 
+# ── Google Calendar per project ───────────────────────────────────────────────
+
+def get_project_calendar_id(project_id: str) -> str | None:
+    """Return the calendar_id configured for this project, or None if not set."""
+    db = _db()
+    if not db or not project_id:
+        return None
+    try:
+        rows = _ok(
+            db.table("project_calendar_config")
+            .select("calendar_id")
+            .eq("project_id", project_id)
+            .limit(1)
+            .execute()
+        )
+        return rows[0]["calendar_id"] if rows else None
+    except Exception:
+        return None
+
+
+def set_project_calendar_id(project_id: str, calendar_id: str) -> bool:
+    """Upsert the calendar_id for a project. Returns True on success."""
+    db = _db()
+    if not db:
+        return False
+    from datetime import datetime, timezone
+    try:
+        db.table("project_calendar_config").upsert({
+            "project_id":  project_id,
+            "calendar_id": calendar_id.strip(),
+            "updated_at":  datetime.now(timezone.utc).isoformat(),
+        }).execute()
+        return True
+    except Exception:
+        return False
+
+
+def delete_project_calendar_id(project_id: str) -> bool:
+    """Remove the calendar_id override for a project."""
+    db = _db()
+    if not db:
+        return False
+    try:
+        db.table("project_calendar_config").delete().eq("project_id", project_id).execute()
+        return True
+    except Exception:
+        return False
+
+
+def list_project_calendar_configs() -> list[dict]:
+    """Return all project calendar configs joined with project name."""
+    db = _db()
+    if not db:
+        return []
+    try:
+        rows = _ok(
+            db.table("project_calendar_config")
+            .select("project_id, calendar_id, updated_at, projects(name)")
+            .execute()
+        )
+        result = []
+        for r in rows:
+            proj = r.get("projects") or {}
+            result.append({
+                "project_id":   r["project_id"],
+                "project_name": proj.get("name", "—"),
+                "calendar_id":  r["calendar_id"],
+                "updated_at":   r.get("updated_at", ""),
+            })
+        return result
+    except Exception:
+        return []
+
+
 def list_login_logs(
     domain: str | None = None,
     success: bool | None = None,
