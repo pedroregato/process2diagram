@@ -109,23 +109,31 @@ Agente conversacional que responde perguntas sobre:
 
 ## Integração Google Calendar
 
-O Process2Diagram possui integração nativa com o **Google Calendar** via Service Account. As operações disponíveis são:
+O Process2Diagram possui integração nativa com o **Google Calendar** via Service Account. Cada projeto pode ter sua própria agenda configurada — se não houver, usa a agenda global dos secrets.
 
 | Ferramenta | Perfil | O que faz |
 |---|---|---|
-| `calendar_list_events` | todos | Lista os próximos eventos da agenda do projeto |
+| `calendar_list_events` | todos | Lista eventos futuros da agenda do projeto (filtros: data, busca por texto) |
 | `calendar_get_event` | todos | Retorna detalhes completos de um evento pelo ID |
-| `calendar_suggest_time` | todos | Sugere horários livres usando a API freebusy |
-| `calendar_create_event` | admin | Cria novo evento com título, horário, local e participantes |
-| `calendar_schedule_action_items` | admin | Lê a ata de uma reunião e cria um evento por item de ação |
+| `calendar_suggest_time` | todos | Sugere horários livres via API freebusy |
+| `calendar_create_event` | admin | Cria evento com título, horário, local e participantes |
+| `calendar_schedule_action_items` | admin | Lê a ata de uma reunião no Supabase e cria um evento por item de ação |
+| `calendar_share_with_user` | admin | Concede acesso à agenda para um e-mail Google (reader/writer/owner) |
+| `calendar_revoke_access` | admin | Remove o acesso de um e-mail da agenda |
+| `calendar_diagnose` | admin | Diagnóstico passo a passo (7 etapas) da integração |
 
 **Exemplos de uso:**
 - "Quais eventos temos esta semana?" → `calendar_list_events`
 - "Quando estamos livres para uma reunião de 1 hora?" → `calendar_suggest_time`
 - "Agende um follow-up para sexta às 14h com joao@empresa.com" → `calendar_create_event`
-- "Crie eventos no calendário para os encaminhamentos da Reunião 3, com data base 20/05/2026 às 10h" → `calendar_schedule_action_items`
+- "Crie eventos para os encaminhamentos da Reunião 3, data base 20/05/2026 às 10h" → `calendar_schedule_action_items`
+- "Compartilhe a agenda com pedro@gmail.com com permissão de edição" → `calendar_share_with_user`
+- "Remova o acesso de usuario@empresa.com" → `calendar_revoke_access`
+- "Execute o diagnóstico do Google Calendar" → `calendar_diagnose`
 
-**Requisito:** a agenda deve estar compartilhada com a Service Account do projeto. A integração é configurada via `st.secrets[google_calendar]`.
+**Agenda por projeto:** cada projeto pode ter um `calendar_id` próprio configurado em **Configurações → Banco de Dados → 📅 Google Calendar por Projeto**. O Assistente usa automaticamente a agenda do projeto selecionado.
+
+**Requisito:** a agenda deve estar compartilhada com a Service Account do projeto com permissão **"Fazer alterações e gerenciar compartilhamento"** (necessário para as ferramentas de ACL). Configurado via `st.secrets[google_calendar]`.
 
 ---
 

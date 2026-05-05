@@ -107,7 +107,7 @@ process2diagram/
 │   ├── embeddings.py             # chunk_text(), embed_text(), embed_batch() — Gemini/OpenAI embeddings (1536 dims)
 │   ├── meeting_roi_calculator.py # ROI-TR v2 — MEETING_TYPES, TYPE_WEIGHTS matrix, classify_meeting_type() LLM, MeetingROIData, compute_project_roi()
 │   ├── cross_meeting_analyzer.py # find_recurring_topics() — semantic (pgvector) + keyword fallback; save_project_scores(); load_score_history()
-│   └── calendar_client.py        # Google Calendar API client — list_events(), get_event(), create_event(), suggest_time(), schedule_action_items(); reads credentials from st.secrets[google_calendar] with local-file fallback
+│   └── calendar_client.py        # Google Calendar API client — 8 public functions: list_events(), get_event(), create_event(), suggest_time(), schedule_action_items(), share_calendar(), revoke_calendar_access(), diagnose_calendar() (7 steps); _load_calendar_id(project_id) resolves: Supabase project_calendar_config → st.secrets → local file → "primary"; all public functions accept project_id param
 │
 ├── ui/
 │   ├── sidebar.py                # render_sidebar() — provider, config, agent toggles, re-run buttons
@@ -985,14 +985,44 @@ All pages begin with `ui.auth_gate.apply_auth_gate()` immediately after `st.set_
 # .streamlit/secrets.toml
 [google_calendar]
 calendar_id      = "...@group.calendar.google.com"
-credentials_json = '{"type": "service_account", ...}'  # full JSON as string
+credentials_json = '''{"type": "service_account", ...}'''  # full JSON — use ''' not """
 ```
+
+**TOML encoding:** always use `'''` (literal triple-single-quotes) for `credentials_json`. Using `"""` causes Python to process `\n` escape sequences, corrupting the private key.
 
 **Local dev fallback:** if secrets are absent, `calendar_client.py` looks for `*.json` in `mcp/google_console/` and `.google-calendar` in the same directory. Both files are `.gitignore`d.
 
-`calendar_configured()` returns `True` when credentials are available. All 5 calendar tools in `AssistantToolExecutor` call this guard and return a friendly message when unconfigured — fail-open, no exception.
+**calendar_id resolution order (per call):**
+1. `project_calendar_config` table in Supabase (if `project_id` provided) — per-project override
+2. `st.secrets["google_calendar"]["calendar_id"]` — global default
+3. Local `.google-calendar` file — dev fallback
+4. `"primary"` — final fallback
 
-**Write tools** (`calendar_create_event`, `calendar_schedule_action_items`) are gated by `is_admin()` in `_ADMIN_TOOLS`.
+**Per-project calendar:** admins configure a `calendar_id` per project in **Configurações → Banco de Dados → 📅 Google Calendar por Projeto**. Stored in `project_calendar_config` table. The `AssistantToolExecutor` always passes `self.project_id` to every calendar tool call.
+
+`calendar_configured()` returns `True` when credentials are available. All 9 calendar tools in `AssistantToolExecutor` call this guard and return a friendly message when unconfigured — fail-open, no exception.
+
+**Service Account sharing requirement:** the service account must have **"Fazer alterações e gerenciar compartilhamento"** (owner-level ACL) on the calendar — not just "Fazer alterações nos eventos" — to use `calendar_share_with_user` and `calendar_revoke_access`.
+
+**Admin-only tools** (`calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`) are gated by `is_admin()` in `_ADMIN_TOOLS`.
+
+### User Integration Accounts
+
+`tenant_users` table has two nullable columns for external service accounts:
+- `google_account TEXT` — user's Google account (e.g. `pedro@gmail.com`) for calendar sharing
+- `ms_teams_account TEXT` — user's Microsoft 365 account for Teams/Outlook integration (future)
+
+Managed in **Master Admin → Usuários → Contas de integração** row (💾 button per user).
+Function: `tenant_auth.update_user_accounts(user_id, google_account, ms_teams_account)`.
+
+### Microsoft 365 Integration (PENDING)
+
+Planned integration for Outlook email and Teams scheduling via Microsoft Graph API.
+**Blocked:** requires Azure AD App Registration with admin consent (`Mail.Send`, `Calendars.ReadWrite`, `OnlineMeetings.ReadWrite`). Organization has corporate accounts but no admin access in the project team.
+
+Full implementation plan: `CLAUDE_MS365.md` in project root.
+IT request text: prepared and ready to send.
+When unblocked: create `modules/office_client.py` + 2 tools (`outlook_send_email`, `teams_schedule_meeting`) + `msal==1.31.0` in `requirements.txt`.
 
 ---
 
@@ -1061,12 +1091,16 @@ credentials_json = '{"type": "service_account", ...}'  # full JSON as string
 - [x] **`modules/reqtracker_exporter.py`** — Excel/CSV export for ReqTracker
 - [x] **Google Gemini SDK migration** — use `google-generativeai` (stable) for `embed_content()` + `list_models()`; `google-genai` kept as secondary dependency
 
-### PC8 — Concluído (v4.15)
-- [x] **`modules/calendar_client.py`** — cliente Google Calendar API v3 para o Assistente P2D; credenciais via `st.secrets[google_calendar]` (Streamlit Cloud) com fallback para arquivo local (dev); `calendar_configured()` guard; 5 funções públicas: `list_events()`, `get_event()`, `create_event()`, `suggest_time()`, `schedule_action_items()`; fuso horário `America/Sao_Paulo` por padrão para datetimes sem tzinfo
-- [x] **5 novas ferramentas de calendário no Assistente** — `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time` (consulta, todos os perfis); `calendar_create_event`, `calendar_schedule_action_items` (admin-only); integradas ao `AssistantToolExecutor` + schemas OpenAI/Anthropic + `_TOOL_CATEGORIES` + `_ADMIN_TOOLS`
-- [x] **`calendar_schedule_action_items`** — ferramenta P2D-nativa: lê automaticamente os itens de ação da ata de uma reunião do Supabase e cria um evento no Google Calendar por item, usando `default_date` como data base para itens sem prazo explícito
-- [x] **MCP Google Calendar** (`mcp/google_calendar_server.py`) — servidor MCP para Claude Code CLI (8 tools via FastMCP/stdio); `.gitignore` atualizado para proteger `mcp/google_console/*.json` e `.google-calendar`; bug de fuso horário corrigido (`timezone.utc` → `ZoneInfo("America/Sao_Paulo")`)
-- [x] **Secrets structure** — `st.secrets[google_calendar][calendar_id]` + `[credentials_json]` (string JSON da Service Account)
+### PC8 — Concluído (v4.15 / 2026-05-03)
+- [x] **`modules/calendar_client.py`** — 8 funções públicas: `list_events()`, `get_event()`, `create_event()`, `suggest_time()`, `schedule_action_items()`, `share_calendar()`, `revoke_calendar_access()`, `diagnose_calendar()` (7 etapas incl. 2b RSA + 4b token); todas aceitam `project_id`; `_load_calendar_id(project_id)` resolve: Supabase → secrets → arquivo → "primary"
+- [x] **9 ferramentas de calendário no Assistente** — `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time` (todos perfis); `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose` (admin); `get_system_capabilities` (todos)
+- [x] **Multi-projeto Google Calendar** — tabela `project_calendar_config (project_id PK, calendar_id, updated_at)` no Supabase; `project_store.py`: `get/set/delete/list_project_calendar_id()`; `AssistantToolExecutor` passa `self.project_id` em todas as chamadas de calendário; UI admin em **Configurações → Banco de Dados → 📅 Google Calendar por Projeto**
+- [x] **Compartilhamento de agenda pelo Assistente** — `calendar_share_with_user(email, role)` via ACL API; `calendar_revoke_access(email)` busca e remove regra ACL; requer permissão "owner" da Service Account na agenda
+- [x] **Contas de integração por usuário** — `tenant_users.google_account` + `tenant_users.ms_teams_account` (nullable); `update_user_accounts()` em `tenant_auth.py`; UI em Master Admin → Usuários → "Contas de integração"; migrations: `supabase_migration_user_accounts.sql`
+- [x] **Google Calendar embed na Home** — iframe construído dinamicamente via `_load_calendar_id()` com `components.html()`; fallback caption quando não configurado
+- [x] **MCP Google Calendar** (`mcp/google_calendar_server.py`) — servidor MCP para Claude Code CLI (8 tools via FastMCP/stdio); timezone bug corrigido (UTC→Sao_Paulo); credentials protegidas no `.gitignore`
+- [x] **Documentação de integrações** — `mcp/integration_guide.html` (guia completo HTML com nav lateral); `CLAUDE_MS365.md` (plano MS365 bloqueado + texto de solicitação ao TI)
+- [ ] **Microsoft 365 (Outlook + Teams)** — PENDENTE: bloqueado por falta de App Registration com admin consent no Azure AD; plano completo em `CLAUDE_MS365.md`
 
 ### PC7 — Concluído (v4.14)
 - [x] **`pages/Home.py`** — tela inicial padrão (default) com header de boas-vindas (nome, role badge, tenant, data), 4 KPIs globais (`get_global_stats()`), guia visual de 4 etapas, acesso rápido por área (Pipeline / Análise / Sistema / Orientações), reuniões recentes com links contextuais para Assistente + Validação + Editor BPMN; `@st.cache_data(ttl=60)` para chamadas DB
