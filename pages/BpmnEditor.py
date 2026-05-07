@@ -97,6 +97,7 @@ for v in versions:
         "Versão":  v.get("version", "—"),
         "Atual":   "✅" if v.get("is_current") else "",
         "Reunião": f"#{mtg.get('meeting_number','?')} — {mtg.get('title','')}" if mtg else "—",
+        "Data":    (mtg.get("meeting_date") or "")[:10] if mtg else "—",
         "Notas":   v.get("change_notes") or "",
         "ID":      v["id"],
     })
@@ -105,6 +106,8 @@ st.dataframe(ver_rows, use_container_width=True, hide_index=True,
 
 ver_opts_labels = [
     f"v{v.get('version','?')}{' (atual)' if v.get('is_current') else ''} — "
+    f"#{(v.get('meetings') or {}).get('meeting_number', '?')} · "
+    f"{((v.get('meetings') or {}).get('meeting_date') or '')[:10]} · "
     f"{(v.get('meetings') or {}).get('title', 'sem reunião')}"
     for v in versions
 ]
