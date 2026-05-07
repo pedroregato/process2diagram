@@ -541,6 +541,31 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "rename_meeting",
+                "description": (
+                    "Altera o título de uma reunião existente no banco de dados. "
+                    "Use get_meeting_list para obter o número da reunião antes de renomear. "
+                    "Operação irreversível via esta ferramenta — confirme com o usuário antes de executar."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Número da reunião cujo título será alterado",
+                        },
+                        "new_title": {
+                            "type": "string",
+                            "description": "Novo título para a reunião (não pode ser vazio)",
+                        },
+                    },
+                    "required": ["meeting_number", "new_title"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "reprocess_meeting_requirements",
                 "description": (
                     "Re-executa o AgentRequirements sobre a transcrição armazenada de uma reunião "
@@ -1078,6 +1103,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "add_sbvr_rule":                "escrita",
     # Admin — escrita privilegiada
     "apply_text_correction":        "admin",
+    "rename_meeting":               "admin",
     "delete_meeting":               "admin",
     "fix_missing_llm_provider":     "admin",
     "generate_meeting_embeddings":  "admin",
@@ -1094,6 +1120,7 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "fix_missing_llm_provider",
     "generate_meeting_embeddings",
     "delete_meeting",
+    "rename_meeting",
     "apply_text_correction",
     "reprocess_meeting_requirements",
     "batch_reprocess_requirements",
@@ -1220,7 +1247,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
     add_sbvr_term, update_sbvr_term, add_sbvr_rule
 
   Admin (perfil admin/master):
-    apply_text_correction, delete_meeting, reprocess_meeting_requirements,
+    apply_text_correction, rename_meeting, delete_meeting, reprocess_meeting_requirements,
     batch_reprocess_requirements, generate_missing_minutes,
     get_database_integrity, fix_missing_llm_provider, generate_meeting_embeddings
 
@@ -2117,6 +2144,28 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             )
         except Exception as exc:
             return f"❌ Erro ao excluir Reunião {meeting_number}: {exc}"
+
+    def rename_meeting(self, meeting_number: int, new_title: str) -> str:
+        """Rename a meeting — updates title in the meetings table."""
+        if not new_title or not new_title.strip():
+            return "❌ Novo título não pode ser vazio."
+
+        m = self._find_meeting(meeting_number)
+        if not m:
+            return f"Reunião {meeting_number} não encontrada no projeto."
+
+        old_title = m.get("title") or f"Reunião {meeting_number}"
+        meeting_id = m.get("id", "")
+
+        from core.project_store import update_meeting_title
+        success = update_meeting_title(meeting_id, new_title.strip())
+        if success:
+            return (
+                f"✅ Título da Reunião {meeting_number} atualizado com sucesso.\n"
+                f"   Antes: {old_title}\n"
+                f"   Depois: {new_title.strip()}"
+            )
+        return f"❌ Falha ao atualizar o título da Reunião {meeting_number}. Verifique a conexão com o banco."
 
     def reprocess_meeting_requirements(
         self,
@@ -3471,6 +3520,10 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 "delete_meeting":                 lambda: self.delete_meeting(
                     tool_input["meeting_number"],
                     bool(tool_input.get("confirmed", False)),
+                ),
+                "rename_meeting":                 lambda: self.rename_meeting(
+                    tool_input["meeting_number"],
+                    tool_input["new_title"],
                 ),
                 "reprocess_meeting_requirements": lambda: self.reprocess_meeting_requirements(
                     tool_input["meeting_number"],

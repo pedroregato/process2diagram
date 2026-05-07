@@ -154,6 +154,18 @@ def save_meeting_tokens(meeting_id: str, total_tokens: int, llm_provider: str) -
         return False
 
 
+def update_meeting_title(meeting_id: str, new_title: str) -> bool:
+    """Atualiza o título de uma reunião pelo seu ID."""
+    db = _db()
+    if not db:
+        return False
+    try:
+        db.table("meetings").update({"title": new_title.strip()}).eq("id", meeting_id).execute()
+        return True
+    except Exception:
+        return False
+
+
 def load_meeting_as_hub(meeting_id: str, project_id: str):
     """Reconstrói um KnowledgeHub a partir dos artefatos salvos de uma reunião.
 
