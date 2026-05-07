@@ -15,15 +15,14 @@ def render(hub, prefix, suffix):
         st.markdown(f"<div style='text-align:center;padding:2rem;border:2px solid {color}'><h1>{tq.grade}</h1><h3>{tq.overall_score:.1f}/100</h3></div>", unsafe_allow_html=True)
     with col2:
         for c in tq.criteria:
-            with st.container(border=True):
-                st.markdown(f"**{c.criterion}** — {c.score}/100")
-                st.progress(c.score/100)
-                st.markdown(c.justification)
+            st.markdown(f"**{c.criterion}** — {c.score}/100")
+            st.progress(c.score/100)
+            st.caption(c.justification)
+            st.markdown("---")
     if tq.inconsistencies:
         st.markdown(f"#### 🔍 Inconsistências ({len(tq.inconsistencies)})")
-        with st.container(border=True):
-            for inc in tq.inconsistencies:
-                st.markdown(f"**{inc.speaker}** {inc.timestamp}: {inc.text} → {inc.reason}")
+        for inc in tq.inconsistencies:
+            st.markdown(f"**{inc.speaker}** {inc.timestamp}: {inc.text} → {inc.reason}")
     if pp and pp.ready:
         st.markdown("### Texto Original vs. Pré‑processado")
         col_raw, col_clean = st.columns(2)
