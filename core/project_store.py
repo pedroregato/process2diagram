@@ -1799,15 +1799,16 @@ def retrieve_data_summary(project_id: str) -> dict:
     except Exception:
         pass
 
-    # Chunks indexados (busca semântica)
+    # Chunks indexados (busca semântica) — usa count="exact" para evitar truncagem a 1000
     try:
-        chunk_rows = _ok(
+        _cr = (
             db.table("transcript_chunks")
-            .select("id")
+            .select("*", count="exact")
             .eq("project_id", project_id)
+            .limit(1)
             .execute()
         )
-        summary["n_chunks_indexed"] = len(chunk_rows)
+        summary["n_chunks_indexed"] = _cr.count or 0
     except Exception:
         pass
 

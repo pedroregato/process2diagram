@@ -3243,11 +3243,13 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         except Exception as exc:
             return f"❌ Erro ao carregar reuniões: {exc}"
 
-        # Embeddings
+        # Embeddings — limit generoso para evitar truncagem padrão de 1000 linhas
         try:
             chunks = (
                 db.table("transcript_chunks").select("meeting_id")
-                .eq("project_id", self.project_id).execute().data or []
+                .eq("project_id", self.project_id)
+                .limit(25000)
+                .execute().data or []
             )
             mids_with_chunks = {c["meeting_id"] for c in chunks}
             chunks_ok = True
@@ -3267,7 +3269,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         _ACTIONS = {
             "transcrição": "→ use Manutenção > Transcript Backfill",
             "ata":         "→ use generate_missing_minutes()",
-            "embeddings":  "→ use generate_meeting_embeddings() [requer API key]",
+            "embeddings":  "→ use embed_meeting(N) para uma reunião ou generate_meeting_embeddings() para todas",
             "BPMN":        "→ use Manutenção > BPMN Backfill",
             "tokens":      "→ registrado em versão anterior sem contagem de tokens",
             "provedor LLM": "→ use fix_missing_llm_provider(provider)",
@@ -3462,7 +3464,9 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         try:
             chunks_rows = (
                 db.table("transcript_chunks").select("meeting_id")
-                .eq("project_id", self.project_id).execute().data or []
+                .eq("project_id", self.project_id)
+                .limit(25000)
+                .execute().data or []
             )
             mids_with_chunks = {c["meeting_id"] for c in chunks_rows}
         except Exception:
