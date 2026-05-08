@@ -27,6 +27,7 @@ import pandas as pd
 import streamlit as st
 
 from ui.auth_gate import apply_auth_gate
+from modules.auth import is_admin
 from modules.supabase_client import supabase_configured, get_supabase_client
 from modules.cost_estimator import PROVIDER_PRICING, cost_for_tokens
 
@@ -634,6 +635,39 @@ with tab_emb:
         elif chunks_ok and transcript_chunks:
             st.caption("ℹ️ Chunks sem informação de provedor — gerados antes da migração de rastreamento.")
 
+        # ── Reparo de project_id divergente ───────────────────────────────────
+        if chunks_ok and is_admin():
+            _orphan_chunks = [
+                c for c in transcript_chunks
+                if c.get("meeting_id") and (
+                    not c.get("project_id")
+                    or c.get("project_id") != (meeting_map.get(c["meeting_id"]) or {}).get("project_id")
+                )
+            ]
+            if _orphan_chunks:
+                _orphan_mids = {c["meeting_id"] for c in _orphan_chunks}
+                st.warning(
+                    f"⚠️ **{len(_orphan_chunks)} chunk(s) em {len(_orphan_mids)} reunião(ões)** "
+                    "têm `project_id` ausente ou divergente do da reunião. "
+                    "Isso faz o Assistente reportar menos reuniões indexadas do que o real."
+                )
+                if st.button("🔧 Corrigir project_id dos chunks", key="fix_chunk_pid_btn"):
+                    _fixed = 0
+                    for _mid in _orphan_mids:
+                        _m = meeting_map.get(_mid)
+                        if not _m:
+                            continue
+                        try:
+                            db.table("transcript_chunks").update(
+                                {"project_id": _m["project_id"]}
+                            ).eq("meeting_id", _mid).execute()
+                            _fixed += 1
+                        except Exception as _e:
+                            st.error(f"Erro ao corrigir meeting {_mid}: {_e}")
+                    if _fixed:
+                        st.success(f"✅ {_fixed} reunião(ões) corrigidas. Recarregue a página.")
+                        st.rerun()
+
         st.markdown("---")
 
         # ── Project selector for embedding actions ────────────────────────────
@@ -1110,7 +1144,6 @@ with tab_int:
                         disabled=not _emb_key.strip(),
                     ):
                         try:
-                            from modules.embeddings import chunk_text, embed_text
                             from core.project_store import save_transcript_embeddings
                         except ImportError as _ie:
                             st.error(f"Módulo de embeddings não disponível: {_ie}")
@@ -1127,20 +1160,12 @@ with tab_int:
                             )
                             _text = _m.get("transcript_clean") or _m.get("transcript_raw") or ""
                             try:
-                                _chunks = chunk_text(_text)
-                                if not _chunks:
-                                    st.warning(f"⚠️ {_title}: nenhum chunk gerado.")
-                                    _emb_fail += 1
-                                    continue
-                                _embeddings = [
-                                    embed_text(_c, _emb_key.strip(), _emb_provider)
-                                    for _c in _chunks
-                                ]
                                 save_transcript_embeddings(
-                                    _m["id"],
-                                    _m.get("project_id"),
-                                    _chunks,
-                                    _embeddings,
+                                    meeting_id=_m["id"],
+                                    project_id=_m.get("project_id"),
+                                    transcript=_text,
+                                    api_key=_emb_key.strip(),
+                                    provider=_emb_provider,
                                 )
                                 _emb_ok += 1
                             except Exception as _e:
