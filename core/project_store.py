@@ -1978,7 +1978,7 @@ def save_transcript_embeddings(
     if not db:
         return 0
 
-    from modules.embeddings import chunk_text, embed_batch, normalize_for_embedding
+    from modules.embeddings import chunk_text, embed_batch, normalize_for_embedding, EMBEDDING_PROVIDERS
 
     # 1. Normaliza a transcrição principal
     source_text = normalize_for_embedding(transcript or "")
@@ -2010,13 +2010,16 @@ def save_transcript_embeddings(
         )
 
     # 5. Upsert — idempotente por (meeting_id, chunk_index).
+    emb_model = EMBEDDING_PROVIDERS.get(provider, {}).get("model")
     rows = [
         {
-            "meeting_id":   meeting_id,
-            "project_id":   project_id,
-            "chunk_index":  i,
-            "chunk_text":   chunk,
-            "embedding":    vector,
+            "meeting_id":        meeting_id,
+            "project_id":        project_id,
+            "chunk_index":       i,
+            "chunk_text":        chunk,
+            "embedding":         vector,
+            "embedding_provider": provider,
+            "embedding_model":   emb_model,
         }
         for i, (chunk, vector) in enumerate(zip(chunks, vectors))
     ]
@@ -2324,23 +2327,34 @@ def get_embedding_coverage(project_id: str) -> dict:
         )
         total_chunks = count_resp.count or 0
 
-        # Fetch meeting_ids with a generous limit — we only need the distinct set.
+        # Fetch meeting_ids + provider/model — we only need the distinct set.
         # 10 000 should cover any realistic project (≈100 meetings × 100 chunks).
         chunk_rows = _ok(
             db.table("transcript_chunks")
-            .select("meeting_id")
+            .select("meeting_id, embedding_provider, embedding_model")
             .eq("project_id", project_id)
             .limit(10000)
             .execute()
         )
         indexed_meetings = len({r["meeting_id"] for r in chunk_rows})
+
+        # Collect distinct (provider, model) combinations for compatibility reporting
+        providers_used: list[dict] = []
+        seen: set[tuple] = set()
+        for r in chunk_rows:
+            key = (r.get("embedding_provider") or "desconhecido", r.get("embedding_model") or "desconhecido")
+            if key not in seen:
+                seen.add(key)
+                providers_used.append({"provider": key[0], "model": key[1]})
+
         return {
             "total_meetings":   total_meetings,
             "indexed_meetings": indexed_meetings,
             "total_chunks":     total_chunks,
+            "providers_used":   providers_used,
         }
     except Exception:
-        return {"total_meetings": 0, "indexed_meetings": 0, "total_chunks": 0}
+        return {"total_meetings": 0, "indexed_meetings": 0, "total_chunks": 0, "providers_used": []}
 
 
 def list_contradictions(project_id: str) -> list[dict]:

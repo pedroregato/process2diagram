@@ -725,30 +725,17 @@ def get_tool_schemas_openai() -> list[dict]:
                 "name": "generate_meeting_embeddings",
                 "description": (
                     "Gera embeddings de transcrição para reuniões que ainda não foram indexadas "
-                    "(sem chunks em transcript_chunks). Requer API key do provedor de embedding "
-                    "(Google Gemini — gratuito — ou OpenAI). "
+                    "(sem chunks em transcript_chunks). "
+                    "Usa automaticamente o provedor e a API key configurados em Configurações → "
+                    "Embeddings & Busca — NÃO peça provider, modelo ou API key ao usuário. "
                     "USE quando o usuário pedir para gerar embeddings, indexar transcrições, "
-                    "ou corrigir reuniões sem embeddings para o Assistente de busca semântica. "
+                    "ou corrigir reuniões sem embeddings para busca semântica. "
+                    "Para uma única reunião, prefira embed_meeting. "
                     "🔒 Requer perfil administrador."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "api_key": {
-                            "type": "string",
-                            "description": (
-                                "Chave de API do provedor de embedding. "
-                                "Google AI Studio key para Gemini, ou OpenAI API key. "
-                                "Peça ao usuário antes de chamar esta ferramenta."
-                            ),
-                        },
-                        "embedding_provider": {
-                            "type": "string",
-                            "description": (
-                                "Provedor de embedding: 'Google Gemini' (padrão, gratuito) "
-                                "ou 'OpenAI'."
-                            ),
-                        },
                         "meeting_numbers": {
                             "type": "array",
                             "items": {"type": "integer"},
@@ -758,7 +745,39 @@ def get_tool_schemas_openai() -> list[dict]:
                             ),
                         },
                     },
-                    "required": ["api_key"],
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "embed_meeting",
+                "description": (
+                    "Gera (ou regenera) os embeddings de transcrição de UMA reunião específica. "
+                    "Usa automaticamente o provedor e a API key configurados em Configurações → "
+                    "Embeddings & Busca — NÃO peça provider, modelo ou API key ao usuário. "
+                    "USE quando o usuário mencionar um número de reunião específico: "
+                    "'gere o embedding da reunião 11', 'indexe a reunião 3', etc. "
+                    "O parâmetro force=true regenera mesmo que a reunião já tenha embeddings. "
+                    "🔒 Requer perfil administrador."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Número da reunião cujo embedding deve ser gerado",
+                        },
+                        "force": {
+                            "type": "boolean",
+                            "description": (
+                                "Se true, apaga os embeddings existentes e gera novos. "
+                                "Padrão: false (pula se já tiver embeddings)."
+                            ),
+                        },
+                    },
+                    "required": ["meeting_number"],
                 },
             },
         },
@@ -1107,6 +1126,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "delete_meeting":               "admin",
     "fix_missing_llm_provider":     "admin",
     "generate_meeting_embeddings":  "admin",
+    "embed_meeting":                "admin",
     "get_database_integrity":       "admin",
     # Geração (LLM-powered) — admin
     "generate_missing_minutes":       "admin",
@@ -1119,6 +1139,7 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "get_database_integrity",
     "fix_missing_llm_provider",
     "generate_meeting_embeddings",
+    "embed_meeting",
     "delete_meeting",
     "rename_meeting",
     "apply_text_correction",
@@ -1249,7 +1270,8 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
   Admin (perfil admin/master):
     apply_text_correction, rename_meeting, delete_meeting, reprocess_meeting_requirements,
     batch_reprocess_requirements, generate_missing_minutes,
-    get_database_integrity, fix_missing_llm_provider, generate_meeting_embeddings
+    get_database_integrity, fix_missing_llm_provider,
+    embed_meeting (reunião única), generate_meeting_embeddings (em lote)
 
 ## Integração Google Calendar ({cal_status})
   Consulta (todos os perfis):
@@ -3343,26 +3365,85 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             lines.extend(errors)
         return "\n".join(lines)
 
+    def _get_embed_credentials(self) -> tuple[str, str]:
+        """Read embedding api_key and provider from Streamlit session state."""
+        import streamlit as st
+        api_key  = st.session_state.get("asst_embed_key", "").strip()
+        provider = st.session_state.get("asst_embed_provider", "Google Gemini")
+        return api_key, provider
+
+    def _embed_one_meeting(
+        self,
+        meeting: dict,
+        api_key: str,
+        provider: str,
+        force: bool = False,
+    ) -> str:
+        """
+        Generate and save embeddings for a single meeting dict.
+        Returns a status string (success or error message).
+        Skips if already has chunks and force=False.
+        """
+        from modules.supabase_client import get_supabase_client
+        from core.project_store import save_transcript_embeddings
+
+        n     = meeting.get("meeting_number", "?")
+        title = meeting.get("title") or f"Reunião {n}"
+        mid   = meeting["id"]
+        text  = meeting.get("transcript_clean") or meeting.get("transcript_raw") or ""
+
+        if not text.strip():
+            return f"  • Reunião {n} — '{title}': sem transcrição disponível."
+
+        db = get_supabase_client()
+        if db:
+            try:
+                existing = (
+                    db.table("transcript_chunks")
+                    .select("chunk_index", count="exact")
+                    .eq("meeting_id", mid)
+                    .limit(1)
+                    .execute()
+                )
+                has_chunks = (existing.count or 0) > 0
+            except Exception:
+                has_chunks = False
+
+            if has_chunks and not force:
+                return f"  • Reunião {n} — '{title}': já possui embeddings (use force=true para regenerar)."
+
+            if has_chunks and force:
+                try:
+                    db.table("transcript_chunks").delete().eq("meeting_id", mid).execute()
+                except Exception as exc:
+                    return f"  • Reunião {n} — '{title}': erro ao apagar embeddings antigos: {exc}"
+
+        try:
+            n_chunks = save_transcript_embeddings(
+                mid, self.project_id, text, api_key, provider
+            )
+            from modules.embeddings import EMBEDDING_PROVIDERS
+            model = EMBEDDING_PROVIDERS.get(provider, {}).get("model", provider)
+            return (
+                f"  • Reunião {n} — '{title}': ✅ {n_chunks} chunks indexados "
+                f"[{provider} / {model}]."
+            )
+        except Exception as exc:
+            return f"  • Reunião {n} — '{title}': ❌ {exc}"
+
     def generate_meeting_embeddings(
         self,
-        api_key: str,
-        embedding_provider: str = "Google Gemini",
         meeting_numbers: list[int] | None = None,
     ) -> str:
-        """Generate transcript embeddings for meetings that have transcript but no chunks."""
-        if not api_key or not api_key.strip():
+        """Generate embeddings for all eligible meetings (no chunks yet)."""
+        api_key, provider = self._get_embed_credentials()
+        if not api_key:
             return (
-                "❌ API key não fornecida. "
-                "Por favor informe a chave do provedor de embedding (Google Gemini ou OpenAI)."
+                "❌ API key de embedding não configurada. "
+                "Acesse **Configurações → Embeddings & Busca** e salve a chave antes de continuar."
             )
 
         from modules.supabase_client import get_supabase_client
-        try:
-            from modules.embeddings import chunk_text, embed_text
-            from core.project_store import save_transcript_embeddings
-        except ImportError as exc:
-            return f"❌ Módulo de embeddings não disponível: {exc}"
-
         db = get_supabase_client()
         if not db:
             return "Banco de dados não disponível."
@@ -3395,47 +3476,41 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         ]
 
         if not candidates:
-            return "✅ Todas as reuniões elegíveis já possuem embeddings. Nada a gerar."
+            already = "já possuem embeddings" if not meeting_numbers else "já possuem embeddings ou não têm transcrição"
+            return f"✅ Todas as reuniões elegíveis {already}. Nada a gerar."
 
-        successes: list[str] = []
-        failures:  list[str] = []
+        from modules.embeddings import EMBEDDING_PROVIDERS
+        model = EMBEDDING_PROVIDERS.get(provider, {}).get("model", provider)
+        results = [self._embed_one_meeting(m, api_key, provider) for m in candidates]
 
-        for m in candidates:
-            n     = m.get("meeting_number", "?")
-            title = m.get("title") or f"Reunião {n}"
-            text  = m.get("transcript_clean") or m.get("transcript_raw") or ""
-            try:
-                chunks_list = chunk_text(text)
-                if not chunks_list:
-                    failures.append(f"  • Reunião {n} — '{title}': nenhum chunk gerado.")
-                    continue
-                embeddings = [
-                    embed_text(c, api_key.strip(), embedding_provider)
-                    for c in chunks_list
-                ]
-                save_transcript_embeddings(m["id"], self.project_id, chunks_list, embeddings)
-                successes.append(
-                    f"  • Reunião {n} — '{title}': {len(chunks_list)} chunks indexados."
-                )
-            except Exception as exc:
-                failures.append(f"  • Reunião {n} — '{title}': {exc}")
+        ok  = [r for r in results if "✅" in r]
+        err = [r for r in results if "✅" not in r]
 
         lines = [
-            f"generate_meeting_embeddings — provider: {embedding_provider}",
-            f"✅ {len(successes)} reunião(ões) indexadas · ❌ {len(failures)} falha(s).",
+            f"Provedor: **{provider}** · Modelo: `{model}`",
+            f"✅ {len(ok)} indexadas · ❌ {len(err)} falha(s) / puladas",
             "",
         ]
-        if successes:
-            lines.append("Indexadas:")
-            lines.extend(successes)
-        if failures:
-            lines.append("Falhas:")
-            lines.extend(failures)
-        if successes:
-            lines.append(
-                "\nAs transcrições estão disponíveis para busca semântica no Assistente."
-            )
+        lines.extend(results)
+        if ok:
+            lines.append("\nTranscrições disponíveis para busca semântica no Assistente.")
         return "\n".join(lines)
+
+    def embed_meeting(self, meeting_number: int, force: bool = False) -> str:
+        """Generate (or regenerate) embeddings for a single specific meeting."""
+        api_key, provider = self._get_embed_credentials()
+        if not api_key:
+            return (
+                "❌ API key de embedding não configurada. "
+                "Acesse **Configurações → Embeddings & Busca** e salve a chave antes de continuar."
+            )
+
+        m = self._find_meeting(meeting_number)
+        if not m:
+            return f"Reunião {meeting_number} não encontrada no projeto."
+
+        result = self._embed_one_meeting(m, api_key, provider, force=force)
+        return result.strip("  • ")
 
     # ── Dispatcher ────────────────────────────────────────────────────────────
 
@@ -3593,9 +3668,11 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     tool_input["provider"],
                 ),
                 "generate_meeting_embeddings":    lambda: self.generate_meeting_embeddings(
-                    tool_input["api_key"],
-                    tool_input.get("embedding_provider", "Google Gemini"),
                     tool_input.get("meeting_numbers"),
+                ),
+                "embed_meeting":                  lambda: self.embed_meeting(
+                    tool_input["meeting_number"],
+                    bool(tool_input.get("force", False)),
                 ),
             }
             if tool_name not in dispatch:

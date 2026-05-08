@@ -131,7 +131,7 @@ with st.spinner("Carregando dados do banco…"):
     chunks_ok = False
     transcript_chunks: list[dict] = []
     try:
-        transcript_chunks = db.table("transcript_chunks").select("id, project_id, meeting_id").execute().data or []
+        transcript_chunks = db.table("transcript_chunks").select("id, project_id, meeting_id, embedding_provider, embedding_model").execute().data or []
         chunks_ok = True
     except Exception:
         pass
@@ -599,6 +599,32 @@ with tab_emb:
             })
         if _cov_rows:
             st.dataframe(pd.DataFrame(_cov_rows), use_container_width=True, hide_index=True)
+
+        # ── Provider/model compatibility report ───────────────────────────────
+        _providers_seen: dict[tuple, int] = {}
+        for _c in transcript_chunks:
+            _key = (
+                _c.get("embedding_provider") or "desconhecido",
+                _c.get("embedding_model") or "desconhecido",
+            )
+            _providers_seen[_key] = _providers_seen.get(_key, 0) + 1
+
+        if _providers_seen:
+            st.markdown("#### 🔍 Provedores utilizados")
+            if len(_providers_seen) > 1:
+                st.warning(
+                    "⚠️ **Múltiplos provedores/modelos detectados.** "
+                    "Embeddings de origens diferentes **não são comparáveis** — "
+                    "a busca semântica pode retornar resultados inconsistentes. "
+                    "Recomenda-se regenerar todos os embeddings com um único provedor."
+                )
+            _prov_rows = [
+                {"Provedor": p, "Modelo": m, "Chunks": cnt}
+                for (p, m), cnt in sorted(_providers_seen.items())
+            ]
+            st.dataframe(pd.DataFrame(_prov_rows), use_container_width=True, hide_index=True)
+        elif chunks_ok and transcript_chunks:
+            st.caption("ℹ️ Chunks sem informação de provedor — gerados antes da migração de rastreamento.")
 
         st.markdown("---")
 
