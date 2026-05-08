@@ -131,7 +131,15 @@ with st.spinner("Carregando dados do banco…"):
     chunks_ok = False
     transcript_chunks: list[dict] = []
     try:
-        transcript_chunks = db.table("transcript_chunks").select("id, project_id, meeting_id, embedding_provider, embedding_model").execute().data or []
+        # Limit generoso: cobre projetos com até ~200 reuniões × 100 chunks cada.
+        # O limite padrão do Supabase (1000 linhas) truncava a lista e causava
+        # falsos negativos na coluna Embeddings da grid de reuniões.
+        transcript_chunks = (
+            db.table("transcript_chunks")
+            .select("id, project_id, meeting_id, embedding_provider, embedding_model")
+            .limit(25000)
+            .execute().data or []
+        )
         chunks_ok = True
     except Exception:
         pass
