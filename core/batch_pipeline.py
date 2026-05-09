@@ -297,6 +297,98 @@ class BatchPipeline:
                            "failed", {}, 0, 0, str(exc)[:500])
             return FileResult(filename=filename, status="failed", error=str(exc))
 
+    def _reprocess_one(
+        self,
+        meeting: dict,
+        project_id: str,
+        agents_config: dict,
+    ) -> FileResult:
+        """Re-run the pipeline on an existing meeting using its stored transcript.
+
+        Updates artifacts in-place (no new meeting row created).
+        Always saves total_tokens and llm_provider back to meetings table.
+        """
+        from core.project_store import (
+            save_meeting_artifacts, save_meeting_tokens,
+            save_sbvr_from_hub, save_bpmn_from_hub,
+        )
+        from core.pipeline import run_pipeline
+        from core.knowledge_hub import KnowledgeHub
+
+        meeting_id = meeting["id"]
+        meeting_number = meeting.get("meeting_number", "?")
+        title = meeting.get("title") or f"Reunião {meeting_number}"
+        transcript = (meeting.get("transcript_clean") or meeting.get("transcript_raw") or "").strip()
+
+        if not transcript:
+            return FileResult(
+                filename=title,
+                status="failed",
+                error="Sem transcrição armazenada — use TranscriptBackfill primeiro.",
+            )
+
+        hub = KnowledgeHub.new()
+        hub.set_transcript(transcript)
+        hub.meta.llm_provider = self.provider_cfg.get("api_key_label", "")
+
+        pipeline_config: dict[str, Any] = {
+            "client_info":          self.client_info,
+            "provider_cfg":         self.provider_cfg,
+            "output_language":      self.output_language,
+            "run_quality":          agents_config.get("run_quality", False),
+            "run_bpmn":             agents_config.get("run_bpmn", False),
+            "run_minutes":          agents_config.get("run_minutes", True),
+            "run_requirements":     agents_config.get("run_requirements", True),
+            "run_sbvr":             agents_config.get("run_sbvr", True),
+            "run_bmm":              agents_config.get("run_bmm", True),
+            "run_synthesizer":      agents_config.get("run_synthesizer", False),
+            "n_bpmn_runs":          1,
+            "bpmn_weights":         {"granularity": 5, "task_type": 5,
+                                     "gateways": 5, "structural": 5},
+            "use_langgraph":        False,
+            "validation_threshold": 6.0,
+            "max_bpmn_retries":     3,
+        }
+
+        try:
+            hub = run_pipeline(hub, pipeline_config, lambda *_: None)
+        except Exception as exc:
+            return FileResult(filename=title, status="failed", error=str(exc))
+
+        try:
+            save_meeting_artifacts(meeting_id, hub)
+            save_meeting_tokens(
+                meeting_id,
+                getattr(hub.meta, "total_tokens_used", 0),
+                getattr(hub.meta, "llm_provider", ""),
+            )
+
+            n_terms, n_rules = 0, 0
+            if getattr(hub, "sbvr", None) and hub.sbvr.ready:
+                n_terms, n_rules = save_sbvr_from_hub(meeting_id, project_id, hub)
+
+            if getattr(hub, "bpmn", None) and hub.bpmn.ready:
+                save_bpmn_from_hub(meeting_id, project_id, hub)
+
+            req_counts: dict[str, int] = {}
+            if getattr(hub, "requirements", None) and hub.requirements.ready:
+                from agents.agent_req_reconciler import AgentReqReconciler
+                reconciler = AgentReqReconciler(self.client_info, self.provider_cfg)
+                req_counts = reconciler.run(hub, project_id, meeting_id, self.output_language)
+
+            return FileResult(
+                filename=title,
+                status="done",
+                meeting_id=meeting_id,
+                meeting_title=title,
+                req_counts=req_counts,
+                n_terms=n_terms,
+                n_rules=n_rules,
+            )
+
+        except Exception as exc:
+            return FileResult(filename=title, status="failed", error=str(exc))
+
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _resolve_meta(

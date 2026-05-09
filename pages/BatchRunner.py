@@ -29,7 +29,7 @@ from modules.session_security import get_session_llm_client, render_api_key_read
 from modules.ingest import load_transcript
 from core.project_store import (
     list_projects, create_project,
-    is_file_processed, list_batch_log,
+    is_file_processed, list_batch_log, list_meetings,
 )
 from core.batch_pipeline import (
     BatchPipeline, FileResult,
@@ -156,6 +156,116 @@ else:
 
 if not project_id:
     st.stop()
+
+st.markdown("---")
+
+# ── 1b. Reprocessar reuniões existentes ──────────────────────────────────────
+with st.expander("🔄 Reprocessar Reuniões Existentes", expanded=False):
+    st.caption(
+        "Re-executa o pipeline em reuniões já armazenadas no Supabase, "
+        "atualizando ata, requisitos, SBVR, BMM e tokens sem criar novas reuniões."
+    )
+    _rp_meetings = list_meetings(project_id)
+    if not _rp_meetings:
+        st.info("Nenhuma reunião encontrada neste projeto.")
+    else:
+        _rp_opts = {
+            f"#{m.get('meeting_number','?')} — {m.get('title') or '(sem título)'} "
+            f"({'✅ transcrição' if (m.get('transcript_clean') or m.get('transcript_raw')) else '❌ sem transcrição'}"
+            f"{' · ⚠️ sem tokens' if not m.get('total_tokens') else ''})": m
+            for m in _rp_meetings
+        }
+        _rp_selected_labels = st.multiselect(
+            "Selecione as reuniões a reprocessar",
+            list(_rp_opts.keys()),
+            key="rp_meeting_sel",
+        )
+        _rp_selected = [_rp_opts[lbl] for lbl in _rp_selected_labels]
+
+        if _rp_selected:
+            _rp_no_transcript = [
+                m for m in _rp_selected
+                if not (m.get("transcript_clean") or m.get("transcript_raw"))
+            ]
+            if _rp_no_transcript:
+                st.warning(
+                    f"⚠️ {len(_rp_no_transcript)} reunião(ões) sem transcrição armazenada "
+                    "serão ignoradas. Use **Manutenção → Transcript Backfill** primeiro."
+                )
+
+            st.markdown("**Agentes a executar:**")
+            _rc1, _rc2, _rc3, _rc4, _rc5, _rc6 = st.columns(6)
+            _rp_minutes      = _rc1.checkbox("📋 Ata",          value=True,  key="rp_minutes")
+            _rp_requirements = _rc2.checkbox("📝 Requisitos",   value=True,  key="rp_req")
+            _rp_sbvr         = _rc3.checkbox("📖 SBVR",         value=True,  key="rp_sbvr")
+            _rp_bmm          = _rc4.checkbox("🎯 BMM",          value=True,  key="rp_bmm")
+            _rp_quality      = _rc5.checkbox("🔬 Qualidade",    value=False, key="rp_quality")
+            _rp_bpmn         = _rc6.checkbox("📐 BPMN (lento)", value=False, key="rp_bpmn")
+
+            _rp_agents_config = {
+                "run_minutes":      _rp_minutes,
+                "run_requirements": _rp_requirements,
+                "run_sbvr":         _rp_sbvr,
+                "run_bmm":          _rp_bmm,
+                "run_quality":      _rp_quality,
+                "run_bpmn":         _rp_bpmn,
+                "run_synthesizer":  False,
+            }
+
+            _rp_runnable = [
+                m for m in _rp_selected
+                if (m.get("transcript_clean") or m.get("transcript_raw"))
+            ]
+
+            if not client_info:
+                st.warning("👈 Configure a API key na sidebar antes de reprocessar.")
+            elif st.button(
+                f"🔄 Reprocessar {len(_rp_runnable)} reunião(ões)",
+                key="rp_run_btn",
+                type="primary",
+                disabled=len(_rp_runnable) == 0,
+            ):
+                _rp_pipeline = BatchPipeline(
+                    client_info=client_info,
+                    provider_cfg=AVAILABLE_PROVIDERS[selected_provider],
+                    output_language=output_language,
+                )
+                _rp_prog = st.progress(0.0)
+                _rp_status = st.empty()
+                _rp_results: list[FileResult] = []
+
+                for _i, _m in enumerate(_rp_runnable):
+                    _title = _m.get("title") or f"Reunião {_m.get('meeting_number','?')}"
+                    _rp_status.info(f"⏳ **{_i+1}/{len(_rp_runnable)}** — {_title}")
+                    _res = _rp_pipeline._reprocess_one(_m, project_id, _rp_agents_config)
+                    _rp_results.append(_res)
+                    _rp_prog.progress((_i + 1) / len(_rp_runnable))
+
+                _rp_status.empty()
+                _rp_prog.progress(1.0)
+                st.session_state["rp_results"] = _rp_results
+
+    if st.session_state.get("rp_results"):
+        _rp_res: list[FileResult] = st.session_state["rp_results"]
+        _rp_done = [r for r in _rp_res if r.status == "done"]
+        _rp_fail = [r for r in _rp_res if r.status == "failed"]
+        st.success(f"✅ {len(_rp_done)} reprocessadas · ❌ {len(_rp_fail)} falha(s)")
+        import pandas as pd
+        _rp_table = [
+            {
+                "Status":    "✅" if r.status == "done" else "❌",
+                "Reunião":   r.filename,
+                "REQ novos": r.req_new,
+                "Termos":    r.n_terms,
+                "Regras":    r.n_rules,
+                "Erro":      (r.error or "")[:80],
+            }
+            for r in _rp_res
+        ]
+        st.dataframe(pd.DataFrame(_rp_table), use_container_width=True, hide_index=True)
+        if _rp_fail:
+            for r in _rp_fail:
+                st.error(f"**{r.filename}**: {r.error}")
 
 st.markdown("---")
 

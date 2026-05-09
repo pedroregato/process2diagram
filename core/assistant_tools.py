@@ -600,6 +600,44 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "reprocess_meeting_full",
+                "description": (
+                    "Reprocessa completamente uma reunião existente re-executando o pipeline "
+                    "completo (Ata, Requisitos, SBVR, BMM e opcionalmente BPMN e Qualidade) "
+                    "sobre a transcrição armazenada. Atualiza todos os artefatos no Supabase "
+                    "sem criar uma nova reunião. "
+                    "USE quando o usuário pedir para reprocessar, atualizar ou corrigir todos "
+                    "os artefatos de uma reunião de uma só vez. "
+                    "Para reprocessar apenas requisitos, prefira reprocess_meeting_requirements. "
+                    "🔒 Requer perfil administrador."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Número da reunião a reprocessar",
+                        },
+                        "run_bpmn": {
+                            "type": "boolean",
+                            "description": "Se true, gera também o BPMN (mais lento). Padrão: false.",
+                        },
+                        "run_quality": {
+                            "type": "boolean",
+                            "description": "Se true, avalia qualidade da transcrição. Padrão: false.",
+                        },
+                        "output_language": {
+                            "type": "string",
+                            "description": "Idioma dos artefatos gerados. Padrão: 'Auto-detect'.",
+                        },
+                    },
+                    "required": ["meeting_number"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "generate_missing_minutes",
                 "description": (
                     "Gera atas de reunião (AgentMinutes) para todas as reuniões do projeto "
@@ -1131,6 +1169,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     # Geração (LLM-powered) — admin
     "generate_missing_minutes":       "admin",
     "reprocess_meeting_requirements": "admin",
+    "reprocess_meeting_full":         "admin",
     "batch_reprocess_requirements":   "admin",
 }
 
@@ -1144,6 +1183,7 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "rename_meeting",
     "apply_text_correction",
     "reprocess_meeting_requirements",
+    "reprocess_meeting_full",
     "batch_reprocess_requirements",
     "generate_missing_minutes",
     "calendar_create_event",
@@ -1269,7 +1309,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
 
   Admin (perfil admin/master):
     apply_text_correction, rename_meeting, delete_meeting, reprocess_meeting_requirements,
-    batch_reprocess_requirements, generate_missing_minutes,
+    reprocess_meeting_full, batch_reprocess_requirements, generate_missing_minutes,
     get_database_integrity, fix_missing_llm_provider,
     embed_meeting (reunião única), generate_meeting_embeddings (em lote)
 
@@ -3267,7 +3307,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             "ata":         "→ use generate_missing_minutes()",
             "embeddings":  "→ use embed_meeting(N) para uma reunião ou generate_meeting_embeddings() para todas",
             "BPMN":        "→ use Manutenção > BPMN Backfill",
-            "tokens":      "→ registrado em versão anterior sem contagem de tokens",
+            "tokens":      "→ use reprocess_meeting_full(N) para regenerar todos os artefatos",
             "provedor LLM": "→ use fix_missing_llm_provider(provider)",
         }
 
@@ -3508,6 +3548,78 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         result = self._embed_one_meeting(m, api_key, provider, force=force)
         return result.strip("  • ")
 
+    def reprocess_meeting_full(
+        self,
+        meeting_number: int,
+        run_bpmn: bool = False,
+        run_quality: bool = False,
+        output_language: str = "Auto-detect",
+    ) -> str:
+        """Re-run the full pipeline on an existing meeting and update all artifacts."""
+        if not self.llm_config:
+            return (
+                "❌ Configuração LLM não disponível no executor. "
+                "Certifique-se de que a chave de API está configurada no Assistente."
+            )
+
+        m = self._find_meeting(meeting_number)
+        if not m:
+            return f"Reunião {meeting_number} não encontrada no projeto."
+
+        title      = m.get("title") or f"Reunião {meeting_number}"
+        transcript = (m.get("transcript_clean") or m.get("transcript_raw") or "").strip()
+
+        if not transcript:
+            return (
+                f"❌ Reunião {meeting_number} — '{title}' não possui transcrição armazenada. "
+                "Use Manutenção → Transcript Backfill para carregar a transcrição antes de reprocessar."
+            )
+
+        try:
+            from core.batch_pipeline import BatchPipeline, FileResult
+
+            provider_cfg = self.llm_config.get("provider_cfg", {})
+            client_info  = {"api_key": self.llm_config.get("api_key", "")}
+
+            pipeline = BatchPipeline(
+                client_info=client_info,
+                provider_cfg=provider_cfg,
+                output_language=output_language,
+            )
+
+            agents_config = {
+                "run_minutes":      True,
+                "run_requirements": True,
+                "run_sbvr":         True,
+                "run_bmm":          True,
+                "run_quality":      run_quality,
+                "run_bpmn":         run_bpmn,
+                "run_synthesizer":  False,
+            }
+
+            result: FileResult = pipeline._reprocess_one(m, self.project_id, agents_config)
+
+            if result.status == "failed":
+                return f"❌ Falha ao reprocessar Reunião {meeting_number} — '{title}': {result.error}"
+
+            lines = [
+                "══════════════════════════════════════════════",
+                f"  Reunião {meeting_number} — '{title}'",
+                "══════════════════════════════════════════════",
+                f"  Status               : ✅ Reprocessada com sucesso",
+                f"  Requisitos novos     : {result.req_new}",
+                f"  Termos SBVR          : {result.n_terms}",
+                f"  Regras SBVR          : {result.n_rules}",
+            ]
+            if run_bpmn:
+                lines.append("  BPMN                 : regenerado")
+            if run_quality:
+                lines.append("  Qualidade            : avaliada")
+            return "\n".join(lines)
+
+        except Exception as exc:
+            return f"❌ Erro ao reprocessar Reunião {meeting_number}: {exc}"
+
     # ── Dispatcher ────────────────────────────────────────────────────────────
 
     def execute(self, tool_name: str, tool_input: dict) -> str:
@@ -3669,6 +3781,12 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 "embed_meeting":                  lambda: self.embed_meeting(
                     tool_input["meeting_number"],
                     bool(tool_input.get("force", False)),
+                ),
+                "reprocess_meeting_full":         lambda: self.reprocess_meeting_full(
+                    tool_input["meeting_number"],
+                    bool(tool_input.get("run_bpmn", False)),
+                    bool(tool_input.get("run_quality", False)),
+                    tool_input.get("output_language", "Auto-detect"),
                 ),
             }
             if tool_name not in dispatch:
