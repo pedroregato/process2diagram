@@ -13,15 +13,13 @@ def copy_button(text: str, key: str, label: str = "📋 Copy to Clipboard", comp
         compact: If True, renders a smaller pill-style button (height=28).
                  Use compact=True inside st.chat_message to avoid whitespace.
 
-    Strategy (most-reliable first):
-      1. navigator.clipboard.writeText()  — works in HTTPS when the component
-         iframe has allow="clipboard-write" (Streamlit sets this) and the click
-         is the active user gesture in the SAME iframe document.
-      2. Parent-document execCommand     — creates a hidden textarea in the
-         same-origin parent frame and uses execCommand('copy') there; works in
-         local HTTP dev where navigator.clipboard requires a secure context.
-      3. Iframe execCommand              — last resort; deprecated but broadly
-         supported in most browsers as of 2025.
+    Strategy:
+      1. navigator.clipboard.writeText() — preferred when browser grants
+         clipboard-write permission to the iframe (Chrome/Edge/Firefox HTTPS).
+      2. execCommand('copy') fallback — textarea in the iframe, focused and
+         selected within the same user-gesture, then immediately removed.
+         Does NOT use opacity:0 (prevents focus in some browsers).
+         Does NOT try window.parent (always throws SecurityError cross-origin).
     """
     safe = json.dumps(text)
     if compact:
@@ -43,58 +41,42 @@ def copy_button(text: str, key: str, label: str = "📋 Copy to Clipboard", comp
     restore_color = '#94a3b8' if compact else '#475569'
     components.html(
         f"""
-        <button id="cbtn_{key}"
-          onclick="(function(){{
-            var text = {safe};
-            var b = document.getElementById('cbtn_{key}');
-            function _ok() {{
-              b.innerHTML = '✅';
-              b.style.borderColor = '#22c55e';
-              b.style.color = '#22c55e';
-              setTimeout(function(){{
-                b.innerHTML = {json.dumps(label)};
-                b.style.borderColor = '#cbd5e1';
-                b.style.color = '{restore_color}';
-              }}, 2000);
-            }}
-            // Strategy 2: parent-document execCommand (same-origin, HTTP-safe)
-            function _parent_exec() {{
-              try {{
-                var pd = window.parent && window.parent.document;
-                if (!pd) return false;
-                var ta = pd.createElement('textarea');
-                ta.value = text;
-                ta.style.cssText = 'position:fixed;left:-9999px;opacity:0;pointer-events:none;';
-                pd.body.appendChild(ta);
-                ta.focus(); ta.select();
-                var ok = pd.execCommand('copy');
-                pd.body.removeChild(ta);
-                if (ok) {{ _ok(); return true; }}
-              }} catch(e) {{}}
-              return false;
-            }}
-            // Strategy 3: in-iframe execCommand (last resort)
-            function _iframe_exec() {{
-              var ta = document.createElement('textarea');
-              ta.value = text;
-              ta.style.cssText = 'position:fixed;left:-9999px;opacity:0;';
-              document.body.appendChild(ta);
-              ta.focus(); ta.select();
-              try {{ document.execCommand('copy'); _ok(); }} catch(e) {{}}
-              document.body.removeChild(ta);
-            }}
-            // Strategy 1: navigator.clipboard (HTTPS + allow="clipboard-write")
-            // Must be called on the SAME document that has focus (the iframe),
-            // NOT window.parent.navigator.clipboard — Chrome v102+ rejects that.
-            if (navigator.clipboard && window.isSecureContext) {{
-              navigator.clipboard.writeText(text).then(_ok, function() {{
-                if (!_parent_exec()) _iframe_exec();
-              }});
-            }} else {{
-              if (!_parent_exec()) _iframe_exec();
-            }}
-          }})()"
-          style="{style}">
+        <script>
+        function _cbtn_{key}() {{
+          var text = {safe};
+          var b    = document.getElementById('cbtn_{key}');
+
+          function _ok() {{
+            b.textContent = '\u2705';
+            b.style.borderColor = '#22c55e';
+            b.style.color       = '#22c55e';
+            setTimeout(function() {{
+              b.textContent       = {json.dumps(label)};
+              b.style.borderColor = '#cbd5e1';
+              b.style.color       = '{restore_color}';
+            }}, 2000);
+          }}
+
+          function _execFallback() {{
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.cssText = 'position:fixed;top:0;left:0;width:2em;height:2em;'
+              + 'padding:0;border:none;outline:none;box-shadow:none;background:transparent;';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            try {{ document.execCommand('copy'); _ok(); }} catch(e) {{}}
+            document.body.removeChild(ta);
+          }}
+
+          if (navigator.clipboard && navigator.clipboard.writeText) {{
+            navigator.clipboard.writeText(text).then(_ok, _execFallback);
+          }} else {{
+            _execFallback();
+          }}
+        }}
+        </script>
+        <button id="cbtn_{key}" onclick="_cbtn_{key}()" style="{style}">
           {label}
         </button>
         """,
