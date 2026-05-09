@@ -10,7 +10,7 @@
 - **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown / Word / PDF), requirements analysis (JSON/Markdown), executive HTML report, interactive requirements mind map
 - **Deploy:** Streamlit Cloud — auto-deploy on push to `main` branch (`github.com/pedroregato/process2diagram`)
 - **Dev environment:** PyCharm on Windows; Python 3.13
-- **Current version:** v4.15
+- **Current version:** v4.16
 
 Supported LLM providers: DeepSeek (default), Claude (Anthropic), OpenAI, Groq, Google Gemini.
 
@@ -117,8 +117,9 @@ process2diagram/
 │   ├── assistant_diagram.py      # render_assistant_diagram() — RAG pipeline architecture splash (Assistente page)
 │   ├── project_selector.py       # render_project_selector() — Supabase project/meeting picker widget
 │   ├── components/
-│   │   ├── copy_button.py        # Copy-to-clipboard button component
+│   │   ├── copy_button.py        # Copy-to-clipboard button — navigator.clipboard + execCommand fallback (no cross-origin parent exec)
 │   │   ├── download_button.py    # Styled download button wrapper
+│   │   ├── page_header.py        # render_page_header(icon, title, caption) — amber accent HR; applied to Pipeline/Settings/DatabaseOverview/BatchRunner/MeetingROI
 │   │   └── transcript_highlighter.py  # Transcript text highlighter component
 │   └── tabs/
 │       ├── bpmn_tabs.py          # render_bpmn(), render_mermaid(), render_validation()
@@ -413,9 +414,11 @@ Receives `nlp_actors` from `hub.nlp.actors` to improve lane inference.
 ## BPMN Viewer (`modules/bpmn_viewer.py`)
 
 - Rendered via `streamlit.components.v1.html` with **bpmn-js 17** injected inline (no external CDN).
-- Toolbar positioned top-right (light theme).
-- `MutationObserver` triggers auto-fit when the SVG is inserted into the DOM.
-- `getBoundingClientRect()` returns zero before paint — use `fitWhenReady` polling loop.
+- **Asset loading:** bpmn-js JS (~1.2 MB) and CSS fetched **server-side** via `urllib.request` on first call, cached with `@functools.lru_cache(maxsize=None)`, inlined as `<style>`/`<script>` blocks — no CDN URL in the iframe. Avoids Streamlit Cloud sandbox restriction blocking external `<script src>` in `components.html()` iframes.
+- **Pan/zoom:** bpmn-js native canvas API — `canvas.zoom('fit-viewport')`, `canvas.zoom(factor, 'auto')` — NOT a CSS `transform` wrapper (which conflicted with bpmn-js internal viewport management).
+- **Zoom label:** synced via `viewer.get('eventBus').on('canvas.viewbox.changed', refreshLabel)`.
+- **Fallback:** `_TEMPLATE_CDN_FALLBACK` used when server-side fetch fails.
+- Public API: `preview_from_xml(xml: str) -> str` and `generate_bpmn_preview(bpmn: BpmnProcess) -> str`.
 
 ---
 
@@ -1091,6 +1094,15 @@ When unblocked: create `modules/office_client.py` + 2 tools (`outlook_send_email
 - [x] **`modules/text_utils.py`** — `rule_keyword_pt()` and other Portuguese text utilities
 - [x] **`modules/reqtracker_exporter.py`** — Excel/CSV export for ReqTracker
 - [x] **Google Gemini SDK migration** — use `google-generativeai` (stable) for `embed_content()` + `list_models()`; `google-genai` kept as secondary dependency
+
+### PC9 — Concluído (v4.16 / 2026-05-09)
+- [x] **`modules/bpmn_viewer.py` rewrite** — fetches bpmn-js assets server-side via `urllib` + `lru_cache`, inlines JS/CSS; eliminates CDN `<script src>` blocked by Streamlit sandbox; uses bpmn-js native `canvas.zoom('fit-viewport')` + `eventBus` instead of CSS `transform` wrapper; CDN fallback template when server-side fetch fails
+- [x] **`ui/components/copy_button.py` fix** — removed broken strategies (`window.isSecureContext` false in srcdoc iframes; `window.parent.document` always SecurityError; `opacity:0` prevents focus); new: try `navigator.clipboard.writeText()` unconditionally, fall back to transparent textarea `execCommand` within same user-gesture
+- [x] **`ui/components/page_header.py`** (new) — `render_page_header(icon, title, caption)` — consistent page header with amber accent HR; applied to Pipeline, Settings, DatabaseOverview, BatchRunner, MeetingROI
+- [x] **`pages/Pipeline.py`** — replaced manual progress markdown with `st.status()` context manager
+- [x] **`ui/sidebar.py`** — agent checkboxes grouped (Análise de Reunião / Diagramas / Análise de Negócio); SBVR + BMM rerun buttons added; `st.code` → `st.caption` for model display
+- [x] **`app.py`** — role-aware `st.navigation()`: Manutenção + admin pages (MasterAdmin, DatabaseOverview) only when `is_admin()`; rebuilt every rerun so menu updates immediately post-login
+- [x] **BatchRunner reprocess** — "Reprocessar Reuniões Existentes": `_reprocess_one()` in `core/batch_pipeline.py`; `reprocess_meeting_full` admin tool in `core/assistant_tools.py`
 
 ### PC8 — Concluído (v4.15 / 2026-05-03)
 - [x] **`modules/calendar_client.py`** — 8 funções públicas: `list_events()`, `get_event()`, `create_event()`, `suggest_time()`, `schedule_action_items()`, `share_calendar()`, `revoke_calendar_access()`, `diagnose_calendar()` (7 etapas incl. 2b RSA + 4b token); todas aceitam `project_id`; `_load_calendar_id(project_id)` resolve: Supabase → secrets → arquivo → "primary"
