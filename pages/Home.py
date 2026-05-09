@@ -252,16 +252,14 @@ with col_recent:
 
     if not recent:
         st.caption("Nenhuma reunião encontrada. Processe a primeira transcrição para começar.")
+        st.page_link("pages/Pipeline.py", label="🚀 Processar primeira transcrição")
     else:
         for mtg in recent:
             num   = mtg.get("meeting_number", "?")
             title = mtg.get("title", "(sem título)")
             date  = mtg.get("meeting_date", "—")
             proj  = mtg.get("project_name", "—")
-            mid   = mtg.get("id")
-            pid   = mtg.get("project_id")
 
-            # Label truncado para caber no card
             label_short = title if len(title) <= 38 else title[:35] + "…"
 
             st.markdown(f"""
@@ -270,29 +268,35 @@ with col_recent:
 <div class="mtg-meta">📁 {proj} · 📅 {date}</div>
 </div>""", unsafe_allow_html=True)
 
-            # Links contextuais inline
             lc1, lc2, lc3 = st.columns(3)
             with lc1:
                 st.page_link(
                     "pages/Assistente.py",
-                    label="💬",
-                    help=f"Assistente — {title}",
+                    label="💬 Assistente",
+                    help=f"Consultar dados desta reunião no Assistente",
                     use_container_width=True,
                 )
             with lc2:
                 st.page_link(
                     "pages/ValidationHub.py",
-                    label="✅",
-                    help=f"Validação — {title}",
+                    label="✅ Validação",
+                    help=f"Revisar requisitos e artefatos desta reunião",
                     use_container_width=True,
                 )
             with lc3:
                 st.page_link(
                     "pages/BpmnEditor.py",
-                    label="✏️",
-                    help=f"Editor BPMN — {title}",
+                    label="✏️ Editor",
+                    help=f"Editar diagrama BPMN desta reunião",
                     use_container_width=True,
                 )
+
+        st.markdown(
+            "<div style='text-align:right;margin-top:.3rem'>",
+            unsafe_allow_html=True,
+        )
+        st.page_link("pages/Assistente.py", label="Ver todas as reuniões →")
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # ── 5. Agenda do Projeto ──────────────────────────────────────────────────────
 st.markdown('<div class="section-hdr">📅 Agenda do Projeto</div>', unsafe_allow_html=True)
@@ -319,9 +323,11 @@ except Exception as _cal_exc:
     st.caption(f"📅 Agenda indisponível: {_cal_exc}")
 
 # ── Rodapé ────────────────────────────────────────────────────────────────────
-st.markdown("""
-<div style="margin-top:2rem;padding-top:.8rem;border-top:1px solid #1e3a55;
-text-align:center;font-size:.7rem;color:#445566">
-Process2Diagram v4.15 · Multi-agent process intelligence platform
-</div>
-""", unsafe_allow_html=True)
+_APP_VERSION = "v4.15"
+st.markdown(
+    f"<div style='margin-top:2rem;padding-top:.8rem;border-top:1px solid #1e3a55;"
+    f"text-align:center;font-size:.7rem;color:#445566'>"
+    f"Process2Diagram {_APP_VERSION} · Multi-agent process intelligence platform"
+    f"</div>",
+    unsafe_allow_html=True,
+)

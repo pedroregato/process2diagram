@@ -33,7 +33,7 @@ def render_sidebar():
         )
         st.session_state.selected_provider = sel
         st.session_state.provider_cfg = AVAILABLE_PROVIDERS[sel]
-        st.code(st.session_state.provider_cfg["default_model"])
+        st.caption(f"Modelo: `{st.session_state.provider_cfg['default_model']}`")
         render_api_key_gate(sel, st.session_state.provider_cfg)
 
         out_lang = st.selectbox(
@@ -71,13 +71,15 @@ def render_sidebar():
 
             st.markdown("---")
 
-            # ── Agentes ───────────────────────────────────────────────────────
-            st.markdown("**🤖 Agentes ativos**")
-            st.session_state.run_quality = st.checkbox(
-                "Inspetor de Qualidade", value=st.session_state.run_quality
-            )
+            # ── Agentes: Análise de Reunião ────────────────────────────────────
+            st.markdown("**📊 Análise de Reunião**")
+            st.session_state.run_minutes      = st.checkbox("📋 Ata de Reunião",    value=st.session_state.run_minutes)
+            st.session_state.run_requirements = st.checkbox("📝 Requisitos",        value=st.session_state.run_requirements)
+            st.session_state.run_quality      = st.checkbox("🔬 Qualidade",        value=st.session_state.run_quality)
+
+            st.markdown("**📐 Diagramas**")
             st.session_state.run_bpmn = st.checkbox(
-                "Arquiteto BPMN", value=st.session_state.run_bpmn
+                "📐 Arquiteto BPMN", value=st.session_state.run_bpmn
             )
             if st.session_state.run_bpmn:
                 st.session_state.n_bpmn_runs = st.select_slider(
@@ -108,11 +110,11 @@ def render_sidebar():
                             index=[1, 2, 3, 5].index(st.session_state.max_bpmn_retries)
                             if st.session_state.max_bpmn_retries in [1, 2, 3, 5] else 2,
                         )
-            st.session_state.run_minutes      = st.checkbox("Ata de Reunião",                   value=st.session_state.run_minutes)
-            st.session_state.run_requirements = st.checkbox("Requisitos",                       value=st.session_state.run_requirements)
-            st.session_state.run_sbvr         = st.checkbox("Vocabulário & Regras (SBVR)",      value=st.session_state.run_sbvr)
-            st.session_state.run_bmm          = st.checkbox("Motivação do Negócio (BMM)",       value=st.session_state.run_bmm)
-            st.session_state.run_synthesizer  = st.checkbox("Relatório Executivo",              value=st.session_state.run_synthesizer)
+
+            st.markdown("**🧠 Análise de Negócio**")
+            st.session_state.run_sbvr        = st.checkbox("📖 Vocabulário & Regras (SBVR)", value=st.session_state.run_sbvr)
+            st.session_state.run_bmm         = st.checkbox("🎯 Motivação do Negócio (BMM)",  value=st.session_state.run_bmm)
+            st.session_state.run_synthesizer = st.checkbox("📄 Relatório Executivo",         value=st.session_state.run_synthesizer)
 
             st.markdown("---")
 
@@ -132,17 +134,21 @@ def render_sidebar():
         if "hub" in st.session_state:
             st.markdown("---")
             st.markdown("### 🔄 Reexecutar Agente")
-            st.caption("Reprocessa um agente individualmente.")
+            st.caption("Reprocessa um agente individualmente sem rodar o pipeline inteiro.")
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("🔬 Qualidade",  key="rr_q"):
+                if st.button("🔬 Qualidade",  key="rr_q",  use_container_width=True):
                     st.session_state.rerun_agent = "quality"
-                if st.button("📐 BPMN",       key="rr_b"):
+                if st.button("📐 BPMN",       key="rr_b",  use_container_width=True):
                     st.session_state.rerun_agent = "bpmn"
-                if st.button("📋 Ata",        key="rr_m"):
+                if st.button("📋 Ata",        key="rr_m",  use_container_width=True):
                     st.session_state.rerun_agent = "minutes"
+                if st.button("📖 SBVR",       key="rr_sv", use_container_width=True):
+                    st.session_state.rerun_agent = "sbvr"
             with col2:
-                if st.button("📝 Requisitos", key="rr_r"):
+                if st.button("📝 Requisitos", key="rr_r",  use_container_width=True):
                     st.session_state.rerun_agent = "requirements"
-                if st.button("📄 Relatório",  key="rr_s"):
+                if st.button("📄 Relatório",  key="rr_s",  use_container_width=True):
                     st.session_state.rerun_agent = "synthesizer"
+                if st.button("🎯 BMM",        key="rr_bm", use_container_width=True):
+                    st.session_state.rerun_agent = "bmm"

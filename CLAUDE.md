@@ -214,15 +214,16 @@ AgentSynthesizer         ← LLM (optional); reads all hub artifacts incl. SBVR 
 
 ### App.py — Navigation Entry Point
 
-`app.py` (v4.14) uses `st.navigation()` to define all pages in 5 groups:
+`app.py` (v4.15) uses `st.navigation()` with **role-aware groups** (rebuilt on every rerun so the menu updates immediately after login):
 
-| Group | Pages |
-|---|---|
-| **Início** | Home.py (default) |
-| **Pipeline** | Pipeline.py, Diagramas.py, BpmnEditor.py |
-| **Análise** | Assistente.py, ReqTracker.py, MeetingROI.py, EntityRecognition.py |
-| **Sistema** | Settings.py, MasterAdmin.py, DatabaseOverview.py, CostEstimator.py, guide pages |
-| **Manutenção** | BatchRunner.py, BpmnBackfill.py, MinutesBackfill.py, TranscriptBackfill.py |
+| Group | Pages | Visibility |
+|---|---|---|
+| **Início** | Home.py (default) | Todos |
+| **Pipeline** | Pipeline.py, Diagramas.py, BpmnEditor.py | Todos |
+| **Análise** | Assistente.py, ReqTracker.py, ValidationHub.py, MeetingROI.py, EntityRecognition.py | Todos |
+| **Sistema** | Settings.py, CostEstimator.py [+ MasterAdmin.py, DatabaseOverview.py] | Todos [admin extra] |
+| **Ajuda** | Orientacoes_ComoIniciar.py, Orientacoes_Arquiteturas.py | Todos |
+| **Manutenção** | BatchRunner.py, BpmnBackfill.py, MinutesBackfill.py, TranscriptBackfill.py | Admin only |
 
 `app.py` itself renders no content — it only calls `st.navigation(pages).run()`. All pipeline logic lives in `pages/Pipeline.py`.
 

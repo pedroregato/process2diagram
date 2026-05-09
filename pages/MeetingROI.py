@@ -40,12 +40,12 @@ from modules.session_security import render_api_key_readonly
 
 apply_auth_gate()
 
-# ── Page header ───────────────────────────────────────────────────────────────
-st.markdown("# 📊 Qualidade de Reuniões — ROI-TR")
-st.caption(
+from ui.components.page_header import render_page_header
+render_page_header(
+    "📊", "Qualidade de Reuniões — ROI-TR",
     "Indicador de eficiência das reuniões: ROI-TR sensível ao tipo de reunião, "
     "TRC (Taxa de Retrabalho Conceitual) e Fulfillment (entrega vs. expectativa do tipo). "
-    "Calculado a partir de atas, transcrições, requisitos e artefatos no Supabase."
+    "Calculado a partir de atas, transcrições, requisitos e artefatos no Supabase.",
 )
 
 if not supabase_configured():

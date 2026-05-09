@@ -48,11 +48,11 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ── Header ────────────────────────────────────────────────────────────────────
-st.markdown("# 🗂️ Batch Runner")
-st.caption(
-    "Processa uma pasta de transcrições em lote — extrai Ata, Requisitos, SBVR e BMM "
-    "de cada arquivo e persiste tudo no projeto selecionado."
+from ui.components.page_header import render_page_header
+render_page_header(
+    "🗂️", "Batch Runner",
+    "Processa múltiplas transcrições em lote ou reprocessa reuniões existentes — "
+    "extrai Ata, Requisitos, SBVR e BMM de cada arquivo e persiste no Supabase.",
 )
 
 if not supabase_configured():

@@ -33,12 +33,12 @@ from modules.cost_estimator import PROVIDER_PRICING, cost_for_tokens
 
 apply_auth_gate()
 
-# ── Header ────────────────────────────────────────────────────────────────────
-st.markdown("# 🗄️ Visão Geral do Banco de Dados")
-st.caption(
+from ui.components.page_header import render_page_header
+render_page_header(
+    "🗄️", "Visão Geral do Banco de Dados",
     "Consolidado de todos os registros armazenados no Supabase — "
     "projetos, reuniões, requisitos, BPMN, SBVR e embeddings. "
-    "Nenhum dado é modificado por esta página."
+    "Nenhum dado é modificado por esta página.",
 )
 
 if not supabase_configured():

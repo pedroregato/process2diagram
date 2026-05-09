@@ -40,6 +40,13 @@ apply_auth_gate()
 # Sidebar (específica do pipeline)
 render_sidebar()
 
+# ── Cabeçalho ─────────────────────────────────────────────────────────────────
+from ui.components.page_header import render_page_header
+render_page_header(
+    "🚀", "Processar Transcrição",
+    "Cole ou faça upload de uma transcrição e execute o pipeline de agentes LLM.",
+)
+
 # ─────────────────────────────────────────────────────────────────────────────
 # MODO: Nova transcrição vs. Reunião existente
 # ─────────────────────────────────────────────────────────────────────────────
@@ -50,10 +57,9 @@ _MODE_LOAD = "📂 Reunião existente"
 
 if _db_available:
     pipeline_mode = st.radio(
-        "Modo",
+        "Modo de operação",
         [_MODE_NEW, _MODE_LOAD],
         horizontal=True,
-        label_visibility="collapsed",
         key="pipeline_mode_radio",
     )
 else:
@@ -83,9 +89,6 @@ if pipeline_mode == _MODE_NEW:
     if not get_session_llm_client(st.session_state.selected_provider):
         st.warning("👈 Insira sua API key na sidebar para continuar.")
         st.stop()
-
-    # Placeholder para progresso
-    progress_placeholder = st.empty()
 
     # ── Pipeline principal ────────────────────────────────────────────────────
     if start_process and st.session_state.transcript_text.strip():
@@ -125,19 +128,22 @@ if pipeline_mode == _MODE_NEW:
             "max_bpmn_retries": st.session_state.max_bpmn_retries,
         }
 
-        agent_status = {}
-        def update_progress(step, status):
-            agent_status[step] = status
-            lines = [f"{'✅' if 'done' in s else '⏳' if 'running' in s else '❌'} **{n}** — {s}" for n, s in agent_status.items()]
-            progress_placeholder.markdown("\n".join(lines))
-
-        try:
-            hub = run_pipeline(hub, config, update_progress)
-            st.session_state.hub = hub
-            progress_placeholder.success(f"✅ Pipeline concluído. Tokens: {hub.meta.total_tokens_used}")
-        except Exception as e:
-            progress_placeholder.error(f"Erro no pipeline: {e}")
-            st.stop()
+        with st.status("⏳ Executando pipeline de agentes...", expanded=True) as _pipeline_status:
+            def update_progress(step, status):
+                icon = "✅" if "done" in status else "⏳" if "running" in status else "❌"
+                st.write(f"{icon} **{step}** — {status}")
+            try:
+                hub = run_pipeline(hub, config, update_progress)
+                st.session_state.hub = hub
+                _pipeline_status.update(
+                    label=f"✅ Pipeline concluído · {hub.meta.total_tokens_used:,} tokens usados",
+                    state="complete",
+                    expanded=False,
+                )
+            except Exception as e:
+                _pipeline_status.update(label="❌ Erro no pipeline", state="error", expanded=True)
+                st.error(f"Erro no pipeline: {e}")
+                st.stop()
 
         # ── Persistência no Supabase + reconciliação de requisitos ───────────
         if supabase_configured() and st.session_state.get("project_confirmed"):

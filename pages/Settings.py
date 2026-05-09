@@ -27,11 +27,11 @@ from modules.supabase_client import supabase_configured, get_supabase_client
 
 apply_auth_gate()
 
-# ── Header ────────────────────────────────────────────────────────────────────
-st.markdown("# ⚙️ Configurações da Sessão")
-st.caption(
+from ui.components.page_header import render_page_header
+render_page_header(
+    "⚙️", "Configurações da Sessão",
     "Configure provedores, chaves de API, modo de busca e preferências. "
-    "Tudo persiste durante a sessão — configure uma vez e todas as páginas usarão."
+    "Tudo persiste durante a sessão — configure uma vez e todas as páginas usarão.",
 )
 
 # ── Helper: API key section with mask/clear pattern ───────────────────────────

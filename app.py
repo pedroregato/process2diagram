@@ -7,13 +7,15 @@
 #   (default)    → Home (Central de Operações)
 #   Pipeline     → Processar Transcrição, Diagramas, Editor BPMN
 #   Análise      → Assistente, Req. Tracker, Validação, ROI-TR, Entidades
-#   Sistema      → Configurações, Admin, Banco, Custo, Orientações
-#   Manutenção   → Batch Runner, Backfills (ferramentas de manutenção)
+#   Sistema      → Configurações, Custo [+ Admin, Banco apenas para admin]
+#   Ajuda        → Como Iniciar, Arquiteturas
+#   Manutenção   → Batch Runner, Backfills [apenas admin]
 # ─────────────────────────────────────────────────────────────────────────────
 
 import streamlit as st
 from core.session_state import init_session_state
 from ui.auth_gate import apply_auth_gate
+from modules.auth import is_admin
 
 # ── Configuração global da página ─────────────────────────────────────────────
 # set_page_config deve ser chamado AQUI (única vez) — páginas não devem chamá-lo.
@@ -27,10 +29,23 @@ st.set_page_config(
 # ── Inicialização ─────────────────────────────────────────────────────────────
 init_session_state()
 
-# ── Navegação — deve ser definida ANTES de apply_auth_gate() ──────────────────
-# st.navigation() precisa ser chamado em TODAS as execuções (inclusive as
-# não-autenticadas), caso contrário o roteamento não é inicializado e
-# Streamlit trata cada navegação de página como nova sessão → login repetido.
+# ── Navegação dinâmica por perfil ─────────────────────────────────────────────
+# st.navigation() deve ser chamado em TODAS as execuções (inclusive antes do
+# login) — caso contrário o roteamento não é inicializado e Streamlit trata
+# cada navegação como nova sessão. is_admin() lê st.session_state e retorna
+# False antes do login, True após — o menu se atualiza automaticamente ao logar.
+_admin = is_admin()
+
+_sistema_pages = [
+    st.Page("pages/Settings.py",         title="Configurações",       icon="⚙️"),
+    st.Page("pages/CostEstimator.py",    title="Estimativa de Custo", icon="💰"),
+]
+if _admin:
+    _sistema_pages += [
+        st.Page("pages/MasterAdmin.py",      title="Master Admin",    icon="🛡️"),
+        st.Page("pages/DatabaseOverview.py", title="Banco de Dados",  icon="🗄️"),
+    ]
+
 pages = {
     "Início": [
         st.Page("pages/Home.py", title="Central de Operações", icon="🏠", default=True),
@@ -47,21 +62,19 @@ pages = {
         st.Page("pages/MeetingROI.py",        title="Qualidade ROI-TR", icon="📊"),
         st.Page("pages/EntityRecognition.py", title="Entidades (NER)",  icon="🔍"),
     ],
-    "Sistema": [
-        st.Page("pages/Settings.py",                  title="Configurações",       icon="⚙️"),
-        st.Page("pages/MasterAdmin.py",               title="Master Admin",        icon="🛡️"),
-        st.Page("pages/DatabaseOverview.py",          title="Banco de Dados",      icon="🗄️"),
-        st.Page("pages/CostEstimator.py",             title="Estimativa de Custo", icon="💰"),
-        st.Page("pages/Orientacoes_ComoIniciar.py",   title="Como Iniciar",        icon="📖"),
-        st.Page("pages/Orientacoes_Arquiteturas.py",  title="Arquiteturas",        icon="🏗️"),
+    "Sistema": _sistema_pages,
+    "Ajuda": [
+        st.Page("pages/Orientacoes_ComoIniciar.py",  title="Como Iniciar",  icon="📖"),
+        st.Page("pages/Orientacoes_Arquiteturas.py", title="Arquiteturas",  icon="🏗️"),
     ],
-    "Manutenção": [
+}
+if _admin:
+    pages["Manutenção"] = [
         st.Page("pages/BatchRunner.py",        title="Batch Runner",        icon="🔄"),
         st.Page("pages/BpmnBackfill.py",       title="BPMN Backfill",       icon="🔧"),
         st.Page("pages/MinutesBackfill.py",    title="Minutes Backfill",    icon="📝"),
         st.Page("pages/TranscriptBackfill.py", title="Transcript Backfill", icon="📑"),
-    ],
-}
+    ]
 pg = st.navigation(pages)
 
 # ── Autenticação — após st.navigation(), antes de pg.run() ────────────────────
