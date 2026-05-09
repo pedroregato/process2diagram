@@ -50,9 +50,9 @@ st.markdown(
     """
 Dois modos de operação para responder perguntas sobre as reuniões armazenadas:
 
-- **Modo A — Tool-use (padrão):** o LLM decide dinamicamente quais ferramentas
-  chamar (participantes, decisões, requisitos, BPMN, SBVR…). Até 5 rounds de
-  chamadas a ferramentas antes de gerar a resposta final.
+- **Modo A — Tool-use (padrão):** o LLM decide dinamicamente quais das 21
+  ferramentas chamar — dados de reuniões, requisitos, BPMN, SBVR, Google
+  Calendar e ferramentas admin. Até 5 rounds de chamadas antes da resposta final.
 
 - **Modo B — RAG Clássico (fallback):** busca por keyword + similaridade
   semântica via pgvector; o contexto recuperado é passado diretamente ao LLM.

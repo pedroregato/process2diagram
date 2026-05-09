@@ -53,7 +53,7 @@ with st.sidebar:
     st.markdown("#### 🔧 Modo Ferramentas")
     use_tools = st.checkbox("Ativar tool-use", value=True, key="asst_use_tools")
     if use_tools:
-        st.caption("🔢 21 ferramentas · catálogo em Configurações")
+        st.caption("🔢 22 ferramentas · catálogo em Configurações")
 
     st.markdown("---")
 

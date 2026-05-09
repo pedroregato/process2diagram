@@ -74,6 +74,13 @@ flowchart TD
         R7["📄 Relatório\\nExecutivo HTML"]:::rCls
     end
 
+    subgraph PERSIST["☁️ Persistência & Integrações"]
+        direction LR
+        SB["🗄️ Supabase\\nReuniões · Requisitos · BPMN versioned\\nSBVR · BMM · Embeddings vector(1536)"]:::aCls
+        GC["📅 Google Calendar\\nAgendamento de action items\\nCompartilhamento por projeto"]:::lCls
+        ASST["💬 Assistente RAG\\n21 ferramentas · tool-use + pgvector\\nKeyword + busca semântica"]:::optCls
+    end
+
     IN --> A1
     LLM -.->|"REST API"| PIPE
     A4 --> R1
@@ -82,7 +89,10 @@ flowchart TD
     A6 --> R4
     A7 --> R5
     A8 --> R6
-    A9 --> R7\
+    A9 --> R7
+    OUTS -.->|"salvo em"| SB
+    SB <-.->|"consulta"| ASST
+    SB -.->|"action items"| GC\
 """
 
 
