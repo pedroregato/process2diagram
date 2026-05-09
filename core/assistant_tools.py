@@ -3243,14 +3243,10 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         except Exception as exc:
             return f"❌ Erro ao carregar reuniões: {exc}"
 
-        # Embeddings — limit generoso para evitar truncagem padrão de 1000 linhas
+        # Embeddings — paginação para contornar o limite server-side de 1000 linhas do Supabase
         try:
-            chunks = (
-                db.table("transcript_chunks").select("meeting_id")
-                .eq("project_id", self.project_id)
-                .limit(25000)
-                .execute().data or []
-            )
+            from core.project_store import _fetch_all_chunks_paginated
+            chunks = _fetch_all_chunks_paginated(db, self.project_id, "meeting_id")
             mids_with_chunks = {c["meeting_id"] for c in chunks}
             chunks_ok = True
         except Exception:
@@ -3462,12 +3458,8 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             return f"❌ Erro ao buscar reuniões: {exc}"
 
         try:
-            chunks_rows = (
-                db.table("transcript_chunks").select("meeting_id")
-                .eq("project_id", self.project_id)
-                .limit(25000)
-                .execute().data or []
-            )
+            from core.project_store import _fetch_all_chunks_paginated
+            chunks_rows = _fetch_all_chunks_paginated(db, self.project_id, "meeting_id")
             mids_with_chunks = {c["meeting_id"] for c in chunks_rows}
         except Exception:
             mids_with_chunks = set()

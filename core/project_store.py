@@ -2299,16 +2299,40 @@ def retrieve_context_semantic(
     return result
 
 
+def _fetch_all_chunks_paginated(db, project_id: str, select: str = "meeting_id") -> list[dict]:
+    """
+    Busca todos os chunks de um projeto usando paginação de 1000 em 1000.
+    Necessário porque o Supabase tem um limite server-side de 1000 linhas por request
+    que não pode ser sobreposto com .limit() no cliente.
+    """
+    results: list[dict] = []
+    page_size = 1000
+    offset = 0
+    while True:
+        batch = (
+            db.table("transcript_chunks")
+            .select(select)
+            .eq("project_id", project_id)
+            .range(offset, offset + page_size - 1)
+            .execute().data or []
+        )
+        results.extend(batch)
+        if len(batch) < page_size:
+            break
+        offset += page_size
+    return results
+
+
 def get_embedding_coverage(project_id: str) -> dict:
     """
     Retorna estatísticas de cobertura de embeddings do projeto.
 
     Returns:
-        {total_meetings, indexed_meetings, total_chunks}
+        {total_meetings, indexed_meetings, total_chunks, providers_used}
     """
     db = _db()
     if not db:
-        return {"total_meetings": 0, "indexed_meetings": 0, "total_chunks": 0}
+        return {"total_meetings": 0, "indexed_meetings": 0, "total_chunks": 0, "providers_used": []}
 
     try:
         total_meetings = len(_ok(
@@ -2317,8 +2341,8 @@ def get_embedding_coverage(project_id: str) -> dict:
             .eq("project_id", project_id)
             .execute()
         ))
-        # Use count="exact" for accurate total_chunks (avoids the 1 000-row
-        # default Supabase limit that would truncate the count for large projects).
+
+        # count="exact" com limit(1) retorna o total real sem buscar todas as linhas
         count_resp = (
             db.table("transcript_chunks")
             .select("*", count="exact")
@@ -2328,18 +2352,13 @@ def get_embedding_coverage(project_id: str) -> dict:
         )
         total_chunks = count_resp.count or 0
 
-        # Fetch meeting_ids + provider/model — we only need the distinct set.
-        # 10 000 should cover any realistic project (≈100 meetings × 100 chunks).
-        chunk_rows = _ok(
-            db.table("transcript_chunks")
-            .select("meeting_id, embedding_provider, embedding_model")
-            .eq("project_id", project_id)
-            .limit(10000)
-            .execute()
+        # Paginação para obter meeting_ids e provedores de todos os chunks
+        chunk_rows = _fetch_all_chunks_paginated(
+            db, project_id, "meeting_id, embedding_provider, embedding_model"
         )
         indexed_meetings = len({r["meeting_id"] for r in chunk_rows})
 
-        # Collect distinct (provider, model) combinations for compatibility reporting
+        # Combinações distintas de (provider, model)
         providers_used: list[dict] = []
         seen: set[tuple] = set()
         for r in chunk_rows:
