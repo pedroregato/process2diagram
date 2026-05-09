@@ -2,264 +2,293 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # BPMN interactive viewer — presentation layer only, zero business logic.
 #
-# Extracted from diagram_bpmn.py (original by Pedro Gentil).
-# Depends on bpmn_generator.generate_bpmn_xml() for the XML source.
-#
 # Public API:
 #   generate_bpmn_preview(bpmn: BpmnProcess) -> str   (HTML string)
 #   preview_from_xml(xml: str)              -> str   (HTML string, raw XML in)
 #
-# The second entry point allows the viewer to be used independently —
-# e.g. loading a .bpmn file from disk without going through the generator.
+# Rendering strategy
+# ──────────────────
+# bpmn-js JS + CSS are fetched server-side (Python urllib) on first call and
+# cached in memory (functools.lru_cache).  The HTML template receives them as
+# inline <style> / <script> blocks — no CDN URL inside the iframe at all.
+# This avoids the Streamlit Cloud sandbox restriction that blocks external
+# <script src="…"> requests from inside components.html() iframes.
+#
+# Pan/zoom uses bpmn-js's own canvas API (canvas.zoom / moveCanvas) rather
+# than a CSS-transform wrapper, which previously conflicted with bpmn-js's
+# internal viewport management.
 # ─────────────────────────────────────────────────────────────────────────────
+
+from __future__ import annotations
+import functools
+import urllib.request
 
 from modules.schema import BpmnProcess
 from modules.bpmn_generator import generate_bpmn_xml
 
+# ── Asset fetching ────────────────────────────────────────────────────────────
 
-# ── HTML/JS template ──────────────────────────────────────────────────────────
+_BPMN_JS_URL  = "https://unpkg.com/bpmn-js@17/dist/bpmn-viewer.production.min.js"
+_CSS_URLS = [
+    "https://unpkg.com/bpmn-js@17/dist/assets/bpmn-js.css",
+    "https://unpkg.com/bpmn-js@17/dist/assets/diagram-js.css",
+    "https://unpkg.com/bpmn-js@17/dist/assets/bpmn-font/css/bpmn-embedded.css",
+]
+_FETCH_TIMEOUT = 20  # seconds
+
+
+@functools.lru_cache(maxsize=None)
+def _fetch_text(url: str) -> str:
+    """Fetch a URL server-side and return its text content. Cached forever."""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "process2diagram/1.0"})
+        with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+
+
+def _load_bpmn_assets() -> tuple[str, str]:
+    """Return (js_code, css_code). Both are inlined into the HTML template."""
+    js  = _fetch_text(_BPMN_JS_URL)
+    css = "\n".join(_fetch_text(u) for u in _CSS_URLS)
+    return js, css
+
+
+# ── HTML template ─────────────────────────────────────────────────────────────
+# {js_inline}  — full bpmn-viewer.production.min.js content
+# {css_inline} — concatenated bpmn-js + diagram-js + bpmn-embedded CSS
+# {xml_js}     — BPMN XML, JS-escaped (backticks / $ escaped)
 
 _TEMPLATE = """\
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <style>
-    * {{ margin:0; padding:0; box-sizing:border-box; }}
-    body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; user-select:none; }}
+<meta charset="UTF-8">
+<style>
+* {{ margin:0; padding:0; box-sizing:border-box; }}
+body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
 
-    /* Manual pan/zoom wrapper — bpmn-js renders inside, we transform the wrapper */
-    #viewport {{
-      position: absolute; top:0; left:0;
-      transform-origin: 0 0;
-      cursor: grab;
-    }}
-    #viewport.grabbing {{ cursor: grabbing; }}
+/* bpmn-js manages its own SVG — container must fill the iframe */
+#bpmn-container {{
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 42px;   /* leave room for toolbar */
+  background: #f8fafc;
+}}
 
-    /* bpmn-js container — large canvas, content is clipped by body overflow:hidden */
-    #bpmn-container {{
-      position: relative;
-      width: 4000px;
-      height: 3000px;
-    }}
+#toolbar {{
+  position: fixed; bottom: 0; left: 0; right: 0;
+  height: 40px;
+  display: flex; align-items: center; gap: 4px;
+  padding: 0 8px;
+  background: rgba(248,250,252,0.95);
+  border-top: 1px solid #e2e8f0;
+  z-index: 100;
+}}
+.tb-btn {{
+  height: 28px; min-width: 28px; padding: 0 8px;
+  border: 1px solid #cbd5e1; background: #fff;
+  border-radius: 6px; cursor: pointer; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  color: #475569; transition: all 0.12s;
+  white-space: nowrap;
+}}
+.tb-btn:hover {{ background: #f1f5f9; border-color: #94a3b8; }}
+#zoom-label {{
+  color: #94a3b8; font-size: 11px; font-family: monospace;
+  min-width: 40px; text-align: center; user-select: none;
+}}
+.tb-sep {{ width: 1px; height: 20px; background: #e2e8f0; margin: 0 2px; }}
+.tb-hint {{
+  margin-left: auto; font-size: 10px; color: #cbd5e1;
+  font-family: sans-serif; white-space: nowrap;
+}}
 
-    /* Suppress bpmn-js built-in overlays that interfere with our pan */
-    .djs-overlay-container {{ pointer-events: none !important; }}
+#loading {{
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  background: white; padding: 12px 24px; border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.1); color: #64748b;
+  font-family: sans-serif; font-size: 14px; z-index: 200;
+}}
+#err {{
+  display: none; position: absolute; top: 16px; left: 50%;
+  transform: translateX(-50%);
+  background: white; border: 1px solid #fca5a5; border-radius: 8px;
+  padding: 16px 24px; max-width: 600px; font-family: monospace; font-size: 12px;
+  color: #dc2626; box-shadow: 0 4px 24px rgba(0,0,0,.15); z-index: 300;
+}}
 
-    #toolbar {{
-      position: fixed; top: 8px; right: 8px;
-      display: flex; align-items: center; gap: 4px;
-      z-index: 100;
-    }}
-    .tb-btn {{
-      width:32px; height:32px; border:1px solid #cbd5e1; background:#fff;
-      border-radius:6px; cursor:pointer; font-size:14px;
-      display:flex; align-items:center; justify-content:center;
-      color:#475569; transition: all 0.15s;
-    }}
-    .tb-btn:hover {{ background:#f1f5f9; border-color:#94a3b8; }}
-    #zoom-label {{ color:#94a3b8; font-size:11px; font-family:monospace; min-width:40px; text-align:center; }}
+/* bpmn-js overrides */
+.bjs-powered-by {{ display: none !important; }}
+.djs-palette      {{ display: none !important; }}   /* viewer has no palette */
+</style>
 
-    #loading {{
-      position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
-      background:white; padding:12px 24px; border-radius:8px;
-      box-shadow:0 2px 8px rgba(0,0,0,0.1); color:#64748b; z-index:200;
-    }}
-    #err {{
-      display:none; position:fixed; top:16px; left:50%; transform:translateX(-50%);
-      background:white; border:1px solid #fca5a5; border-radius:8px;
-      padding:16px 24px; max-width:600px; font-family:monospace; font-size:12px;
-      color:#dc2626; box-shadow:0 4px 24px rgba(0,0,0,0.15); z-index:300;
-    }}
-  </style>
-  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-js.css">
-  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/diagram-js.css">
-  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-font/css/bpmn-embedded.css">
+<!-- bpmn-js CSS inlined server-side — no CDN dependency in iframe -->
+<style>{css_inline}</style>
 </head>
 <body>
-<div id="loading">Carregando diagrama...</div>
-<div id="viewport">
-  <div id="bpmn-container"></div>
-</div>
-<div id="toolbar">
-  <button class="tb-btn" id="btn-in"    title="Zoom in">&#43;</button>
-  <button class="tb-btn" id="btn-out"   title="Zoom out">&#8722;</button>
-  <button class="tb-btn" id="btn-fit"   title="Fit to screen">&#8865;</button>
-  <button class="tb-btn" id="btn-reset" title="Reset view">&#8634;</button>
-</div>
-<div id="zoom-label" style="position:fixed;bottom:8px;left:8px;z-index:100;font-size:11px;color:#94a3b8;pointer-events:none">100% | Scroll: zoom | Drag: mover</div>
+
+<div id="loading">Carregando diagrama BPMN...</div>
 <div id="err"></div>
 
-<script src="https://unpkg.com/bpmn-js@17/dist/bpmn-viewer.development.js"></script>
+<div id="bpmn-container"></div>
+
+<div id="toolbar">
+  <button class="tb-btn" id="btn-fit"   title="Ajustar à tela (tecla 0)">⊞ Ajustar</button>
+  <div class="tb-sep"></div>
+  <button class="tb-btn" id="btn-in"    title="Zoom in (+)">+</button>
+  <span   id="zoom-label">100%</span>
+  <button class="tb-btn" id="btn-out"   title="Zoom out (-)">−</button>
+  <div class="tb-sep"></div>
+  <button class="tb-btn" id="btn-reset" title="Redefinir zoom">↺</button>
+  <span class="tb-hint">Arraste: mover &nbsp;·&nbsp; Scroll: zoom &nbsp;·&nbsp; 0: ajustar</span>
+</div>
+
+<!-- bpmn-js JS inlined server-side — no CDN dependency in iframe -->
+<script>{js_inline}</script>
+
 <script>
 (function() {{
   const xml     = `{xml_js}`;
-  const errDiv  = document.getElementById('err');
   const loading = document.getElementById('loading');
-  const vp      = document.getElementById('viewport');
+  const errDiv  = document.getElementById('err');
   const zoomLbl = document.getElementById('zoom-label');
 
-  // ── Pan/zoom state ──────────────────────────────────────────────────────
-  let scale = 1, tx = 0, ty = 0;
-  let dragging = false, startX, startY, startTx, startTy;
-  let lastDist = null, touchTx, touchTy;
-
-  function apply() {{
-    vp.style.transform = `translate(${{tx}}px,${{ty}}px) scale(${{scale}})`;
-    zoomLbl.textContent = Math.round(scale * 100) + '% | Scroll: zoom | Drag: mover';
-  }}
-
-  function clamp(s) {{ return Math.min(Math.max(s, 0.05), 8); }}
-
-  function zoomTo(ns, cx, cy) {{
-    const r = ns / scale;
-    tx = cx - r * (cx - tx);
-    ty = cy - r * (cy - ty);
-    scale = clamp(ns);
-    apply();
-  }}
-
-  function fitToScreen() {{
-    const svg = document.querySelector('#bpmn-container svg');
-    if (!svg) return;
-    const vb = svg.viewBox && svg.viewBox.baseVal;
-    let sw, sh;
-    if (vb && vb.width > 10 && vb.height > 10) {{
-      sw = vb.width; sh = vb.height;
-    }} else {{
-      sw = parseFloat(svg.getAttribute('width'))  || 800;
-      sh = parseFloat(svg.getAttribute('height')) || 600;
-    }}
-    if (!sw || !sh || sw < 10) return;
-    const W = window.innerWidth, H = window.innerHeight - 60;
-    const ns = clamp(Math.min((W - 40) / sw, (H - 40) / sh));
-    if (!isFinite(ns) || ns <= 0) return;
-    scale = ns;
-    tx = (W - sw * scale) / 2;
-    ty = Math.max(10, (H - sh * scale) / 2);
-    apply();
-  }}
-
-  function fitWhenReady(n) {{
-    const svg = document.querySelector('#bpmn-container svg');
-    const vb  = svg && svg.viewBox && svg.viewBox.baseVal;
-    if (vb && vb.width > 10) {{ fitToScreen(); }}
-    else if (n > 0) {{ setTimeout(() => fitWhenReady(n - 1), 200); }}
-  }}
-
-  // Watch for SVG insertion and auto-fit as soon as it's ready
-  const observer = new MutationObserver(() => {{
-    const svg = document.querySelector('#bpmn-container svg');
-    if (svg) {{
-      observer.disconnect();
-      // Wait for bpmn-js to finish laying out elements
-      let attempts = 0;
-      const checkAndFit = () => {{
-        const vb = svg.viewBox && svg.viewBox.baseVal;
-        if (vb && vb.width > 10 && vb.height > 10) {{
-          fitToScreen();
-        }} else if (attempts < 20) {{
-          attempts++;
-          setTimeout(checkAndFit, 150);
-        }}
-      }};
-      setTimeout(checkAndFit, 100);
-    }}
-  }});
-  observer.observe(document.getElementById('bpmn-container'), {{ childList: true, subtree: true }});
-
-  // ── Mouse pan ───────────────────────────────────────────────────────────
-  vp.addEventListener('mousedown', e => {{
-    if (e.button !== 0) return;
-    dragging = true; startX = e.clientX; startY = e.clientY;
-    startTx = tx; startTy = ty;
-    vp.classList.add('grabbing');
-    e.preventDefault();
-  }});
-  window.addEventListener('mousemove', e => {{
-    if (!dragging) return;
-    tx = startTx + e.clientX - startX;
-    ty = startTy + e.clientY - startY;
-    apply();
-  }});
-  window.addEventListener('mouseup', () => {{
-    dragging = false; vp.classList.remove('grabbing');
-  }});
-
-  // ── Wheel zoom ──────────────────────────────────────────────────────────
-  window.addEventListener('wheel', e => {{
-    e.preventDefault();
-    zoomTo(scale * (e.deltaY > 0 ? 0.9 : 1.1), e.clientX, e.clientY);
-  }}, {{ passive: false }});
-
-  // ── Touch ───────────────────────────────────────────────────────────────
-  vp.addEventListener('touchstart', e => {{
-    if (e.touches.length === 1) {{
-      startX = e.touches[0].clientX; startY = e.touches[0].clientY;
-      touchTx = tx; touchTy = ty;
-    }}
-    if (e.touches.length === 2) {{
-      lastDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-    }}
-  }}, {{ passive: true }});
-
-  vp.addEventListener('touchmove', e => {{
-    if (e.touches.length === 1) {{
-      tx = touchTx + e.touches[0].clientX - startX;
-      ty = touchTy + e.touches[0].clientY - startY;
-      apply();
-    }}
-    if (e.touches.length === 2) {{
-      const d  = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-      const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-      if (lastDist) zoomTo(scale * d / lastDist, mx, my);
-      lastDist = d;
-    }}
-    e.preventDefault();
-  }}, {{ passive: false }});
-
-  vp.addEventListener('touchend', () => {{ lastDist = null; }});
-
-  // ── Keyboard shortcuts ──────────────────────────────────────────────────
-  window.addEventListener('keydown', e => {{
-    const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
-    if (e.key === '+' || e.key === '=') zoomTo(scale * 1.15, cx, cy);
-    if (e.key === '-')                  zoomTo(scale * 0.87, cx, cy);
-    if (e.key === '0')                  fitToScreen();
-    if (e.key === 'r' || e.key === 'R') {{ scale=1; tx=0; ty=0; apply(); }}
-  }});
-
-  // ── Toolbar buttons ─────────────────────────────────────────────────────
-  const cx = () => window.innerWidth / 2, cy = () => window.innerHeight / 2;
-  document.getElementById('btn-in').onclick    = () => zoomTo(scale * 1.2, cx(), cy());
-  document.getElementById('btn-out').onclick   = () => zoomTo(scale * 0.8, cx(), cy());
-  document.getElementById('btn-fit').onclick   = fitToScreen;
-  document.getElementById('btn-reset').onclick = () => {{ scale=1; tx=0; ty=0; apply(); }};
-
-  // ── Mount bpmn-js — disable its own scroll/keyboard (we own those) ──────
+  // ── Instantiate viewer ──────────────────────────────────────────────────
   const viewer = new BpmnJS({{
     container: '#bpmn-container',
-    keyboard: {{ bindTo: null }},
+    // keyboard handled manually below
+    keyboard: {{ bindTo: window }},
   }});
 
+  // ── Zoom label helper ───────────────────────────────────────────────────
+  function refreshLabel() {{
+    try {{
+      const z = viewer.get('canvas').zoom();
+      zoomLbl.textContent = Math.round(z * 100) + '%';
+    }} catch(_) {{}}
+  }}
+
+  // ── Import & fit ────────────────────────────────────────────────────────
   viewer.importXML(xml)
-    .then(() => {{
+    .then(function(result) {{
       loading.style.display = 'none';
-      try {{ viewer.get('zoomScroll')._enabled = false; }} catch(_) {{}}
-      setTimeout(() => fitWhenReady(10), 400);
+      if (result.warnings && result.warnings.length) {{
+        console.warn('bpmn-js import warnings:', result.warnings);
+      }}
+      // Use bpmn-js native fit — waits for layout to complete
+      const canvas = viewer.get('canvas');
+      canvas.zoom('fit-viewport');
+      refreshLabel();
     }})
-    .catch(err => {{
+    .catch(function(err) {{
       loading.style.display = 'none';
       errDiv.style.display  = 'block';
-      errDiv.innerHTML = '<b>BPMN render error:</b><br>' + err.message;
+      errDiv.innerHTML      = '<b>Erro ao renderizar BPMN:</b><br>' +
+                              (err.message || String(err));
     }});
+
+  // ── Keep label in sync with user pan/zoom ───────────────────────────────
+  try {{
+    viewer.get('eventBus').on('canvas.viewbox.changed', refreshLabel);
+  }} catch(_) {{}}
+
+  // ── Toolbar buttons ─────────────────────────────────────────────────────
+  function safeZoom(factor) {{
+    try {{
+      const canvas = viewer.get('canvas');
+      canvas.zoom(canvas.zoom() * factor, 'auto');
+      refreshLabel();
+    }} catch(_) {{}}
+  }}
+  function fitView() {{
+    try {{
+      viewer.get('canvas').zoom('fit-viewport');
+      refreshLabel();
+    }} catch(_) {{}}
+  }}
+
+  document.getElementById('btn-fit').onclick   = fitView;
+  document.getElementById('btn-reset').onclick = fitView;
+  document.getElementById('btn-in').onclick    = function() {{ safeZoom(1.2); }};
+  document.getElementById('btn-out').onclick   = function() {{ safeZoom(0.8); }};
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────
+  window.addEventListener('keydown', function(e) {{
+    if (e.key === '0')                   fitView();
+    if (e.key === '+' || e.key === '=')  safeZoom(1.15);
+    if (e.key === '-')                   safeZoom(0.87);
+  }});
+}})();
+</script>
+</body>
+</html>"""
+
+
+# ── Fallback template (CDN) ───────────────────────────────────────────────────
+# Used only when server-side fetch of bpmn-js fails (network error, timeout).
+# In this case the iframe must still try to load from CDN.
+
+_TEMPLATE_CDN_FALLBACK = """\
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+* {{ margin:0; padding:0; box-sizing:border-box; }}
+body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
+#bpmn-container {{ position:absolute; top:0; left:0; right:0; bottom:42px; background:#f8fafc; }}
+#toolbar {{
+  position:fixed; bottom:0; left:0; right:0; height:40px;
+  display:flex; align-items:center; gap:4px; padding:0 8px;
+  background:rgba(248,250,252,.95); border-top:1px solid #e2e8f0; z-index:100;
+}}
+.tb-btn {{
+  height:28px; min-width:28px; padding:0 8px; border:1px solid #cbd5e1;
+  background:#fff; border-radius:6px; cursor:pointer; font-size:13px;
+  display:flex; align-items:center; justify-content:center; color:#475569;
+}}
+.tb-btn:hover {{ background:#f1f5f9; }}
+#zoom-label {{ color:#94a3b8; font-size:11px; font-family:monospace; min-width:40px; text-align:center; }}
+.bjs-powered-by,.djs-palette {{ display:none !important; }}
+#loading {{
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  background:white; padding:12px 24px; border-radius:8px;
+  box-shadow:0 2px 8px rgba(0,0,0,.1); color:#64748b; font-family:sans-serif; z-index:200;
+}}
+</style>
+<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-js.css">
+<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/diagram-js.css">
+<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17/dist/assets/bpmn-font/css/bpmn-embedded.css">
+</head>
+<body>
+<div id="loading">Carregando diagrama BPMN...</div>
+<div id="bpmn-container"></div>
+<div id="toolbar">
+  <button class="tb-btn" id="btn-fit">⊞ Ajustar</button>
+  <button class="tb-btn" id="btn-in">+</button>
+  <span id="zoom-label">100%</span>
+  <button class="tb-btn" id="btn-out">−</button>
+</div>
+<script src="https://unpkg.com/bpmn-js@17/dist/bpmn-viewer.production.min.js"></script>
+<script>
+(function(){{
+  const xml = `{xml_js}`;
+  const viewer = new BpmnJS({{ container:'#bpmn-container', keyboard:{{bindTo:window}} }});
+  function refreshLabel(){{ try{{ document.getElementById('zoom-label').textContent = Math.round(viewer.get('canvas').zoom()*100)+'%'; }}catch(_){{}} }}
+  function fitView(){{ try{{ viewer.get('canvas').zoom('fit-viewport'); refreshLabel(); }}catch(_){{}} }}
+  viewer.importXML(xml).then(function(){{
+    document.getElementById('loading').style.display='none';
+    fitView();
+    try{{ viewer.get('eventBus').on('canvas.viewbox.changed',refreshLabel); }}catch(_){{}}
+  }}).catch(function(e){{
+    document.getElementById('loading').style.display='none';
+    document.getElementById('bpmn-container').innerHTML='<p style="color:red;padding:20px">Erro: '+e.message+'</p>';
+  }});
+  document.getElementById('btn-fit').onclick=fitView;
+  document.getElementById('btn-in').onclick=function(){{ try{{ var c=viewer.get('canvas'); c.zoom(c.zoom()*1.2,'auto'); refreshLabel(); }}catch(_){{}} }};
+  document.getElementById('btn-out').onclick=function(){{ try{{ var c=viewer.get('canvas'); c.zoom(c.zoom()*0.8,'auto'); refreshLabel(); }}catch(_){{}} }};
+  window.addEventListener('keydown',function(e){{ if(e.key==='0') fitView(); }});
 }})();
 </script>
 </body>
@@ -268,24 +297,35 @@ _TEMPLATE = """\
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
-    """
-    Generate interactive HTML viewer from a BpmnProcess object.
-    Internally calls generate_bpmn_xml() to produce the XML source.
-    """
-    xml = generate_bpmn_xml(bpmn)
-    return preview_from_xml(xml)
+def _escape_xml_for_js(xml: str) -> str:
+    """Escape BPMN XML for embedding inside a JS template literal."""
+    return (
+        xml
+        .replace("\\", "\\\\")
+        .replace("`",  "\\`")
+        .replace("$",  "\\$")
+    )
 
 
 def preview_from_xml(xml: str) -> str:
-    """
-    Generate interactive HTML viewer from a raw BPMN XML string.
-    Use this when loading an existing .bpmn file from disk.
+    """Generate interactive HTML viewer from a raw BPMN XML string.
 
-    Example:
-        xml = Path("process.bpmn").read_text()
-        html = preview_from_xml(xml)
+    bpmn-js assets are fetched server-side on first call (cached).
+    Falls back to CDN URLs if server-side fetch fails.
     """
-    xml_js = xml.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
-    return _TEMPLATE.format(xml_js=xml_js)
-  
+    xml_js = _escape_xml_for_js(xml)
+
+    js, css = _load_bpmn_assets()
+
+    if js:
+        # Happy path: assets available inline — no CDN in iframe
+        return _TEMPLATE.format(js_inline=js, css_inline=css, xml_js=xml_js)
+    else:
+        # Fallback: let the iframe try CDN directly
+        return _TEMPLATE_CDN_FALLBACK.format(xml_js=xml_js)
+
+
+def generate_bpmn_preview(bpmn: BpmnProcess) -> str:
+    """Generate interactive HTML viewer from a BpmnProcess object."""
+    xml = generate_bpmn_xml(bpmn)
+    return preview_from_xml(xml)
