@@ -22,17 +22,31 @@ from ui.comms_diagram import render_comms_diagram
 
 apply_auth_gate()
 
+
+def _fullscreen_btn(diagram_key: str) -> None:
+    """Button that opens the diagram in the dedicated full-screen viewer."""
+    if st.button("⛶ Tela cheia", key=f"fs_{diagram_key}", help="Abrir em tela dedicada"):
+        st.session_state["arch_viewer_diagram"] = diagram_key
+        st.switch_page("pages/ArquiteturaViewer.py")
+
+
 # ── Cabeçalho ─────────────────────────────────────────────────────────────────
 st.markdown("# 🏗️ Arquiteturas do Sistema")
 st.caption(
-    "Mapas visuais dos dois fluxos principais do Process2Diagram. "
-    "Use scroll + drag para explorar. Botão ⊞ para ajustar à tela."
+    "Mapas visuais dos fluxos do Process2Diagram. "
+    "Use scroll + drag para explorar. Botão ⊞ para ajustar à tela. "
+    "Clique em ⛶ Tela cheia para abrir o diagrama em tela dedicada."
 )
 
 st.markdown("---")
 
 # ── Diagrama 1: Pipeline Principal ────────────────────────────────────────────
-st.markdown("## 🚀 Pipeline de Processamento")
+col1, col2 = st.columns([9, 1])
+with col1:
+    st.markdown("## 🚀 Pipeline de Processamento")
+with col2:
+    _fullscreen_btn("pipeline")
+
 st.markdown(
     """
 Fluxo completo desde a transcrição bruta até os artefatos finais.
@@ -46,12 +60,17 @@ render_architecture_diagram(height=720)
 st.markdown("---")
 
 # ── Diagrama 2: Assistente RAG ────────────────────────────────────────────────
-st.markdown("## 💬 Assistente — Pipeline RAG")
+col1, col2 = st.columns([9, 1])
+with col1:
+    st.markdown("## 💬 Assistente — Pipeline RAG")
+with col2:
+    _fullscreen_btn("assistente")
+
 st.markdown(
     """
 Dois modos de operação para responder perguntas sobre as reuniões armazenadas:
 
-- **Modo A — Tool-use (padrão):** o LLM decide dinamicamente quais das 21
+- **Modo A — Tool-use (padrão):** o LLM decide dinamicamente quais das 22
   ferramentas chamar — dados de reuniões, requisitos, BPMN, SBVR, Google
   Calendar e ferramentas admin. Até 5 rounds de chamadas antes da resposta final.
 
@@ -65,7 +84,12 @@ render_assistant_diagram(height=680)
 st.markdown("---")
 
 # ── Diagrama 3: Comunicação & Integrações ─────────────────────────────────────
-st.markdown("## 🔌 Comunicação & Integrações")
+col1, col2 = st.columns([9, 1])
+with col1:
+    st.markdown("## 🔌 Comunicação & Integrações")
+with col2:
+    _fullscreen_btn("comms")
+
 st.markdown(
     """
 Topologia completa de comunicação — quem chama quem, por qual protocolo
