@@ -54,7 +54,8 @@ CREATE INDEX IF NOT EXISTS idx_bpmn_ver_current  ON bpmn_versions(process_id, is
     WHERE is_current = TRUE;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- RLS — desabilitado para uso via service_role (Streamlit backend)
+-- RLS — habilitado; acesso público (anon) bloqueado.
+-- O backend usa service_role (st.secrets), que ignora RLS automaticamente.
 -- ─────────────────────────────────────────────────────────────────────────────
-ALTER TABLE bpmn_processes DISABLE ROW LEVEL SECURITY;
-ALTER TABLE bpmn_versions  DISABLE ROW LEVEL SECURITY;
+ALTER TABLE bpmn_processes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bpmn_versions  ENABLE ROW LEVEL SECURITY;

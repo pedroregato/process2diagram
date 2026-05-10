@@ -38,7 +38,8 @@ CREATE INDEX transcript_chunks_meeting_idx  ON transcript_chunks (meeting_id);
 CREATE UNIQUE INDEX transcript_chunks_meeting_chunk_idx
     ON transcript_chunks (meeting_id, chunk_index);
 
-ALTER TABLE transcript_chunks DISABLE ROW LEVEL SECURITY;
+-- RLS habilitado; service_role (backend) ignora RLS automaticamente.
+ALTER TABLE transcript_chunks ENABLE ROW LEVEL SECURITY;
 
 -- ── Função de busca semântica ─────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION match_transcript_chunks(

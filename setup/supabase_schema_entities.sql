@@ -31,7 +31,8 @@ CREATE INDEX IF NOT EXISTS meeting_entities_type_idx
 CREATE INDEX IF NOT EXISTS meeting_entities_normalized_idx
     ON meeting_entities (normalized_name);
 
-ALTER TABLE meeting_entities DISABLE ROW LEVEL SECURITY;
+-- RLS habilitado; service_role (backend) ignora RLS automaticamente.
+ALTER TABLE meeting_entities ENABLE ROW LEVEL SECURITY;
 
 -- ── Dicionário de entidades conhecidas (curado por projeto) ──────────────────
 CREATE TABLE IF NOT EXISTS entity_dictionary (
@@ -51,7 +52,7 @@ CREATE INDEX IF NOT EXISTS entity_dictionary_project_idx
 CREATE INDEX IF NOT EXISTS entity_dictionary_type_idx
     ON entity_dictionary (entity_type);
 
-ALTER TABLE entity_dictionary DISABLE ROW LEVEL SECURITY;
+ALTER TABLE entity_dictionary ENABLE ROW LEVEL SECURITY;
 
 COMMENT ON TABLE meeting_entities IS
     'Entidades (pessoas, áreas, unidades, cargos) extraídas automaticamente das transcrições via spaCy + regex + dicionário.';

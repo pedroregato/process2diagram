@@ -39,7 +39,8 @@ CREATE INDEX IF NOT EXISTS idx_mqs_project
 CREATE INDEX IF NOT EXISTS idx_mqs_meeting
     ON meeting_quality_scores (meeting_id, computed_at DESC);
 
-ALTER TABLE meeting_quality_scores DISABLE ROW LEVEL SECURITY;
+-- RLS habilitado; service_role (backend) ignora RLS automaticamente.
+ALTER TABLE meeting_quality_scores ENABLE ROW LEVEL SECURITY;
 
 COMMENT ON TABLE meeting_quality_scores IS
     'Histórico de indicadores ROI-TR por reunião — permite análise de tendência ao longo do tempo.';

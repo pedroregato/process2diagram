@@ -135,11 +135,12 @@ CREATE INDEX IF NOT EXISTS idx_sbvr_rules_project  ON sbvr_rules(project_id);
 CREATE INDEX IF NOT EXISTS idx_sbvr_rules_meeting  ON sbvr_rules(meeting_id);
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- RLS — desabilitado para uso via service_role (Streamlit backend)
+-- RLS — habilitado; acesso público (anon) bloqueado.
+-- O backend usa service_role (st.secrets), que ignora RLS automaticamente.
 -- ─────────────────────────────────────────────────────────────────────────────
-ALTER TABLE projects              DISABLE ROW LEVEL SECURITY;
-ALTER TABLE meetings              DISABLE ROW LEVEL SECURITY;
-ALTER TABLE requirements          DISABLE ROW LEVEL SECURITY;
-ALTER TABLE requirement_versions  DISABLE ROW LEVEL SECURITY;
-ALTER TABLE sbvr_terms            DISABLE ROW LEVEL SECURITY;
-ALTER TABLE sbvr_rules            DISABLE ROW LEVEL SECURITY;
+ALTER TABLE projects              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE meetings              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE requirements          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE requirement_versions  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sbvr_terms            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sbvr_rules            ENABLE ROW LEVEL SECURITY;

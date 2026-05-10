@@ -24,4 +24,5 @@ CREATE TABLE IF NOT EXISTS batch_log (
 CREATE INDEX IF NOT EXISTS idx_batch_log_project ON batch_log(project_id);
 CREATE INDEX IF NOT EXISTS idx_batch_log_hash    ON batch_log(file_hash);
 
-ALTER TABLE batch_log DISABLE ROW LEVEL SECURITY;
+-- RLS habilitado; service_role (backend) ignora RLS automaticamente.
+ALTER TABLE batch_log ENABLE ROW LEVEL SECURITY;

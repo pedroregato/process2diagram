@@ -31,5 +31,6 @@ CREATE INDEX IF NOT EXISTS idx_sbvr_terms_meeting  ON sbvr_terms(meeting_id);
 CREATE INDEX IF NOT EXISTS idx_sbvr_rules_project  ON sbvr_rules(project_id);
 CREATE INDEX IF NOT EXISTS idx_sbvr_rules_meeting  ON sbvr_rules(meeting_id);
 
-ALTER TABLE sbvr_terms DISABLE ROW LEVEL SECURITY;
-ALTER TABLE sbvr_rules DISABLE ROW LEVEL SECURITY;
+-- RLS habilitado; service_role (backend) ignora RLS automaticamente.
+ALTER TABLE sbvr_terms ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sbvr_rules ENABLE ROW LEVEL SECURITY;
