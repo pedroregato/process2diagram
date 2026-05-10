@@ -155,12 +155,44 @@ _EDITOR_TEMPLATE = """\
     try {{ modeler.get('commandStack').redo(); }} catch(_) {{}}
   }};
 
-  document.getElementById('btn-new').onclick = function() {{
-    var html='<!DOCTYPE html>'+document.documentElement.outerHTML;
-    var blob=new Blob([html],{{type:'text/html;charset=utf-8'}});
-    var url=URL.createObjectURL(blob);
-    var w=(window.top||window).open(url,'_blank');
-    if(!w)window.open(url,'_blank');
+  document.getElementById('btn-new').onclick = async function() {{
+    // Export current XML (captures edits made in this session)
+    var curXml;
+    try {{
+      var _res = await modeler.saveXML({{ format: true }});
+      curXml = _res.xml;
+    }} catch(_) {{
+      curXml = xml; // fall back to initial xml const
+    }}
+    // Store XML as a body attribute — HTML-encoded on serialization, decoded on read
+    document.body.setAttribute('data-bpmn-xml', curXml);
+    // Clone the full document
+    var clone = document.documentElement.cloneNode(true);
+    // Clear bpmn-js rendered SVG so the new window initializes fresh
+    var mc = clone.querySelector('#modeler-container');
+    if (mc) mc.innerHTML = '';
+    // Restore loading overlay (it has display:none inline style after init)
+    var lo = clone.querySelector('#loading-overlay');
+    if (lo) lo.removeAttribute('style');
+    // Hide xml panel if it was open
+    var xp = clone.querySelector('#xml-panel');
+    if (xp) xp.style.display = 'none';
+    // Patch inline script: replace hardcoded xml const with data-attribute read
+    var scripts = clone.querySelectorAll('script:not([src])');
+    for (var i = 0; i < scripts.length; i++) {{
+      if (scripts[i].textContent.indexOf('const xml') !== -1) {{
+        scripts[i].textContent = scripts[i].textContent.replace(
+          /const xml\s*=\s*`[\s\S]*?`;/,
+          "const xml = document.body.getAttribute('data-bpmn-xml');"
+        );
+        break;
+      }}
+    }}
+    var html = '<!DOCTYPE html>' + clone.outerHTML;
+    var blob = new Blob([html], {{type:'text/html;charset=utf-8'}});
+    var url = URL.createObjectURL(blob);
+    var w = (window.top||window).open(url, '_blank');
+    if (!w) window.open(url, '_blank');
   }};
 
   document.getElementById('btn-export').onclick = async () => {{
