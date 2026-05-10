@@ -18,6 +18,7 @@ import streamlit as st
 from ui.auth_gate import apply_auth_gate
 from ui.architecture_diagram import render_architecture_diagram
 from ui.assistant_diagram import render_assistant_diagram
+from ui.comms_diagram import render_comms_diagram
 
 apply_auth_gate()
 
@@ -60,6 +61,28 @@ Dois modos de operação para responder perguntas sobre as reuniões armazenadas
 )
 
 render_assistant_diagram(height=680)
+
+st.markdown("---")
+
+# ── Diagrama 3: Comunicação & Integrações ─────────────────────────────────────
+st.markdown("## 🔌 Comunicação & Integrações")
+st.markdown(
+    """
+Topologia completa de comunicação — quem chama quem, por qual protocolo
+e com qual autenticação. Destaque para os **dois caminhos independentes**
+ao Google Calendar:
+
+- **Streamlit App** → `calendar_client.py` → Google Calendar API
+  (service account JWT; `calendar_id` resolvido via Supabase → secrets → arquivo → `"primary"`)
+- **Claude Code CLI** → `google_calendar_server.py` (MCP / stdio) → Google Calendar API
+  (mesmo service account, caminho totalmente separado do Streamlit; uso exclusivo em desenvolvimento)
+
+Ferramentas marcadas com **★** requerem perfil `admin` ou `master` — verificado
+pelo `is_admin()` gate no `AssistantToolExecutor`.
+"""
+)
+
+render_comms_diagram(height=760)
 
 st.markdown("---")
 st.caption("Process2Diagram · Arquiteturas do Sistema")
