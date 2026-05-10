@@ -159,10 +159,11 @@ body{{background:#F4F7FB;overflow:hidden;
 </style></head><body>
 <div id="wrap">
   <div class="tb">
-    <button onclick="zoomIn()"  title="Zoom in">+</button>
-    <button onclick="zoomOut()" title="Zoom out">&minus;</button>
-    <button onclick="fit()"     title="Ajustar">&#8865;</button>
-    <button onclick="reset()"   title="Resetar">&#8634;</button>
+    <button onclick="zoomIn()"     title="Zoom in">+</button>
+    <button onclick="zoomOut()"    title="Zoom out">&minus;</button>
+    <button onclick="fit()"        title="Ajustar">&#8865;</button>
+    <button onclick="reset()"      title="Resetar">&#8634;</button>
+    <button onclick="openNewTab()" title="Abrir em nova janela" style="font-size:11px;letter-spacing:-.5px">&#10696;</button>
   </div>
   <div id="hint">Scroll: zoom · Drag: mover</div>
   <div id="stage"><div id="vp">{svg_safe}</div></div>
@@ -181,6 +182,13 @@ body{{background:#F4F7FB;overflow:hidden;
   window.zoomIn =function(){{sc=Math.min(sc*1.25,MAX);apply()}};
   window.zoomOut=function(){{sc=Math.max(sc/1.25,MIN);apply()}};
   window.reset  =function(){{sc=1;px=0;py=0;apply()}};
+  window.openNewTab=function(){{
+    var html='<!DOCTYPE html>'+document.documentElement.outerHTML;
+    var blob=new Blob([html],{{type:'text/html;charset=utf-8'}});
+    var url=URL.createObjectURL(blob);
+    var w=(window.top||window).open(url,'_blank');
+    if(!w)window.open(url,'_blank');
+  }};
   window.fit=function(){{
     var s=vp.querySelector('svg');if(!s)return;
     var vb=s.viewBox?s.viewBox.baseVal:null;
