@@ -74,10 +74,15 @@ def _render_from_supabase() -> None:
         return
 
     with col2:
-        proc_names = [p["name"] for p in processes]
-        proc_map   = {p["name"]: p for p in processes}
-        sel_proc   = st.selectbox("Processo", proc_names, key="diag_sb_proc")
-        process_id = proc_map[sel_proc]["id"]
+        def _proc_label(p: dict) -> str:
+            mtg = p.get("meetings") or {}
+            num = mtg.get("meeting_number")
+            return f"#{num} · {p['name']}" if num else p["name"]
+
+        proc_labels = [_proc_label(p) for p in processes]
+        proc_map    = {lbl: p for lbl, p in zip(proc_labels, processes)}
+        sel_proc    = st.selectbox("Processo", proc_labels, key="diag_sb_proc")
+        process_id  = proc_map[sel_proc]["id"]
 
     versions = list_bpmn_versions(process_id)
     if not versions:

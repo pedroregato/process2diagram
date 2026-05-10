@@ -139,6 +139,7 @@ color:#94a3b8;pointer-events:none}
 <button onclick="zoomOut()" title="Zoom out">&minus;</button>
 <button onclick="fitToScreen()" title="Fit">&#8865;</button>
 <button onclick="resetView()" title="Reset">&#8634;</button>
+<button onclick="openNewTab()" title="Abrir em nova janela" style="font-size:11px;letter-spacing:-.5px">&#10696;</button>
 </div>
 <div class="zoom-hint" id="zoomHint">Scroll: zoom | Drag: mover</div>
 <div id="container"><div id="viewport"></div></div>
@@ -173,6 +174,13 @@ setTimeout(fitToScreen,50);
 window.zoomIn=function(){scale=Math.min(scale*1.25,MAX);apply()};
 window.zoomOut=function(){scale=Math.max(scale/1.25,MIN);apply()};
 window.resetView=function(){scale=1;panX=0;panY=0;apply()};
+window.openNewTab=function(){
+var html='<!DOCTYPE html>'+document.documentElement.outerHTML;
+var blob=new Blob([html],{type:'text/html;charset=utf-8'});
+var url=URL.createObjectURL(blob);
+var w=(window.top||window).open(url,'_blank');
+if(!w)window.open(url,'_blank');
+};
 window.fitToScreen=function(){
 var s=v.querySelector("svg");if(!s)return;
 var vb=s.viewBox?s.viewBox.baseVal:null;

@@ -968,20 +968,32 @@ def list_meetings_without_bpmn(project_id: str) -> list[dict]:
 
 
 def list_bpmn_processes(project_id: str) -> list[dict]:
-    """Retorna todos os processos BPMN do projeto ordenados por nome."""
+    """Retorna todos os processos BPMN do projeto ordenados por nome.
+
+    Inclui numero e titulo da reuniao de origem via last_meeting_id -> meetings.
+    """
     db = _db()
     if not db:
         return []
     try:
         return _ok(
             db.table("bpmn_processes")
-            .select("*")
+            .select("*, meetings!last_meeting_id(meeting_number, title)")
             .eq("project_id", project_id)
             .order("name")
             .execute()
         )
     except Exception:
-        return []
+        try:
+            return _ok(
+                db.table("bpmn_processes")
+                .select("*")
+                .eq("project_id", project_id)
+                .order("name")
+                .execute()
+            )
+        except Exception:
+            return []
 
 
 def get_bpmn_process(process_id: str) -> dict | None:
