@@ -49,6 +49,11 @@ if "_bpme_ok" in st.session_state:
 if "_bpme_err" in st.session_state:
     st.error(st.session_state.pop("_bpme_err"))
 
+# ── Reset de widgets após salvar (deve ocorrer ANTES de renderizá-los) ────────
+if st.session_state.pop("_bpme_reset_fields", False):
+    st.session_state["bpme_paste_xml"] = ""
+    st.session_state["bpme_notes"]     = ""
+
 # ── Cabeçalho ─────────────────────────────────────────────────────────────────
 st.title("✏️ Editor BPMN")
 st.caption("Edite diagramas BPMN visualmente e registre novas versões no banco de dados.")
@@ -242,9 +247,8 @@ with col_save:
                 "✅ Nova versão salva! A versão anterior foi marcada como não-atual."
             )
             st.session_state.pop("_bpme_captured_xml", None)
-            st.session_state["bpme_paste_xml"] = ""
-            st.session_state["bpme_notes"]     = ""
             st.session_state.pop("bpme_show_preview", None)
+            st.session_state["_bpme_reset_fields"] = True
             st.rerun()
         else:
             st.session_state["_bpme_err"] = "❌ Falha ao salvar. Verifique a conexão com o banco."
