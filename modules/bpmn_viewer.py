@@ -142,7 +142,7 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
   <div class="tb-sep"></div>
   <button class="tb-btn" id="btn-reset" title="Redefinir zoom">↺</button>
   <div class="tb-sep"></div>
-  <button class="tb-btn" id="btn-new" title="Abrir em nova janela" style="font-size:11px">⧉</button>
+  <button class="tb-btn" id="btn-new" title="Abrir em nova janela">↗ Janela</button>
   <span class="tb-hint">Arraste: mover &nbsp;·&nbsp; Scroll: zoom &nbsp;·&nbsp; 0: ajustar</span>
 </div>
 
@@ -278,7 +278,7 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
   <button class="tb-btn" id="btn-in">+</button>
   <span id="zoom-label">100%</span>
   <button class="tb-btn" id="btn-out">−</button>
-  <button class="tb-btn" id="btn-new" title="Abrir em nova janela" style="font-size:11px">⧉</button>
+  <button class="tb-btn" id="btn-new" title="Abrir em nova janela">↗ Janela</button>
 </div>
 <script src="https://unpkg.com/bpmn-js@17/dist/bpmn-viewer.production.min.js"></script>
 <script>

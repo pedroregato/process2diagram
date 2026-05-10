@@ -163,7 +163,7 @@ body{{background:#F4F7FB;overflow:hidden;
     <button onclick="zoomOut()"    title="Zoom out">&minus;</button>
     <button onclick="fit()"        title="Ajustar">&#8865;</button>
     <button onclick="reset()"      title="Resetar">&#8634;</button>
-    <button onclick="openNewTab()" title="Abrir em nova janela" style="font-size:11px;letter-spacing:-.5px">&#10696;</button>
+    <button onclick="openNewTab()" title="Abrir em nova janela" style="font-size:11px;letter-spacing:-.5px">&#8599;</button>
   </div>
   <div id="hint">Scroll: zoom · Drag: mover</div>
   <div id="stage"><div id="vp">{svg_safe}</div></div>

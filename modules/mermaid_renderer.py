@@ -139,7 +139,7 @@ color:#94a3b8;pointer-events:none}
 <button onclick="zoomOut()" title="Zoom out">&minus;</button>
 <button onclick="fitToScreen()" title="Fit">&#8865;</button>
 <button onclick="resetView()" title="Reset">&#8634;</button>
-<button onclick="openNewTab()" title="Abrir em nova janela" style="font-size:11px;letter-spacing:-.5px">&#10696;</button>
+<button onclick="openNewTab()" title="Abrir em nova janela" style="font-size:11px;letter-spacing:-.5px">&#8599;</button>
 </div>
 <div class="zoom-hint" id="zoomHint">Scroll: zoom | Drag: mover</div>
 <div id="container"><div id="viewport"></div></div>
