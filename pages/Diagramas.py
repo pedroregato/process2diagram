@@ -2,8 +2,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Dedicated full-screen diagram viewer — Streamlit multi-page app.
 #
-# Shares st.session_state["hub"] with app.py.
-# Shows BPMN 2.0 (bpmn-js), Mermaid flowchart, and Mind Map dos Requisitos.
+# Two modes:
+#   A) hub present in session_state  → show pipeline results (BPMN, Mermaid, Mind Map)
+#   B) no hub                        → Supabase fallback: project/process/version picker
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from core.knowledge_hub import KnowledgeHub
 from ui.auth_gate import apply_auth_gate
 from modules.bpmn_viewer import preview_from_xml
 from modules.mermaid_renderer import render_mermaid_block
+from modules.supabase_client import supabase_configured
 
 # ── Autenticação ───────────────────────────────────────────────────────────────
 apply_auth_gate()
@@ -39,9 +41,100 @@ st.markdown("""
 # ── Load hub from session_state ───────────────────────────────────────────────
 hub: KnowledgeHub | None = st.session_state.get("hub")
 
+
+# ── Fallback: load from Supabase ──────────────────────────────────────────────
+def _render_from_supabase() -> None:
+    from core.project_store import list_projects, list_bpmn_processes, list_bpmn_versions
+
+    st.markdown("## 📐 Visualizador de Diagramas")
+    st.caption("Nenhuma transcrição processada nesta sessão — carregando diagramas salvos no Supabase.")
+    st.page_link("pages/Pipeline.py", label="← Processar nova transcrição", icon="🚀")
+    st.divider()
+
+    if not supabase_configured():
+        st.info("Supabase não configurado. Processe uma transcrição primeiro.")
+        return
+
+    projects = list_projects()
+    if not projects:
+        st.info("Nenhum projeto encontrado no Supabase.")
+        return
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        proj_names = [p["name"] for p in projects]
+        proj_map   = {p["name"]: p for p in projects}
+        sel_proj   = st.selectbox("Projeto", proj_names, key="diag_sb_proj")
+        project_id = proj_map[sel_proj]["id"]
+
+    processes = list_bpmn_processes(project_id)
+    if not processes:
+        st.info("Nenhum processo BPMN encontrado neste projeto.")
+        return
+
+    with col2:
+        proc_names = [p["name"] for p in processes]
+        proc_map   = {p["name"]: p for p in processes}
+        sel_proc   = st.selectbox("Processo", proc_names, key="diag_sb_proc")
+        process_id = proc_map[sel_proc]["id"]
+
+    versions = list_bpmn_versions(process_id)
+    if not versions:
+        st.info("Nenhuma versão encontrada para este processo.")
+        return
+
+    with col3:
+        def _ver_label(v: dict) -> str:
+            mtg = v.get("meetings") or {}
+            title = mtg.get("title") or "—"
+            return f"v{v['version']} · {title}"
+
+        ver_labels = [_ver_label(v) for v in versions]
+        ver_map    = {lbl: v for lbl, v in zip(ver_labels, versions)}
+        sel_ver    = st.selectbox("Versão", ver_labels, key="diag_sb_ver")
+        version    = ver_map[sel_ver]
+
+    bpmn_xml = version.get("bpmn_xml") or ""
+    mermaid  = version.get("mermaid_code") or ""
+
+    # Build tab list
+    tab_labels = []
+    if bpmn_xml:
+        tab_labels.append("📐 BPMN 2.0")
+    if mermaid:
+        tab_labels.append("📊 Mermaid")
+
+    if not tab_labels:
+        st.warning("Esta versão não tem BPMN XML armazenado.")
+        return
+
+    tabs = st.tabs(tab_labels)
+    tab_idx = 0
+
+    if "📐 BPMN 2.0" in tab_labels:
+        with tabs[tab_idx]:
+            st.caption(
+                "Renderizado com bpmn-js · "
+                "Arraste para mover · Scroll para zoom · Tecla **0** para ajustar tela"
+            )
+            components.html(preview_from_xml(bpmn_xml), height=900, scrolling=False)
+            st.download_button(
+                "⬇️ Baixar .bpmn",
+                data=bpmn_xml,
+                file_name=f"{proc_map[sel_proc]['name'].replace(' ', '_')}_v{version['version']}.bpmn",
+                mime="application/xml",
+            )
+        tab_idx += 1
+
+    if "📊 Mermaid" in tab_labels:
+        with tabs[tab_idx]:
+            st.caption("Fluxograma Mermaid · ↓/→ alterna direção · Scroll: zoom · Drag: mover")
+            render_mermaid_block(mermaid, show_code=True, key_suffix="diag_sb_mermaid", height=820)
+
+
 if hub is None:
-    st.info("Nenhum resultado disponível. Processe uma transcrição na página principal primeiro.")
-    st.page_link("pages/Pipeline.py", label="← Voltar para Process2Diagram", icon="⚙️")
+    _render_from_supabase()
     st.stop()
 
 hub = KnowledgeHub.migrate(hub)
