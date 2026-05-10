@@ -101,6 +101,7 @@ _EDITOR_TEMPLATE = """\
   <button class="tb-btn tb-btn-default" id="btn-undo" title="Desfazer">↩ Desfazer</button>
   <button class="tb-btn tb-btn-default" id="btn-redo" title="Refazer">↪ Refazer</button>
   <button class="tb-btn tb-btn-primary" id="btn-export" title="Exportar XML para copiar">📋 Exportar XML</button>
+  <button class="tb-btn tb-btn-default" id="btn-new" title="Abrir em nova janela">&#8599; Janela</button>
 </div>
 
 <div id="canvas">
@@ -152,6 +153,14 @@ _EDITOR_TEMPLATE = """\
 
   document.getElementById('btn-redo').onclick = () => {{
     try {{ modeler.get('commandStack').redo(); }} catch(_) {{}}
+  }};
+
+  document.getElementById('btn-new').onclick = function() {{
+    var html='<!DOCTYPE html>'+document.documentElement.outerHTML;
+    var blob=new Blob([html],{{type:'text/html;charset=utf-8'}});
+    var url=URL.createObjectURL(blob);
+    var w=(window.top||window).open(url,'_blank');
+    if(!w)window.open(url,'_blank');
   }};
 
   document.getElementById('btn-export').onclick = async () => {{
