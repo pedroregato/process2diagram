@@ -97,7 +97,10 @@ _EDITOR_TEMPLATE = """\
 
 <div id="toolbar">
   <span id="tb-title">🎨 Editor BPMN — edite os elementos e exporte o XML</span>
+  <button class="tb-btn tb-btn-default" id="btn-zoom-in"  title="Zoom in">&plus;</button>
+  <button class="tb-btn tb-btn-default" id="btn-zoom-out" title="Zoom out">&minus;</button>
   <button class="tb-btn tb-btn-default" id="btn-fit" title="Ajustar ao ecrã">⊞ Ajustar</button>
+  <span id="zoom-label" style="color:#8899aa;font-size:11px;font-family:monospace;min-width:38px;text-align:right">100%</span>
   <button class="tb-btn tb-btn-default" id="btn-undo" title="Desfazer">↩ Desfazer</button>
   <button class="tb-btn tb-btn-default" id="btn-redo" title="Refazer">↪ Refazer</button>
   <button class="tb-btn tb-btn-primary" id="btn-export" title="Exportar XML para copiar">📋 Exportar XML</button>
@@ -120,7 +123,7 @@ _EDITOR_TEMPLATE = """\
 <script src="https://unpkg.com/bpmn-js@17/dist/bpmn-modeler.development.js"></script>
 <script>
 (function() {{
-  const xml      = `{xml_js}`;
+  const xml     = `{xml_js}`;
   const loading  = document.getElementById('loading-overlay');
   const errPanel = document.getElementById('err-panel');
   const xmlPanel = document.getElementById('xml-panel');
@@ -131,11 +134,19 @@ _EDITOR_TEMPLATE = """\
     keyboard: {{ bindTo: window }},
   }});
 
+  function updateZoomLabel() {{
+    try {{
+      var zl = document.getElementById('zoom-label');
+      if (zl) zl.textContent = Math.round(modeler.get('canvas').zoom() * 100) + '%';
+    }} catch(_) {{}}
+  }}
+
   modeler.importXML(xml)
     .then(() => {{
       loading.style.display = 'none';
-      const canvas = modeler.get('canvas');
-      canvas.zoom('fit-viewport', 'auto');
+      modeler.get('canvas').zoom('fit-viewport', 'auto');
+      updateZoomLabel();
+      try {{ modeler.get('eventBus').on('canvas.viewbox.changed', updateZoomLabel); }} catch(_) {{}}
     }})
     .catch(err => {{
       loading.style.display = 'none';
@@ -143,66 +154,104 @@ _EDITOR_TEMPLATE = """\
       errPanel.textContent = '❌ Erro ao carregar BPMN: ' + err.message;
     }});
 
-  document.getElementById('btn-fit').onclick = () => {{
+  document.getElementById('btn-zoom-in').onclick = function() {{
+    try {{ var c = modeler.get('canvas'); c.zoom(Math.min(c.zoom() * 1.25, 8), 'auto'); }} catch(_) {{}}
+  }};
+
+  document.getElementById('btn-zoom-out').onclick = function() {{
+    try {{ var c = modeler.get('canvas'); c.zoom(Math.max(c.zoom() / 1.25, 0.1), 'auto'); }} catch(_) {{}}
+  }};
+
+  document.getElementById('btn-fit').onclick = function() {{
     try {{ modeler.get('canvas').zoom('fit-viewport', 'auto'); }} catch(_) {{}}
   }};
 
-  document.getElementById('btn-undo').onclick = () => {{
+  document.getElementById('btn-undo').onclick = function() {{
     try {{ modeler.get('commandStack').undo(); }} catch(_) {{}}
   }};
 
-  document.getElementById('btn-redo').onclick = () => {{
+  document.getElementById('btn-redo').onclick = function() {{
     try {{ modeler.get('commandStack').redo(); }} catch(_) {{}}
   }};
 
-  document.getElementById('btn-new').onclick = async function() {{
-    // Export current XML (captures edits made in this session)
-    var curXml;
-    try {{
-      var _res = await modeler.saveXML({{ format: true }});
-      curXml = _res.xml;
-    }} catch(_) {{
-      curXml = xml; // fall back to initial xml const
-    }}
-    // Store XML as a body attribute — HTML-encoded on serialization, decoded on read
-    document.body.setAttribute('data-bpmn-xml', curXml);
-    // Clone the full document
-    var clone = document.documentElement.cloneNode(true);
-    // Clear bpmn-js rendered SVG so the new window initializes fresh
-    var mc = clone.querySelector('#modeler-container');
-    if (mc) mc.innerHTML = '';
-    // Restore loading overlay (it has display:none inline style after init)
-    var lo = clone.querySelector('#loading-overlay');
-    if (lo) lo.removeAttribute('style');
-    // Hide xml panel if it was open
-    var xp = clone.querySelector('#xml-panel');
-    if (xp) xp.style.display = 'none';
-    // Patch inline script: replace hardcoded xml const with data-attribute read
-    var scripts = clone.querySelectorAll('script:not([src])');
-    for (var i = 0; i < scripts.length; i++) {{
-      if (scripts[i].textContent.indexOf('const xml') !== -1) {{
-        scripts[i].textContent = scripts[i].textContent.replace(
-          /const xml\s*=\s*`[\s\S]*?`;/,
-          "const xml = document.body.getAttribute('data-bpmn-xml');"
-        );
-        break;
+  // ── Receive XML from the standalone new window ────────────────────────────
+  window.addEventListener('message', function(ev) {{
+    if (!ev.data || ev.data.type !== 'bpmn-save') return;
+    var savedXml = ev.data.xml;
+    xmlOut.value = savedXml;
+    xmlPanel.style.display = 'block';
+    xmlOut.select();
+    var hint = document.getElementById('xml-hint');
+    navigator.clipboard.writeText(savedXml).then(function() {{
+      hint.innerHTML = '✅ <strong>XML recebido e copiado!</strong> Cole no campo "XML editado" abaixo (Ctrl+V).';
+    }}, function() {{
+      hint.innerHTML = '📋 XML recebido da janela — selecione tudo (Ctrl+A) e copie (Ctrl+C), depois cole abaixo.';
+    }});
+  }});
+
+  // ── ↗ Janela / 💾 Fechar & Salvar (dual-mode button) ────────────────────
+  var btnNew = document.getElementById('btn-new');
+  if (window.opener) {{
+    // Running as a standalone window opened from the editor
+    btnNew.innerHTML = '&#128190; Fechar &amp; Salvar';
+    btnNew.title = 'Enviar XML editado para o editor e fechar esta janela';
+    btnNew.className = 'tb-btn tb-btn-primary';
+  }}
+
+  btnNew.onclick = async function() {{
+    if (window.opener) {{
+      // Standalone window: send XML to original iframe and close
+      try {{
+        var _r = await modeler.saveXML({{ format: true }});
+        window.opener.postMessage({{ type: 'bpmn-save', xml: _r.xml }}, '*');
+      }} catch(e) {{
+        alert('Erro ao exportar XML: ' + e.message);
+        return;
       }}
+      window.close();
+    }} else {{
+      // Original iframe: open a fresh standalone window with current XML
+      var curXml;
+      try {{
+        var _res = await modeler.saveXML({{ format: true }});
+        curXml = _res.xml;
+      }} catch(_) {{
+        curXml = xml;
+      }}
+      document.body.setAttribute('data-bpmn-xml', curXml);
+      var clone = document.documentElement.cloneNode(true);
+      var mc = clone.querySelector('#modeler-container');
+      if (mc) mc.innerHTML = '';
+      var lo = clone.querySelector('#loading-overlay');
+      if (lo) lo.removeAttribute('style');
+      var xp = clone.querySelector('#xml-panel');
+      if (xp) xp.style.display = 'none';
+      var scripts = clone.querySelectorAll('script:not([src])');
+      for (var i = 0; i < scripts.length; i++) {{
+        if (scripts[i].textContent.indexOf('const xml') !== -1) {{
+          scripts[i].textContent = scripts[i].textContent.replace(
+            /const xml\s*=\s*`[\\s\\S]*?`;/,
+            "const xml = document.body.getAttribute('data-bpmn-xml');"
+          );
+          break;
+        }}
+      }}
+      var html = '<!DOCTYPE html>' + clone.outerHTML;
+      var blob = new Blob([html], {{type:'text/html;charset=utf-8'}});
+      var url = URL.createObjectURL(blob);
+      var w = (window.top||window).open(url, '_blank');
+      if (!w) window.open(url, '_blank');
     }}
-    var html = '<!DOCTYPE html>' + clone.outerHTML;
-    var blob = new Blob([html], {{type:'text/html;charset=utf-8'}});
-    var url = URL.createObjectURL(blob);
-    var w = (window.top||window).open(url, '_blank');
-    if (!w) window.open(url, '_blank');
   }};
 
-  document.getElementById('btn-export').onclick = async () => {{
+  // ── Export XML button ────────────────────────────────────────────────────
+  document.getElementById('btn-export').onclick = async function() {{
     try {{
       const {{ xml: exportedXml }} = await modeler.saveXML({{ format: true }});
       xmlOut.value = exportedXml;
       xmlPanel.style.display = 'block';
       xmlOut.select();
-
-      let hint = document.getElementById('xml-hint');
+      var hint = document.getElementById('xml-hint');
       try {{
         await navigator.clipboard.writeText(exportedXml);
         hint.innerHTML = '✅ <strong>XML copiado para a área de transferência.</strong> Cole no campo abaixo (Ctrl+V).';
