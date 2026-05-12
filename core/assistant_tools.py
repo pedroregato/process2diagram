@@ -2604,6 +2604,17 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 rows = db.table(table).select("id").eq(col, mid).execute().data or []
                 if rows:
                     cascade.append(f"  • {len(rows)} registro(s) em `{table}`")
+                    if table == "bpmn_processes":
+                        # bpmn_versions são filhos de bpmn_processes
+                        total_ver = 0
+                        for proc in rows:
+                            try:
+                                ver = db.table("bpmn_versions").select("id").eq("process_id", proc["id"]).execute().data or []
+                                total_ver += len(ver)
+                            except Exception:
+                                pass
+                        if total_ver:
+                            cascade.append(f"    ↳ {total_ver} versão(ões) em `bpmn_versions`")
             except Exception:
                 cascade.append(f"  • `{table}`: não foi possível verificar")
 
@@ -2659,12 +2670,23 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     pass  # column may not exist — safe to ignore
 
             # ── Step 2: Delete child rows in tables that may lack CASCADE DELETE ─
-            # (transcript_chunks, sbvr_terms, sbvr_rules, bpmn_processes)
-            for table in ("transcript_chunks", "sbvr_terms", "sbvr_rules", "bpmn_processes"):
+            for table in ("transcript_chunks", "sbvr_terms", "sbvr_rules"):
                 try:
                     db.table(table).delete().eq("meeting_id", mid).execute()
                 except Exception:
                     pass  # table/column may not exist — safe to ignore
+
+            # bpmn_versions must be deleted before bpmn_processes (FK constraint)
+            try:
+                procs = db.table("bpmn_processes").select("id").eq("meeting_id", mid).execute().data or []
+                for proc in procs:
+                    try:
+                        db.table("bpmn_versions").delete().eq("process_id", proc["id"]).execute()
+                    except Exception:
+                        pass
+                db.table("bpmn_processes").delete().eq("meeting_id", mid).execute()
+            except Exception:
+                pass
 
             # ── Step 3: Delete the meeting row itself ────────────────────────────
             db.table("meetings").delete().eq("id", mid).execute()
