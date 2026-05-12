@@ -3351,7 +3351,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         lines = [f"**Usuários do domínio `{domain}`** ({len(users)} encontrados):\n"]
         for u in users:
             role_badge = f" `{u.get('role', 'user')}`"
-            nome = u.get("nome") or u.get("login", "?")
+            nome = u.get("display_name") or u.get("login", "?")
             lines.append(f"- **{nome}** ({u.get('login', '')}){role_badge}")
         return "\n".join(lines)
 
