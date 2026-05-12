@@ -191,6 +191,15 @@ _editing_idx: int | None = st.session_state.get("_edit_idx")
 for i, msg in enumerate(history):
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
+        # Render charts attached to this assistant message
+        if msg["role"] == "assistant":
+            for ci, fig_dict in enumerate(msg.get("charts") or []):
+                try:
+                    import plotly.graph_objects as go
+                    fig = go.Figure(fig_dict)
+                    st.plotly_chart(fig, use_container_width=True, key=f"chart_{i}_{ci}")
+                except Exception as _chart_err:
+                    st.caption(f"⚠️ Não foi possível renderizar o gráfico: {_chart_err}")
         if msg["role"] == "user":
             col_edit, col_copy, _ = st.columns([1, 1, 8])
             with col_edit:
@@ -262,6 +271,7 @@ if _asst_running:
         response_text = result_box.get("response") or "❌ Sem resposta."
         tokens_used   = result_box.get("tokens", 0)
         tools_called  = result_box.get("tools_called", [])
+        charts        = result_box.get("charts", [])
         error         = result_box.get("error")
 
         if error and not result_box.get("response"):
@@ -269,7 +279,7 @@ if _asst_running:
 
         response_text = _clean_response(response_text) or response_text
         history = st.session_state["assistant_history"]
-        history.append({"role": "assistant", "content": response_text})
+        history.append({"role": "assistant", "content": response_text, "charts": charts})
         st.session_state["assistant_history"] = history
 
         st.session_state["_asst_last_caption"] = {
@@ -355,7 +365,7 @@ if active_question and not _asst_running:
             try:
                 _status("🔧 Iniciando consulta…")
                 _agent = AgentAssistant({"api_key": _api_key}, _provider_cfg)
-                resp_text, tok, tools = _agent.chat_with_tools(
+                resp_text, tok, tools, charts = _agent.chat_with_tools(
                     history=_history_snap,
                     question=_question,
                     project_id=_project_id,
@@ -366,6 +376,7 @@ if active_question and not _asst_running:
                 _result_box["response"]     = resp_text
                 _result_box["tokens"]       = tok
                 _result_box["tools_called"] = tools
+                _result_box["charts"]       = charts
             except Exception as _exc:
                 _status("⚠️ Tool-use falhou — usando busca por keyword…")
                 try:

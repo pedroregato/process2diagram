@@ -1045,7 +1045,7 @@ class AgentAssistant(BaseAgent):
         project_name: str = "",
         cancel_event: threading.Event | None = None,
         status_fn: Callable[[str], None] | None = None,
-    ) -> tuple[str, int, list[str]]:
+    ) -> tuple[str, int, list[str], list[dict]]:
         """
         Tool-use conversational turn.
 
@@ -1065,8 +1065,9 @@ class AgentAssistant(BaseAgent):
                            (e.g. "🔧 Executando `get_meeting_list`…").
 
         Returns:
-            (response_text, tokens_used, tools_called)
+            (response_text, tokens_used, tools_called, charts)
             tools_called is a list of tool names that were invoked.
+            charts is a list of Plotly figure dicts (empty when no chart tools were called).
         """
         from core.assistant_tools import AssistantToolExecutor
 
@@ -1220,12 +1221,13 @@ class AgentAssistant(BaseAgent):
         model       = self.provider_cfg["default_model"]
 
         if client_type == "openai_compatible":
-            return self._chat_with_tools_openai(
+            resp_text, total_tk, called = self._chat_with_tools_openai(
                 system, messages, api_key, model, executor, cancel_event, status_fn
             )
         elif client_type == "anthropic":
-            return self._chat_with_tools_anthropic(
+            resp_text, total_tk, called = self._chat_with_tools_anthropic(
                 system, messages, api_key, model, executor, cancel_event, status_fn
             )
         else:
             raise ValueError(f"client_type '{client_type}' não suporta tool-use")
+        return resp_text, total_tk, called, executor.get_pending_charts()

@@ -1109,6 +1109,153 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        # ── Chart tools ──────────────────────────────────────────────────────
+        {
+            "type": "function",
+            "function": {
+                "name": "generate_requirements_chart",
+                "description": (
+                    "Gera um gráfico de barras interativo com a distribuição de requisitos por tipo "
+                    "(Funcional, Não-Funcional, Regra de Negócio, etc.) e/ou por prioridade. "
+                    "USE para: 'mostre um gráfico de requisitos', 'quantos requisitos por tipo', "
+                    "'distribuição de prioridades', 'gráfico de RF vs RNF'."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "group_by": {
+                            "type": "string",
+                            "enum": ["type", "priority", "both"],
+                            "description": "Agrupar por tipo (type), prioridade (priority) ou ambos (both). Padrão: type.",
+                        },
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Filtrar por reunião específica. Omita para todo o projeto.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "generate_meetings_timeline",
+                "description": (
+                    "Gera um gráfico de linha do tempo das reuniões do projeto, mostrando "
+                    "volume de artefatos (requisitos, decisões, ações) por reunião. "
+                    "USE para: 'mostre a evolução das reuniões', 'linha do tempo', "
+                    "'como foi o projeto ao longo do tempo', 'gráfico de reuniões'."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "metric": {
+                            "type": "string",
+                            "enum": ["requirements", "decisions", "action_items", "all"],
+                            "description": "Métrica a exibir. Padrão: all.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "generate_action_items_chart",
+                "description": (
+                    "Gera um gráfico com o status dos itens de ação (pendentes, em andamento, concluídos) "
+                    "e/ou distribuição por responsável. "
+                    "USE para: 'gráfico de ações', 'status das tarefas', 'quem tem mais ações pendentes', "
+                    "'itens de ação por responsável'."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "group_by": {
+                            "type": "string",
+                            "enum": ["status", "responsible", "meeting"],
+                            "description": "Agrupar por status, responsável ou reunião. Padrão: status.",
+                        },
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Filtrar por reunião específica. Omita para todo o projeto.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "generate_roi_chart",
+                "description": (
+                    "Gera um gráfico de barras com o indicador ROI-TR de cada reunião do projeto. "
+                    "USE para: 'gráfico de ROI', 'qual reunião teve mais valor', 'evolução do ROI', "
+                    "'comparar qualidade das reuniões'."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "cost_per_hour": {
+                            "type": "number",
+                            "description": "Custo médio por hora/participante em R$. Padrão: 150.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "generate_custom_chart",
+                "description": (
+                    "Gera um gráfico completamente personalizado a partir de dados fornecidos. "
+                    "USE quando o usuário pedir um gráfico específico que não se encaixa nos "
+                    "gráficos pré-definidos (scatter, pizza, heatmap, etc.). "
+                    "O LLM fornece labels e valores e o sistema renderiza interativamente."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "chart_type": {
+                            "type": "string",
+                            "description": "Tipo: bar, line, pie, scatter, heatmap, funnel.",
+                        },
+                        "title": {
+                            "type": "string",
+                            "description": "Título do gráfico.",
+                        },
+                        "labels": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Rótulos do eixo X ou categorias (para pizza).",
+                        },
+                        "values": {
+                            "type": "array",
+                            "items": {"type": "number"},
+                            "description": "Valores numéricos correspondentes aos rótulos.",
+                        },
+                        "x_label": {
+                            "type": "string",
+                            "description": "Título do eixo X (opcional).",
+                        },
+                        "y_label": {
+                            "type": "string",
+                            "description": "Título do eixo Y (opcional).",
+                        },
+                        "series_name": {
+                            "type": "string",
+                            "description": "Nome da série de dados (opcional).",
+                        },
+                    },
+                    "required": ["chart_type", "title", "labels", "values"],
+                },
+            },
+        },
     ]
 
 
@@ -1171,6 +1318,12 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "reprocess_meeting_requirements": "admin",
     "reprocess_meeting_full":         "admin",
     "batch_reprocess_requirements":   "admin",
+    # Gráficos
+    "generate_requirements_chart":    "grafico",
+    "generate_meetings_timeline":     "grafico",
+    "generate_action_items_chart":    "grafico",
+    "generate_roi_chart":             "grafico",
+    "generate_custom_chart":          "grafico",
 }
 
 # Ferramentas que exigem perfil administrador
@@ -1225,6 +1378,11 @@ class AssistantToolExecutor:
         self.project_id = project_id
         self.llm_config = llm_config or {}   # {"api_key", "model", "provider_cfg"}
         self._meeting_cache: list[dict] | None = None
+        self._pending_charts: list[dict] = []  # Plotly figure dicts accumulated during a turn
+
+    def get_pending_charts(self) -> list[dict]:
+        """Return Plotly figure dicts accumulated by chart tools during this turn."""
+        return list(self._pending_charts)
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -3620,6 +3778,391 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         except Exception as exc:
             return f"❌ Erro ao reprocessar Reunião {meeting_number}: {exc}"
 
+    # ── Chart tools ───────────────────────────────────────────────────────────
+
+    def _dark_layout(self, fig, title: str = "") -> None:
+        """Apply the app's dark theme to a Plotly figure in-place."""
+        fig.update_layout(
+            title=dict(text=title, font=dict(size=15, color="#FAFAF8")),
+            paper_bgcolor="#0A1A32",
+            plot_bgcolor="#0A1A32",
+            font=dict(color="#FAFAF8", size=12),
+            xaxis=dict(gridcolor="#1A3050", zerolinecolor="#1A3050"),
+            yaxis=dict(gridcolor="#1A3050", zerolinecolor="#1A3050"),
+            legend=dict(bgcolor="#0F2040", bordercolor="#1A3050", borderwidth=1),
+            margin=dict(t=60, b=50, l=50, r=20),
+        )
+
+    def generate_requirements_chart(
+        self,
+        group_by: str = "type",
+        meeting_number: int | None = None,
+    ) -> str:
+        """Bar chart of requirements grouped by type and/or priority."""
+        from modules.supabase_client import get_supabase_client
+        import plotly.graph_objects as go
+        from collections import Counter
+
+        client = get_supabase_client()
+        if client is None:
+            return "Supabase não configurado."
+        try:
+            q = (
+                client.table("requirements")
+                .select("req_type, priority")
+                .eq("project_id", self.project_id)
+            )
+            if meeting_number:
+                q = q.eq("meeting_number", meeting_number)
+            rows = q.execute().data or []
+        except Exception as e:
+            return f"Erro ao buscar requisitos: {e}"
+
+        if not rows:
+            return "Nenhum requisito encontrado para gerar o gráfico."
+
+        _TYPE_COLORS = {
+            "Funcional": "#3b82f6",
+            "Não-Funcional": "#8b5cf6",
+            "Regra de Negócio": "#C97B1A",
+            "Restrição": "#ef4444",
+            "Interface": "#10b981",
+            "Desempenho": "#06b6d4",
+        }
+        _PRIO_COLORS = {"Alta": "#ef4444", "Média": "#C97B1A", "Baixa": "#10b981"}
+
+        suffix = f" — Reunião {meeting_number}" if meeting_number else ""
+        n_total = len(rows)
+
+        if group_by == "priority":
+            counts = Counter(r.get("priority") or "Não definida" for r in rows)
+            labels = list(counts.keys())
+            values = list(counts.values())
+            colors = [_PRIO_COLORS.get(lb, "#64748b") for lb in labels]
+            fig = go.Figure(go.Bar(
+                x=labels, y=values, marker_color=colors,
+                text=values, textposition="outside",
+            ))
+            self._dark_layout(fig, f"Requisitos por Prioridade{suffix}")
+
+        elif group_by == "both":
+            # Stacked bar: type on x, stacked by priority
+            type_prio: dict[str, Counter] = {}
+            for r in rows:
+                t = r.get("req_type") or "Outro"
+                p = r.get("priority") or "Não definida"
+                type_prio.setdefault(t, Counter())[p] += 1
+            all_types = list(type_prio.keys())
+            all_prios = list({r.get("priority") or "Não definida" for r in rows})
+            traces = []
+            for prio in all_prios:
+                traces.append(go.Bar(
+                    name=prio,
+                    x=all_types,
+                    y=[type_prio.get(t, Counter()).get(prio, 0) for t in all_types],
+                    marker_color=_PRIO_COLORS.get(prio, "#64748b"),
+                ))
+            fig = go.Figure(data=traces)
+            fig.update_layout(barmode="stack")
+            self._dark_layout(fig, f"Requisitos por Tipo e Prioridade{suffix}")
+
+        else:  # type (default)
+            counts = Counter(r.get("req_type") or "Outro" for r in rows)
+            labels = list(counts.keys())
+            values = list(counts.values())
+            colors = [_TYPE_COLORS.get(lb, "#64748b") for lb in labels]
+            fig = go.Figure(go.Bar(
+                x=labels, y=values, marker_color=colors,
+                text=values, textposition="outside",
+            ))
+            self._dark_layout(fig, f"Requisitos por Tipo{suffix}")
+
+        self._pending_charts.append(fig.to_dict())
+        breakdown = ", ".join(
+            f"{k}: {v}"
+            for k, v in Counter(r.get("req_type") or "Outro" for r in rows).most_common()
+        )
+        return f"📊 Gráfico gerado: {n_total} requisitos{suffix} — {breakdown}"
+
+    def generate_meetings_timeline(self, metric: str = "all") -> str:
+        """Bar chart of meeting artefact volumes over time."""
+        from modules.supabase_client import get_supabase_client
+        import plotly.graph_objects as go
+
+        client = get_supabase_client()
+        if client is None:
+            return "Supabase não configurado."
+
+        meetings = self._get_meetings()
+        if not meetings:
+            return "Nenhuma reunião encontrada."
+
+        try:
+            reqs_resp = (
+                client.table("requirements")
+                .select("meeting_number")
+                .eq("project_id", self.project_id)
+                .execute()
+            )
+            req_rows = reqs_resp.data or []
+        except Exception:
+            req_rows = []
+
+        from collections import Counter, defaultdict
+        req_counts = Counter(r.get("meeting_number") for r in req_rows)
+
+        mtg_nums   = [m.get("meeting_number") for m in meetings]
+        mtg_labels = [
+            f"#{m.get('meeting_number')} {(m.get('title') or '')[:20]}"
+            for m in meetings
+        ]
+
+        def _extract_decisions(minutes_md: str) -> int:
+            if not minutes_md:
+                return 0
+            import re
+            dec_section = re.search(r"Decisões.*?\n(.*?)(?:\n##|\Z)", minutes_md, re.DOTALL | re.IGNORECASE)
+            if dec_section:
+                return len([ln for ln in dec_section.group(1).splitlines() if ln.strip().startswith("-")])
+            return 0
+
+        def _extract_actions(minutes_md: str) -> int:
+            if not minutes_md:
+                return 0
+            import re
+            act_section = re.search(r"Ações|Action Items.*?\n(.*?)(?:\n##|\Z)", minutes_md, re.DOTALL | re.IGNORECASE)
+            if act_section:
+                return len([ln for ln in act_section.group(1).splitlines() if ln.strip().startswith("-")])
+            return 0
+
+        decisions = [_extract_decisions(m.get("minutes_md", "")) for m in meetings]
+        actions   = [_extract_actions(m.get("minutes_md", "")) for m in meetings]
+        reqs      = [req_counts.get(n, 0) for n in mtg_nums]
+
+        traces = []
+        if metric in ("requirements", "all"):
+            traces.append(go.Bar(name="Requisitos", x=mtg_labels, y=reqs, marker_color="#3b82f6"))
+        if metric in ("decisions", "all"):
+            traces.append(go.Bar(name="Decisões", x=mtg_labels, y=decisions, marker_color="#C97B1A"))
+        if metric in ("action_items", "all"):
+            traces.append(go.Bar(name="Ações", x=mtg_labels, y=actions, marker_color="#10b981"))
+
+        fig = go.Figure(data=traces)
+        fig.update_layout(barmode="group")
+        self._dark_layout(fig, "Linha do Tempo das Reuniões — Artefatos por Reunião")
+        self._pending_charts.append(fig.to_dict())
+        return f"📊 Gráfico gerado: {len(meetings)} reuniões — requisitos, decisões e ações"
+
+    def generate_action_items_chart(
+        self,
+        group_by: str = "status",
+        meeting_number: int | None = None,
+    ) -> str:
+        """Bar or pie chart of action items."""
+        import plotly.graph_objects as go
+        from collections import Counter
+        import re
+
+        meetings = self._get_meetings()
+        if meeting_number:
+            meetings = [m for m in meetings if m.get("meeting_number") == meeting_number]
+
+        # Parse action items from minutes_md
+        items = []
+        for m in meetings:
+            md = m.get("minutes_md") or ""
+            # look for lines like "- [ ] Task | Resp | Date" or "- [x] Task"
+            for line in md.splitlines():
+                line = line.strip()
+                if not line.startswith("- ["):
+                    continue
+                done = line.startswith("- [x]") or line.startswith("- [X]")
+                rest = re.sub(r"^- \[.\]\s*", "", line)
+                parts = [p.strip() for p in rest.split("|")]
+                task = parts[0] if parts else rest
+                resp = parts[1] if len(parts) > 1 else "Não definido"
+                items.append({
+                    "task": task,
+                    "responsible": resp,
+                    "status": "Concluído" if done else "Pendente",
+                    "meeting_number": m.get("meeting_number"),
+                })
+
+        if not items:
+            return "Nenhum item de ação encontrado (verifique se as atas foram geradas)."
+
+        suffix = f" — Reunião {meeting_number}" if meeting_number else ""
+
+        if group_by == "responsible":
+            counts = Counter(it["responsible"] for it in items)
+            labels = list(counts.keys())
+            values = list(counts.values())
+            fig = go.Figure(go.Bar(
+                x=labels, y=values, marker_color="#C97B1A",
+                text=values, textposition="outside",
+            ))
+            self._dark_layout(fig, f"Itens de Ação por Responsável{suffix}")
+
+        elif group_by == "meeting":
+            counts = Counter(f"Reunião #{it['meeting_number']}" for it in items)
+            labels = list(counts.keys())
+            values = list(counts.values())
+            fig = go.Figure(go.Bar(
+                x=labels, y=values, marker_color="#8b5cf6",
+                text=values, textposition="outside",
+            ))
+            self._dark_layout(fig, "Itens de Ação por Reunião")
+
+        else:  # status
+            counts = Counter(it["status"] for it in items)
+            labels = list(counts.keys())
+            values = list(counts.values())
+            colors = {"Concluído": "#10b981", "Pendente": "#ef4444"}.values()
+            fig = go.Figure(go.Pie(
+                labels=labels, values=values,
+                marker=dict(colors=["#10b981" if lb == "Concluído" else "#ef4444" for lb in labels]),
+                textinfo="label+percent+value",
+                hole=0.35,
+            ))
+            self._dark_layout(fig, f"Status dos Itens de Ação{suffix}")
+
+        self._pending_charts.append(fig.to_dict())
+        total = len(items)
+        done = sum(1 for it in items if it["status"] == "Concluído")
+        return f"📊 Gráfico gerado: {total} itens de ação{suffix} — {done} concluídos, {total - done} pendentes"
+
+    def generate_roi_chart(self, cost_per_hour: float = 150.0) -> str:
+        """Bar chart of ROI-TR per meeting."""
+        import plotly.graph_objects as go
+        import re
+
+        meetings = self._get_meetings()
+        if not meetings:
+            return "Nenhuma reunião encontrada."
+
+        from modules.supabase_client import get_supabase_client
+        client = get_supabase_client()
+
+        labels, roi_values, colors = [], [], []
+        for m in meetings:
+            num   = m.get("meeting_number")
+            title = (m.get("title") or "")[:20]
+            md    = m.get("minutes_md") or ""
+
+            # Count participants
+            n_part = 1
+            part_match = re.search(r"Participantes.*?\n(.*?)(?:\n##|\Z)", md, re.DOTALL | re.IGNORECASE)
+            if part_match:
+                n_part = max(1, len([ln for ln in part_match.group(1).splitlines() if ln.strip().startswith("-")]))
+
+            # Count decisions
+            dec_match = re.search(r"Decisões.*?\n(.*?)(?:\n##|\Z)", md, re.DOTALL | re.IGNORECASE)
+            n_dec = len([ln for ln in (dec_match.group(1).splitlines() if dec_match else []) if ln.strip().startswith("-")])
+
+            # Count actions
+            n_act = len([ln for ln in md.splitlines() if ln.strip().startswith("- [")])
+
+            # Count requirements
+            n_req = 0
+            if client:
+                try:
+                    n_req = len(client.table("requirements").select("id").eq("project_id", self.project_id).eq("meeting_number", num).execute().data or [])
+                except Exception:
+                    pass
+
+            # Simple ROI formula (approximate)
+            dc = n_dec * 1.5 + n_act * 1.0 + n_req * 1.0
+            dur_h = 1.0  # assume 1h
+            roi = min(10.0, dc * 1000 / (n_part * dur_h * cost_per_hour) * 1.5) if cost_per_hour > 0 else 0.0
+            roi = round(roi, 2)
+
+            labels.append(f"#{num} {title}")
+            roi_values.append(roi)
+            colors.append(
+                "#10b981" if roi >= 7 else "#C97B1A" if roi >= 4 else "#ef4444"
+            )
+
+        fig = go.Figure(go.Bar(
+            x=labels, y=roi_values,
+            marker_color=colors,
+            text=[f"{v:.1f}" for v in roi_values],
+            textposition="outside",
+        ))
+        fig.add_hline(y=7.0, line_dash="dash", line_color="#10b981",
+                      annotation_text="Bom (7)", annotation_position="right")
+        fig.add_hline(y=4.0, line_dash="dash", line_color="#C97B1A",
+                      annotation_text="Regular (4)", annotation_position="right")
+        self._dark_layout(fig, "ROI-TR por Reunião (0–10)")
+        fig.update_yaxes(range=[0, 11])
+        self._pending_charts.append(fig.to_dict())
+        avg = sum(roi_values) / len(roi_values) if roi_values else 0
+        return f"📊 Gráfico ROI-TR gerado: {len(meetings)} reuniões — média {avg:.1f}/10"
+
+    def generate_custom_chart(
+        self,
+        chart_type: str,
+        title: str,
+        labels: list[str],
+        values: list[float],
+        x_label: str = "",
+        y_label: str = "",
+        series_name: str = "",
+    ) -> str:
+        """Render a custom chart from LLM-provided data."""
+        import plotly.graph_objects as go
+
+        _PALETTE = [
+            "#3b82f6", "#C97B1A", "#10b981", "#8b5cf6",
+            "#ef4444", "#06b6d4", "#f59e0b", "#ec4899",
+        ]
+        colors = [_PALETTE[i % len(_PALETTE)] for i in range(len(labels))]
+
+        ct = chart_type.lower()
+        try:
+            if ct == "pie":
+                trace = go.Pie(
+                    labels=labels, values=values,
+                    marker=dict(colors=colors),
+                    textinfo="label+percent+value",
+                    hole=0.3,
+                )
+                fig = go.Figure(trace)
+            elif ct == "line":
+                fig = go.Figure(go.Scatter(
+                    x=labels, y=values, mode="lines+markers",
+                    name=series_name or title,
+                    line=dict(color=_PALETTE[0], width=2),
+                    marker=dict(size=8),
+                ))
+            elif ct == "scatter":
+                fig = go.Figure(go.Scatter(
+                    x=labels, y=values, mode="markers",
+                    name=series_name or title,
+                    marker=dict(color=colors, size=12),
+                ))
+            elif ct == "funnel":
+                fig = go.Figure(go.Funnel(
+                    y=labels, x=values,
+                    marker=dict(color=colors),
+                ))
+            else:  # bar (default)
+                fig = go.Figure(go.Bar(
+                    x=labels, y=values,
+                    marker_color=colors,
+                    text=values, textposition="outside",
+                    name=series_name or title,
+                ))
+
+            self._dark_layout(fig, title)
+            if x_label:
+                fig.update_xaxes(title_text=x_label)
+            if y_label:
+                fig.update_yaxes(title_text=y_label)
+            self._pending_charts.append(fig.to_dict())
+            return f"📊 Gráfico '{title}' ({chart_type}) gerado com {len(labels)} categorias."
+        except Exception as e:
+            return f"Erro ao gerar gráfico personalizado: {e}"
+
     # ── Dispatcher ────────────────────────────────────────────────────────────
 
     def execute(self, tool_name: str, tool_input: dict) -> str:
@@ -3787,6 +4330,30 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     bool(tool_input.get("run_bpmn", False)),
                     bool(tool_input.get("run_quality", False)),
                     tool_input.get("output_language", "Auto-detect"),
+                ),
+                # ── Chart tools ───────────────────────────────────────────────
+                "generate_requirements_chart":    lambda: self.generate_requirements_chart(
+                    group_by=tool_input.get("group_by", "type"),
+                    meeting_number=tool_input.get("meeting_number"),
+                ),
+                "generate_meetings_timeline":     lambda: self.generate_meetings_timeline(
+                    metric=tool_input.get("metric", "all"),
+                ),
+                "generate_action_items_chart":    lambda: self.generate_action_items_chart(
+                    group_by=tool_input.get("group_by", "status"),
+                    meeting_number=tool_input.get("meeting_number"),
+                ),
+                "generate_roi_chart":             lambda: self.generate_roi_chart(
+                    cost_per_hour=float(tool_input.get("cost_per_hour", 150.0)),
+                ),
+                "generate_custom_chart":          lambda: self.generate_custom_chart(
+                    chart_type=tool_input["chart_type"],
+                    title=tool_input["title"],
+                    labels=tool_input["labels"],
+                    values=[float(v) for v in tool_input["values"]],
+                    x_label=tool_input.get("x_label", ""),
+                    y_label=tool_input.get("y_label", ""),
+                    series_name=tool_input.get("series_name", ""),
                 ),
             }
             if tool_name not in dispatch:
