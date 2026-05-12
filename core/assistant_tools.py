@@ -1256,6 +1256,52 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+		{
+			"type": "function",
+			"function": {
+				"name": "get_users_by_domain",
+				"description": "Lista todos os usuários cadastrados em um domínio específico (ex: 'fgv', 'gmail.com'). Responde perguntas como 'Quais são os usuários do domínio fgv?'",
+				"parameters": {
+					"type": "object",
+					"properties": {
+						"domain": {
+							"type": "string",
+							"description": "Nome do domínio (ex: 'fgv', 'fgv.br', 'gmail.com')"
+						}
+					},
+					"required": ["domain"]
+				}
+			}
+		},
+		{
+			"type": "function",
+			"function": {
+				"name": "list_all_domains",
+				"description": "Lista todos os domínios ou projetos cadastrados na solução, com contagem de usuários por domínio. Responde perguntas como 'Quais domínios estão cadastrados?' ou 'Quais são todos os projetos/domínios?'",
+				"parameters": {
+					"type": "object",
+					"properties": {},
+					"required": []
+				}
+			}
+		},
+		{
+			"type": "function",
+			"function": {
+				"name": "list_users_by_project",
+				"description": "Lista todos os usuários agrupados por projeto cadastrado na solução. Responde perguntas como 'Liste todos os usuários por projeto'. Opcionalmente filtra por um projeto específico.",
+				"parameters": {
+					"type": "object",
+					"properties": {
+						"project_id": {
+							"type": "string",
+							"description": "ID do projeto para filtrar (opcional). Se omitido, retorna todos os projetos."
+						}
+					},
+					"required": []
+				}
+			}
+		},		
     ]
 
 
