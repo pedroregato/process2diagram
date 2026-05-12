@@ -175,15 +175,37 @@ st.markdown("""
 [data-testid="stChatMessageContainer"][data-role="assistant"] [data-testid="chatAvatarIcon-assistant"] {
     background: #C97B1A !important;
 }
-/* Campo de entrada */
+/* Campo de entrada — container */
 [data-testid="stChatInput"] {
-    border: 1px solid #1e4a7a !important;
-    background: #0a1e34 !important;
+    border: 1px solid #3a5a7a !important;
+    background: #000000 !important;
     border-radius: 10px !important;
 }
 [data-testid="stChatInput"]:focus-within {
     border-color: #C97B1A !important;
-    box-shadow: 0 0 0 2px rgba(201,123,26,.2) !important;
+    box-shadow: 0 0 0 2px rgba(201,123,26,.25) !important;
+}
+/* Textarea dentro do input */
+[data-testid="stChatInput"] textarea {
+    background: #000000 !important;
+    color: #ffffff !important;
+    caret-color: #ffffff !important;
+}
+[data-testid="stChatInput"] textarea::placeholder {
+    color: #6b8aa8 !important;
+}
+/* Botão de envio (seta) */
+[data-testid="stChatInput"] button {
+    background: transparent !important;
+    color: #ffffff !important;
+}
+[data-testid="stChatInput"] button svg {
+    fill: #ffffff !important;
+    stroke: #ffffff !important;
+}
+[data-testid="stChatInput"] button:hover svg {
+    fill: #C97B1A !important;
+    stroke: #C97B1A !important;
 }
 </style>
 """, unsafe_allow_html=True)
