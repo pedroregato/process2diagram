@@ -4075,13 +4075,12 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
 
             labels.append(f"#{num} {title}")
             roi_values.append(roi)
-            colors.append(
-                "#10b981" if roi >= 7 else "#C97B1A" if roi >= 4 else "#ef4444"
-            )
+
+        bar_colors = [self._palette[i % len(self._palette)] for i in range(len(labels))]
 
         fig = go.Figure(go.Bar(
             x=labels, y=roi_values,
-            marker_color=colors,
+            marker_color=bar_colors,
             text=[f"{v:.1f}" for v in roi_values],
             textposition="outside",
         ))
