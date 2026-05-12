@@ -3337,6 +3337,50 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             f"{len(all_meeting_nums)} reunião(ões)."
         )
         return "\n".join(lines)
+		
+	# ── User / Domain query methods ────────────────────────────────────────
+
+    def get_users_by_domain(self, domain: str) -> str:
+        """Lista usuários cujo login contém o domínio informado."""
+        domain = domain.strip().lstrip("@")
+        from core import project_store
+        users = project_store.list_users_by_domain(domain)
+        if not users:
+            return f"Nenhum usuário encontrado para o domínio '{domain}'."
+        lines = [f"**Usuários do domínio `{domain}`** ({len(users)} encontrados):\n"]
+        for u in users:
+            role_badge = f" `{u.get('role', 'user')}`"
+            nome = u.get("nome") or u.get("login", "?")
+            lines.append(f"- **{nome}** ({u.get('login', '')}){role_badge}")
+        return "\n".join(lines)
+
+    def list_all_domains_tool(self) -> str:
+        """Lista todos os domínios distintos extraídos dos logins cadastrados."""
+        from core import project_store
+        domains = project_store.list_all_domains()
+        if not domains:
+            return "Nenhum domínio encontrado."
+        lines = ["**Domínios cadastrados na solução:**\n"]
+        for d in domains:
+            lines.append(f"- `{d['domain']}` — {d['user_count']} usuário(s)")
+        return "\n".join(lines)
+
+    def list_users_by_project_tool(self, project_id: str | None = None) -> str:
+        """Lista usuários agrupados por projeto."""
+        from core import project_store
+        data = project_store.list_users_by_project(project_id)
+        if not data:
+            return "Nenhum dado encontrado."
+        lines = ["**Usuários por projeto:**\n"]
+        for proj in data:
+            count = proj["user_count"]
+            lines.append(f"\n### 📁 {proj['project_name']} ({count} usuário(s))")
+            for u in proj.get("users", []):
+                lines.append(
+                    f"- {u.get('nome', u.get('login', '?'))} "
+                    f"({u.get('login', '')}) `{u.get('role', 'user')}`"
+                )
+        return "\n".join(lines)		
 
     # ── Google Calendar tools ─────────────────────────────────────────────────
 
@@ -4384,6 +4428,16 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 "generate_roi_chart":             lambda: self.generate_roi_chart(
                     cost_per_hour=float(tool_input.get("cost_per_hour", 150.0)),
                 ),
+				
+				# ── User / Domain query tools ─────────────────────────────────
+                "get_users_by_domain":            lambda: self.get_users_by_domain(
+                    tool_input["domain"],
+                ),
+                "list_all_domains":               lambda: self.list_all_domains_tool(),
+                "list_users_by_project":          lambda: self.list_users_by_project_tool(
+                    tool_input.get("project_id"),
+                ),				
+				
                 "generate_custom_chart":          lambda: self.generate_custom_chart(
                     chart_type=tool_input["chart_type"],
                     title=tool_input["title"],
