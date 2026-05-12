@@ -191,17 +191,22 @@ st.markdown("""
 [data-baseweb="avatar"] svg {
     fill: #3b82f6 !important;
 }
-/* Campo de entrada — container */
-[data-testid="stChatInput"] {
-    border: 1px solid #3a5a7a !important;
+/* Campo de entrada — todos os níveis do container */
+[data-testid="stChatInput"],
+[data-testid="stChatInput"] > div,
+[data-testid="stChatInput"] > div > div,
+[data-testid="stChatInput"] > div > div > div {
     background: #000000 !important;
     border-radius: 10px !important;
+}
+[data-testid="stChatInput"] {
+    border: 1px solid #3a5a7a !important;
 }
 [data-testid="stChatInput"]:focus-within {
     border-color: #C97B1A !important;
     box-shadow: 0 0 0 2px rgba(201,123,26,.25) !important;
 }
-/* Textarea dentro do input */
+/* Textarea */
 [data-testid="stChatInput"] textarea {
     background: #000000 !important;
     color: #ffffff !important;
@@ -210,16 +215,23 @@ st.markdown("""
 [data-testid="stChatInput"] textarea::placeholder {
     color: #6b8aa8 !important;
 }
-/* Botão de envio (seta) */
-[data-testid="stChatInput"] button {
-    background: transparent !important;
+/* Botão de envio — todos os níveis */
+[data-testid="stChatInput"] button,
+[data-testid="stChatInput"] button > div,
+[data-testid="stChatInput"] [data-baseweb="button"],
+[data-testid="stChatInputSubmitButton"] {
+    background: #000000 !important;
+    border: none !important;
+    border-radius: 6px !important;
     color: #ffffff !important;
 }
-[data-testid="stChatInput"] button svg {
+[data-testid="stChatInput"] button svg,
+[data-testid="stChatInputSubmitButton"] svg {
     fill: #ffffff !important;
     stroke: #ffffff !important;
 }
-[data-testid="stChatInput"] button:hover svg {
+[data-testid="stChatInput"] button:hover svg,
+[data-testid="stChatInputSubmitButton"]:hover svg {
     fill: #C97B1A !important;
     stroke: #C97B1A !important;
 }
