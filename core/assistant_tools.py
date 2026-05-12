@@ -1069,11 +1069,11 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
-		# ---------------------------- moedas
-		{
-			"type": "function",
-			"function": {
-				"name": "convert_usd_to_brl",
+        # ---------------------------- moedas
+        {
+            "type": "function",
+            "function": {
+                "name": "convert_usd_to_brl",
 				"description": (
 					"Obtém a cotação atual do dólar americano (USD) em reais brasileiros (BRL) "
 					"e converte um valor se fornecido. "
@@ -1094,11 +1094,11 @@ def get_tool_schemas_openai() -> list[dict]:
 							),
 						}
 					},
-					"required": ["usd_amount"],
-				},
-			},
-		},		
-		# ---------------------------- speaker
+                    "required": ["usd_amount"],
+                },
+            },
+        },		
+        # ---------------------------- speaker
         {
             "type": "function",
             "function": {
