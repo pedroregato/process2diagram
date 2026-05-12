@@ -1074,30 +1074,30 @@ def get_tool_schemas_openai() -> list[dict]:
             "type": "function",
             "function": {
                 "name": "convert_usd_to_brl",
-				"description": (
-					"Obtém a cotação atual do dólar americano (USD) em reais brasileiros (BRL) "
-					"e converte um valor se fornecido. "
-					"USE para qualquer pergunta sobre: cotação do dólar hoje, valor atual do USD, "
-					"quanto vale um dólar em reais, conversão de USD para BRL, "
-					"custo em reais de valores em dólar. "
-					"Quando o usuário não informar um valor, use usd_amount=1.0 para retornar "
-					"apenas a cotação atual."
-				),
-				"parameters": {
-					"type": "object",
-					"properties": {
-						"usd_amount": {
-							"type": "number",
-							"description": (
-								"Valor em dólares a converter. "
-								"Use 1.0 quando o usuário perguntar apenas pela cotação atual."
-							),
-						}
-					},
+                "description": (
+                    "Obtém a cotação atual do dólar americano (USD) em reais brasileiros (BRL) "
+                    "e converte um valor se fornecido. "
+                    "USE para qualquer pergunta sobre: cotação do dólar hoje, valor atual do USD, "
+                    "quanto vale um dólar em reais, conversão de USD para BRL, "
+                    "custo em reais de valores em dólar. "
+                    "Quando o usuário não informar um valor, use usd_amount=1.0 para retornar "
+                    "apenas a cotação atual."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "usd_amount": {
+                            "type": "number",
+                            "description": (
+                                "Valor em dólares a converter. "
+                                "Use 1.0 quando o usuário perguntar apenas pela cotação atual."
+                            ),
+                        }
+                    },
                     "required": ["usd_amount"],
                 },
             },
-        },		
+        },        
         # ---------------------------- speaker
         {
             "type": "function",
@@ -1282,52 +1282,52 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
-		{
-			"type": "function",
-			"function": {
-				"name": "get_users_by_domain",
-				"description": "Lista todos os usuários cadastrados em um domínio específico (ex: 'fgv', 'gmail.com'). Responde perguntas como 'Quais são os usuários do domínio fgv?'",
-				"parameters": {
-					"type": "object",
-					"properties": {
-						"domain": {
-							"type": "string",
-							"description": "Nome do domínio (ex: 'fgv', 'fgv.br', 'gmail.com')"
-						}
-					},
-					"required": ["domain"]
-				}
-			}
-		},
-		{
-			"type": "function",
-			"function": {
-				"name": "list_all_domains",
-				"description": "Lista todos os domínios ou projetos cadastrados na solução, com contagem de usuários por domínio. Responde perguntas como 'Quais domínios estão cadastrados?' ou 'Quais são todos os projetos/domínios?'",
-				"parameters": {
-					"type": "object",
-					"properties": {},
-					"required": []
-				}
-			}
-		},
-		{
-			"type": "function",
-			"function": {
-				"name": "list_users_by_project",
-				"description": "Lista todos os usuários agrupados por projeto cadastrado na solução. Responde perguntas como 'Liste todos os usuários por projeto'. Opcionalmente filtra por um projeto específico.",
-				"parameters": {
-					"type": "object",
-					"properties": {
-						"project_id": {
-							"type": "string",
-							"description": "ID do projeto para filtrar (opcional). Se omitido, retorna todos os projetos."
-						}
-					},
-					"required": []
-				}
-			}
-		},		
+        {
+            "type": "function",
+            "function": {
+                "name": "get_users_by_domain",
+                "description": "Lista todos os usuários cadastrados em um domínio específico (ex: 'fgv', 'gmail.com'). Responde perguntas como 'Quais são os usuários do domínio fgv?'",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "domain": {
+                            "type": "string",
+                            "description": "Nome do domínio (ex: 'fgv', 'fgv.br', 'gmail.com')"
+                        }
+                    },
+                    "required": ["domain"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_all_domains",
+                "description": "Lista todos os domínios ou projetos cadastrados na solução, com contagem de usuários por domínio. Responde perguntas como 'Quais domínios estão cadastrados?' ou 'Quais são todos os projetos/domínios?'",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_users_by_project",
+                "description": "Lista todos os usuários agrupados por projeto cadastrado na solução. Responde perguntas como 'Liste todos os usuários por projeto'. Opcionalmente filtra por um projeto específico.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "project_id": {
+                            "type": "string",
+                            "description": "ID do projeto para filtrar (opcional). Se omitido, retorna todos os projetos."
+                        }
+                    },
+                    "required": []
+                }
+            }
+        },        
     ]
 
 
@@ -1364,13 +1364,13 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "preview_text_correction":      "consulta",
     "get_speaker_contributions":    "consulta",
     "get_system_capabilities":          "consulta",
-	
-	"get_users_by_domain":   "consulta",
-	"list_all_domains":      "consulta",
-	"list_users_by_project": "consulta",
-	
-	"convert_usd_to_brl": "consulta",
-	
+    
+    "get_users_by_domain":   "consulta",
+    "list_all_domains":      "consulta",
+    "list_users_by_project": "consulta",
+    
+    "convert_usd_to_brl": "consulta",
+    
     "calendar_diagnose":                "admin",
     # Google Calendar
     "calendar_list_events":             "consulta",
@@ -1464,23 +1464,23 @@ class AssistantToolExecutor:
     def get_pending_charts(self) -> list[dict]:
         """Return Plotly figure dicts accumulated by chart tools during this turn."""
         return list(self._pending_charts)
-		
-	def convert_usd_to_brl(self, usd_amount: float) -> str:
-		"""Converte USD para BRL usando cotação em tempo real da AwesomeAPI."""
-		try:
-			from modules.cost_estimator import get_usd_brl_rate
-			rate, from_cache = get_usd_brl_rate()
-			brl_amount = usd_amount * rate
-			cache_label = "cache" if from_cache else "atualizada agora"
-			return (
-				f"💱 **Conversão USD → BRL**\n\n"
-				f"- Valor em USD: **$ {usd_amount:,.4f}**\n"
-				f"- Cotação atual: **R$ {rate:.4f}** ({cache_label})\n"
-				f"- Valor em BRL: **R$ {brl_amount:,.2f}**\n\n"
-				f"_Fonte: AwesomeAPI (economia.awesomeapi.com.br)_"
-			)
-		except Exception as exc:
-			return f"Erro ao obter cotação: {exc}"		
+        
+    def convert_usd_to_brl(self, usd_amount: float) -> str:
+        """Converte USD para BRL usando cotação em tempo real da AwesomeAPI."""
+        try:
+            from modules.cost_estimator import get_usd_brl_rate
+            rate, from_cache = get_usd_brl_rate()
+            brl_amount = usd_amount * rate
+            cache_label = "cache" if from_cache else "atualizada agora"
+            return (
+                f"💱 **Conversão USD → BRL**\n\n"
+                f"- Valor em USD: **$ {usd_amount:,.4f}**\n"
+                f"- Cotação atual: **R$ {rate:.4f}** ({cache_label})\n"
+                f"- Valor em BRL: **R$ {brl_amount:,.2f}**\n\n"
+                f"_Fonte: AwesomeAPI (economia.awesomeapi.com.br)_"
+            )
+        except Exception as exc:
+            return f"Erro ao obter cotação: {exc}"        
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -1513,8 +1513,8 @@ class AssistantToolExecutor:
             if m.get("meeting_number") == meeting_number:
                 return m
         return None
-		
-		
+        
+        
 
     @staticmethod
     def _section(minutes_md: str, *section_names: str) -> str:
@@ -3389,7 +3389,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             f"{len(all_meeting_nums)} reunião(ões)."
         )
         return "\n".join(lines)
-		
+        
     # ── User / Domain query methods ────────────────────────────────────────
 
     def get_users_by_domain(self, domain: str) -> str:
@@ -3432,7 +3432,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     f"- {u.get('nome', u.get('login', '?'))} "
                     f"({u.get('login', '')}) `{u.get('role', 'user')}`"
                 )
-        return "\n".join(lines)		
+        return "\n".join(lines)        
 
     # ── Google Calendar tools ─────────────────────────────────────────────────
 
@@ -4465,10 +4465,10 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     bool(tool_input.get("run_quality", False)),
                     tool_input.get("output_language", "Auto-detect"),
                 ),
-				# ── Moedas ───────────────────────────────────────────────
-				"convert_usd_to_brl": lambda: self.convert_usd_to_brl(
-					float(tool_input["usd_amount"]),
-				),				
+                # ── Moedas ───────────────────────────────────────────────
+                "convert_usd_to_brl": lambda: self.convert_usd_to_brl(
+                    float(tool_input["usd_amount"]),
+                ),
                 # ── Chart tools ───────────────────────────────────────────────
                 "generate_requirements_chart":    lambda: self.generate_requirements_chart(
                     group_by=tool_input.get("group_by", "type"),
@@ -4484,7 +4484,6 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 "generate_roi_chart":             lambda: self.generate_roi_chart(
                     cost_per_hour=float(tool_input.get("cost_per_hour", 150.0)),
                 ),
-				
                 # ── User / Domain query tools ─────────────────────────────────
                 "get_users_by_domain":            lambda: self.get_users_by_domain(
                     tool_input["domain"],
@@ -4492,8 +4491,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 "list_all_domains":               lambda: self.list_all_domains_tool(),
                 "list_users_by_project":          lambda: self.list_users_by_project_tool(
                     tool_input.get("project_id"),
-                ),				
-				
+                ),
                 "generate_custom_chart":          lambda: self.generate_custom_chart(
                     chart_type=tool_input["chart_type"],
                     title=tool_input["title"],
