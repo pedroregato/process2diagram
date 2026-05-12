@@ -86,33 +86,39 @@ def list_users_by_domain(domain: str) -> list[dict]:
     if client is None:
         return []
     try:
-        # Find tenant by domain_slug or display_name
+        # Busca o tenant pelo domain_slug
         tenant_res = (
             client.table("tenants")
             .select("id, domain_slug, display_name")
-            .or_(f"domain_slug.ilike.%{domain}%,display_name.ilike.%{domain}%")
+            .ilike("domain_slug", f"%{domain}%")
             .execute()
         )
         tenants = tenant_res.data or []
+
+        # Se não achou pelo slug, tenta pelo display_name
+        if not tenants:
+            tenant_res = (
+                client.table("tenants")
+                .select("id, domain_slug, display_name")
+                .ilike("display_name", f"%{domain}%")
+                .execute()
+            )
+            tenants = tenant_res.data or []
+
         if not tenants:
             return []
 
-        tenant_ids = [t["id"] for t in tenants]
-
-        # Fetch users for those tenants
+        # Busca usuários de cada tenant encontrado
         all_users = []
-        for tid in tenant_ids:
+        for t in tenants:
             res = (
                 client.table("tenant_users")
                 .select("id, login, display_name, role, tenant_id")
-                .eq("tenant_id", tid)
+                .eq("tenant_id", t["id"])
                 .order("display_name")
                 .execute()
             )
-            tenant_name = next(
-                (t["display_name"] or t["domain_slug"] for t in tenants if t["id"] == tid),
-                domain,
-            )
+            tenant_name = t.get("display_name") or t.get("domain_slug") or domain
             for u in (res.data or []):
                 u["tenant_name"] = tenant_name
                 all_users.append(u)
@@ -120,7 +126,6 @@ def list_users_by_domain(domain: str) -> list[dict]:
         return all_users
     except Exception:
         return []
-
 
 def list_all_domains() -> list[dict]:
     """Return all tenants (domains) with user count."""
