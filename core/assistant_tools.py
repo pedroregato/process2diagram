@@ -1563,147 +1563,147 @@ class AssistantToolExecutor:
                 return m
         return None
         
-def update_requirement_status(
-    self,
-    new_status: str,
-    req_numbers: list[int] | None = None,
-    filter_req_type: str | None = None,
-    filter_current_status: str | None = None,
-    filter_meeting_number: int | None = None,
-    status_note: str | None = None,
-) -> str:
-    """Atualiza status de requisitos com filtros opcionais e registra versão."""
-    from modules.supabase_client import get_supabase_client
-    db = get_supabase_client()
-    if not db:
-        return "Banco de dados não disponível."
+    def update_requirement_status(
+        self,
+        new_status: str,
+        req_numbers: list[int] | None = None,
+        filter_req_type: str | None = None,
+        filter_current_status: str | None = None,
+        filter_meeting_number: int | None = None,
+        status_note: str | None = None,
+    ) -> str:
+        """Atualiza status de requisitos com filtros opcionais e registra versão."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
 
-    valid_statuses = {"active", "revised", "contradicted", "confirmed"}
-    if new_status not in valid_statuses:
-        return f"❌ Status inválido: '{new_status}'. Use: {', '.join(sorted(valid_statuses))}."
+        valid_statuses = {"active", "revised", "contradicted", "confirmed"}
+        if new_status not in valid_statuses:
+            return f"❌ Status inválido: '{new_status}'. Use: {', '.join(sorted(valid_statuses))}."
 
-    # ── Buscar requisitos candidatos ──────────────────────────────────────────
-    try:
-        q = (
-            db.table("requirements")
-            .select("id, req_number, title, req_type, status, first_meeting_id")
-            .eq("project_id", self.project_id)
-        )
-        if filter_req_type:
-            q = q.eq("req_type", filter_req_type)
-        if filter_current_status:
-            q = q.eq("status", filter_current_status)
-        rows = q.order("req_number").execute().data or []
-    except Exception as exc:
-        return f"❌ Erro ao buscar requisitos: {exc}"
-
-    # Filtro por números de requisito
-    if req_numbers:
-        rows = [r for r in rows if r.get("req_number") in req_numbers]
-
-    # Filtro por reunião de origem
-    if filter_meeting_number is not None:
-        # Resolve meeting_number → meeting_id
-        meeting = self._find_meeting(filter_meeting_number)
-        if not meeting:
-            return f"❌ Reunião {filter_meeting_number} não encontrada."
-        target_mid = meeting["id"]
-        rows = [r for r in rows if r.get("first_meeting_id") == target_mid]
-
-    if not rows:
-        return "Nenhum requisito encontrado com os filtros fornecidos."
-
-    # ── Preview antes de aplicar ──────────────────────────────────────────────
-    # Se muitos requisitos seriam afetados, lista para confirmação
-    if len(rows) > 10:
-        preview = "\n".join(
-            f"  REQ-{r['req_number']:03d}: {r['title'][:60]} [{r['status']} → {new_status}]"
-            for r in rows[:5]
-        )
-        return (
-            f"⚠️ {len(rows)} requisitos seriam atualizados para '{new_status}'.\n"
-            f"Primeiros 5:\n{preview}\n  ... e mais {len(rows) - 5}\n\n"
-            f"Confirme explicitamente: 'sim, atualize todos' ou refine os filtros."
-        )
-
-    # ── Aplicar atualização ───────────────────────────────────────────────────
-    from datetime import datetime, timezone
-    now_iso = datetime.now(timezone.utc).isoformat()
-
-    updated: list[str] = []
-    errors:  list[str] = []
-
-    for r in rows:
-        rid        = r["id"]
-        req_number = r.get("req_number")
-        req_id     = f"REQ-{req_number:03d}" if isinstance(req_number, int) else "REQ-???"
-        old_status = r.get("status") or "active"
-
-        if old_status == new_status:
-            updated.append(f"  {req_id}: já estava '{new_status}' — sem alteração")
-            continue
-
-        # Atualiza requirements
-        patch: dict = {
-            "status":     new_status,
-            "updated_at": now_iso,
-        }
-        if status_note:
-            patch["status_note"] = status_note
-
+        # ── Buscar requisitos candidatos ──────────────────────────────────────────
         try:
-            db.table("requirements").update(patch).eq("id", rid).execute()
-        except Exception as exc:
-            errors.append(f"  {req_id}: ❌ {exc}")
-            continue
-
-        # Registra versão em requirement_versions
-        try:
-            # Pega a última versão para incrementar
-            ver_rows = (
-                db.table("requirement_versions")
-                .select("version")
-                .eq("requirement_id", rid)
-                .order("version", desc=True)
-                .limit(1)
-                .execute().data or []
+            q = (
+                db.table("requirements")
+                .select("id, req_number, title, req_type, status, first_meeting_id")
+                .eq("project_id", self.project_id)
             )
-            next_ver = (ver_rows[0]["version"] + 1) if ver_rows else 1
+            if filter_req_type:
+                q = q.eq("req_type", filter_req_type)
+            if filter_current_status:
+                q = q.eq("status", filter_current_status)
+            rows = q.order("req_number").execute().data or []
+        except Exception as exc:
+            return f"❌ Erro ao buscar requisitos: {exc}"
 
-            # Usa o first_meeting_id como meeting_id de referência
-            ver_payload = {
-                "requirement_id": rid,
-                "meeting_id":     r.get("first_meeting_id"),
-                "version":        next_ver,
-                "title":          r.get("title", ""),
-                "description":    None,
-                "req_type":       r.get("req_type"),
-                "priority":       None,
-                "change_type":    "status_change",
-                "change_summary": (
-                    f"Status: {old_status} → {new_status}"
-                    + (f". {status_note}" if status_note else "")
-                ),
+        # Filtro por números de requisito
+        if req_numbers:
+            rows = [r for r in rows if r.get("req_number") in req_numbers]
+
+        # Filtro por reunião de origem
+        if filter_meeting_number is not None:
+            # Resolve meeting_number → meeting_id
+            meeting = self._find_meeting(filter_meeting_number)
+            if not meeting:
+                return f"❌ Reunião {filter_meeting_number} não encontrada."
+            target_mid = meeting["id"]
+            rows = [r for r in rows if r.get("first_meeting_id") == target_mid]
+
+        if not rows:
+            return "Nenhum requisito encontrado com os filtros fornecidos."
+
+        # ── Preview antes de aplicar ──────────────────────────────────────────────
+        # Se muitos requisitos seriam afetados, lista para confirmação
+        if len(rows) > 10:
+            preview = "\n".join(
+                f"  REQ-{r['req_number']:03d}: {r['title'][:60]} [{r['status']} → {new_status}]"
+                for r in rows[:5]
+            )
+            return (
+                f"⚠️ {len(rows)} requisitos seriam atualizados para '{new_status}'.\n"
+                f"Primeiros 5:\n{preview}\n  ... e mais {len(rows) - 5}\n\n"
+                f"Confirme explicitamente: 'sim, atualize todos' ou refine os filtros."
+            )
+
+        # ── Aplicar atualização ───────────────────────────────────────────────────
+        from datetime import datetime, timezone
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        updated: list[str] = []
+        errors:  list[str] = []
+
+        for r in rows:
+            rid        = r["id"]
+            req_number = r.get("req_number")
+            req_id     = f"REQ-{req_number:03d}" if isinstance(req_number, int) else "REQ-???"
+            old_status = r.get("status") or "active"
+
+            if old_status == new_status:
+                updated.append(f"  {req_id}: já estava '{new_status}' — sem alteração")
+                continue
+
+            # Atualiza requirements
+            patch: dict = {
+                "status":     new_status,
+                "updated_at": now_iso,
             }
-            db.table("requirement_versions").insert(ver_payload).execute()
-        except Exception:
-            pass  # versão falhou mas o status foi atualizado — não bloqueia
+            if status_note:
+                patch["status_note"] = status_note
 
-        updated.append(f"  {req_id}: {old_status} → **{new_status}**")
+            try:
+                db.table("requirements").update(patch).eq("id", rid).execute()
+            except Exception as exc:
+                errors.append(f"  {req_id}: ❌ {exc}")
+                continue
 
-    # ── Resultado ─────────────────────────────────────────────────────────────
-    lines = [
-        f"**Atualização de Status → `{new_status}`**",
-        f"{len([u for u in updated if '→' in u])} requisito(s) atualizado(s):",
-        "",
-    ]
-    lines.extend(updated)
-    if errors:
-        lines.append(f"\n❌ {len(errors)} erro(s):")
-        lines.extend(errors)
-    if status_note:
-        lines.append(f"\n📝 Nota registrada: *{status_note}*")
-    return "\n".join(lines)
+            # Registra versão em requirement_versions
+            try:
+                # Pega a última versão para incrementar
+                ver_rows = (
+                    db.table("requirement_versions")
+                    .select("version")
+                    .eq("requirement_id", rid)
+                    .order("version", desc=True)
+                    .limit(1)
+                    .execute().data or []
+                )
+                next_ver = (ver_rows[0]["version"] + 1) if ver_rows else 1
+
+                # Usa o first_meeting_id como meeting_id de referência
+                ver_payload = {
+                    "requirement_id": rid,
+                    "meeting_id":     r.get("first_meeting_id"),
+                    "version":        next_ver,
+                    "title":          r.get("title", ""),
+                    "description":    None,
+                    "req_type":       r.get("req_type"),
+                    "priority":       None,
+                    "change_type":    "status_change",
+                    "change_summary": (
+                        f"Status: {old_status} → {new_status}"
+                        + (f". {status_note}" if status_note else "")
+                    ),
+                }
+                db.table("requirement_versions").insert(ver_payload).execute()
+            except Exception:
+                pass  # versão falhou mas o status foi atualizado — não bloqueia
+
+            updated.append(f"  {req_id}: {old_status} → **{new_status}**")
+
+        # ── Resultado ─────────────────────────────────────────────────────────────
+        lines = [
+            f"**Atualização de Status → `{new_status}`**",
+            f"{len([u for u in updated if '→' in u])} requisito(s) atualizado(s):",
+            "",
+        ]
+        lines.extend(updated)
+        if errors:
+            lines.append(f"\n❌ {len(errors)} erro(s):")
+            lines.extend(errors)
+        if status_note:
+            lines.append(f"\n📝 Nota registrada: *{status_note}*")
+        return "\n".join(lines)
 
     @staticmethod
     def _section(minutes_md: str, *section_names: str) -> str:
