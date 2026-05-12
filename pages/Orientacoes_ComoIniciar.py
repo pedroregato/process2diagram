@@ -179,6 +179,7 @@ _FEATURES = [
     ("✅", "Validação & Rastreamento"),
     ("📅", "Google Calendar"),
     ("📈", "Dashboard ROI-TR"),
+    ("📊", "Graficos Interativos"),
 ]
 pills_html = "".join(
     f'<span class="feat-pill"><span class="fp-icon">{ic}</span>{lb}</span>'
@@ -386,12 +387,17 @@ Exibe aba <em>Dev Tools</em> com o KnowledgeHub JSON completo — útil para dep
 # ── Novidades (v4.16) ─────────────────────────────────────────────────────────
 st.markdown(
     '<div class="g-section-hdr">Novidades recentes'
-    '<span class="new-badge">v4.16</span>'
+    '<span class="new-badge">v4.17</span>'
     '</div>',
     unsafe_allow_html=True,
 )
 
 _NEWS = [
+    ("📊", "Graficos interativos no Assistente",
+     "Peca graficos diretamente no chat do Assistente: barras de requisitos por tipo ou prioridade, "
+     "linha do tempo de artefatos por reuniao, pizza de status de acoes, ROI-TR por reuniao e graficos "
+     "customizados com dados informados na conversa. Selecione a paleta de cores na sidebar "
+     "(<em>Graficos → Paleta de cores</em>) e repita o pedido para aplicar as novas cores."),
     ("📅", "Google Calendar integrado",
      "O Assistente pode listar eventos, sugerir horários e agendar itens de ação diretamente nas agendas do projeto. "
      "Cada projeto pode ter um calendário Google dedicado, configurável em Configurações → Banco de Dados."),
@@ -444,6 +450,11 @@ _TIPS = [
 
     "**Configure o Google Calendar** em Configurações → Banco de Dados para que o Assistente "
     "possa agendar itens de ação e sugerir horários de reunião diretamente da conversa.",
+
+    "**Gere graficos no Assistente** pedindo diretamente no chat: <em>'Gere um grafico de requisitos por tipo'</em>, "
+    "<em>'Mostre o ROI-TR das reunioes'</em> ou <em>'Crie um grafico de pizza com: Aprovado 45, Pendente 30'</em>. "
+    "Se algum texto ficar ilegivel por contraste de cores, troque a paleta na sidebar "
+    "(<em>Graficos → Paleta de cores</em>) e repita o pedido.",
 ]
 
 tips_html = ""
@@ -460,7 +471,7 @@ st.markdown(tips_html, unsafe_allow_html=True)
 st.markdown(
     "<div style='margin-top:2rem;padding-top:.8rem;border-top:1px solid #1A3050;"
     "text-align:center;font-size:.68rem;color:#3A5070;letter-spacing:.04em'>"
-    "Process2Diagram v4.16 &nbsp;·&nbsp; Guia de Início Rápido"
+    "Process2Diagram v4.17 &nbsp;·&nbsp; Guia de Inicio Rapido"
     "</div>",
     unsafe_allow_html=True,
 )

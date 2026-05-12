@@ -10,7 +10,7 @@
 - **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown / Word / PDF), requirements analysis (JSON/Markdown), executive HTML report, interactive requirements mind map
 - **Deploy:** Streamlit Cloud — auto-deploy on push to `main` branch (`github.com/pedroregato/process2diagram`)
 - **Dev environment:** PyCharm on Windows; Python 3.13
-- **Current version:** v4.16
+- **Current version:** v4.17
 
 Supported LLM providers: DeepSeek (default), Claude (Anthropic), OpenAI, Groq, Google Gemini.
 
@@ -61,6 +61,7 @@ process2diagram/
 │   ├── session_state.py          # init_session_state() — initializes all st.session_state keys
 │   ├── rerun_handlers.py         # handle_rerun() — re-executes a single named agent
 │   ├── assistant_tools.py        # Tool schemas + AssistantToolExecutor for AgentAssistant tool-use mode
+│   ├── chart_config.py           # CHART_PALETTES + DEFAULT_PALETTE — zero-dependency constants shared by Assistente and AssistantToolExecutor
 │   └── schema.py                 # Legacy schemas (Process, Step, Edge, BpmnProcess…)
 │
 ├── agents/
@@ -517,6 +518,17 @@ AgentAssistant.chat_with_tools(history, question, project_id)
 **Admin gate:** `AssistantToolExecutor.execute()` checks `is_admin()` before running any tool in `_ADMIN_TOOLS` frozenset. Returns `"⛔ A ferramenta '...' requer perfil administrador."` if role is insufficient.
 
 **Tool catalog:** visible in **Configurações → aba Assistente → "📖 Catálogo de Ferramentas"** expander. Previously was shown inline in Assistente.py (removed in v4.13).
+
+**Chart tools (v4.17):** 5 tools in the `grafico` category generate interactive Plotly figures:
+- `generate_requirements_chart(group_by, meeting_number?)` — bar chart grouped by type or priority
+- `generate_meetings_timeline(metric)` — grouped bars per meeting (requirements / decisions / actions)
+- `generate_action_items_chart(group_by, meeting_number?)` — pie (status) or bar (responsible / meeting)
+- `generate_roi_chart(cost_per_hour)` — bar chart ROI-TR 0–10 per meeting with threshold lines
+- `generate_custom_chart(chart_type, title, labels, values, ...)` — bar/line/pie/scatter/funnel from LLM data
+
+Chart figures are accumulated in `executor._pending_charts` as `fig.to_dict()` dicts during a tool-use turn, returned as the 4th element of `chat_with_tools()`, stored in message history under `"charts"` key, and rendered via `st.plotly_chart()` in the chat loop.
+
+**Colour palettes:** defined in `core/chart_config.py` (zero-dependency). `AssistantToolExecutor.__init__` reads `llm_config.get("chart_palette")` and sets `self._palette`. All chart methods use `self._palette` for bar/pie/line colors. Semantic colors (priority Alta/Média/Baixa, action status) are kept fixed regardless of palette. Palette selection UI lives in the Assistente sidebar under "🎨 Gráficos".
 
 **Message format differences:**
 - OpenAI: `finish_reason == "tool_calls"` → tool results as `{"role": "tool", "tool_call_id": id, "content": text}`
@@ -1094,6 +1106,11 @@ When unblocked: create `modules/office_client.py` + 2 tools (`outlook_send_email
 - [x] **`modules/text_utils.py`** — `rule_keyword_pt()` and other Portuguese text utilities
 - [x] **`modules/reqtracker_exporter.py`** — Excel/CSV export for ReqTracker
 - [x] **Google Gemini SDK migration** — use `google-generativeai` (stable) for `embed_content()` + `list_models()`; `google-genai` kept as secondary dependency
+
+### PC10 — Concluído (v4.17 / 2026-05-11)
+- [x] **Gráficos interativos no Assistente** — 5 ferramentas de gráfico no `AssistantToolExecutor`: `generate_requirements_chart` (barras por tipo/prioridade), `generate_meetings_timeline` (artefatos por reunião), `generate_action_items_chart` (pizza status / barras responsável), `generate_roi_chart` (ROI-TR por reunião), `generate_custom_chart` (bar/line/pie/scatter/funnel com dados do LLM); figuras Plotly serializadas como `fig.to_dict()` em `_pending_charts`, retornadas como 4º elemento da tupla de `chat_with_tools()`, renderizadas com `st.plotly_chart()` no histórico do chat
+- [x] **Paleta de cores configurável** — `core/chart_config.py` (zero imports) define `CHART_PALETTES` (6 paletas nomeadas: P2D Dark, Azul Oceano, Floresta, Laranja, Roxo, Cinza) e `DEFAULT_PALETTE`; `AssistantToolExecutor.__init__` lê `chart_palette` de `llm_config` e expõe `self._palette`; todos os métodos de gráfico usam `self._palette`; cores semânticas (prioridade, status concluído/pendente) mantidas fixas; `Assistente.py` sidebar exibe selectbox + swatches de preview; aviso inline quando paleta é alterada orientando o usuário a repetir o pedido
+- [x] **`core/chart_config.py`** — arquivo independente para constantes de paleta; evita ImportError ao importar `core.assistant_tools` (4000+ linhas) no nível de módulo da página; chaves ASCII-only para evitar problemas de encoding no Streamlit Cloud
 
 ### PC9 — Concluído (v4.16 / 2026-05-09)
 - [x] **`modules/bpmn_viewer.py` rewrite** — fetches bpmn-js assets server-side via `urllib` + `lru_cache`, inlines JS/CSS; eliminates CDN `<script src>` blocked by Streamlit sandbox; uses bpmn-js native `canvas.zoom('fit-viewport')` + `eventBus` instead of CSS `transform` wrapper; CDN fallback template when server-side fetch fails
