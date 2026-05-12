@@ -77,6 +77,106 @@ def create_project(name: str, description: str = "", sigla: str = "") -> dict | 
             return rows[0] if rows else None
         except Exception:
             return None
+			
+# ── User / Tenant query functions ──────────────────────────────────────────
+
+def list_users_by_domain(domain: str) -> list[dict]:
+    """Return all users whose login contains '@<domain>' (case-insensitive)."""
+    client = get_supabase_client()
+    if client is None:
+        return []
+    try:
+        res = (
+            client.table("tenant_users")
+            .select("id, login, nome, role, google_account")
+            .ilike("login", f"%@{domain}%")
+            .order("nome")
+            .execute()
+        )
+        return res.data or []
+    except Exception:
+        return []
+
+
+def list_all_domains() -> list[dict]:
+    """Return distinct domains (extracted from login emails) across all users."""
+    client = get_supabase_client()
+    if client is None:
+        return []
+    try:
+        res = (
+            client.table("tenant_users")
+            .select("login")
+            .execute()
+        )
+        from collections import Counter
+        domains: Counter = Counter()
+        for row in (res.data or []):
+            login = row.get("login", "")
+            if "@" in login:
+                domain = login.split("@", 1)[1].lower()
+                domains[domain] += 1
+        return [{"domain": d, "user_count": c} for d, c in sorted(domains.items())]
+    except Exception:
+        return []
+
+
+def list_users_by_project(project_id: str | None = None) -> list[dict]:
+    """Return users grouped by project. If project_id given, filter to that project.
+    
+    Joins tenant_users with projects via meetings.created_by or a direct
+    project_members table if it exists. Falls back to listing all users with
+    their associated project data via project_store.
+    """
+    client = get_supabase_client()
+    if client is None:
+        return []
+    try:
+        # Approach: list all projects and all users, then cross-reference
+        # via meetings.created_by field (who ran pipelines in each project)
+        projects_res = client.table("projects").select("id, name").execute()
+        users_res = (
+            client.table("tenant_users")
+            .select("id, login, nome, role")
+            .execute()
+        )
+        meetings_res = (
+            client.table("meetings")
+            .select("project_id, created_by")
+            .execute()
+        )
+
+        # Build map: project_id → set of user logins
+        from collections import defaultdict
+        proj_users: dict = defaultdict(set)
+        for m in (meetings_res.data or []):
+            if m.get("project_id") and m.get("created_by"):
+                proj_users[m["project_id"]].add(m["created_by"])
+
+        projects = {p["id"]: p["name"] for p in (projects_res.data or [])}
+        users = {u["login"]: u for u in (users_res.data or [])}
+
+        result = []
+        for pid, pname in sorted(projects.items(), key=lambda x: x[1]):
+            if project_id and pid != project_id:
+                continue
+            members = sorted(proj_users.get(pid, set()))
+            result.append({
+                "project_id": pid,
+                "project_name": pname,
+                "user_count": len(members),
+                "users": [
+                    {
+                        "login": login,
+                        "nome": users.get(login, {}).get("nome", login),
+                        "role": users.get(login, {}).get("role", "user"),
+                    }
+                    for login in members
+                ],
+            })
+        return result
+    except Exception:
+        return []			
 
 
 # ── Reuniões ──────────────────────────────────────────────────────────────────
