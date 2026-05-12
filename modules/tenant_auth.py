@@ -194,11 +194,19 @@ def list_all_tenants() -> list[dict]:
         return []
 
 
-def list_users_by_tenant(tenant_id: str) -> list[dict]:
-    """Lista usuários de um tenant (sem expor password_hash)."""
+def list_users_by_tenant(tenant_id: str) -> tuple[list[dict], str | None]:
+    """Lista usuários de um tenant (sem expor password_hash).
+
+    Returns:
+        (rows, error_message) — error_message é None em caso de sucesso.
+        Tenta query completa primeiro; se falhar (ex: colunas opcionais ausentes),
+        executa query reduzida. Se ambas falharem retorna ([], mensagem).
+    """
     client = get_supabase_client()
     if client is None:
-        return []
+        return [], "Supabase não configurado."
+
+    # Tentativa 1 — query completa com colunas de integração
     try:
         resp = (
             client.table("tenant_users")
@@ -207,9 +215,23 @@ def list_users_by_tenant(tenant_id: str) -> list[dict]:
             .order("login")
             .execute()
         )
-        return resp.data or []
-    except Exception:
-        return []
+        return resp.data or [], None
+    except Exception as e1:
+        err1 = str(e1)
+
+    # Tentativa 2 — fallback sem colunas opcionais (google_account / ms_teams_account
+    # podem não existir se a migration ainda não foi aplicada no banco)
+    try:
+        resp = (
+            client.table("tenant_users")
+            .select("id, login, display_name, role, active, created_at")
+            .eq("tenant_id", tenant_id)
+            .order("login")
+            .execute()
+        )
+        return resp.data or [], None
+    except Exception as e2:
+        return [], f"Erro ao listar usuários: {e2} | (query completa falhou com: {err1})"
 
 
 def create_tenant(domain_slug: str, display_name: str) -> tuple[bool, str]:

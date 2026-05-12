@@ -7,6 +7,7 @@
 #   2. KPIs globais do banco (projetos, reuniões, requisitos, processos BPMN)
 #   3. Fluxo de trabalho visual (4 etapas com links)
 #   4. Acesso rápido por área (esquerda) + Reuniões recentes (direita)
+#   5. Agenda do Projeto (Google Calendar embed)
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
@@ -41,58 +42,165 @@ role_color = _ROLE_COLOR.get(user_role, "#64748b")
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
+/* ── Header ── */
 .home-header {
-    background: linear-gradient(135deg, #0B1E3D 0%, #1A3A6B 100%);
+    background: linear-gradient(135deg, #071428 0%, #0B1E3D 55%, #122848 100%);
     border-bottom: 3px solid #C97B1A;
-    border-radius: 10px;
-    padding: 1.4rem 2rem;
-    margin-bottom: 1.2rem;
-    display: flex; align-items: center; justify-content: space-between;
+    border-radius: 12px;
+    padding: 1.6rem 2rem;
+    margin-bottom: 1.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 24px rgba(0,0,0,.35);
+    position: relative;
+    overflow: hidden;
 }
-.home-header .greeting { font-size: 1.5rem; font-weight: 700; color: #FAFAF8; }
-.home-header .sub      { font-size: .82rem; color: #8899AA; margin-top: .2rem; }
+.home-header::before {
+    content: "";
+    position: absolute;
+    top: -40px; right: -40px;
+    width: 180px; height: 180px;
+    background: radial-gradient(circle, rgba(201,123,26,.12) 0%, transparent 70%);
+    pointer-events: none;
+}
+.home-header .greeting {
+    font-size: 1.55rem; font-weight: 700; color: #FAFAF8;
+    letter-spacing: -.01em;
+}
+.home-header .sub { font-size: .82rem; color: #7A8EA8; margin-top: .3rem; }
+.home-header .brand-badge {
+    text-align: right; opacity: .7;
+    font-size: .65rem; letter-spacing: .14em;
+    text-transform: uppercase; color: #C97B1A;
+    line-height: 1.6;
+}
+.home-header .brand-badge span {
+    display: block; font-size: 1.6rem; opacity: .5; letter-spacing: 0;
+}
 .role-badge {
-    display:inline-block; padding:3px 10px; border-radius:20px;
-    font-size:.72rem; font-weight:700; letter-spacing:.06em;
-    margin-left:.6rem; vertical-align:middle;
+    display: inline-block; padding: 3px 10px; border-radius: 20px;
+    font-size: .70rem; font-weight: 700; letter-spacing: .07em;
+    margin-left: .6rem; vertical-align: middle;
 }
+
+/* ── KPI Cards ── */
 .kpi-card {
-    background: #0F2040; border: 1px solid #1e3a55; border-radius: 8px;
-    padding: 1rem 1.2rem; text-align: center;
+    background: #0A1A32;
+    border: 1px solid #1A3050;
+    border-top: 3px solid var(--kpi-accent, #C97B1A);
+    border-radius: 10px;
+    padding: 1.1rem 1.2rem .9rem;
+    text-align: center;
+    transition: transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 10px rgba(0,0,0,.25);
 }
-.kpi-card .kpi-num  { font-size: 2rem; font-weight: 700; color: #FAFAF8; line-height:1; }
-.kpi-card .kpi-lbl  { font-size: .72rem; color: #8899AA; letter-spacing:.06em;
-                       text-transform: uppercase; margin-top: .3rem; }
+.kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,.35);
+}
+.kpi-card .kpi-icon { font-size: 1.3rem; margin-bottom: .2rem; }
+.kpi-card .kpi-num  {
+    font-size: 2.1rem; font-weight: 800; color: #FAFAF8;
+    line-height: 1; letter-spacing: -.02em;
+}
+.kpi-card .kpi-lbl  {
+    font-size: .68rem; color: #6A7E98; letter-spacing: .08em;
+    text-transform: uppercase; margin-top: .35rem;
+}
+
+/* ── Section header ── */
+.section-hdr {
+    display: flex; align-items: center; gap: .6rem;
+    font-size: .72rem; font-weight: 700; color: #6A7E98;
+    letter-spacing: .12em; text-transform: uppercase;
+    margin: 1.4rem 0 .6rem;
+}
+.section-hdr::after {
+    content: ""; flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, #1e3a55 0%, transparent 100%);
+}
+
+/* ── Flow steps ── */
 .flow-step {
-    background: #0F2040; border: 1px solid #1e3a55; border-radius: 8px;
-    padding: .9rem 1rem; text-align: center; position: relative;
+    background: #0A1A32;
+    border: 1px solid #1A3050;
+    border-left: 3px solid var(--step-color, #C97B1A);
+    border-radius: 10px;
+    padding: 1rem 1rem .9rem;
+    text-align: center;
+    height: 100%;
+    box-shadow: 0 2px 10px rgba(0,0,0,.2);
+    transition: transform .15s, box-shadow .15s;
+    position: relative;
+}
+.flow-step:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,.3);
 }
 .flow-step .step-num {
-    display:inline-block; width:22px; height:22px; line-height:22px;
-    border-radius:50%; background:#C97B1A; color:#fff;
-    font-size:.72rem; font-weight:700; margin-bottom:.4rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--step-color, #C97B1A);
+    color: #fff; font-size: .72rem; font-weight: 800;
+    margin-bottom: .5rem;
+    box-shadow: 0 2px 6px rgba(0,0,0,.3);
 }
+.flow-step .step-icon  { font-size: 1.25rem; display: block; margin-bottom: .3rem; }
 .flow-step .step-title { font-size: .88rem; font-weight: 700; color: #FAFAF8; }
-.flow-step .step-desc  { font-size: .72rem; color: #8899AA; margin-top:.25rem; }
+.flow-step .step-desc  { font-size: .70rem; color: #7A8EA8; margin-top: .3rem; line-height: 1.45; }
+
+/* ── Flow arrow ── */
+.flow-arrow {
+    text-align: center; padding-top: 2.1rem;
+    color: #C97B1A; font-size: 1.3rem; opacity: .7;
+}
+
+/* ── Area cards ── */
 .area-card {
-    background: #0F2040; border: 1px solid #1e3a55; border-radius: 8px;
-    padding: 1rem 1.2rem; margin-bottom: .8rem;
+    background: #0A1A32;
+    border: 1px solid #1A3050;
+    border-radius: 10px;
+    padding: 1rem 1.2rem 1rem;
+    margin-bottom: .8rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,.2);
 }
 .area-card .area-title {
-    font-size: .78rem; font-weight: 700; color: #C97B1A;
-    letter-spacing: .08em; text-transform: uppercase; margin-bottom: .6rem;
-}
-.mtg-card {
-    background: #0F2040; border: 1px solid #1e3a55; border-radius: 8px;
-    padding: .8rem 1rem; margin-bottom: .6rem;
-}
-.mtg-card .mtg-title { font-size: .88rem; font-weight: 600; color: #FAFAF8; }
-.mtg-card .mtg-meta  { font-size: .72rem; color: #8899AA; margin-top: .2rem; }
-.section-hdr {
-    font-size: .78rem; font-weight: 700; color: #8899AA;
+    font-size: .70rem; font-weight: 700; color: #C97B1A;
     letter-spacing: .1em; text-transform: uppercase;
-    margin: 1.2rem 0 .5rem;
-    border-bottom: 1px solid #1e3a55; padding-bottom: .3rem;
+    margin-bottom: .7rem; display: flex; align-items: center; gap: .4rem;
+}
+.area-card .area-title::after {
+    content: ""; flex: 1; height: 1px; background: #1A3050;
+}
+
+/* ── Meeting cards ── */
+.mtg-card {
+    background: #0A1A32;
+    border: 1px solid #1A3050;
+    border-left: 3px solid #2A5080;
+    border-radius: 10px;
+    padding: .8rem 1rem;
+    margin-bottom: .5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,.18);
+    transition: border-left-color .15s;
+}
+.mtg-card:hover { border-left-color: #C97B1A; }
+.mtg-card .mtg-num   { font-size: .65rem; color: #C97B1A; font-weight: 700; letter-spacing: .08em; }
+.mtg-card .mtg-title { font-size: .88rem; font-weight: 600; color: #FAFAF8; margin-top: .1rem; }
+.mtg-card .mtg-meta  { font-size: .68rem; color: #6A7E98; margin-top: .25rem; }
+
+/* ── Footer ── */
+.home-footer {
+    margin-top: 2.5rem;
+    padding-top: .8rem;
+    border-top: 1px solid #1A3050;
+    text-align: center;
+    font-size: .68rem;
+    color: #3A5070;
+    letter-spacing: .04em;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -101,13 +209,20 @@ st.markdown("""
 tenant_str = f" · {tenant_name}" if tenant_name else ""
 st.markdown(f"""
 <div class="home-header">
-<div>
-<div class="greeting">
-  Bem-vindo(a), {user_name}
-  <span class="role-badge" style="background:{role_color}22;color:{role_color};border:1px solid {role_color}44">{role_label}</span>
-</div>
-<div class="sub">Process2Diagram{tenant_str} · {today_str}</div>
-</div>
+  <div>
+    <div class="greeting">
+      Bem-vindo(a), {user_name}
+      <span class="role-badge"
+            style="background:{role_color}22;color:{role_color};border:1px solid {role_color}55">
+        {role_label}
+      </span>
+    </div>
+    <div class="sub">Process2Diagram{tenant_str} &nbsp;·&nbsp; {today_str}</div>
+  </div>
+  <div class="brand-badge">
+    <span>⚙</span>
+    Process2Diagram<br>Central de Operações
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -126,15 +241,27 @@ recent = _load_recent()
 def _fmt(n: int, available: bool) -> str:
     return str(n) if available else "—"
 
-c1, c2, c3, c4 = st.columns(4)
-with c1:
-    st.markdown(f'<div class="kpi-card"><div class="kpi-num">{_fmt(stats["n_projects"], stats["available"])}</div><div class="kpi-lbl">Projetos</div></div>', unsafe_allow_html=True)
-with c2:
-    st.markdown(f'<div class="kpi-card"><div class="kpi-num">{_fmt(stats["n_meetings"], stats["available"])}</div><div class="kpi-lbl">Reuniões</div></div>', unsafe_allow_html=True)
-with c3:
-    st.markdown(f'<div class="kpi-card"><div class="kpi-num">{_fmt(stats["n_reqs"], stats["available"])}</div><div class="kpi-lbl">Requisitos</div></div>', unsafe_allow_html=True)
-with c4:
-    st.markdown(f'<div class="kpi-card"><div class="kpi-num">{_fmt(stats["n_bpmn_procs"], stats["available"])}</div><div class="kpi-lbl">Processos BPMN</div></div>', unsafe_allow_html=True)
+_KPI_ACCENTS = ["#C97B1A", "#3b82f6", "#10b981", "#8b5cf6"]
+_KPI_ICONS   = ["📁", "🗓️", "📝", "📐"]
+_KPI_DATA    = [
+    ("n_projects",   "Projetos"),
+    ("n_meetings",   "Reuniões"),
+    ("n_reqs",       "Requisitos"),
+    ("n_bpmn_procs", "Processos BPMN"),
+]
+
+cols = st.columns(4)
+for col, (key, label), accent, icon in zip(cols, _KPI_DATA, _KPI_ACCENTS, _KPI_ICONS):
+    val = _fmt(stats[key], stats["available"])
+    with col:
+        st.markdown(
+            f'<div class="kpi-card" style="--kpi-accent:{accent}">'
+            f'<div class="kpi-icon">{icon}</div>'
+            f'<div class="kpi-num">{val}</div>'
+            f'<div class="kpi-lbl">{label}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
 if not stats["available"]:
     st.caption("⚠️ Banco de dados não configurado — KPIs indisponíveis. Configure em **Sistema → Configurações**.")
@@ -142,48 +269,40 @@ if not stats["available"]:
 # ── 3. Fluxo de trabalho ──────────────────────────────────────────────────────
 st.markdown('<div class="section-hdr">Fluxo de trabalho</div>', unsafe_allow_html=True)
 
+_STEPS = [
+    ("#C97B1A", "1", "📥", "Processar",
+     "Cole ou faça upload de uma transcrição e execute o pipeline de agentes"),
+    ("#3b82f6", "2", "✅", "Validar",
+     "Revise e aprove requisitos, termos SBVR, regras e diagramas BPMN"),
+    ("#10b981", "3", "🔍", "Analisar",
+     "Converse com o Assistente, acompanhe requisitos e indicadores de ROI"),
+    ("#8b5cf6", "4", "📤", "Exportar",
+     "Edite diagramas BPMN, visualize fluxos e exporte atas, relatórios e XML"),
+]
+
 f1, arr1, f2, arr2, f3, arr3, f4 = st.columns([4, 1, 4, 1, 4, 1, 4])
 
-with f1:
-    st.markdown("""
-<div class="flow-step">
-<div class="step-num">1</div>
-<div class="step-title">📥 Processar</div>
-<div class="step-desc">Cole ou faça upload de uma transcrição e execute o pipeline de agentes</div>
-</div>""", unsafe_allow_html=True)
-
-with arr1:
-    st.markdown("<div style='text-align:center;padding-top:1.8rem;color:#C97B1A;font-size:1.4rem'>→</div>", unsafe_allow_html=True)
-
-with f2:
-    st.markdown("""
-<div class="flow-step">
-<div class="step-num">2</div>
-<div class="step-title">✅ Validar</div>
-<div class="step-desc">Revise e aprove requisitos, termos SBVR, regras e diagramas BPMN</div>
-</div>""", unsafe_allow_html=True)
-
-with arr2:
-    st.markdown("<div style='text-align:center;padding-top:1.8rem;color:#C97B1A;font-size:1.4rem'>→</div>", unsafe_allow_html=True)
-
-with f3:
-    st.markdown("""
-<div class="flow-step">
-<div class="step-num">3</div>
-<div class="step-title">🔍 Analisar</div>
-<div class="step-desc">Converse com o Assistente, acompanhe requisitos e indicadores de ROI</div>
-</div>""", unsafe_allow_html=True)
-
-with arr3:
-    st.markdown("<div style='text-align:center;padding-top:1.8rem;color:#C97B1A;font-size:1.4rem'>→</div>", unsafe_allow_html=True)
-
-with f4:
-    st.markdown("""
-<div class="flow-step">
-<div class="step-num">4</div>
-<div class="step-title">📤 Exportar</div>
-<div class="step-desc">Edite diagramas BPMN, visualize fluxos e exporte atas, relatórios e XML</div>
-</div>""", unsafe_allow_html=True)
+for col, arrow_col, (color, num, icon, title, desc) in zip(
+    [f1, f2, f3, f4],
+    [None, arr1, arr2, arr3],
+    _STEPS,
+):
+    if arrow_col is not None:
+        with arrow_col:
+            st.markdown(
+                f'<div class="flow-arrow">›</div>',
+                unsafe_allow_html=True,
+            )
+    with col:
+        st.markdown(
+            f'<div class="flow-step" style="--step-color:{color}">'
+            f'<div class="step-num">{num}</div>'
+            f'<div class="step-icon">{icon}</div>'
+            f'<div class="step-title">{title}</div>'
+            f'<div class="step-desc">{desc}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
 # ── 4. Acesso rápido + Reuniões recentes ──────────────────────────────────────
 st.markdown('<div class="section-hdr">Acesso rápido</div>', unsafe_allow_html=True)
@@ -217,24 +336,24 @@ with col_nav:
         st.page_link("pages/MeetingROI.py",     label="📊 ROI-TR",        use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Sistema (sempre visível, mas conteúdo restringe-se ao papel)
+    # Sistema
     st.markdown('<div class="area-card"><div class="area-title">⚙️ Sistema</div>', unsafe_allow_html=True)
     if is_admin():
         s1, s2, s3, s4 = st.columns(4)
         with s1:
-            st.page_link("pages/Settings.py",          label="⚙️ Configurações",    use_container_width=True)
+            st.page_link("pages/Settings.py",         label="⚙️ Configurações",  use_container_width=True)
         with s2:
-            st.page_link("pages/DatabaseOverview.py",  label="🗄️ Banco de Dados",   use_container_width=True)
+            st.page_link("pages/DatabaseOverview.py", label="🗄️ Banco de Dados", use_container_width=True)
         with s3:
-            st.page_link("pages/MasterAdmin.py",       label="🛡️ Master Admin",     use_container_width=True)
+            st.page_link("pages/MasterAdmin.py",      label="🛡️ Master Admin",   use_container_width=True)
         with s4:
-            st.page_link("pages/CostEstimator.py",     label="💰 Custos",           use_container_width=True)
+            st.page_link("pages/CostEstimator.py",    label="💰 Custos",         use_container_width=True)
     else:
         s1, s2 = st.columns(2)
         with s1:
-            st.page_link("pages/Settings.py",          label="⚙️ Configurações",    use_container_width=True)
+            st.page_link("pages/Settings.py",      label="⚙️ Configurações",       use_container_width=True)
         with s2:
-            st.page_link("pages/CostEstimator.py",     label="💰 Estimativa de Custo", use_container_width=True)
+            st.page_link("pages/CostEstimator.py", label="💰 Estimativa de Custo", use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
     # Orientações
@@ -264,8 +383,9 @@ with col_recent:
 
             st.markdown(f"""
 <div class="mtg-card">
-<div class="mtg-title">#{num} — {label_short}</div>
-<div class="mtg-meta">📁 {proj} · 📅 {date}</div>
+  <div class="mtg-num">REUNIÃO #{num}</div>
+  <div class="mtg-title">{label_short}</div>
+  <div class="mtg-meta">📁 {proj} &nbsp;·&nbsp; 📅 {date}</div>
 </div>""", unsafe_allow_html=True)
 
             lc1, lc2, lc3 = st.columns(3)
@@ -273,26 +393,26 @@ with col_recent:
                 st.page_link(
                     "pages/Assistente.py",
                     label="💬 Assistente",
-                    help=f"Consultar dados desta reunião no Assistente",
+                    help="Consultar dados desta reunião no Assistente",
                     use_container_width=True,
                 )
             with lc2:
                 st.page_link(
                     "pages/ValidationHub.py",
                     label="✅ Validação",
-                    help=f"Revisar requisitos e artefatos desta reunião",
+                    help="Revisar requisitos e artefatos desta reunião",
                     use_container_width=True,
                 )
             with lc3:
                 st.page_link(
                     "pages/BpmnEditor.py",
                     label="✏️ Editor",
-                    help=f"Editar diagrama BPMN desta reunião",
+                    help="Editar diagrama BPMN desta reunião",
                     use_container_width=True,
                 )
 
         st.markdown(
-            "<div style='text-align:right;margin-top:.3rem'>",
+            "<div style='text-align:right;margin-top:.4rem'>",
             unsafe_allow_html=True,
         )
         st.page_link("pages/Assistente.py", label="Ver todas as reuniões →")
@@ -305,15 +425,16 @@ try:
     from urllib.parse import quote
     from modules.calendar_client import _load_calendar_id, calendar_configured
     if calendar_configured():
-        cal_id   = _load_calendar_id()
-        cal_url  = (
+        cal_id  = _load_calendar_id()
+        cal_url = (
             "https://calendar.google.com/calendar/embed"
             f"?src={quote(cal_id)}&ctz=America%2FSao_Paulo"
             "&showTitle=0&showNav=1&showPrint=0&showTabs=1&showCalendars=0"
         )
         import streamlit.components.v1 as _components
         _components.html(
-            f'<iframe src="{cal_url}" style="border:0;width:100%;height:600px" '
+            f'<iframe src="{cal_url}" '
+            f'style="border:0;width:100%;height:600px;border-radius:10px" '
             f'frameborder="0" scrolling="no"></iframe>',
             height=620,
         )
@@ -323,11 +444,10 @@ except Exception as _cal_exc:
     st.caption(f"📅 Agenda indisponível: {_cal_exc}")
 
 # ── Rodapé ────────────────────────────────────────────────────────────────────
-_APP_VERSION = "v4.15"
+_APP_VERSION = "v4.16"
 st.markdown(
-    f"<div style='margin-top:2rem;padding-top:.8rem;border-top:1px solid #1e3a55;"
-    f"text-align:center;font-size:.7rem;color:#445566'>"
-    f"Process2Diagram {_APP_VERSION} · Multi-agent process intelligence platform"
-    f"</div>",
+    f'<div class="home-footer">'
+    f'Process2Diagram {_APP_VERSION} &nbsp;·&nbsp; Multi-agent process intelligence platform'
+    f'</div>',
     unsafe_allow_html=True,
 )

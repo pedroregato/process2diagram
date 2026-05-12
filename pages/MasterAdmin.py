@@ -59,7 +59,7 @@ st.markdown("---")
 tenants = list_all_tenants()
 
 # Métricas rápidas
-total_users = sum(len(list_users_by_tenant(t["id"])) for t in tenants)
+total_users = sum(len(list_users_by_tenant(t["id"])[0]) for t in tenants)
 all_projects = list_projects() or []
 c1, c2, c3 = st.columns(3)
 c1.metric("Domínios",  len(tenants))
@@ -108,8 +108,27 @@ st.markdown("---")
 # ══════════════════════════════════════════════════════════════════════════════
 # SEÇÃO 2 — Usuários do domínio selecionado
 # ══════════════════════════════════════════════════════════════════════════════
-users = list_users_by_tenant(sel_tid)
+users, users_err = list_users_by_tenant(sel_tid)
 st.markdown(f"### 👥 Usuários — {sel_slug} ({len(users)})")
+
+if users_err:
+    st.error(f"⚠️ Não foi possível carregar os usuários: `{users_err}`")
+    with st.expander("🔍 Possíveis causas", expanded=True):
+        st.markdown(
+            "**1. Colunas opcionais ausentes** — as colunas `google_account` e `ms_teams_account` "
+            "podem não ter sido criadas ainda. Execute no Supabase SQL Editor:\n"
+            "```sql\n"
+            "ALTER TABLE tenant_users ADD COLUMN IF NOT EXISTS google_account TEXT;\n"
+            "ALTER TABLE tenant_users ADD COLUMN IF NOT EXISTS ms_teams_account TEXT;\n"
+            "```\n\n"
+            "**2. RLS bloqueando a leitura** — se o Supabase usa a chave `anon` (não `service_role`), "
+            "o RLS pode estar impedindo o SELECT. Adicione uma policy permissiva ou use a chave `service_role` "
+            "em `st.secrets[\"supabase\"][\"key\"]`:\n"
+            "```sql\n"
+            "ALTER TABLE tenant_users ENABLE ROW LEVEL SECURITY;\n"
+            "CREATE POLICY \"allow_all\" ON tenant_users USING (true) WITH CHECK (true);\n"
+            "```"
+        )
 
 with st.expander("➕ Novo Usuário", expanded=False):
     ua, ub = st.columns(2)

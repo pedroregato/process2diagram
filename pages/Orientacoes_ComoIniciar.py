@@ -17,213 +17,450 @@ from ui.auth_gate import apply_auth_gate
 
 apply_auth_gate()
 
-# ── Cabeçalho ─────────────────────────────────────────────────────────────────
-st.markdown("# 📖 Como Iniciar")
-st.caption("Guia de referência rápida — leia antes de usar o Process2Diagram pela primeira vez.")
+# ── CSS ───────────────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+/* ── Page header ── */
+.guide-header {
+    background: linear-gradient(135deg, #071428 0%, #0B1E3D 55%, #122848 100%);
+    border-bottom: 3px solid #C97B1A;
+    border-radius: 12px;
+    padding: 1.4rem 2rem;
+    margin-bottom: 1.6rem;
+    box-shadow: 0 4px 24px rgba(0,0,0,.35);
+}
+.guide-header .gh-title { font-size: 1.5rem; font-weight: 700; color: #FAFAF8; }
+.guide-header .gh-sub   { font-size: .80rem; color: #7A8EA8; margin-top: .3rem; }
 
-st.markdown("---")
+/* ── Section header ── */
+.g-section-hdr {
+    display: flex; align-items: center; gap: .6rem;
+    font-size: .72rem; font-weight: 700; color: #6A7E98;
+    letter-spacing: .12em; text-transform: uppercase;
+    margin: 1.8rem 0 .8rem;
+}
+.g-section-hdr::after {
+    content: ""; flex: 1; height: 1px;
+    background: linear-gradient(90deg, #1e3a55 0%, transparent 100%);
+}
+
+/* ── Feature pill ── */
+.feat-pill {
+    display: inline-flex; align-items: center; gap: .35rem;
+    background: #0A1A32; border: 1px solid #1A3050;
+    border-radius: 20px; padding: .28rem .75rem;
+    font-size: .75rem; color: #FAFAF8;
+    margin: .2rem .2rem;
+}
+.feat-pill .fp-icon { font-size: .95rem; }
+
+/* ── Step cards ── */
+.step-card {
+    background: #0A1A32;
+    border: 1px solid #1A3050;
+    border-left: 4px solid var(--step-color, #C97B1A);
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    margin-bottom: .8rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,.2);
+}
+.step-card .sc-header {
+    display: flex; align-items: center; gap: .6rem;
+    margin-bottom: .5rem;
+}
+.step-card .sc-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--step-color, #C97B1A);
+    color: #fff; font-size: .72rem; font-weight: 800;
+    flex-shrink: 0;
+}
+.step-card .sc-title { font-size: .95rem; font-weight: 700; color: #FAFAF8; }
+.step-card .sc-body  { font-size: .82rem; color: #9AAABB; line-height: 1.55; }
+.step-card .sc-tip {
+    margin-top: .6rem; padding: .4rem .7rem;
+    background: rgba(201,123,26,.08);
+    border-left: 2px solid #C97B1A;
+    border-radius: 4px;
+    font-size: .76rem; color: #C9A060;
+}
+
+/* ── Page grid ── */
+.page-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: .7rem;
+    margin-bottom: .5rem;
+}
+.page-item {
+    background: #0A1A32;
+    border: 1px solid #1A3050;
+    border-radius: 10px;
+    padding: .85rem 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,.18);
+}
+.page-item .pi-header {
+    display: flex; align-items: center; gap: .5rem;
+    margin-bottom: .35rem;
+}
+.page-item .pi-icon   { font-size: 1.15rem; }
+.page-item .pi-name   { font-size: .88rem; font-weight: 700; color: #FAFAF8; }
+.page-item .pi-group  {
+    font-size: .63rem; font-weight: 700; color: #C97B1A;
+    letter-spacing: .08em; text-transform: uppercase;
+    background: rgba(201,123,26,.12); border-radius: 10px;
+    padding: 1px 7px; margin-left: auto;
+}
+.page-item .pi-desc   { font-size: .74rem; color: #7A8EA8; line-height: 1.45; }
+
+/* ── Info box ── */
+.info-box {
+    background: #0A1A32; border: 1px solid #1A3050;
+    border-radius: 10px; padding: 1rem 1.2rem;
+    margin-bottom: .8rem;
+}
+.info-box .ib-title {
+    font-size: .80rem; font-weight: 700; color: #C97B1A;
+    letter-spacing: .07em; text-transform: uppercase;
+    margin-bottom: .5rem;
+}
+
+/* ── Tip list ── */
+.tip-row {
+    display: flex; gap: .8rem; align-items: flex-start;
+    background: #0A1A32; border: 1px solid #1A3050;
+    border-radius: 10px; padding: .75rem 1rem;
+    margin-bottom: .5rem;
+}
+.tip-row .tip-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; min-width: 22px;
+    border-radius: 50%; background: #1A3050;
+    color: #C97B1A; font-size: .70rem; font-weight: 800; flex-shrink: 0;
+}
+.tip-row .tip-txt { font-size: .80rem; color: #9AAABB; line-height: 1.5; }
+
+/* ── New badge ── */
+.new-badge {
+    display: inline-block; padding: 1px 7px; border-radius: 10px;
+    font-size: .60rem; font-weight: 700; letter-spacing: .06em;
+    background: rgba(16,185,129,.15); color: #10b981;
+    border: 1px solid rgba(16,185,129,.3); margin-left: .4rem;
+    vertical-align: middle;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ── Cabeçalho ─────────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="guide-header">
+  <div class="gh-title">📖 Como Iniciar</div>
+  <div class="gh-sub">Guia de referência rápida — leia antes de usar o Process2Diagram pela primeira vez.</div>
+</div>
+""", unsafe_allow_html=True)
 
 # ── O que é ───────────────────────────────────────────────────────────────────
-st.markdown("## 🧭 O que é o Process2Diagram?")
+st.markdown('<div class="g-section-hdr">O que é o Process2Diagram?</div>', unsafe_allow_html=True)
 st.markdown(
-    """
-**Process2Diagram** transforma transcrições de reuniões em artefatos profissionais de análise de processos,
-usando um pipeline de múltiplos agentes LLM encadeados:
-
-- 📐 **Diagrama BPMN 2.0** — fluxo de processo com pools, lanes e gateways
-- 📊 **Fluxograma Mermaid** — visualização alternativa leve
-- 📋 **Ata de Reunião** — participantes, decisões, itens de ação (Markdown / Word / PDF)
-- 📝 **Requisitos** — extração IEEE 830 (funcional, não-funcional, regra de negócio...)
-- 📖 **Vocabulário SBVR** — termos e regras de negócio formais
-- 🎯 **BMM** — visão, missão, objetivos e estratégias
-- 📄 **Relatório Executivo HTML** — síntese interativa de todos os artefatos
-"""
+    "**Process2Diagram** transforma transcrições de reuniões em artefatos profissionais de análise de processos, "
+    "usando um pipeline de múltiplos agentes LLM encadeados. "
+    "Cada agente é especializado e opera sobre o mesmo hub de conhecimento compartilhado."
 )
 
-st.markdown("---")
+_FEATURES = [
+    ("📐", "Diagrama BPMN 2.0"),
+    ("📊", "Fluxograma Mermaid"),
+    ("📋", "Ata de Reunião"),
+    ("📝", "Requisitos IEEE 830"),
+    ("📖", "Vocabulário SBVR"),
+    ("🎯", "Modelo BMM"),
+    ("📄", "Relatório Executivo HTML"),
+    ("💬", "Assistente RAG"),
+    ("✅", "Validação & Rastreamento"),
+    ("📅", "Google Calendar"),
+    ("📈", "Dashboard ROI-TR"),
+]
+pills_html = "".join(
+    f'<span class="feat-pill"><span class="fp-icon">{ic}</span>{lb}</span>'
+    for ic, lb in _FEATURES
+)
+st.markdown(f'<div style="margin:.4rem 0 .6rem">{pills_html}</div>', unsafe_allow_html=True)
 
 # ── Pré-requisitos ─────────────────────────────────────────────────────────────
-st.markdown("## ✅ Pré-requisitos")
+st.markdown('<div class="g-section-hdr">Pré-requisitos</div>', unsafe_allow_html=True)
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown("### 🔑 API Key LLM (obrigatório)")
-    st.markdown(
-        """
-Escolha **um** dos provedores e obtenha sua chave:
+    st.markdown("""
+<div class="info-box">
+<div class="ib-title">🔑 API Key LLM (obrigatório)</div>
+<p style="font-size:.80rem;color:#9AAABB;margin-bottom:.6rem">
+Escolha <strong>um</strong> dos provedores e obtenha sua chave:
+</p>
 
 | Provedor | Onde obter | Custo |
 |---|---|---|
 | **DeepSeek** *(recomendado)* | platform.deepseek.com | Muito baixo |
 | **Claude (Anthropic)** | console.anthropic.com | Médio |
-| **OpenAI** | platform.openai.com/api-keys | Médio |
-| **Groq (Llama)** | console.groq.com | Gratuito (limits) |
-| **Google Gemini** | aistudio.google.com | Gratuito (limits) |
+| **OpenAI** | platform.openai.com | Médio |
+| **Groq (Llama)** | console.groq.com | Gratuito* |
+| **Google Gemini** | aistudio.google.com | Gratuito* |
 
-> 💡 Para começar sem custo: use **Groq** ou **Google Gemini** no tier gratuito.
-"""
-    )
+<p style="font-size:.74rem;color:#C9A060;margin-top:.4rem">
+💡 Para começar sem custo: use <strong>Groq</strong> ou <strong>Google Gemini</strong> no tier gratuito.
+</p>
+</div>
+""", unsafe_allow_html=True)
 
 with col2:
-    st.markdown("### 🗄️ Supabase (opcional)")
-    st.markdown(
-        """
+    st.markdown("""
+<div class="info-box">
+<div class="ib-title">🗄️ Supabase (opcional, recomendado)</div>
+<p style="font-size:.80rem;color:#9AAABB;margin-bottom:.5rem">
 O Supabase é necessário para funcionalidades avançadas:
+</p>
+<ul style="font-size:.80rem;color:#9AAABB;margin:0;padding-left:1.2rem;line-height:1.7">
+  <li>💬 <strong>Assistente</strong> — Q&A semântico sobre reuniões passadas</li>
+  <li>📋 <strong>Req. Tracker</strong> — acompanhe requisitos ao longo do tempo</li>
+  <li>🔄 <strong>Batch Runner</strong> — processe e persista múltiplas transcrições</li>
+  <li>📈 <strong>Histórico e ROI-TR</strong> — compare reuniões e detecte contradições</li>
+  <li>📅 <strong>Google Calendar</strong> — agende ações diretamente pelo Assistente</li>
+</ul>
+<p style="font-size:.74rem;color:#6A7E98;margin-top:.5rem">
+<strong>Sem Supabase:</strong> o pipeline principal funciona 100% — resultados ficam na sessão.
+</p>
+</div>
+""", unsafe_allow_html=True)
 
-- 💬 **Assistente** — Q&A sobre reuniões passadas
-- 📋 **Req. Tracker** — acompanhe requisitos ao longo do tempo
-- 🔄 **Batch Runner** — processe e persista múltiplas transcrições
-- 📈 **Histórico** — compare reuniões e detecte contradições em requisitos
+# ── Primeiros passos ──────────────────────────────────────────────────────────
+st.markdown('<div class="g-section-hdr">Primeiros passos — Pipeline principal</div>', unsafe_allow_html=True)
 
-**Sem Supabase:** o pipeline principal (BPMN, Ata, Requisitos, Relatório)
-funciona 100% — os resultados ficam na sessão atual.
+_STEPS = [
+    ("#C97B1A", "1", "Configure o provedor LLM",
+     "Na sidebar esquerda, selecione o provedor (ex: DeepSeek) e insira sua API Key. "
+     "A chave fica <strong>apenas na memória da sessão</strong> — nunca é gravada em disco.",
+     "Dica: comece com DeepSeek para custo mínimo ou Groq para velocidade máxima."),
+    ("#3b82f6", "2", "Cole ou faça upload da transcrição",
+     "Na página <strong>Processar Transcrição</strong>, cole o texto diretamente ou faça upload de "
+     "um arquivo <code>.txt</code>, <code>.docx</code> ou <code>.pdf</code>. "
+     "O botão <em>Pré-processar</em> remove ruídos de ASR sem usar LLM — útil para revisar antes de processar.",
+     "Identifique participantes com o padrão <code>Nome: fala</code> — o BPMN usa esses nomes nas lanes."),
+    ("#10b981", "3", "(Opcional) Selecione o projeto no Supabase",
+     "Se o Supabase estiver configurado, escolha ou crie um projeto e informe o título e data da reunião. "
+     "Os artefatos gerados serão salvos automaticamente ao final do pipeline.",
+     "Sem projeto selecionado, os resultados ficam disponíveis apenas na sessão atual."),
+    ("#8b5cf6", "4", "Escolha os agentes e clique em Gerar Insights",
+     "Na sidebar, habilite/desabilite agentes conforme necessário. "
+     "BPMN, Ata e Requisitos são os mais usados. "
+     "SBVR, BMM e Relatório Executivo são opcionais e aumentam o custo de tokens.",
+     "Use 3 ou 5 passes BPMN quando quiser o melhor diagrama possível — o torneio seleciona o candidato com maior pontuação."),
+    ("#C97B1A", "5", "Explore os resultados nas abas",
+     "Os resultados aparecem nas abas abaixo do pipeline: BPMN 2.0, Mermaid, Ata, Requisitos, etc. "
+     "Use <strong>📐 Diagramas</strong> no menu lateral para visualização em tela cheia com pan/zoom e mind map.",
+     "A aba <em>Análise Avançada</em> (expander) contém Qualidade, SBVR, BMM, Validação e Dev Tools."),
+    ("#3b82f6", "6", "(Supabase) Gere embeddings e use o Assistente",
+     "Após salvar reuniões, vá em <strong>Banco de Dados → aba Embeddings</strong> e gere os vetores "
+     "com uma chave do Google Gemini (gratuito) ou OpenAI. "
+     "Em seguida, use o <strong>Assistente</strong> para perguntas como "
+     "<em>'Quais foram as decisões da Reunião 3?'</em> ou <em>'Liste os requisitos de autenticação.'</em>",
+     "O Assistente no modo tool-use decide automaticamente quais ferramentas chamar — sem necessidade de embeddings para perguntas estruturadas."),
+]
 
-Para configurar: crie um projeto gratuito em **supabase.com** e adicione
-`url` e `key` em *Settings → Secrets* no Streamlit Cloud.
-"""
+for color, num, title, body, tip in _STEPS:
+    st.markdown(
+        f'<div class="step-card" style="--step-color:{color}">'
+        f'<div class="sc-header">'
+        f'  <span class="sc-num">{num}</span>'
+        f'  <span class="sc-title">{title}</span>'
+        f'</div>'
+        f'<div class="sc-body">{body}</div>'
+        f'<div class="sc-tip">💡 {tip}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
     )
 
-st.markdown("---")
-
-# ── Fluxo de trabalho ─────────────────────────────────────────────────────────
-st.markdown("## 🚀 Primeiros passos — Pipeline Principal")
-
-steps = [
-    ("1️⃣", "Configure o provedor LLM",
-     "Na sidebar esquerda, selecione o provedor (ex: DeepSeek) e insira sua API Key. "
-     "A chave fica apenas na memória da sessão — nunca é gravada em disco."),
-    ("2️⃣", "Cole ou faça upload da transcrição",
-     "Na página **Processar Transcrição**, cole o texto diretamente no campo de texto "
-     "ou faça upload de um arquivo **.txt**, **.docx** ou **.pdf**. "
-     "O botão **Pré-processar** remove ruídos do ASR sem usar LLM — útil para revisar antes de processar."),
-    ("3️⃣", "(Opcional) Selecione o projeto no Supabase",
-     "Se o Supabase estiver configurado, escolha ou crie um projeto e informe o título e data da reunião. "
-     "Os artefatos gerados serão salvos automaticamente ao final do pipeline."),
-    ("4️⃣", "Escolha os agentes e clique em Gerar Insights",
-     "Na sidebar, habilite/desabilite agentes conforme necessário. "
-     "BPMN, Ata e Requisitos são os mais usados. SBVR, BMM e Relatório Executivo são opcionais. "
-     "Clique em **🚀 Gerar Insights** para iniciar o processamento."),
-    ("5️⃣", "Explore os resultados nas abas",
-     "Os resultados aparecem nas abas abaixo do pipeline: BPMN 2.0, Mermaid, Ata, Requisitos, etc. "
-     "Use **📊 Diagramas** (menu lateral) para visualização em tela cheia com pan/zoom."),
-    ("6️⃣", "(Supabase) Gere embeddings e use o Assistente",
-     "Após salvar reuniões, vá em **Assistente** → clique em **⚡ Gerar Embeddings** "
-     "com uma chave do Google Gemini (gratuito) ou OpenAI. "
-     "Em seguida, faça perguntas como 'Quais foram as decisões da Reunião 3?' ou "
-     "'Liste todos os requisitos funcionais sobre autenticação.'"),
-]
-
-for icon, title, desc in steps:
-    with st.expander(f"{icon} {title}", expanded=False):
-        st.markdown(desc)
-
-st.markdown("---")
-
 # ── Páginas disponíveis ────────────────────────────────────────────────────────
-st.markdown("## 📚 Páginas disponíveis")
+st.markdown('<div class="g-section-hdr">Páginas disponíveis</div>', unsafe_allow_html=True)
 
-pages_info = [
+_PAGES = [
+    # Pipeline
     ("🚀", "Processar Transcrição", "Pipeline",
      "Pipeline principal. Cole ou faça upload de uma transcrição e gere todos os artefatos."),
-    ("📊", "Diagramas", "Pipeline",
+    ("📐", "Diagramas", "Pipeline",
      "Visualizador full-screen: BPMN 2.0 (bpmn-js), Mermaid (pan/zoom) e Mind Map de requisitos."),
-    ("💬", "Assistente", "Análise & Dados",
-     "Chat Q&A sobre todas as reuniões do projeto. Usa tool-use (LLM decide quais ferramentas chamar) "
-     "ou RAG clássico (busca semântica por pgvector). Requer Supabase + embeddings gerados."),
-    ("📋", "Req. Tracker", "Análise & Dados",
+    ("✏️", "Editor BPMN", "Pipeline",
+     "Editor visual bpmn-js com histórico de versões e salvamento no Supabase."),
+    # Análise
+    ("💬", "Assistente", "Análise",
+     "Chat Q&A sobre todas as reuniões do projeto. Tool-use ou RAG clássico com busca semântica (pgvector). Requer Supabase."),
+    ("✅", "Validação", "Análise",
+     "Hub de validação de requisitos e artefatos gerados pelo pipeline."),
+    ("📋", "Req. Tracker", "Análise",
      "Quadro de acompanhamento de requisitos: status, contradições, exportação Excel/CSV. Requer Supabase."),
-    ("🔄", "Batch Runner", "Operações",
-     "Processa múltiplas transcrições em sequência. Útil para indexar reuniões passadas de uma vez."),
-    ("🔧", "BPMN Backfill", "Operações",
-     "Gera BPMN para reuniões já salvas no Supabase que ainda não têm diagrama."),
-    ("📝", "Transcript Backfill", "Operações",
-     "Salva transcrições para reuniões já no banco que têm ata mas não têm texto de transcrição."),
-    ("💰", "Estimativa de Custo", "Operações",
+    ("📊", "ROI-TR", "Análise",
+     "Dashboard de qualidade e retorno sobre investimento por tipo de reunião (11 tipos, pesos por artefato)."),
+    ("🏷️", "Entity Recognition", "Análise",
+     "Reconhecimento de entidades nomeadas na transcrição via spaCy (NER)."),
+    # Sistema
+    ("⚙️", "Configurações", "Sistema",
+     "Central de configurações: provedores LLM, embeddings, banco de dados, Google Calendar por projeto."),
+    ("💰", "Estimativa de Custo", "Sistema",
      "Calcule o custo estimado de tokens antes de processar, por provedor e agente."),
+    ("🗄️", "Banco de Dados", "Sistema (admin)",
+     "Health score, KPIs de integridade, gestão de embeddings e correções inline. Requer perfil admin."),
+    ("🛡️", "Master Admin", "Sistema (admin)",
+     "Gestão de usuários, roles, contas de integração (Google, MS Teams). Requer perfil master."),
+    # Manutenção
+    ("🔄", "Batch Runner", "Manutenção",
+     "Processa múltiplas transcrições em sequência e persiste no Supabase."),
+    ("🔧", "BPMN Backfill", "Manutenção",
+     "Gera BPMN para reuniões já salvas no Supabase que ainda não têm diagrama."),
+    ("📝", "Transcript Backfill", "Manutenção",
+     "Salva transcrições para reuniões já no banco que têm ata mas não têm texto."),
+    ("📋", "Minutes Backfill", "Manutenção",
+     "Regenera atas de reuniões já armazenadas no Supabase."),
 ]
 
-for icon, name, section, desc in pages_info:
-    col_ic, col_info = st.columns([1, 9])
-    with col_ic:
-        st.markdown(f"## {icon}")
-    with col_info:
-        st.markdown(f"**{name}** `{section}`")
-        st.caption(desc)
-    st.markdown("")
-
-st.markdown("---")
+# render grid
+items_html = ""
+for icon, name, group, desc in _PAGES:
+    items_html += (
+        f'<div class="page-item">'
+        f'<div class="pi-header">'
+        f'  <span class="pi-icon">{icon}</span>'
+        f'  <span class="pi-name">{name}</span>'
+        f'  <span class="pi-group">{group}</span>'
+        f'</div>'
+        f'<div class="pi-desc">{desc}</div>'
+        f'</div>'
+    )
+st.markdown(f'<div class="page-grid">{items_html}</div>', unsafe_allow_html=True)
 
 # ── Configurações da sidebar ──────────────────────────────────────────────────
-st.markdown("## ⚙️ Configurações da sidebar (Pipeline Principal)")
+st.markdown('<div class="g-section-hdr">Configurações da sidebar (Pipeline)</div>', unsafe_allow_html=True)
 
 col_a, col_b = st.columns(2)
 
 with col_a:
-    st.markdown(
-        """
-**Agentes disponíveis**
-- 🔬 **Qualidade da Transcrição** — grade A–E com critérios
-- 📐 **BPMN** — diagrama de processo (core)
-- 📋 **Ata de Reunião** — minutes completa
-- 📝 **Requisitos** — extração IEEE 830
-- 📖 **SBVR** — vocabulário e regras de negócio
-- 🎯 **BMM** — modelo de motivação
-- 📄 **Relatório Executivo** — síntese HTML
-
-**Otimização BPMN**
-- **1 pass** — execução única (padrão)
-- **3 ou 5 passes** — torneio: melhor candidato selecionado por pontuação
-- **Adaptive Retry (LangGraph)** — retenta até atingir nota mínima
-"""
-    )
+    st.markdown("""
+<div class="info-box">
+<div class="ib-title">Agentes disponíveis</div>
+<ul style="font-size:.80rem;color:#9AAABB;margin:0;padding-left:1.2rem;line-height:1.8">
+  <li>🔬 <strong>Qualidade da Transcrição</strong> — grade A–E</li>
+  <li>📐 <strong>BPMN</strong> — diagrama de processo <em>(core)</em></li>
+  <li>📋 <strong>Ata de Reunião</strong> — minutes completa</li>
+  <li>📝 <strong>Requisitos</strong> — extração IEEE 830</li>
+  <li>📖 <strong>SBVR</strong> — vocabulário e regras de negócio</li>
+  <li>🎯 <strong>BMM</strong> — modelo de motivação</li>
+  <li>📄 <strong>Relatório Executivo</strong> — síntese HTML</li>
+</ul>
+<div class="ib-title" style="margin-top:.8rem">Otimização BPMN</div>
+<ul style="font-size:.80rem;color:#9AAABB;margin:0;padding-left:1.2rem;line-height:1.8">
+  <li><strong>1 pass</strong> — execução única (padrão)</li>
+  <li><strong>3 ou 5 passes</strong> — torneio: melhor candidato por pontuação</li>
+  <li><strong>Adaptive Retry (LangGraph)</strong> — retenta até nota mínima</li>
+</ul>
+</div>
+""", unsafe_allow_html=True)
 
 with col_b:
+    st.markdown("""
+<div class="info-box">
+<div class="ib-title">Idioma de saída</div>
+<p style="font-size:.80rem;color:#9AAABB;margin-bottom:.5rem">
+Auto-detect detecta o idioma da transcrição. Também disponível: Português, Inglês, Espanhol, etc.
+</p>
+<div class="ib-title">Prefixo / Sufixo</div>
+<p style="font-size:.80rem;color:#9AAABB;margin-bottom:.5rem">
+Adicionados aos nomes dos arquivos exportados.<br>
+Ex: <code>ACME_</code> + <code>v1</code> → <code>ACME_processo_2026-05-11_v1.bpmn</code>
+</p>
+<div class="ib-title">Modo Desenvolvedor</div>
+<p style="font-size:.80rem;color:#9AAABB;margin-bottom:0">
+Exibe aba <em>Dev Tools</em> com o KnowledgeHub JSON completo — útil para depurar o que cada agente produziu.
+</p>
+</div>
+""", unsafe_allow_html=True)
+
+# ── Novidades (v4.16) ─────────────────────────────────────────────────────────
+st.markdown(
+    '<div class="g-section-hdr">Novidades recentes'
+    '<span class="new-badge">v4.16</span>'
+    '</div>',
+    unsafe_allow_html=True,
+)
+
+_NEWS = [
+    ("📅", "Google Calendar integrado",
+     "O Assistente pode listar eventos, sugerir horários e agendar itens de ação diretamente nas agendas do projeto. "
+     "Cada projeto pode ter um calendário Google dedicado, configurável em Configurações → Banco de Dados."),
+    ("🔒", "Segurança RLS no Supabase",
+     "Row Level Security habilitado em todas as tabelas — os dados de cada projeto ficam isolados por política de acesso."),
+    ("✏️", "Editor BPMN com histórico de versões",
+     "O Editor BPMN agora salva cada edição como nova versão no Supabase, com navegação entre versões e notas de revisão."),
+    ("🏠", "Central de Operações renovada",
+     "A página inicial ganhou KPIs coloridos, cards de fluxo com cores por etapa, e acesso rápido reorganizado por área."),
+    ("📐", "SysML v2 — análise e proposta de integração",
+     "Documentação inicial sobre a integração futura com SysML v2 disponível em <code>SysMLv2/</code> no repositório "
+     "(ideiaManus.md e referencia.md)."),
+]
+
+for icon, title, desc in _NEWS:
     st.markdown(
-        """
-**Idioma de saída**
-- Auto-detect — detecta o idioma da transcrição
-- Português, Inglês, Espanhol, etc.
-
-**Prefixo / Sufixo**
-- Adicionados aos nomes dos arquivos exportados
-- Ex: `ACME_` + `processo_v1` → `ACME_processo_2026-04-12.bpmn`
-
-**Modo Desenvolvedor**
-- Exibe aba *Dev Tools* com o KnowledgeHub JSON completo
-- Útil para depurar o que cada agente produziu
-"""
+        f'<div class="step-card" style="--step-color:#10b981">'
+        f'<div class="sc-header">'
+        f'  <span class="sc-num" style="background:#10b981;font-size:.85rem">{icon}</span>'
+        f'  <span class="sc-title">{title}</span>'
+        f'</div>'
+        f'<div class="sc-body">{desc}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
     )
 
-st.markdown("---")
-
 # ── Dicas de qualidade ────────────────────────────────────────────────────────
-st.markdown("## 💡 Dicas para melhores resultados")
+st.markdown('<div class="g-section-hdr">Dicas para melhores resultados</div>', unsafe_allow_html=True)
 
-tips = [
+_TIPS = [
     "**Transcrições mais longas e detalhadas** geram diagramas BPMN mais ricos. "
     "Procure incluir pelo menos os momentos de decisão e transições entre responsáveis.",
 
-    "**Identifique os participantes** na transcrição com padrão `Nome: fala` ou `NOME: fala`. "
-    "O agente de ata extrai participantes e o de BPMN usa os nomes para definir as lanes.",
+    "**Identifique os participantes** com o padrão <code>Nome: fala</code> ou <code>NOME: fala</code>. "
+    "O agente de ata extrai participantes e o BPMN usa os nomes para definir as lanes.",
 
     "**Pré-processe antes de processar** se a transcrição tiver ruídos de ASR "
-    "(repetições, hesitações, palavras cortadas). O botão *Pré-processar* remove esses artefatos.",
+    "(repetições, hesitações, palavras cortadas). O botão <em>Pré-processar</em> remove esses artefatos sem LLM.",
 
     "**Use múltiplas passes BPMN** (3 ou 5) quando o diagrama gerado parecer incompleto "
     "ou com pouca granularidade — o torneio seleciona o melhor candidato.",
 
     "**O Assistente no modo tool-use** responde melhor a perguntas estruturadas "
-    "('Quais são os participantes?', 'Liste as decisões') do que a perguntas abertas. "
+    "(<em>'Quais são os participantes?'</em>, <em>'Liste as decisões'</em>) do que perguntas abertas. "
     "Para buscas em texto de transcrição, ambos os modos funcionam bem.",
 
     "**Gere embeddings imediatamente** após salvar uma reunião enquanto a chave do "
-    "Google Gemini está disponível — o processo demora alguns minutos por reunião "
-    "por conta do rate limit do tier gratuito (1.2s entre chamadas).",
+    "Google Gemini está disponível — o processo demora alguns minutos por conta do rate limit "
+    "do tier gratuito (1,2s entre chamadas, 100 req/min).",
+
+    "**Configure o Google Calendar** em Configurações → Banco de Dados para que o Assistente "
+    "possa agendar itens de ação e sugerir horários de reunião diretamente da conversa.",
 ]
 
-for i, tip in enumerate(tips, 1):
-    st.markdown(f"**{i}.** {tip}")
+tips_html = ""
+for i, tip in enumerate(_TIPS, 1):
+    tips_html += (
+        f'<div class="tip-row">'
+        f'<span class="tip-num">{i}</span>'
+        f'<span class="tip-txt">{tip}</span>'
+        f'</div>'
+    )
+st.markdown(tips_html, unsafe_allow_html=True)
 
-st.markdown("---")
-st.caption("Process2Diagram · Guia de Início Rápido")
+# ── Rodapé ─────────────────────────────────────────────────────────────────────
+st.markdown(
+    "<div style='margin-top:2rem;padding-top:.8rem;border-top:1px solid #1A3050;"
+    "text-align:center;font-size:.68rem;color:#3A5070;letter-spacing:.04em'>"
+    "Process2Diagram v4.16 &nbsp;·&nbsp; Guia de Início Rápido"
+    "</div>",
+    unsafe_allow_html=True,
+)
