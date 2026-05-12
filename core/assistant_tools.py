@@ -534,7 +534,7 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
-        {
+		{
             "type": "function",
             "function": {
                 "name": "rename_meeting",
@@ -1069,6 +1069,30 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+		# ---------------------------- moedas
+		{
+			"type": "function",
+			"function": {
+				"name": "convert_usd_to_brl",
+				"description": (
+					"Converte um valor em dólares americanos (USD) para reais brasileiros (BRL) "
+					"usando a cotação atual do dólar obtida da AwesomeAPI. "
+					"USE sempre que o usuário perguntar sobre conversão de USD para BRL, "
+					"valor em reais de custos LLM, ou cotação atual do dólar."
+				),
+				"parameters": {
+					"type": "object",
+					"properties": {
+						"usd_amount": {
+							"type": "number",
+							"description": "Valor em dólares americanos a converter (ex: 1.50)",
+						}
+					},
+					"required": ["usd_amount"],
+				},
+			},
+		},		
+		# ---------------------------- speaker
         {
             "type": "function",
             "function": {
@@ -1339,6 +1363,8 @@ _TOOL_CATEGORIES: dict[str, str] = {
 	"list_all_domains":      "consulta",
 	"list_users_by_project": "consulta",
 	
+	"convert_usd_to_brl": "consulta",
+	
     "calendar_diagnose":                "admin",
     # Google Calendar
     "calendar_list_events":             "consulta",
@@ -1432,6 +1458,23 @@ class AssistantToolExecutor:
     def get_pending_charts(self) -> list[dict]:
         """Return Plotly figure dicts accumulated by chart tools during this turn."""
         return list(self._pending_charts)
+		
+	def convert_usd_to_brl(self, usd_amount: float) -> str:
+		"""Converte USD para BRL usando cotação em tempo real da AwesomeAPI."""
+		try:
+			from modules.cost_estimator import get_usd_brl_rate
+			rate, from_cache = get_usd_brl_rate()
+			brl_amount = usd_amount * rate
+			cache_label = "cache" if from_cache else "atualizada agora"
+			return (
+				f"💱 **Conversão USD → BRL**\n\n"
+				f"- Valor em USD: **$ {usd_amount:,.4f}**\n"
+				f"- Cotação atual: **R$ {rate:.4f}** ({cache_label})\n"
+				f"- Valor em BRL: **R$ {brl_amount:,.2f}**\n\n"
+				f"_Fonte: AwesomeAPI (economia.awesomeapi.com.br)_"
+			)
+		except Exception as exc:
+			return f"Erro ao obter cotação: {exc}"		
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -1464,6 +1507,8 @@ class AssistantToolExecutor:
             if m.get("meeting_number") == meeting_number:
                 return m
         return None
+		
+		
 
     @staticmethod
     def _section(minutes_md: str, *section_names: str) -> str:
@@ -4414,6 +4459,10 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     bool(tool_input.get("run_quality", False)),
                     tool_input.get("output_language", "Auto-detect"),
                 ),
+				# ── Moedas ───────────────────────────────────────────────
+				"convert_usd_to_brl": lambda: self.convert_usd_to_brl(
+					float(tool_input["usd_amount"]),
+				),				
                 # ── Chart tools ───────────────────────────────────────────────
                 "generate_requirements_chart":    lambda: self.generate_requirements_chart(
                     group_by=tool_input.get("group_by", "type"),
