@@ -32,7 +32,7 @@ from modules.cost_estimator import (
     estimate_embedding_cost,
     compare_providers,
     cost_for_tokens,
-    get_usd_brl_rate,  
+    get_usd_brl_rate,
 )
 from core.project_store import list_projects, _db, _ok
 
@@ -40,18 +40,14 @@ apply_auth_gate()
 
 # ── Cotação USD/BRL ───────────────────────────────────────────────────────────
 from time import time as _time_now
-if "usd_brl_rate" not in st.session_state or st.session_state.get("usd_brl_rate", 0) == 0.0:
-    _rate, _cached = get_usd_brl_rate()
-    st.session_state["usd_brl_rate"] = _rate
-    st.session_state["usd_brl_ts"]   = _time_now()
-elif (_time_now() - st.session_state.get("usd_brl_ts", 0)) > 3600:
+if st.session_state.get("usd_brl_rate", 0.0) == 0.0 or \
+   (_time_now() - st.session_state.get("usd_brl_ts", 0)) > 3600:
     _rate, _cached = get_usd_brl_rate()
     st.session_state["usd_brl_rate"] = _rate
     st.session_state["usd_brl_ts"]   = _time_now()
 
 # ── Header ────────────────────────────────────────────────────────────────────
-st.markdown("# 💰 Estimativa de Custos LLM")
-st.caption(
+st.markdown("# 💰 Estimativa de Custos LLM")st.caption(
     "Análise de custo real (histórico de tokens do banco) e estimativas para cenários futuros. "
     "Preços aproximados — consulte a página oficial de cada provedor para valores atualizados."
 )
@@ -277,15 +273,38 @@ with col_res:
             st.caption(f"⚡ BPMN com {calc_passes} passes (passes extras incluídos)")
         st.dataframe(pd.DataFrame(bd_rows), use_container_width=True, hide_index=True)
 
-        # Projeção em BRL
+        # Projeção em BRL — cotação dinâmica
+        from datetime import datetime
+        _usd_brl    = st.session_state.get("usd_brl_rate", 5.20)
+        _usd_brl_ts = st.session_state.get("usd_brl_ts", 0)
+        _updated_at = datetime.fromtimestamp(_usd_brl_ts).strftime("%d/%m/%Y %H:%M") if _usd_brl_ts else "—"
+
+        col_brl, col_refresh = st.columns([3, 1])
+        with col_brl:
+            st.metric(
+                "💱 Cotação USD/BRL (AwesomeAPI)",
+                f"R$ {_usd_brl:.4f}",
+                help=f"Atualizado em {_updated_at}. Recarrega automaticamente a cada hora.",
+            )
+        with col_refresh:
+            st.write("")
+            if st.button("🔄", key="ce_refresh_brl", help="Forçar atualização da cotação"):
+                st.session_state["usd_brl_rate"] = 0.0
+                st.rerun()
+
         brl_rate = st.number_input(
-            "Taxa USD → BRL",
-            min_value=1.0, max_value=20.0, value=5.80, step=0.10,
+            "Ajustar taxa manualmente (opcional)",
+            min_value=1.0, max_value=20.0,
+            value=float(f"{_usd_brl:.2f}"),
+            step=0.10,
             key="ce_brl",
             format="%.2f",
+            help="Pré-preenchido com a cotação atual. Edite para simular outro cenário.",
         )
         total_brl = est.total_cost_usd * brl_rate
         st.caption(f"💵 Equivalente em BRL: **R$ {total_brl:.2f}** (taxa 1 USD = R$ {brl_rate:.2f})")
+        if _usd_brl == 5.20 and _usd_brl_ts == 0:
+            st.caption("⚠️ Usando cotação de fallback — verifique a conectividade.")
 
 st.markdown("---")
 
