@@ -57,6 +57,27 @@ with st.sidebar:
 
     st.markdown("---")
 
+    st.markdown("#### 🎨 Gráficos")
+    from core.assistant_tools import CHART_PALETTES, DEFAULT_PALETTE
+    _palette_names = list(CHART_PALETTES.keys())
+    _cur_palette = st.session_state.get("asst_chart_palette", DEFAULT_PALETTE)
+    _cur_idx = _palette_names.index(_cur_palette) if _cur_palette in _palette_names else 0
+    _sel_palette = st.selectbox(
+        "Paleta de cores",
+        _palette_names,
+        index=_cur_idx,
+        key="asst_chart_palette_sel",
+    )
+    st.session_state["asst_chart_palette"] = _sel_palette
+    _swatches_html = "".join(
+        f'<span style="display:inline-block;width:20px;height:20px;border-radius:4px;'
+        f'background:{c};margin:2px;border:1px solid #ffffff30"></span>'
+        for c in CHART_PALETTES[_sel_palette]
+    )
+    st.markdown(f'<div style="margin-top:2px;line-height:1">{_swatches_html}</div>', unsafe_allow_html=True)
+
+    st.markdown("---")
+
     # Contexto adicional
     uploaded_ctx_file = st.file_uploader(
         "Arquivo de contexto", type=["txt", "docx", "pdf", "csv", "xlsx"],
@@ -364,7 +385,8 @@ if active_question and not _asst_running:
 
             try:
                 _status("🔧 Iniciando consulta…")
-                _agent = AgentAssistant({"api_key": _api_key}, _provider_cfg)
+                _chart_palette = st.session_state.get("asst_chart_palette", "P2D Dark")
+                _agent = AgentAssistant({"api_key": _api_key, "chart_palette": _chart_palette}, _provider_cfg)
                 resp_text, tok, tools, charts = _agent.chat_with_tools(
                     history=_history_snap,
                     question=_question,

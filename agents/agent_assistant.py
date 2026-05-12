@@ -1076,9 +1076,10 @@ class AgentAssistant(BaseAgent):
         executor = AssistantToolExecutor(
             project_id,
             llm_config={
-                "api_key":      self.client_info.get("api_key", ""),
-                "model":        self.provider_cfg.get("default_model", ""),
-                "provider_cfg": self.provider_cfg,
+                "api_key":       self.client_info.get("api_key", ""),
+                "model":         self.provider_cfg.get("default_model", ""),
+                "provider_cfg":  self.provider_cfg,
+                "chart_palette": self.client_info.get("chart_palette", "P2D Dark"),
             },
         )
 

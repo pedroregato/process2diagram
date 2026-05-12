@@ -30,6 +30,19 @@ def _compute_initials(name: str) -> str:
     )
 
 
+# ── Chart colour palettes ─────────────────────────────────────────────────────
+
+CHART_PALETTES: dict[str, list[str]] = {
+    "P2D Dark":      ["#3b82f6", "#C97B1A", "#10b981", "#8b5cf6", "#ef4444", "#06b6d4", "#f59e0b", "#ec4899"],
+    "Azul Oceano":   ["#0369a1", "#0ea5e9", "#38bdf8", "#7dd3fc", "#1e40af", "#3b82f6", "#60a5fa", "#93c5fd"],
+    "Floresta":      ["#166534", "#16a34a", "#4ade80", "#86efac", "#14532d", "#15803d", "#22c55e", "#bbf7d0"],
+    "Pôr do Sol":    ["#9a3412", "#ea580c", "#fb923c", "#fdba74", "#7c2d12", "#c2410c", "#f97316", "#fed7aa"],
+    "Roxo Galáxia":  ["#4c1d95", "#7c3aed", "#a78bfa", "#ddd6fe", "#581c87", "#7e22ce", "#c084fc", "#f3e8ff"],
+    "Tons de Cinza": ["#1e293b", "#475569", "#94a3b8", "#cbd5e1", "#0f172a", "#334155", "#64748b", "#e2e8f0"],
+}
+
+DEFAULT_PALETTE = "P2D Dark"
+
 # ── Tool schemas ──────────────────────────────────────────────────────────────
 
 
@@ -1376,9 +1389,11 @@ class AssistantToolExecutor:
 
     def __init__(self, project_id: str, llm_config: dict | None = None):
         self.project_id = project_id
-        self.llm_config = llm_config or {}   # {"api_key", "model", "provider_cfg"}
+        self.llm_config = llm_config or {}   # {"api_key", "model", "provider_cfg", "chart_palette"}
         self._meeting_cache: list[dict] | None = None
         self._pending_charts: list[dict] = []  # Plotly figure dicts accumulated during a turn
+        palette_name = self.llm_config.get("chart_palette", DEFAULT_PALETTE)
+        self._palette: list[str] = CHART_PALETTES.get(palette_name, CHART_PALETTES[DEFAULT_PALETTE])
 
     def get_pending_charts(self) -> list[dict]:
         """Return Plotly figure dicts accumulated by chart tools during this turn."""
@@ -3821,15 +3836,9 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         if not rows:
             return "Nenhum requisito encontrado para gerar o gráfico."
 
-        _TYPE_COLORS = {
-            "Funcional": "#3b82f6",
-            "Não-Funcional": "#8b5cf6",
-            "Regra de Negócio": "#C97B1A",
-            "Restrição": "#ef4444",
-            "Interface": "#10b981",
-            "Desempenho": "#06b6d4",
-        }
-        _PRIO_COLORS = {"Alta": "#ef4444", "Média": "#C97B1A", "Baixa": "#10b981"}
+        _req_types = ["Funcional", "Não-Funcional", "Regra de Negócio", "Restrição", "Interface", "Desempenho"]
+        _TYPE_COLORS = {t: self._palette[i % len(self._palette)] for i, t in enumerate(_req_types)}
+        _PRIO_COLORS = {"Alta": "#ef4444", "Média": "#C97B1A", "Baixa": "#10b981"}  # semantic, kept fixed
 
         suffix = f" — Reunião {meeting_number}" if meeting_number else ""
         n_total = len(rows)
@@ -3941,11 +3950,11 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
 
         traces = []
         if metric in ("requirements", "all"):
-            traces.append(go.Bar(name="Requisitos", x=mtg_labels, y=reqs, marker_color="#3b82f6"))
+            traces.append(go.Bar(name="Requisitos", x=mtg_labels, y=reqs, marker_color=self._palette[0]))
         if metric in ("decisions", "all"):
-            traces.append(go.Bar(name="Decisões", x=mtg_labels, y=decisions, marker_color="#C97B1A"))
+            traces.append(go.Bar(name="Decisões", x=mtg_labels, y=decisions, marker_color=self._palette[1]))
         if metric in ("action_items", "all"):
-            traces.append(go.Bar(name="Ações", x=mtg_labels, y=actions, marker_color="#10b981"))
+            traces.append(go.Bar(name="Ações", x=mtg_labels, y=actions, marker_color=self._palette[2]))
 
         fig = go.Figure(data=traces)
         fig.update_layout(barmode="group")
@@ -3997,8 +4006,9 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             counts = Counter(it["responsible"] for it in items)
             labels = list(counts.keys())
             values = list(counts.values())
+            bar_colors = [self._palette[i % len(self._palette)] for i in range(len(labels))]
             fig = go.Figure(go.Bar(
-                x=labels, y=values, marker_color="#C97B1A",
+                x=labels, y=values, marker_color=bar_colors,
                 text=values, textposition="outside",
             ))
             self._dark_layout(fig, f"Itens de Ação por Responsável{suffix}")
@@ -4007,17 +4017,17 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             counts = Counter(f"Reunião #{it['meeting_number']}" for it in items)
             labels = list(counts.keys())
             values = list(counts.values())
+            bar_colors = [self._palette[i % len(self._palette)] for i in range(len(labels))]
             fig = go.Figure(go.Bar(
-                x=labels, y=values, marker_color="#8b5cf6",
+                x=labels, y=values, marker_color=bar_colors,
                 text=values, textposition="outside",
             ))
             self._dark_layout(fig, "Itens de Ação por Reunião")
 
-        else:  # status
+        else:  # status — keep semantic green/red (Concluído/Pendente carry meaning)
             counts = Counter(it["status"] for it in items)
             labels = list(counts.keys())
             values = list(counts.values())
-            colors = {"Concluído": "#10b981", "Pendente": "#ef4444"}.values()
             fig = go.Figure(go.Pie(
                 labels=labels, values=values,
                 marker=dict(colors=["#10b981" if lb == "Concluído" else "#ef4444" for lb in labels]),
@@ -4111,11 +4121,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         """Render a custom chart from LLM-provided data."""
         import plotly.graph_objects as go
 
-        _PALETTE = [
-            "#3b82f6", "#C97B1A", "#10b981", "#8b5cf6",
-            "#ef4444", "#06b6d4", "#f59e0b", "#ec4899",
-        ]
-        colors = [_PALETTE[i % len(_PALETTE)] for i in range(len(labels))]
+        colors = [self._palette[i % len(self._palette)] for i in range(len(labels))]
 
         ct = chart_type.lower()
         try:
@@ -4131,7 +4137,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 fig = go.Figure(go.Scatter(
                     x=labels, y=values, mode="lines+markers",
                     name=series_name or title,
-                    line=dict(color=_PALETTE[0], width=2),
+                    line=dict(color=self._palette[0], width=2),
                     marker=dict(size=8),
                 ))
             elif ct == "scatter":
