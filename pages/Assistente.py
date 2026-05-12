@@ -171,9 +171,25 @@ st.markdown("""
     border: 1px solid #1e3a55 !important;
     border-radius: 6px !important;
 }
-/* Avatar do assistente */
-[data-testid="stChatMessageContainer"][data-role="assistant"] [data-testid="chatAvatarIcon-assistant"] {
-    background: #C97B1A !important;
+/* Avatares */
+[data-testid="chatAvatarIcon-user"],
+[data-testid="chatAvatarIcon-assistant"] {
+    background: transparent !important;
+    border: none !important;
+}
+[data-testid="chatAvatarIcon-user"] svg,
+[data-testid="chatAvatarIcon-assistant"] svg {
+    fill: #3b82f6 !important;
+}
+[data-testid="chatAvatarIcon-assistant"] svg {
+    fill: #C97B1A !important;
+}
+/* Fallback: qualquer elemento de avatar (baseweb) */
+[data-baseweb="avatar"] {
+    background: transparent !important;
+}
+[data-baseweb="avatar"] svg {
+    fill: #3b82f6 !important;
 }
 /* Campo de entrada — container */
 [data-testid="stChatInput"] {
