@@ -12,6 +12,30 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import urllib.request
+import json
+from functools import lru_cache
+from time import time
+
+_USD_BRL_CACHE: tuple[float, float] = (0.0, 0.0)  # (rate, timestamp)
+_CACHE_TTL = 3600  # 1 hora
+
+def get_usd_brl_rate(fallback: float = 5.20) -> float:
+    """Fetch USD/BRL rate from AwesomeAPI. Returns fallback on failure."""
+    global _USD_BRL_CACHE
+    rate, ts = _USD_BRL_CACHE
+    if rate > 0 and (time() - ts) < _CACHE_TTL:
+        return rate
+    try:
+        url = "https://economia.awesomeapi.com.br/last/USD-BRL"
+        with urllib.request.urlopen(url, timeout=3) as resp:
+            data = json.loads(resp.read())
+        rate = float(data["USDBRL"]["bid"])
+        _USD_BRL_CACHE = (rate, time())
+        return rate
+    except Exception:
+        return fallback
+
 # ── Preços por provedor (USD por 1 000 000 tokens) ───────────────────────────
 # input_usd: custo por 1M tokens de entrada (prompt + contexto)
 # output_usd: custo por 1M tokens de saída (resposta gerada)
