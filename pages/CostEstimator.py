@@ -48,7 +48,8 @@ if _usd_brl_missing or _usd_brl_age > 3600:
     st.session_state["usd_brl_ts"]   = _time_now()
 
 # ── Header ────────────────────────────────────────────────────────────────────
-st.markdown("# 💰 Estimativa de Custos LLM")st.caption(
+st.markdown("# 💰 Estimativa de Custos LLM")
+st.caption(
     "Análise de custo real (histórico de tokens do banco) e estimativas para cenários futuros. "
     "Preços aproximados — consulte a página oficial de cada provedor para valores atualizados."
 )
