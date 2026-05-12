@@ -17,13 +17,13 @@ from modules.supabase_client import supabase_configured, get_supabase_client
 from modules.config import AVAILABLE_PROVIDERS
 from modules.embeddings import EMBEDDING_PROVIDERS
 from core.project_store import (
-    list_projects,
     retrieve_context_for_question,
     retrieve_context_semantic,
     format_context,
     transcript_chunks_table_exists,
     get_embedding_coverage,
 )
+from ui.project_selector import require_active_project
 from agents.agent_assistant import AgentAssistant
 from ui.components.copy_button import copy_button
 from core.chart_config import CHART_PALETTES, DEFAULT_PALETTE
@@ -35,19 +35,14 @@ apply_auth_gate()
 with st.sidebar:
     st.markdown("### 💬 Assistente")
 
-    st.markdown("#### 📁 Projeto")
-    projects = list_projects()
-    if projects:
-        proj_names = [p["name"] for p in projects]
-        proj_map = {p["name"]: p for p in projects}
-        selected_proj_name = st.selectbox("Selecione o projeto", proj_names, key="asst_proj_sel")
-        selected_project = proj_map[selected_proj_name]
-        project_id = selected_project["id"]
-        project_name = selected_project["name"]
+    st.markdown("#### 📁 Projeto de Trabalho")
+    _ap_name = st.session_state.get("active_project_name", "")
+    if _ap_name:
+        st.success(f"**{_ap_name}**")
+        st.page_link("pages/Home.py", label="↩ Trocar projeto")
     else:
-        st.info("Nenhum projeto disponível.")
-        project_id = None
-        project_name = ""
+        st.warning("Nenhum projeto ativo.")
+        st.page_link("pages/Home.py", label="← Selecionar projeto")
 
     st.markdown("---")
 
@@ -135,9 +130,7 @@ if not supabase_configured():
     st.warning("⚙️ Supabase não configurado.")
     st.stop()
 
-if not project_id:
-    st.warning("👈 Selecione um projeto na sidebar.")
-    st.stop()
+project_id, project_name = require_active_project()
 
 # ── Guard: LLM API key ───────────────────────────────────────────────────────
 if not api_key:

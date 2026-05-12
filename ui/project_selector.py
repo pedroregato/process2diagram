@@ -231,3 +231,21 @@ def render_bpmn_process_selector() -> None:
                 st.session_state.bpmn_process_override_name = ""
                 st.session_state.bpmn_process_display       = proc["name"]
             st.rerun()
+
+
+def require_active_project() -> tuple[str, str]:
+    """Retorna (project_id, project_name) do projeto de trabalho ativo.
+
+    Se nenhum projeto estiver ativo, exibe aviso com link para a Central de
+    Operações e chama st.stop() — a pagina chamadora nao renderiza mais nada.
+    """
+    pid  = st.session_state.get("active_project_id")
+    name = st.session_state.get("active_project_name", "")
+    if not pid:
+        st.warning(
+            "Nenhum projeto de trabalho ativo. "
+            "Selecione um projeto na **Central de Operações**."
+        )
+        st.page_link("pages/Home.py", label="← Ir para a Central de Operações")
+        st.stop()
+    return pid, name

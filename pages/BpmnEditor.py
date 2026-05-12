@@ -32,12 +32,12 @@ import streamlit.components.v1 as components
 
 from ui.auth_gate import apply_auth_gate
 from core.project_store import (
-    list_projects,
     list_bpmn_processes,
     list_bpmn_versions,
     save_bpmn_new_version,
     bpmn_tables_exist,
 )
+from ui.project_selector import require_active_project
 from modules.bpmn_editor import editor_from_xml
 from modules.bpmn_viewer import preview_from_xml
 
@@ -66,19 +66,16 @@ if not bpmn_tables_exist():
     )
     st.stop()
 
-# ── Seletores ─────────────────────────────────────────────────────────────────
-projects = list_projects()
-if not projects:
-    st.info("Nenhum projeto encontrado. Processe pelo menos uma transcrição primeiro.")
-    st.stop()
-
-col_proj, col_proc = st.columns(2)
-with col_proj:
-    proj_opts = {p["name"]: p["id"] for p in projects}
-    proj_name = st.selectbox("Projeto", list(proj_opts.keys()), key="bpme_project")
-    project_id = proj_opts[proj_name]
+# ── Projeto de trabalho ativo + seletor de processo ──────────────────────────
+project_id, proj_name = require_active_project()
+_col_proj, _col_change = st.columns([5, 1])
+with _col_proj:
+    st.success(f"📁 **Projeto:** {proj_name}")
+with _col_change:
+    st.page_link("pages/Home.py", label="Trocar")
 
 processes = list_bpmn_processes(project_id)
+col_proc = st.columns(1)[0]
 with col_proc:
     if not processes:
         st.info("Nenhum processo BPMN registrado para este projeto.")

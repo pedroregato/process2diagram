@@ -1375,7 +1375,29 @@ def get_tool_schemas_openai() -> list[dict]:
                     "required": []
                 }
             }
-        },        
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "set_active_project",
+                "description": (
+                    "Define o projeto de trabalho ativo para toda a aplicação. "
+                    "Após a mudança, todas as páginas (Assistente, ReqTracker, Editor BPMN, ROI-TR, ValidationHub) "
+                    "passarão a usar o novo projeto automaticamente. "
+                    "Use quando o usuário pedir para mudar, selecionar ou trocar o projeto de trabalho."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "project_name": {
+                            "type": "string",
+                            "description": "Nome do projeto (busca parcial sem distinção de maiúsculas/minúsculas). Ex: 'SDEA', 'saúde', 'proj'."
+                        }
+                    },
+                    "required": ["project_name"]
+                }
+            }
+        },
     ]
 
 
@@ -1416,6 +1438,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "get_users_by_domain":   "consulta",
     "list_all_domains":      "consulta",
     "list_users_by_project": "consulta",
+    "set_active_project":    "escrita",
     
     "convert_usd_to_brl": "consulta",
     
@@ -3621,7 +3644,33 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     f"- {u.get('nome', u.get('login', '?'))} "
                     f"({u.get('login', '')}) `{u.get('role', 'user')}`"
                 )
-        return "\n".join(lines)        
+        return "\n".join(lines)
+
+    def set_active_project(self, project_name: str) -> str:
+        """Define o projeto de trabalho ativo para toda a aplicação."""
+        import streamlit as st
+        from core.project_store import list_projects
+        projects = list_projects()
+        if not projects:
+            return "Nenhum projeto disponível no banco de dados."
+        name_lower = project_name.lower().strip()
+        project = next((p for p in projects if p["name"].lower() == name_lower), None)
+        if not project:
+            project = next((p for p in projects if name_lower in p["name"].lower()), None)
+        if not project:
+            names = ", ".join(p["name"] for p in projects)
+            return (
+                f"Projeto nao encontrado: '{project_name}'. "
+                f"Projetos disponíveis: {names}"
+            )
+        st.session_state["active_project_id"]   = project["id"]
+        st.session_state["active_project_name"] = project["name"]
+        if project.get("sigla"):
+            st.session_state["prefix"] = project["sigla"].strip() + "_"
+        return (
+            f"Projeto de trabalho alterado para **{project['name']}**. "
+            "Todas as páginas agora usarão este projeto."
+        )
 
     # ── Google Calendar tools ─────────────────────────────────────────────────
 
@@ -4688,6 +4737,9 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 "list_all_domains":               lambda: self.list_all_domains_tool(),
                 "list_users_by_project":          lambda: self.list_users_by_project_tool(
                     tool_input.get("project_id"),
+                ),
+                "set_active_project":             lambda: self.set_active_project(
+                    tool_input["project_name"],
                 ),
                 "generate_custom_chart":          lambda: self.generate_custom_chart(
                     chart_type=tool_input["chart_type"],

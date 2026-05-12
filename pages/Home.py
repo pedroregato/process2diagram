@@ -24,7 +24,7 @@ import streamlit as st
 
 from ui.auth_gate import apply_auth_gate
 from modules.auth import is_admin
-from core.project_store import get_global_stats, list_recent_meetings
+from core.project_store import get_global_stats, list_recent_meetings, list_projects
 
 apply_auth_gate()
 
@@ -225,6 +225,58 @@ st.markdown(f"""
   </div>
 </div>
 """, unsafe_allow_html=True)
+
+# ── Projeto de Trabalho ──────────────────────────────────────────────────────
+@st.cache_data(ttl=120, show_spinner=False)
+def _load_projects():
+    return list_projects()
+
+_all_projects = _load_projects()
+_ap_id   = st.session_state.get("active_project_id")
+_ap_name = st.session_state.get("active_project_name", "")
+
+# Auto-selecionar quando houver apenas 1 projeto e nenhum ativo
+if _all_projects and not _ap_id and len(_all_projects) == 1:
+    _p = _all_projects[0]
+    st.session_state["active_project_id"]   = _p["id"]
+    st.session_state["active_project_name"] = _p["name"]
+    if _p.get("sigla"):
+        st.session_state["prefix"] = _p["sigla"].strip() + "_"
+    _ap_id   = _p["id"]
+    _ap_name = _p["name"]
+
+if _ap_id:
+    _col_badge, _col_change = st.columns([5, 1])
+    with _col_badge:
+        st.success(f"📁 **Projeto de trabalho:** {_ap_name}")
+    with _col_change:
+        if st.button("Trocar", key="home_change_proj", use_container_width=True):
+            st.session_state["active_project_id"]   = None
+            st.session_state["active_project_name"] = ""
+            st.rerun()
+elif _all_projects:
+    with st.container(border=True):
+        st.markdown("#### 📁 Selecione o Projeto de Trabalho")
+        st.caption("O projeto ativo é usado em todas as páginas: Assistente, ReqTracker, Editor BPMN, ROI-TR e ValidationHub.")
+        _proj_map = {p["name"]: p for p in _all_projects}
+        _proj_sel = st.selectbox(
+            "Projeto", list(_proj_map.keys()),
+            key="home_proj_sel", label_visibility="collapsed",
+        )
+        if st.button("✅ Ativar Projeto", key="home_activate_proj",
+                     type="primary", use_container_width=True):
+            _p = _proj_map[_proj_sel]
+            st.session_state["active_project_id"]   = _p["id"]
+            st.session_state["active_project_name"] = _p["name"]
+            if _p.get("sigla"):
+                st.session_state["prefix"] = _p["sigla"].strip() + "_"
+            _load_projects.clear()
+            st.rerun()
+else:
+    st.info(
+        "ℹ️ Nenhum projeto encontrado. "
+        "Configure o Supabase em **Sistema → Configurações** e crie um projeto."
+    )
 
 # ── 2. KPIs ───────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=60, show_spinner=False)

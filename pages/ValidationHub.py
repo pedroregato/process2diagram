@@ -17,10 +17,11 @@ import streamlit as st
 from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured
 from core.project_store import (
-    list_projects, list_meetings,
+    list_meetings,
     list_requirements, list_sbvr_terms, list_sbvr_rules, list_bpmn_processes,
     validate_artifact, update_artifact_content,
 )
+from ui.project_selector import require_active_project
 
 apply_auth_gate()
 
@@ -67,19 +68,15 @@ if "_vhub_msg" in st.session_state:
     kind, msg = st.session_state.pop("_vhub_msg")
     getattr(st, kind)(msg)
 
-# ── Seletores ─────────────────────────────────────────────────────────────────
-projects = list_projects()
-if not projects:
-    st.info("Nenhum projeto encontrado.")
-    st.stop()
+# ── Projeto de trabalho ativo + seletores ─────────────────────────────────────
+proj_id, proj_name = require_active_project()
+_col_p, _col_ch = st.columns([5, 1])
+with _col_p:
+    st.success(f"📁 **Projeto:** {proj_name}")
+with _col_ch:
+    st.page_link("pages/Home.py", label="Trocar")
 
-col_proj, col_meet, col_status = st.columns(3)
-
-with col_proj:
-    proj_map = {p["name"]: p for p in projects}
-    sel_proj = st.selectbox("Projeto", list(proj_map.keys()), key="vhub_proj")
-    project  = proj_map[sel_proj]
-    proj_id  = project["id"]
+col_meet, col_status = st.columns(2)
 
 with col_meet:
     meetings   = list_meetings(proj_id)
@@ -99,7 +96,7 @@ with col_status:
 all_reqs  = list_requirements(proj_id)
 all_terms = list_sbvr_terms(proj_id)
 all_rules = list_sbvr_rules(proj_id)
-all_bpmn  = list_bpmn_processes(proj_id)
+all_bpmn  = list_bpmn_processes(proj_id)  # type: ignore[arg-type]
 
 # Aplica filtro de reunião
 def _meet_filter(items: list[dict], field: str) -> list[dict]:

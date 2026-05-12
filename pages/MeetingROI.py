@@ -21,6 +21,7 @@ import pandas as pd
 import streamlit as st
 
 from ui.auth_gate import apply_auth_gate
+from ui.project_selector import require_active_project
 from modules.supabase_client import supabase_configured, get_supabase_client
 from modules.meeting_roi_calculator import (
     compute_project_roi,
@@ -122,30 +123,13 @@ Proxy linguístico de repetição de conceitos na transcrição.
 """
     )
 
-# ── Project selector ──────────────────────────────────────────────────────────
-db = get_supabase_client()
-if not db:
-    st.error("Não foi possível conectar ao Supabase.")
-    st.stop()
-
-try:
-    projects = db.table("projects").select("id, name, sigla").order("name").execute().data or []
-except Exception as exc:
-    st.error(f"Erro ao carregar projetos: {exc}")
-    st.stop()
-
-if not projects:
-    st.warning("Nenhum projeto encontrado no banco de dados.")
-    st.stop()
-
-project_options = {p["name"]: p for p in projects}
-selected_name   = st.selectbox(
-    "Projeto",
-    list(project_options.keys()),
-    key="roi_project_sel",
-)
-project    = project_options[selected_name]
-project_id = project["id"]
+# ── Projeto de trabalho ativo ─────────────────────────────────────────────────
+project_id, project_name = require_active_project()
+_col_p, _col_ch = st.columns([5, 1])
+with _col_p:
+    st.success(f"📁 **Projeto:** {project_name}")
+with _col_ch:
+    st.page_link("pages/Home.py", label="Trocar")
 
 st.markdown("---")
 

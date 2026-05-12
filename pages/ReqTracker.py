@@ -22,10 +22,11 @@ from modules.supabase_client import supabase_configured
 from modules.text_utils import rule_keyword_pt
 from modules.reqtracker_exporter import to_html as export_html, to_pdf as export_pdf
 from core.project_store import (
-    list_projects, list_meetings, list_requirements, list_contradictions,
+    list_meetings, list_requirements, list_contradictions,
     list_sbvr_terms, list_sbvr_rules,
     list_bpmn_processes, list_bpmn_versions, bpmn_tables_exist,
 )
+from ui.project_selector import require_active_project
 
 apply_auth_gate()
 
@@ -72,20 +73,13 @@ if not supabase_configured():
     st.error("⚙️ Supabase não configurado. Adicione as credenciais em Settings → Secrets.")
     st.stop()
 
-# ── Seleção de projeto ────────────────────────────────────────────────────────
-projects = list_projects()
-if not projects:
-    st.info("Nenhum projeto encontrado. Execute pelo menos uma reunião no app principal.")
-    st.stop()
-
-proj_map = {p["name"]: p for p in projects}
-selected_name = st.selectbox(
-    "Selecione o projeto",
-    list(proj_map.keys()),
-    key="rt_project_sel",
-)
-project = proj_map[selected_name]
-project_id = project["id"]
+# ── Projeto de trabalho ativo ─────────────────────────────────────────────────
+project_id, project_name = require_active_project()
+_col_proj, _col_change = st.columns([5, 1])
+with _col_proj:
+    st.success(f"📁 **Projeto:** {project_name}")
+with _col_change:
+    st.page_link("pages/Home.py", label="Trocar")
 
 # ── Carrega dados ─────────────────────────────────────────────────────────────
 meetings       = list_meetings(project_id)

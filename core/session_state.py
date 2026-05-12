@@ -70,3 +70,9 @@ def init_session_state():
         st.session_state.current_meeting_id = None
     if "project_confirmed" not in st.session_state:
         st.session_state.project_confirmed = False
+
+    # ── Projeto de trabalho ativo (global — compartilhado por todas as páginas) ─
+    if "active_project_id" not in st.session_state:
+        st.session_state.active_project_id = None
+    if "active_project_name" not in st.session_state:
+        st.session_state.active_project_name = ""
