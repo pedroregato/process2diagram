@@ -12,30 +12,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-import urllib.request
-import json
-from functools import lru_cache
-from time import time
-
-_USD_BRL_CACHE: tuple[float, float] = (0.0, 0.0)  # (rate, timestamp)
-_CACHE_TTL = 3600  # 1 hora
-
-def get_usd_brl_rate(fallback: float = 5.20) -> float:
-    """Fetch USD/BRL rate from AwesomeAPI. Returns fallback on failure."""
-    global _USD_BRL_CACHE
-    rate, ts = _USD_BRL_CACHE
-    if rate > 0 and (time() - ts) < _CACHE_TTL:
-        return rate
-    try:
-        url = "https://economia.awesomeapi.com.br/last/USD-BRL"
-        with urllib.request.urlopen(url, timeout=3) as resp:
-            data = json.loads(resp.read())
-        rate = float(data["USDBRL"]["bid"])
-        _USD_BRL_CACHE = (rate, time())
-        return rate
-    except Exception:
-        return fallback
-
 # ── Preços por provedor (USD por 1 000 000 tokens) ───────────────────────────
 # input_usd: custo por 1M tokens de entrada (prompt + contexto)
 # output_usd: custo por 1M tokens de saída (resposta gerada)
@@ -275,3 +251,37 @@ def compare_providers(
         })
     results.sort(key=lambda x: x["Custo total (USD)"])
     return results
+
+# ── Cotação USD/BRL (AwesomeAPI) ──────────────────────────────────────────────
+
+import urllib.request as _urllib_request
+import json as _json
+from time import time as _time
+
+_USD_BRL_CACHE: tuple[float, float] = (0.0, 0.0)  # (rate, timestamp)
+_USD_BRL_TTL   = 3600  # segundos — recarrega a cada 1 hora
+
+
+def get_usd_brl_rate(fallback: float = 5.20) -> tuple[float, bool]:
+    """Fetch USD/BRL bid rate from AwesomeAPI with 1-hour in-memory cache.
+
+    Returns:
+        (rate, from_cache)
+        rate       — float com a cotação (fallback se API falhar)
+        from_cache — True se o valor veio do cache, False se foi buscado agora
+    """
+    global _USD_BRL_CACHE
+    rate, ts = _USD_BRL_CACHE
+    if rate > 0 and (_time() - ts) < _USD_BRL_TTL:
+        return rate, True
+    try:
+        url = "https://economia.awesomeapi.com.br/last/USD-BRL"
+        with _urllib_request.urlopen(url, timeout=3) as resp:
+            data = _json.loads(resp.read())
+        rate = float(data["USDBRL"]["bid"])
+        _USD_BRL_CACHE = (rate, _time())
+        return rate, False
+    except Exception:
+        if rate > 0:                        # cache expirado mas válido
+            return rate, True
+        return fallback, False              # sem cache, sem API → fallback
