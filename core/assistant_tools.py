@@ -2594,11 +2594,12 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
 
         cascade: list[str] = []
         for table, col in [
-            ("requirements",      "first_meeting_id"),
-            ("transcript_chunks", "meeting_id"),
-            ("sbvr_terms",        "meeting_id"),
-            ("sbvr_rules",        "meeting_id"),
-            ("bpmn_processes",    "meeting_id"),
+            ("requirement_versions", "meeting_id"),
+            ("requirements",         "first_meeting_id"),
+            ("transcript_chunks",    "meeting_id"),
+            ("sbvr_terms",           "meeting_id"),
+            ("sbvr_rules",           "meeting_id"),
+            ("bpmn_processes",       "meeting_id"),
         ]:
             try:
                 rows = db.table(table).select("id").eq(col, mid).execute().data or []
@@ -2662,14 +2663,21 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         title = m.get("title") or f"Reunião {meeting_number}"
 
         try:
-            # ── Step 1: Null-out non-cascade FK references in requirements ──────
+            # ── Step 1: Delete requirement_versions for this meeting ─────────────
+            # Must come before nulling requirements FK (FK: requirement_versions.meeting_id)
+            try:
+                db.table("requirement_versions").delete().eq("meeting_id", mid).execute()
+            except Exception:
+                pass
+
+            # ── Step 2: Null-out non-cascade FK references in requirements ───────
             for fk_col in ("last_meeting_id", "first_meeting_id"):
                 try:
                     db.table("requirements").update({fk_col: None}).eq(fk_col, mid).execute()
                 except Exception:
                     pass  # column may not exist — safe to ignore
 
-            # ── Step 2: Delete child rows in tables that may lack CASCADE DELETE ─
+            # ── Step 3: Delete child rows in tables that may lack CASCADE DELETE ─
             for table in ("transcript_chunks", "sbvr_terms", "sbvr_rules"):
                 try:
                     db.table(table).delete().eq("meeting_id", mid).execute()
