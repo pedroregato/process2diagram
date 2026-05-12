@@ -319,7 +319,7 @@ with tab_table:
     st.download_button(
         "⬇️ Exportar CSV",
         data=csv,
-        file_name=f"roi_tr_{selected_name.replace(' ', '_')}.csv",
+        file_name=f"roi_tr_{project_name.replace(' ', '_')}.csv",
         mime="text/csv",
     )
 
