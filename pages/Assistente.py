@@ -132,6 +132,12 @@ if not supabase_configured():
 
 project_id, project_name = require_active_project()
 
+_col_proj, _col_change = st.columns([5, 1])
+with _col_proj:
+    st.success(f"📁 **Projeto:** {project_name}")
+with _col_change:
+    st.page_link("pages/Home.py", label="Trocar")
+
 # ── Guard: LLM API key ───────────────────────────────────────────────────────
 if not api_key:
     st.warning("⚙️ Configure a chave de API em Configurações → LLM Assistente.")
