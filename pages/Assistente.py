@@ -60,8 +60,8 @@ with st.sidebar:
 
     st.markdown("#### 🎨 Gráficos")
     _palette_names = list(CHART_PALETTES.keys())
-    _cur_palette = st.session_state.get("asst_chart_palette", DEFAULT_PALETTE)
-    _cur_idx = _palette_names.index(_cur_palette) if _cur_palette in _palette_names else 0
+    _prev_palette = st.session_state.get("asst_chart_palette", DEFAULT_PALETTE)
+    _cur_idx = _palette_names.index(_prev_palette) if _prev_palette in _palette_names else 0
     _sel_palette = st.selectbox(
         "Paleta de cores",
         _palette_names,
@@ -75,6 +75,10 @@ with st.sidebar:
         for c in CHART_PALETTES[_sel_palette]
     )
     st.markdown(f'<div style="margin-top:2px;line-height:1">{_swatches_html}</div>', unsafe_allow_html=True)
+    if _sel_palette != _prev_palette:
+        st.info("Paleta alterada. Repita o pedido no chat para gerar o grafico com as novas cores.", icon="🎨")
+    else:
+        st.caption("Selecione uma paleta e repita o pedido no chat para aplicar.")
 
     st.markdown("---")
 
