@@ -81,16 +81,15 @@ def create_project(name: str, description: str = "", sigla: str = "") -> dict | 
 # ── User / Tenant query functions ──────────────────────────────────────────
 
 def list_users_by_domain(domain: str) -> list[dict]:
-    """Return all users whose login contains '@<domain>' (case-insensitive)."""
     client = get_supabase_client()
     if client is None:
         return []
     try:
         res = (
             client.table("tenant_users")
-            .select("id, login, nome, role, google_account")
+            .select("id, login, display_name, role, google_account")
             .ilike("login", f"%@{domain}%")
-            .order("nome")
+            .order("display_name")
             .execute()
         )
         return res.data or []
@@ -137,7 +136,7 @@ def list_users_by_project(project_id: str | None = None) -> list[dict]:
         projects_res = client.table("projects").select("id, name").execute()
         users_res = (
             client.table("tenant_users")
-            .select("id, login, nome, role")
+            .select("id, login, display_name, role")
             .execute()
         )
         meetings_res = (
@@ -168,7 +167,7 @@ def list_users_by_project(project_id: str | None = None) -> list[dict]:
                 "users": [
                     {
                         "login": login,
-                        "nome": users.get(login, {}).get("nome", login),
+                        "nome": users.get(login, {}).get("display_name", login),
                         "role": users.get(login, {}).get("role", "user"),
                     }
                     for login in members
