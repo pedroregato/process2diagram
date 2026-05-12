@@ -123,6 +123,71 @@ if "asst_use_semantic" not in st.session_state:
         st.session_state.get("asst_embed_key", "") and _chunks_table_ok
     )
 
+# ── CSS — chat area ───────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+/* ── Área de chat ── */
+[data-testid="stChatMessageContainer"] {
+    padding: .75rem 1rem !important;
+    border-radius: 10px !important;
+    margin-bottom: .5rem !important;
+}
+/* Mensagem do usuário */
+[data-testid="stChatMessageContainer"][data-role="user"] {
+    background: #0d2a4a !important;
+    border: 1px solid #1e4a7a !important;
+    border-left: 3px solid #3b82f6 !important;
+}
+/* Mensagem do assistente */
+[data-testid="stChatMessageContainer"][data-role="assistant"] {
+    background: #0f2235 !important;
+    border: 1px solid #1a3a55 !important;
+    border-left: 3px solid #C97B1A !important;
+}
+/* Texto das mensagens */
+[data-testid="stChatMessageContainer"] .stMarkdown p,
+[data-testid="stChatMessageContainer"] .stMarkdown li,
+[data-testid="stChatMessageContainer"] .stMarkdown {
+    color: #e2eaf4 !important;
+    font-size: .93rem !important;
+    line-height: 1.6 !important;
+}
+/* Headings dentro do chat */
+[data-testid="stChatMessageContainer"] .stMarkdown h1,
+[data-testid="stChatMessageContainer"] .stMarkdown h2,
+[data-testid="stChatMessageContainer"] .stMarkdown h3 {
+    color: #f0f4fa !important;
+}
+/* Código inline */
+[data-testid="stChatMessageContainer"] .stMarkdown code {
+    background: #1a3a5a !important;
+    color: #7dd3fc !important;
+    padding: 1px 6px !important;
+    border-radius: 4px !important;
+}
+/* Bloco de código */
+[data-testid="stChatMessageContainer"] .stMarkdown pre {
+    background: #071628 !important;
+    border: 1px solid #1e3a55 !important;
+    border-radius: 6px !important;
+}
+/* Avatar do assistente */
+[data-testid="stChatMessageContainer"][data-role="assistant"] [data-testid="chatAvatarIcon-assistant"] {
+    background: #C97B1A !important;
+}
+/* Campo de entrada */
+[data-testid="stChatInput"] {
+    border: 1px solid #1e4a7a !important;
+    background: #0a1e34 !important;
+    border-radius: 10px !important;
+}
+[data-testid="stChatInput"]:focus-within {
+    border-color: #C97B1A !important;
+    box-shadow: 0 0 0 2px rgba(201,123,26,.2) !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ── Main Area ─────────────────────────────────────────────────────────────────
 st.markdown("# 💬 Assistente de Reuniões")
 
