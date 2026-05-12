@@ -40,8 +40,9 @@ apply_auth_gate()
 
 # ── Cotação USD/BRL ───────────────────────────────────────────────────────────
 from time import time as _time_now
-if st.session_state.get("usd_brl_rate", 0.0) == 0.0 or \
-   (_time_now() - st.session_state.get("usd_brl_ts", 0)) > 3600:
+_usd_brl_age = _time_now() - st.session_state.get("usd_brl_ts", 0)
+_usd_brl_missing = st.session_state.get("usd_brl_rate", 0.0) == 0.0
+if _usd_brl_missing or _usd_brl_age > 3600:
     _rate, _cached = get_usd_brl_rate()
     st.session_state["usd_brl_rate"] = _rate
     st.session_state["usd_brl_ts"]   = _time_now()
