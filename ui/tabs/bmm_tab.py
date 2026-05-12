@@ -31,26 +31,25 @@ def render(hub, prefix, suffix):
         for g in bmm.goals:
             icon    = _GOAL_TYPE_ICON.get(g.goal_type, "🎯")
             horizon = _HORIZON_LABEL.get(g.horizon, g.horizon)
-            with st.expander(f"{icon} **{g.id}** — {g.name}  ·  *{horizon}*"):
-                st.markdown(g.description or "*Sem descrição adicional.*")
-                st.caption(f"Tipo: {g.goal_type.capitalize()}")
+            st.markdown(f"**{icon} {g.id} — {g.name}** · *{horizon}*")
+            st.markdown(g.description or "*Sem descrição adicional.*")
+            st.caption(f"Tipo: {g.goal_type.capitalize()}")
+            st.markdown("---")
     else:
         st.info("Nenhum objetivo extraído.")
 
     # ── Strategies ────────────────────────────────────────────────────────────
     if bmm.strategies:
         st.markdown(f"#### 🗺️ Estratégias ({len(bmm.strategies)})")
-
-        # Build goal name map for readable "supports" labels
         goal_names = {g.id: g.name for g in bmm.goals}
-
         for s in bmm.strategies:
             supports_txt = ", ".join(
                 f"{gid} ({goal_names.get(gid, '?')})" for gid in s.supports
             ) if s.supports else "—"
-            with st.expander(f"🗺️ **{s.id}** — {s.name}"):
-                st.markdown(s.description or "*Sem descrição adicional.*")
-                st.caption(f"Suporta: {supports_txt}")
+            st.markdown(f"**🗺️ {s.id} — {s.name}**")
+            st.markdown(s.description or "*Sem descrição adicional.*")
+            st.caption(f"Suporta: {supports_txt}")
+            st.markdown("---")
 
     # ── Policies ─────────────────────────────────────────────────────────────
     if bmm.policies:
