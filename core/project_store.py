@@ -81,102 +81,158 @@ def create_project(name: str, description: str = "", sigla: str = "") -> dict | 
 # ── User / Tenant query functions ──────────────────────────────────────────
 
 def list_users_by_domain(domain: str) -> list[dict]:
+    """Return all users whose tenant matches the domain slug or display_name."""
     client = get_supabase_client()
     if client is None:
         return []
     try:
-        res = (
-            client.table("tenant_users")
-            .select("id, login, display_name, role, google_account")
-            .ilike("login", f"%@{domain}%")
-            .order("display_name")
+        # Find tenant by domain_slug or display_name
+        tenant_res = (
+            client.table("tenants")
+            .select("id, domain_slug, display_name")
+            .or_(f"domain_slug.ilike.%{domain}%,display_name.ilike.%{domain}%")
             .execute()
         )
-        return res.data or []
+        tenants = tenant_res.data or []
+        if not tenants:
+            return []
+
+        tenant_ids = [t["id"] for t in tenants]
+
+        # Fetch users for those tenants
+        all_users = []
+        for tid in tenant_ids:
+            res = (
+                client.table("tenant_users")
+                .select("id, login, display_name, role, tenant_id")
+                .eq("tenant_id", tid)
+                .order("display_name")
+                .execute()
+            )
+            tenant_name = next(
+                (t["display_name"] or t["domain_slug"] for t in tenants if t["id"] == tid),
+                domain,
+            )
+            for u in (res.data or []):
+                u["tenant_name"] = tenant_name
+                all_users.append(u)
+
+        return all_users
     except Exception:
         return []
 
 
 def list_all_domains() -> list[dict]:
-    """Return distinct domains (extracted from login emails) across all users."""
+    """Return all tenants (domains) with user count."""
     client = get_supabase_client()
     if client is None:
         return []
     try:
-        res = (
-            client.table("tenant_users")
-            .select("login")
+        tenants_res = (
+            client.table("tenants")
+            .select("id, domain_slug, display_name")
+            .order("display_name")
             .execute()
         )
-        from collections import Counter
-        domains: Counter = Counter()
-        for row in (res.data or []):
-            login = row.get("login", "")
-            if "@" in login:
-                domain = login.split("@", 1)[1].lower()
-                domains[domain] += 1
-        return [{"domain": d, "user_count": c} for d, c in sorted(domains.items())]
+        tenants = tenants_res.data or []
+        if not tenants:
+            return []
+
+        result = []
+        for t in tenants:
+            try:
+                users_res = (
+                    client.table("tenant_users")
+                    .select("id", count="exact")
+                    .eq("tenant_id", t["id"])
+                    .execute()
+                )
+                count = users_res.count or 0
+            except Exception:
+                count = 0
+            result.append({
+                "domain":       t.get("domain_slug") or t.get("display_name") or "—",
+                "display_name": t.get("display_name") or t.get("domain_slug") or "—",
+                "tenant_id":    t["id"],
+                "user_count":   count,
+            })
+        return result
     except Exception:
         return []
 
 
 def list_users_by_project(project_id: str | None = None) -> list[dict]:
-    """Return users grouped by project. If project_id given, filter to that project.
-    
-    Joins tenant_users with projects via meetings.created_by or a direct
-    project_members table if it exists. Falls back to listing all users with
-    their associated project data via project_store.
+    """Return users grouped by project via tenant linkage.
+
+    Since there is no direct project→tenant FK yet, groups users by tenant
+    and lists all projects of matching sigla/name as context.
+    Falls back to listing all tenants with their users when project_id is None.
     """
     client = get_supabase_client()
     if client is None:
         return []
     try:
-        # Approach: list all projects and all users, then cross-reference
-        # via meetings.created_by field (who ran pipelines in each project)
-        projects_res = client.table("projects").select("id, name").execute()
-        users_res = (
-            client.table("tenant_users")
-            .select("id, login, display_name, role")
+        # Get all tenants
+        tenants_res = (
+            client.table("tenants")
+            .select("id, domain_slug, display_name")
+            .order("display_name")
             .execute()
         )
-        meetings_res = (
-            client.table("meetings")
-            .select("project_id, created_by")
+        tenants = tenants_res.data or []
+
+        # Get all projects
+        projects_res = (
+            client.table("projects")
+            .select("id, name, sigla, description")
             .execute()
         )
-
-        # Build map: project_id → set of user logins
-        from collections import defaultdict
-        proj_users: dict = defaultdict(set)
-        for m in (meetings_res.data or []):
-            if m.get("project_id") and m.get("created_by"):
-                proj_users[m["project_id"]].add(m["created_by"])
-
-        projects = {p["id"]: p["name"] for p in (projects_res.data or [])}
-        users = {u["login"]: u for u in (users_res.data or [])}
+        projects = projects_res.data or []
 
         result = []
-        for pid, pname in sorted(projects.items(), key=lambda x: x[1]):
-            if project_id and pid != project_id:
-                continue
-            members = sorted(proj_users.get(pid, set()))
-            result.append({
-                "project_id": pid,
-                "project_name": pname,
-                "user_count": len(members),
+        for t in tenants:
+            tid = t["id"]
+            tenant_label = t.get("display_name") or t.get("domain_slug") or tid
+
+            users_res = (
+                client.table("tenant_users")
+                .select("id, login, display_name, role")
+                .eq("tenant_id", tid)
+                .order("display_name")
+                .execute()
+            )
+            users = users_res.data or []
+
+            # Try to match projects by sigla or name containing domain slug
+            slug = (t.get("domain_slug") or "").lower()
+            related_projects = [
+                p for p in projects
+                if slug and (
+                    slug in (p.get("sigla") or "").lower()
+                    or slug in (p.get("name") or "").lower()
+                )
+            ]
+
+            entry = {
+                "project_name": tenant_label,
+                "tenant_id":    tid,
+                "domain_slug":  t.get("domain_slug") or "",
+                "user_count":   len(users),
                 "users": [
                     {
-                        "login": login,
-                        "nome": users.get(login, {}).get("display_name", login),
-                        "role": users.get(login, {}).get("role", "user"),
+                        "login": u.get("login", ""),
+                        "nome":  u.get("display_name") or u.get("login", "?"),
+                        "role":  u.get("role", "user"),
                     }
-                    for login in members
+                    for u in users
                 ],
-            })
+                "related_projects": [p.get("name") for p in related_projects],
+            }
+            result.append(entry)
+
         return result
     except Exception:
-        return []			
-
+        return []
 
 # ── Reuniões ──────────────────────────────────────────────────────────────────
 
