@@ -1338,6 +1338,11 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "preview_text_correction":      "consulta",
     "get_speaker_contributions":    "consulta",
     "get_system_capabilities":          "consulta",
+	
+	"get_users_by_domain":   "consulta",
+	"list_all_domains":      "consulta",
+	"list_users_by_project": "consulta",
+	
     "calendar_diagnose":                "admin",
     # Google Calendar
     "calendar_list_events":             "consulta",
