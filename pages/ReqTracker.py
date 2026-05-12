@@ -146,7 +146,7 @@ with st.expander("📦 Exportar Relatório", expanded=False):
                 except Exception as e:
                     st.error(f"Erro ao gerar PDF: {e}")
 
-    fname = selected_name.replace(" ", "_")
+    fname = project_name.replace(" ", "_")
 
     if st.session_state.get("rt_html"):
         st.download_button(
@@ -323,7 +323,7 @@ with tab_mindmap:
             st.info("Nenhum requisito corresponde aos filtros selecionados.")
         elif _mindmap_ok:
             st.caption(f"Exibindo {len(mm_reqs)} requisito(s) no mind map.")
-            tree = build_mindmap_tree_from_dicts(mm_reqs, selected_name)
+            tree = build_mindmap_tree_from_dicts(mm_reqs, project_name)
             if tree.get("children"):
                 render_interactive_mindmap(tree, height=mm_height)
             else:
