@@ -32,10 +32,22 @@ from modules.cost_estimator import (
     estimate_embedding_cost,
     compare_providers,
     cost_for_tokens,
+    get_usd_brl_rate,  
 )
 from core.project_store import list_projects, _db, _ok
 
 apply_auth_gate()
+
+# ── Cotação USD/BRL ───────────────────────────────────────────────────────────
+from time import time as _time_now
+if "usd_brl_rate" not in st.session_state or st.session_state.get("usd_brl_rate", 0) == 0.0:
+    _rate, _cached = get_usd_brl_rate()
+    st.session_state["usd_brl_rate"] = _rate
+    st.session_state["usd_brl_ts"]   = _time_now()
+elif (_time_now() - st.session_state.get("usd_brl_ts", 0)) > 3600:
+    _rate, _cached = get_usd_brl_rate()
+    st.session_state["usd_brl_rate"] = _rate
+    st.session_state["usd_brl_ts"]   = _time_now()
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.markdown("# 💰 Estimativa de Custos LLM")
