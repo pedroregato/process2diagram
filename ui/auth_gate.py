@@ -230,5 +230,8 @@ def apply_auth_gate() -> None:
     if not is_authenticated():
         render_login_page()
     # Inject colour theme CSS (no-op for default dark theme)
-    from ui.theme import apply_theme
-    apply_theme()
+    try:
+        from ui.theme import apply_theme
+        apply_theme()
+    except Exception:
+        pass
