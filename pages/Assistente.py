@@ -26,6 +26,7 @@ from core.project_store import (
 )
 from agents.agent_assistant import AgentAssistant
 from ui.components.copy_button import copy_button
+from core.assistant_tools import CHART_PALETTES, DEFAULT_PALETTE
 
 # ── Page config ───────────────────────────────────────────────────────────────
 apply_auth_gate()
@@ -58,7 +59,6 @@ with st.sidebar:
     st.markdown("---")
 
     st.markdown("#### 🎨 Gráficos")
-    from core.assistant_tools import CHART_PALETTES, DEFAULT_PALETTE
     _palette_names = list(CHART_PALETTES.keys())
     _cur_palette = st.session_state.get("asst_chart_palette", DEFAULT_PALETTE)
     _cur_idx = _palette_names.index(_cur_palette) if _cur_palette in _palette_names else 0
