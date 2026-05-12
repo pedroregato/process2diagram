@@ -769,6 +769,45 @@ $$;
 # ║  TAB 5 — Preferências Gerais                        ║
 # ╚══════════════════════════════════════════════════════╝
 with tab_pref:
+    st.markdown("#### 🎨 Tema da Aplicação")
+    from ui.theme import THEME_OPTIONS, DEFAULT_THEME
+    _theme_keys   = list(THEME_OPTIONS.keys())
+    _theme_labels = list(THEME_OPTIONS.values())
+    _cur_theme    = st.session_state.get("app_theme", DEFAULT_THEME)
+    _cur_idx      = _theme_keys.index(_cur_theme) if _cur_theme in _theme_keys else 0
+
+    _t_cols = st.columns(len(_theme_keys))
+    for _col, _key, _label in zip(_t_cols, _theme_keys, _theme_labels):
+        with _col:
+            _selected = _cur_theme == _key
+            _border   = "2px solid #C97B1A" if _selected else "1px solid #1A3050"
+            _previews = {
+                "dark":       [("#071428", "#C97B1A"), ("#0A1A32", "#FAFAF8")],
+                "dark_slate": [("#0d0d1a", "#6366f1"), ("#1a1a2e", "#e8e8f0")],
+                "light":      [("#f8fafc", "#C97B1A"), ("#ffffff", "#1e293b")],
+            }
+            _swatches = "".join(
+                f'<span style="display:inline-block;width:24px;height:24px;border-radius:4px;'
+                f'background:{bg};border:2px solid {fg};margin:2px"></span>'
+                for bg, fg in _previews.get(_key, [])
+            )
+            st.markdown(
+                f'<div style="border:{_border};border-radius:10px;padding:.7rem;'
+                f'text-align:center;cursor:pointer;margin-bottom:.3rem">'
+                f'<div style="font-size:.85rem;font-weight:700;margin-bottom:.4rem">{_label}</div>'
+                f'<div>{_swatches}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("Selecionar" if not _selected else "✓ Ativo",
+                         key=f"theme_btn_{_key}",
+                         disabled=_selected,
+                         use_container_width=True):
+                st.session_state["app_theme"] = _key
+                st.rerun()
+
+    st.caption("O tema é aplicado a toda a aplicação. Recarregue a página se algum elemento não atualizar.")
+    st.markdown("---")
     st.markdown("#### 🌐 Idioma de Saída")
     lang_options = ["Auto-detect", "Portuguese (BR)", "English"]
     current_lang = st.session_state.get("output_language", "Auto-detect")

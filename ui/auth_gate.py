@@ -229,3 +229,6 @@ def apply_auth_gate() -> None:
     """Gate de autenticação. Chamar logo após st.set_page_config()."""
     if not is_authenticated():
         render_login_page()
+    # Inject colour theme CSS (no-op for default dark theme)
+    from ui.theme import apply_theme
+    apply_theme()
