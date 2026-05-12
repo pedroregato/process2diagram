@@ -32,10 +32,6 @@ def _compute_initials(name: str) -> str:
 
 # ── Tool schemas ──────────────────────────────────────────────────────────────
 
-
-
-# ── Tool schemas ──────────────────────────────────────────────────────────────
-
 def get_tool_schemas_openai() -> list[dict]:
     """Tool definitions in OpenAI function-calling format."""
     return [
@@ -3343,7 +3339,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         )
         return "\n".join(lines)
 		
-	# ── User / Domain query methods ────────────────────────────────────────
+    # ── User / Domain query methods ────────────────────────────────────────
 
     def get_users_by_domain(self, domain: str) -> str:
         """Lista usuários cujo login contém o domínio informado."""
@@ -4434,7 +4430,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     cost_per_hour=float(tool_input.get("cost_per_hour", 150.0)),
                 ),
 				
-				# ── User / Domain query tools ─────────────────────────────────
+                # ── User / Domain query tools ─────────────────────────────────
                 "get_users_by_domain":            lambda: self.get_users_by_domain(
                     tool_input["domain"],
                 ),
