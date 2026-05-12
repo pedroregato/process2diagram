@@ -1075,17 +1075,23 @@ def get_tool_schemas_openai() -> list[dict]:
 			"function": {
 				"name": "convert_usd_to_brl",
 				"description": (
-					"Converte um valor em dólares americanos (USD) para reais brasileiros (BRL) "
-					"usando a cotação atual do dólar obtida da AwesomeAPI. "
-					"USE sempre que o usuário perguntar sobre conversão de USD para BRL, "
-					"valor em reais de custos LLM, ou cotação atual do dólar."
+					"Obtém a cotação atual do dólar americano (USD) em reais brasileiros (BRL) "
+					"e converte um valor se fornecido. "
+					"USE para qualquer pergunta sobre: cotação do dólar hoje, valor atual do USD, "
+					"quanto vale um dólar em reais, conversão de USD para BRL, "
+					"custo em reais de valores em dólar. "
+					"Quando o usuário não informar um valor, use usd_amount=1.0 para retornar "
+					"apenas a cotação atual."
 				),
 				"parameters": {
 					"type": "object",
 					"properties": {
 						"usd_amount": {
 							"type": "number",
-							"description": "Valor em dólares americanos a converter (ex: 1.50)",
+							"description": (
+								"Valor em dólares a converter. "
+								"Use 1.0 quando o usuário perguntar apenas pela cotação atual."
+							),
 						}
 					},
 					"required": ["usd_amount"],
