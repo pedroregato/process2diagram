@@ -180,7 +180,19 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
       }}
       // Use bpmn-js native fit — waits for layout to complete
       const canvas = viewer.get('canvas');
-      canvas.zoom('fit-viewport');
+      try {{
+        const vb = canvas.viewbox();
+        const inn = vb && vb.inner;
+        if (inn && isFinite(inn.x) && isFinite(inn.y) &&
+            isFinite(inn.width) && isFinite(inn.height) &&
+            inn.width > 0 && inn.height > 0) {{
+          canvas.zoom('fit-viewport');
+        }} else {{
+          canvas.zoom(0.75);
+        }}
+      }} catch(zoomErr) {{
+        try {{ canvas.zoom(0.75); }} catch(_) {{}}
+      }}
       refreshLabel();
     }})
     .catch(function(err) {{
@@ -286,7 +298,7 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
   const xml = `{xml_js}`;
   const viewer = new BpmnJS({{ container:'#bpmn-container', keyboard:{{bindTo:window}} }});
   function refreshLabel(){{ try{{ document.getElementById('zoom-label').textContent = Math.round(viewer.get('canvas').zoom()*100)+'%'; }}catch(_){{}} }}
-  function fitView(){{ try{{ viewer.get('canvas').zoom('fit-viewport'); refreshLabel(); }}catch(_){{}} }}
+  function fitView(){{ try{{ var c=viewer.get('canvas'),vb=c.viewbox(),inn=vb&&vb.inner; if(inn&&isFinite(inn.x)&&isFinite(inn.y)&&isFinite(inn.width)&&isFinite(inn.height)&&inn.width>0&&inn.height>0){{c.zoom('fit-viewport');}}else{{c.zoom(0.75);}} refreshLabel(); }}catch(_){{try{{viewer.get('canvas').zoom(0.75);}}catch(__){{}}}} }}
   viewer.importXML(xml).then(function(){{
     document.getElementById('loading').style.display='none';
     fitView();
