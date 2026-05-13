@@ -673,7 +673,7 @@ openpyxl==X.X.X
 
 ---
 
-## CASES - exemplos de utilização:
+# CASES A - exemplos de utilização:
 
 ---
 
@@ -892,3 +892,265 @@ Contexto: Use search_knowledge_hub e o módulo de estatísticas.
 Esses cases são **implementáveis imediatamente** seguindo o guia — todas as tabelas, módulos e agentes estão especificados para execução via Claude Code CLI no PyCharm.
 
 *Guia gerado em 2026-05-13 — Process2Diagram v4.16 → v4.17 (PC9)*
+
+
+# CASES B
+
+Com certeza! Analisando a documentação do projeto e os cases apresentados, consigo identificar **mais 5 casos de negócio estratégicos** que demonstram como o **Process2Diagram** entrega valor real para a empresa, indo além da simples automação de reuniões.
+
+---
+
+## Case 4: Auditoria Interna — Rastreabilidade Obrigatória para SOX/ISO
+
+### Contexto
+Empresa de capital aberto precisa comprovar que **decisões regulatórias** documentadas em reuniões foram implementadas nos processos. Auditoria anterior falhou por falta de **rastreabilidade** entre ata de reunião e BPMN final.
+
+### Problema Real
+- Reunião do Comitê de Auditoria (12/2024): "Incluir validação de fornecedor crítico a cada 6 meses"
+- Processo BPMN final (02/2025): não continha essa validação
+- **Multa potencial**: R$ 5 milhões por não conformidade SOX
+
+### Solução (Feature A + rastreabilidade)
+
+```python
+# O Knowledge Hub armazena a proveniência de cada fato
+kh_facts table:
+  - content: "Fornecedor crítico requer validação semestral"
+  - source_meeting_ids: ["meeting_audit_12_2024"]
+  - confidence: 0.98
+
+# Agente de Auditoria verifica automaticamente
+report = analyst.run("""
+  Verifique se todos os fatos regulatórios das reuniões do comitê
+  foram implementados nos BPMNs atuais. Liste fatos não implementados.
+""")
+```
+
+### Resultado
+- **Auditoria concluída em 4 horas** (antes: 3 semanas)
+- **Evidência de rastreabilidade**: cada fato linkado à ata original
+- **Multa evitada**: R$ 5 milhões
+- **ROI**: 1.250x no primeiro ano
+
+### Evidência na UI (aba Fatos)
+```
+📋 FATO | tipo: constraint | confiança: 0.98
+"Validação de fornecedor crítico a cada 6 meses"
+🔗 Origem: Ata Reunião Comitê 12/12/2024 (pág. 23)
+✅ Status: Implementado no BPMN v2.3
+[Ver implementação] [Reportar não conformidade]
+```
+
+---
+
+## Case 5: Due Diligence em M&A — Aceleração de 8 para 2 dias
+
+### Contexto
+Empresa compradora precisa analisar **430 atas de reunião** da target (startup de fintech) em 10 dias úteis para decisão de aquisição de R$ 120 milhões.
+
+### Problema Real
+- Time de M&A: 6 pessoas, cada uma lendo 70 atas
+- Descobriram **contradições** nas reuniões da target: processo de KYC mudou 5 vezes
+- Sem ferramenta: 3 meses de análise → deal perderia prazo
+
+### Solução (Feature B + análise autônoma)
+
+```python
+analyst.run("""
+  Objetivo: Due diligence operacional da Target
+  1. Liste todos os processos KYC documentados com suas versões
+  2. Identifique contradições entre versões (severity > medium)
+  3. Compare com processos KYC da compradora
+  4. Gere score de risco (0-100) com justificativa
+""")
+```
+
+**Processo autônomo (LangChain ReAct):**
+```
+🔍 Passo 1: Buscar todos facts tipo 'rule' sobre KYC
+🛠️ search_knowledge_hub("KYC processo validação")
+📊 12 fatos encontrados, 5 versões diferentes
+
+🔍 Passo 2: Detectar contradições
+⚠️ Contradição alta: "v3 exige biometria" vs "v4 remove biometria"
+
+🔍 Passo 3: Comparar com baseline da compradora
+📊 Compatibilidade: 63% - risco médio
+
+🔍 Passo 4: Gerar relatório com score
+🏷️ render_table(título="Matriz de Risco KYC", linhas=12)
+```
+
+### Resultado
+- **Análise concluída em 48h** (antes: 3 meses)
+- **Risco identificado**: Processo de KYC inconsistente → desconto de R$ 8 milhões no valuation
+- **Deal fechado**: Economia real de R$ 8M
+- **Valor da aquisição**: R$ 112M (vs. R$ 120M inicial)
+
+### Métrica financeira
+```
+Custo da análise autônoma:        R$ 2.400 (tokens API)
+Valor economizado no deal:         R$ 8.000.000
+ROI:                              3.333x
+Tempo economizado:                 20 dias úteis
+```
+
+---
+
+## Case 6: Gestão de Riscos Operacionais — Prevenção de Incidentes
+
+### Contexto
+Empresa de energia teve **apagão de 6 horas** porque um operador seguiu processo desatualizado. A versão correta estava documentada em reunião de engenharia 3 meses antes, mas ninguém leu.
+
+### Problema Real
+- Processo "Reset de Subestação" tinha 3 versões conflitantes (reuniões 12, 18, 24)
+- Versão correta: reunião 18 ("sequência de reset deve ser A→C→B")
+- Versão incorreta (seguida pelo operador): reunião 12 ("sequência A→B→C")
+- **Resultado**: Sobrecarga no transformador, apagão, multa ANEEL de R$ 2.1M
+
+### Solução (Feature A + detecção de contradições em tempo real)
+
+```python
+# O Knowledge Hub detectou contradição severity='critical' entre reuniões 12 e 18
+kh_contradictions:
+  - description: "Reunião 12 define reset A→B→C; Reunião 18 define A→C→B"
+  - severity: "high"
+  - resolved: FALSE
+
+# O novo pipeline notifica time de engenharia
+st.session_state["_kh_new_contradictions"] → UI badge "⚠️ 1 contradição crítica"
+```
+
+**Notificação automática enviada ao responsável:**
+> "Contradição detectada no processo 'Reset de Subestação' entre reuniões de 12/2024 e 03/2025. Risco operacional alto. Revise antes da próxima execução."
+
+### Resultado
+- **Contradição resolvida em 48h** (antes da próxima manutenção programada)
+- **Segundo apagão evitado**: economia de R$ 2.1M em multas + R$ 8M em custo de interrupção
+- **Cultura de segurança**: Time de operação agora consulta KH antes de processos críticos
+
+### Evidência quantitativa
+| Indicador | Antes | Depois |
+|-----------|-------|--------|
+| Incidentes por processo desatualizado | 3/ano | 0/ano |
+| Tempo para detectar contradição | Não detectava | 45 minutos |
+| Multas regulatórias | R$ 5.2M/ano | R$ 0 |
+
+---
+
+## Case 7: Transformação Digital — Baseline para Automação (RPA)
+
+### Contexto
+Empresa de logística vai automatizar 28 processos com RPA, mas precisa saber **qual versão de cada processo** está correta. Descobriram que diferentes áreas usam versões diferentes do mesmo processo.
+
+### Problema Real
+- Processo "Cancelamento de Pedido": versões divergentes em SP, RJ e MG
+- RPA implementado com versão de SP → falhou em MG porque a sequência de aprovação era diferente
+- **Custo**: R$ 400k em desenvolvimento perdido + 3 meses de atraso
+
+### Solução (Feature A + cross-meeting versionamento)
+
+```python
+# Knowledge Hub consolida todas as versões por processo
+kh_processes table:
+  - process_name: "Cancelamento de Pedido"
+  - version_count: 4
+  - meeting_ids: ["SP_12", "RJ_05", "MG_09", "nacional_22"]
+
+# Agente analisa qual é a versão "oficial" mais recente
+analyst.run("""
+  Determine a versão canônica do processo 'Cancelamento de Pedido'
+  baseado em: (1) data mais recente, (2) abrangência nacional, (3) approval de diretoria.
+""")
+
+# Resultado: reunião nacional_22 deve ser a baseline
+```
+
+### Resultado
+- **Baseline única estabelecida**: processo do RJ que era conflitante ajustado
+- **RPA implementado em 12 semanas** (vs. 24 semanas estimadas)
+- **Custo evitado**: R$ 400k em retrabalho
+- **Taxa de erro do RPA**: 0.2% vs. 8% esperado
+
+### Fluxo visual
+```
+KH Processos                    → Agente Autônomo → Baseline Única
+├── SP: 3 aprovadores (2 dias)      │
+├── RJ: 2 aprovadores (1 dia)       ├── "Recomendo versão RJ
+├── MG: 4 aprovadores (3 dias)      │    por eficiência e data
+└── NAC: 2 aprovadores (1.5 dias)   └    de aprovação mais recente"
+```
+
+---
+
+## Case 8: Treinamento e Onboarding — Redução de Ramp-up de 6 para 1 semana
+
+### Contexto
+Empresa de tecnologia com alta rotatividade (turnover 35%/ano). Novos analistas levavam **6 semanas** para entender os processos antes de contribuir.
+
+### Problema Real
+- Documentação estática (wiki) desatualizada há 2 anos
+- Conhecimento tácito só com analistas antigos
+- Cada novo funcionário "redescobria" fatos já conhecidos pela equipe
+- **Custo anual**: 35 novos analistas × 6 semanas improdutivas × R$15k/semana = R$ 3.15M
+
+### Solução (Feature A + contexto injetado no AssistantAgent)
+
+```python
+# Durante onboarding, novo analista faz perguntas no Assistente
+user: "Como funciona a aprovação de crédito para cliente novo?"
+
+# AssistantAgent injeta contexto do KH no system prompt
+kh_context = ks.search_relevant_context("aprovação crédito cliente novo")
+system_prompt += f"""
+Conhecimento acumulado do projeto:
+- Fato: "Cliente novo acima de R$50k requer análise de crédito" (confiança 0.94)
+- Processo: "Aprovação Comercial → Crédito → Compliance" (3 versões, última 02/2025)
+- Entidade: "Time de Crédito" (aparece em 12 reuniões, contato: ana@empresa)
+"""
+
+# Resposta do assistente inclui fontes confiáveis
+response = "Conforme reunião de 15/02/2025, clientes novos acima de R$50k passam por..."
+```
+
+### Resultado
+- **Ramp-up reduzido**: 6 semanas → 5 dias
+- **Produtividade recuperada**: 35 novos analistas × 5 semanas recuperadas × R$15k = R$ 2.6M/ano economizados
+- **Autonomia**: Novos analistas fazem perguntas sem interromper sêniores (redução de 70% em interrupções)
+- **Precisão**: 94% das respostas baseadas em KH (vs. 45% em wiki estática)
+
+### Feedback de usuário
+> "Parece que o sistema 'lembra' de todas as reuniões que eu não tive tempo de ler. É como ter um analista sênior disponível 24/7." — Novo analista de crédito, semana 2
+
+---
+
+## Síntese Estratégica — O Valor em Números
+
+### ROI Consolidado por Case
+
+| Case | Área | Investimento | Retorno | ROI |
+|------|------|--------------|---------|-----|
+| #4 Auditoria | Compliance | R$ 8k | R$ 5M (multa evitada) | 625x |
+| #5 M&A | Estratégia | R$ 2.4k | R$ 8M (desconto no deal) | 3.333x |
+| #6 Riscos | Operações | R$ 5k | R$ 10.1M (multa + interrupção) | 2.020x |
+| #7 RPA | TI | R$ 12k | R$ 400k (retrabalho evitado) | 33x |
+| #8 Onboarding | RH | R$ 20k | R$ 2.6M/ano (produtividade) | 130x |
+
+### Benefícios Intangíveis
+
+- **Velocidade de decisão**: Análises que levavam semanas → minutos
+- **Rastreabilidade regulatória**: Evidência de conformidade para auditorias
+- **Memória institucional**: Conhecimento não se perde com turnover
+- **Escalabilidade**: Time de 5 analistas suporta 10 projetos simultâneos
+- **Qualidade de resposta**: 94% de precisão vs 45% de wiki estática
+
+### Alinhamento com Objetivos de Negócio
+
+```
+Process2Diagram = Processos mais rápidos + Decisões mais seguras + Time mais produtivo
+                            ↓                    ↓                        ↓
+                    50-80% menos tempo     Multas evitadas         70% menos interrupções
+                    de análise             (milhões)               entre times
+```
+
+Esses cases demonstram que o **Process2Diagram** não é apenas uma ferramenta de automação de reuniões — é uma **plataforma de inteligência operacional** que transforma conhecimento disperso em vantagem competitiva mensurável.
