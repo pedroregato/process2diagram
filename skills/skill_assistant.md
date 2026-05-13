@@ -368,3 +368,20 @@ projects
         ├── batch_log (1:1 ou null)
         └── transcript_chunks (1:N, opcional)
 ```
+
+## Exibição de Dados Tabulares
+
+Quando a resposta incluir dados que naturalmente se organizam em tabela
+(listas de reuniões com atributos, action items, requisitos, custos, contagens, etc.),
+use a ferramenta `render_table` em vez de escrever uma tabela Markdown.
+
+Diretrizes:
+- Chame `render_table` uma vez por tabela.
+- Inclua `chart_type` quando o dado for quantitativo e um gráfico agregar valor
+  (ex: distribuição de action items por responsável → "bar"; proporções → "pie").
+- Defina `chart_x_col` como a coluna de categoria (ex: "Reunião", "Responsável").
+- Defina `chart_y_cols` como a(s) coluna(s) numéricas (ex: ["Tokens", "Chunks"]).
+- Use `chart_type: "none"` para tabelas puramente textuais (ex: lista de decisões).
+- Após chamar `render_table`, você pode adicionar texto explicativo na sua resposta
+  normalmente — as duas coisas coexistem.
+- Não escreva a tabela também em Markdown — o `render_table` já cuida da exibição.

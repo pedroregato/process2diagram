@@ -1398,6 +1398,51 @@ def get_tool_schemas_openai() -> list[dict]:
                 }
             }
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "render_table",
+                "description": (
+                    "Use this tool INSTEAD of writing a Markdown table whenever the response "
+                    "contains structured tabular data. This captures the data for Excel export. "
+                    "Call this once per table. Do NOT call it for purely narrative responses."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "title": {
+                            "type": "string",
+                            "description": "Descriptive title for the table and chart (e.g. 'Custo de Embeddings por Reuniao — SDEA')."
+                        },
+                        "columns": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Column header names, in display order."
+                        },
+                        "rows": {
+                            "type": "array",
+                            "items": {"type": "array", "items": {}},
+                            "description": "Data rows. Each row is an array of values matching the columns order. Values may be strings, numbers, or null."
+                        },
+                        "chart_type": {
+                            "type": "string",
+                            "enum": ["bar", "pie", "line", "none"],
+                            "description": "Chart type to generate in Excel. Use 'none' if the data is not suitable for charting."
+                        },
+                        "chart_x_col": {
+                            "type": "string",
+                            "description": "Column name to use as X axis (bar/line) or slice labels (pie). Required when chart_type != 'none'."
+                        },
+                        "chart_y_cols": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Column names to use as Y axis series. One series = one column. Required when chart_type != 'none'."
+                        }
+                    },
+                    "required": ["title", "columns", "rows", "chart_type"]
+                }
+            }
+        },
     ]
 
 
@@ -1475,6 +1520,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "generate_action_items_chart":    "grafico",
     "generate_roi_chart":             "grafico",
     "generate_custom_chart":          "grafico",
+    "render_table":                   "consulta",
 }
 
 # Ferramentas que exigem perfil administrador
@@ -4565,6 +4611,25 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         except Exception as e:
             return f"Erro ao gerar gráfico personalizado: {e}"
 
+    # ── render_table ──────────────────────────────────────────────────────────
+
+    def _render_table(self, args: dict) -> str:
+        """Persist table data so Assistente.py can render it + offer Excel export."""
+        import streamlit as st
+        pending = st.session_state.get("_pending_tables", [])
+        pending.append({
+            "title":       args.get("title", "Tabela"),
+            "columns":     args.get("columns", []),
+            "rows":        args.get("rows", []),
+            "chart_type":  args.get("chart_type", "none"),
+            "chart_x_col": args.get("chart_x_col"),
+            "chart_y_cols": args.get("chart_y_cols", []),
+        })
+        st.session_state["_pending_tables"] = pending
+        col_count = len(args.get("columns", []))
+        row_count = len(args.get("rows", []))
+        return f"Tabela '{args.get('title', '')}' registrada ({row_count} linhas x {col_count} colunas)."
+
     # ── Dispatcher ────────────────────────────────────────────────────────────
 
     def execute(self, tool_name: str, tool_input: dict) -> str:
@@ -4780,6 +4845,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     y_label=tool_input.get("y_label", ""),
                     series_name=tool_input.get("series_name", ""),
                 ),
+                "render_table":                   lambda: self._render_table(tool_input),
             }
             if tool_name not in dispatch:
                 return f"Ferramenta desconhecida: '{tool_name}'"

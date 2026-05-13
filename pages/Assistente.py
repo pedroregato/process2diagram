@@ -27,6 +27,7 @@ from ui.project_selector import require_active_project
 from agents.agent_assistant import AgentAssistant
 from ui.components.copy_button import copy_button
 from core.chart_config import CHART_PALETTES, DEFAULT_PALETTE
+from modules.excel_exporter import export_table_to_excel
 
 # ── Page config ───────────────────────────────────────────────────────────────
 apply_auth_gate()
@@ -318,6 +319,42 @@ def _clean_response(text: str) -> str:
     return text.strip()
 
 
+def _render_message_tables(tables: list[dict], msg_idx: int, project_name: str, question: str) -> None:
+    """Render tables stored in a message dict as st.dataframe + Excel download button."""
+    import pandas as pd
+    from datetime import datetime as _dt
+    for ti, table_data in enumerate(tables):
+        columns = table_data.get("columns", [])
+        rows    = table_data.get("rows", [])
+        title   = table_data.get("title", "Tabela")
+        if not columns or not rows:
+            continue
+
+        st.markdown(f"**{title}**")
+        df = pd.DataFrame(rows, columns=columns)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+
+        cache_key = f"_excel_bytes_{msg_idx}_{ti}"
+        if cache_key not in st.session_state:
+            st.session_state[cache_key] = export_table_to_excel(
+                table_data=table_data,
+                question=question,
+                project_name=project_name,
+            )
+
+        ct = table_data.get("chart_type", "none")
+        chart_label = f" + grafico {ct}" if ct and ct != "none" else ""
+        filename = f"p2d_tabela_{_dt.now().strftime('%Y%m%d_%H%M')}.xlsx"
+
+        st.download_button(
+            label=f"Exportar para Excel{chart_label}",
+            data=st.session_state[cache_key],
+            file_name=filename,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"btn_excel_{msg_idx}_{ti}",
+        )
+
+
 # ── Session history ───────────────────────────────────────────────────────────
 if "assistant_history" not in st.session_state:
     st.session_state["assistant_history"] = []
@@ -339,6 +376,14 @@ for i, msg in enumerate(history):
                     st.plotly_chart(fig, use_container_width=True, key=f"chart_{i}_{ci}")
                 except Exception as _chart_err:
                     st.caption(f"⚠️ Não foi possível renderizar o gráfico: {_chart_err}")
+            # Render tables attached to this assistant message
+            if msg.get("tables"):
+                _render_message_tables(
+                    tables=msg["tables"],
+                    msg_idx=i,
+                    project_name=st.session_state.get("active_project_name", ""),
+                    question=msg.get("question", ""),
+                )
         if msg["role"] == "user":
             col_edit, col_copy, _ = st.columns([1, 1, 8])
             with col_edit:
@@ -417,8 +462,16 @@ if _asst_running:
             response_text = f"❌ Erro: {error}"
 
         response_text = _clean_response(response_text) or response_text
+        pending_tables = st.session_state.pop("_pending_tables", [])
         history = st.session_state["assistant_history"]
-        history.append({"role": "assistant", "content": response_text, "charts": charts})
+        last_question = history[-1]["content"] if history and history[-1]["role"] == "user" else ""
+        history.append({
+            "role": "assistant",
+            "content": response_text,
+            "charts": charts,
+            "tables": pending_tables,
+            "question": last_question,
+        })
         st.session_state["assistant_history"] = history
 
         st.session_state["_asst_last_caption"] = {

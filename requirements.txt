@@ -19,6 +19,7 @@ spacy>=3.7,<4.0                 # motor NLP
 
 # ── Exportação de documentos ──────────────────────────────────────────────────
 pypdf>=5.0.0
+openpyxl>=3.1.5                 # exportação .xlsx no Assistente (render_table tool)
 
 # ── Inportação de documentos ──────────────────────────────────────────────────
 python-docx==1.1.2              # exportação DOCX da Ata (pure Python)
