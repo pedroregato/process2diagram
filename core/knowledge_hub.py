@@ -139,6 +139,9 @@ class MinutesModel:
     ready: bool = False
     # Raw markdown — populated when loading from DB (structured fields may be empty)
     minutes_md: str = ""
+    # ATA Engine interactive HTML — generated after pipeline, empty if not available
+    ata_html: str = ""
+    ata_html_error: str = ""
 
 
 # ── Requirements Model ────────────────────────────────────────────────────
@@ -474,6 +477,12 @@ class KnowledgeHub:
         # ── v4.13: minutes_md raw fallback field ─────────────────────────────────
         if not hasattr(hub.minutes, 'minutes_md'):
             hub.minutes.minutes_md = ""
+
+        # ── v4.19: ATA Engine HTML output fields ─────────────────────────────────
+        if not hasattr(hub.minutes, 'ata_html'):
+            hub.minutes.ata_html = ""
+        if not hasattr(hub.minutes, 'ata_html_error'):
+            hub.minutes.ata_html_error = ""
 
         # ── v4.13: loaded_from_db flag ────────────────────────────────────────
         if not hasattr(hub, 'loaded_from_db'):

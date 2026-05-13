@@ -186,6 +186,28 @@ class Orchestrator:
                     self._progress("Agente Ata", f"error: {exc}")
                     raise RuntimeError(f"Minutes Agent failed: {exc}") from exc
 
+        # ── Post-minutes: ATA Engine HTML generation ──────────────────────────
+        if run_minutes and hub.minutes.ready:
+            try:
+                from modules.ata_engine_generator import generate_ata_html
+                from datetime import date as _date
+                _cfg     = getattr(self, "_pipeline_config", {})
+                _slug    = _cfg.get("project_slug") or "p2d"
+                _proj_id = _cfg.get("project_id", "")
+                _mtg_id  = _cfg.get("meeting_id", "")
+                _local   = _cfg.get("meeting_location", "Videoconferência")
+                hub.minutes.ata_html = generate_ata_html(
+                    minutes      = hub.minutes,
+                    project_id   = _proj_id,
+                    meeting_id   = _mtg_id,
+                    project_slug = _slug,
+                    meeting_date = _date.today(),
+                    local        = _local,
+                )
+                hub.bump()
+            except Exception as _ata_err:
+                hub.minutes.ata_html_error = str(_ata_err)
+
             if run_requirements:
                 self._progress("Agente Requisitos", "running")
                 try:

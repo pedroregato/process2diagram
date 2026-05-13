@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+from pages._settings_roster import render_roster_tab
+
 import sys
 from pathlib import Path
 
@@ -97,11 +99,12 @@ def _render_api_key_section(
 # ══════════════════════════════════════════════════════════════════════════════
 # TABS
 # ══════════════════════════════════════════════════════════════════════════════
-tab_llm, tab_asst, tab_embed, tab_db, tab_pref, tab_domain = st.tabs([
+tab_llm, tab_asst, tab_embed, tab_db, tab_roster, tab_pref, tab_domain = st.tabs([
     "🤖 LLM Principal",
     "💬 LLM Assistente",
     "🔮 Embeddings & Busca",
     "🗄️ Banco de Dados",
+    "👥 Participantes",
     "🌐 Preferências",
     "🔑 Domínio",
 ])
@@ -557,6 +560,19 @@ with tab_db:
                         key=f"pdesc_{pid}",
                         height=80,
                     )
+                    new_ata_slug = col_a.text_input(
+                        "Slug da ata (localStorage)",
+                        value=p.get("ata_slug") or "",
+                        placeholder="sdea",
+                        max_chars=30,
+                        key=f"ataslug_{pid}",
+                        help="Slug usado nas chaves localStorage das atas: {slug}_{ano}_{mes}_{dia}_v1",
+                    ).lower().strip()
+                    new_location = col_a.text_input(
+                        "Local padrão das reuniões",
+                        value=p.get("meeting_location") or "Videoconferência",
+                        key=f"location_{pid}",
+                    ).strip()
                     with col_b:
                         st.write("")
                         st.write("")
@@ -564,6 +580,11 @@ with tab_db:
                             patch: dict = {"name": new_name.strip(), "description": new_desc.strip()}
                             if _has_sigla:
                                 patch["sigla"] = new_sigla.strip().upper()
+                            # ATA Engine fields (safe — IF NOT EXISTS in migration)
+                            if new_ata_slug:
+                                patch["ata_slug"] = new_ata_slug
+                            if new_location:
+                                patch["meeting_location"] = new_location
                             try:
                                 db.table("projects").update(patch).eq("id", pid).execute()
                                 st.success("✅ Projeto atualizado.")
@@ -766,7 +787,14 @@ $$;
                     st.rerun()
 
 # ╔══════════════════════════════════════════════════════╗
-# ║  TAB 5 — Preferências Gerais                        ║
+# ╔══════════════════════════════════════════════════════╗
+# ║  TAB 5 — Participantes (Roster ATA Engine)          ║
+# ╚══════════════════════════════════════════════════════╝
+with tab_roster:
+    render_roster_tab()
+
+# ╔══════════════════════════════════════════════════════╗
+# ║  TAB 6 — Preferências Gerais                        ║
 # ╚══════════════════════════════════════════════════════╝
 with tab_pref:
     st.markdown("#### 🎨 Tema da Aplicação")

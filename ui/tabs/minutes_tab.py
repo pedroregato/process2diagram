@@ -50,6 +50,26 @@ def render(hub, prefix, suffix):
             })
         st.dataframe(rows, use_container_width=True)
     st.markdown("---")
+
+    # ── ATA Engine HTML interativo ────────────────────────────────────────────
+    ata_html = getattr(m, "ata_html", "")
+    ata_err  = getattr(m, "ata_html_error", "")
+    if ata_html:
+        with st.expander("Ata Interativa — ATA Engine", expanded=True):
+            st.caption(
+                "HTML standalone com chips por participante, tabela de pendencias "
+                "editavel, persistencia local e exportacao encadeavel (file://)."
+            )
+            st.download_button(
+                label="Baixar HTML Interativo",
+                data=ata_html.encode("utf-8"),
+                file_name=make_filename("ATA", "html", prefix, suffix),
+                mime="text/html",
+                key="dl_ata_html",
+            )
+    elif ata_err:
+        st.warning(f"Nao foi possivel gerar a ata interativa: {ata_err}")
+
     st.markdown("### Export Minutes")
     md_content = AgentMinutes.to_markdown(m)
     

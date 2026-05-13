@@ -2725,3 +2725,275 @@ def list_login_logs(
         return _ok(q.execute())
     except Exception:
         return []
+
+
+# =============================================================================
+# ATA ENGINE — ROSTER DE PARTICIPANTES
+# =============================================================================
+# Funções de leitura/escrita para project_roster e meeting_participants.
+# Padrão: fail-open — retornam [] / None / False sem levantar exceção para o caller.
+# =============================================================================
+
+import re as _re
+import logging as _logging
+
+_roster_log = _logging.getLogger(__name__)
+
+# Cores padrão do ATA Engine — usadas como swatches na UI e como fallback
+ATA_ENGINE_COLORS = {
+    "navy":   "0B1E3D",
+    "blue":   "1A4B8C",
+    "green":  "1A7F5A",
+    "amber":  "C97B1A",
+    "purple": "6B3FA0",
+    "muted":  "8496B0",
+}
+FALLBACK_COLOR = ATA_ENGINE_COLORS["muted"]
+
+
+# ── Roster — leitura ──────────────────────────────────────────────────────────
+
+def get_project_roster(project_id: str, include_inactive: bool = False) -> list[dict]:
+    """Retorna membros do roster de um projeto ordenados por sort_order."""
+    db = get_supabase_client()
+    if not db:
+        return []
+    try:
+        q = (
+            db.table("project_roster")
+            .select("id, initials, full_name, area, color_hex, name_aliases, "
+                    "project_slug, is_active, sort_order, created_at, updated_at")
+            .eq("project_id", project_id)
+            .order("sort_order")
+            .order("initials")
+        )
+        if not include_inactive:
+            q = q.eq("is_active", True)
+        return _ok(q.execute())
+    except Exception as e:
+        _roster_log.error("get_project_roster(%s): %s", project_id, e)
+        return []
+
+
+def get_roster_member_by_initials(project_id: str, initials: str) -> dict | None:
+    """Retorna um membro do roster pelas iniciais dentro de um projeto."""
+    db = get_supabase_client()
+    if not db:
+        return None
+    try:
+        result = (
+            db.table("project_roster")
+            .select("*")
+            .eq("project_id", project_id)
+            .eq("initials", initials.upper())
+            .single()
+            .execute()
+        )
+        return result.data
+    except Exception as e:
+        _roster_log.error("get_roster_member_by_initials(%s, %s): %s", project_id, initials, e)
+        return None
+
+
+# ── Roster — escrita ──────────────────────────────────────────────────────────
+
+def upsert_roster_member(project_id: str, member: dict) -> dict | None:
+    """Cria ou atualiza um membro no roster. Levanta ValueError se formato inválido."""
+    required = ["initials", "full_name", "color_hex"]
+    missing = [f for f in required if not member.get(f)]
+    if missing:
+        raise ValueError(f"Campos obrigatórios ausentes: {missing}")
+
+    initials = member["initials"].upper().strip()
+    if not _re.match(r"^[A-Z]{1,4}$", initials):
+        raise ValueError(f"Iniciais invalidas: '{initials}' — use 1 a 4 letras maiusculas")
+
+    color_hex = member["color_hex"].lstrip("#").upper()
+    if not _re.match(r"^[0-9A-F]{6}$", color_hex):
+        raise ValueError(f"Cor invalida: '{color_hex}' — use hex de 6 caracteres sem #")
+
+    db = get_supabase_client()
+    if not db:
+        return None
+
+    payload = {
+        "project_id":   project_id,
+        "initials":     initials,
+        "full_name":    member["full_name"].strip(),
+        "area":         member.get("area", "").strip() or None,
+        "color_hex":    color_hex,
+        "name_aliases": member.get("name_aliases") or [],
+        "project_slug": member.get("project_slug") or None,
+        "sort_order":   member.get("sort_order", 0),
+        "is_active":    member.get("is_active", True),
+    }
+    try:
+        result = (
+            db.table("project_roster")
+            .upsert(payload, on_conflict="project_id,initials")
+            .execute()
+        )
+        return result.data[0] if result.data else None
+    except Exception as e:
+        _roster_log.error("upsert_roster_member(%s, %s): %s", project_id, initials, e)
+        return None
+
+
+def deactivate_roster_member(roster_id: str) -> bool:
+    """Soft delete de um membro do roster (preserva histórico)."""
+    db = get_supabase_client()
+    if not db:
+        return False
+    try:
+        db.table("project_roster").update({"is_active": False}).eq("id", roster_id).execute()
+        return True
+    except Exception as e:
+        _roster_log.error("deactivate_roster_member(%s): %s", roster_id, e)
+        return False
+
+
+# ── Participantes de reunião ──────────────────────────────────────────────────
+
+def get_meeting_participants_roster(meeting_id: str) -> list[dict]:
+    """Retorna participantes confirmados de uma reunião via RPC do Supabase."""
+    db = get_supabase_client()
+    if not db:
+        return []
+    try:
+        result = db.rpc("get_meeting_participants_full", {"p_meeting_id": meeting_id}).execute()
+        return result.data or []
+    except Exception as e:
+        _roster_log.error("get_meeting_participants_roster(%s): %s", meeting_id, e)
+        return []
+
+
+def save_meeting_participants(
+    meeting_id: str,
+    roster_ids: list[str],
+    source: str = "auto",
+    confirmed: bool = True,
+) -> bool:
+    """Persiste participantes de uma reunião (upsert idempotente)."""
+    if not roster_ids:
+        return True
+    db = get_supabase_client()
+    if not db:
+        return False
+    payload = [
+        {"meeting_id": meeting_id, "roster_id": rid, "confirmed": confirmed, "source": source}
+        for rid in roster_ids
+    ]
+    try:
+        db.table("meeting_participants").upsert(payload, on_conflict="meeting_id,roster_id").execute()
+        return True
+    except Exception as e:
+        _roster_log.error("save_meeting_participants(%s): %s", meeting_id, e)
+        return False
+
+
+def clear_meeting_participants(meeting_id: str) -> bool:
+    """Remove todos os participantes de uma reunião (antes de re-inferir)."""
+    db = get_supabase_client()
+    if not db:
+        return False
+    try:
+        db.table("meeting_participants").delete().eq("meeting_id", meeting_id).execute()
+        return True
+    except Exception as e:
+        _roster_log.error("clear_meeting_participants(%s): %s", meeting_id, e)
+        return False
+
+
+# ── Matching: nome da transcrição → roster ────────────────────────────────────
+
+def match_participant_to_roster(name: str, roster: list[dict]) -> dict | None:
+    """Casa um nome da transcrição com o roster em 3 passes: full_name, initials, aliases."""
+    if not name or not roster:
+        return None
+    name_lower = name.lower().strip()
+    for member in roster:
+        if member["full_name"].lower() == name_lower:
+            return member
+    for member in roster:
+        if member["initials"].lower() == name_lower:
+            return member
+    for member in roster:
+        aliases = [a.lower() for a in (member.get("name_aliases") or [])]
+        for alias in aliases:
+            if name_lower == alias or name_lower in alias or alias in name_lower:
+                return member
+    return None
+
+
+def infer_and_save_participants(
+    names_from_transcript: list[str],
+    project_id: str,
+    meeting_id: str,
+) -> list[dict]:
+    """Infere participantes a partir de nomes da transcrição, cruza com roster e persiste."""
+    roster = get_project_roster(project_id)
+    resolved: list[dict] = []
+    matched_ids: list[str] = []
+
+    for name in names_from_transcript:
+        member = match_participant_to_roster(name, roster)
+        if member and member["id"] not in matched_ids:
+            matched_ids.append(member["id"])
+            resolved.append(member)
+        elif not member:
+            parts = name.strip().split()
+            if len(parts) >= 2:
+                ini = (parts[0][0] + parts[1][0]).upper()
+            elif len(parts) == 1 and len(parts[0]) >= 2:
+                ini = parts[0][:2].upper()
+            else:
+                ini = "??"
+            resolved.append({
+                "id": None, "initials": ini, "full_name": name,
+                "area": None, "color_hex": FALLBACK_COLOR,
+                "name_aliases": [], "sort_order": 999,
+                "confirmed": True, "source": "auto",
+            })
+
+    if matched_ids:
+        save_meeting_participants(meeting_id, matched_ids, source="auto")
+
+    resolved.sort(key=lambda p: (p.get("sort_order") or 999, p["initials"]))
+    return resolved
+
+
+# ── Analytics ─────────────────────────────────────────────────────────────────
+
+def get_roster_attendance_summary(project_id: str) -> list[dict]:
+    """Resumo de presença: quantas reuniões cada membro do roster participou."""
+    db = get_supabase_client()
+    if not db:
+        return []
+    try:
+        roster = get_project_roster(project_id)
+        if not roster:
+            return []
+        mp_result = db.table("meeting_participants").select("roster_id, confirmed").execute()
+        mp_rows = mp_result.data or []
+        counts: dict[str, dict] = {}
+        for row in mp_rows:
+            rid = row["roster_id"]
+            if rid not in counts:
+                counts[rid] = {"total": 0, "confirmed": 0}
+            counts[rid]["total"] += 1
+            if row["confirmed"]:
+                counts[rid]["confirmed"] += 1
+        summary = []
+        for m in roster:
+            c = counts.get(m["id"], {"total": 0, "confirmed": 0})
+            summary.append({
+                "roster_id": m["id"], "initials": m["initials"],
+                "full_name": m["full_name"], "area": m["area"],
+                "color_hex": m["color_hex"],
+                "total_meetings": c["total"], "confirmed_meetings": c["confirmed"],
+            })
+        summary.sort(key=lambda x: x["confirmed_meetings"], reverse=True)
+        return summary
+    except Exception as e:
+        _roster_log.error("get_roster_attendance_summary(%s): %s", project_id, e)
+        return []
