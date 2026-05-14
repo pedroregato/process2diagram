@@ -3147,10 +3147,6 @@ def save_report_html(
     report_html: str,
     provider: str = "",
 ) -> bool:
-    """
-    Persist the executive HTML report for a meeting.
-    Returns True on success, False on any error (fail-open pattern).
-    """
     client = get_supabase_client()
     if client is None:
         return False
@@ -3169,9 +3165,6 @@ def save_report_html(
 
 
 def get_report_html(meeting_id: str) -> str | None:
-    """
-    Retrieve persisted executive HTML report. Returns None if not found.
-    """
     client = get_supabase_client()
     if client is None:
         return None
@@ -3186,4 +3179,4 @@ def get_report_html(meeting_id: str) -> str | None:
         return result.data.get("report_html") or None
     except Exception:
         return None
-		
+    
