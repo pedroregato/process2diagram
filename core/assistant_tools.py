@@ -159,14 +159,18 @@ def get_tool_schemas_openai() -> list[dict]:
                 "description": (
                     "Busca e lista requisitos do projeto. Pode filtrar por palavra-chave, "
                     "tipo (funcional, não-funcional, regra de negócio, restrição, interface) "
-                    "e status (active, revised, contradicted, confirmed)."
+                    "e status (active, revised, contradicted, confirmed). "
+                    "Use count_only=true para obter apenas o total sem risco de truncamento."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "keyword": {
                             "type": "string",
-                            "description": "Palavra-chave para buscar no título e descrição",
+                            "description": (
+                                "Palavra-chave para buscar no título, descrição ou número do requisito "
+                                "(ex: 'REQ-229', '229', 'autenticação')."
+                            ),
                         },
                         "req_type": {
                             "type": "string",
@@ -175,6 +179,14 @@ def get_tool_schemas_openai() -> list[dict]:
                         "status": {
                             "type": "string",
                             "description": "Status: active | revised | contradicted | confirmed",
+                        },
+                        "count_only": {
+                            "type": "boolean",
+                            "description": (
+                                "Se true, retorna apenas o total (SELECT COUNT) sem buscar os dados. "
+                                "Use para perguntas como 'quantos requisitos existem?' "
+                                "evitando truncamento. Compativel com req_type e status."
+                            ),
                         },
                     },
                     "required": [],
@@ -2058,11 +2070,37 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         keyword: str | None = None,
         req_type: str | None = None,
         status: str | None = None,
+        count_only: bool = False,
     ) -> str:
         from modules.supabase_client import get_supabase_client
         db = get_supabase_client()
         if not db:
             return "Banco de dados não disponível."
+
+        # ── count_only: SELECT COUNT(*) — sem risco de truncamento ───────────
+        if count_only and not keyword:  # keyword requer dados para filtrar localmente
+            try:
+                q = (
+                    db.table("requirements")
+                    .select("*", count="exact")
+                    .eq("project_id", self.project_id)
+                )
+                if req_type:
+                    q = q.eq("req_type", req_type)
+                if status:
+                    q = q.eq("status", status)
+                result = q.limit(0).execute()
+                total = result.count if result.count is not None else 0
+                filters = []
+                if req_type:
+                    filters.append(f"tipo: {req_type}")
+                if status:
+                    filters.append(f"status: {status}")
+                filter_desc = f" ({', '.join(filters)})" if filters else ""
+                return f"Total de requisitos{filter_desc}: **{total}**"
+            except Exception as exc:
+                return f"Erro ao contar requisitos: {exc}"
+
         try:
             q = (
                 db.table("requirements")
@@ -2082,11 +2120,15 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             return f"Erro ao acessar requisitos: {exc}"
 
         if keyword:
-            kw = keyword.lower()
+            kw = keyword.lower().strip()
+            # Support "REQ-229", "req-229", "229" matching req_number
+            _kw_num = kw.replace("req-", "").replace("req ", "").strip()
+            _kw_is_num = _kw_num.isdigit()
             rows = [
                 r for r in rows
                 if kw in (r.get("title") or "").lower()
                 or kw in (r.get("description") or "").lower()
+                or (_kw_is_num and int(_kw_num) == r.get("req_number"))
             ]
 
         if not rows:
@@ -4855,6 +4897,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     keyword=tool_input.get("keyword"),
                     req_type=tool_input.get("req_type"),
                     status=tool_input.get("status"),
+                    count_only=bool(tool_input.get("count_only", False)),
                 ),
                 "list_bpmn_processes":       lambda: self.list_bpmn_processes(),
                 "get_sbvr_terms":            lambda: self.get_sbvr_terms(tool_input.get("keyword")),
