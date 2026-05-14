@@ -20,12 +20,6 @@ from ui.project_selector import require_active_project
 from ui.components.page_header import render_page_header
 from modules.supabase_client import supabase_configured
 
-st.set_page_config(
-    page_title="Knowledge Hub — P2D",
-    page_icon="🧠",
-    layout="wide",
-)
-
 apply_auth_gate()
 
 render_page_header("🧠", "Knowledge Hub", "Conhecimento acumulado cross-session por projeto")
