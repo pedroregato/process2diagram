@@ -4,6 +4,7 @@ para uma reunião específica ou para todas as reuniões de um projeto.
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 from ui.auth_gate import apply_auth_gate
 from modules.config import AVAILABLE_PROVIDERS
 from core.project_store import get_supabase_client
@@ -27,9 +28,14 @@ with st.sidebar:
     st.info(f"🤖 Provedor: **{provider}**")
     if not api_key:
         st.warning("⚠️ API key não configurada. Acesse Configurações → LLM Assistente.")
+    st.markdown("---")
+    preview_height = st.slider(
+        "Altura da visualização (px)", min_value=400, max_value=1200,
+        value=700, step=100, key="rb_preview_height"
+    )
 
 # ── Project + meeting selector ────────────────────────────────────────────────
-project_id = st.session_state.get("active_project_id")
+project_id   = st.session_state.get("active_project_id")
 project_name = st.session_state.get("active_project_name", "")
 
 if not project_id:
@@ -43,7 +49,9 @@ if not api_key:
 
 st.info(f"📁 Projeto: **{project_name}**")
 
+# ── Meeting selector ──────────────────────────────────────────────────────────
 meeting_id = None
+_meetings  = []
 _db = get_supabase_client()
 if _db:
     try:
@@ -55,36 +63,39 @@ if _db:
             .execute()
         ).data or []
         if _meetings:
-            _opts = {f"Reunião {m['meeting_number']} — {m['title']}": m["id"] for m in _meetings}
-            _sel = st.selectbox("Selecionar reunião", list(_opts.keys()), key="rb_meeting_sel")
+            _opts      = {f"Reunião {m['meeting_number']} — {m['title']}": m["id"] for m in _meetings}
+            _sel       = st.selectbox("Selecionar reunião", list(_opts.keys()), key="rb_meeting_sel")
             meeting_id = _opts.get(_sel)
     except Exception as _e:
         st.error(f"Erro ao carregar reuniões: {_e}")
 
 # ── Build LLM config ──────────────────────────────────────────────────────────
-prov_cfg = AVAILABLE_PROVIDERS.get(provider, {})
+prov_cfg   = AVAILABLE_PROVIDERS.get(provider, {})
 llm_config = {
     **prov_cfg,
-    "api_key": api_key,
+    "api_key":       api_key,
     "provider_name": provider,
 }
 
-# ── Tabs: single meeting / all project ───────────────────────────────────────
+# ── Tabs ──────────────────────────────────────────────────────────────────────
 tab_single, tab_batch = st.tabs(["📋 Reunião Única", "📦 Todas as Reuniões"])
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TAB: Single meeting
 # ─────────────────────────────────────────────────────────────────────────────
 with tab_single:
-    st.subheader("Gerar relatório para uma reunião")
 
     if not meeting_id:
         st.info("Selecione uma reunião no seletor acima.")
     else:
-        # Check if report already exists
-        client = get_supabase_client()
-        existing = None
-        mtg_label = "Reunião selecionada"
+        # Load meeting data
+        client     = get_supabase_client()
+        existing   = None
+        mtg_number = 0
+        mtg_label  = "Reunião selecionada"
+        gen_at     = ""
+        gen_prov   = ""
+
         if client:
             try:
                 row = (
@@ -94,50 +105,72 @@ with tab_single:
                     .single()
                     .execute()
                 ).data
-                existing = row.get("report_html")
-                mtg_label = f"Reunião {row.get('meeting_number')} — {row.get('title', '')}"
+                existing   = row.get("report_html")
+                mtg_number = row.get("meeting_number", 0)
+                mtg_label  = f"Reunião {mtg_number} — {row.get('title', '')}"
+                gen_at     = (row.get("report_generated_at") or "")[:16].replace("T", " ")
+                gen_prov   = row.get("report_provider") or ""
             except Exception:
                 pass
 
-        st.write(f"**{mtg_label}**")
+        st.markdown(f"### {mtg_label}")
 
+        # ── Report exists ─────────────────────────────────────────────────────
         if existing:
-            st.success("✅ Esta reunião já possui relatório executivo gerado.")
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                if "rb_existing_html" not in st.session_state:
-                    st.session_state["rb_existing_html"] = existing.encode()
+            # Persist bytes in session_state before rendering buttons
+            _cache_key = f"rb_html_{meeting_id}"
+            if _cache_key not in st.session_state:
+                st.session_state[_cache_key] = existing.encode()
+
+            # Metadata + action buttons
+            meta_col, dl_col, regen_col = st.columns([3, 1.2, 1.5])
+            with meta_col:
+                st.success(f"✅ Relatório gerado em **{gen_at}** · Provedor: **{gen_prov}**")
+            with dl_col:
                 st.download_button(
-                    "⬇️ Baixar relatório existente",
-                    data=st.session_state["rb_existing_html"],
-                    file_name="relatorio_executivo_reuniao.html",
+                    "⬇️ Baixar HTML",
+                    data=st.session_state[_cache_key],
+                    file_name=f"relatorio_executivo_reuniao_{mtg_number}.html",
                     mime="text/html",
                     key="btn_dl_existing",
                 )
-            with col2:
-                regenerate = st.button("🔄 Regenerar (sobrescrever)", key="btn_regen_single")
+            with regen_col:
+                regenerate = st.button("🔄 Regenerar", key="btn_regen_single",
+                                       help="Regenerar e sobrescrever o relatório existente")
+
+            # ── Inline preview ────────────────────────────────────────────────
+            st.markdown("#### 👁️ Visualização")
+            components.html(existing, height=preview_height, scrolling=True)
+
+        # ── No report yet ─────────────────────────────────────────────────────
         else:
             st.warning("⚠️ Esta reunião ainda não tem relatório executivo.")
-            regenerate = st.button("▶️ Gerar Relatório Executivo", key="btn_gen_single", type="primary")
+            regenerate = st.button(
+                "▶️ Gerar Relatório Executivo", key="btn_gen_single", type="primary"
+            )
 
+        # ── Generate / regenerate ─────────────────────────────────────────────
         if "regenerate" in dir() and regenerate:
             with st.spinner("Gerando relatório executivo..."):
                 from modules.report_builder import build_report_for_meeting
                 result = build_report_for_meeting(meeting_id, llm_config, language)
 
             if result.success:
-                st.success(f"✅ Relatório gerado com sucesso! ({result.tokens_used:,} tokens · {result.provider})")
-                st.session_state["rb_result_html"] = result.html.encode()
+                st.success(
+                    f"✅ Relatório gerado com sucesso! "
+                    f"({result.tokens_used:,} tokens · {result.provider})"
+                )
+                _cache_key = f"rb_html_{meeting_id}"
+                st.session_state[_cache_key] = result.html.encode()
                 st.download_button(
                     "⬇️ Baixar Relatório Executivo",
-                    data=st.session_state["rb_result_html"],
+                    data=st.session_state[_cache_key],
                     file_name=f"relatorio_executivo_reuniao_{result.meeting_number}.html",
                     mime="text/html",
                     key="btn_dl_result",
                 )
-                with st.expander("👁️ Pré-visualizar", expanded=False):
-                    import streamlit.components.v1 as components
-                    components.html(result.html, height=600, scrolling=True)
+                st.markdown("#### 👁️ Visualização")
+                components.html(result.html, height=preview_height, scrolling=True)
             else:
                 st.error(f"❌ Falha: {result.error}")
 
@@ -147,8 +180,9 @@ with tab_single:
 with tab_batch:
     st.subheader("Gerar relatório para todas as reuniões do projeto")
 
-    # Show coverage table
+    # Coverage table
     client = get_supabase_client()
+    rows   = []
     if client:
         try:
             rows = (
@@ -161,20 +195,25 @@ with tab_batch:
         except Exception:
             rows = []
 
-        if rows:
-            import pandas as pd
-            df = pd.DataFrame([{
-                "Nº": r.get("meeting_number"),
-                "Título": r.get("title", ""),
-                "Relatório": "✅ Gerado" if r.get("report_html") else "❌ Pendente",
-                "Gerado em": (r.get("report_generated_at") or "")[:16].replace("T", " "),
-                "Provedor": r.get("report_provider") or "",
-            } for r in rows])
-            st.dataframe(df, use_container_width=True, hide_index=True)
+    if rows:
+        import pandas as pd
+        df = pd.DataFrame([{
+            "Nº":        r.get("meeting_number"),
+            "Título":    r.get("title", ""),
+            "Relatório": "✅ Gerado" if r.get("report_html") else "❌ Pendente",
+            "Gerado em": (r.get("report_generated_at") or "")[:16].replace("T", " "),
+            "Provedor":  r.get("report_provider") or "",
+        } for r in rows])
+        st.dataframe(df, use_container_width=True, hide_index=True)
 
-            pending = sum(1 for r in rows if not r.get("report_html"))
-            total   = len(rows)
-            st.write(f"**{total - pending}** de **{total}** reuniões com relatório gerado. **{pending}** pendentes.")
+        pending = sum(1 for r in rows if not r.get("report_html"))
+        total   = len(rows)
+        st.write(
+            f"**{total - pending}** de **{total}** reuniões com relatório gerado. "
+            f"**{pending}** pendentes."
+        )
+
+    st.markdown("---")
 
     skip_existing = st.checkbox(
         "Pular reuniões que já têm relatório (recomendado)",
@@ -186,15 +225,14 @@ with tab_batch:
 
         progress_bar = st.progress(0)
         status_text  = st.empty()
-        results_list = []
 
         def _callback(current, total, result):
             progress_bar.progress(current / total)
             icon = "✅" if result.success else "❌"
             status_text.text(
-                f"{icon} [{current}/{total}] Reunião {result.meeting_number} — {result.meeting_title}"
+                f"{icon} [{current}/{total}] "
+                f"Reunião {result.meeting_number} — {result.meeting_title}"
             )
-            results_list.append(result)
 
         with st.spinner("Processando..."):
             results = build_reports_for_project(
@@ -209,12 +247,17 @@ with tab_batch:
         success_count = sum(1 for r in results if r.success)
         fail_count    = sum(1 for r in results if not r.success)
 
-        st.success(f"✅ {success_count} relatórios gerados com sucesso.")
+        if success_count:
+            st.success(f"✅ {success_count} relatório(s) gerado(s) com sucesso.")
         if fail_count:
-            st.error(f"❌ {fail_count} falhas.")
+            st.error(f"❌ {fail_count} falha(s).")
             for r in results:
                 if not r.success:
                     st.write(f"- Reunião {r.meeting_number}: {r.error}")
 
         total_tokens = sum(r.tokens_used for r in results)
-        st.info(f"Total de tokens usados: {total_tokens:,}")
+        if total_tokens:
+            st.info(f"Total de tokens usados: {total_tokens:,}")
+
+        st.rerun()
+        
