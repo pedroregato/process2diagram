@@ -61,6 +61,7 @@ pages = {
         st.Page("pages/ValidationHub.py",     title="Validação",        icon="✅"),
         st.Page("pages/MeetingROI.py",        title="Qualidade ROI-TR", icon="📊"),
         st.Page("pages/EntityRecognition.py", title="Entidades (NER)",  icon="🔍"),
+        st.Page("pages/KnowledgeHub.py",      title="Knowledge Hub",    icon="🧠"),
     ],
     "Sistema": _sistema_pages,
     "Ajuda": [

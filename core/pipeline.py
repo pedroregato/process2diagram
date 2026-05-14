@@ -102,4 +102,17 @@ def run_pipeline(hub, config, progress_callback):
                                run_sbvr=run_sbvr,
                                run_bmm=run_bmm,
                                run_synthesizer=run_synthesizer)
+
+    # ── Knowledge extraction (non-fatal, post-pipeline) ───────────────────────
+    try:
+        from agents.agent_knowledge_extractor import AgentKnowledgeExtractor
+        _kh_agent = AgentKnowledgeExtractor(client_info, provider_cfg)
+        _kh_agent.run(
+            hub, output_lang,
+            meeting_id=config.get("meeting_id"),
+            project_id=config.get("project_id"),
+        )
+    except Exception:
+        pass  # non-fatal — never blocks the pipeline result
+
     return hub
