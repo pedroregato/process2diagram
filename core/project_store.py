@@ -3139,3 +3139,51 @@ def extract_participants_from_project(
         "meetings_scanned":           len(meetings),
         "meetings_with_participants": meetings_with_participants,
     }
+
+# ----- Persistência do relatório executivo da reunião em html
+
+def save_report_html(
+    meeting_id: str,
+    report_html: str,
+    provider: str = "",
+) -> bool:
+    """
+    Persist the executive HTML report for a meeting.
+    Returns True on success, False on any error (fail-open pattern).
+    """
+    client = get_supabase_client()
+    if client is None:
+        return False
+    try:
+        from datetime import datetime, timezone
+        client.table("meetings").update({
+            "report_html":         report_html,
+            "report_generated_at": datetime.now(timezone.utc).isoformat(),
+            "report_provider":     provider,
+        }).eq("id", meeting_id).execute()
+        return True
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"save_report_html failed: {e}")
+        return False
+
+
+def get_report_html(meeting_id: str) -> str | None:
+    """
+    Retrieve persisted executive HTML report. Returns None if not found.
+    """
+    client = get_supabase_client()
+    if client is None:
+        return None
+    try:
+        result = (
+            client.table("meetings")
+            .select("report_html")
+            .eq("id", meeting_id)
+            .single()
+            .execute()
+        )
+        return result.data.get("report_html") or None
+    except Exception:
+        return None
+		
