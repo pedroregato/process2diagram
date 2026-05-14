@@ -59,8 +59,6 @@ if _db:
         st.error(f"Erro ao carregar reuniões: {_e}")
 
 # ── Build LLM config ──────────────────────────────────────────────────────────
-
-# ── Build LLM config ──────────────────────────────────────────────────────────
 prov_cfg = AVAILABLE_PROVIDERS.get(provider, {})
 llm_config = {
     **prov_cfg,
@@ -225,4 +223,3 @@ with tab_batch:
 
             total_tokens = sum(r.tokens_used for r in results)
             st.info(f"Total de tokens usados: {total_tokens:,}")
-                       
