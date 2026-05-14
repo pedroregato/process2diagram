@@ -16,18 +16,17 @@ st.caption(
     "Apenas o AgentSynthesizer é executado, usando os dados já armazenados no Supabase."
 )
 
-# ── Sidebar: provider + API key ───────────────────────────────────────────────
+# ── Provider e API key da sessão global ───────────────────────────────────────
+provider = st.session_state.get("asst_provider", "DeepSeek")
+api_key  = st.session_state.get("asst_api_key", "")
+
+# ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("⚙️ Configuração")
-    provider = st.selectbox("Provedor LLM", list(AVAILABLE_PROVIDERS.keys()), key="rb_provider")
-    api_key  = st.text_input(
-        AVAILABLE_PROVIDERS[provider]["api_key_label"],
-        type="password", key="rb_api_key"
-    )
     language = st.selectbox("Idioma do relatório", ["Portuguese (BR)", "English"], key="rb_lang")
-
+    st.info(f"🤖 Provedor: **{provider}**")
     if not api_key:
-        st.warning("⚠️ Insira a API key para continuar.")
+        st.warning("⚠️ API key não configurada. Acesse Configurações → LLM Assistente.")
 
 # ── Project + meeting selector ────────────────────────────────────────────────
 project_id = st.session_state.get("active_project_id")
@@ -36,6 +35,10 @@ project_name = st.session_state.get("active_project_name", "")
 if not project_id:
     st.warning("Nenhum projeto de trabalho ativo. Selecione um projeto na Central de Operações.")
     st.page_link("pages/Home.py", label="← Ir para a Central de Operações")
+    st.stop()
+
+if not api_key:
+    st.warning("⚠️ API key não configurada. Acesse **Configurações → LLM Assistente** e salve a chave.")
     st.stop()
 
 st.info(f"📁 Projeto: **{project_name}**")
@@ -76,13 +79,12 @@ with tab_single:
     st.subheader("Gerar relatório para uma reunião")
 
     if not meeting_id:
-        st.info("Selecione um projeto e uma reunião no seletor acima.")
-    elif not api_key:
-        st.warning("Configure a API key na sidebar.")
+        st.info("Selecione uma reunião no seletor acima.")
     else:
         # Check if report already exists
         client = get_supabase_client()
         existing = None
+        mtg_label = "Reunião selecionada"
         if client:
             try:
                 row = (
@@ -95,7 +97,7 @@ with tab_single:
                 existing = row.get("report_html")
                 mtg_label = f"Reunião {row.get('meeting_number')} — {row.get('title', '')}"
             except Exception:
-                mtg_label = "Reunião selecionada"
+                pass
 
         st.write(f"**{mtg_label}**")
 
@@ -103,13 +105,12 @@ with tab_single:
             st.success("✅ Esta reunião já possui relatório executivo gerado.")
             col1, col2 = st.columns([1, 1])
             with col1:
-                # Persist bytes before button renders (survive rerun)
                 if "rb_existing_html" not in st.session_state:
                     st.session_state["rb_existing_html"] = existing.encode()
                 st.download_button(
                     "⬇️ Baixar relatório existente",
                     data=st.session_state["rb_existing_html"],
-                    file_name=f"relatorio_executivo_reuniao.html",
+                    file_name="relatorio_executivo_reuniao.html",
                     mime="text/html",
                     key="btn_dl_existing",
                 )
@@ -146,80 +147,74 @@ with tab_single:
 with tab_batch:
     st.subheader("Gerar relatório para todas as reuniões do projeto")
 
-    if not project_id:
-        st.info("Selecione um projeto no seletor acima.")
-    elif not api_key:
-        st.warning("Configure a API key na sidebar.")
-    else:
-        # Show coverage table
-        client = get_supabase_client()
-        if client:
-            try:
-                rows = (
-                    client.table("meetings")
-                    .select("meeting_number, title, report_html, report_generated_at, report_provider")
-                    .eq("project_id", project_id)
-                    .order("meeting_number")
-                    .execute()
-                ).data or []
-            except Exception:
-                rows = []
+    # Show coverage table
+    client = get_supabase_client()
+    if client:
+        try:
+            rows = (
+                client.table("meetings")
+                .select("meeting_number, title, report_html, report_generated_at, report_provider")
+                .eq("project_id", project_id)
+                .order("meeting_number")
+                .execute()
+            ).data or []
+        except Exception:
+            rows = []
 
-            if rows:
-                import pandas as pd
-                df = pd.DataFrame([{
-                    "Nº": r.get("meeting_number"),
-                    "Título": r.get("title", ""),
-                    "Relatório": "✅ Gerado" if r.get("report_html") else "❌ Pendente",
-                    "Gerado em": (r.get("report_generated_at") or "")[:16].replace("T", " "),
-                    "Provedor": r.get("report_provider") or "",
-                } for r in rows])
-                st.dataframe(df, use_container_width=True, hide_index=True)
+        if rows:
+            import pandas as pd
+            df = pd.DataFrame([{
+                "Nº": r.get("meeting_number"),
+                "Título": r.get("title", ""),
+                "Relatório": "✅ Gerado" if r.get("report_html") else "❌ Pendente",
+                "Gerado em": (r.get("report_generated_at") or "")[:16].replace("T", " "),
+                "Provedor": r.get("report_provider") or "",
+            } for r in rows])
+            st.dataframe(df, use_container_width=True, hide_index=True)
 
-                pending = sum(1 for r in rows if not r.get("report_html"))
-                total   = len(rows)
-                st.write(f"**{total - pending}** de **{total}** reuniões com relatório gerado. **{pending}** pendentes.")
+            pending = sum(1 for r in rows if not r.get("report_html"))
+            total   = len(rows)
+            st.write(f"**{total - pending}** de **{total}** reuniões com relatório gerado. **{pending}** pendentes.")
 
-        skip_existing = st.checkbox(
-            "Pular reuniões que já têm relatório (recomendado)",
-            value=True, key="rb_skip_existing"
-        )
+    skip_existing = st.checkbox(
+        "Pular reuniões que já têm relatório (recomendado)",
+        value=True, key="rb_skip_existing"
+    )
 
-        if st.button("▶️ Gerar Relatórios em Lote", key="btn_batch", type="primary",
-                     disabled=not project_id or not api_key):
-            from modules.report_builder import build_reports_for_project
+    if st.button("▶️ Gerar Relatórios em Lote", key="btn_batch", type="primary"):
+        from modules.report_builder import build_reports_for_project
 
-            progress_bar = st.progress(0)
-            status_text  = st.empty()
-            results_list = []
+        progress_bar = st.progress(0)
+        status_text  = st.empty()
+        results_list = []
 
-            def _callback(current, total, result):
-                progress_bar.progress(current / total)
-                icon = "✅" if result.success else "❌"
-                status_text.text(
-                    f"{icon} [{current}/{total}] Reunião {result.meeting_number} — {result.meeting_title}"
-                )
-                results_list.append(result)
+        def _callback(current, total, result):
+            progress_bar.progress(current / total)
+            icon = "✅" if result.success else "❌"
+            status_text.text(
+                f"{icon} [{current}/{total}] Reunião {result.meeting_number} — {result.meeting_title}"
+            )
+            results_list.append(result)
 
-            with st.spinner("Processando..."):
-                results = build_reports_for_project(
-                    project_id=project_id,
-                    llm_config=llm_config,
-                    output_language=language,
-                    callback=_callback,
-                    skip_existing=skip_existing,
-                )
+        with st.spinner("Processando..."):
+            results = build_reports_for_project(
+                project_id=project_id,
+                llm_config=llm_config,
+                output_language=language,
+                callback=_callback,
+                skip_existing=skip_existing,
+            )
 
-            progress_bar.progress(1.0)
-            success_count = sum(1 for r in results if r.success)
-            fail_count    = sum(1 for r in results if not r.success)
+        progress_bar.progress(1.0)
+        success_count = sum(1 for r in results if r.success)
+        fail_count    = sum(1 for r in results if not r.success)
 
-            st.success(f"✅ {success_count} relatórios gerados com sucesso.")
-            if fail_count:
-                st.error(f"❌ {fail_count} falhas.")
-                for r in results:
-                    if not r.success:
-                        st.write(f"- Reunião {r.meeting_number}: {r.error}")
+        st.success(f"✅ {success_count} relatórios gerados com sucesso.")
+        if fail_count:
+            st.error(f"❌ {fail_count} falhas.")
+            for r in results:
+                if not r.success:
+                    st.write(f"- Reunião {r.meeting_number}: {r.error}")
 
-            total_tokens = sum(r.tokens_used for r in results)
-            st.info(f"Total de tokens usados: {total_tokens:,}")
+        total_tokens = sum(r.tokens_used for r in results)
+        st.info(f"Total de tokens usados: {total_tokens:,}")
