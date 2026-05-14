@@ -1146,6 +1146,28 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },        
+        # ---------------------------- Report
+        {
+         "type": "function",
+         "function": {
+                "name": "get_executive_report",
+                "description": (
+                    "Retorna o relatório executivo HTML de uma reunião já gerado e armazenado. "
+                    "Use quando o usuário pede para ver, acessar ou baixar o relatório executivo. "
+                    "NÃO usa esta ferramenta para gerar um relatório novo — apenas recupera o existente."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Número da reunião cujo relatório deve ser recuperado."
+                        }
+                    },
+                    "required": ["meeting_number"]
+                }
+            }
+        },
         # ---------------------------- speaker
         {
             "type": "function",
@@ -1515,7 +1537,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "preview_text_correction":      "consulta",
     "get_speaker_contributions":    "consulta",
     "get_system_capabilities":          "consulta",
-    
+    "get_executive_report":         "consulta",    
     "get_users_by_domain":   "consulta",
     "list_all_domains":      "consulta",
     "list_users_by_project": "consulta",
@@ -4749,6 +4771,54 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         col_count = len(args.get("columns", []))
         row_count = len(args.get("rows", []))
         return f"Tabela '{args.get('title', '')}' registrada ({row_count} linhas x {col_count} colunas)."
+        
+    def get_executive_report(self, meeting_number: int) -> str:
+        """Retrieve persisted executive HTML report and queue for download."""
+        import streamlit as st
+        from modules.supabase_client import get_supabase_client
+
+        m = self._find_meeting(meeting_number)
+        if not m:
+            return f"Reunião {meeting_number} não encontrada no projeto."
+
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        try:
+            row = (
+                db.table("meetings")
+                .select("report_html, report_generated_at, report_provider")
+                .eq("id", m["id"])
+                .single()
+                .execute()
+            ).data
+        except Exception as exc:
+            return f"Erro ao buscar relatório: {exc}"
+
+        html = row.get("report_html") if row else None
+        if not html:
+            return (
+                f"A reunião {meeting_number} ainda não tem relatório executivo. "
+                f"Acesse **Manutenção → Relatório Executivo** para gerar."
+            )
+
+        key = f"_report_dl_{meeting_number}"
+        st.session_state["_pending_report_html"] = {
+            "html":           html,
+            "meeting_number": meeting_number,
+            "filename":       f"relatorio_executivo_reuniao_{meeting_number}.html",
+            "cache_key":      key,
+        }
+        st.session_state[key] = html.encode()
+
+        gen_at  = (row.get("report_generated_at") or "")[:16].replace("T", " ")
+        prov    = row.get("report_provider") or "—"
+        size_kb = round(len(html) / 1024, 1)
+        return (
+            f"✅ Relatório executivo da Reunião {meeting_number} disponível para download.\n"
+            f"Gerado em: {gen_at} · Provedor: {prov} · Tamanho: {size_kb} KB"
+        )
 
     # ── Dispatcher ────────────────────────────────────────────────────────────
 
@@ -4965,8 +5035,11 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     y_label=tool_input.get("y_label", ""),
                     series_name=tool_input.get("series_name", ""),
                 ),
-                "populate_roster":                lambda: self._populate_roster(tool_input),
-                "render_table":                   lambda: self._render_table(tool_input),
+                "populate_roster": lambda: self._populate_roster(tool_input),
+                "render_table": lambda: self._render_table(tool_input),
+                "get_executive_report": lambda: self.get_executive_report(
+                    tool_input["meeting_number"],
+                ),                
             }
             if tool_name not in dispatch:
                 return f"Ferramenta desconhecida: '{tool_name}'"
