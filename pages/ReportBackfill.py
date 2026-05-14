@@ -12,7 +12,6 @@ from core.project_store import get_supabase_client
 
 apply_auth_gate()
 
-st.set_page_config(page_title="Relatório Executivo — Backfill", layout="wide")
 st.title("📄 Backfill — Relatório Executivo")
 st.caption(
     "Gera o Relatório Executivo HTML para reuniões existentes sem reprocessar o pipeline completo. "
