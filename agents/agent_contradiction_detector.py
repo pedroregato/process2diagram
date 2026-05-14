@@ -280,9 +280,14 @@ class AgentContradictionDetector(BaseAgent):
         )
         return inserted
 
-    # ── build_prompt (required by BaseAgent, unused directly) ─────────────────
+    # ── BaseAgent abstract method stubs ───────────────────────────────────────
+    # The real entry points are run_for_meeting() and run_full_scan().
+    # These stubs satisfy the ABC contract so the class can be instantiated.
 
     def build_prompt(self, hub: Any, output_language: str = "Auto-detect"):  # type: ignore[override]
-        raise NotImplementedError(
-            "Use run_for_meeting() or run_full_scan() instead."
-        )
+        """Not used — contradiction detector builds its own prompts internally."""
+        return self._skill, ""
+
+    def run(self, hub: Any, output_language: str = "Auto-detect") -> Any:  # type: ignore[override]
+        """Not used directly — call run_for_meeting() or run_full_scan()."""
+        return hub
