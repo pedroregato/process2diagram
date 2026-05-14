@@ -284,7 +284,7 @@ def _parse_minutes_from_md(minutes_md: str):
             elif section == "actions" and hasattr(m, "action_items"):
                 if _has_action_item:
                     from core.knowledge_hub import ActionItem
-                    m.action_items.append(ActionItem(description=content))
+                    m.action_items.append(ActionItem(task=content))
                 else:
                     m.action_items.append({"description": content})
 
