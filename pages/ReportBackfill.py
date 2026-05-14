@@ -9,6 +9,7 @@ from ui.auth_gate import apply_auth_gate
 from ui.project_selector import render_project_selector
 from modules.config import AVAILABLE_PROVIDERS
 from core.project_store import get_supabase_client
+from ui.project_selector import render_project_selector
 
 apply_auth_gate()
 
