@@ -230,28 +230,46 @@ class AgentContradictionDetector(BaseAgent):
 
         contradictions = data.get("contradictions") or []
         inserted = 0
+
+        # Build a fast lookup: fact_id → first source_meeting_id
+        all_facts_idx: dict[str, str | None] = {}
+        for f in new_facts + existing_facts:
+            src = f.get("source_meeting_ids") or []
+            all_facts_idx[f["id"]] = src[0] if src else None
+
         for c in contradictions:
             desc = (c.get("description") or "").strip()
             if not desc:
                 continue
 
-            # Resolve meeting_b_id from fact_b_id when possible
-            fact_b_id  = c.get("fact_b_id")
-            meeting_b_id = None
-            if fact_b_id:
-                # Find meeting from existing_facts list
-                for f in existing_facts:
-                    if f["id"] == fact_b_id:
-                        src = f.get("source_meeting_ids") or []
-                        meeting_b_id = src[0] if src else None
-                        break
+            # Skip very low-confidence detections
+            conf = c.get("confidence")
+            try:
+                conf = float(conf) if conf is not None else None
+            except (TypeError, ValueError):
+                conf = None
+            if conf is not None and conf < 0.50:
+                continue
+
+            # Skip purely positive relations — not worth storing
+            relation_type = c.get("relation_type") or ""
+            if relation_type in ("equivalent", "complementary", "more_specific"):
+                continue
+
+            # Resolve meeting_b_id from fact_b_id
+            fact_b_id    = c.get("fact_b_id")
+            meeting_b_id = all_facts_idx.get(fact_b_id) if fact_b_id else None
 
             payload = {
-                "description":  desc,
-                "process_name": c.get("process_name") or None,
-                "severity":     c.get("severity") or "medium",
-                "meeting_a_id": meeting_id,
-                "meeting_b_id": meeting_b_id,
+                "description":         desc,
+                "process_name":        c.get("process_name") or None,
+                "severity":            c.get("severity") or "medium",
+                "meeting_a_id":        meeting_id,
+                "meeting_b_id":        meeting_b_id,
+                "relation_type":       relation_type or None,
+                "confidence":          conf,
+                "clarifying_question": c.get("clarifying_question") or None,
+                "suggested_rewrite":   c.get("suggested_rewrite") or None,
             }
             result = insert_contradiction(project_id, payload)
             if result:

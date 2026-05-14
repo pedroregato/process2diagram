@@ -276,7 +276,9 @@ def get_contradictions(
         q = (
             db.table("kh_contradictions")
             .select("id, process_name, description, meeting_a_id, meeting_b_id, "
-                    "severity, status, resolved_by, resolution_note, updated_at")
+                    "severity, status, resolved_by, resolution_note, "
+                    "relation_type, confidence, clarifying_question, suggested_rewrite, "
+                    "updated_at")
             .eq("project_id", project_id)
             .order("updated_at", desc=True)
             .limit(limit)
@@ -297,14 +299,35 @@ def insert_contradiction(project_id: str, contradiction: dict) -> dict | None:
         desc = (contradiction.get("description") or "").strip()
         if not desc:
             return None
+
+        relation_type = contradiction.get("relation_type") or None
+        # Only store real contradictions and noteworthy relations
+        _VALID_RELATIONS = {
+            "contradiction_direct", "contradiction_conditional",
+            "contradiction_temporal", "contradiction_responsibility",
+            "exception", "superseded", "ambiguous",
+        }
+        if relation_type and relation_type not in _VALID_RELATIONS:
+            relation_type = None
+
+        confidence = contradiction.get("confidence")
+        try:
+            confidence = float(confidence) if confidence is not None else None
+        except (TypeError, ValueError):
+            confidence = None
+
         payload = {
-            "project_id":   project_id,
-            "process_name": contradiction.get("process_name") or None,
-            "description":  desc,
-            "meeting_a_id": contradiction.get("meeting_a_id") or None,
-            "meeting_b_id": contradiction.get("meeting_b_id") or None,
-            "severity":     contradiction.get("severity") or "medium",
-            "status":       "open",
+            "project_id":          project_id,
+            "process_name":        contradiction.get("process_name") or None,
+            "description":         desc,
+            "meeting_a_id":        contradiction.get("meeting_a_id") or None,
+            "meeting_b_id":        contradiction.get("meeting_b_id") or None,
+            "severity":            contradiction.get("severity") or "medium",
+            "status":              "open",
+            "relation_type":       relation_type,
+            "confidence":          confidence,
+            "clarifying_question": (contradiction.get("clarifying_question") or "").strip() or None,
+            "suggested_rewrite":   (contradiction.get("suggested_rewrite") or "").strip() or None,
         }
         result = db.table("kh_contradictions").insert(payload).execute()
         return result.data[0] if result.data else None

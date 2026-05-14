@@ -206,19 +206,42 @@ with tab_contradictions:
         "Revise e marque como resolvidas ou falso positivo."
     )
 
-    _contra_status = st.selectbox(
+    col_cs1, col_cs2 = st.columns(2)
+    _contra_status = col_cs1.selectbox(
         "Status",
         ["open", "resolved", "false_positive", "Todos"],
         key="kh_contra_status",
     )
+    _relation_filter = col_cs2.selectbox(
+        "Tipo de relação",
+        ["Todos", "contradiction_direct", "contradiction_conditional",
+         "contradiction_temporal", "contradiction_responsibility",
+         "exception", "superseded", "ambiguous"],
+        key="kh_contra_relation",
+    )
     cstatus = None if _contra_status == "Todos" else _contra_status
-    contradictions = get_contradictions(project_id, status=cstatus, limit=50)
+    contradictions = get_contradictions(project_id, status=cstatus, limit=100)
+
+    # Client-side relation filter
+    if _relation_filter != "Todos":
+        contradictions = [c for c in contradictions
+                          if c.get("relation_type") == _relation_filter]
 
     _SEV_COLORS = {
         "low":      "#1A7F5A",
         "medium":   "#C97B1A",
         "high":     "#d97706",
         "critical": "#dc2626",
+    }
+
+    _RELATION_LABELS = {
+        "contradiction_direct":         ("🔴", "Contradição Direta"),
+        "contradiction_conditional":    ("🟠", "Contradição Condicional"),
+        "contradiction_temporal":       ("🟡", "Contradição Temporal"),
+        "contradiction_responsibility": ("🔴", "Conflito de Responsabilidade"),
+        "exception":                    ("🔵", "Exceção não formalizada"),
+        "superseded":                   ("⚪", "Decisão substituída"),
+        "ambiguous":                    ("🟣", "Ambígua"),
     }
 
     if "_contra_msg" in st.session_state:
@@ -231,24 +254,47 @@ with tab_contradictions:
         else:
             st.info("Nenhuma contradição encontrada com os filtros selecionados.")
     else:
-        st.caption(f"{len(contradictions)} contradição(ões)")
+        st.caption(f"{len(contradictions)} item(ns)")
         for c in contradictions:
-            sev = c.get("severity", "medium")
-            color = _SEV_COLORS.get(sev, "#8496B0")
-            status = c.get("status", "open")
+            sev          = c.get("severity", "medium")
+            color        = _SEV_COLORS.get(sev, "#8496B0")
+            status       = c.get("status", "open")
+            rel_type     = c.get("relation_type") or ""
+            rel_icon, rel_label = _RELATION_LABELS.get(rel_type, ("⚪", rel_type or "—"))
+            confidence   = c.get("confidence")
+            conf_str     = f" · {confidence:.0%}" if confidence is not None else ""
 
             with st.container():
-                col_sev, col_desc, col_actions = st.columns([1, 6, 2])
+                col_sev, col_desc, col_actions = st.columns([1.4, 5.6, 2])
+
+                # Severity + relation badges
                 col_sev.markdown(
                     f'<span style="background:{color};color:white;padding:2px 8px;'
-                    f'border-radius:4px;font-size:12px;font-weight:600;">{sev}</span>',
+                    f'border-radius:4px;font-size:11px;font-weight:600;">{sev}</span>',
                     unsafe_allow_html=True,
                 )
+                if rel_type:
+                    col_sev.caption(f"{rel_icon} {rel_label}{conf_str}")
+
+                # Description
                 if c.get("process_name"):
                     col_desc.markdown(f"**{c['process_name']}** — {c['description']}")
                 else:
                     col_desc.markdown(c["description"])
 
+                # Clarifying question + suggested rewrite in expander
+                has_extra = c.get("clarifying_question") or c.get("suggested_rewrite")
+                if has_extra:
+                    with col_desc:
+                        with st.expander("Ver análise detalhada"):
+                            if c.get("clarifying_question"):
+                                st.markdown(f"**❓ Pergunta para esclarecimento**")
+                                st.info(c["clarifying_question"])
+                            if c.get("suggested_rewrite"):
+                                st.markdown(f"**✏️ Reescrita sugerida**")
+                                st.success(c["suggested_rewrite"])
+
+                # Actions
                 if status == "open" and is_admin():
                     with col_actions:
                         btn_res, btn_fp = st.columns(2)
