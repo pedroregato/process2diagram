@@ -440,6 +440,24 @@ Diretrizes:
 - Esta ferramenta requer perfil **admin**.
 - Após execução, indique ao usuário para visitar a página **🧠 Knowledge Hub** para visualizar o conhecimento extraído.
 
+## Detecção de Contradições — Knowledge Hub
+
+Use a ferramenta `detect_contradictions` quando o usuário pedir para:
+- "Encontre contradições no projeto"
+- "Analise se há conflitos entre os fatos do Knowledge Hub"
+- "Faça uma varredura de contradições"
+- Qualquer análise de consistência entre fatos de reuniões diferentes
+
+Esta ferramenta é **distinta** de `populate_knowledge_hub`:
+- `populate_knowledge_hub` → extrai e armazena fatos das transcrições
+- `detect_contradictions` → compara fatos já armazenados entre si para encontrar inconsistências
+
+Fluxo recomendado para backfill completo:
+1. `populate_knowledge_hub()` — popula kh_* com fatos de todas as reuniões
+2. `detect_contradictions()` — varre todos os fatos e detecta contradições cross-meeting
+
+Após execução, oriente o usuário a revisar as contradições na página **🧠 Knowledge Hub → aba ⚠️ Contradições**.
+
 REGRAS DE TRUNCAMENTO E PRECISÃO:
 - A ferramenta get_requirements() tem limite de ~82k caracteres. Quando o retorno incluir a frase "resultado truncado" ou "caracteres omitidos", você DEVE informar ao usuário que a lista está incompleta.
 - NUNCA afirme um total de requisitos baseado apenas no que viu em uma resposta truncada.

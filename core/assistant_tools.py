@@ -1553,6 +1553,25 @@ def get_tool_schemas_openai() -> list[dict]:
                 }
             }
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "detect_contradictions",
+                "description": (
+                    "Run a full cross-meeting contradiction scan on the project's Knowledge Hub facts. "
+                    "Compares all stored kh_facts entries (grouped by fact_type) using a specialised "
+                    "LLM agent and inserts detected contradictions into kh_contradictions. "
+                    "Use this after populate_knowledge_hub to find inconsistencies across meetings, "
+                    "or whenever the user asks to find, scan or analyse contradictions in the project. "
+                    "Admin only."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        },
     ]
 
 
@@ -1633,6 +1652,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "render_table":                   "consulta",
     "populate_roster":                 "admin",
     "populate_knowledge_hub":          "admin",
+    "detect_contradictions":           "admin",
 }
 
 # Ferramentas que exigem perfil administrador
@@ -1655,6 +1675,7 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "calendar_diagnose",
     "populate_roster",
     "populate_knowledge_hub",
+    "detect_contradictions",
 })
 
 
@@ -4904,6 +4925,54 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             f"Gerado em: {gen_at} · Provedor: {prov} · Tamanho: {size_kb} KB"
         )
 
+    # ── detect_contradictions ─────────────────────────────────────────────────
+
+    def _detect_contradictions(self) -> str:
+        """Full-scan cross-meeting contradiction detection via AgentContradictionDetector."""
+        if not self.llm_config:
+            return (
+                "❌ Configuração LLM não disponível. "
+                "Certifique-se de que a chave de API está configurada no Assistente."
+            )
+        if not self.project_id:
+            return (
+                "Nenhum projeto ativo. Selecione um projeto na Home primeiro "
+                "ou use set_active_project."
+            )
+
+        from core.knowledge_store import kh_tables_exist, get_facts
+        if not kh_tables_exist():
+            return (
+                "❌ As tabelas do Knowledge Hub não existem no Supabase. "
+                "Execute setup/supabase_schema_knowledge_hub.sql primeiro."
+            )
+
+        all_facts = get_facts(self.project_id, active_only=True, limit=500)
+        if len(all_facts) < 2:
+            return (
+                "O Knowledge Hub do projeto ainda tem poucos fatos armazenados. "
+                "Execute populate_knowledge_hub primeiro para popular as tabelas kh_*."
+            )
+
+        provider_cfg = self.llm_config.get("provider_cfg", {})
+        client_info  = {"api_key": self.llm_config.get("api_key", "")}
+
+        from agents.agent_contradiction_detector import AgentContradictionDetector
+        agent = AgentContradictionDetector(client_info, provider_cfg)
+        n = agent.run_full_scan(self.project_id)
+
+        by_type: dict[str, int] = {}
+        for f in all_facts:
+            by_type[f.get("fact_type", "other")] = by_type.get(f.get("fact_type", "other"), 0) + 1
+
+        type_summary = " · ".join(f"{t}: {c}" for t, c in sorted(by_type.items()))
+        return (
+            f"Varredura de contradições concluída.\n\n"
+            f"Fatos analisados: {len(all_facts)} ({type_summary})\n"
+            f"Contradições detectadas e inseridas: {n}\n\n"
+            f"Consulte a aba ⚠️ Contradições na página 🧠 Knowledge Hub para revisar e resolver."
+        )
+
     # ── populate_knowledge_hub ────────────────────────────────────────────────
 
     def _populate_knowledge_hub(self, args: dict) -> str:
@@ -5225,6 +5294,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 ),
                 "populate_roster":          lambda: self._populate_roster(tool_input),
                 "populate_knowledge_hub":  lambda: self._populate_knowledge_hub(tool_input),
+                "detect_contradictions":   lambda: self._detect_contradictions(),
                 "render_table": lambda: self._render_table(tool_input),
                 "get_executive_report": lambda: self.get_executive_report(
                     tool_input["meeting_number"],

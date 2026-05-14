@@ -104,15 +104,27 @@ def run_pipeline(hub, config, progress_callback):
                                run_synthesizer=run_synthesizer)
 
     # ── Knowledge extraction (non-fatal, post-pipeline) ───────────────────────
+    _kh_meeting_id = config.get("meeting_id")
+    _kh_project_id = config.get("project_id")
+
     try:
         from agents.agent_knowledge_extractor import AgentKnowledgeExtractor
         _kh_agent = AgentKnowledgeExtractor(client_info, provider_cfg)
         _kh_agent.run(
             hub, output_lang,
-            meeting_id=config.get("meeting_id"),
-            project_id=config.get("project_id"),
+            meeting_id=_kh_meeting_id,
+            project_id=_kh_project_id,
         )
     except Exception:
-        pass  # non-fatal — never blocks the pipeline result
+        pass  # non-fatal
+
+    # ── Cross-meeting contradiction detection (non-fatal) ─────────────────────
+    if _kh_project_id and _kh_meeting_id:
+        try:
+            from agents.agent_contradiction_detector import AgentContradictionDetector
+            _cd_agent = AgentContradictionDetector(client_info, provider_cfg)
+            _cd_agent.run_for_meeting(_kh_project_id, _kh_meeting_id)
+        except Exception:
+            pass  # non-fatal
 
     return hub
