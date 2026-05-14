@@ -1513,6 +1513,43 @@ def get_tool_schemas_openai() -> list[dict]:
                 }
             }
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "populate_knowledge_hub",
+                "description": (
+                    "Extract and persist structured knowledge (entities, processes, facts, "
+                    "contradictions) from one or more meetings into the Knowledge Hub tables. "
+                    "Useful to backfill historical meetings or to refresh/overwrite KH data "
+                    "for specific meetings. Each meeting's transcript is sent to the LLM and "
+                    "the results are upserted into kh_entities, kh_processes, kh_facts and "
+                    "kh_contradictions. Admin only."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_numbers": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": (
+                                "List of meeting numbers to process. "
+                                "If omitted, all meetings in the active project are processed."
+                            )
+                        },
+                        "overwrite": {
+                            "type": "boolean",
+                            "description": (
+                                "If true, existing facts and contradictions linked to each "
+                                "meeting will be deleted before re-extraction, allowing a "
+                                "clean rewrite. Entities and processes are always upserted "
+                                "(merged). Default: false."
+                            )
+                        }
+                    },
+                    "required": []
+                }
+            }
+        },
     ]
 
 
@@ -1592,6 +1629,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "generate_custom_chart":          "grafico",
     "render_table":                   "consulta",
     "populate_roster":                 "admin",
+    "populate_knowledge_hub":          "admin",
 }
 
 # Ferramentas que exigem perfil administrador
@@ -1613,6 +1651,7 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "calendar_revoke_access",
     "calendar_diagnose",
     "populate_roster",
+    "populate_knowledge_hub",
 })
 
 
@@ -4862,6 +4901,109 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             f"Gerado em: {gen_at} · Provedor: {prov} · Tamanho: {size_kb} KB"
         )
 
+    # ── populate_knowledge_hub ────────────────────────────────────────────────
+
+    def _populate_knowledge_hub(self, args: dict) -> str:
+        """Run AgentKnowledgeExtractor on one or more meetings to populate kh_* tables."""
+        if not self.llm_config:
+            return (
+                "❌ Configuração LLM não disponível. "
+                "Certifique-se de que a chave de API está configurada no Assistente."
+            )
+        if not self.project_id:
+            return (
+                "Nenhum projeto ativo. Selecione um projeto na Home primeiro "
+                "ou use set_active_project."
+            )
+
+        from core.knowledge_store import kh_tables_exist
+        if not kh_tables_exist():
+            return (
+                "❌ As tabelas do Knowledge Hub não existem no Supabase. "
+                "Execute setup/supabase_schema_knowledge_hub.sql no SQL Editor do Supabase primeiro."
+            )
+
+        meeting_numbers = args.get("meeting_numbers") or None
+        overwrite       = bool(args.get("overwrite", False))
+
+        provider_cfg = self.llm_config.get("provider_cfg", {})
+        client_info  = {"api_key": self.llm_config.get("api_key", "")}
+
+        # Fetch meetings
+        meetings = self._get_meetings()
+        if meeting_numbers:
+            num_set  = set(meeting_numbers)
+            meetings = [m for m in meetings if m.get("meeting_number") in num_set]
+
+        if not meetings:
+            return "Nenhuma reunião encontrada com os critérios fornecidos."
+
+        from agents.agent_knowledge_extractor import AgentKnowledgeExtractor
+        agent = AgentKnowledgeExtractor(client_info, provider_cfg)
+
+        ok_list, skip_list, fail_list = [], [], []
+
+        for m in meetings:
+            num       = m.get("meeting_number", "?")
+            title     = m.get("title") or f"Reunião {num}"
+            mid       = m.get("id")
+            transcript = (m.get("transcript_clean") or m.get("transcript_raw") or "").strip()
+
+            if not transcript or len(transcript) < 100:
+                skip_list.append(f"Reunião {num} — '{title}' (sem transcrição)")
+                continue
+
+            try:
+                if overwrite and mid:
+                    # Clear existing facts/contradictions for this meeting before re-extraction
+                    from modules.supabase_client import get_supabase_client
+                    db = get_supabase_client()
+                    if db:
+                        db.table("kh_facts").delete().contains(
+                            "source_meeting_ids", [mid]
+                        ).eq("project_id", self.project_id).execute()
+                        db.table("kh_contradictions").delete().eq(
+                            "meeting_a_id", mid
+                        ).eq("project_id", self.project_id).execute()
+
+                from core.knowledge_hub import KnowledgeHub
+                mini_hub = KnowledgeHub()
+                mini_hub.transcript_raw   = transcript
+                mini_hub.transcript_clean = transcript
+
+                agent.run(
+                    mini_hub,
+                    output_language="Auto-detect",
+                    meeting_id=mid,
+                    project_id=self.project_id,
+                )
+                ok_list.append(f"Reunião {num} — '{title}'")
+            except Exception as exc:
+                fail_list.append(f"Reunião {num} — '{title}': {exc}")
+
+        lines = [
+            f"Knowledge Hub — extração concluída",
+            f"Projeto: {self.project_id}",
+            f"Modo: {'reescrita (overwrite)' if overwrite else 'acumulativo'}",
+            "",
+            f"✅ Processadas ({len(ok_list)}):",
+        ]
+        for item in ok_list:
+            lines.append(f"  • {item}")
+        if skip_list:
+            lines.append(f"\n⏭️ Ignoradas — sem transcrição ({len(skip_list)}):")
+            for item in skip_list:
+                lines.append(f"  • {item}")
+        if fail_list:
+            lines.append(f"\n❌ Falhas ({len(fail_list)}):")
+            for item in fail_list:
+                lines.append(f"  • {item}")
+
+        lines.append(
+            "\nConsulte a página 🧠 Knowledge Hub para visualizar o conhecimento extraído."
+        )
+        return "\n".join(lines)
+
     # ── Dispatcher ────────────────────────────────────────────────────────────
 
     def execute(self, tool_name: str, tool_input: dict) -> str:
@@ -5078,7 +5220,8 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     y_label=tool_input.get("y_label", ""),
                     series_name=tool_input.get("series_name", ""),
                 ),
-                "populate_roster": lambda: self._populate_roster(tool_input),
+                "populate_roster":          lambda: self._populate_roster(tool_input),
+                "populate_knowledge_hub":  lambda: self._populate_knowledge_hub(tool_input),
                 "render_table": lambda: self._render_table(tool_input),
                 "get_executive_report": lambda: self.get_executive_report(
                     tool_input["meeting_number"],
