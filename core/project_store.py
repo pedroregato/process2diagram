@@ -2997,3 +2997,145 @@ def get_roster_attendance_summary(project_id: str) -> list[dict]:
     except Exception as e:
         _roster_log.error("get_roster_attendance_summary(%s): %s", project_id, e)
         return []
+
+
+# ── Extração automática de participantes ──────────────────────────────────────
+
+def extract_participants_from_project(
+    project_id: str,
+    meeting_numbers: list | None = None,
+) -> dict:
+    """
+    Varre minutes_md de todas as reuniões (ou um subconjunto) do projeto e extrai
+    nomes únicos de participantes. Retorna candidatos com iniciais, cores e aliases
+    gerados automaticamente — sem gravar nada no banco.
+
+    Retorna:
+        {
+            "candidates": [{"full_name", "initials", "color_hex", "name_aliases", "meetings_count"}, ...],
+            "existing_initials": set[str],
+            "meetings_scanned": int,
+            "meetings_with_participants": int,
+        }
+    """
+    import re as _re2
+    import unicodedata
+
+    _STOP = {
+        'de','da','do','dos','das','e','a','o','as','os','em','por',
+        'para','com','na','no','nas','nos','ao','aos','um','uma',
+    }
+    _COLOR_CYCLE = ["0B1E3D", "1A4B8C", "1A7F5A", "C97B1A", "6B3FA0"]
+
+    def _parse_names_from_md(md: str) -> list:
+        names = []
+        in_section = False
+        for line in md.splitlines():
+            stripped = line.strip()
+            if _re2.match(r'^#{1,4}\s*Participantes?', stripped, _re2.IGNORECASE):
+                in_section = True
+                continue
+            if in_section and _re2.match(r'^#{1,4}\s', stripped):
+                in_section = False
+                continue
+            if in_section and _re2.match(r'^[-*]\s+', stripped):
+                name = _re2.sub(r'^[-*]\s+', '', stripped).strip()
+                if len(name) >= 3 and not _re2.search(r'\d', name):
+                    names.append(name)
+        return names
+
+    def _generate_initials(name: str, taken: set) -> str:
+        words = [w for w in name.strip().split() if w.lower() not in _STOP and len(w) > 1]
+        if not words:
+            words = name.strip().split()[:2] or [name]
+        candidates = []
+        if len(words) >= 2:
+            candidates.append("".join(w[0].upper() for w in words[:2]))
+        elif words:
+            candidates.append(words[0][:2].upper())
+        if len(words) >= 3:
+            candidates.append("".join(w[0].upper() for w in words[:3]))
+        if len(words) >= 2:
+            opt = (words[0][0] + words[-1][:2]).upper()
+            if len(opt) <= 4:
+                candidates.append(opt)
+        if len(words) >= 4:
+            candidates.append("".join(w[0].upper() for w in words[:4]))
+        candidates.append(words[0][:4].upper())
+        seen_c: set = set()
+        for c in candidates:
+            if c and _re2.match(r'^[A-Z]{1,4}$', c) and c not in seen_c:
+                seen_c.add(c)
+                if c not in taken:
+                    return c
+        base = candidates[0][:2] if candidates else "XX"
+        for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+            opt = (base + ch)[:4]
+            if opt not in taken and _re2.match(r'^[A-Z]{1,4}$', opt):
+                return opt
+        return base
+
+    def _build_aliases(name: str) -> list:
+        aliases = []
+        parts = name.strip().split()
+        if parts:
+            aliases.append(parts[0])
+        if name not in aliases:
+            aliases.append(name)
+        try:
+            norm = unicodedata.normalize('NFD', name)
+            ascii_name = ''.join(c for c in norm if unicodedata.category(c) != 'Mn')
+            if ascii_name != name and ascii_name not in aliases:
+                aliases.append(ascii_name)
+        except Exception:
+            pass
+        return aliases
+
+    meetings = list_meetings(project_id)
+    if meeting_numbers:
+        meetings = [m for m in meetings if m.get("meeting_number") in meeting_numbers]
+
+    name_counts: dict = {}
+    meetings_with_participants = 0
+
+    for meeting in meetings:
+        md = meeting.get("minutes_md") or ""
+        if not md:
+            continue
+        names = _parse_names_from_md(md)
+        if names:
+            meetings_with_participants += 1
+        for name in names:
+            key = name.strip()
+            if key:
+                name_counts[key] = name_counts.get(key, 0) + 1
+
+    roster = get_project_roster(project_id, include_inactive=True)
+    existing_initials: set = {m["initials"] for m in roster}
+    existing_names_lower: set = {m["full_name"].lower() for m in roster}
+
+    taken_initials: set = set(existing_initials)
+    candidates = []
+    color_idx = len(roster)
+
+    for name, count in sorted(name_counts.items(), key=lambda x: -x[1]):
+        if name.lower() in existing_names_lower:
+            continue
+        initials = _generate_initials(name, taken_initials)
+        taken_initials.add(initials)
+        color_hex = _COLOR_CYCLE[color_idx % len(_COLOR_CYCLE)]
+        color_idx += 1
+        candidates.append({
+            "full_name":      name,
+            "initials":       initials,
+            "color_hex":      color_hex,
+            "name_aliases":   _build_aliases(name),
+            "meetings_count": count,
+        })
+
+    return {
+        "candidates":                 candidates,
+        "existing_initials":          existing_initials,
+        "meetings_scanned":           len(meetings),
+        "meetings_with_participants": meetings_with_participants,
+    }

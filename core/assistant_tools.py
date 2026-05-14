@@ -1443,6 +1443,42 @@ def get_tool_schemas_openai() -> list[dict]:
                 }
             }
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "populate_roster",
+                "description": (
+                    "Pre-populate the project roster by extracting participant names from existing "
+                    "meeting minutes (minutes_md). Generates initials, aliases, and assigns colors "
+                    "automatically. Skips participants already in the roster. "
+                    "Use dry_run=true first to preview candidates before writing to the database. "
+                    "Admin only. Should be used when the user asks to create or seed the roster "
+                    "automatically from existing meetings."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "dry_run": {
+                            "type": "boolean",
+                            "description": (
+                                "If true, returns the candidate list without writing to the database. "
+                                "Recommended as a first call so the user can review before confirming. "
+                                "Default: false."
+                            )
+                        },
+                        "meeting_numbers": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": (
+                                "Optional list of meeting numbers to scan. "
+                                "If omitted, all meetings in the active project are scanned."
+                            )
+                        }
+                    },
+                    "required": []
+                }
+            }
+        },
     ]
 
 
@@ -1521,6 +1557,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "generate_roi_chart":             "grafico",
     "generate_custom_chart":          "grafico",
     "render_table":                   "consulta",
+    "populate_roster":                 "admin",
 }
 
 # Ferramentas que exigem perfil administrador
@@ -1541,6 +1578,7 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "calendar_share_with_user",
     "calendar_revoke_access",
     "calendar_diagnose",
+    "populate_roster",
 })
 
 
@@ -4611,7 +4649,89 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         except Exception as e:
             return f"Erro ao gerar gráfico personalizado: {e}"
 
-    # ── render_table ──────────────────────────────────────────────────────────
+    # ── populate_roster ─────────────────────────────────────────
+
+    def _populate_roster(self, args: dict) -> str:
+        """Extract participant names from minutes_md and pre-populate the project roster."""
+        from core.project_store import (
+            extract_participants_from_project,
+            upsert_roster_member,
+            get_project_roster,
+        )
+        dry_run = bool(args.get("dry_run", False))
+        meeting_numbers = args.get("meeting_numbers") or None
+        project_id = self.project_id
+
+        if not project_id:
+            return (
+                "Nenhum projeto ativo. Selecione um projeto na Home primeiro "
+                "ou use set_active_project."
+            )
+
+        result = extract_participants_from_project(project_id, meeting_numbers)
+        candidates = result["candidates"]
+        existing_initials = result["existing_initials"]
+        scanned = result["meetings_scanned"]
+        with_parts = result["meetings_with_participants"]
+
+        header = (
+            f"Pre-cadastro de participantes — {scanned} reuniao(oes) analisadas, "
+            f"{with_parts} com lista de participantes. "
+            f"Roster atual: {len(existing_initials)} membro(s)."
+        )
+
+        if not candidates:
+            return (
+                header + "\n\nNenhum participante novo identificado. "
+                "Todos os nomes encontrados ja estao no roster, "
+                "ou as reunioes nao possuem ata com secao de Participantes."
+            )
+
+        if dry_run:
+            parts = [header, f"\nPreview — {len(candidates)} candidato(s) novo(s):\n"]
+            for c in candidates:
+                label = "reuniao" if c["meetings_count"] == 1 else "reunioes"
+                parts.append(
+                    f"- **{c['initials']}** — {c['full_name']}  "
+                    f"cor #{c['color_hex']} | {c['meetings_count']} {label} | "
+                    f"aliases: {', '.join(c['name_aliases'])}"
+                )
+            parts.append(
+                "\nPara confirmar o cadastro chame populate_roster sem dry_run."
+            )
+            return "\n".join(parts)
+
+        # Write to database
+        existing_roster = get_project_roster(project_id)
+        base_sort = len(existing_roster)
+        added, failed = [], []
+        for idx, c in enumerate(candidates):
+            try:
+                row = upsert_roster_member(project_id, {
+                    "initials":     c["initials"],
+                    "full_name":    c["full_name"],
+                    "area":         None,
+                    "color_hex":    c["color_hex"],
+                    "name_aliases": c["name_aliases"],
+                    "sort_order":   base_sort + idx,
+                    "is_active":    True,
+                })
+                if row:
+                    added.append(c)
+                else:
+                    failed.append(c["full_name"])
+            except Exception as exc:
+                failed.append(f"{c['full_name']} ({exc})")
+
+        parts = [header, f"\n{len(added)} participante(s) adicionado(s):\n"]
+        for c in added:
+            parts.append(f"- **{c['initials']}** — {c['full_name']}  cor #{c['color_hex']}")
+        if failed:
+            parts.append(f"\nFalhas ({len(failed)}): {', '.join(failed)}")
+        parts.append(
+            "\nAcesse Configuracoes > Participantes para ajustar cores, area e aliases."
+        )
+        return "\n".join(parts)
 
     def _render_table(self, args: dict) -> str:
         """Persist table data so Assistente.py can render it + offer Excel export."""
@@ -4845,6 +4965,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     y_label=tool_input.get("y_label", ""),
                     series_name=tool_input.get("series_name", ""),
                 ),
+                "populate_roster":                lambda: self._populate_roster(tool_input),
                 "render_table":                   lambda: self._render_table(tool_input),
             }
             if tool_name not in dispatch:

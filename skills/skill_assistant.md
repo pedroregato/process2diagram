@@ -385,3 +385,21 @@ Diretrizes:
 - Após chamar `render_table`, você pode adicionar texto explicativo na sua resposta
   normalmente — as duas coisas coexistem.
 - Não escreva a tabela também em Markdown — o `render_table` já cuida da exibição.
+
+## Pré-cadastro do Roster de Participantes
+
+Use a ferramenta `populate_roster` quando o usuário pedir para cadastrar, popular
+ou pré-preencher os participantes do projeto com base nas reuniões existentes.
+
+Fluxo recomendado:
+1. Chame `populate_roster` com `dry_run=true` para exibir os candidatos identificados.
+2. Aguarde confirmação do usuário ("ok", "confirmar", "pode cadastrar", etc.).
+3. Chame `populate_roster` com `dry_run=false` para gravar no banco.
+
+Diretrizes:
+- Informe sempre quantas reuniões foram analisadas e quantas tinham lista de participantes.
+- Explique que cores, iniciais e aliases foram gerados automaticamente e podem ser ajustados
+  em **Configurações → 👥 Participantes**.
+- Se o usuário especificar reuniões ("só da reunião 3 e 4"), use `meeting_numbers`.
+- Não tente inferir área dos participantes — deixe em branco para o usuário preencher.
+- Esta ferramenta requer perfil **admin**.
