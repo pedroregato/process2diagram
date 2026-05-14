@@ -2820,7 +2820,7 @@ def upsert_roster_member(project_id: str, member: dict) -> dict | None:
         "project_id":   project_id,
         "initials":     initials,
         "full_name":    member["full_name"].strip(),
-        "area":         member.get("area", "").strip() or None,
+        "area":         (member.get("area") or "").strip() or None,
         "color_hex":    color_hex,
         "name_aliases": member.get("name_aliases") or [],
         "project_slug": member.get("project_slug") or None,
