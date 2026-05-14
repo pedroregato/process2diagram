@@ -1,4 +1,3 @@
-# pages/ReportBackfill.py
 """
 Backfill executivo — gera/regenera o Relatório Executivo HTML
 para uma reunião específica ou para todas as reuniões de um projeto.
@@ -6,10 +5,8 @@ para uma reunião específica ou para todas as reuniões de um projeto.
 
 import streamlit as st
 from ui.auth_gate import apply_auth_gate
-from ui.project_selector import render_project_selector
 from modules.config import AVAILABLE_PROVIDERS
 from core.project_store import get_supabase_client
-from ui.project_selector import render_project_selector
 
 apply_auth_gate()
 
@@ -33,10 +30,35 @@ with st.sidebar:
         st.warning("⚠️ Insira a API key para continuar.")
 
 # ── Project + meeting selector ────────────────────────────────────────────────
-project_id, meeting_id = render_project_selector(
-    key_prefix="rb",
-    show_meeting_selector=True,
-)
+project_id = st.session_state.get("active_project_id")
+project_name = st.session_state.get("active_project_name", "")
+
+if not project_id:
+    st.warning("Nenhum projeto de trabalho ativo. Selecione um projeto na Central de Operações.")
+    st.page_link("pages/Home.py", label="← Ir para a Central de Operações")
+    st.stop()
+
+st.info(f"📁 Projeto: **{project_name}**")
+
+meeting_id = None
+_db = get_supabase_client()
+if _db:
+    try:
+        _meetings = (
+            _db.table("meetings")
+            .select("id, meeting_number, title")
+            .eq("project_id", project_id)
+            .order("meeting_number")
+            .execute()
+        ).data or []
+        if _meetings:
+            _opts = {f"Reunião {m['meeting_number']} — {m['title']}": m["id"] for m in _meetings}
+            _sel = st.selectbox("Selecionar reunião", list(_opts.keys()), key="rb_meeting_sel")
+            meeting_id = _opts.get(_sel)
+    except Exception as _e:
+        st.error(f"Erro ao carregar reuniões: {_e}")
+
+# ── Build LLM config ──────────────────────────────────────────────────────────
 
 # ── Build LLM config ──────────────────────────────────────────────────────────
 prov_cfg = AVAILABLE_PROVIDERS.get(provider, {})
