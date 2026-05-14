@@ -406,21 +406,35 @@ Diretrizes:
 
 ## Knowledge Hub — Popular ou Reescrever
 
-Use a ferramenta `populate_knowledge_hub` quando o usuário pedir para:
-- Popular o Knowledge Hub com dados de reuniões passadas
-- Reprocessar / reescrever o conhecimento de reuniões específicas
-- Fazer o backfill do Knowledge Hub em reuniões históricas
+**IMPORTANTE:** O Knowledge Hub é um sistema de memória persistente composto pelas tabelas
+`kh_entities`, `kh_processes`, `kh_facts` e `kh_contradictions`. Ele é **completamente
+independente** de embeddings, saúde do banco, reprocessamento de reuniões ou qualquer outra
+operação de manutenção.
+
+Use a ferramenta `populate_knowledge_hub` — e SOMENTE ela — quando o usuário pedir para:
+- "Popular o Knowledge Hub"
+- "Preencher o Knowledge Hub"
+- "Fazer backfill do Knowledge Hub"
+- "Reescrever o Knowledge Hub de reunião X"
+- Qualquer pedido envolvendo as tabelas kh_entities / kh_processes / kh_facts / kh_contradictions
+
+**NÃO confunda com:**
+- Embeddings (use `generate_meeting_embeddings` / `embed_meeting`)
+- Saúde do banco (use `get_database_integrity`)
+- Reprocessamento de artefatos como ata, requisitos, BPMN (use `reprocess_meeting_full`)
 
 Parâmetros:
-- `meeting_numbers` (opcional): lista de números de reunião. Se omitido, processa todas as reuniões do projeto.
+- `meeting_numbers` (opcional): lista de números de reunião. Se omitido, processa TODAS as reuniões do projeto.
 - `overwrite` (opcional, padrão `false`): se `true`, apaga fatos e contradições existentes da(s) reunião(ões) antes de re-extrair, permitindo uma reescrita limpa. Entidades e processos são sempre upsertados (acumulados).
 
 Fluxo recomendado:
-- Para backfill inicial: `populate_knowledge_hub()` sem parâmetros processa todas as reuniões.
+- Para backfill inicial de todo o projeto: chame `populate_knowledge_hub()` sem parâmetros — isso processará TODAS as reuniões.
 - Para reuniões específicas: `populate_knowledge_hub(meeting_numbers=[3, 5, 7])`.
 - Para reescrever (limpar e re-extrair): `populate_knowledge_hub(overwrite=true, meeting_numbers=[2])`.
 
 Diretrizes:
+- Chame a ferramenta UMA vez com `meeting_numbers` omitido para processar todo o projeto de uma vez.
+- NÃO chame outras ferramentas de manutenção junto com `populate_knowledge_hub` — são operações independentes.
 - Informe o resultado por reunião (quantas foram processadas, ignoradas por falta de transcrição, e falhas).
 - Reuniões sem transcrição armazenada são automaticamente ignoradas.
 - Esta ferramenta requer perfil **admin**.

@@ -1518,12 +1518,15 @@ def get_tool_schemas_openai() -> list[dict]:
             "function": {
                 "name": "populate_knowledge_hub",
                 "description": (
-                    "Extract and persist structured knowledge (entities, processes, facts, "
-                    "contradictions) from one or more meetings into the Knowledge Hub tables. "
-                    "Useful to backfill historical meetings or to refresh/overwrite KH data "
-                    "for specific meetings. Each meeting's transcript is sent to the LLM and "
-                    "the results are upserted into kh_entities, kh_processes, kh_facts and "
-                    "kh_contradictions. Admin only."
+                    "Extract and persist structured knowledge into the Knowledge Hub tables "
+                    "(kh_entities, kh_processes, kh_facts, kh_contradictions). "
+                    "This tool is EXCLUSIVELY for populating these 4 specific kh_* tables — "
+                    "it has nothing to do with embeddings, database health, or reprocessing. "
+                    "Use this tool whenever the user asks to populate, backfill or rewrite the "
+                    "Knowledge Hub. Each meeting transcript is sent to the LLM which extracts "
+                    "entities (people, teams, systems), processes, facts (rules, decisions, "
+                    "constraints) and contradictions, then persists them in the kh_* tables. "
+                    "Admin only."
                 ),
                 "parameters": {
                     "type": "object",
