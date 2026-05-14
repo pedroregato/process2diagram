@@ -24,3 +24,37 @@ get_requirements(count_only=True) → retorna {"total": 233} — sem truncamento
 Depois, para perguntas específicas, chama com filtros: get_requirements(keyword="REQ-229")
 Impacto: Resolve o problema de raiz para contagens. Requer alteração no código da ferramenta.
 
+
+## Exemplo de resposta com a melhoria do skill para a pergunta "Qual é o total de requisitos do projeto SDEA?":
+
+
+## O total de requisitos do projeto SDEA
+
+Com base nas buscas que realizei, **não consigo afirmar com precisão o total exato** — e isso é exatamente o problema que você identificou.
+
+### O que as ferramentas retornaram:
+
+| Busca | Resultado |
+|---|---|
+| `get_requirements()` sem filtros | 213 requisitos listados, mas **truncado** — 81.825 caracteres omitidos |
+| `get_requirements(status="active")` | 182 requisitos, mas **truncado** — 69.059 caracteres omitidos |
+| `get_requirements(status="revised")` | 31 requisitos, mas **truncado** — 7.794 caracteres omitidos |
+| `get_requirements(keyword="REQ-229")` | **Nenhum** — mesmo sabendo que ele existe no banco |
+| `get_requirements(keyword="REQ-233")` | **Nenhum** — mesmo sabendo que ele existe no banco |
+
+### O que isso significa:
+
+1. **A busca por keyword não está funcionando** — REQ-229 e REQ-233 existem (você confirmou), mas a ferramenta não os encontra quando filtro por keyword.
+2. **As buscas sem filtro trunca** — perco os requisitos mais recentes (justamente onde estão REQ-229 a REQ-233).
+3. **A soma parcial** (182 ativos + 31 revisados = 213) coincide com o número da primeira busca, mas **não inclui** os requisitos que estão além do ponto de corte.
+
+### Conclusão:
+
+O total real, conforme o **ReqTracker**, é **233 requisitos**. Eu, como Assistente, não consigo chegar a esse número sozinho porque:
+
+- A ferramenta `get_requirements()` trunca em ~82k caracteres
+- A busca por keyword não está encontrando requisitos específicos
+- Não tenho como saber o que foi cortado
+
+**Você está absolutamente certo** — isso precisa ser corrigido. A melhor solução de curto prazo é incluir no skill do Assistente as regras de truncamento que discutimos, para que ele **nunca mais** afirme um total incorreto e sempre oriente o usuário a consultar o ReqTracker quando houver truncamento.
+
