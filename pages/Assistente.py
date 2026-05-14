@@ -355,10 +355,6 @@ def _render_message_tables(tables: list[dict], msg_idx: int, project_name: str, 
         )
 
 
-
-
-
-
 def _export_chat_to_markdown(
     messages: list[dict],
     project_name: str,
@@ -379,16 +375,16 @@ def _export_chat_to_markdown(
     for msg in messages:
         if msg["role"] == "user":
             turn += 1
-            lines += [f"## Turno {turn}", "", f"**Voce:** {msg['content']}", ""] 
-        elif msg["role"] == "assistant": 
-            tools = msg.get("tools_used") or [] 
-            meta = provider 
-            if tools: 
+            lines += [f"## Turno {turn}", "", f"**Voce:** {msg['content']}", ""]
+        elif msg["role"] == "assistant":
+            tools = msg.get("tools_used") or []
+            meta = provider
+            if tools:
                 meta += f" · ferramentas: {', '.join(tools)}"
             lines += [f"**Assistente ({meta}):**", "", msg["content"], "", "---", ""]
     return "\n".join(lines)
-  
-  
+
+
 # ── Session history ───────────────────────────────────────────────────────────
 if "assistant_history" not in st.session_state:
     st.session_state["assistant_history"] = []
@@ -468,7 +464,7 @@ for i, msg in enumerate(history):
                         file_name=_fn,
                         mime="text/html",
                         key=f"btn_report_dl_{i}_{_num}",
-                    ) 
+                    )
         if msg["role"] == "user":
             col_edit, col_copy, _ = st.columns([1, 1, 8])
             with col_edit:
@@ -561,10 +557,8 @@ if _asst_running:
         # ── Relatório executivo pendente (get_executive_report tool) ──────────
         if _pending_report := st.session_state.pop("_pending_report_html", None):
             _rkey = _pending_report.get("cache_key", f"_report_dl_{_pending_report.get('meeting_number', 0)}")
-            # bytes já foram gravados pelo executor; garantir que sobrevivem ao rerun
             if _rkey not in st.session_state and _pending_report.get("html"):
                 st.session_state[_rkey] = _pending_report["html"].encode()
-            # Anexar metadados ao último item do histórico para renderização posterior
             history[-1]["report_download"] = {
                 "cache_key": _rkey,
                 "filename":  _pending_report.get("filename", "relatorio_executivo.html"),
