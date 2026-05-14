@@ -355,11 +355,83 @@ def _render_message_tables(tables: list[dict], msg_idx: int, project_name: str, 
         )
 
 
+
+
+
+
+def _export_chat_to_markdown(
+    messages: list[dict],
+    project_name: str,
+    provider: str,
+) -> str:
+    """Format conversation history as a Markdown document for download."""
+    from datetime import datetime as _dt
+    lines = [
+        "# Conversa — Assistente P2D",
+        f"**Projeto:** {project_name}",
+        f"**Data:** {_dt.now().strftime('%Y-%m-%d %H:%M')}",
+        f"**Provedor LLM:** {provider}",
+        "",
+        "---",
+        "",
+    ]
+    turn = 0
+    for msg in messages:
+        if msg["role"] == "user":
+            turn += 1
+            lines += [f"## Turno {turn}", "", f"**Voce:** {msg['content']}", ""]
+        elif msg["role"] == "assistant":
+            tools = msg.get("tools_used") or []
+            meta = provider
+            if tools:
+                meta += f" · ferramentas: {', '.join(tools)}"
+            lines += [f"**Assistente ({meta}):**", "", msg["content"], "", "---", ""]
+    return "\n".join(lines)
+
+
 # ── Session history ───────────────────────────────────────────────────────────
 if "assistant_history" not in st.session_state:
     st.session_state["assistant_history"] = []
 
 history: list[dict] = st.session_state["assistant_history"]
+
+
+# ── Chat toolbar (export + limpar) ───────────────────────────────────────
+if st.session_state.get("_confirm_clear"):
+    st.warning("Limpar toda a conversa? Esta acao nao pode ser desfeita.")
+    _cy, _cn, _ = st.columns([1, 1, 8])
+    with _cy:
+        if st.button("Confirmar", key="btn_clear_yes", type="primary"):
+            for _ck in ["assistant_history", "_edit_idx", "_edit_draft",
+                        "_resubmit_question", "_confirm_clear"]:
+                st.session_state.pop(_ck, None)
+            st.rerun()
+    with _cn:
+        if st.button("Cancelar", key="btn_clear_no"):
+            st.session_state.pop("_confirm_clear", None)
+            st.rerun()
+    st.markdown("---")
+
+if history:
+    _tb_export, _tb_clear, _tb_info = st.columns([1.2, 1, 5])
+    with _tb_export:
+        from datetime import datetime as _dt2
+        _export_md = _export_chat_to_markdown(history, project_name, selected_provider)
+        st.download_button(
+            "⬇️ Exportar",
+            data=_export_md,
+            file_name=f"conversa_{_dt2.now().strftime('%Y%m%d_%H%M')}.md",
+            mime="text/markdown",
+            key="btn_export_chat",
+            help="Baixar conversa como Markdown",
+        )
+    with _tb_clear:
+        if st.button("🗑️ Limpar", key="btn_clear_chat", help="Limpar historico"):
+            st.session_state["_confirm_clear"] = True
+            st.rerun()
+    with _tb_info:
+        _n_turns = sum(1 for _m in history if _m["role"] == "user")
+        st.caption(f"{_n_turns} pergunta(s) · {len(history)} mensagens")
 
 # ── Render existing conversation ──────────────────────────────────────────────
 _editing_idx: int | None = st.session_state.get("_edit_idx")
