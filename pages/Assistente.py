@@ -40,7 +40,6 @@ def _render_analyst_mode(
     provider_name: str,
 ) -> None:
     """Render the Autonomous Analysis mode UI."""
-    st.markdown("# 🔬 Análise Autônoma")
     st.caption(
         "Descreva um objetivo analítico complexo. O agente planeja e executa "
         "múltiplas ferramentas autonomamente, produzindo um relatório estruturado."
@@ -206,14 +205,6 @@ apply_auth_gate()
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### 💬 Assistente")
-
-    st.radio(
-        "Modo",
-        ["💬 Assistente", "🔬 Análise Autônoma"],
-        key="asst_mode",
-        horizontal=True,
-        label_visibility="collapsed",
-    )
 
     st.markdown("#### 📁 Projeto de Trabalho")
     _ap_name = st.session_state.get("active_project_name", "")
@@ -419,8 +410,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── Main Area ─────────────────────────────────────────────────────────────────
-_mode = st.session_state.get("asst_mode", "💬 Assistente")
-st.markdown(f"# {_mode}")
+_col_title, _col_mode = st.columns([3, 2])
+with _col_title:
+    st.markdown("# 💬 Assistente")
+with _col_mode:
+    st.radio(
+        "Modo",
+        ["💬 Assistente", "🔬 Análise Autônoma"],
+        key="asst_mode",
+        horizontal=True,
+    )
 
 if not supabase_configured():
     st.warning("⚙️ Supabase não configurado.")
