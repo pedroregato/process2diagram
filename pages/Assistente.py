@@ -309,6 +309,200 @@ def _analyst_report_to_pdf(report) -> bytes:
     return bytes(pdf.output())
 
 
+def _analyst_report_to_html(report) -> str:
+    """Generate a self-contained HTML report with embedded Plotly charts."""
+    import json, re
+
+    # ── Markdown → HTML (basic) ───────────────────────────────────────────────
+    def _md_to_html(text: str) -> str:
+        text = re.sub(r"^---+$", "<hr>", text, flags=re.MULTILINE)
+        text = re.sub(r"^#{3}\s+(.+)$", r"<h3>\1</h3>", text, flags=re.MULTILINE)
+        text = re.sub(r"^#{2}\s+(.+)$", r"<h2>\1</h2>", text, flags=re.MULTILINE)
+        text = re.sub(r"^#{1}\s+(.+)$", r"<h2>\1</h2>", text, flags=re.MULTILINE)
+        text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+        text = re.sub(r"\*(.+?)\*",     r"<em>\1</em>", text)
+        text = re.sub(r"`(.+?)`",       r"<code>\1</code>", text)
+        text = re.sub(r"^>\s*(.+)$",    r'<blockquote>\1</blockquote>', text, flags=re.MULTILINE)
+        # Bullet lists
+        def _list_block(m):
+            items = re.findall(r"^[-*+]\s+(.+)$", m.group(0), re.MULTILINE)
+            return "<ul>" + "".join(f"<li>{i}</li>" for i in items) + "</ul>"
+        text = re.sub(r"(^[-*+]\s+.+$\n?)+", _list_block, text, flags=re.MULTILINE)
+        # Numbered lists
+        def _olist_block(m):
+            items = re.findall(r"^\d+\.\s+(.+)$", m.group(0), re.MULTILINE)
+            return "<ol>" + "".join(f"<li>{i}</li>" for i in items) + "</ol>"
+        text = re.sub(r"(^\d+\.\s+.+$\n?)+", _olist_block, text, flags=re.MULTILINE)
+        # Paragraphs
+        paragraphs = []
+        for block in re.split(r"\n{2,}", text):
+            block = block.strip()
+            if not block:
+                continue
+            if block.startswith(("<h", "<ul", "<ol", "<hr", "<blockquote")):
+                paragraphs.append(block)
+            else:
+                paragraphs.append(f"<p>{block.replace(chr(10), ' ')}</p>")
+        return "\n".join(paragraphs)
+
+    # ── Tables HTML ───────────────────────────────────────────────────────────
+    def _table_html(tbl: dict) -> str:
+        cols = tbl.get("columns", [])
+        rows = tbl.get("rows", [])
+        title = tbl.get("title", "Tabela")
+        if not cols or not rows:
+            return ""
+        head = "".join(f"<th>{c}</th>" for c in cols)
+        body = ""
+        for row in rows:
+            body += "<tr>" + "".join(f"<td>{v}</td>" for v in row) + "</tr>"
+        return (
+            f'<div class="section">'
+            f'<h2 class="section-title">{title}</h2>'
+            f'<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>'
+            f'</div>'
+        )
+
+    # ── Charts HTML (Plotly) ──────────────────────────────────────────────────
+    chart_blocks = ""
+    if report.charts:
+        for i, chart_dict in enumerate(report.charts):
+            chart_id = f"chart-{i}"
+            data_json = json.dumps(chart_dict.get("data", []))
+            layout_json = json.dumps(chart_dict.get("layout", {}))
+            chart_blocks += (
+                f'<div class="section">'
+                f'<div id="{chart_id}" class="chart-container"></div>'
+                f'<script>Plotly.newPlot("{chart_id}", {data_json}, '
+                f'Object.assign({{responsive:true}}, {layout_json}));</script>'
+                f'</div>\n'
+            )
+
+    # ── Steps HTML ────────────────────────────────────────────────────────────
+    steps_html = ""
+    if report.steps:
+        items = ""
+        for i, step in enumerate(report.steps, 1):
+            obs = f'<div class="obs">{step.observation[:300]}</div>' if step.observation else ""
+            items += (
+                f'<div class="step">'
+                f'<span class="step-num">{i}</span>'
+                f'<div class="step-body">'
+                f'<strong>{step.label}</strong>{obs}'
+                f'</div></div>\n'
+            )
+        steps_html = (
+            f'<div class="section collapsible-section">'
+            f'<h2 class="section-title toggle-btn" onclick="toggleSteps()">'
+            f'Cadeia de Raciocinio ({len(report.steps)} passos) '
+            f'<span id="toggle-icon">&#9660;</span></h2>'
+            f'<div id="steps-body">{items}</div>'
+            f'</div>'
+        )
+
+    # ── Assemble ──────────────────────────────────────────────────────────────
+    tables_html = "\n".join(_table_html(t) for t in report.tables)
+    conclusion_html = _md_to_html(report.conclusion) if report.conclusion else ""
+    plotly_cdn = '<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>' if report.charts else ""
+    date_str   = __import__("datetime").datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    return f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analise Autonoma - Process2Diagram</title>
+{plotly_cdn}
+<style>
+  :root {{
+    --navy: #0d2a4a; --amber: #c97b1a; --bg: #f5f7fa;
+    --card: #ffffff; --text: #1a1a2e; --muted: #6b7280;
+    --border: #e5e7eb;
+  }}
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg);
+          color: var(--text); font-size: 14px; line-height: 1.6; }}
+  .header {{ background: var(--navy); color: #fff; padding: 24px 40px; }}
+  .header h1 {{ font-size: 22px; font-weight: 700; margin-bottom: 4px; }}
+  .header .meta {{ font-size: 12px; color: #a0b4cc; }}
+  .objective-bar {{ background: var(--amber); color: #fff;
+                    padding: 12px 40px; font-size: 13px; font-style: italic; }}
+  .main {{ max-width: 960px; margin: 0 auto; padding: 32px 24px; }}
+  .section {{ background: var(--card); border-radius: 8px;
+              border: 1px solid var(--border); margin-bottom: 24px;
+              overflow: hidden; }}
+  .section-title {{ background: var(--navy); color: #fff;
+                    padding: 10px 18px; font-size: 13px;
+                    font-weight: 700; letter-spacing: .04em; }}
+  .section-body {{ padding: 20px 22px; }}
+  .section-body h2 {{ font-size: 15px; color: var(--navy);
+                      margin: 16px 0 6px; border-bottom: 1px solid var(--border);
+                      padding-bottom: 4px; }}
+  .section-body h3 {{ font-size: 13px; color: var(--amber); margin: 12px 0 4px; }}
+  .section-body p {{ margin-bottom: 10px; }}
+  .section-body ul, .section-body ol {{ padding-left: 22px; margin-bottom: 10px; }}
+  .section-body li {{ margin-bottom: 4px; }}
+  .section-body blockquote {{ border-left: 3px solid var(--amber);
+                               padding: 6px 12px; margin: 10px 0;
+                               background: #fef9f0; color: #555; font-style: italic; }}
+  .section-body code {{ background: #f3f4f6; padding: 1px 5px;
+                         border-radius: 3px; font-size: 12px; }}
+  table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+  thead tr {{ background: var(--amber); color: #fff; }}
+  th {{ padding: 9px 12px; text-align: left; font-weight: 600; }}
+  td {{ padding: 8px 12px; border-bottom: 1px solid var(--border); }}
+  tbody tr:nth-child(even) {{ background: #f9fafb; }}
+  tbody tr:hover {{ background: #eef2ff; }}
+  .chart-container {{ padding: 16px; min-height: 300px; }}
+  .toggle-btn {{ cursor: pointer; user-select: none; }}
+  .toggle-btn:hover {{ background: #163d68; }}
+  .step {{ display: flex; gap: 12px; padding: 8px 18px;
+           border-bottom: 1px solid var(--border); }}
+  .step:last-child {{ border-bottom: none; }}
+  .step-num {{ background: var(--amber); color: #fff; border-radius: 50%;
+               min-width: 22px; height: 22px; font-size: 11px; font-weight: 700;
+               display: flex; align-items: center; justify-content: center;
+               margin-top: 2px; }}
+  .step-body {{ font-size: 12px; flex: 1; }}
+  .obs {{ color: var(--muted); font-size: 11px; margin-top: 3px; }}
+  hr {{ border: none; border-top: 1px solid var(--border); margin: 12px 0; }}
+  .footer {{ text-align: center; color: var(--muted); font-size: 11px;
+             padding: 24px; }}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Analise Autonoma — Relatorio</h1>
+  <div class="meta">Process2Diagram &nbsp;·&nbsp; {date_str} &nbsp;·&nbsp;
+    {len(report.steps)} passos &nbsp;·&nbsp; {report.duration_s:.1f}s</div>
+</div>
+<div class="objective-bar">{report.objective}</div>
+<div class="main">
+
+{"" if not conclusion_html else f'''
+<div class="section">
+  <div class="section-title">CONCLUSAO</div>
+  <div class="section-body">{conclusion_html}</div>
+</div>'''}
+
+{tables_html}
+{chart_blocks}
+{steps_html}
+
+</div>
+<div class="footer">Gerado por Process2Diagram &nbsp;·&nbsp; {date_str}</div>
+<script>
+  function toggleSteps() {{
+    var b = document.getElementById('steps-body');
+    var i = document.getElementById('toggle-icon');
+    if (b.style.display === 'none') {{ b.style.display = ''; i.innerHTML = '&#9660;'; }}
+    else {{ b.style.display = 'none'; i.innerHTML = '&#9654;'; }}
+  }}
+</script>
+</body>
+</html>"""
+
+
 def _render_analyst_report(report, project_id: str) -> None:
     """Display a completed AnalysisReport."""
     from agents.agent_analyst import AnalysisReport  # for isinstance check
@@ -371,7 +565,7 @@ def _render_analyst_report(report, project_id: str) -> None:
                     st.divider()
 
     # ── Export ────────────────────────────────────────────────────────────────
-    _col_save, _col_export, _col_pdf, _col_meta = st.columns([2, 2, 2, 3])
+    _col_save, _col_export, _col_pdf, _col_html, _col_meta = st.columns([2, 2, 2, 2, 2])
 
     _md_lines: list[str] = [f"# Análise Autônoma\n\n**Objetivo:** {report.objective}\n"]
     if report.conclusion:
@@ -425,6 +619,19 @@ def _render_analyst_report(report, project_id: str) -> None:
         )
     except Exception as _pdf_err:
         _col_pdf.caption(f"PDF indisponível: {_pdf_err}")
+
+    try:
+        _html_bytes = _analyst_report_to_html(report).encode("utf-8")
+        _col_html.download_button(
+            "🌐 Exportar HTML",
+            data      = _html_bytes,
+            file_name = "analise_autonoma.html",
+            mime      = "text/html",
+            key       = "analyst_dl_html",
+            use_container_width=True,
+        )
+    except Exception as _html_err:
+        _col_html.caption(f"HTML indisponível: {_html_err}")
 
     if _col_save.button("💾 Salvar análise", key="analyst_save"):
         try:
