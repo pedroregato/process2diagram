@@ -110,6 +110,160 @@ def _render_analyst_mode(
         st.rerun()
 
 
+def _analyst_report_to_pdf(report) -> bytes:
+    """Generate a PDF from AnalysisReport using fpdf2. Returns raw bytes."""
+    from fpdf import FPDF
+
+    # Latin-1 sanitizer (fpdf2 core fonts are ISO 8859-1)
+    _LATIN1_MAP = str.maketrans({
+        "\u2019": "'", "\u2018": "'", "\u201c": '"', "\u201d": '"',
+        "\u2013": "-", "\u2014": "-", "\u2026": "...", "\u2022": "*",
+        "\u00e3": "a", "\u00e2": "a", "\u00e1": "a", "\u00e0": "a",
+        "\u00ea": "e", "\u00e9": "e", "\u00ed": "i", "\u00f3": "o",
+        "\u00f4": "o", "\u00f5": "o", "\u00fa": "u", "\u00fc": "u",
+        "\u00e7": "c", "\u00c3": "A", "\u00c2": "A", "\u00c1": "A",
+        "\u00ca": "E", "\u00c9": "E", "\u00cd": "I", "\u00d3": "O",
+        "\u00d4": "O", "\u00d5": "O", "\u00da": "U", "\u00c7": "C",
+    })
+
+    def _p(text: str) -> str:
+        if not text:
+            return ""
+        text = text.translate(_LATIN1_MAP)
+        return text.encode("latin-1", errors="replace").decode("latin-1")
+
+    NAVY  = (13,  42,  74)
+    AMBER = (201, 123,  26)
+    GRAY  = (245, 245, 245)
+    W     = 190  # usable page width (A4 210mm - 2×10mm margins)
+
+    class _PDF(FPDF):
+        def header(self):
+            self.set_font("Helvetica", "I", 7)
+            self.set_text_color(150, 150, 150)
+            self.cell(0, 6, "Process2Diagram — Analise Autonoma", align="R", ln=True)
+            self.set_text_color(0, 0, 0)
+
+        def footer(self):
+            self.set_y(-12)
+            self.set_font("Helvetica", "I", 7)
+            self.set_text_color(150, 150, 150)
+            self.cell(0, 6, f"Pagina {self.page_no()}", align="C")
+            self.set_text_color(0, 0, 0)
+
+    pdf = _PDF(orientation="P", unit="mm", format="A4")
+    pdf.set_margins(10, 14, 10)
+    pdf.set_auto_page_break(auto=True, margin=16)
+    pdf.add_page()
+
+    # Title
+    r, g, b = NAVY
+    pdf.set_fill_color(r, g, b)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(W, 10, "Analise Autonoma — Relatorio", fill=True, ln=True)
+    pdf.ln(2)
+
+    # Objective
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Helvetica", "B", 9)
+    r, g, b = AMBER
+    pdf.set_text_color(r, g, b)
+    pdf.cell(W, 6, "OBJETIVO", ln=True)
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.multi_cell(W, 5, _p(report.objective))
+    pdf.ln(3)
+
+    # Conclusion
+    if report.conclusion:
+        r, g, b = AMBER
+        pdf.set_fill_color(r, g, b)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.cell(W, 6, "  CONCLUSAO", fill=True, ln=True)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.ln(1)
+        for line in report.conclusion.split("\n"):
+            line = line.strip()
+            if not line:
+                pdf.ln(2)
+                continue
+            # strip Markdown bold/headers for PDF
+            line = line.lstrip("#").strip()
+            if line.startswith("**") and line.endswith("**"):
+                pdf.set_font("Helvetica", "B", 10)
+                line = line[2:-2]
+            else:
+                pdf.set_font("Helvetica", "", 10)
+            pdf.multi_cell(W, 5, _p(line))
+        pdf.ln(3)
+
+    # Tables
+    for tbl in report.tables:
+        cols = tbl.get("columns", [])
+        rows = tbl.get("rows", [])
+        if not cols or not rows:
+            continue
+        r, g, b = NAVY
+        pdf.set_fill_color(r, g, b)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.cell(W, 6, f"  {_p(tbl.get('title', 'Tabela')).upper()}", fill=True, ln=True)
+        pdf.ln(1)
+
+        col_w = W / len(cols)
+        # Header row
+        r, g, b = AMBER
+        pdf.set_fill_color(r, g, b)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Helvetica", "B", 8)
+        for col in cols:
+            pdf.cell(col_w, 6, _p(str(col))[:22], fill=True, border=0)
+        pdf.ln()
+
+        # Data rows
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("Helvetica", "", 8)
+        for i, row in enumerate(rows):
+            r2, g2, b2 = (GRAY if i % 2 == 0 else (255, 255, 255))
+            pdf.set_fill_color(r2, g2, b2)
+            for val in row:
+                pdf.cell(col_w, 5, _p(str(val))[:28], fill=True, border=0)
+            pdf.ln()
+        pdf.ln(4)
+
+    # Steps (chain of thought — compact)
+    if report.steps:
+        r, g, b = NAVY
+        pdf.set_fill_color(r, g, b)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.cell(W, 6, f"  CADEIA DE RACIOCINIO ({len(report.steps)} passos)", fill=True, ln=True)
+        pdf.ln(1)
+        pdf.set_text_color(0, 0, 0)
+        for i, step in enumerate(report.steps, 1):
+            pdf.set_font("Helvetica", "B", 8)
+            pdf.cell(W, 5, _p(f"Passo {i} — {step.label}"), ln=True)
+            if step.observation:
+                pdf.set_font("Helvetica", "", 8)
+                obs = _p(step.observation[:300])
+                pdf.multi_cell(W, 4, obs)
+            pdf.ln(1)
+
+    # Footer meta
+    pdf.ln(4)
+    pdf.set_font("Helvetica", "I", 7)
+    pdf.set_text_color(150, 150, 150)
+    pdf.cell(W, 5,
+        _p(f"Gerado em {report.duration_s:.1f}s · {len(report.steps)} passos · Process2Diagram"),
+        ln=True,
+    )
+
+    return bytes(pdf.output())
+
+
 def _render_analyst_report(report, project_id: str) -> None:
     """Display a completed AnalysisReport."""
     from agents.agent_analyst import AnalysisReport  # for isinstance check
@@ -172,7 +326,7 @@ def _render_analyst_report(report, project_id: str) -> None:
                     st.divider()
 
     # ── Export ────────────────────────────────────────────────────────────────
-    _col_save, _col_export, _col_meta = st.columns([2, 2, 4])
+    _col_save, _col_export, _col_pdf, _col_meta = st.columns([2, 2, 2, 3])
 
     _md_lines: list[str] = [f"# Análise Autônoma\n\n**Objetivo:** {report.objective}\n"]
     if report.conclusion:
@@ -208,6 +362,19 @@ def _render_analyst_report(report, project_id: str) -> None:
         key       = "analyst_dl_md",
         use_container_width=True,
     )
+
+    try:
+        _pdf_bytes = _analyst_report_to_pdf(report)
+        _col_pdf.download_button(
+            "📑 Exportar PDF",
+            data      = _pdf_bytes,
+            file_name = "analise_autonoma.pdf",
+            mime      = "application/pdf",
+            key       = "analyst_dl_pdf",
+            use_container_width=True,
+        )
+    except Exception as _pdf_err:
+        _col_pdf.caption(f"PDF indisponível: {_pdf_err}")
 
     if _col_save.button("💾 Salvar análise", key="analyst_save"):
         try:
