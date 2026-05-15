@@ -111,37 +111,96 @@ def _render_analyst_mode(
 
 
 def _analyst_report_to_pdf(report) -> bytes:
-    """Generate a PDF from AnalysisReport using fpdf2. Returns raw bytes."""
+    """Generate a styled PDF from AnalysisReport using fpdf2. Returns raw bytes."""
+    import re
     from fpdf import FPDF
 
-    # Latin-1 sanitizer (fpdf2 core fonts are ISO 8859-1)
-    _LATIN1_MAP = str.maketrans({
-        "\u2019": "'", "\u2018": "'", "\u201c": '"', "\u201d": '"',
-        "\u2013": "-", "\u2014": "-", "\u2026": "...", "\u2022": "*",
-        "\u00e3": "a", "\u00e2": "a", "\u00e1": "a", "\u00e0": "a",
-        "\u00ea": "e", "\u00e9": "e", "\u00ed": "i", "\u00f3": "o",
-        "\u00f4": "o", "\u00f5": "o", "\u00fa": "u", "\u00fc": "u",
-        "\u00e7": "c", "\u00c3": "A", "\u00c2": "A", "\u00c1": "A",
-        "\u00ca": "E", "\u00c9": "E", "\u00cd": "I", "\u00d3": "O",
-        "\u00d4": "O", "\u00d5": "O", "\u00da": "U", "\u00c7": "C",
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
+    # Only map characters NOT in Latin-1 (> U+00FF) to ASCII equivalents.
+    # Portuguese accented chars (ã â á é ê etc.) ARE in Latin-1 — keep them.
+    _UNICODE_MAP = str.maketrans({
+        "\u2019": "'",  "\u2018": "'",  "\u201c": '"',  "\u201d": '"',
+        "\u2013": "-",  "\u2014": "-",  "\u2026": "...", "\u2022": "-",
+        "\u00b7": ".",  "\u2605": "*",  "\u25cf": "*",
     })
 
     def _p(text: str) -> str:
+        """Sanitize text for fpdf2 Latin-1 core fonts."""
         if not text:
             return ""
-        text = text.translate(_LATIN1_MAP)
-        return text.encode("latin-1", errors="replace").decode("latin-1")
+        text = text.translate(_UNICODE_MAP)
+        # Drop any remaining non-Latin-1 chars (emojis, symbols, etc.)
+        return text.encode("latin-1", errors="ignore").decode("latin-1")
 
+    def _clean_md(text: str) -> str:
+        """Strip Markdown syntax to produce clean plain text."""
+        text = re.sub(r"^-{3,}$",      "",    text, flags=re.MULTILINE)  # ---
+        text = re.sub(r"^={3,}$",      "",    text, flags=re.MULTILINE)  # ===
+        text = re.sub(r"^>\s*",        "",    text, flags=re.MULTILINE)  # > quote
+        text = re.sub(r"^#{1,6}\s*",   "",    text, flags=re.MULTILINE)  # ## header
+        text = re.sub(r"\*{2,3}(.*?)\*{2,3}", r"\1", text)              # **bold**
+        text = re.sub(r"\*(.*?)\*",    r"\1", text)                      # *italic*
+        text = re.sub(r"`([^`]+)`",    r"\1", text)                      # `code`
+        # Markdown table separator rows
+        text = re.sub(r"^\|[-:| ]+\|$", "", text, flags=re.MULTILINE)
+        # Markdown table rows → pipe-joined plain text
+        def _fmt_row(m: re.Match) -> str:
+            cells = [c.strip() for c in m.group(1).split("|") if c.strip()]
+            return "  |  ".join(cells)
+        text = re.sub(r"^\|(.+)\|$", _fmt_row, text, flags=re.MULTILINE)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
+
+    def _section_bar(pdf: "FPDF", label: str, color: tuple, W: int) -> None:
+        r, g, b = color
+        pdf.set_fill_color(r, g, b)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.cell(W, 7, f"  {_p(label)}", fill=True, new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(1)
+
+    def _render_body(pdf: "FPDF", text: str, W: int) -> None:
+        """Render cleaned Markdown body text with basic structure detection."""
+        for line in _clean_md(text).split("\n"):
+            line = line.strip()
+            if not line:
+                pdf.ln(2)
+                continue
+            # Bullet points
+            if line.startswith(("- ", "* ", "+ ")):
+                pdf.set_font("Helvetica", "", 10)
+                pdf.multi_cell(W - 5, 5, _p("  " + line[2:]),
+                               new_x="LMARGIN", new_y="NEXT")
+                continue
+            # Numbered list
+            if re.match(r"^\d+\.", line):
+                pdf.set_font("Helvetica", "", 10)
+                pdf.multi_cell(W - 5, 5, _p("  " + line),
+                               new_x="LMARGIN", new_y="NEXT")
+                continue
+            # Short line without sentence-ending punctuation → treat as sub-header
+            if len(line) < 70 and not line[-1] in ".,:;)":
+                pdf.set_font("Helvetica", "B", 10)
+                pdf.multi_cell(W, 5, _p(line), new_x="LMARGIN", new_y="NEXT")
+                continue
+            pdf.set_font("Helvetica", "", 10)
+            pdf.multi_cell(W, 5, _p(line), new_x="LMARGIN", new_y="NEXT")
+
+    # ── Constants ─────────────────────────────────────────────────────────────
     NAVY  = (13,  42,  74)
     AMBER = (201, 123,  26)
-    GRAY  = (245, 245, 245)
-    W     = 190  # usable page width (A4 210mm - 2×10mm margins)
+    LGRAY = (245, 245, 245)
+    W     = 190
 
+    # ── PDF class ─────────────────────────────────────────────────────────────
     class _PDF(FPDF):
         def header(self):
             self.set_font("Helvetica", "I", 7)
             self.set_text_color(150, 150, 150)
-            self.cell(0, 6, "Process2Diagram - Analise Autonoma", align="R", ln=True)
+            self.cell(0, 6, "Process2Diagram - Analise Autonoma",
+                      align="R", new_x="LMARGIN", new_y="NEXT")
             self.set_text_color(0, 0, 0)
 
         def footer(self):
@@ -156,109 +215,95 @@ def _analyst_report_to_pdf(report) -> bytes:
     pdf.set_auto_page_break(auto=True, margin=16)
     pdf.add_page()
 
-    # Title
+    # ── Title bar ─────────────────────────────────────────────────────────────
     r, g, b = NAVY
     pdf.set_fill_color(r, g, b)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(W, 10, "Analise Autonoma - Relatorio", fill=True, ln=True)
-    pdf.ln(2)
-
-    # Objective
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font("Helvetica", "B", 9)
-    r, g, b = AMBER
-    pdf.set_text_color(r, g, b)
-    pdf.cell(W, 6, "OBJETIVO", ln=True)
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font("Helvetica", "", 10)
-    pdf.multi_cell(W, 5, _p(report.objective))
+    pdf.cell(W, 11, "Analise Autonoma - Relatorio",
+             fill=True, new_x="LMARGIN", new_y="NEXT")
     pdf.ln(3)
 
-    # Conclusion
-    if report.conclusion:
-        r, g, b = AMBER
-        pdf.set_fill_color(r, g, b)
-        pdf.set_text_color(255, 255, 255)
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.cell(W, 6, "  CONCLUSAO", fill=True, ln=True)
-        pdf.set_text_color(0, 0, 0)
-        pdf.set_font("Helvetica", "", 10)
-        pdf.ln(1)
-        for line in report.conclusion.split("\n"):
-            line = line.strip()
-            if not line:
-                pdf.ln(2)
-                continue
-            # strip Markdown bold/headers for PDF
-            line = line.lstrip("#").strip()
-            if line.startswith("**") and line.endswith("**"):
-                pdf.set_font("Helvetica", "B", 10)
-                line = line[2:-2]
-            else:
-                pdf.set_font("Helvetica", "", 10)
-            pdf.multi_cell(W, 5, _p(line))
-        pdf.ln(3)
+    # ── Objetivo ──────────────────────────────────────────────────────────────
+    r, g, b = AMBER
+    pdf.set_text_color(r, g, b)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(W, 6, "OBJETIVO", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.multi_cell(W, 5, _p(report.objective), new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
 
-    # Tables
+    # ── Conclusão ─────────────────────────────────────────────────────────────
+    if report.conclusion:
+        _section_bar(pdf, "CONCLUSAO", AMBER, W)
+        _render_body(pdf, report.conclusion, W)
+        pdf.ln(4)
+
+    # ── Tabelas ───────────────────────────────────────────────────────────────
     for tbl in report.tables:
         cols = tbl.get("columns", [])
         rows = tbl.get("rows", [])
         if not cols or not rows:
             continue
-        r, g, b = NAVY
-        pdf.set_fill_color(r, g, b)
-        pdf.set_text_color(255, 255, 255)
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.cell(W, 6, f"  {_p(tbl.get('title', 'Tabela')).upper()}", fill=True, ln=True)
-        pdf.ln(1)
+
+        _section_bar(pdf, tbl.get("title", "Tabela").upper(), NAVY, W)
 
         col_w = W / len(cols)
+
         # Header row
         r, g, b = AMBER
         pdf.set_fill_color(r, g, b)
         pdf.set_text_color(255, 255, 255)
         pdf.set_font("Helvetica", "B", 8)
         for col in cols:
-            pdf.cell(col_w, 6, _p(str(col))[:22], fill=True, border=0)
+            pdf.cell(col_w, 7, _p(str(col)), fill=True, border=0)
         pdf.ln()
 
         # Data rows
         pdf.set_text_color(0, 0, 0)
-        pdf.set_font("Helvetica", "", 8)
+        pdf.set_font("Helvetica", "", 9)
         for i, row in enumerate(rows):
-            r2, g2, b2 = (GRAY if i % 2 == 0 else (255, 255, 255))
-            pdf.set_fill_color(r2, g2, b2)
+            pdf.set_fill_color(*(LGRAY if i % 2 == 0 else (255, 255, 255)))
             for val in row:
-                pdf.cell(col_w, 5, _p(str(val))[:28], fill=True, border=0)
+                pdf.cell(col_w, 6, _p(str(val)), fill=True, border=0)
             pdf.ln()
-        pdf.ln(4)
+        pdf.ln(5)
 
-    # Steps (chain of thought — compact)
+    # ── Cadeia de raciocínio — compacta ───────────────────────────────────────
     if report.steps:
-        r, g, b = NAVY
-        pdf.set_fill_color(r, g, b)
-        pdf.set_text_color(255, 255, 255)
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.cell(W, 6, f"  CADEIA DE RACIOCINIO ({len(report.steps)} passos)", fill=True, ln=True)
-        pdf.ln(1)
-        pdf.set_text_color(0, 0, 0)
-        for i, step in enumerate(report.steps, 1):
-            pdf.set_font("Helvetica", "B", 8)
-            pdf.cell(W, 5, _p(f"Passo {i} — {step.label}"), ln=True)
-            if step.observation:
-                pdf.set_font("Helvetica", "", 8)
-                obs = _p(step.observation[:300])
-                pdf.multi_cell(W, 4, obs)
-            pdf.ln(1)
+        _section_bar(pdf, f"CADEIA DE RACIOCINIO  ({len(report.steps)} passos)", NAVY, W)
+        pdf.set_font("Helvetica", "", 8)
 
-    # Footer meta
-    pdf.ln(4)
+        for i, step in enumerate(report.steps, 1):
+            # Step header: number + tool name
+            pdf.set_font("Helvetica", "B", 8)
+            label = _p(f"{i}. {step.label}")
+            pdf.cell(W, 5, label, new_x="LMARGIN", new_y="NEXT")
+
+            # One-line observation summary (max 120 chars, no Markdown)
+            if step.observation:
+                obs_clean = _clean_md(step.observation)
+                # Take first non-empty line only
+                first_line = next(
+                    (ln.strip() for ln in obs_clean.split("\n") if ln.strip()), ""
+                )
+                if first_line:
+                    pdf.set_font("Helvetica", "", 7)
+                    pdf.set_text_color(80, 80, 80)
+                    pdf.multi_cell(W - 6, 4, _p("   " + first_line[:140]),
+                                   new_x="LMARGIN", new_y="NEXT")
+                    pdf.set_text_color(0, 0, 0)
+            pdf.ln(0.5)
+
+    # ── Meta rodapé ───────────────────────────────────────────────────────────
+    pdf.ln(5)
     pdf.set_font("Helvetica", "I", 7)
     pdf.set_text_color(150, 150, 150)
-    pdf.cell(W, 5,
-        _p(f"Gerado em {report.duration_s:.1f}s · {len(report.steps)} passos · Process2Diagram"),
-        ln=True,
+    pdf.multi_cell(
+        W, 5,
+        _p(f"Gerado em {report.duration_s:.1f}s  |  {len(report.steps)} passos  |  Process2Diagram"),
+        new_x="LMARGIN", new_y="NEXT",
     )
 
     return bytes(pdf.output())
