@@ -178,22 +178,30 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
       if (result.warnings && result.warnings.length) {{
         console.warn('bpmn-js import warnings:', result.warnings);
       }}
-      // Use bpmn-js native fit — waits for layout to complete
+      // Defer fit-viewport until the iframe container has computed dimensions.
+      // Calling canvas.zoom('fit-viewport') synchronously inside importXML.then()
+      // can fire before the browser has laid out the container (outerW/H = 0),
+      // producing scale = diagramW/0 = Infinity → SVGMatrix non-finite error.
       const canvas = viewer.get('canvas');
-      try {{
-        const vb = canvas.viewbox();
-        const inn = vb && vb.inner;
-        if (inn && isFinite(inn.x) && isFinite(inn.y) &&
-            isFinite(inn.width) && isFinite(inn.height) &&
-            inn.width > 0 && inn.height > 0) {{
-          canvas.zoom('fit-viewport');
-        }} else {{
-          canvas.zoom(0.75);
+      setTimeout(function() {{
+        try {{
+          const vb    = canvas.viewbox();
+          const inn   = vb && vb.inner;
+          const outer = vb && vb.outer;
+          if (inn && outer &&
+              isFinite(inn.width) && isFinite(inn.height) &&
+              isFinite(outer.width) && isFinite(outer.height) &&
+              inn.width > 0 && inn.height > 0 &&
+              outer.width > 0 && outer.height > 0) {{
+            canvas.zoom('fit-viewport');
+          }} else {{
+            canvas.zoom(0.75);
+          }}
+        }} catch(zoomErr) {{
+          try {{ canvas.zoom(0.75); }} catch(_) {{}}
         }}
-      }} catch(zoomErr) {{
-        try {{ canvas.zoom(0.75); }} catch(_) {{}}
-      }}
-      refreshLabel();
+        refreshLabel();
+      }}, 150);
     }})
     .catch(function(err) {{
       loading.style.display = 'none';
@@ -298,10 +306,10 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
   const xml = `{xml_js}`;
   const viewer = new BpmnJS({{ container:'#bpmn-container', keyboard:{{bindTo:window}} }});
   function refreshLabel(){{ try{{ document.getElementById('zoom-label').textContent = Math.round(viewer.get('canvas').zoom()*100)+'%'; }}catch(_){{}} }}
-  function fitView(){{ try{{ var c=viewer.get('canvas'),vb=c.viewbox(),inn=vb&&vb.inner; if(inn&&isFinite(inn.x)&&isFinite(inn.y)&&isFinite(inn.width)&&isFinite(inn.height)&&inn.width>0&&inn.height>0){{c.zoom('fit-viewport');}}else{{c.zoom(0.75);}} refreshLabel(); }}catch(_){{try{{viewer.get('canvas').zoom(0.75);}}catch(__){{}}}} }}
+  function fitView(){{ try{{ var c=viewer.get('canvas'),vb=c.viewbox(),inn=vb&&vb.inner,outer=vb&&vb.outer; if(inn&&outer&&isFinite(inn.width)&&isFinite(inn.height)&&isFinite(outer.width)&&isFinite(outer.height)&&inn.width>0&&inn.height>0&&outer.width>0&&outer.height>0){{c.zoom('fit-viewport');}}else{{c.zoom(0.75);}} refreshLabel(); }}catch(_){{try{{viewer.get('canvas').zoom(0.75);}}catch(__){{}}}} }}
   viewer.importXML(xml).then(function(){{
     document.getElementById('loading').style.display='none';
-    fitView();
+    setTimeout(fitView,150);
     try{{ viewer.get('eventBus').on('canvas.viewbox.changed',refreshLabel); }}catch(_){{}}
   }}).catch(function(e){{
     document.getElementById('loading').style.display='none';
