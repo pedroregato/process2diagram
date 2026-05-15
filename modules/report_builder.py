@@ -2,12 +2,10 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Standalone executive report generator.
 #
-# Uses run_pipeline() with run_synthesizer=True and all other agents enabled
-# (same as a normal pipeline run) but does NOT create a new meeting row —
-# it regenerates artefacts in-place and persists only report_html.
-#
-# This guarantees the report is generated with the exact same hub state
-# as a normal pipeline run: full requirements, SBVR, BMM, BPMN, minutes.
+# Loads all stored artefacts (BPMN, minutes, requirements, SBVR, BMM) via
+# load_meeting_as_hub() and runs only AgentSynthesizer — much faster than
+# re-running the full pipeline and consistent with canonical stored data.
+# Persists only report_html; never overwrites other meeting artefacts.
 #
 # Public API:
 #   build_report_for_meeting(meeting_id, llm_config, output_language) -> ReportResult
@@ -17,7 +15,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 
 @dataclass
@@ -40,14 +38,13 @@ def build_report_for_meeting(
     """
     Generate an executive HTML report for a single meeting.
 
-    Runs the full pipeline (Minutes + Requirements + SBVR + BMM + Synthesizer)
-    on the stored transcript — identical to a normal pipeline run.
+    Loads all existing artefacts (BPMN, minutes, requirements, SBVR, BMM)
+    via load_meeting_as_hub() and runs only AgentSynthesizer — much faster
+    than re-running the full pipeline and consistent with canonical stored data.
     Persists only report_html, report_generated_at, report_provider.
     Does NOT create a new meeting row or overwrite other artefacts.
     """
-    from core.project_store import get_supabase_client, save_report_html
-    from core.knowledge_hub import KnowledgeHub
-    from core.pipeline import run_pipeline
+    from core.project_store import get_supabase_client, save_report_html, load_meeting_as_hub
 
     client = get_supabase_client()
     if client is None:
@@ -56,11 +53,11 @@ def build_report_for_meeting(
             success=False, error="Supabase não configurado."
         )
 
-    # ── 1. Load meeting transcript ────────────────────────────────────────────
+    # ── 1. Load meeting metadata ──────────────────────────────────────────────
     try:
         mtg = (
             client.table("meetings")
-            .select("id, meeting_number, title, transcript_clean, transcript_raw")
+            .select("id, meeting_number, title, project_id")
             .eq("id", meeting_id)
             .single()
             .execute()
@@ -73,68 +70,53 @@ def build_report_for_meeting(
 
     meeting_number = mtg.get("meeting_number", 0)
     meeting_title  = mtg.get("title", "")
-    transcript     = (mtg.get("transcript_clean") or mtg.get("transcript_raw") or "").strip()
+    project_id     = mtg.get("project_id", "")
 
-    if not transcript:
-        return ReportResult(
-            meeting_id=meeting_id,
-            meeting_number=meeting_number,
-            meeting_title=meeting_title,
-            success=False,
-            error="Reunião sem transcrição armazenada. Use TranscriptBackfill primeiro.",
-        )
-
-    # ── 2. Build hub and run pipeline ─────────────────────────────────────────
-    hub = KnowledgeHub.new()
-    hub.set_transcript(transcript)
-    hub.meta.llm_provider = llm_config.get("provider_name", "")
-
-    # Extract client_info and provider_cfg from llm_config
-    # llm_config may be a flat dict (from ReportBackfill) or nested
-    api_key = llm_config.get("api_key", "")
-    client_info = {"api_key": api_key}
-
-    # provider_cfg: everything except api_key and provider_name
-    provider_cfg = {
-        k: v for k, v in llm_config.items()
-        if k not in ("api_key", "provider_name")
-    }
-    # Ensure provider_cfg has the required fields BaseAgent expects
-    if not provider_cfg.get("client_type"):
-        # llm_config is already the provider_cfg (flat structure from AVAILABLE_PROVIDERS)
-        provider_cfg = llm_config
-
-    pipeline_config: dict[str, Any] = {
-        "client_info":          client_info,
-        "provider_cfg":         provider_cfg,
-        "output_language":      output_language,
-        "run_quality":          False,   # skip — not needed for report
-        "run_bpmn":             True,    # needed for BPMN section in report
-        "run_minutes":          True,    # needed for minutes section
-        "run_requirements":     True,    # needed for requirements section
-        "run_sbvr":             True,    # needed for SBVR section
-        "run_bmm":              True,    # needed for BMM section
-        "run_synthesizer":      True,    # the whole point
-        "n_bpmn_runs":          1,
-        "bpmn_weights":         {"granularity": 5, "task_type": 5,
-                                 "gateways": 5, "structural": 5},
-        "use_langgraph":        False,
-        "validation_threshold": 6.0,
-        "max_bpmn_retries":     3,
-    }
-
+    # ── 2. Load all stored artefacts into a hub ───────────────────────────────
     try:
-        hub = run_pipeline(hub, pipeline_config, lambda *_: None)
+        hub = load_meeting_as_hub(meeting_id, project_id)
     except Exception as e:
         return ReportResult(
             meeting_id=meeting_id,
             meeting_number=meeting_number,
             meeting_title=meeting_title,
             success=False,
-            error=f"Pipeline falhou: {e}",
+            error=f"Erro ao carregar artefatos da reunião: {e}",
         )
 
-    # ── 3. Extract HTML ───────────────────────────────────────────────────────
+    if hub is None:
+        return ReportResult(
+            meeting_id=meeting_id,
+            meeting_number=meeting_number,
+            meeting_title=meeting_title,
+            success=False,
+            error="Não foi possível carregar os dados da reunião do Supabase.",
+        )
+
+    hub.meta.llm_provider = llm_config.get("provider_name", "")
+
+    # ── 3. Build client/provider config ──────────────────────────────────────
+    api_key      = llm_config.get("api_key", "")
+    client_info  = {"api_key": api_key}
+    provider_cfg = {k: v for k, v in llm_config.items() if k not in ("api_key", "provider_name")}
+    if not provider_cfg.get("client_type"):
+        provider_cfg = llm_config
+
+    # ── 4. Run only AgentSynthesizer ─────────────────────────────────────────
+    try:
+        from agents.agent_synthesizer import AgentSynthesizer
+        agent = AgentSynthesizer(client_info, provider_cfg)
+        hub   = agent.run(hub, output_language)
+    except Exception as e:
+        return ReportResult(
+            meeting_id=meeting_id,
+            meeting_number=meeting_number,
+            meeting_title=meeting_title,
+            success=False,
+            error=f"AgentSynthesizer falhou: {e}",
+        )
+
+    # ── 5. Extract HTML ───────────────────────────────────────────────────────
     report_html = ""
     if hasattr(hub, "synthesizer") and hub.synthesizer.ready:
         report_html = hub.synthesizer.html or ""
@@ -148,7 +130,7 @@ def build_report_for_meeting(
             error="AgentSynthesizer concluiu mas não gerou HTML.",
         )
 
-    # ── 4. Persist only report_html (do not overwrite other artefacts) ────────
+    # ── 6. Persist only report_html (do not overwrite other artefacts) ────────
     provider_name = llm_config.get("provider_name", "")
     save_report_html(meeting_id, report_html, provider_name)
 

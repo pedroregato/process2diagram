@@ -35,6 +35,21 @@ def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
     elif agent_name == "synthesizer":
         agent = AgentSynthesizer(client_info, provider_cfg)
         hub = agent.run(hub, output_language)
+        # Auto-save report_html to Supabase so it persists without requiring a manual save
+        try:
+            mid = (
+                st.session_state.get("current_meeting_id")
+                or st.session_state.get("_loaded_meeting_id")
+            )
+            if mid and hub.synthesizer.ready and hub.synthesizer.html:
+                from core.project_store import save_report_html
+                save_report_html(
+                    mid,
+                    hub.synthesizer.html,
+                    provider_cfg.get("provider_name", ""),
+                )
+        except Exception:
+            pass  # fail-open: session state update still happened
     else:
         raise ValueError(f"Unknown agent: {agent_name}")
     return hub
