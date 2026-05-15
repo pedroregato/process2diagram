@@ -155,12 +155,53 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "count_artifacts",
+                "description": (
+                    "Conta artefatos do projeto via SELECT COUNT(*) direto no banco — "
+                    "resposta exata e instantânea, sem risco de truncamento. "
+                    "Use SEMPRE que o usuário perguntar 'quantos requisitos', 'quantas regras', "
+                    "'quantos processos', 'quantas reuniões', etc. "
+                    "Quando artifact_type='all' retorna painel completo com todos os artefatos."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "artifact_type": {
+                            "type": "string",
+                            "description": (
+                                "Tipo de artefato: all | requirements | sbvr_terms | sbvr_rules | "
+                                "bpmn_processes | bpmn_versions | meetings | kh_facts | "
+                                "kh_entities | kh_contradictions. "
+                                "Padrão 'all' retorna todos de uma vez."
+                            ),
+                        },
+                        "req_type": {
+                            "type": "string",
+                            "description": (
+                                "Filtra requisitos por tipo (só usado quando artifact_type='requirements'): "
+                                "funcional | não-funcional | regra de negócio | restrição | interface"
+                            ),
+                        },
+                        "status": {
+                            "type": "string",
+                            "description": (
+                                "Filtra por status — para requisitos: active|revised|contradicted|confirmed; "
+                                "para contradições: open|resolved|false_positive."
+                            ),
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "get_requirements",
                 "description": (
-                    "Busca e lista requisitos do projeto. Pode filtrar por palavra-chave, "
-                    "tipo (funcional, não-funcional, regra de negócio, restrição, interface) "
-                    "e status (active, revised, contradicted, confirmed). "
-                    "Use count_only=true para obter apenas o total sem risco de truncamento."
+                    "Busca e lista requisitos do projeto com paginação. "
+                    "Pode filtrar por palavra-chave, tipo e status. "
+                    "Use count_artifacts para obter totais; use get_requirements para listar o conteúdo."
                 ),
                 "parameters": {
                     "type": "object",
@@ -180,12 +221,23 @@ def get_tool_schemas_openai() -> list[dict]:
                             "type": "string",
                             "description": "Status: active | revised | contradicted | confirmed",
                         },
+                        "page": {
+                            "type": "integer",
+                            "description": (
+                                "Página a retornar (começa em 1). "
+                                "Se o total superar page_size, chame novamente com page=2, 3… "
+                                "para obter todos os registros."
+                            ),
+                        },
+                        "page_size": {
+                            "type": "integer",
+                            "description": "Itens por página (padrão 50, máximo 100).",
+                        },
                         "count_only": {
                             "type": "boolean",
                             "description": (
-                                "Se true, retorna apenas o total (SELECT COUNT) sem buscar os dados. "
-                                "Use para perguntas como 'quantos requisitos existem?' "
-                                "evitando truncamento. Compativel com req_type e status."
+                                "Legado — prefira count_artifacts. "
+                                "Se true, retorna apenas o total sem buscar dados."
                             ),
                         },
                     },
@@ -1597,6 +1649,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "get_meeting_action_items":     "consulta",
     "get_meeting_summary":          "consulta",
     "search_transcript":            "consulta",
+    "count_artifacts":              "consulta",
     "get_requirements":             "consulta",
     "list_bpmn_processes":          "consulta",
     "get_sbvr_terms":               "consulta",
@@ -2133,6 +2186,8 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         keyword: str | None = None,
         req_type: str | None = None,
         status: str | None = None,
+        page: int = 1,
+        page_size: int = 50,
         count_only: bool = False,
     ) -> str:
         from modules.supabase_client import get_supabase_client
@@ -2140,76 +2195,96 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         if not db:
             return "Banco de dados não disponível."
 
-        # ── count_only: SELECT COUNT(*) — sem risco de truncamento ───────────
-        if count_only and not keyword:  # keyword requer dados para filtrar localmente
+        # ── count_only legado: redireciona para count_artifacts ──────────────
+        if count_only and not keyword:
+            return self._count_artifacts(artifact_type="requirements",
+                                         req_type=req_type, status=status)
+
+        # Clamp page_size
+        page_size = max(1, min(int(page_size or 50), 100))
+        page      = max(1, int(page or 1))
+
+        if keyword:
+            # Keyword filtering must be client-side — fetch all matching rows
+            # (keyword searches are typically narrow, so volume is manageable)
             try:
                 q = (
                     db.table("requirements")
-                    .select("*", count="exact")
+                    .select(
+                        "req_number, title, description, req_type, status, priority, "
+                        "source_quote, cited_by",
+                        count="exact",
+                    )
                     .eq("project_id", self.project_id)
+                    .order("req_number")
                 )
                 if req_type:
                     q = q.eq("req_type", req_type)
                 if status:
                     q = q.eq("status", status)
-                result = q.limit(0).execute()
-                total = result.count if result.count is not None else 0
-                filters = []
-                if req_type:
-                    filters.append(f"tipo: {req_type}")
-                if status:
-                    filters.append(f"status: {status}")
-                filter_desc = f" ({', '.join(filters)})" if filters else ""
-                return f"Total de requisitos{filter_desc}: **{total}**"
+                result = q.execute()
+                all_rows = result.data or []
             except Exception as exc:
-                return f"Erro ao contar requisitos: {exc}"
+                return f"Erro ao acessar requisitos: {exc}"
 
-        try:
-            q = (
-                db.table("requirements")
-                .select(
-                    "req_number, title, description, req_type, status, priority, "
-                    "source_quote, cited_by"
-                )
-                .eq("project_id", self.project_id)
-                .order("req_number")
-            )
-            if req_type:
-                q = q.eq("req_type", req_type)
-            if status:
-                q = q.eq("status", status)
-            rows = q.execute().data or []
-        except Exception as exc:
-            return f"Erro ao acessar requisitos: {exc}"
-
-        if keyword:
-            kw = keyword.lower().strip()
-            # Support "REQ-229", "req-229", "229" matching req_number
+            kw      = keyword.lower().strip()
             _kw_num = kw.replace("req-", "").replace("req ", "").strip()
             _kw_is_num = _kw_num.isdigit()
             rows = [
-                r for r in rows
+                r for r in all_rows
                 if kw in (r.get("title") or "").lower()
                 or kw in (r.get("description") or "").lower()
                 or (_kw_is_num and int(_kw_num) == r.get("req_number"))
             ]
+            total = len(rows)
+            # Still paginate the filtered result
+            start = (page - 1) * page_size
+            rows  = rows[start: start + page_size]
+        else:
+            # Server-side pagination via .range()
+            start = (page - 1) * page_size
+            end   = start + page_size - 1
+            try:
+                q = (
+                    db.table("requirements")
+                    .select(
+                        "req_number, title, description, req_type, status, priority, "
+                        "source_quote, cited_by",
+                        count="exact",
+                    )
+                    .eq("project_id", self.project_id)
+                    .order("req_number")
+                    .range(start, end)
+                )
+                if req_type:
+                    q = q.eq("req_type", req_type)
+                if status:
+                    q = q.eq("status", status)
+                result = q.execute()
+                rows  = result.data or []
+                total = result.count if result.count is not None else len(rows)
+            except Exception as exc:
+                return f"Erro ao acessar requisitos: {exc}"
 
         if not rows:
             return "Nenhum requisito encontrado com os filtros fornecidos."
 
-        lines = [f"Requisitos encontrados ({len(rows)}):"]
+        total_pages = max(1, -(-total // page_size))  # ceiling division
+        header = f"Requisitos (página {page}/{total_pages} · {len(rows)} de {total} no total):"
+        lines  = [header]
+
         for r in rows:
-            n        = r.get("req_number")
-            req_id   = f"REQ-{n:03d}" if isinstance(n, int) else "REQ-???"
-            rtype    = r.get("req_type") or "—"
-            rstatus  = r.get("status") or "—"
-            rprio    = r.get("priority") or "—"
-            title    = r.get("title") or ""
-            desc     = (r.get("description") or "")[:200]
+            n       = r.get("req_number")
+            req_id  = f"REQ-{n:03d}" if isinstance(n, int) else "REQ-???"
+            rtype   = r.get("req_type") or "—"
+            rstatus = r.get("status") or "—"
+            rprio   = r.get("priority") or "—"
+            title   = r.get("title") or ""
+            desc    = (r.get("description") or "")[:200]
             if len(r.get("description") or "") > 200:
                 desc += "..."
-            cited    = r.get("cited_by") or ""
-            quote    = r.get("source_quote") or ""
+            cited   = r.get("cited_by") or ""
+            quote   = r.get("source_quote") or ""
             lines.append(f"• {req_id} [{rtype} | {rstatus} | prioridade: {rprio}]: {title}")
             if desc:
                 lines.append(f"  {desc}")
@@ -2219,6 +2294,168 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     lines.append(f'  > {attr}"{quote}"')
                 elif cited:
                     lines.append(f"  Autor: {cited}")
+
+        if page < total_pages:
+            lines.append(
+                f"\n[Há mais requisitos. Chame get_requirements(page={page + 1}) para continuar.]"
+            )
+
+        return "\n".join(lines)
+
+    def _count_artifacts(
+        self,
+        artifact_type: str = "all",
+        req_type: str | None = None,
+        status: str | None = None,
+    ) -> str:
+        """
+        SELECT COUNT(*) para cada tipo de artefato — resposta exata, sem truncamento.
+        """
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        def _count(table: str, filters: list[tuple[str, str]]) -> int:
+            """Return COUNT(*) for a table with optional eq filters."""
+            try:
+                q = db.table(table).select("*", count="exact").limit(0)
+                for col, val in filters:
+                    q = q.eq(col, val)
+                r = q.execute()
+                return r.count if r.count is not None else 0
+            except Exception:
+                return -1  # table may not exist (e.g. KH tables not migrated yet)
+
+        pid = self.project_id
+        art = (artifact_type or "all").strip().lower()
+
+        # ── Single-type queries ────────────────────────────────────────────────
+        if art == "requirements":
+            f = [("project_id", pid)]
+            if req_type:
+                f.append(("req_type", req_type))
+            if status:
+                f.append(("status", status))
+            n = _count("requirements", f)
+            parts = []
+            if req_type:
+                parts.append(f"tipo: {req_type}")
+            if status:
+                parts.append(f"status: {status}")
+            desc = f" ({', '.join(parts)})" if parts else ""
+            return f"Requisitos{desc}: **{n}**"
+
+        if art == "sbvr_terms":
+            n = _count("sbvr_terms", [("project_id", pid)])
+            return f"Termos SBVR: **{n}**"
+
+        if art == "sbvr_rules":
+            n = _count("sbvr_rules", [("project_id", pid)])
+            return f"Regras SBVR: **{n}**"
+
+        if art == "bpmn_processes":
+            n = _count("bpmn_processes", [("project_id", pid)])
+            return f"Processos BPMN: **{n}**"
+
+        if art == "bpmn_versions":
+            # versions join through processes — count via processes first then versions
+            try:
+                proc_ids_result = (
+                    db.table("bpmn_processes")
+                    .select("id")
+                    .eq("project_id", pid)
+                    .execute()
+                )
+                proc_ids = [r["id"] for r in (proc_ids_result.data or [])]
+                if not proc_ids:
+                    return "Versões BPMN: **0**"
+                r = (
+                    db.table("bpmn_versions")
+                    .select("*", count="exact")
+                    .in_("process_id", proc_ids)
+                    .limit(0)
+                    .execute()
+                )
+                n = r.count if r.count is not None else 0
+                return f"Versões BPMN: **{n}**"
+            except Exception as exc:
+                return f"Erro ao contar versões BPMN: {exc}"
+
+        if art == "meetings":
+            n = _count("meetings", [("project_id", pid)])
+            return f"Reuniões: **{n}**"
+
+        if art == "kh_facts":
+            f = [("project_id", pid)]
+            if status:
+                f.append(("is_active", status))  # "True"/"False" as string is not ideal;
+            n = _count("kh_facts", [("project_id", pid)])
+            n_active = _count("kh_facts", [("project_id", pid), ("is_active", "true")])
+            if n < 0:
+                return "Fatos KH: tabelas do Knowledge Hub ainda não criadas."
+            return f"Fatos (Knowledge Hub): **{n}** total · **{n_active}** ativos"
+
+        if art == "kh_entities":
+            n = _count("kh_entities", [("project_id", pid)])
+            if n < 0:
+                return "Entidades KH: tabelas do Knowledge Hub ainda não criadas."
+            return f"Entidades (Knowledge Hub): **{n}**"
+
+        if art == "kh_contradictions":
+            f = [("project_id", pid)]
+            if status:
+                f.append(("status", status))
+            n = _count("kh_contradictions", f)
+            if n < 0:
+                return "Contradições KH: tabelas do Knowledge Hub ainda não criadas."
+            desc = f" (status: {status})" if status else ""
+            return f"Contradições (Knowledge Hub){desc}: **{n}**"
+
+        # ── artifact_type == "all": painel completo ────────────────────────────
+        lines = [f"## Painel de Artefatos — Projeto"]
+
+        # Meetings
+        n_mtg = _count("meetings", [("project_id", pid)])
+        lines.append(f"📅 **Reuniões:** {n_mtg}")
+
+        # Requirements breakdown by type
+        req_types = ["funcional", "não-funcional", "regra de negócio", "restrição", "interface"]
+        n_req_total = _count("requirements", [("project_id", pid)])
+        if n_req_total > 0:
+            by_type_parts = []
+            for rt in req_types:
+                c = _count("requirements", [("project_id", pid), ("req_type", rt)])
+                if c > 0:
+                    by_type_parts.append(f"{rt}: {c}")
+            by_type_str = " · ".join(by_type_parts) if by_type_parts else ""
+            lines.append(f"📋 **Requisitos:** {n_req_total}" +
+                         (f" ({by_type_str})" if by_type_str else ""))
+        else:
+            lines.append(f"📋 **Requisitos:** {n_req_total}")
+
+        # BPMN
+        n_proc = _count("bpmn_processes", [("project_id", pid)])
+        lines.append(f"📐 **Processos BPMN:** {n_proc}")
+
+        # SBVR
+        n_terms = _count("sbvr_terms", [("project_id", pid)])
+        n_rules = _count("sbvr_rules", [("project_id", pid)])
+        lines.append(f"📖 **Vocabulário SBVR:** {n_terms} termos · {n_rules} regras")
+
+        # Knowledge Hub (may not exist)
+        n_facts    = _count("kh_facts",         [("project_id", pid)])
+        n_entities = _count("kh_entities",       [("project_id", pid)])
+        n_contras  = _count("kh_contradictions", [("project_id", pid)])
+        if n_facts >= 0:
+            n_active = _count("kh_facts", [("project_id", pid), ("is_active", "true")])
+            n_open   = _count("kh_contradictions", [("project_id", pid), ("status", "open")])
+            lines.append(
+                f"🧠 **Knowledge Hub:** {n_entities} entidades · "
+                f"{n_active}/{n_facts} fatos ativos · "
+                f"{n_open} contradições abertas"
+            )
+
         return "\n".join(lines)
 
     def list_bpmn_processes(self) -> str:
@@ -5107,10 +5344,17 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     tool_input["query"],
                     tool_input.get("meeting_number"),
                 ),
+                "count_artifacts":           lambda: self._count_artifacts(
+                    artifact_type=tool_input.get("artifact_type", "all"),
+                    req_type=tool_input.get("req_type"),
+                    status=tool_input.get("status"),
+                ),
                 "get_requirements":          lambda: self.get_requirements(
                     keyword=tool_input.get("keyword"),
                     req_type=tool_input.get("req_type"),
                     status=tool_input.get("status"),
+                    page=int(tool_input.get("page") or 1),
+                    page_size=int(tool_input.get("page_size") or 50),
                     count_only=bool(tool_input.get("count_only", False)),
                 ),
                 "list_bpmn_processes":       lambda: self.list_bpmn_processes(),

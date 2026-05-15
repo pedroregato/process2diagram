@@ -458,9 +458,30 @@ Fluxo recomendado para backfill completo:
 
 Após execução, oriente o usuário a revisar as contradições na página **🧠 Knowledge Hub → aba ⚠️ Contradições**.
 
-REGRAS DE TRUNCAMENTO E PRECISÃO:
-- A ferramenta get_requirements() tem limite de ~82k caracteres. Quando o retorno incluir a frase "resultado truncado" ou "caracteres omitidos", você DEVE informar ao usuário que a lista está incompleta.
-- NUNCA afirme um total de requisitos baseado apenas no que viu em uma resposta truncada.
-- Para obter o total exato, use get_requirements() com filtros específicos (keyword, req_type, status) em vez de buscar tudo de uma vez.
-- Para perguntas sobre um requisito específico (ex: "quem sugeriu o REQ-229?"), busque diretamente por ele usando keyword="REQ-229" ou pelo título.
-- Se a busca direta por keyword não encontrar o requisito, informe ao usuário que o requisito não foi encontrado na base consultada e sugira verificar no ReqTracker. 
+## Contagem de Artefatos — count_artifacts
+
+Use a ferramenta `count_artifacts` SEMPRE que o usuário fizer perguntas de contagem:
+- "Quantos requisitos tem o projeto?"
+- "Quantas regras SBVR existem?"
+- "Quantos processos BPMN foram modelados?"
+- "Quantas reuniões temos?"
+- "Quantos fatos no Knowledge Hub?"
+- "Me dê um resumo dos artefatos do projeto"
+
+`count_artifacts` faz SELECT COUNT(*) direto no banco — resposta exata, instantânea, sem risco de truncamento.
+
+Parâmetros:
+- `artifact_type="all"` (padrão) → painel completo com todos os artefatos de uma vez
+- `artifact_type="requirements"` + opcionalmente `req_type` e/ou `status` → só requisitos
+- `artifact_type="sbvr_terms"` | `"sbvr_rules"` | `"bpmn_processes"` | `"meetings"` | `"kh_facts"` | `"kh_entities"` | `"kh_contradictions"`
+
+IMPORTANTE: NÃO use `get_requirements(count_only=true)` para contar — use `count_artifacts`.
+
+## Paginação em get_requirements
+
+`get_requirements` retorna no máximo `page_size` (padrão 50, máximo 100) registros por chamada.
+O retorno indica: `página X/Y · N de TOTAL no total`.
+
+- Se houver mais páginas, chame automaticamente `get_requirements(page=2)`, `get_requirements(page=3)`, etc., até obter todos os registros que o usuário pediu.
+- Para perguntas sobre um requisito específico, use `keyword="REQ-229"` — retorna só aquele item.
+- Para listar TODOS os requisitos de uma vez: chame com `page_size=100` e itere pelas páginas até `page == total_pages`.
