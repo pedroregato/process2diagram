@@ -5346,13 +5346,26 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     req_type=tool_input.get("req_type"),
                     status=tool_input.get("status"),
                 ),
-                "get_requirements":          lambda: self.get_requirements(
-                    keyword=tool_input.get("keyword"),
-                    req_type=tool_input.get("req_type"),
-                    status=tool_input.get("status"),
-                    page=int(tool_input.get("page") or 1),
-                    page_size=int(tool_input.get("page_size") or 50),
-                    count_only=bool(tool_input.get("count_only", False)),
+                "get_requirements":          lambda: (
+                    # Guard: bare call with no keyword = almost certainly a count question.
+                    # Redirect to count_artifacts to avoid token waste and wrong routing.
+                    self._count_artifacts(
+                        artifact_type="requirements",
+                        req_type=tool_input.get("req_type"),
+                        status=tool_input.get("status"),
+                    ) + "\n\n[Dica: para LISTAR o conteúdo dos requisitos, chame "
+                      "get_requirements com keyword, req_type ou page.]"
+                    if (not tool_input.get("keyword")
+                        and not tool_input.get("page")
+                        and not tool_input.get("count_only"))
+                    else self.get_requirements(
+                        keyword=tool_input.get("keyword"),
+                        req_type=tool_input.get("req_type"),
+                        status=tool_input.get("status"),
+                        page=int(tool_input.get("page") or 1),
+                        page_size=int(tool_input.get("page_size") or 50),
+                        count_only=bool(tool_input.get("count_only", False)),
+                    )
                 ),
                 "list_bpmn_processes":       lambda: self.list_bpmn_processes(),
                 "get_sbvr_terms":            lambda: self.get_sbvr_terms(tool_input.get("keyword")),
