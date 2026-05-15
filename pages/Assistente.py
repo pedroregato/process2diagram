@@ -431,6 +431,11 @@ with _col_help:
             "- Usa até 8 ferramentas por rodada\n"
             "- Mantém histórico da conversa\n"
             "- Ideal para consultas rápidas\n\n"
+            "**Exemplos:**\n"
+            "> *Quem participou da reunião 3?*\n\n"
+            "> *Quais decisões foram tomadas sobre o módulo de pagamento?*\n\n"
+            "> *Liste os requisitos funcionais de alta prioridade.*\n\n"
+            "> *O que ficou pendente na última reunião?*\n\n"
             "---\n\n"
             "### 🔬 Análise Autônoma\n"
             "Agente que executa um objetivo analítico complexo de forma "
@@ -438,7 +443,14 @@ with _col_help:
             "- Planeja e encadeia múltiplas ferramentas (até 15 passos)\n"
             "- Produz relatório estruturado com conclusão, tabelas e gráficos\n"
             "- Ideal para análises cruzadas (ex: requisitos × decisões × prazos)\n"
-            "- Resultados salvos no histórico do projeto"
+            "- Resultados salvos no histórico do projeto\n\n"
+            "**Exemplos:**\n"
+            "> *Compare os requisitos funcionais aprovados com as decisões das "
+            "últimas 3 reuniões e identifique lacunas de implementação.*\n\n"
+            "> *Liste todas as ações em aberto por responsável, calcule o prazo "
+            "médio de entrega e aponte os itens atrasados.*\n\n"
+            "> *Gere um panorama completo do projeto: reuniões realizadas, "
+            "volume de requisitos por tipo, decisões críticas e próximos passos.*"
         )
 
 if not supabase_configured():
