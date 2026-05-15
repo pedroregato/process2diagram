@@ -10,7 +10,7 @@
 - **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown / Word / PDF), requirements analysis (JSON/Markdown), executive HTML report, interactive requirements mind map
 - **Deploy:** Streamlit Cloud — auto-deploy on push to `main` branch (`github.com/pedroregato/process2diagram`)
 - **Dev environment:** PyCharm on Windows; Python 3.13
-- **Current version:** v4.17
+- **Current version:** v4.18
 
 Supported LLM providers: DeepSeek (default), Claude (Anthropic), OpenAI, Groq, Google Gemini.
 
@@ -39,7 +39,7 @@ process2diagram/
 ├── app.py                        # Streamlit entry point — st.navigation() with 5 groups: Início | Pipeline | Análise | Sistema | Manutenção
 │
 ├── pages/
-│   ├── Home.py                   # 🏠 Landing page (default) — welcome header, KPI strip, workflow guide, quick access, recent meetings
+│   ├── Home.py                   # 🏠 Landing page (default) — welcome header, active-project selector (global context), KPI strip, workflow guide, quick access, recent meetings
 │   ├── Pipeline.py               # 🚀 Main pipeline page — transcript input, agent run, result tabs
 │   ├── Diagramas.py              # Full-screen multi-page diagram viewer (BPMN, Mermaid, Mind Map)
 │   ├── BpmnEditor.py             # ✏️ BPMN editor — bpmn-js Modeler, version history, save new version to Supabase
@@ -116,7 +116,7 @@ process2diagram/
 │   ├── architecture_diagram.py   # render_architecture_diagram() — splash flowchart TD (cached SVG)
 │   ├── auth_gate.py              # apply_auth_gate() / render_login_page() — login wall; st.stop() if unauthenticated
 │   ├── assistant_diagram.py      # render_assistant_diagram() — RAG pipeline architecture splash (Assistente page)
-│   ├── project_selector.py       # render_project_selector() — Supabase project/meeting picker widget
+│   ├── project_selector.py       # render_project_selector() — Supabase project/meeting picker widget; require_active_project() — stops page if no active project, returns (project_id, project_name)
 │   ├── components/
 │   │   ├── copy_button.py        # Copy-to-clipboard button — navigator.clipboard + execCommand fallback (no cross-origin parent exec)
 │   │   ├── download_button.py    # Styled download button wrapper
@@ -417,6 +417,7 @@ Receives `nlp_actors` from `hub.nlp.actors` to improve lane inference.
 - Rendered via `streamlit.components.v1.html` with **bpmn-js 17** injected inline (no external CDN).
 - **Asset loading:** bpmn-js JS (~1.2 MB) and CSS fetched **server-side** via `urllib.request` on first call, cached with `@functools.lru_cache(maxsize=None)`, inlined as `<style>`/`<script>` blocks — no CDN URL in the iframe. Avoids Streamlit Cloud sandbox restriction blocking external `<script src>` in `components.html()` iframes.
 - **Pan/zoom:** bpmn-js native canvas API — `canvas.zoom('fit-viewport')`, `canvas.zoom(factor, 'auto')` — NOT a CSS `transform` wrapper (which conflicted with bpmn-js internal viewport management).
+- **Fit timing:** `canvas.zoom('fit-viewport')` is deferred via `setTimeout(fn, 150)` inside `importXML().then()`. Calling it synchronously causes the iframe container dimensions to be 0 (browser hasn't laid out yet), producing `scale = diagramW/0 = Infinity → SVGMatrix non-finite` error. The guard checks both `inner.width/height > 0` AND `outer.width/height > 0` before calling fit; falls back to `canvas.zoom(0.75)` otherwise.
 - **Zoom label:** synced via `viewer.get('eventBus').on('canvas.viewbox.changed', refreshLabel)`.
 - **Fallback:** `_TEMPLATE_CDN_FALLBACK` used when server-side fetch fails.
 - Public API: `preview_from_xml(xml: str) -> str` and `generate_bpmn_preview(bpmn: BpmnProcess) -> str`.
@@ -466,7 +467,18 @@ Streamlit multi-page app — accessible via sidebar navigation or `st.page_link`
 
 ## RAG Assistant (`pages/Assistente.py`)
 
-Semantic Q&A over meeting transcripts stored in Supabase. Two modes, selectable via "🔧 Modo Ferramentas" sidebar toggle (`asst_use_tools`, default `True`).
+Semantic Q&A over meeting transcripts stored in Supabase. Three modes selectable via the radio button in the page header (next to the title):
+
+| Mode | Key | Description |
+|---|---|---|
+| **💬 Assistente** | `asst_mode = "💬 Assistente"` | Interactive Q&A — conversational, history-aware, up to 8 tool rounds |
+| **🔬 Análise Autônoma** | `asst_mode = "🔬 Análise Autônoma"` | Autonomous agent — single complex objective, up to 15 tool rounds, structured report with tables/charts |
+
+Within **💬 Assistente** mode, a sidebar toggle `asst_use_tools` (default `True`) switches between:
+- **Modo A: Tool-use** (padrão) — LLM calls tools against Supabase directly
+- **Modo B: RAG Clássico** — keyword + semantic vector search fallback
+
+A `❓ Modos` popover button in the page header explains the difference to end users.
 
 ### Architecture — Modo A: Tool-use (padrão)
 
@@ -967,6 +979,36 @@ if "_embed_error" in st.session_state:
     st.error(st.session_state.pop("_embed_error"))
 ```
 
+### bpmn-js fit-viewport SVGMatrix non-finite error
+
+**Symptom:** `Failed to execute 'scale' on 'SVGMatrix': The provided float value is non-finite` when rendering BPMN diagrams.
+
+**Root cause:** `canvas.zoom('fit-viewport')` called synchronously inside `importXML().then()` fires before the browser has computed the iframe container dimensions. When `outerW = 0` and `innerW = 0`, the scale calculation produces `0/0 = NaN` or `diagramW/0 = Infinity`.
+
+**Fix (applied in `modules/bpmn_viewer.py`):** defer the zoom call via `setTimeout(fn, 150)` and validate both inner and outer dimensions before calling fit:
+```javascript
+setTimeout(function() {
+  var vb = canvas.viewbox();
+  var inn = vb && vb.inner, outer = vb && vb.outer;
+  if (inn && outer &&
+      isFinite(inn.width) && inn.width > 0 &&
+      isFinite(outer.width) && outer.width > 0) {
+    canvas.zoom('fit-viewport');
+  } else {
+    canvas.zoom(0.75);
+  }
+}, 150);
+```
+This applies to **both** the main inline template and `_TEMPLATE_CDN_FALLBACK`.
+
+### Global active-project context
+
+`active_project_id` and `active_project_name` in `st.session_state` are the single source of truth for the current working project. They are set only from **Home.py** (project selector UI) or via the **`set_active_project` Assistente tool**.
+
+All analysis pages (`Assistente`, `ReqTracker`, `BpmnEditor`, `MeetingROI`, `ValidationHub`) call `require_active_project()` from `ui/project_selector.py` at the top of their render flow. This function either returns `(project_id, project_name)` or calls `st.stop()` with a navigation link to Home.
+
+**Do NOT** add a local project selectbox to these pages — it would fragment the project context.
+
 ---
 
 ## Security Model
@@ -1107,6 +1149,15 @@ When unblocked: create `modules/office_client.py` + 2 tools (`outlook_send_email
 - [x] **`modules/reqtracker_exporter.py`** — Excel/CSV export for ReqTracker
 - [x] **Google Gemini SDK migration** — use `google-generativeai` (stable) for `embed_content()` + `list_models()`; `google-genai` kept as secondary dependency
 
+### PC11 — Concluído (v4.18 / 2026-05-12)
+- [x] **Projeto de trabalho global** — `active_project_id` + `active_project_name` em `st.session_state` (inicializados em `core/session_state.py`); set only via Home.py ou ferramenta `set_active_project`; persiste por toda a sessão
+- [x] **`require_active_project()`** — nova função em `ui/project_selector.py`; retorna `(project_id, project_name)` ou exibe warning + `st.page_link("pages/Home.py")` + `st.stop()`; chamada no topo de Assistente, ReqTracker, BpmnEditor, MeetingROI, ValidationHub; elimina selectboxes de projeto locais nessas páginas
+- [x] **Home.py — seletor de projeto** — bloco entre header e KPIs; auto-seleciona quando há apenas 1 projeto; mostra badge `st.success` + botão "Trocar" quando projeto já ativo; selectbox + botão "✅ Ativar Projeto" quando nenhum ativo; seta `prefix` = `sigla + "_"` do projeto selecionado
+- [x] **`set_active_project` tool no Assistente** — ferramenta na categoria "escrita" em `AssistantToolExecutor`; match parcial de nome (case-insensitive); atualiza `session_state["active_project_id"]`, `["active_project_name"]` e `["prefix"]`; retorna lista de projetos disponíveis se não encontrar
+- [x] **`delete_meeting` cascade fix** — adicionado Step 1: deleta `requirement_versions` por `meeting_id` (FK direto que bloqueava exclusão); `bpmn_versions` agora deletada via process IDs antes de deletar `bpmn_processes`; `preview_meeting_deletion` atualizado para listar `requirement_versions`
+- [x] **Assistente chat styling** — `[data-testid="stChatMessageContainer"][data-role="user"]`: fundo `#0d2a4a`, borda-esq azul; `[data-role="assistant"]`: fundo `#0f2235`, borda-esq âmbar; chat input e todos os divs filhos: fundo preto, texto/ícone brancos; elimina "meia lua branca" no canto esquerdo do input
+- [x] **BPMN viewer timing fix** — `canvas.zoom('fit-viewport')` adiado via `setTimeout(fn, 150)` em ambos os templates (inline e CDN fallback); guard duplo: `inner.width/height > 0` AND `outer.width/height > 0`; elimina erro `SVGMatrix non-finite` causado por container com dimensões zero no momento do fit
+
 ### PC10 — Concluído (v4.17 / 2026-05-11)
 - [x] **Gráficos interativos no Assistente** — 5 ferramentas de gráfico no `AssistantToolExecutor`: `generate_requirements_chart` (barras por tipo/prioridade), `generate_meetings_timeline` (artefatos por reunião), `generate_action_items_chart` (pizza status / barras responsável), `generate_roi_chart` (ROI-TR por reunião), `generate_custom_chart` (bar/line/pie/scatter/funnel com dados do LLM); figuras Plotly serializadas como `fig.to_dict()` em `_pending_charts`, retornadas como 4º elemento da tupla de `chat_with_tools()`, renderizadas com `st.plotly_chart()` no histórico do chat
 - [x] **Paleta de cores configurável** — `core/chart_config.py` (zero imports) define `CHART_PALETTES` (6 paletas nomeadas: P2D Dark, Azul Oceano, Floresta, Laranja, Roxo, Cinza) e `DEFAULT_PALETTE`; `AssistantToolExecutor.__init__` lê `chart_palette` de `llm_config` e expõe `self._palette`; todos os métodos de gráfico usam `self._palette`; cores semânticas (prioridade, status concluído/pendente) mantidas fixas; `Assistente.py` sidebar exibe selectbox + swatches de preview; aviso inline quando paleta é alterada orientando o usuário a repetir o pedido
@@ -1159,7 +1210,7 @@ When unblocked: create `modules/office_client.py` + 2 tools (`outlook_send_email
 - [x] **`MeetingROIData` v2** — novos campos: `meeting_type`, `meeting_type_confidence`, `fulfillment_score`, `n_sbvr`, `n_bpmn_procs`; pesos do tipo exibidos no expander de fórmula
 - [x] **`compute_project_roi()` v2** — busca SBVR (`sbvr_terms` + `sbvr_rules`) e BPMN (`bpmn_processes`) por meeting; aceita `llm_config` opcional; retrocompatível (fallback sem coluna `meeting_type` no schema)
 - [x] **`pages/MeetingROI.py` v2** — sidebar com seletor de provedor + API key + botão "🏷️ Classificar Tipos com IA"; 6 KPIs (inclui "Tipos classificados"); gráfico de Fulfillment e distribuição de tipos; detalhe mostra pesos por artefato e min_dc; recomendações incluem "Baixo Fulfillment"
-- [x] **`delete_meeting` fix** — pré-exclusão limpa `requirements.last_meeting_id`, `requirements.first_meeting_id`, `sbvr_terms`, `sbvr_rules`, `bpmn_processes` e `transcript_chunks` para contornar FKs sem CASCADE
+- [x] **`delete_meeting` fix** — pré-exclusão limpa FKs em cascata: (1) `requirement_versions` por `meeting_id` (FK direto, descoberto em v4.18); (2) nula `requirements.first_meeting_id/last_meeting_id`; (3) deleta `sbvr_terms`, `sbvr_rules`, `transcript_chunks`; (4) busca IDs de `bpmn_processes`, deleta `bpmn_versions`, depois `bpmn_processes`; (5) deleta o registro de `meetings`
 - [x] **SQL migração** — `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS meeting_type TEXT` adicionado em Configurações → Banco de Dados → Fase 3b
 
 ---

@@ -410,7 +410,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── Main Area ─────────────────────────────────────────────────────────────────
-_col_title, _col_mode = st.columns([3, 2])
+_col_title, _col_mode, _col_help = st.columns([3, 2, 1])
 with _col_title:
     st.markdown("# 💬 Assistente")
 with _col_mode:
@@ -420,6 +420,26 @@ with _col_mode:
         key="asst_mode",
         horizontal=True,
     )
+with _col_help:
+    with st.popover("❓ Modos"):
+        st.markdown(
+            "### 💬 Assistente\n"
+            "Conversa interativa com os dados do projeto. "
+            "Faça perguntas e receba respostas baseadas nas reuniões, "
+            "requisitos e documentos armazenados.\n\n"
+            "- Responde perguntas pontuais\n"
+            "- Usa até 8 ferramentas por rodada\n"
+            "- Mantém histórico da conversa\n"
+            "- Ideal para consultas rápidas\n\n"
+            "---\n\n"
+            "### 🔬 Análise Autônoma\n"
+            "Agente que executa um objetivo analítico complexo de forma "
+            "autônoma, sem intervenção manual a cada passo.\n\n"
+            "- Planeja e encadeia múltiplas ferramentas (até 15 passos)\n"
+            "- Produz relatório estruturado com conclusão, tabelas e gráficos\n"
+            "- Ideal para análises cruzadas (ex: requisitos × decisões × prazos)\n"
+            "- Resultados salvos no histórico do projeto"
+        )
 
 if not supabase_configured():
     st.warning("⚙️ Supabase não configurado.")
