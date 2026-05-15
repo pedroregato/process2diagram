@@ -1487,6 +1487,28 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "save_context_skill",
+                "description": (
+                    "Salva ou atualiza o Context Knowledge File (CKF) do contexto de trabalho ativo. "
+                    "O CKF é injetado no prompt de todos os agentes (BPMN, Ata, SBVR, BMM) em cada execução do pipeline, "
+                    "fornecendo conhecimento permanente sobre participantes, glossário, processos e regras de negócio. "
+                    "Use quando o usuário pedir para salvar, atualizar ou documentar informações permanentes do contexto."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "skill_md": {
+                            "type": "string",
+                            "description": "Conteúdo Markdown do CKF. Pode incluir participantes, glossário, processos conhecidos, regras permanentes e objetivos estratégicos."
+                        }
+                    },
+                    "required": ["skill_md"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "render_table",
                 "description": (
                     "Use this tool INSTEAD of writing a Markdown table whenever the response "
@@ -1666,7 +1688,8 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "list_all_domains":      "consulta",
     "list_users_by_project": "consulta",
     "set_active_project":    "escrita",
-    
+    "save_context_skill":    "escrita",
+
     "convert_usd_to_brl": "consulta",
     
     "calendar_diagnose":                "admin",
@@ -4147,6 +4170,25 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             "Todas as páginas agora usarão este contexto."
         )
 
+    def save_context_skill(self, skill_md: str) -> str:
+        """Salva o Context Knowledge File (CKF) do contexto de trabalho ativo."""
+        import streamlit as st
+        ctx_id = st.session_state.get("active_project_id")
+        if not ctx_id:
+            return "Nenhum contexto ativo. Selecione um contexto na Home primeiro."
+        ctx_name = st.session_state.get("active_project_name", ctx_id)
+        try:
+            from core.project_store import save_context_skill as _save
+            ok = _save(ctx_id, skill_md.strip())
+            if ok:
+                return (
+                    f"✅ Context Knowledge File salvo para **{ctx_name}**. "
+                    "Será injetado automaticamente no próximo pipeline."
+                )
+            return "❌ Erro ao salvar o CKF no Supabase. Verifique a coluna `skill_md` na tabela `contexts`."
+        except Exception as exc:
+            return f"❌ Erro: {exc}"
+
     # ── Google Calendar tools ─────────────────────────────────────────────────
 
     def calendar_diagnose(self) -> str:
@@ -5536,6 +5578,9 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 ),
                 "set_active_project":             lambda: self.set_active_project(
                     tool_input["project_name"],
+                ),
+                "save_context_skill":             lambda: self.save_context_skill(
+                    tool_input["skill_md"],
                 ),
                 "generate_custom_chart":          lambda: self.generate_custom_chart(
                     chart_type=tool_input["chart_type"],

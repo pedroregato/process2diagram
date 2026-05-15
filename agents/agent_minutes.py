@@ -162,6 +162,9 @@ class AgentMinutes(BaseAgent):
         raw_skill = self._skill if self._skill.strip() else _EMBEDDED_SKILL
         system = raw_skill.replace("{output_language}", lang)
 
+        if getattr(hub, "context_skill", "").strip():
+            system += f"\n\n## Conhecimento do Contexto\n\n{hub.context_skill.strip()}"
+
         actor_hint = ""
         if hub.nlp.actors:
             actor_hint = f"\nParticipants identified by NLP: {', '.join(hub.nlp.actors)}"

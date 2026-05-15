@@ -161,6 +161,9 @@ class AgentBPMN(BaseAgent):
         lang = self._language_instruction(output_language)
         system = self._skill.replace("{output_language}", lang)
 
+        if getattr(hub, "context_skill", "").strip():
+            system += f"\n\n## Conhecimento do Contexto\n\n{hub.context_skill.strip()}"
+
         actor_hint = ""
         if hub.nlp.actors:
             actor_hint = f"\nActors identified by NLP pre-processing: {', '.join(hub.nlp.actors)}"

@@ -26,6 +26,10 @@ class AgentBMM(BaseAgent):
     ) -> tuple[str, str]:
         lang = self._language_instruction(output_language)
         system = self._skill.replace("{output_language}", lang)
+
+        if getattr(hub, "context_skill", "").strip():
+            system += f"\n\n## Conhecimento do Contexto\n\n{hub.context_skill.strip()}"
+
         user = (
             "Extract the business motivation model from this transcript:\n\n"
             f"{hub.transcript_clean}"

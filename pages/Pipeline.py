@@ -110,6 +110,17 @@ if pipeline_mode == _MODE_NEW:
             hub.transcript_clean = st.session_state.curated_clean
         hub.meta.llm_provider = st.session_state.selected_provider
 
+        # Load Context Knowledge File (CKF) from active context
+        _ctx_id = st.session_state.get("active_project_id") or st.session_state.get("project_id")
+        if _ctx_id:
+            try:
+                from core.project_store import get_context_skill
+                _ckf = get_context_skill(_ctx_id)
+                if _ckf:
+                    hub.context_skill = _ckf
+            except Exception:
+                pass
+
         # Derive project slug from prefix (e.g. "SDEA_" → "sdea")
         _ata_slug = st.session_state.get("prefix", "p2d_").rstrip("_").lower() or "p2d"
 

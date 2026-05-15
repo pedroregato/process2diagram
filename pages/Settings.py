@@ -594,6 +594,67 @@ with tab_db:
 
     st.markdown("---")
 
+    # ── Context Knowledge File (CKF) ──────────────────────────────────────
+    if db:
+        st.markdown("#### 📖 Context Knowledge File (CKF)")
+        st.caption(
+            "O CKF é injetado no prompt de todos os agentes (BPMN, Ata, SBVR, BMM) a cada execução do pipeline. "
+            "Use para registrar participantes frequentes, glossário, processos conhecidos e regras permanentes do contexto."
+        )
+
+        try:
+            ckf_proj_rows = db.table("contexts").select("id, name, skill_md").order("name").execute().data or []
+        except Exception:
+            ckf_proj_rows = []
+
+        if not ckf_proj_rows:
+            st.info("Nenhum contexto encontrado.")
+        else:
+            for cp in ckf_proj_rows:
+                cpid   = cp["id"]
+                cpname = cp.get("name", "—")
+                cpskill = cp.get("skill_md") or ""
+                with st.expander(f"📖 {cpname}", expanded=False):
+                    if "_ckf_ok" in st.session_state and st.session_state.get("_ckf_ok_id") == cpid:
+                        st.success(st.session_state.pop("_ckf_ok"))
+                        st.session_state.pop("_ckf_ok_id", None)
+
+                    # Load template if empty
+                    _template_path = Path(__file__).parent.parent / "skills" / "skill_context_template.md"
+                    try:
+                        _template = _template_path.read_text(encoding="utf-8")
+                    except Exception:
+                        _template = ""
+
+                    new_skill = st.text_area(
+                        "Conteúdo do CKF (Markdown)",
+                        value=cpskill or _template,
+                        height=300,
+                        key=f"ckf_{cpid}",
+                        help="Será injetado no sistema prompt de todos os agentes ao processar uma transcrição deste contexto.",
+                    )
+                    col_save, col_clear = st.columns([1, 1])
+                    with col_save:
+                        if st.button("💾 Salvar CKF", key=f"ckf_save_{cpid}", type="primary", use_container_width=True):
+                            try:
+                                db.table("contexts").update({"skill_md": new_skill.strip() or None}).eq("id", cpid).execute()
+                                st.session_state["_ckf_ok"]    = f"✅ CKF salvo para '{cpname}'."
+                                st.session_state["_ckf_ok_id"] = cpid
+                                st.rerun()
+                            except Exception as ckf_err:
+                                st.error(f"Erro ao salvar CKF: {ckf_err}")
+                    with col_clear:
+                        if st.button("🗑 Limpar CKF", key=f"ckf_clear_{cpid}", use_container_width=True):
+                            try:
+                                db.table("contexts").update({"skill_md": None}).eq("id", cpid).execute()
+                                st.session_state["_ckf_ok"]    = f"CKF de '{cpname}' removido."
+                                st.session_state["_ckf_ok_id"] = cpid
+                                st.rerun()
+                            except Exception as ckf_err:
+                                st.error(f"Erro ao limpar CKF: {ckf_err}")
+
+    st.markdown("---")
+
     # ── Migração de schema ─────────────────────────────────────────────────
     if db:
         st.markdown("#### 🔧 Migração de Schema")
