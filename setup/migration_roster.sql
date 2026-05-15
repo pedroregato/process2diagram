@@ -183,19 +183,23 @@ ALTER TABLE project_roster       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE meeting_participants ENABLE ROW LEVEL SECURITY;
 
 -- Leitura pública para autenticados
+DROP POLICY IF EXISTS roster_select_authenticated ON project_roster;
 CREATE POLICY roster_select_authenticated
     ON project_roster FOR SELECT
     USING (true);
 
+DROP POLICY IF EXISTS mp_select_authenticated ON meeting_participants;
 CREATE POLICY mp_select_authenticated
     ON meeting_participants FOR SELECT
     USING (true);
 
 -- Escrita apenas via service_role (a camada Python usa a service key)
+DROP POLICY IF EXISTS roster_write_service ON project_roster;
 CREATE POLICY roster_write_service
     ON project_roster FOR ALL
     USING (auth.role() = 'service_role');
 
+DROP POLICY IF EXISTS mp_write_service ON meeting_participants;
 CREATE POLICY mp_write_service
     ON meeting_participants FOR ALL
     USING (auth.role() = 'service_role');
