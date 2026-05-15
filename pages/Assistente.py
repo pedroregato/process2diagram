@@ -450,7 +450,15 @@ with _col_help:
             "> *Liste todas as ações em aberto por responsável, calcule o prazo "
             "médio de entrega e aponte os itens atrasados.*\n\n"
             "> *Gere um panorama completo do projeto: reuniões realizadas, "
-            "volume de requisitos por tipo, decisões críticas e próximos passos.*"
+            "volume de requisitos por tipo, decisões críticas e próximos passos.*\n\n"
+            "---\n\n"
+            "### Quando usar cada modo?\n\n"
+            "| | 💬 Assistente | 🔬 Análise Autônoma |\n"
+            "|---|---|---|\n"
+            "| Profundidade | Resumo (amostra) | Exaustiva (tudo) |\n"
+            "| Formato | Texto de chat | Relatório com tabelas |\n"
+            "| Tempo | ~10–20 s | ~60–120 s |\n"
+            "| Ideal para | Consultas rápidas e pontuais | Análises cruzadas completas |"
         )
 
 if not supabase_configured():
