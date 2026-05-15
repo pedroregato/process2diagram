@@ -49,11 +49,12 @@ if not kh_tables_exist():
     st.stop()
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
-tab_entities, tab_processes, tab_facts, tab_contradictions = st.tabs([
+tab_entities, tab_processes, tab_facts, tab_contradictions, tab_analyses = st.tabs([
     "👥 Entidades",
     "⚙️ Processos",
     "📌 Fatos",
     "⚠️ Contradições",
+    "📜 Análises Anteriores",
 ])
 
 # ── Tab: Entidades ────────────────────────────────────────────────────────────
@@ -320,3 +321,98 @@ with tab_contradictions:
                         col_actions.caption(c["resolution_note"][:60])
 
                 st.divider()
+
+
+# ── Tab: Análises Anteriores ───────────────────────────────────────────────────
+with tab_analyses:
+    from core.analyst_store import get_analyses, get_analysis, analyses_table_exists
+
+    st.markdown(
+        "Análises autônomas geradas pelo AgentAnalyst (modo 🔬 Análise Autônoma no Assistente). "
+        "Salvas permanentemente para reuso sem re-executar o LLM."
+    )
+
+    if not analyses_table_exists():
+        st.warning(
+            "Tabela `kh_analyses` não encontrada. "
+            "Execute `setup/supabase_migration_kh_analyses.sql` no Supabase Dashboard."
+        )
+    else:
+        _show_failed = st.checkbox("Incluir análises com erro", value=False, key="kh_anal_show_failed")
+        analyses_list = get_analyses(project_id, limit=30, success_only=not _show_failed)
+
+        if not analyses_list:
+            st.info(
+                "Nenhuma análise salva para este projeto. "
+                "Execute uma análise no modo 🔬 e clique em '💾 Salvar análise'."
+            )
+        else:
+            st.caption(f"{len(analyses_list)} análise(s) encontrada(s)")
+
+            for anal in analyses_list:
+                _aid       = anal["id"]
+                _obj       = (anal.get("objective") or "—")[:120]
+                _steps     = anal.get("step_count", 0)
+                _dur       = anal.get("duration_s") or 0
+                _created   = (anal.get("created_at") or "")[:10]
+                _by        = anal.get("created_by") or "—"
+                _ok_flag   = anal.get("success", True)
+                _status_icon = "✅" if _ok_flag else "❌"
+
+                with st.expander(f"{_status_icon} {_obj}", expanded=False):
+                    col_meta, col_btn = st.columns([5, 2])
+                    col_meta.caption(
+                        f"Data: **{_created}** · Usuário: **{_by}** · "
+                        f"Passos: **{_steps}** · Tempo: **{_dur:.1f}s**"
+                    )
+                    if col_btn.button("↩️ Reabrir", key=f"kh_anal_open_{_aid}"):
+                        st.session_state["_kh_anal_detail"] = _aid
+                        st.rerun()
+
+            # ── Detail view ───────────────────────────────────────────────────
+            if "_kh_anal_detail" in st.session_state:
+                detail_id = st.session_state["_kh_anal_detail"]
+                detail    = get_analysis(detail_id)
+
+                if detail:
+                    st.markdown("---")
+                    st.markdown(f"**Objetivo:** {detail.get('objective', '—')}")
+                    conclusion = detail.get("conclusion") or ""
+                    if conclusion:
+                        st.markdown("#### Conclusão")
+                        st.markdown(conclusion)
+
+                    tables = detail.get("tables_json") or []
+                    if tables:
+                        st.markdown("#### Tabelas")
+                        for tbl in tables:
+                            cols = tbl.get("columns", [])
+                            rows = tbl.get("rows", [])
+                            if cols and rows:
+                                import pandas as pd
+                                df = pd.DataFrame(rows, columns=cols)
+                                st.markdown(f"**{tbl.get('title', 'Tabela')}**")
+                                st.dataframe(df, use_container_width=True)
+
+                    steps = detail.get("steps_json") or []
+                    if steps:
+                        with st.expander(
+                            f"🧠 Cadeia de raciocínio ({len(steps)} passos)", expanded=False
+                        ):
+                            for i, s in enumerate(steps, 1):
+                                icon = {"action": "🛠️", "conclusion": "✅", "error": "❌"}.get(
+                                    s.get("type", ""), "🔍"
+                                )
+                                st.markdown(f"**{icon} Passo {i} — {s.get('label', '')}**")
+                                if s.get("content"):
+                                    st.markdown(s["content"])
+                                if s.get("observation"):
+                                    st.caption(f"Observação: {s['observation'][:400]}")
+                                st.divider()
+
+                    if st.button("✖️ Fechar", key="kh_anal_close"):
+                        st.session_state.pop("_kh_anal_detail", None)
+                        st.rerun()
+                else:
+                    st.error("Análise não encontrada.")
+                    st.session_state.pop("_kh_anal_detail", None)

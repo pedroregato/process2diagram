@@ -29,12 +29,191 @@ from ui.components.copy_button import copy_button
 from core.chart_config import CHART_PALETTES, DEFAULT_PALETTE
 from modules.excel_exporter import export_table_to_excel
 
+
+# ── Análise Autônoma UI ───────────────────────────────────────────────────────
+
+def _render_analyst_mode(
+    project_id: str,
+    project_name: str,
+    api_key: str,
+    provider_cfg: dict,
+    provider_name: str,
+) -> None:
+    """Render the Autonomous Analysis mode UI."""
+    st.markdown("# 🔬 Análise Autônoma")
+    st.caption(
+        "Descreva um objetivo analítico complexo. O agente planeja e executa "
+        "múltiplas ferramentas autonomamente, produzindo um relatório estruturado."
+    )
+
+    # ── Objective input ───────────────────────────────────────────────────────
+    objective = st.text_area(
+        "Objetivo da análise",
+        height=120,
+        placeholder=(
+            "Ex: Identifique os requisitos funcionais não implementados e compare "
+            "com as decisões das últimas 3 reuniões. Liste ações em aberto por responsável."
+        ),
+        key="analyst_objective",
+    )
+
+    col_btn, col_info = st.columns([2, 5])
+    run_clicked = col_btn.button("▶️ Iniciar Análise", type="primary", use_container_width=True)
+    col_info.caption(
+        f"Provedor: **{provider_name}** · modelo: `{provider_cfg.get('default_model', '—')}`"
+    )
+
+    # ── Results from previous run ─────────────────────────────────────────────
+    if "_analyst_report" in st.session_state:
+        _render_analyst_report(st.session_state["_analyst_report"], project_id)
+
+    # ── Run ───────────────────────────────────────────────────────────────────
+    if run_clicked:
+        if not objective.strip():
+            st.warning("Descreva o objetivo da análise antes de iniciar.")
+            return
+
+        # Clear previous result
+        st.session_state.pop("_analyst_report", None)
+
+        from modules.auth import is_admin
+        llm_config = {
+            "client_type": provider_cfg.get("client_type", "openai_compatible"),
+            "model":       provider_cfg.get("default_model", "deepseek-chat"),
+            "api_key":     api_key,
+            "base_url":    provider_cfg.get("base_url"),
+        }
+
+        with st.status("🔬 Executando análise autônoma...", expanded=True) as status:
+            st.write("Inicializando agente ReAct...")
+            try:
+                from agents.agent_analyst import AgentAnalyst
+                analyst = AgentAnalyst(
+                    llm_config = llm_config,
+                    project_id = project_id,
+                    is_admin   = is_admin(),
+                )
+                st.write("Agente iniciado. Executando passos analíticos...")
+                report = analyst.run(objective.strip())
+                st.session_state["_analyst_report"] = report
+                if report.success:
+                    status.update(
+                        label=f"✅ Análise concluída — {len(report.steps)} passo(s) · {report.duration_s:.1f}s",
+                        state="complete",
+                    )
+                else:
+                    status.update(label=f"❌ Falha: {report.error[:80]}", state="error")
+            except Exception as exc:
+                status.update(label=f"❌ Erro inesperado: {exc}", state="error")
+                st.error(str(exc))
+                return
+
+        st.rerun()
+
+
+def _render_analyst_report(report, project_id: str) -> None:
+    """Display a completed AnalysisReport."""
+    from agents.agent_analyst import AnalysisReport  # for isinstance check
+
+    st.markdown("---")
+
+    # ── Conclusion ────────────────────────────────────────────────────────────
+    if report.conclusion:
+        st.markdown("## Conclusão da Análise")
+        st.markdown(report.conclusion)
+
+    # ── Tables ────────────────────────────────────────────────────────────────
+    if report.tables:
+        st.markdown("### Tabelas geradas")
+        for tbl in report.tables:
+            title   = tbl.get("title", "Tabela")
+            columns = tbl.get("columns", [])
+            rows    = tbl.get("rows", [])
+            if not columns or not rows:
+                continue
+            import pandas as pd
+            df = pd.DataFrame(rows, columns=columns)
+            st.markdown(f"**{title}**")
+            st.dataframe(df, use_container_width=True)
+            try:
+                from modules.excel_exporter import export_table_to_excel
+                excel_bytes = export_table_to_excel(tbl)
+                if excel_bytes:
+                    st.download_button(
+                        f"⬇️ Exportar {title} (.xlsx)",
+                        data        = excel_bytes,
+                        file_name   = f"{title.lower().replace(' ', '_')}.xlsx",
+                        mime        = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key         = f"analyst_dl_{title}",
+                    )
+            except Exception:
+                pass
+
+    # ── Charts ────────────────────────────────────────────────────────────────
+    if report.charts:
+        for chart_dict in report.charts:
+            try:
+                import plotly.graph_objects as go
+                fig = go.Figure(chart_dict)
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception:
+                pass
+
+    # ── Chain of thought ──────────────────────────────────────────────────────
+    if report.steps:
+        with st.expander(f"🧠 Cadeia de raciocínio ({len(report.steps)} passos)", expanded=False):
+            for i, step in enumerate(report.steps, 1):
+                icon = {"action": "🛠️", "conclusion": "✅", "error": "❌"}.get(step.type, "🔍")
+                with st.container():
+                    st.markdown(f"**{icon} Passo {i} — {step.label}**")
+                    if step.content:
+                        st.markdown(step.content)
+                    if step.observation:
+                        st.caption(f"Observação: {step.observation[:500]}")
+                    st.divider()
+
+    # ── Save to Supabase ──────────────────────────────────────────────────────
+    _col_save, _col_meta = st.columns([2, 5])
+    if _col_save.button("💾 Salvar análise", key="analyst_save"):
+        try:
+            from core.analyst_store import save_analysis, analyses_table_exists
+            if not analyses_table_exists():
+                st.error(
+                    "Tabela `kh_analyses` não encontrada. "
+                    "Execute `setup/supabase_migration_kh_analyses.sql` no Supabase."
+                )
+            else:
+                user = st.session_state.get("_usuario_login", "")
+                aid  = save_analysis(project_id, report, created_by=user)
+                if aid:
+                    st.session_state["_analyst_saved_id"] = aid
+                    st.success(f"✅ Análise salva (ID: `{aid[:8]}…`)")
+                else:
+                    st.error("Falha ao salvar análise.")
+        except Exception as exc:
+            st.error(f"Erro ao salvar: {exc}")
+
+    _col_meta.caption(
+        f"Passos: {len(report.steps)} · "
+        f"Tempo: {report.duration_s:.1f}s · "
+        f"Tabelas: {len(report.tables)}"
+    )
+
+
 # ── Page config ───────────────────────────────────────────────────────────────
 apply_auth_gate()
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### 💬 Assistente")
+
+    st.radio(
+        "Modo",
+        ["💬 Assistente", "🔬 Análise Autônoma"],
+        key="asst_mode",
+        horizontal=True,
+        label_visibility="collapsed",
+    )
 
     st.markdown("#### 📁 Projeto de Trabalho")
     _ap_name = st.session_state.get("active_project_name", "")
@@ -240,7 +419,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── Main Area ─────────────────────────────────────────────────────────────────
-st.markdown("# 💬 Assistente de Reuniões")
+_mode = st.session_state.get("asst_mode", "💬 Assistente")
+st.markdown(f"# {_mode}")
 
 if not supabase_configured():
     st.warning("⚙️ Supabase não configurado.")
@@ -257,6 +437,11 @@ with _col_change:
 # ── Guard: LLM API key ───────────────────────────────────────────────────────
 if not api_key:
     st.warning("⚙️ Configure a chave de API em Configurações → LLM Assistente.")
+    st.stop()
+
+# ── Análise Autônoma mode branch ──────────────────────────────────────────────
+if st.session_state.get("asst_mode") == "🔬 Análise Autônoma":
+    _render_analyst_mode(project_id, project_name, api_key, provider_cfg, selected_provider)
     st.stop()
 
 # ── Status badges ────────────────────────────────────────────────────────────
