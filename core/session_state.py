@@ -31,6 +31,8 @@ def init_session_state():
         st.session_state.run_bmm = False
     if "run_synthesizer" not in st.session_state:
         st.session_state.run_synthesizer = False
+    if "run_ckf_updater" not in st.session_state:
+        st.session_state.run_ckf_updater = False
     if "n_bpmn_runs" not in st.session_state:
         st.session_state.n_bpmn_runs = 1
     if "bpmn_weights" not in st.session_state:

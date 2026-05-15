@@ -115,6 +115,15 @@ def render_sidebar():
             st.session_state.run_sbvr        = st.checkbox("📖 Vocabulário & Regras (SBVR)", value=st.session_state.run_sbvr)
             st.session_state.run_bmm         = st.checkbox("🎯 Motivação do Negócio (BMM)",  value=st.session_state.run_bmm)
             st.session_state.run_synthesizer = st.checkbox("📄 Relatório Executivo",         value=st.session_state.run_synthesizer)
+            st.session_state.run_ckf_updater = st.checkbox(
+                "🧠 Atualizar CKF do Contexto",
+                value=st.session_state.run_ckf_updater,
+                help=(
+                    "Ao final do pipeline, atualiza automaticamente o Context Knowledge File "
+                    "com participantes, termos, regras e objetivos identificados nesta reunião. "
+                    "O CKF é injetado nos agentes de todas as reuniões futuras deste contexto."
+                ),
+            )
 
             st.markdown("---")
 

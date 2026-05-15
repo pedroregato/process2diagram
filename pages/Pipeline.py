@@ -141,9 +141,11 @@ if pipeline_mode == _MODE_NEW:
             "validation_threshold": st.session_state.validation_threshold,
             "max_bpmn_retries": st.session_state.max_bpmn_retries,
             # ATA Engine context — meeting_id left empty until Supabase creates the record
-            "project_id":       st.session_state.get("project_id", ""),
-            "project_slug":     _ata_slug,
-            "meeting_location": "Videoconferência",
+            "project_id":         st.session_state.get("project_id", ""),
+            "active_project_id":  st.session_state.get("active_project_id", ""),
+            "project_slug":       _ata_slug,
+            "meeting_location":   "Videoconferência",
+            "run_ckf_updater":    st.session_state.run_ckf_updater,
         }
 
         with st.status("⏳ Executando pipeline de agentes...", expanded=True) as _pipeline_status:

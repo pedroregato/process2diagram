@@ -104,6 +104,23 @@ def run_pipeline(hub, config, progress_callback):
                                run_bmm=run_bmm,
                                run_synthesizer=run_synthesizer)
 
+    # ── CKF Updater (non-fatal, post-pipeline) ────────────────────────────────
+    if config.get("run_ckf_updater", False):
+        _ckf_ctx_id = (
+            config.get("active_project_id")
+            or config.get("project_id")
+            or getattr(hub, "context_id", "")
+        )
+        if _ckf_ctx_id:
+            try:
+                progress_callback("Atualizador CKF", "running")
+                from agents.agent_ckf_updater import AgentCKFUpdater
+                _ckf_agent = AgentCKFUpdater(client_info, provider_cfg)
+                hub = _ckf_agent.run(hub, output_lang, context_id=_ckf_ctx_id)
+                progress_callback("Atualizador CKF", "done")
+            except Exception:
+                progress_callback("Atualizador CKF", "skipped")
+
     # ── Knowledge extraction (non-fatal, post-pipeline) ───────────────────────
     _kh_meeting_id = config.get("meeting_id")
     _kh_project_id = config.get("project_id")
