@@ -141,7 +141,7 @@ def _analyst_report_to_pdf(report) -> bytes:
         def header(self):
             self.set_font("Helvetica", "I", 7)
             self.set_text_color(150, 150, 150)
-            self.cell(0, 6, "Process2Diagram — Analise Autonoma", align="R", ln=True)
+            self.cell(0, 6, "Process2Diagram - Analise Autonoma", align="R", ln=True)
             self.set_text_color(0, 0, 0)
 
         def footer(self):
@@ -161,7 +161,7 @@ def _analyst_report_to_pdf(report) -> bytes:
     pdf.set_fill_color(r, g, b)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(W, 10, "Analise Autonoma — Relatorio", fill=True, ln=True)
+    pdf.cell(W, 10, "Analise Autonoma - Relatorio", fill=True, ln=True)
     pdf.ln(2)
 
     # Objective
@@ -341,6 +341,11 @@ def _render_analyst_report(report, project_id: str) -> None:
             for row in rows:
                 _md_lines.append("| " + " | ".join(str(v) for v in row) + " |")
             _md_lines.append("")
+    if report.charts:
+        _md_lines.append(
+            f"> **Nota:** esta análise gerou {len(report.charts)} gráfico(s) interativo(s). "
+            "Gráficos não são exportáveis para Markdown — visualize-os na plataforma.\n"
+        )
     if report.steps:
         _md_lines.append("## Cadeia de Raciocínio\n")
         for i, step in enumerate(report.steps, 1):
