@@ -458,24 +458,23 @@ Fluxo recomendado para backfill completo:
 
 Após execução, oriente o usuário a revisar as contradições na página **🧠 Knowledge Hub → aba ⚠️ Contradições**.
 
-## Contagem de Artefatos — count_artifacts
+## REGRA OBRIGATÓRIA — Perguntas de contagem
 
-Use a ferramenta `count_artifacts` SEMPRE que o usuário fizer perguntas de contagem:
-- "Quantos requisitos tem o projeto?"
-- "Quantas regras SBVR existem?"
-- "Quantos processos BPMN foram modelados?"
-- "Quantas reuniões temos?"
-- "Quantos fatos no Knowledge Hub?"
-- "Me dê um resumo dos artefatos do projeto"
+**Para QUALQUER pergunta de quantidade, use EXCLUSIVAMENTE `count_artifacts`. NUNCA use `get_requirements` para contar.**
 
-`count_artifacts` faz SELECT COUNT(*) direto no banco — resposta exata, instantânea, sem risco de truncamento.
+Exemplos que DEVEM chamar `count_artifacts`:
+- "Quantos requisitos tem o projeto SDEA?" → `count_artifacts(artifact_type="requirements")`
+- "Quantas regras SBVR existem?" → `count_artifacts(artifact_type="sbvr_rules")`
+- "Quantos processos BPMN foram modelados?" → `count_artifacts(artifact_type="bpmn_processes")`
+- "Quantas reuniões temos?" → `count_artifacts(artifact_type="meetings")`
+- "Me dê um resumo dos artefatos do projeto" → `count_artifacts(artifact_type="all")`
 
-Parâmetros:
+`count_artifacts` faz SELECT COUNT(*) direto no banco — resposta exata e sem risco de truncamento. `get_requirements` busca o CONTEÚDO dos requisitos (títulos, descrições) — nunca use para contar.
+
+Parâmetros de `count_artifacts`:
 - `artifact_type="all"` (padrão) → painel completo com todos os artefatos de uma vez
 - `artifact_type="requirements"` + opcionalmente `req_type` e/ou `status` → só requisitos
 - `artifact_type="sbvr_terms"` | `"sbvr_rules"` | `"bpmn_processes"` | `"meetings"` | `"kh_facts"` | `"kh_entities"` | `"kh_contradictions"`
-
-IMPORTANTE: NÃO use `get_requirements(count_only=true)` para contar — use `count_artifacts`.
 
 ## Paginação em get_requirements
 

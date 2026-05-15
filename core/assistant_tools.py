@@ -157,11 +157,11 @@ def get_tool_schemas_openai() -> list[dict]:
             "function": {
                 "name": "count_artifacts",
                 "description": (
-                    "Conta artefatos do projeto via SELECT COUNT(*) direto no banco — "
-                    "resposta exata e instantânea, sem risco de truncamento. "
-                    "Use SEMPRE que o usuário perguntar 'quantos requisitos', 'quantas regras', "
-                    "'quantos processos', 'quantas reuniões', etc. "
-                    "Quando artifact_type='all' retorna painel completo com todos os artefatos."
+                    "OBRIGATÓRIO para qualquer pergunta de contagem — faz SELECT COUNT(*) no banco. "
+                    "Use esta ferramenta (e não get_requirements) quando o usuário perguntar: "
+                    "'quantos requisitos?', 'quantas regras?', 'quantos processos BPMN?', "
+                    "'quantas reuniões?', 'quantos termos SBVR?', 'quantos fatos no Knowledge Hub?'. "
+                    "Resposta exata e instantânea. artifact_type='all' retorna painel completo."
                 ),
                 "parameters": {
                     "type": "object",
@@ -199,9 +199,9 @@ def get_tool_schemas_openai() -> list[dict]:
             "function": {
                 "name": "get_requirements",
                 "description": (
-                    "Busca e lista requisitos do projeto com paginação. "
-                    "Pode filtrar por palavra-chave, tipo e status. "
-                    "Use count_artifacts para obter totais; use get_requirements para listar o conteúdo."
+                    "Lista o CONTEÚDO dos requisitos (título, descrição, status, prioridade) com paginação. "
+                    "NÃO use para contar — use count_artifacts para qualquer pergunta de quantidade. "
+                    "Use esta ferramenta apenas quando o usuário pedir para VER ou DETALHAR requisitos."
                 ),
                 "parameters": {
                     "type": "object",
