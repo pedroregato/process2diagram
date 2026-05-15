@@ -2387,11 +2387,8 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             return f"Reuniões: **{n}**"
 
         if art == "kh_facts":
-            f = [("project_id", pid)]
-            if status:
-                f.append(("is_active", status))  # "True"/"False" as string is not ideal;
             n = _count("kh_facts", [("project_id", pid)])
-            n_active = _count("kh_facts", [("project_id", pid), ("is_active", "true")])
+            n_active = _count("kh_facts", [("project_id", pid), ("is_active", True)])
             if n < 0:
                 return "Fatos KH: tabelas do Knowledge Hub ainda não criadas."
             return f"Fatos (Knowledge Hub): **{n}** total · **{n_active}** ativos"
@@ -2448,7 +2445,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         n_entities = _count("kh_entities",       [("project_id", pid)])
         n_contras  = _count("kh_contradictions", [("project_id", pid)])
         if n_facts >= 0:
-            n_active = _count("kh_facts", [("project_id", pid), ("is_active", "true")])
+            n_active = _count("kh_facts", [("project_id", pid), ("is_active", True)])
             n_open   = _count("kh_contradictions", [("project_id", pid), ("status", "open")])
             lines.append(
                 f"🧠 **Knowledge Hub:** {n_entities} entidades · "
