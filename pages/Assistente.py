@@ -171,8 +171,44 @@ def _render_analyst_report(report, project_id: str) -> None:
                         st.caption(f"Observação: {step.observation[:500]}")
                     st.divider()
 
-    # ── Save to Supabase ──────────────────────────────────────────────────────
-    _col_save, _col_meta = st.columns([2, 5])
+    # ── Export ────────────────────────────────────────────────────────────────
+    _col_save, _col_export, _col_meta = st.columns([2, 2, 4])
+
+    _md_lines: list[str] = [f"# Análise Autônoma\n\n**Objetivo:** {report.objective}\n"]
+    if report.conclusion:
+        _md_lines.append(f"## Conclusão\n\n{report.conclusion}\n")
+    for tbl in report.tables:
+        cols = tbl.get("columns", [])
+        rows = tbl.get("rows", [])
+        if cols and rows:
+            _md_lines.append(f"## {tbl.get('title', 'Tabela')}\n")
+            _md_lines.append("| " + " | ".join(cols) + " |")
+            _md_lines.append("| " + " | ".join(["---"] * len(cols)) + " |")
+            for row in rows:
+                _md_lines.append("| " + " | ".join(str(v) for v in row) + " |")
+            _md_lines.append("")
+    if report.steps:
+        _md_lines.append("## Cadeia de Raciocínio\n")
+        for i, step in enumerate(report.steps, 1):
+            _md_lines.append(f"**Passo {i} — {step.label}**\n")
+            if step.tool_input:
+                _md_lines.append(f"Input: `{step.tool_input[:200]}`\n")
+            if step.observation:
+                _md_lines.append(f"Resultado: {step.observation[:400]}\n")
+    _md_lines.append(
+        f"\n---\n*Gerado em {report.duration_s:.1f}s · {len(report.steps)} passos*"
+    )
+    _md_export = "\n".join(_md_lines)
+
+    _col_export.download_button(
+        "📄 Exportar Markdown",
+        data      = _md_export.encode("utf-8"),
+        file_name = "analise_autonoma.md",
+        mime      = "text/markdown",
+        key       = "analyst_dl_md",
+        use_container_width=True,
+    )
+
     if _col_save.button("💾 Salvar análise", key="analyst_save"):
         try:
             from core.analyst_store import save_analysis, analyses_table_exists
