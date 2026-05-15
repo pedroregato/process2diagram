@@ -38,10 +38,7 @@ streamlit-javascript==0.1.5     # executa JS no browser e retorna valor ao Pytho
 # ── Orquestração com grafo (LangGraph) ───────────────────────────────────────
 langgraph==1.2.0                # adaptive BPMN retry loop (core/lg_pipeline.py); pinado pois langchain==1.3.0 exige <1.3.0
 
-# ── Agente Autônomo (LangChain ReAct) ─────────────────────────────────────────
-langchain==1.3.0                # ReAct agent framework para AgentAnalyst
-langchain-openai==1.2.1         # ChatOpenAI para providers OpenAI-compatible
-langchain-anthropic==1.4.3      # ChatAnthropic para provider Anthropic nativo
+# (AgentAnalyst usa loop manual de tool-calling — sem dependência extra de LangChain)
 
 # ── Supabase (persistência de projetos/reuniões/requisitos) ──────────────────
 supabase>=2.4.0                 # cliente Python para Supabase (project_store.py)

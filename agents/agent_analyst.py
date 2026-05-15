@@ -1,21 +1,18 @@
 # agents/agent_analyst.py
 # ─────────────────────────────────────────────────────────────────────────────
-# AgentAnalyst — autonomous analysis agent using LangChain tool-calling loop.
+# AgentAnalyst — autonomous analysis agent using a manual tool-calling loop.
 #
-# Uses langchain.agents.create_agent (LangGraph-backed) which:
-#  - calls the LLM with tool definitions (function-calling style)
-#  - executes chosen tools, feeds results back
-#  - repeats until the LLM produces a final answer with no tool call
-#
-# Unlike AgentAssistant (≤5 rounds, conversational), AgentAnalyst executes
-# multi-step analytical objectives autonomously (up to ~15 tool rounds),
-# with full chain-of-thought capture and streaming step display.
+# Mirrors the pattern of AgentAssistant.chat_with_tools() but:
+#  - Single analytical objective (not conversational)
+#  - Up to MAX_ITERATIONS = 15 tool rounds
+#  - Captures ReActStep for each tool call + observation
+#  - Returns AnalysisReport
+#  - Works with all existing providers via openai==1.65.0 / anthropic==0.49.0
+#    (no LangChain dependency)
 #
 # Public API:
 #   AgentAnalyst(llm_config, project_id, is_admin=False)
 #     .run(objective: str) -> AnalysisReport
-#
-# LangChain imports are lazy (inside run()) to avoid slowing Streamlit cold start.
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
@@ -26,6 +23,8 @@ import time
 from dataclasses import dataclass, field
 
 _log = logging.getLogger(__name__)
+
+MAX_ITERATIONS = 15   # max tool rounds before forcing final answer
 
 
 # ── Data classes ──────────────────────────────────────────────────────────────
@@ -107,7 +106,10 @@ class AnalysisReport:
 
 class AgentAnalyst:
     """
-    Autonomous analysis agent using LangChain tool-calling loop (LangGraph-backed).
+    Autonomous analysis agent using a manual tool-calling loop.
+
+    Uses the same openai / anthropic SDK already in requirements.txt —
+    no LangChain dependency.
 
     Parameters
     ----------
@@ -118,9 +120,6 @@ class AgentAnalyst:
     is_admin : bool
         Whether admin-only tools should be exposed
     """
-
-    # Each tool round = 2 graph steps (agent → tools → agent). 15 rounds = 32 steps.
-    RECURSION_LIMIT = 32
 
     SYSTEM_PROMPT = (
         "Você é um analista sênior de processos de negócios.\n"
@@ -159,129 +158,226 @@ class AgentAnalyst:
     # ── Internal ──────────────────────────────────────────────────────────────
 
     def _run_agent(self, objective: str, t0: float) -> AnalysisReport:
-        # Lazy imports — only executed when Análise Autônoma mode is triggered
-        from langchain.agents import create_agent
-        from adapters.langchain_tools import build_langchain_tools
+        from core.assistant_tools import (
+            AssistantToolExecutor,
+            get_tool_schemas_openai,
+            get_tool_schemas_anthropic,
+        )
         import streamlit as st
 
-        executor_obj, tools = build_langchain_tools(
-            self.project_id,
-            is_admin   = self.is_admin,
+        executor = AssistantToolExecutor(
+            project_id = self.project_id,
             llm_config = self.llm_config,
-        )
-        llm = self._build_llm()
-
-        agent_graph = create_agent(
-            model         = llm,
-            tools         = tools,
-            system_prompt = self.SYSTEM_PROMPT,
         )
 
         # Clear pending tables from any previous run
         st.session_state.pop("_pending_tables", None)
 
-        # Stream to capture intermediate steps
-        steps:        list[ReActStep] = []
-        final_answer: str             = ""
+        client_type = self.llm_config.get("client_type", "openai_compatible")
 
-        try:
-            for chunk in agent_graph.stream(
-                {"messages": [("user", objective)]},
-                config       = {"recursion_limit": self.RECURSION_LIMIT},
-                stream_mode  = "updates",
-            ):
-                for node_name, update in chunk.items():
-                    for msg in (update.get("messages") or []):
-                        self._process_message(msg, steps)
-                        # Track final answer from last AI message
-                        content = getattr(msg, "content", "")
-                        tc      = getattr(msg, "tool_calls", None)
-                        if content and not tc:
-                            msg_type = getattr(msg, "type", "")
-                            if msg_type == "ai":
-                                final_answer = str(content)
-        except Exception as exc:
-            _log.warning("AgentAnalyst stream interrupted: %s", exc)
-            if not final_answer:
-                final_answer = f"Análise interrompida: {exc}"
-
-        # Add conclusion step if not already captured
-        if final_answer and (not steps or steps[-1].type != "conclusion"):
-            steps.append(ReActStep(
-                type    = "conclusion",
-                label   = "Resposta Final",
-                content = final_answer,
-            ))
+        if client_type == "anthropic":
+            conclusion, total_tk, steps = self._loop_anthropic(
+                executor, objective, get_tool_schemas_anthropic()
+            )
+        else:
+            conclusion, total_tk, steps = self._loop_openai(
+                executor, objective, get_tool_schemas_openai()
+            )
 
         tables = st.session_state.pop("_pending_tables", [])
-        charts = executor_obj.get_pending_charts()
+        charts = executor.get_pending_charts()
 
         return AnalysisReport(
             objective  = objective,
             steps      = steps,
-            conclusion = final_answer,
+            conclusion = conclusion,
             tables     = tables,
             charts     = charts,
+            tokens_used = total_tk,
             duration_s = time.time() - t0,
-            success    = bool(final_answer),
+            success    = bool(conclusion),
         )
 
-    @staticmethod
-    def _process_message(msg, steps: list[ReActStep]) -> None:
-        """Extract ReActStep entries from a LangGraph message."""
-        msg_type  = getattr(msg, "type", "")
-        content   = getattr(msg, "content", "")
-        tool_calls = getattr(msg, "tool_calls", None)
+    # ── OpenAI-compatible loop ────────────────────────────────────────────────
 
-        if tool_calls:
-            # AI message with tool calls → action steps
-            for tc in tool_calls:
-                name  = tc.get("name", "tool")
-                args  = tc.get("args", {})
-                args_str = (
-                    json.dumps(args, ensure_ascii=False)
-                    if isinstance(args, dict)
-                    else str(args)
-                )[:400]
-                steps.append(ReActStep(
-                    type       = "action",
-                    label      = f"Ferramenta: {name}",
-                    tool_name  = name,
-                    tool_input = args_str,
-                    content    = f"**Ferramenta:** `{name}`\n\n**Input:** {args_str}",
-                ))
+    def _loop_openai(
+        self,
+        executor,
+        objective: str,
+        tools: list[dict],
+    ) -> tuple[str, int, list[ReActStep]]:
+        from openai import OpenAI
 
-        elif msg_type == "tool":
-            # ToolMessage → observation for the last unmatched action
-            obs = str(content)[:1000]
-            for s in reversed(steps):
-                if s.type == "action" and not s.observation:
-                    s.observation = obs
-                    break
-
-    def _build_llm(self):
-        """Build a LangChain chat model from llm_config."""
-        client_type = self.llm_config.get("client_type", "openai_compatible")
-        model       = self.llm_config.get("model", "deepseek-chat")
-        api_key     = self.llm_config.get("api_key", "")
-
-        if client_type == "anthropic":
-            from langchain_anthropic import ChatAnthropic
-            return ChatAnthropic(
-                model       = model,
-                api_key     = api_key,
-                temperature = 0,
-                max_tokens  = 4096,
-            )
-
-        from langchain_openai import ChatOpenAI
-        kwargs: dict = {
-            "model":       model,
-            "api_key":     api_key,
-            "temperature": 0,
-            "max_tokens":  4096,
-        }
+        api_key  = self.llm_config.get("api_key", "")
+        model    = self.llm_config.get("model", "deepseek-chat")
         base_url = self.llm_config.get("base_url")
-        if base_url:
-            kwargs["base_url"] = base_url
-        return ChatOpenAI(**kwargs)
+
+        client = OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
+
+        msgs: list[dict] = [
+            {"role": "system", "content": self.SYSTEM_PROMPT},
+            {"role": "user",   "content": objective},
+        ]
+        total_tk = 0
+        steps: list[ReActStep] = []
+
+        for iteration in range(MAX_ITERATIONS):
+            tool_choice = "required" if iteration == 0 else "auto"
+
+            resp = client.chat.completions.create(
+                model       = model,
+                messages    = msgs,
+                tools       = tools,
+                tool_choice = tool_choice,
+                max_tokens  = 4096,
+                temperature = 0,
+            )
+            total_tk += resp.usage.total_tokens if resp.usage else 0
+            choice = resp.choices[0]
+            content = choice.message.content or ""
+
+            if choice.finish_reason != "tool_calls" or not choice.message.tool_calls:
+                # Final answer
+                return content, total_tk, steps
+
+            # Build clean assistant message (avoid SDK-specific extra fields)
+            tc_list = choice.message.tool_calls or []
+            msgs.append({
+                "role":    "assistant",
+                "content": content,
+                "tool_calls": [
+                    {
+                        "id":   tc.id,
+                        "type": tc.type,
+                        "function": {
+                            "name":      tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in tc_list
+                ],
+            })
+
+            for tc in tc_list:
+                fn_name = tc.function.name
+                try:
+                    fn_args = json.loads(tc.function.arguments or "{}")
+                except json.JSONDecodeError:
+                    fn_args = {}
+
+                args_str = json.dumps(fn_args, ensure_ascii=False)[:400]
+                step = ReActStep(
+                    type       = "action",
+                    label      = f"Ferramenta: {fn_name}",
+                    tool_name  = fn_name,
+                    tool_input = args_str,
+                    content    = f"**Ferramenta:** `{fn_name}`\n\n**Input:** {args_str}",
+                )
+
+                result = executor.execute(fn_name, fn_args)
+                obs = str(result)[:1000]
+                step.observation = obs
+                steps.append(step)
+
+                msgs.append({
+                    "role":         "tool",
+                    "tool_call_id": tc.id,
+                    "content":      obs,
+                })
+
+        # Force final answer after MAX_ITERATIONS
+        final_resp = client.chat.completions.create(
+            model      = model,
+            messages   = msgs + [{
+                "role":    "user",
+                "content": (
+                    "Com base em todos os dados coletados, escreva agora a conclusão completa "
+                    "em Português do Brasil."
+                ),
+            }],
+            max_tokens  = 4096,
+            temperature = 0,
+        )
+        total_tk += final_resp.usage.total_tokens if final_resp.usage else 0
+        return final_resp.choices[0].message.content or "", total_tk, steps
+
+    # ── Anthropic loop ────────────────────────────────────────────────────────
+
+    def _loop_anthropic(
+        self,
+        executor,
+        objective: str,
+        tools: list[dict],
+    ) -> tuple[str, int, list[ReActStep]]:
+        import anthropic
+
+        api_key = self.llm_config.get("api_key", "")
+        model   = self.llm_config.get("model", "claude-sonnet-4-6")
+
+        client = anthropic.Anthropic(api_key=api_key)
+
+        msgs: list[dict] = [{"role": "user", "content": objective}]
+        total_tk = 0
+        steps: list[ReActStep] = []
+
+        for _ in range(MAX_ITERATIONS):
+            resp = client.messages.create(
+                model      = model,
+                system     = self.SYSTEM_PROMPT,
+                tools      = tools,
+                messages   = msgs,
+                max_tokens = 4096,
+            )
+            total_tk += (resp.usage.input_tokens + resp.usage.output_tokens) if resp.usage else 0
+
+            if resp.stop_reason != "tool_use":
+                text = next((b.text for b in resp.content if hasattr(b, "text")), "")
+                return text, total_tk, steps
+
+            tool_use_blocks = [b for b in resp.content if b.type == "tool_use"]
+            if not tool_use_blocks:
+                text = next((b.text for b in resp.content if hasattr(b, "text")), "")
+                return text, total_tk, steps
+
+            msgs.append({"role": "assistant", "content": resp.content})
+
+            tool_results = []
+            for tb in tool_use_blocks:
+                args_str = json.dumps(tb.input or {}, ensure_ascii=False)[:400]
+                step = ReActStep(
+                    type       = "action",
+                    label      = f"Ferramenta: {tb.name}",
+                    tool_name  = tb.name,
+                    tool_input = args_str,
+                    content    = f"**Ferramenta:** `{tb.name}`\n\n**Input:** {args_str}",
+                )
+
+                result = executor.execute(tb.name, tb.input or {})
+                obs = str(result)[:1000]
+                step.observation = obs
+                steps.append(step)
+
+                tool_results.append({
+                    "type":        "tool_result",
+                    "tool_use_id": tb.id,
+                    "content":     obs,
+                })
+
+            msgs.append({"role": "user", "content": tool_results})
+
+        # Force final answer after MAX_ITERATIONS
+        final_resp = client.messages.create(
+            model      = model,
+            system     = self.SYSTEM_PROMPT,
+            messages   = msgs + [{
+                "role":    "user",
+                "content": (
+                    "Com base em todos os dados coletados, escreva agora a conclusão completa "
+                    "em Português do Brasil."
+                ),
+            }],
+            max_tokens = 4096,
+        )
+        total_tk += (final_resp.usage.input_tokens + final_resp.usage.output_tokens) if final_resp.usage else 0
+        text = next((b.text for b in final_resp.content if hasattr(b, "text")), "")
+        return text, total_tk, steps
