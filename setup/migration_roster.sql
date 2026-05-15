@@ -246,48 +246,14 @@ COMMENT ON FUNCTION get_meeting_participants_full IS
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- FASE 8 — SEED: Projeto SDEA
+-- FASE 8 — SEED (removido do migration genérico)
 -- ─────────────────────────────────────────────────────────────────────────────
--- Remover ou comentar este bloco em deploys genéricos.
--- Substitua <SDEA_PROJECT_UUID> pelo UUID real do projeto SDEA no Supabase.
-
-/*
-DO $$
-DECLARE
-    v_project_id UUID := '<SDEA_PROJECT_UUID>';
-BEGIN
-    -- Atualizar slug e local do projeto
-    UPDATE projects
-       SET ata_slug         = 'sdea',
-           meeting_location = 'Teams / FGV'
-     WHERE id = v_project_id;
-
-    -- Inserir roster SDEA
-    INSERT INTO project_roster
-        (project_id, initials, full_name, area, color_hex, name_aliases, sort_order)
-    VALUES
-        (v_project_id, 'MF', 'Maria de Fátima Duarte Moura', 'Auditoria',
-         '0B1E3D', ARRAY['Maria', 'Fátima', 'MF', 'Maria de Fátima', 'Maria Fátima'],
-         0),
-        (v_project_id, 'JL', 'João Luís F. Chaves', 'Auditoria',
-         '1A4B8C', ARRAY['João', 'João Luís', 'JL', 'Joao Luis'],
-         1),
-        (v_project_id, 'NC', 'Natasha Cristine Costa', 'DTI/SOLCORP',
-         '1A7F5A', ARRAY['Natasha', 'NC', 'Natasha Cristine'],
-         2),
-        (v_project_id, 'PG', 'Pedro Gentil R. O. Soares', 'DTI/SOLCORP',
-         'C97B1A', ARRAY['Pedro', 'PG', 'Pedro Gentil'],
-         3)
-    ON CONFLICT (project_id, initials) DO UPDATE SET
-        full_name    = EXCLUDED.full_name,
-        area         = EXCLUDED.area,
-        color_hex    = EXCLUDED.color_hex,
-        name_aliases = EXCLUDED.name_aliases,
-        sort_order   = EXCLUDED.sort_order,
-        updated_at   = now();
-END;
-$$;
-*/
+-- Para popular o roster de um projeto específico, use a UI em
+-- Configurações → 👥 Participantes, ou insira diretamente via SQL:
+--
+-- INSERT INTO project_roster (project_id, initials, full_name, area, color_hex, name_aliases, sort_order)
+-- VALUES ('<uuid-do-projeto>', 'AB', 'Nome Completo', 'Área', '1A4B8C', ARRAY['Nome', 'NomeAlias'], 0)
+-- ON CONFLICT (project_id, initials) DO UPDATE SET ...;
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
