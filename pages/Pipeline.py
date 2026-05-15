@@ -110,6 +110,9 @@ if pipeline_mode == _MODE_NEW:
             hub.transcript_clean = st.session_state.curated_clean
         hub.meta.llm_provider = st.session_state.selected_provider
 
+        # Derive project slug from prefix (e.g. "SDEA_" → "sdea")
+        _ata_slug = st.session_state.get("prefix", "p2d_").rstrip("_").lower() or "p2d"
+
         config = {
             "client_info": client_info,
             "provider_cfg": st.session_state.provider_cfg,
@@ -126,6 +129,10 @@ if pipeline_mode == _MODE_NEW:
             "use_langgraph": st.session_state.use_langgraph,
             "validation_threshold": st.session_state.validation_threshold,
             "max_bpmn_retries": st.session_state.max_bpmn_retries,
+            # ATA Engine context — meeting_id left empty until Supabase creates the record
+            "project_id":       st.session_state.get("project_id", ""),
+            "project_slug":     _ata_slug,
+            "meeting_location": "Videoconferência",
         }
 
         with st.status("⏳ Executando pipeline de agentes...", expanded=True) as _pipeline_status:
@@ -158,6 +165,31 @@ if pipeline_mode == _MODE_NEW:
                     st.session_state.current_meeting_id = meeting_id
                     save_transcript(meeting_id, hub)
                     save_meeting_artifacts(meeting_id, hub)
+
+                    # Regenerate ATA HTML with actual meeting_id so the roster
+                    # matching and participant persistence work correctly
+                    if hub.minutes.ready:
+                        try:
+                            from modules.ata_engine_generator import generate_ata_html
+                            from datetime import date as _d
+                            _mtg_date = st.session_state.get("meeting_date") or _d.today()
+                            if isinstance(_mtg_date, str):
+                                from datetime import date as _date
+                                try:
+                                    _mtg_date = _date.fromisoformat(_mtg_date)
+                                except ValueError:
+                                    _mtg_date = _d.today()
+                            hub.minutes.ata_html = generate_ata_html(
+                                minutes      = hub.minutes,
+                                project_id   = st.session_state.get("project_id", ""),
+                                meeting_id   = meeting_id,
+                                project_slug = _ata_slug,
+                                meeting_date = _mtg_date,
+                                local        = "Videoconferência",
+                            )
+                            st.session_state.hub = hub
+                        except Exception:
+                            pass  # non-fatal — first-pass ATA HTML still available
 
                     if hub.sbvr.ready:
                         save_sbvr_from_hub(meeting_id, st.session_state.project_id, hub)

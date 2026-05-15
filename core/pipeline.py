@@ -25,6 +25,7 @@ def run_pipeline(hub, config, progress_callback):
     bpmn_weights = config["bpmn_weights"]
 
     orchestrator = Orchestrator(client_info, provider_cfg, progress_callback)
+    orchestrator._pipeline_config = config  # gives ATA Engine access to project_id/slug/location
 
     if run_bpmn and n_bpmn_runs > 1:
         # ── Multi‑run tournament: run N passes, pick best by AgentValidator ──────
