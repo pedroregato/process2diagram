@@ -6,13 +6,6 @@
 import streamlit as st
 from ui.auth_gate import apply_auth_gate
 
-st.set_page_config(
-    page_title="Guia CKF — Process2Diagram",
-    page_icon="📖",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
-
 apply_auth_gate()
 
 # ── HTML guide ────────────────────────────────────────────────────────────────
