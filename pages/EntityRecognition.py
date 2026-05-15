@@ -82,7 +82,7 @@ if not projects:
     st.stop()
 
 proj_map        = {p["name"]: p for p in projects}
-sel_proj        = st.selectbox("Projeto", list(proj_map.keys()), key="er_proj")
+sel_proj        = st.selectbox("Contexto", list(proj_map.keys()), key="er_proj")
 project_id: str = proj_map[sel_proj]["id"]
 
 st.markdown("---")

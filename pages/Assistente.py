@@ -670,10 +670,10 @@ with st.sidebar:
     _ap_name = st.session_state.get("active_project_name", "")
     if _ap_name:
         st.success(f"**{_ap_name}**")
-        st.page_link("pages/Home.py", label="↩ Trocar projeto")
+        st.page_link("pages/Home.py", label="↩ Trocar contexto")
     else:
-        st.warning("Nenhum projeto ativo.")
-        st.page_link("pages/Home.py", label="← Selecionar projeto")
+        st.warning("Nenhum contexto ativo.")
+        st.page_link("pages/Home.py", label="← Selecionar contexto")
 
     st.markdown("---")
 
@@ -929,7 +929,7 @@ project_id, project_name = require_active_project()
 
 _col_proj, _col_change = st.columns([5, 1])
 with _col_proj:
-    st.success(f"📁 **Projeto:** {project_name}")
+    st.success(f"📁 **Contexto:** {project_name}")
 with _col_change:
     st.page_link("pages/Home.py", label="Trocar")
 
@@ -959,7 +959,7 @@ _embed_key  = st.session_state.get("asst_embed_key", "")
 _model      = provider_cfg.get("default_model", "")
 
 _badges = [
-    _badge("📁", "Projeto", project_name, "#1A4B8C"),
+    _badge("📁", "Contexto", project_name, "#1A4B8C"),
     _badge("🤖", "LLM", selected_provider, "#C97B1A"),
     _badge("⚡", "Modelo", _model, "#1e3a5f"),
 ]
@@ -1048,7 +1048,7 @@ def _export_chat_to_markdown(
     from datetime import datetime as _dt
     lines = [
         "# Conversa — Assistente P2D",
-        f"**Projeto:** {project_name}",
+        f"**Contexto:** {project_name}",
         f"**Data:** {_dt.now().strftime('%Y-%m-%d %H:%M')}",
         f"**Provedor LLM:** {provider}",
         "",

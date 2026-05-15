@@ -466,7 +466,7 @@ with tab_db:
 
             # Quick stats
             try:
-                n_proj = len(db.table("projects").select("id").execute().data or [])
+                n_proj = len(db.table("contexts").select("id").execute().data or [])
                 n_meet = len(db.table("meetings").select("id").execute().data or [])
                 n_req  = len(db.table("requirements").select("id").execute().data or [])
                 c1, c2, c3 = st.columns(3)
@@ -501,26 +501,26 @@ with tab_db:
 
     st.markdown("---")
 
-    # ── Projetos — gestão de sigla ─────────────────────────────────────────
+    # ── Contextos — gestão de sigla ────────────────────────────────────────
     if db:
-        st.markdown("#### 📁 Projetos")
-        st.caption("Visualize e edite a sigla dos projetos cadastrados.")
+        st.markdown("#### 📁 Contextos")
+        st.caption("Visualize e edite a sigla dos contextos cadastrados.")
 
         try:
-            proj_rows = db.table("projects").select("*").order("name").execute().data or []
+            proj_rows = db.table("contexts").select("*").order("name").execute().data or []
         except Exception as e:
             proj_rows = []
-            st.warning(f"Erro ao carregar projetos: {e}")
+            st.warning(f"Erro ao carregar contextos: {e}")
 
         if not proj_rows:
-            st.info("Nenhum projeto cadastrado.")
+            st.info("Nenhum contexto cadastrado.")
             # Show migration SQL if sigla column is likely missing
             with st.expander("🔧 Adicionar coluna `sigla` ao Supabase", expanded=False):
                 st.markdown(
                     "Execute este SQL no **Supabase → SQL Editor** para adicionar a coluna:"
                 )
                 st.code(
-                    "ALTER TABLE projects ADD COLUMN IF NOT EXISTS sigla TEXT DEFAULT '';",
+                    "ALTER TABLE contexts ADD COLUMN IF NOT EXISTS sigla TEXT DEFAULT '';",
                     language="sql",
                 )
         else:
@@ -528,11 +528,11 @@ with tab_db:
             _has_sigla = "sigla" in (proj_rows[0] if proj_rows else {})
             if not _has_sigla:
                 st.warning(
-                    "⚠️ A coluna `sigla` não existe na tabela `projects`. "
+                    "⚠️ A coluna `sigla` não existe na tabela `contexts`. "
                     "Execute o SQL abaixo no Supabase para criá-la:"
                 )
                 st.code(
-                    "ALTER TABLE projects ADD COLUMN IF NOT EXISTS sigla TEXT DEFAULT '';",
+                    "ALTER TABLE contexts ADD COLUMN IF NOT EXISTS sigla TEXT DEFAULT '';",
                     language="sql",
                 )
 
@@ -547,7 +547,7 @@ with tab_db:
                         value=psig,
                         max_chars=20,
                         key=f"sigla_{pid}",
-                        help="Abreviação do projeto (ex: SDEA, FGV, P2D)",
+                        help="Abreviação do contexto (ex: SDEA, FGV, P2D)",
                     )
                     new_name = col_a.text_input(
                         "Nome",
@@ -586,8 +586,8 @@ with tab_db:
                             if new_location:
                                 patch["meeting_location"] = new_location
                             try:
-                                db.table("projects").update(patch).eq("id", pid).execute()
-                                st.success("✅ Projeto atualizado.")
+                                db.table("contexts").update(patch).eq("id", pid).execute()
+                                st.success("✅ Contexto atualizado.")
                                 st.rerun()
                             except Exception as upd_err:
                                 st.error(f"Erro ao salvar: {upd_err}")
@@ -602,8 +602,8 @@ with tab_db:
             "no **Supabase → SQL Editor**."
         )
         _migration_sql = """\
--- Adiciona coluna sigla em projects (caso não exista)
-ALTER TABLE projects ADD COLUMN IF NOT EXISTS sigla TEXT DEFAULT '';
+-- Adiciona coluna sigla em contexts (caso não exista)
+ALTER TABLE contexts ADD COLUMN IF NOT EXISTS sigla TEXT DEFAULT '';
 
 -- Torna meeting_id opcional em sbvr_terms e sbvr_rules
 -- (permite termos/regras adicionados pelo Assistente sem reunião de origem)
@@ -662,7 +662,7 @@ ALTER TABLE meetings ADD COLUMN IF NOT EXISTS meeting_type TEXT DEFAULT NULL;
 -- Tabela de histórico de indicadores ROI-TR
 CREATE TABLE IF NOT EXISTS meeting_quality_scores (
     id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id          UUID        NOT NULL REFERENCES projects(id)  ON DELETE CASCADE,
+    project_id          UUID        NOT NULL REFERENCES contexts(id)  ON DELETE CASCADE,
     meeting_id          UUID        NOT NULL REFERENCES meetings(id)  ON DELETE CASCADE,
     meeting_number      INTEGER     NOT NULL,
     computed_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -679,7 +679,7 @@ CREATE TABLE IF NOT EXISTS meeting_quality_scores (
     dc_score            NUMERIC,
     roi_tr              NUMERIC
 );
-CREATE INDEX IF NOT EXISTS idx_mqs_project
+CREATE INDEX IF NOT EXISTS idx_mqs_context
     ON meeting_quality_scores (project_id, meeting_number, computed_at DESC);
 ALTER TABLE meeting_quality_scores DISABLE ROW LEVEL SECURITY;
 
@@ -700,6 +700,26 @@ $$;
 """
         st.code(_roi_sql, language="sql")
 
+        st.markdown("---")
+        st.markdown("#### 🔄 v4.21 — Migração `projects` → `contexts`")
+        st.info(
+            "**Necessário para a versão v4.21+**\n\n"
+            "Renomeia a tabela `projects` para `contexts` e adiciona as colunas "
+            "`context_type` e `skill_md`. Execute uma única vez no Supabase → SQL Editor."
+        )
+        _v421_sql_path = Path(__file__).parent.parent / "setup" / "migrate_v4_21_context.sql"
+        try:
+            _v421_sql = _v421_sql_path.read_text(encoding="utf-8")
+        except Exception:
+            _v421_sql = "-- Arquivo não encontrado: setup/migrate_v4_21_context.sql"
+        st.download_button(
+            "⬇️ Baixar migrate_v4_21_context.sql",
+            data=_v421_sql,
+            file_name="migrate_v4_21_context.sql",
+            mime="text/plain",
+        )
+        st.code(_v421_sql, language="sql")
+
     st.markdown("---")
     st.markdown("#### 📊 Painel completo do banco")
     st.markdown(
@@ -709,21 +729,21 @@ $$;
     )
     st.page_link("pages/DatabaseOverview.py", label="Abrir Visão do Banco →", icon="🗄️")
 
-    # ── Google Calendar por Projeto (admin) ───────────────────────────────────
+    # ── Google Calendar por Contexto (admin) ──────────────────────────────────
     from modules.auth import is_admin
     if is_admin():
         st.markdown("---")
-        st.markdown("#### 📅 Google Calendar por Projeto")
+        st.markdown("#### 📅 Google Calendar por Contexto")
         st.caption(
-            "Associe um calendar_id específico a cada projeto. "
+            "Associe um calendar_id específico a cada contexto. "
             "Quando configurado, o Assistente usará essa agenda ao executar ferramentas de calendário "
-            "no contexto do projeto selecionado. "
+            "no contexto selecionado. "
             "A service account global (st.secrets) é sempre usada para autenticação."
         )
 
         from modules.auth import is_admin as _ia
         from core.project_store import (
-            list_projects, list_project_calendar_configs,
+            list_contexts, list_project_calendar_configs,
             set_project_calendar_id, delete_project_calendar_id,
         )
 
@@ -737,22 +757,22 @@ $$;
         if cal_configs:
             import pandas as pd
             df_cal = pd.DataFrame([{
-                "Projeto":      c["project_name"],
+                "Contexto":     c["project_name"],
                 "Calendar ID":  c["calendar_id"],
                 "Atualizado":   (c.get("updated_at") or "")[:10],
             } for c in cal_configs])
             st.dataframe(df_cal, use_container_width=True, hide_index=True)
         else:
-            st.caption("Nenhum projeto com calendar_id específico configurado.")
+            st.caption("Nenhum contexto com calendar_id específico configurado.")
 
         # Formulário para adicionar/atualizar
         with st.expander("➕ Associar / Atualizar calendar_id", expanded=False):
-            projects = list_projects()
+            projects = list_contexts()
             if not projects:
-                st.caption("Nenhum projeto cadastrado.")
+                st.caption("Nenhum contexto cadastrado.")
             else:
                 proj_opts = {p["name"]: p["id"] for p in projects}
-                sel_proj_name = st.selectbox("Projeto", list(proj_opts.keys()),
+                sel_proj_name = st.selectbox("Contexto", list(proj_opts.keys()),
                                              key="s_cal_proj_sel")
                 new_cal_id = st.text_input(
                     "Calendar ID",
@@ -776,7 +796,7 @@ $$;
         if cal_configs:
             with st.expander("🗑 Remover configuração", expanded=False):
                 cfg_opts = {c["project_name"]: c["project_id"] for c in cal_configs}
-                sel_rm = st.selectbox("Projeto", list(cfg_opts.keys()), key="s_cal_rm_sel")
+                sel_rm = st.selectbox("Contexto", list(cfg_opts.keys()), key="s_cal_rm_sel")
                 if st.button("Remover", key="s_cal_rm", type="secondary"):
                     if delete_project_calendar_id(cfg_opts[sel_rm]):
                         st.session_state["_cal_proj_ok"] = (

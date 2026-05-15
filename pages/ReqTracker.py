@@ -73,11 +73,11 @@ if not supabase_configured():
     st.error("⚙️ Supabase não configurado. Adicione as credenciais em Settings → Secrets.")
     st.stop()
 
-# ── Projeto de trabalho ativo ─────────────────────────────────────────────────
+# ── Contexto de trabalho ativo ───────────────────────────────────────────────
 project_id, project_name = require_active_project()
 _col_proj, _col_change = st.columns([5, 1])
 with _col_proj:
-    st.success(f"📁 **Projeto:** {project_name}")
+    st.success(f"📁 **Contexto:** {project_name}")
 with _col_change:
     st.page_link("pages/Home.py", label="Trocar")
 

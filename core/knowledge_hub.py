@@ -372,6 +372,10 @@ class KnowledgeHub:
     transcript_clean: str = ""
     # Set to True when hub was reconstructed from DB (not from a live pipeline run)
     loaded_from_db: bool = False
+    # Context fields (v4.21 — formerly "project")
+    context_id:    str = ""   # UUID of the active context
+    context_type:  str = ""   # project | product | feasibility | strategic | meeting_series | discussion | other
+    context_skill: str = ""   # Content of the Context Knowledge File (CKF), injected into agent prompts
     transcript_quality: TranscriptQualityModel = field(default_factory=TranscriptQualityModel)
     preprocessing: PreprocessingModel = field(default_factory=PreprocessingModel)
     nlp: NLPEnvelope = field(default_factory=NLPEnvelope)
@@ -483,6 +487,14 @@ class KnowledgeHub:
             hub.minutes.ata_html = ""
         if not hasattr(hub.minutes, 'ata_html_error'):
             hub.minutes.ata_html_error = ""
+
+        # ── v4.21: Context fields (project → context rename) ──────────────────
+        if not hasattr(hub, 'context_id'):
+            hub.context_id = ""
+        if not hasattr(hub, 'context_type'):
+            hub.context_type = ""
+        if not hasattr(hub, 'context_skill'):
+            hub.context_skill = ""
 
         # ── v4.13: loaded_from_db flag ────────────────────────────────────────
         if not hasattr(hub, 'loaded_from_db'):

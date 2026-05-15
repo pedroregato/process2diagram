@@ -123,11 +123,11 @@ Proxy linguístico de repetição de conceitos na transcrição.
 """
     )
 
-# ── Projeto de trabalho ativo ─────────────────────────────────────────────────
+# ── Contexto de trabalho ativo ───────────────────────────────────────────────
 project_id, project_name = require_active_project()
 _col_p, _col_ch = st.columns([5, 1])
 with _col_p:
-    st.success(f"📁 **Projeto:** {project_name}")
+    st.success(f"📁 **Contexto:** {project_name}")
 with _col_ch:
     st.page_link("pages/Home.py", label="Trocar")
 

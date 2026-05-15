@@ -3,8 +3,8 @@
 # Visão Geral do Banco de Dados — Process2Diagram
 #
 # Consolidado de todos os registros no Supabase:
-#   • Métricas globais (projetos, reuniões, requisitos, tokens, BPMN, SBVR…)
-#   • Breakdown por projeto
+#   • Métricas globais (contextos, reuniões, requisitos, tokens, BPMN, SBVR…)
+#   • Breakdown por contexto
 #   • Detalhe por reunião (presença de artefatos)
 #   • Distribuição de requisitos (tipo × status × prioridade)
 #   • Artefatos (BPMN, SBVR, embeddings)
@@ -37,7 +37,7 @@ from ui.components.page_header import render_page_header
 render_page_header(
     "🗄️", "Visão Geral do Banco de Dados",
     "Consolidado de todos os registros armazenados no Supabase — "
-    "projetos, reuniões, requisitos, BPMN, SBVR e embeddings. "
+    "contextos, reuniões, requisitos, BPMN, SBVR e embeddings. "
     "Nenhum dado é modificado por esta página.",
 )
 
@@ -50,14 +50,14 @@ if not db:
     st.error("Não foi possível conectar ao Supabase.")
     st.stop()
 
-# Quick connectivity probe — tries to count projects rows
+# Quick connectivity probe — tries to count contexts rows
 try:
-    _probe = db.table("projects").select("id", count="exact").limit(1).execute()
+    _probe = db.table("contexts").select("id", count="exact").limit(1).execute()
     _probe_count = _probe.count if hasattr(_probe, "count") else "?"
-    st.caption(f"✅ Supabase conectado · projetos acessíveis (count={_probe_count})")
+    st.caption(f"✅ Supabase conectado · contextos acessíveis (count={_probe_count})")
 except Exception as _probe_err:
     st.warning(
-        f"⚠️ Supabase conectado mas a tabela **projects** não está acessível: `{_probe_err}`  \n"
+        f"⚠️ Supabase conectado mas a tabela **contexts** não está acessível: `{_probe_err}`  \n"
         "Verifique se a tabela existe e se a chave possui permissão SELECT."
     )
 
@@ -82,10 +82,10 @@ with st.spinner("Carregando dados do banco…"):
             return []
 
     projects = _safe(
-        lambda: db.table("projects")
+        lambda: db.table("contexts")
                   .select("*")
                   .order("name").execute().data or [],
-        "projects",
+        "contexts",
     )
 
     meetings = _safe(
@@ -250,7 +250,7 @@ total_cost = sum(
 # ── Global metrics bar ────────────────────────────────────────────────────────
 st.markdown("---")
 c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
-c1.metric("📁 Projetos",    total_projects)
+c1.metric("📁 Contextos",   total_projects)
 c2.metric("📅 Reuniões",    total_meetings)
 c3.metric("📋 Requisitos",  total_req)
 c4.metric("🔢 Tokens",      f"{total_tokens:,}")
@@ -264,7 +264,7 @@ st.markdown("---")
 # TABS
 # ══════════════════════════════════════════════════════════════════════════════
 tab_proj, tab_meet, tab_req, tab_art, tab_emb, tab_int = st.tabs([
-    "📊 Por Projeto",
+    "📊 Por Contexto",
     "📅 Reuniões",
     "📋 Requisitos",
     "🔧 Artefatos",
@@ -273,11 +273,11 @@ tab_proj, tab_meet, tab_req, tab_art, tab_emb, tab_int = st.tabs([
 ])
 
 # ╔══════════════════════════════════════════════════════╗
-# ║  TAB 1 — Por Projeto                                ║
+# ║  TAB 1 — Por Contexto                               ║
 # ╚══════════════════════════════════════════════════════╝
 with tab_proj:
     if not projects:
-        st.info("Nenhum projeto encontrado.")
+        st.info("Nenhum contexto encontrado.")
     else:
         rows = []
         for p in projects:
@@ -285,7 +285,7 @@ with tab_proj:
             ps   = proj_stats.get(pid, _zero())
             n_m  = ps["meetings"]
             rows.append({
-                "Projeto":         p.get("name", "—"),
+                "Contexto":        p.get("name", "—"),
                 "Sigla":           p.get("sigla") or "—",
                 "Reuniões":        n_m,
                 "Requisitos":      ps["req"],
@@ -334,7 +334,7 @@ with tab_meet:
     else:
         # Optional project filter
         all_proj_names = ["(todos)"] + [p["name"] for p in projects]
-        sel_proj = st.selectbox("Filtrar por projeto", all_proj_names, key="dbo_meet_proj")
+        sel_proj = st.selectbox("Filtrar por contexto", all_proj_names, key="dbo_meet_proj")
 
         rows = []
         for m in meetings:
@@ -345,7 +345,7 @@ with tab_meet:
             tok   = m.get("total_tokens") or 0
             prov  = (m.get("llm_provider") or "").strip() or "—"
             rows.append({
-                "Projeto":      pname,
+                "Contexto":     pname,
                 "Nº":           m.get("meeting_number") or "—",
                 "Título":       m.get("title") or "(sem título)",
                 "Data":         str(m.get("meeting_date") or "—"),
@@ -371,7 +371,7 @@ with tab_req:
         st.info("Nenhum requisito encontrado.")
     else:
         sel_proj_req = st.selectbox(
-            "Filtrar por projeto",
+            "Filtrar por contexto",
             ["(todos)"] + [p["name"] for p in projects],
             key="dbo_req_proj",
         )
@@ -477,7 +477,7 @@ with tab_art:
             pid   = bp.get("project_id")
             pname = (proj_map.get(pid) or {}).get("name") or "—"
             bpmn_rows.append({
-                "Projeto":  pname,
+                "Contexto": pname,
                 "Processo": bp.get("name") or "—",
                 "Status":   bp.get("status") or "—",
                 "Versões":  versions_per_proc.get(bp["id"], 0),
@@ -537,7 +537,7 @@ with tab_art:
             pname = (proj_map.get(pid) or {}).get("name") or "—"
             n_ch  = chunks_per_meeting.get(mid, 0)
             emb_rows.append({
-                "Projeto":  pname,
+                "Contexto": pname,
                 "Nº":       m.get("meeting_number") or "—",
                 "Reunião":  m.get("title") or "(sem título)",
                 "Chunks":   n_ch,
@@ -596,7 +596,7 @@ with tab_emb:
         )
     else:
         # ── Coverage summary ──────────────────────────────────────────────────
-        st.markdown("#### 📊 Cobertura por Projeto")
+        st.markdown("#### 📊 Cobertura por Contexto")
         _cov_rows = []
         for _p in projects:
             _pid = _p["id"]
@@ -605,7 +605,7 @@ with tab_emb:
             _total = len(_p_meetings)
             _chunks_count = sum(1 for c in transcript_chunks if c.get("project_id") == _pid)
             _cov_rows.append({
-                "Projeto": _p.get("name", "—"),
+                "Contexto": _p.get("name", "—"),
                 "Reuniões": _total,
                 "Indexadas": _indexed,
                 "% Cobertura": f"{100*_indexed//_total if _total else 0}%",
@@ -680,8 +680,8 @@ with tab_emb:
         _emb_proj_names = [p["name"] for p in projects]
         _emb_proj_map   = {p["name"]: p for p in projects}
         _emb_sel_name   = st.selectbox(
-            "Projeto", _emb_proj_names, key="emb_tab_proj_sel",
-            help="Selecione o projeto para gerenciar embeddings.",
+            "Contexto", _emb_proj_names, key="emb_tab_proj_sel",
+            help="Selecione o contexto para gerenciar embeddings.",
         )
         _emb_proj = _emb_proj_map.get(_emb_sel_name, {})
         _emb_proj_id = _emb_proj.get("id")
@@ -732,7 +732,7 @@ with tab_emb:
                 expanded=(len(_not_indexed) > 0 and _indexed_count == 0),
             ):
                 st.caption(
-                    "Gera embeddings para **todas** as reuniões do projeto. "
+                    "Gera embeddings para **todas** as reuniões do contexto. "
                     "Reuniões já indexadas são re-processadas (upsert)."
                 )
                 if _not_indexed:
@@ -746,7 +746,7 @@ with tab_emb:
                         hide_index=True,
                     )
                 else:
-                    st.success("✅ Todas as reuniões deste projeto já estão indexadas.")
+                    st.success("✅ Todas as reuniões deste contexto já estão indexadas.")
 
                 if st.button(
                     f"⚡ Gerar para todas as {len(_proj_meetings)} reuniões",
@@ -986,7 +986,7 @@ with tab_int:
             issues.append({
                 "_mid":      mid,
                 "_missing":  missing,
-                "Projeto":   pname,
+                "Contexto":  pname,
                 "Nº":        m.get("meeting_number") or "?",
                 "Reunião":   m.get("title") or "(sem título)",
                 "Data":      str(m.get("meeting_date") or "—"),
@@ -1135,7 +1135,7 @@ with tab_int:
                         {
                             "Nº": m.get("meeting_number") or "—",
                             "Reunião": m.get("title") or "(sem título)",
-                            "Projeto": (proj_map.get(m.get("project_id")) or {}).get("name") or "—",
+                            "Contexto": (proj_map.get(m.get("project_id")) or {}).get("name") or "—",
                         }
                         for m in _affected_emb
                     ]

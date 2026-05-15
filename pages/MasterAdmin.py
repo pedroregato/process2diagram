@@ -215,30 +215,30 @@ for u in users:
 st.markdown("---")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SEÇÃO 3 — Projetos
+# SEÇÃO 3 — Contextos
 # ══════════════════════════════════════════════════════════════════════════════
-st.markdown(f"### 📁 Projetos ({len(all_projects)})")
+st.markdown(f"### 📁 Contextos ({len(all_projects)})")
 st.caption(
-    "Projetos são globais (ainda sem isolamento por domínio). "
+    "Contextos são globais (ainda sem isolamento por domínio). "
     "O isolamento por tenant será implementado na Fase D."
 )
 
-with st.expander("➕ Novo Projeto", expanded=False):
+with st.expander("➕ Novo Contexto", expanded=False):
     pa, pb, pc = st.columns([3, 2, 1])
-    proj_name  = pa.text_input("Nome do projeto", key="m_proj_name",
+    proj_name  = pa.text_input("Nome do contexto", key="m_proj_name",
                                 placeholder="Mapeamento de Processos RH")
     proj_sigla = pb.text_input("Sigla (máx 10)", key="m_proj_sigla",
                                 placeholder="RH", max_chars=10)
     proj_desc  = st.text_area("Descrição (opcional)", key="m_proj_desc", height=68)
-    if st.button("Criar projeto", key="m_create_proj", type="primary"):
+    if st.button("Criar contexto", key="m_create_proj", type="primary"):
         if proj_name.strip():
             result = create_project(proj_name.strip(), proj_desc.strip(), proj_sigla.strip())
             if result:
-                st.session_state["_master_ok"] = f"Projeto '{proj_name.strip()}' criado."
+                st.session_state["_master_ok"] = f"Contexto '{proj_name.strip()}' criado."
             else:
-                st.session_state["_master_err"] = "Erro ao criar projeto."
+                st.session_state["_master_err"] = "Erro ao criar contexto."
         else:
-            st.session_state["_master_err"] = "Nome do projeto é obrigatório."
+            st.session_state["_master_err"] = "Nome do contexto é obrigatório."
         st.rerun()
 
 if all_projects:

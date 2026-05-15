@@ -85,7 +85,7 @@ else:
     projects = list_projects()
     if projects:
         proj_map  = {p["name"]: p for p in projects}
-        sel_proj  = st.selectbox("Projeto", list(proj_map.keys()), key="ce_proj")
+        sel_proj  = st.selectbox("Contexto", list(proj_map.keys()), key="ce_proj")
         project_id = proj_map[sel_proj]["id"]
 
         db = _db()

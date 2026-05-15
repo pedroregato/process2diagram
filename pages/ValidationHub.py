@@ -72,7 +72,7 @@ if "_vhub_msg" in st.session_state:
 proj_id, proj_name = require_active_project()
 _col_p, _col_ch = st.columns([5, 1])
 with _col_p:
-    st.success(f"📁 **Projeto:** {proj_name}")
+    st.success(f"📁 **Contexto:** {proj_name}")
 with _col_ch:
     st.page_link("pages/Home.py", label="Trocar")
 

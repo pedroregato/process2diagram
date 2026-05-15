@@ -32,51 +32,84 @@ def _ok(response) -> list[dict]:
 
 # ── Projetos ──────────────────────────────────────────────────────────────────
 
-def list_projects() -> list[dict]:
-    """Retorna todos os projetos ordenados por nome."""
+def list_contexts() -> list[dict]:
+    """Retorna todos os contextos ordenados por nome."""
     db = _db()
     if not db:
         return []
     try:
-        return _ok(db.table("projects").select("*").order("name").execute())
+        return _ok(db.table("contexts").select("*").order("name").execute())
     except Exception:
         return []
 
 
-def get_project(project_id: str) -> dict | None:
-    """Retorna um projeto pelo ID."""
+def get_context(context_id: str) -> dict | None:
+    """Retorna um contexto pelo ID."""
     db = _db()
     if not db:
         return None
     try:
-        rows = _ok(db.table("projects").select("*").eq("id", project_id).execute())
+        rows = _ok(db.table("contexts").select("*").eq("id", context_id).execute())
         return rows[0] if rows else None
     except Exception:
         return None
 
 
-def create_project(name: str, description: str = "", sigla: str = "") -> dict | None:
-    """Cria e retorna um novo projeto."""
+def create_context(name: str, description: str = "", sigla: str = "",
+                   context_type: str = "project") -> dict | None:
+    """Cria e retorna um novo contexto."""
     db = _db()
     if not db:
         return None
     payload: dict = {
-        "name":        name.strip(),
-        "description": description.strip(),
+        "name":         name.strip(),
+        "description":  description.strip(),
+        "context_type": context_type,
     }
     if sigla:
         payload["sigla"] = sigla.strip().upper()
     try:
-        rows = _ok(db.table("projects").insert(payload).execute())
+        rows = _ok(db.table("contexts").insert(payload).execute())
         return rows[0] if rows else None
     except Exception:
-        # Retry without sigla in case column doesn't exist yet
+        # Retry without optional columns in case migration hasn't run yet
         try:
             payload.pop("sigla", None)
-            rows = _ok(db.table("projects").insert(payload).execute())
+            payload.pop("context_type", None)
+            rows = _ok(db.table("contexts").insert(payload).execute())
             return rows[0] if rows else None
         except Exception:
             return None
+
+
+def get_context_skill(context_id: str) -> str | None:
+    """Fetch the Context Knowledge File (skill_md) for a context."""
+    client = get_supabase_client()
+    if not client:
+        return None
+    try:
+        res = client.table("contexts").select("skill_md").eq("id", context_id).single().execute()
+        return res.data.get("skill_md") if res.data else None
+    except Exception:
+        return None
+
+
+def save_context_skill(context_id: str, skill_md: str) -> bool:
+    """Persist the Context Knowledge File for a context. Returns True on success."""
+    client = get_supabase_client()
+    if not client:
+        return False
+    try:
+        client.table("contexts").update({"skill_md": skill_md}).eq("id", context_id).execute()
+        return True
+    except Exception:
+        return False
+
+
+# ── Compatibility aliases (remove after v4.21 rollout confirmed) ──────────────
+list_projects  = list_contexts
+get_project    = get_context
+create_project = create_context
 			
 # ── User / Tenant query functions ──────────────────────────────────────────
 
@@ -186,9 +219,9 @@ def list_users_by_project(project_id: str | None = None) -> list[dict]:
         )
         tenants = tenants_res.data or []
 
-        # Get all projects
+        # Get all contexts
         projects_res = (
-            client.table("projects")
+            client.table("contexts")
             .select("id, name, sigla, description")
             .execute()
         )
@@ -2003,7 +2036,7 @@ def get_global_stats() -> dict:
     if not db:
         return base
     try:
-        base["n_projects"] = len(_ok(db.table("projects").select("id").execute()))
+        base["n_projects"] = len(_ok(db.table("contexts").select("id").execute()))
         base["n_meetings"] = len(_ok(db.table("meetings").select("id").execute()))
         base["available"]  = True
     except Exception:

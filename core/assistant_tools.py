@@ -1467,17 +1467,17 @@ def get_tool_schemas_openai() -> list[dict]:
             "function": {
                 "name": "set_active_project",
                 "description": (
-                    "Define o projeto de trabalho ativo para toda a aplicação. "
+                    "Define o contexto de trabalho ativo para toda a aplicação. "
                     "Após a mudança, todas as páginas (Assistente, ReqTracker, Editor BPMN, ROI-TR, ValidationHub) "
-                    "passarão a usar o novo projeto automaticamente. "
-                    "Use quando o usuário pedir para mudar, selecionar ou trocar o projeto de trabalho."
+                    "passarão a usar o novo contexto automaticamente. "
+                    "Use quando o usuário pedir para mudar, selecionar ou trocar o contexto de trabalho."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "project_name": {
                             "type": "string",
-                            "description": "Nome do projeto (busca parcial sem distinção de maiúsculas/minúsculas). Ex: 'SDEA', 'saúde', 'proj'."
+                            "description": "Nome do contexto (busca parcial sem distinção de maiúsculas/minúsculas). Ex: 'SDEA', 'saúde', 'proj'."
                         }
                     },
                     "required": ["project_name"]
@@ -4122,12 +4122,12 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         return "\n".join(lines)
 
     def set_active_project(self, project_name: str) -> str:
-        """Define o projeto de trabalho ativo para toda a aplicação."""
+        """Define o contexto de trabalho ativo para toda a aplicação."""
         import streamlit as st
-        from core.project_store import list_projects
-        projects = list_projects()
+        from core.project_store import list_contexts
+        projects = list_contexts()
         if not projects:
-            return "Nenhum projeto disponível no banco de dados."
+            return "Nenhum contexto disponível no banco de dados."
         name_lower = project_name.lower().strip()
         project = next((p for p in projects if p["name"].lower() == name_lower), None)
         if not project:
@@ -4135,16 +4135,16 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         if not project:
             names = ", ".join(p["name"] for p in projects)
             return (
-                f"Projeto nao encontrado: '{project_name}'. "
-                f"Projetos disponíveis: {names}"
+                f"Contexto não encontrado: '{project_name}'. "
+                f"Contextos disponíveis: {names}"
             )
         st.session_state["active_project_id"]   = project["id"]
         st.session_state["active_project_name"] = project["name"]
         if project.get("sigla"):
             st.session_state["prefix"] = project["sigla"].strip() + "_"
         return (
-            f"Projeto de trabalho alterado para **{project['name']}**. "
-            "Todas as páginas agora usarão este projeto."
+            f"Contexto de trabalho alterado para **{project['name']}**. "
+            "Todas as páginas agora usarão este contexto."
         )
 
     # ── Google Calendar tools ─────────────────────────────────────────────────
@@ -5025,7 +5025,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
 
         if not project_id:
             return (
-                "Nenhum projeto ativo. Selecione um projeto na Home primeiro "
+                "Nenhum contexto ativo. Selecione um contexto na Home primeiro "
                 "ou use set_active_project."
             )
 
@@ -5170,7 +5170,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             )
         if not self.project_id:
             return (
-                "Nenhum projeto ativo. Selecione um projeto na Home primeiro "
+                "Nenhum contexto ativo. Selecione um contexto na Home primeiro "
                 "ou use set_active_project."
             )
 
@@ -5218,7 +5218,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             )
         if not self.project_id:
             return (
-                "Nenhum projeto ativo. Selecione um projeto na Home primeiro "
+                "Nenhum contexto ativo. Selecione um contexto na Home primeiro "
                 "ou use set_active_project."
             )
 

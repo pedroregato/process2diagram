@@ -65,7 +65,7 @@ def _render_from_supabase() -> None:
     with col1:
         proj_names = [p["name"] for p in projects]
         proj_map   = {p["name"]: p for p in projects}
-        sel_proj   = st.selectbox("Projeto", proj_names, key="diag_sb_proj")
+        sel_proj   = st.selectbox("Contexto", proj_names, key="diag_sb_proj")
         project_id = proj_map[sel_proj]["id"]
 
     processes = list_bpmn_processes(project_id)

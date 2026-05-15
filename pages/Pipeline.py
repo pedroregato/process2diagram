@@ -24,7 +24,7 @@ from core.rerun_handlers import handle_rerun
 from core.project_store import (
     create_meeting, save_transcript, save_meeting_artifacts,
     save_sbvr_from_hub, save_bpmn_from_hub,
-    list_projects, list_meetings, load_meeting_as_hub,
+    list_contexts as list_projects, list_meetings, load_meeting_as_hub,
 )
 from agents.agent_req_reconciler import AgentReqReconciler
 from modules.supabase_client import supabase_configured
@@ -78,7 +78,7 @@ st.session_state["_last_pipeline_mode"] = pipeline_mode
 # ─────────────────────────────────────────────────────────────────────────────
 if pipeline_mode == _MODE_NEW:
 
-    # ── Projeto / Reunião ─────────────────────────────────────────────────────
+    # ── Contexto / Reunião ────────────────────────────────────────────────────
     render_project_selector()
     render_bpmn_process_selector()
 
@@ -235,13 +235,13 @@ else:
 
     projects = list_projects()
     if not projects:
-        st.info("Nenhum projeto encontrado no banco de dados.")
+        st.info("Nenhum contexto encontrado no banco de dados.")
         st.stop()
 
-    # Project selector
+    # Context selector
     proj_options = {p["name"]: p["id"] for p in projects}
     selected_proj_name = st.selectbox(
-        "Projeto",
+        "Contexto",
         list(proj_options.keys()),
         key="load_proj_select",
     )
@@ -250,7 +250,7 @@ else:
     # Meeting selector
     meetings = list_meetings(selected_proj_id)
     if not meetings:
-        st.info("Nenhuma reunião encontrada para este projeto.")
+        st.info("Nenhuma reunião encontrada para este contexto.")
         st.stop()
 
     def _fmt_meeting(m: dict) -> str:

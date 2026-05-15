@@ -396,3 +396,7 @@ def load_score_history(
         return q.execute().data or []
     except Exception:
         return []
+
+
+# Compatibility alias
+save_context_scores = save_project_scores

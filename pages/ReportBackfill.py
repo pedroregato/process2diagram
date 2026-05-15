@@ -47,7 +47,7 @@ if not api_key:
     st.warning("⚠️ API key não configurada. Acesse **Configurações → LLM Assistente** e salve a chave.")
     st.stop()
 
-st.info(f"📁 Projeto: **{project_name}**")
+st.info(f"📁 Contexto: **{project_name}**")
 
 # ── Meeting selector ──────────────────────────────────────────────────────────
 meeting_id = None

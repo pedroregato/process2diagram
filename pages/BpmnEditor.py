@@ -66,11 +66,11 @@ if not bpmn_tables_exist():
     )
     st.stop()
 
-# ── Projeto de trabalho ativo + seletor de processo ──────────────────────────
+# ── Contexto de trabalho ativo + seletor de processo ─────────────────────────
 project_id, proj_name = require_active_project()
 _col_proj, _col_change = st.columns([5, 1])
 with _col_proj:
-    st.success(f"📁 **Projeto:** {proj_name}")
+    st.success(f"📁 **Contexto:** {proj_name}")
 with _col_change:
     st.page_link("pages/Home.py", label="Trocar")
 

@@ -75,7 +75,7 @@ if not projects:
     st.stop()
 
 proj_map = {p["name"]: p for p in projects}
-sel_proj = st.selectbox("Projeto", list(proj_map.keys()), key="mb_proj")
+sel_proj = st.selectbox("Contexto", list(proj_map.keys()), key="mb_proj")
 if not sel_proj:
     st.stop()
 

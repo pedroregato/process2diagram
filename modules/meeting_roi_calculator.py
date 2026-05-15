@@ -509,7 +509,7 @@ def _compute_single(
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def compute_project_roi(
+def compute_context_roi(
     project_id: str,
     cost_per_hour: float = 150.0,
     llm_config: dict | None = None,
@@ -695,3 +695,7 @@ def project_summary(data: list[MeetingROIData]) -> dict:
         "total_sbvr"           : sum(m.n_sbvr for m in data),
         "total_bpmn"           : sum(m.n_bpmn_procs for m in data),
     }
+
+
+# Compatibility alias
+compute_project_roi = compute_context_roi

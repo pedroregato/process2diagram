@@ -81,10 +81,10 @@ if not bpmn_tables_exist():
     st.stop()
 
 # ── 1. Projeto ────────────────────────────────────────────────────────────────
-st.markdown("## 1️⃣ Projeto")
+st.markdown("## 1️⃣ Contexto")
 projects = list_projects()
 proj_map = {p["name"]: p for p in projects}
-sel_proj = st.selectbox("Projeto", list(proj_map.keys()), key="bf_proj")
+sel_proj = st.selectbox("Contexto", list(proj_map.keys()), key="bf_proj")
 
 if not sel_proj:
     st.stop()

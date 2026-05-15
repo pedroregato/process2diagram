@@ -4,10 +4,10 @@
 #
 # Seções:
 #   1. Header de boas-vindas (nome, perfil, data)
-#   2. KPIs globais do banco (projetos, reuniões, requisitos, processos BPMN)
+#   2. KPIs globais do banco (contextos, reuniões, requisitos, processos BPMN)
 #   3. Fluxo de trabalho visual (4 etapas com links)
 #   4. Acesso rápido por área (esquerda) + Reuniões recentes (direita)
-#   5. Agenda do Projeto (Google Calendar embed)
+#   5. Agenda do Contexto (Google Calendar embed)
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ import streamlit as st
 
 from ui.auth_gate import apply_auth_gate
 from modules.auth import is_admin
-from core.project_store import get_global_stats, list_recent_meetings, list_projects
+from core.project_store import get_global_stats, list_recent_meetings, list_contexts
 
 apply_auth_gate()
 
@@ -226,16 +226,16 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Projeto de Trabalho ──────────────────────────────────────────────────────
+# ── Contexto de Trabalho ─────────────────────────────────────────────────────
 @st.cache_data(ttl=120, show_spinner=False)
 def _load_projects():
-    return list_projects()
+    return list_contexts()
 
 _all_projects = _load_projects()
 _ap_id   = st.session_state.get("active_project_id")
 _ap_name = st.session_state.get("active_project_name", "")
 
-# Auto-selecionar quando houver apenas 1 projeto e nenhum ativo
+# Auto-selecionar quando houver apenas 1 contexto e nenhum ativo
 if _all_projects and not _ap_id and len(_all_projects) == 1:
     _p = _all_projects[0]
     st.session_state["active_project_id"]   = _p["id"]
@@ -248,7 +248,7 @@ if _all_projects and not _ap_id and len(_all_projects) == 1:
 if _ap_id:
     _col_badge, _col_change = st.columns([5, 1])
     with _col_badge:
-        st.success(f"📁 **Projeto de trabalho:** {_ap_name}")
+        st.success(f"📁 **Contexto de trabalho:** {_ap_name}")
     with _col_change:
         if st.button("Trocar", key="home_change_proj", use_container_width=True):
             st.session_state["active_project_id"]   = None
@@ -256,14 +256,14 @@ if _ap_id:
             st.rerun()
 elif _all_projects:
     with st.container(border=True):
-        st.markdown("#### 📁 Selecione o Projeto de Trabalho")
-        st.caption("O projeto ativo é usado em todas as páginas: Assistente, ReqTracker, Editor BPMN, ROI-TR e ValidationHub.")
+        st.markdown("#### 📁 Selecione o Contexto de Trabalho")
+        st.caption("O contexto ativo é usado em todas as páginas: Assistente, ReqTracker, Editor BPMN, ROI-TR e ValidationHub.")
         _proj_map = {p["name"]: p for p in _all_projects}
         _proj_sel = st.selectbox(
-            "Projeto", list(_proj_map.keys()),
+            "Contexto", list(_proj_map.keys()),
             key="home_proj_sel", label_visibility="collapsed",
         )
-        if st.button("✅ Ativar Projeto", key="home_activate_proj",
+        if st.button("✅ Ativar Contexto", key="home_activate_proj",
                      type="primary", use_container_width=True):
             _p = _proj_map[_proj_sel]
             st.session_state["active_project_id"]   = _p["id"]
@@ -274,8 +274,8 @@ elif _all_projects:
             st.rerun()
 else:
     st.info(
-        "ℹ️ Nenhum projeto encontrado. "
-        "Configure o Supabase em **Sistema → Configurações** e crie um projeto."
+        "ℹ️ Nenhum contexto encontrado. "
+        "Configure o Supabase em **Sistema → Configurações** e crie um contexto."
     )
 
 # ── 2. KPIs ───────────────────────────────────────────────────────────────────
@@ -296,7 +296,7 @@ def _fmt(n: int, available: bool) -> str:
 _KPI_ACCENTS = ["#C97B1A", "#3b82f6", "#10b981", "#8b5cf6"]
 _KPI_ICONS   = ["📁", "🗓️", "📝", "📐"]
 _KPI_DATA    = [
-    ("n_projects",   "Projetos"),
+    ("n_projects",   "Contextos"),
     ("n_meetings",   "Reuniões"),
     ("n_reqs",       "Requisitos"),
     ("n_bpmn_procs", "Processos BPMN"),
@@ -470,8 +470,8 @@ with col_recent:
         st.page_link("pages/Assistente.py", label="Ver todas as reuniões →")
         st.markdown("</div>", unsafe_allow_html=True)
 
-# ── 5. Agenda do Projeto ──────────────────────────────────────────────────────
-st.markdown('<div class="section-hdr">📅 Agenda do Projeto</div>', unsafe_allow_html=True)
+# ── 5. Agenda do Contexto ────────────────────────────────────────────────────
+st.markdown('<div class="section-hdr">📅 Agenda do Contexto</div>', unsafe_allow_html=True)
 
 try:
     from urllib.parse import quote

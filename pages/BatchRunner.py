@@ -146,10 +146,10 @@ if sel_proj == "➕ Criar novo projeto":
             else:
                 created = create_project(new_proj_name.strip(), sigla=new_proj_sigla.strip())
                 if created:
-                    st.success(f"Projeto **{new_proj_name}** ({new_proj_sigla.upper()}) criado!")
+                    st.success(f"Contexto **{new_proj_name}** ({new_proj_sigla.upper()}) criado!")
                     st.rerun()
                 else:
-                    st.error("Erro ao criar projeto.")
+                    st.error("Erro ao criar contexto.")
         st.markdown("</div>", unsafe_allow_html=True)
 else:
     project_id = proj_map[sel_proj]["id"]

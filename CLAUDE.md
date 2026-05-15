@@ -1229,3 +1229,22 @@ When unblocked: create `modules/office_client.py` + 2 tools (`outlook_send_email
 | pgvector | github.com/pgvector/pgvector — ivfflat index, max 2000 dims |
 | google-generativeai | pypi.org/project/google-generativeai — embed_content(), list_models() |
 | Supabase Python client | supabase.com/docs/reference/python |
+
+## Decisões Padrão (não perguntar)
+
+- Novos agentes: sempre herdar de BaseAgent, seguir padrão do CLAUDE.md §Agent Pattern
+- Novos campos em KnowledgeHub: sempre adicionar guard em migrate()
+- Skill files: sempre lowercase, verificar com git ls-files antes de commitar
+- Supabase: sempre fail-open (retornar [] ou None, nunca deixar exceção vazar)
+- UI: nunca adicionar selectbox de projeto nas páginas de análise (usar require_active_project())
+- Streamlit: nunca usar href="#id" em components.html — usar data-target + scrollIntoView
+
+## Checklist de Entrega
+
+Antes de marcar uma feature como concluída, verificar:
+- [ ] migrate() atualizado se KnowledgeHub foi modificado
+- [ ] Skill file com nome correto (git ls-files)
+- [ ] Agente registrado no Orchestrator._PLAN e rerun_handlers
+- [ ] Tab registrada em ui/tabs/__init__.py
+- [ ] Export adicionado em export_tab.py se gera novo artefato
+- [ ] Versão em CLAUDE.md § Roadmap atualizada
