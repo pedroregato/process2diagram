@@ -28,6 +28,9 @@ class AgentSBVR(BaseAgent):
         if getattr(hub, "context_skill", "").strip():
             system += f"\n\n## Conhecimento do Contexto\n\n{hub.context_skill.strip()}"
 
+        if getattr(hub, "context_files_text", "").strip():
+            system += f"\n\n## Documentos de Referência do Contexto\n\n{hub.context_files_text.strip()}"
+
         user = (
             "Extract the business vocabulary and rules from this transcript:\n\n"
             f"{hub.transcript_clean}"

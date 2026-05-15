@@ -290,6 +290,18 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "list_context_files",
+                "description": (
+                    "Lista os arquivos de referência (HTML, PPTX, PDF, TXT, MD) carregados no contexto ativo. "
+                    "Use quando o usuário perguntar sobre documentos de referência, manuais, políticas ou "
+                    "apresentações disponíveis no contexto."
+                ),
+                "parameters": {"type": "object", "properties": {}, "required": []},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "add_sbvr_term",
                 "description": (
                     "Adiciona um novo termo ao vocabulário SBVR do projeto diretamente no banco de dados. "
@@ -1676,6 +1688,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "list_bpmn_processes":          "consulta",
     "get_sbvr_terms":               "consulta",
     "get_sbvr_rules":               "consulta",
+    "list_context_files":           "consulta",
     "calculate_meeting_roi":        "consulta",
     "get_recurring_topics":         "consulta",
     "get_meeting_metadata":         "consulta",
@@ -2028,7 +2041,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
     get_meeting_list, get_meeting_participants, get_meeting_decisions,
     get_meeting_action_items, get_meeting_summary, search_transcript,
     get_requirements, list_bpmn_processes, get_sbvr_terms, get_sbvr_rules,
-    calculate_meeting_roi, get_recurring_topics, get_meeting_metadata,
+    list_context_files, calculate_meeting_roi, get_recurring_topics, get_meeting_metadata,
     preview_meeting_deletion, preview_text_correction, get_speaker_contributions
 
   Escrita (todos os perfis):
@@ -2526,6 +2539,20 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             statement = r.get("statement") or ""
             nucleo    = r.get("nucleo_nominal") or ""
             lines.append(f"• [{rule_id}] {nucleo}: {statement}")
+        return "\n".join(lines)
+
+    def list_context_files(self) -> str:
+        from core.project_store import list_context_files as _list_files
+        files = _list_files(self.project_id)
+        if not files:
+            return "Nenhum arquivo de referência encontrado para este contexto."
+        lines = [f"Arquivos de referência do contexto ({len(files)}):"]
+        for f in files:
+            size_kb = (f.get("file_size") or 0) / 1024
+            date    = (f.get("uploaded_at") or "")[:10]
+            by      = f.get("uploaded_by") or ""
+            by_str  = f" por {by}" if by else ""
+            lines.append(f"• {f['filename']} ({f['file_type'].upper()}, {size_kb:.0f} KB) — adicionado em {date}{by_str}")
         return "\n".join(lines)
 
     def _resolve_search_terms(self, db, name: str) -> list[str]:
@@ -5412,6 +5439,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 "list_bpmn_processes":       lambda: self.list_bpmn_processes(),
                 "get_sbvr_terms":            lambda: self.get_sbvr_terms(tool_input.get("keyword")),
                 "get_sbvr_rules":            lambda: self.get_sbvr_rules(tool_input.get("keyword")),
+                "list_context_files":        lambda: self.list_context_files(),
                 "add_sbvr_term":             lambda: self.add_sbvr_term(
                     tool_input["term"],
                     tool_input["definition"],

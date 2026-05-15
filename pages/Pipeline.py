@@ -110,14 +110,17 @@ if pipeline_mode == _MODE_NEW:
             hub.transcript_clean = st.session_state.curated_clean
         hub.meta.llm_provider = st.session_state.selected_provider
 
-        # Load Context Knowledge File (CKF) from active context
+        # Load Context Knowledge File (CKF) and reference files from active context
         _ctx_id = st.session_state.get("active_project_id") or st.session_state.get("project_id")
         if _ctx_id:
             try:
-                from core.project_store import get_context_skill
+                from core.project_store import get_context_skill, get_context_files_text
                 _ckf = get_context_skill(_ctx_id)
                 if _ckf:
                     hub.context_skill = _ckf
+                _ctx_files_text = get_context_files_text(_ctx_id)
+                if _ctx_files_text:
+                    hub.context_files_text = _ctx_files_text
             except Exception:
                 pass
 

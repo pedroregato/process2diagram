@@ -24,6 +24,7 @@ openpyxl>=3.1.5                 # exportação .xlsx no Assistente (render_table
 # ── Inportação de documentos ──────────────────────────────────────────────────
 python-docx==1.1.2              # exportação DOCX da Ata (pure Python)
 fpdf2==2.8.2                    # exportação PDF da Ata (pure Python, sem GTK)
+python-pptx==1.0.2              # extração de texto de apresentações .pptx (context_files)
 
 # ── Validação de schema ────────────────────────────────────────────────────────
 jsonschema>=4.21                # validação do Knowledge Hub e modelos JSON

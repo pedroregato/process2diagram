@@ -67,6 +67,7 @@ pages = {
     "Ajuda": [
         st.Page("pages/Orientacoes_ComoIniciar.py",  title="Como Iniciar",  icon="📖"),
         st.Page("pages/Orientacoes_Arquiteturas.py", title="Arquiteturas",  icon="🏗️"),
+        st.Page("pages/Orientacoes_CKF.py",          title="Guia CKF",      icon="🧠"),
     ],
 }
 if _admin:

@@ -375,7 +375,8 @@ class KnowledgeHub:
     # Context fields (v4.21 — formerly "project")
     context_id:    str = ""   # UUID of the active context
     context_type:  str = ""   # project | product | feasibility | strategic | meeting_series | discussion | other
-    context_skill: str = ""   # Content of the Context Knowledge File (CKF), injected into agent prompts
+    context_skill: str = ""        # CKF manual (skill_md) — injected into agent prompts
+    context_files_text: str = ""   # Extracted text from uploaded context files (HTML, PPTX, PDF, TXT)
     transcript_quality: TranscriptQualityModel = field(default_factory=TranscriptQualityModel)
     preprocessing: PreprocessingModel = field(default_factory=PreprocessingModel)
     nlp: NLPEnvelope = field(default_factory=NLPEnvelope)
@@ -495,6 +496,8 @@ class KnowledgeHub:
             hub.context_type = ""
         if not hasattr(hub, 'context_skill'):
             hub.context_skill = ""
+        if not hasattr(hub, 'context_files_text'):
+            hub.context_files_text = ""
 
         # ── v4.13: loaded_from_db flag ────────────────────────────────────────
         if not hasattr(hub, 'loaded_from_db'):

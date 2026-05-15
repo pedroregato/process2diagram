@@ -655,6 +655,115 @@ with tab_db:
 
     st.markdown("---")
 
+    # ── Arquivos de Contexto ───────────────────────────────────────────────
+    if db:
+        st.markdown("#### 📎 Arquivos de Referência do Contexto")
+        st.caption(
+            "Faça upload de documentos (HTML, PPTX, PDF, TXT, MD) para cada contexto. "
+            "O texto extraído é injetado nos prompts dos agentes junto com o CKF. "
+            "Útil para manuais, políticas, glossários e apresentações de referência."
+        )
+
+        try:
+            from modules.context_files import extract_text, SUPPORTED_EXTENSIONS, MAX_FILE_SIZE
+            from core.project_store import list_context_files, save_context_file, delete_context_file
+            _ctxf_proj_rows = db.table("contexts").select("id, name").order("name").execute().data or []
+        except Exception as _ctxf_init_err:
+            st.warning(f"Módulo de arquivos de contexto indisponível: {_ctxf_init_err}")
+            _ctxf_proj_rows = []
+
+        if _ctxf_proj_rows:
+            _ctxf_ctx_names = [r["name"] for r in _ctxf_proj_rows]
+            _ctxf_sel_name  = st.selectbox("Contexto", _ctxf_ctx_names, key="ctxf_ctx_sel")
+            _ctxf_ctx       = next((r for r in _ctxf_proj_rows if r["name"] == _ctxf_sel_name), None)
+
+            if _ctxf_ctx:
+                _ctxf_ctx_id = _ctxf_ctx["id"]
+
+                # Feedback messages
+                if st.session_state.get("_ctxf_ok"):
+                    st.success(st.session_state.pop("_ctxf_ok"))
+                if st.session_state.get("_ctxf_err"):
+                    st.error(st.session_state.pop("_ctxf_err"))
+
+                # ── Upload ────────────────────────────────────────────────
+                _ext_list = ", ".join(sorted(SUPPORTED_EXTENSIONS))
+                uploaded_file = st.file_uploader(
+                    f"Adicionar arquivo ({_ext_list})",
+                    type=[e.lstrip(".") for e in SUPPORTED_EXTENSIONS],
+                    key=f"ctxf_upload_{_ctxf_ctx_id}",
+                )
+                if uploaded_file is not None:
+                    if uploaded_file.size > MAX_FILE_SIZE:
+                        st.error(f"Arquivo muito grande ({uploaded_file.size/1024/1024:.1f} MB). Limite: 10 MB.")
+                    else:
+                        if st.button("⬆️ Extrair e Salvar", key=f"ctxf_save_{_ctxf_ctx_id}", type="primary"):
+                            with st.spinner("Extraindo texto..."):
+                                try:
+                                    _file_bytes = uploaded_file.read()
+                                    _extracted  = extract_text(uploaded_file.name, _file_bytes)
+                                    if not _extracted.strip():
+                                        st.warning("Nenhum texto extraído. Verifique se o arquivo contém conteúdo legível.")
+                                    else:
+                                        _ext_only = uploaded_file.name.rsplit(".", 1)[-1].lower() if "." in uploaded_file.name else "txt"
+                                        _login = st.session_state.get("_usuario_login", "")
+                                        _saved = save_context_file(
+                                            _ctxf_ctx_id,
+                                            uploaded_file.name,
+                                            _ext_only,
+                                            _extracted,
+                                            uploaded_file.size,
+                                            _login,
+                                        )
+                                        if _saved:
+                                            st.session_state["_ctxf_ok"] = f"✅ '{uploaded_file.name}' adicionado ({len(_extracted):,} chars extraídos)."
+                                        else:
+                                            st.session_state["_ctxf_err"] = "Erro ao salvar no banco. Verifique a migração v4.22."
+                                        st.rerun()
+                                except Exception as _ctxf_upload_err:
+                                    st.error(f"Erro ao processar arquivo: {_ctxf_upload_err}")
+
+                # ── Lista de arquivos ──────────────────────────────────────
+                _files = list_context_files(_ctxf_ctx_id)
+                if _files:
+                    st.markdown(f"**{len(_files)} arquivo(s) de referência:**")
+                    for _f in _files:
+                        _fcol1, _fcol2 = st.columns([5, 1])
+                        with _fcol1:
+                            _size_kb = (_f.get("file_size") or 0) / 1024
+                            _date    = (_f.get("uploaded_at") or "")[:10]
+                            st.caption(f"📄 **{_f['filename']}** ({_f['file_type'].upper()}, {_size_kb:.0f} KB) — {_date}")
+                        with _fcol2:
+                            if st.button("🗑", key=f"ctxf_del_{_f['id']}", help="Remover arquivo"):
+                                if delete_context_file(_f["id"]):
+                                    st.session_state["_ctxf_ok"] = f"Arquivo '{_f['filename']}' removido."
+                                else:
+                                    st.session_state["_ctxf_err"] = "Erro ao remover arquivo."
+                                st.rerun()
+                else:
+                    st.info("Nenhum arquivo adicionado a este contexto ainda.")
+
+                # ── Migração v4.22 ─────────────────────────────────────────
+                with st.expander("🔧 Migração v4.22 — Tabela context_files", expanded=False):
+                    st.info(
+                        "Execute este SQL no **Supabase → SQL Editor** para criar a tabela `context_files`. "
+                        "Necessário antes de usar o upload de arquivos."
+                    )
+                    _v422_sql_path = Path(__file__).parent.parent / "setup" / "migrate_v4_22_context_files.sql"
+                    try:
+                        _v422_sql = _v422_sql_path.read_text(encoding="utf-8")
+                    except Exception:
+                        _v422_sql = "-- Arquivo não encontrado: setup/migrate_v4_22_context_files.sql"
+                    st.code(_v422_sql, language="sql")
+                    st.download_button(
+                        "⬇️ Baixar migrate_v4_22_context_files.sql",
+                        data=_v422_sql,
+                        file_name="migrate_v4_22_context_files.sql",
+                        mime="text/plain",
+                    )
+
+    st.markdown("---")
+
     # ── Migração de schema ─────────────────────────────────────────────────
     if db:
         st.markdown("#### 🔧 Migração de Schema")

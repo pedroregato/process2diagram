@@ -106,6 +106,83 @@ def save_context_skill(context_id: str, skill_md: str) -> bool:
         return False
 
 
+# ── Context Files ─────────────────────────────────────────────────────────────
+
+def list_context_files(context_id: str) -> list[dict]:
+    """List all uploaded reference files for a context, newest first."""
+    db = _db()
+    if not db:
+        return []
+    try:
+        return _ok(
+            db.table("context_files")
+            .select("id, filename, file_type, file_size, uploaded_at, uploaded_by")
+            .eq("context_id", context_id)
+            .order("uploaded_at", desc=True)
+            .execute()
+        )
+    except Exception:
+        return []
+
+
+def save_context_file(context_id: str, filename: str, file_type: str,
+                      content_text: str, file_size: int,
+                      uploaded_by: str = "") -> dict | None:
+    """Persist an uploaded context file (extracted text). Returns the new row or None."""
+    db = _db()
+    if not db:
+        return None
+    try:
+        rows = _ok(
+            db.table("context_files").insert({
+                "context_id":   context_id,
+                "filename":     filename,
+                "file_type":    file_type,
+                "content_text": content_text,
+                "file_size":    file_size,
+                "uploaded_by":  uploaded_by,
+            }).execute()
+        )
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
+def delete_context_file(file_id: str) -> bool:
+    """Delete a context file by ID. Returns True on success."""
+    db = _db()
+    if not db:
+        return False
+    try:
+        db.table("context_files").delete().eq("id", file_id).execute()
+        return True
+    except Exception:
+        return False
+
+
+def get_context_files_text(context_id: str) -> str:
+    """Return combined extracted text from all context files for a context."""
+    db = _db()
+    if not db:
+        return ""
+    try:
+        rows = _ok(
+            db.table("context_files")
+            .select("filename, file_type, content_text")
+            .eq("context_id", context_id)
+            .order("uploaded_at", desc=True)
+            .execute()
+        )
+        parts = []
+        for r in rows:
+            text = (r.get("content_text") or "").strip()
+            if text:
+                parts.append(f"### {r['filename']}\n\n{text}")
+        return "\n\n---\n\n".join(parts)
+    except Exception:
+        return ""
+
+
 # ── Compatibility aliases (remove after v4.21 rollout confirmed) ──────────────
 list_projects  = list_contexts
 get_project    = get_context
