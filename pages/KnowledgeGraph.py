@@ -110,6 +110,7 @@ def _load_graph_data(project_id: str) -> dict:
         processes = []
 
     try:
+        # Tenta com dialogue_act (coluna adicionada em v4.23)
         facts = (
             db.table("kh_facts")
             .select("id, subject_entity_id, predicate, object_entity_id, object_value, process_id, confidence, dialogue_act")
@@ -118,7 +119,17 @@ def _load_graph_data(project_id: str) -> dict:
             .execute().data or []
         )
     except Exception:
-        facts = []
+        try:
+            # Fallback sem dialogue_act (schema anterior à v4.23)
+            facts = (
+                db.table("kh_facts")
+                .select("id, subject_entity_id, predicate, object_entity_id, object_value, process_id, confidence")
+                .eq("project_id", project_id)
+                .limit(300)
+                .execute().data or []
+            )
+        except Exception:
+            facts = []
 
     try:
         contradictions = (
@@ -558,19 +569,26 @@ with tab_facts:
         proc_name_map = {p["id"]: p.get("process_name", p["id"][:8]) for p in processes}
         fact_rows = []
         for f in facts:
-            subj = entity_name_map.get(f.get("subject_entity_id", ""), f.get("subject_entity_id", "")[:8] or "—")
-            obj_e = entity_name_map.get(f.get("object_entity_id", ""), "")
-            obj_v = f.get("object_value", "")
-            obj = obj_e or obj_v or "—"
-            proc = proc_name_map.get(f.get("process_id", ""), "")
+            subj = entity_name_map.get(f.get("subject_entity_id") or "", "") or (f.get("subject_entity_id") or "")[:8] or "—"
+            obj_e = entity_name_map.get(f.get("object_entity_id") or "", "")
+            obj_v = f.get("object_value") or ""
+            obj   = obj_e or obj_v or "—"
+            proc  = proc_name_map.get(f.get("process_id") or "", "")
+            conf  = f.get("confidence")
             fact_rows.append({
-                "Sujeito": subj,
-                "Predicado": f.get("predicate", "—"),
-                "Objeto": obj[:60],
-                "Processo": proc[:30],
-                "Confianca": f"{int((f.get('confidence') or 1.0) * 100)}%",
+                "Sujeito":     subj[:40],
+                "Predicado":   f.get("predicate") or "—",
+                "Objeto":      obj[:60],
+                "Processo":    proc[:30] if proc else "—",
+                "Confianca":   f"{int((conf or 1.0) * 100)}%" if conf is not None else "—",
                 "Ato Dialogo": f.get("dialogue_act") or "—",
             })
+        st.caption(f"{len(fact_rows)} relacao(oes) extraida(s) das transcricoes.")
         st.dataframe(fact_rows, use_container_width=True, hide_index=True)
     else:
-        st.info("Nenhum fato/relacao disponivel.")
+        st.info(
+            "Nenhuma relacao/fato disponivel para este projeto ainda. "
+            "Os fatos sao extraidos pelo **Knowledge Extractor** durante o pipeline. "
+            "Se suas reunioes foram processadas antes da v4.23, reprocesse-as via "
+            "**Assistente** (`reprocess_meeting_full`) ou **Manutenção → Batch Runner**."
+        )
