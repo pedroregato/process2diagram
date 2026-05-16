@@ -31,7 +31,8 @@ from modules.supabase_client import supabase_configured
 from ui.tabs import (
     render_quality, render_bpmn, render_mermaid, render_validation,
     render_minutes, render_requirements, render_sbvr, render_bmm,
-    render_synthesizer, render_export, render_dev_tools
+    render_synthesizer, render_export, render_dev_tools,
+    render_dmn, render_argumentation,
 )
 from modules.session_security import get_session_llm_client
 
@@ -136,6 +137,8 @@ if pipeline_mode == _MODE_NEW:
             "run_minutes": st.session_state.run_minutes,
             "run_requirements": st.session_state.run_requirements,
             "run_sbvr": st.session_state.run_sbvr,
+            "run_dmn": st.session_state.get("run_dmn", False),
+            "run_argumentation": st.session_state.get("run_argumentation", False),
             "run_bmm": st.session_state.run_bmm,
             "run_synthesizer": st.session_state.run_synthesizer,
             "n_bpmn_runs": st.session_state.n_bpmn_runs,
@@ -385,6 +388,10 @@ if "hub" in st.session_state:
         advanced.append("sbvr")
     if hub.bmm.ready:
         advanced.append("bmm")
+    if getattr(hub, 'dmn', None) and hub.dmn.ready:
+        advanced.append("dmn")
+    if getattr(hub, 'argumentation', None) and hub.argumentation.ready:
+        advanced.append("argumentation")
     if hub.validation.ready and hub.validation.n_bpmn_runs > 1:
         advanced.append("validation")
     if st.session_state.show_dev_tools:
@@ -401,6 +408,8 @@ if "hub" in st.session_state:
         "sbvr":         "📖 SBVR",
         "bmm":          "🎯 BMM",
         "validation":   "🏆 Validação BPMN",
+        "dmn":          "⚖️ DMN",
+        "argumentation": "🗺️ IBIS / Argumentação",
         "devtools":     "🔍 Dev Tools",
     }
 
@@ -415,6 +424,8 @@ if "hub" in st.session_state:
         elif tab_id == "sbvr":        render_sbvr(hub, prefix, suffix)
         elif tab_id == "bmm":         render_bmm(hub, prefix, suffix)
         elif tab_id == "validation":  render_validation(hub)
+        elif tab_id == "dmn":          render_dmn(hub, prefix, suffix)
+        elif tab_id == "argumentation": render_argumentation(hub, prefix, suffix)
         elif tab_id == "devtools":    render_dev_tools(hub, st.session_state.show_raw_json)
 
     # Renderiza abas primárias

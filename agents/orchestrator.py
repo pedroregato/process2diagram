@@ -37,6 +37,8 @@ from agents.agent_minutes import AgentMinutes
 from agents.agent_requirements import AgentRequirements
 from agents.agent_sbvr import AgentSBVR
 from agents.agent_bmm import AgentBMM
+from agents.agent_dmn import AgentDMN
+from agents.agent_argumentation import AgentArgumentation
 from agents.agent_synthesizer import AgentSynthesizer
 from agents.agent_transcript_quality import AgentTranscriptQuality
 from core.knowledge_hub import KnowledgeHub, PreprocessingModel, SessionMetadata
@@ -63,7 +65,7 @@ class Orchestrator:
     """
 
     _PLAN = ["transcript_quality", "preprocessing", "nlp", "bpmn",
-             "minutes", "requirements", "sbvr", "bmm", "synthesizer"]
+             "minutes", "requirements", "sbvr", "bmm", "dmn", "argumentation", "synthesizer"]
 
     def __init__(
         self,
@@ -85,6 +87,8 @@ class Orchestrator:
         self._agent_sbvr         = AgentSBVR(client_info, provider_cfg)
         self._agent_bmm          = AgentBMM(client_info, provider_cfg)
         self._agent_synthesizer  = AgentSynthesizer(client_info, provider_cfg)
+        self._agent_dmn          = AgentDMN(client_info, provider_cfg)
+        self._agent_argumentation = AgentArgumentation(client_info, provider_cfg)
 
     # ── Thread-safe progress callback ─────────────────────────────────────────
 
@@ -105,6 +109,8 @@ class Orchestrator:
         run_requirements: bool = True,
         run_sbvr: bool = False,
         run_bmm: bool = False,
+        run_dmn: bool = False,
+        run_argumentation: bool = False,
         run_synthesizer: bool = False,
     ) -> KnowledgeHub:
         """
@@ -235,6 +241,26 @@ class Orchestrator:
                 self._progress("Agente BMM", "done")
             except Exception as exc:
                 self._progress("Agente BMM", f"error: {exc}")
+                hub.bump()
+
+        # ── Step 6b: DMN Agent ───────────────────────────────────────────────────
+        if run_dmn:
+            self._progress("Agente DMN", "running")
+            try:
+                hub = self._agent_dmn.run(hub, output_language)
+                self._progress("Agente DMN", "done")
+            except Exception as exc:
+                self._progress("Agente DMN", f"error: {exc}")
+                hub.bump()
+
+        # ── Step 6c: Argumentation Agent ─────────────────────────────────────
+        if run_argumentation:
+            self._progress("Agente Argumentacao (IBIS)", "running")
+            try:
+                hub = self._agent_argumentation.run(hub, output_language)
+                self._progress("Agente Argumentacao (IBIS)", "done")
+            except Exception as exc:
+                self._progress("Agente Argumentacao (IBIS)", f"error: {exc}")
                 hub.bump()
 
         # ── Step 7: Synthesizer Agent ─────────────────────────────────────────

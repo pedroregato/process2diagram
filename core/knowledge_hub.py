@@ -137,6 +137,12 @@ class MinutesModel:
     action_items: list[ActionItem] = field(default_factory=list)
     next_meeting: Optional[str] = None
     ready: bool = False
+    # BABOK Guide v3 — Elicitation fields (Fase E)
+    assumptions: list[str] = field(default_factory=list)       # explicit premises stated
+    open_questions: list[str] = field(default_factory=list)    # unanswered questions at end
+    risks_identified: list[str] = field(default_factory=list)  # risks (not formal requirements)
+    dependencies: list[str] = field(default_factory=list)      # inter-team/system dependencies
+    stakeholder_needs: list[str] = field(default_factory=list) # informal stakeholder needs
     # Raw markdown — populated when loading from DB (structured fields may be empty)
     minutes_md: str = ""
     # ATA Engine interactive HTML — generated after pipeline, empty if not available
@@ -339,6 +345,95 @@ class BMMModel:
     ready: bool = False
 
 
+
+# ── DMN Model (Fase A — OMG DMN 1.4) ─────────────────────────────────────────
+
+@dataclass
+class DMNInput:
+    label: str
+    expression: str = ""    # condition expression (e.g. "value >= 5000")
+
+
+@dataclass
+class DMNOutput:
+    label: str
+    value: str = ""          # outcome value
+
+
+@dataclass
+class DMNRule:
+    inputs: list[str] = field(default_factory=list)   # one per DMNInput
+    output: str = ""
+    annotation: str = ""     # optional note on this rule row
+
+
+@dataclass
+class DMNDecision:
+    id: str
+    name: str
+    question: str = ""       # business question this decision answers
+    rationale: str = ""      # context and justification
+    decided_by: list[str] = field(default_factory=list)
+    inputs: list[DMNInput] = field(default_factory=list)
+    outputs: list[DMNOutput] = field(default_factory=list)
+    rules: list[DMNRule] = field(default_factory=list)
+    hit_policy: str = "U"    # U=Unique, A=Any, F=First, C=Collect
+    confidence: float = 1.0
+
+
+@dataclass
+class DMNModel:
+    """Output of AgentDMN — formalized decision tables (OMG DMN 1.4)."""
+    decisions: list[DMNDecision] = field(default_factory=list)
+    ready: bool = False
+
+
+# ── Argumentation Map (Fase C — IBIS) ─────────────────────────────────────────
+
+@dataclass
+class IBISAlternative:
+    id: str
+    description: str
+    proposed_by: str = ""
+    pros: list[str] = field(default_factory=list)
+    cons: list[str] = field(default_factory=list)
+    supported_by: list[str] = field(default_factory=list)
+    opposed_by: list[str] = field(default_factory=list)
+    was_chosen: bool = False
+
+
+@dataclass
+class IBISResolution:
+    type: str = "unresolved"          # decided | deferred | unresolved
+    chosen_alternative_id: str = ""
+    rationale: str = ""
+    with_caveats: list[str] = field(default_factory=list)
+
+
+@dataclass
+class IBISQuestion:
+    id: str
+    statement: str
+    raised_by: str = ""
+    alternatives: list[IBISAlternative] = field(default_factory=list)
+    resolution: IBISResolution = field(default_factory=IBISResolution)
+
+
+@dataclass
+class ArgumentationMap:
+    """Output of AgentArgumentation — IBIS argumentation structure."""
+    questions: list[IBISQuestion] = field(default_factory=list)
+    ready: bool = False
+
+    @property
+    def resolved_count(self) -> int:
+        return sum(1 for q in self.questions if q.resolution.type == "decided")
+
+    @property
+    def unresolved_count(self) -> int:
+        return sum(1 for q in self.questions if q.resolution.type == "unresolved")
+
+
 # ── Session Metadata ──────────────────────────────────────────────────────────
 
 @dataclass
@@ -385,6 +480,8 @@ class KnowledgeHub:
     requirements: RequirementsModel = field(default_factory=RequirementsModel)
     sbvr: SBVRModel = field(default_factory=SBVRModel)
     bmm: BMMModel = field(default_factory=BMMModel)
+    dmn: DMNModel = field(default_factory=DMNModel)                      # Fase A: DMN decisions
+    argumentation: ArgumentationMap = field(default_factory=ArgumentationMap)  # Fase C: IBIS map
     validation: ValidationReport = field(default_factory=ValidationReport)
     synthesizer: SynthesizerModel = field(default_factory=SynthesizerModel)
     meta: SessionMetadata = field(default_factory=SessionMetadata)
@@ -521,6 +618,20 @@ class KnowledgeHub:
         for req in hub.requirements.requirements:
             if not hasattr(req, 'status'):
                 req.status = "active"
+
+        # ── v4.23 BMIF: DMN (Fase A) ─────────────────────────────────────────────
+        if not hasattr(hub, 'dmn'):
+            hub.dmn = DMNModel()
+
+        # ── v4.23 BMIF: Argumentation / IBIS (Fase C) ────────────────────────
+        if not hasattr(hub, 'argumentation'):
+            hub.argumentation = ArgumentationMap()
+
+        # ── v4.23 BMIF: BABOK fields in MinutesModel (Fase E) ────────────────
+        for _field in ('assumptions', 'open_questions', 'risks_identified',
+                       'dependencies', 'stakeholder_needs'):
+            if not hasattr(hub.minutes, _field):
+                setattr(hub.minutes, _field, [])
 
         return hub
 

@@ -39,6 +39,18 @@ Fatos devem ser:
 - Em linguagem natural clara e objetiva
 - Confiança (`confidence`) entre 0.0 e 1.0 (use 0.7-0.9 quando há alguma ambiguidade)
 
+Para cada fato, classifique o **ato de diálogo** que o originou (`dialogue_act`):
+- `decision` — afirmação que fecha um ponto ("ficou definido", "aprovado", "vai ser assim")
+- `commitment` — compromisso assumido por alguém ("eu me comprometo", "vou entregar")
+- `objection` — discordância ou contestação ("não vai funcionar", "discordo", "mas e se")
+- `risk` — risco identificado ("existe o risco de", "podemos ter problema com")
+- `open_question` — pergunta sem resposta ("quem vai fazer isso?", "quando será?")
+- `agreement` — confirmação ou concordância ("concordo", "faz sentido", "certo")
+- `exception` — exceção operacional ("na prática é diferente", "exceto quando")
+- `revision` — revisão de algo anterior ("antes era assim, agora mudou")
+
+Também extraia `utterance_speaker`: iniciais do participante cuja fala originou o fato (ex: "MF", "PG"), ou null se não identificável.
+
 ## Contradições (`contradictions`)
 
 Identifique SOMENTE contradições explícitas com versões anteriores mencionadas na própria transcrição:
@@ -69,7 +81,9 @@ Retorne APENAS JSON válido com a estrutura abaixo:
     {
       "fact_type": "rule|decision|constraint|nomenclature|insight",
       "content": "Texto completo e autoexplicativo do fato",
-      "confidence": 0.95
+      "confidence": 0.95,
+      "dialogue_act": "decision|commitment|objection|risk|open_question|agreement|exception|revision",
+      "utterance_speaker": "MF"
     }
   ],
   "contradictions": [

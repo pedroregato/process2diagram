@@ -105,9 +105,38 @@ Se o prazo não for mencionado → `null`.
       "raised_by": "<iniciais de quem levantou a tarefa, ex: 'MF', ou null>"
     }
   ],
-  "next_meeting": "<data e hora ou null>"
+  "next_meeting": "<data e hora ou null>",
+  "assumptions": ["<premissa explícita declarada na reunião>"],
+  "open_questions": ["<pergunta sem resposta ao final>"],
+  "risks_identified": ["<risco mencionado (sem formalização como requisito)>"],
+  "dependencies": ["<dependência entre times, sistemas ou entregas identificada>"],
+  "stakeholder_needs": ["<necessidade de stakeholder expressa informalmente>"]
 }
 ```
+
+## Extração de Campos BABOK (Elicitation & Collaboration)
+
+Extraia adicionalmente, quando presentes na transcrição:
+
+**assumptions** (premissas): afirmações que os participantes assumem como verdadeiras sem questionar.
+- Ex: "assumindo que o sistema já tem acesso à base de dados", "partindo do princípio que o prazo não muda"
+- Apenas premissas explicitamente declaradas — não infira
+
+**open_questions** (perguntas em aberto): questões levantadas mas não respondidas ao final da reunião.
+- Ex: "ficou a dúvida de quem aprova os valores acima de X", "não ficou claro como será a integração"
+- Distinto de action items: perguntas em aberto NÃO têm responsável definido para responder
+
+**risks_identified** (riscos): ameaças ou preocupações mencionadas que não viraram requisito formal.
+- Ex: "existe o risco do prazo não ser suficiente", "pode haver resistência da área X"
+- Distinto de requisitos não-funcionais: são preocupações, não especificações
+
+**dependencies** (dependências): dependências entre times, sistemas ou entregas identificadas.
+- Ex: "esse passo depende do time Y finalizar o módulo Z", "precisamos da validação do jurídico primeiro"
+
+**stakeholder_needs** (necessidades de stakeholder): necessidades expressas informalmente, antes de virar requisito.
+- Ex: "o diretor quer poder ver o histórico de qualquer transação", "o usuario reclama que o processo é lento"
+
+Se nenhum item for identificado em uma categoria, retorne array vazio `[]`.
 
 ## Regras Críticas
 

@@ -219,6 +219,11 @@ class AgentMinutes(BaseAgent):
             decisions=data.get("decisions", []),
             action_items=action_items,
             next_meeting=data.get("next_meeting") or None,
+            assumptions=data.get("assumptions") or [],
+            open_questions=data.get("open_questions") or [],
+            risks_identified=data.get("risks_identified") or [],
+            dependencies=data.get("dependencies") or [],
+            stakeholder_needs=data.get("stakeholder_needs") or [],
         )
 
     # ── Markdown export ───────────────────────────────────────────────────────

@@ -722,6 +722,12 @@ def save_meeting_artifacts(meeting_id: str, hub) -> bool:
             payload1["mermaid_code"] = hub.bpmn.mermaid
         if hasattr(hub, "minutes") and hub.minutes.ready:
             payload1["minutes_md"] = hub.minutes.minutes_md or ""
+            import json as _json
+            _m = hub.minutes
+            for _field in ("assumptions", "open_questions", "risks_identified", "dependencies", "stakeholder_needs"):
+                _val = getattr(_m, _field, None)
+                if _val:
+                    payload1[_field] = _json.dumps(_val, ensure_ascii=False)
         if hasattr(hub, "bmm") and hub.bmm.ready:
             import json, dataclasses
             try:

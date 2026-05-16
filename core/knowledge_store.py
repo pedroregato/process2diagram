@@ -242,6 +242,10 @@ def insert_fact(project_id: str, fact: dict) -> dict | None:
             "confidence":        float(fact.get("confidence", 1.0)),
             "is_active":         True,
         }
+        if fact.get("dialogue_act"):
+            payload["dialogue_act"] = fact["dialogue_act"]
+        if fact.get("utterance_speaker"):
+            payload["utterance_speaker"] = fact["utterance_speaker"]
         result = db.table("kh_facts").insert(payload).execute()
         return result.data[0] if result.data else None
     except Exception as exc:

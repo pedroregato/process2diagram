@@ -8,3 +8,5 @@ from .bmm_tab import render as render_bmm
 from .synthesizer_tab import render as render_synthesizer
 from .export_tab import render as render_export
 from .dev_tools_tab import render as render_dev_tools
+from .dmn_tab import render as render_dmn
+from .argumentation_tab import render as render_argumentation

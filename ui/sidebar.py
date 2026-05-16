@@ -114,6 +114,8 @@ def render_sidebar():
             st.markdown("**🧠 Análise de Negócio**")
             st.session_state.run_sbvr        = st.checkbox("📖 Vocabulário & Regras (SBVR)", value=st.session_state.run_sbvr)
             st.session_state.run_bmm         = st.checkbox("🎯 Motivação do Negócio (BMM)",  value=st.session_state.run_bmm)
+            st.session_state.run_dmn         = st.checkbox("⚖️ Tabelas de Decisão (DMN)",    value=st.session_state.get("run_dmn", False))
+            st.session_state.run_argumentation = st.checkbox("🗺️ Argumentação (IBIS)",         value=st.session_state.get("run_argumentation", False))
             st.session_state.run_synthesizer = st.checkbox("📄 Relatório Executivo",         value=st.session_state.run_synthesizer)
             st.session_state.run_ckf_updater = st.checkbox(
                 "🧠 Atualizar CKF do Contexto",
@@ -161,3 +163,7 @@ def render_sidebar():
                     st.session_state.rerun_agent = "synthesizer"
                 if st.button("🎯 BMM",        key="rr_bm", use_container_width=True):
                     st.session_state.rerun_agent = "bmm"
+                if st.button("⚖️ DMN",        key="rr_dmn", use_container_width=True):
+                    st.session_state.rerun_agent = "dmn"
+                if st.button("🗺️ IBIS",       key="rr_arg", use_container_width=True):
+                    st.session_state.rerun_agent = "argumentation"

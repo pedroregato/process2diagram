@@ -49,6 +49,29 @@ def render(hub, prefix, suffix):
                 "Deadline": ai.deadline or "—"
             })
         st.dataframe(rows, use_container_width=True)
+    # ── BABOK fields ──────────────────────────────────────────────────────────
+    _babok_fields = [
+        (getattr(m, "assumptions", []),       "Premissas (Assumptions)"),
+        (getattr(m, "risks_identified", []),  "Riscos Identificados"),
+        (getattr(m, "dependencies", []),      "Dependencias"),
+        (getattr(m, "open_questions", []),    "Questoes em Aberto"),
+        (getattr(m, "stakeholder_needs", []), "Necessidades dos Stakeholders"),
+    ]
+    _has_babok = any(lst for lst, _ in _babok_fields)
+    if _has_babok:
+        with st.expander("Analise BABOK", expanded=False):
+            st.caption(
+                "Campos extraidos com base no BABOK Guide v3 — Elicitation & Collaboration. "
+                "Captura premissas, riscos, dependencias, questoes abertas e necessidades dos stakeholders."
+            )
+            cols = st.columns(2)
+            for i, (lst, label) in enumerate(_babok_fields):
+                if lst:
+                    with cols[i % 2]:
+                        st.markdown(f"**{label}**")
+                        for item in lst:
+                            st.markdown(f"- {item}")
+
     st.markdown("---")
 
     # ── ATA Engine HTML interativo ────────────────────────────────────────────

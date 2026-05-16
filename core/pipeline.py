@@ -20,6 +20,8 @@ def run_pipeline(hub, config, progress_callback):
     run_requirements = config["run_requirements"]
     run_sbvr = config.get("run_sbvr", False)
     run_bmm = config.get("run_bmm", False)
+    run_dmn = config.get("run_dmn", False)
+    run_argumentation = config.get("run_argumentation", False)
     run_synthesizer = config["run_synthesizer"]
     n_bpmn_runs = config["n_bpmn_runs"]
     bpmn_weights = config["bpmn_weights"]
@@ -63,6 +65,8 @@ def run_pipeline(hub, config, progress_callback):
                                run_requirements=run_requirements,
                                run_sbvr=run_sbvr,
                                run_bmm=run_bmm,
+                               run_dmn=run_dmn,
+                               run_argumentation=run_argumentation,
                                run_synthesizer=run_synthesizer)
 
     elif run_bpmn and config.get("use_langgraph", False):
@@ -91,6 +95,8 @@ def run_pipeline(hub, config, progress_callback):
                                run_requirements=run_requirements,
                                run_sbvr=run_sbvr,
                                run_bmm=run_bmm,
+                               run_dmn=run_dmn,
+                               run_argumentation=run_argumentation,
                                run_synthesizer=run_synthesizer)
 
     else:
@@ -102,6 +108,8 @@ def run_pipeline(hub, config, progress_callback):
                                run_requirements=run_requirements,
                                run_sbvr=run_sbvr,
                                run_bmm=run_bmm,
+                               run_dmn=run_dmn,
+                               run_argumentation=run_argumentation,
                                run_synthesizer=run_synthesizer)
 
     # ── CKF Updater (non-fatal, post-pipeline) ────────────────────────────────

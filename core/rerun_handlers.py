@@ -5,6 +5,8 @@ from agents.agent_minutes import AgentMinutes
 from agents.agent_requirements import AgentRequirements
 from agents.agent_sbvr import AgentSBVR
 from agents.agent_bmm import AgentBMM
+from agents.agent_dmn import AgentDMN
+from agents.agent_argumentation import AgentArgumentation
 from agents.agent_synthesizer import AgentSynthesizer
 from agents.agent_transcript_quality import AgentTranscriptQuality
 from core.knowledge_hub import SynthesizerModel
@@ -50,6 +52,12 @@ def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
                 )
         except Exception:
             pass  # fail-open: session state update still happened
+    elif agent_name == "dmn":
+        agent = AgentDMN(client_info, provider_cfg)
+        hub = agent.run(hub, output_language)
+    elif agent_name == "argumentation":
+        agent = AgentArgumentation(client_info, provider_cfg)
+        hub = agent.run(hub, output_language)
     else:
         raise ValueError(f"Unknown agent: {agent_name}")
     return hub

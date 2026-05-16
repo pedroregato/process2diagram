@@ -68,6 +68,46 @@ def render(hub, prefix, suffix):
             key="export_req_json"
         )
         st.markdown("---")
+
+    if getattr(hub, 'dmn', None) and hub.dmn.ready:
+        st.markdown("**Decision Tables (DMN)**")
+        try:
+            from modules.dmn_viewer import dmn_to_xml
+            import json as _json
+            st.download_button(
+                "⬇️ DMN 1.4 (.xml)",
+                data=dmn_to_xml(hub.dmn).encode("utf-8"),
+                file_name=make_filename("decisions", "dmn", prefix, suffix),
+                mime="application/xml",
+                key="export_tab_dmn_xml",
+            )
+            decisions_list = [
+                {"id": d.id, "name": d.name, "question": d.question,
+                 "rationale": d.rationale, "decided_by": d.decided_by,
+                 "rules": [{"inputs": r.inputs, "output": r.output} for r in d.rules]}
+                for d in hub.dmn.decisions
+            ]
+            st.download_button(
+                "⬇️ DMN JSON",
+                data=_json.dumps({"decisions": decisions_list}, ensure_ascii=False, indent=2),
+                file_name=make_filename("decisions", "json", prefix, suffix),
+                key="export_tab_dmn_json",
+            )
+        except Exception:
+            pass
+        st.markdown("---")
+
+    if getattr(hub, 'argumentation', None) and hub.argumentation.ready:
+        import json as _json2, dataclasses
+        st.markdown("**Argumentation Map (IBIS)**")
+        ibis_data = {"questions": [dataclasses.asdict(q) for q in hub.argumentation.questions]}
+        st.download_button(
+            "⬇️ IBIS JSON",
+            data=_json2.dumps(ibis_data, ensure_ascii=False, indent=2),
+            file_name=make_filename("argumentation", "json", prefix, suffix),
+            key="export_tab_ibis_json",
+        )
+        st.markdown("---")
     if hub.synthesizer.ready:
         st.markdown("**Executive Report**")
         st.download_button(
