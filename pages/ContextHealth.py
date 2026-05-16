@@ -405,12 +405,14 @@ def _chart_meeting_types(roi_data) -> go.Figure:
         hovertemplate="<b>%{label}</b><br>%{value} reunião(ões) (%{percent})<extra></extra>",
         textfont=dict(size=11),
     ))
-    fig.update_layout(**_PLOTLY_LAYOUT,
-        title=dict(text="Tipos de Reunião", font=dict(size=14, color=_AMBER)),
-        height=300,
-        showlegend=True,
-        legend=dict(orientation="v", x=1.02, y=0.5, font=dict(size=10)),
-    )
+    fig.update_layout(**{
+        **_PLOTLY_LAYOUT,
+        "title":      dict(text="Tipos de Reunião", font=dict(size=14, color=_AMBER)),
+        "height":     300,
+        "showlegend": True,
+        "legend":     dict(orientation="v", x=1.02, y=0.5, font=dict(size=10),
+                           bgcolor="rgba(0,0,0,0)"),
+    })
     return fig
 
 
