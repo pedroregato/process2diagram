@@ -29,28 +29,52 @@ apply_auth_gate()
 
 # ── Palette ───────────────────────────────────────────────────────────────────
 
-_COLORS = {
-    "ACTOR":     "#60a5fa",   # blue-400  — mais luminoso para contraste
-    "SYSTEM":    "#a78bfa",   # violet-400
-    "PROCESS":   "#fbbf24",   # amber-400
-    "CONCEPT":   "#4ade80",   # green-400
-    "DOCUMENT":  "#22d3ee",   # cyan-400
-    "LOCATION":  "#fb923c",   # orange-400
-    "fact":      "#94a3b8",
-    "process":   "#fbbf24",
-    "edge":      "#475569",
-    "bg":        "#0d1b2a",   # fundo escuro fixo — garante contraste independente do tema
-    "text":      "#f1f5f9",   # branco-gelo — legível sobre fundo escuro
-    "label":     "#ffffff",   # labels dos nós: branco puro
+# Cores maximamente distintas — distribuídas ao longo do círculo cromático
+_TYPE_COLOR: dict[str, str] = {
+    "ACTOR":    "#f87171",   # vermelho     — o ator humano mais proeminente
+    "SYSTEM":   "#38bdf8",   # azul-ciano   — sistemas / ferramentas
+    "PROCESS":  "#fbbf24",   # âmbar/ouro   — processos de negócio
+    "CONCEPT":  "#4ade80",   # verde        — conceitos e temas
+    "DOCUMENT": "#c084fc",   # roxo         — documentos e artefatos
+    "LOCATION": "#f472b6",   # rosa/magenta — locais e ambientes
+    "ROLE":     "#34d399",   # esmeralda    — papéis organizacionais
+    "TERM":     "#fb923c",   # laranja      — termos técnicos
+    "OTHER":    "#94a3b8",   # cinza-ardósia — outros
+    "_PROC":    "#fde047",   # amarelo-vivo  — nós de Processo (KH)
 }
 
-_NODE_SYMBOLS = {
+_TYPE_LABEL: dict[str, str] = {
+    "ACTOR":    "Ator / Pessoa",
+    "SYSTEM":   "Sistema / Ferramenta",
+    "PROCESS":  "Processo de negocio",
+    "CONCEPT":  "Conceito / Tema",
+    "DOCUMENT": "Documento / Artefato",
+    "LOCATION": "Local / Ambiente",
+    "ROLE":     "Papel / Funcao",
+    "TERM":     "Termo tecnico",
+    "OTHER":    "Outro",
+    "_PROC":    "Processo (Knowledge Hub)",
+}
+
+_TYPE_SYMBOL: dict[str, str] = {
     "ACTOR":    "circle",
     "SYSTEM":   "diamond",
     "PROCESS":  "square",
     "CONCEPT":  "triangle-up",
-    "DOCUMENT": "hexagon",
+    "DOCUMENT": "hexagon2",
     "LOCATION": "star",
+    "ROLE":     "circle-open",
+    "TERM":     "triangle-down",
+    "OTHER":    "cross",
+    "_PROC":    "square-dot",
+}
+
+# Mantidos para compatibilidade com a sidebar legend
+_COLORS = {
+    "edge": "#475569",
+    "bg":   "#0d1b2a",
+    "text": "#f1f5f9",
+    "label": "#ffffff",
 }
 
 # ── Data loading ───────────────────────────────────────────────────────────────
@@ -176,111 +200,97 @@ def _spring_layout(nodes: list[str], edges: list[tuple[str, str]], iterations: i
 
 # ── Graph builder ──────────────────────────────────────────────────────────────
 
-def _build_graph(data: dict, max_nodes: int, show_facts: bool, show_processes: bool, entity_types: list[str]) -> go.Figure:
+def _build_graph(
+    data: dict, max_nodes: int, show_facts: bool,
+    show_processes: bool, entity_types: list[str],
+) -> go.Figure:
+    from collections import defaultdict
+
     entities = data["entities"]
     processes = data["processes"] if show_processes else []
-    facts = data["facts"] if show_facts else []
+    facts     = data["facts"] if show_facts else []
     contradictions = data["contradictions"]
 
-    # Filter entities by selected types
     if entity_types:
         entities = [e for e in entities if e.get("entity_type", "ACTOR") in entity_types]
     entities = entities[:max_nodes]
 
     entity_ids = {e["id"] for e in entities}
-    process_ids = {p["id"] for p in processes}
-    contra_pairs = {(c.get("fact_a_id"), c.get("fact_b_id")) for c in contradictions}
 
-    # Build id→index maps
-    id_to_idx: dict[str, int] = {}
-    node_x: list[float] = []
-    node_y: list[float] = []
-    node_text: list[str] = []
-    node_color: list[str] = []
-    node_size: list[float] = []
-    node_symbol: list[str] = []
-    node_hover: list[str] = []
-
-    # --- Entity nodes ---
+    # ── 1. Spring layout (coordenadas) ─────────────────────────────────────────
     all_node_ids = list(entity_ids) + [f"proc_{p['id']}" for p in processes]
     edge_pairs: list[tuple[str, str]] = []
-
     for fact in facts:
-        s = fact.get("subject_entity_id")
-        o = fact.get("object_entity_id")
+        s, o = fact.get("subject_entity_id"), fact.get("object_entity_id")
         if s in entity_ids and o and o in entity_ids:
             edge_pairs.append((s, o))
-
     for proc in processes:
-        involved = proc.get("involved_entities") or []
-        for eid in involved:
+        for eid in (proc.get("involved_entities") or []):
             if eid in entity_ids:
                 edge_pairs.append((eid, f"proc_{proc['id']}"))
 
     pos = _spring_layout(all_node_ids, edge_pairs, iterations=80)
 
+    # ── 2. Construir arrays paralelos de nós ───────────────────────────────────
+    id_to_idx: dict[str, int] = {}
+    node_x: list[float]  = []
+    node_y: list[float]  = []
+    node_text: list[str] = []
+    node_size: list[float] = []
+    node_hover: list[str] = []
+    node_etype: list[str] = []   # tipo de cada nó (para agrupar por trace)
+
     for e in entities:
-        eid = e["id"]
+        eid   = e["id"]
         etype = e.get("entity_type", "ACTOR")
         count = e.get("occurrence_count", 1)
-        idx = len(id_to_idx)
-        id_to_idx[eid] = idx
-        px, py = pos.get(eid, (0, 0))
-        node_x.append(px)
-        node_y.append(py)
+        id_to_idx[eid] = len(id_to_idx)
+        px, py = pos.get(eid, (0.0, 0.0))
+        node_x.append(px);  node_y.append(py)
         node_text.append(e.get("canonical_name", "?"))
-        node_color.append(_COLORS.get(etype, "#94a3b8"))
-        node_size.append(max(12, min(40, 12 + count * 3)))
-        node_symbol.append(_NODE_SYMBOLS.get(etype, "circle"))
+        node_size.append(max(14, min(42, 14 + count * 3)))
+        node_etype.append(etype)
         aliases = ", ".join((e.get("aliases") or [])[:3])
         node_hover.append(
             f"<b>{e.get('canonical_name')}</b><br>"
-            f"Tipo: {etype}<br>"
-            f"Ocorrencias: {count}<br>"
-            + (f"Aliases: {aliases}" if aliases else "")
+            f"Tipo: {_TYPE_LABEL.get(etype, etype)}<br>"
+            f"Ocorrencias: {count}"
+            + (f"<br>Aliases: {aliases}" if aliases else "")
         )
 
+    # Nós de processo KH
+    proc_x: list[float] = []; proc_y: list[float] = []
+    proc_text: list[str] = []; proc_size: list[float] = []; proc_hover: list[str] = []
     for proc in processes:
         pid = f"proc_{proc['id']}"
-        idx = len(id_to_idx)
-        id_to_idx[pid] = idx
-        px, py = pos.get(pid, (0, 0))
-        node_x.append(px)
-        node_y.append(py)
-        node_text.append(proc.get("process_name", "?")[:22])
-        node_color.append(_COLORS["PROCESS"])
-        node_size.append(20)
-        node_symbol.append("square")
-        node_hover.append(
+        id_to_idx[pid] = len(id_to_idx)
+        px, py = pos.get(pid, (0.0, 0.0))
+        proc_x.append(px);  proc_y.append(py)
+        proc_text.append(proc.get("process_name", "?")[:22])
+        proc_size.append(20)
+        proc_hover.append(
             f"<b>{proc.get('process_name')}</b><br>"
             f"Status: {proc.get('status', '—')}<br>"
             f"Versoes: {proc.get('version_count', 1)}<br>"
-            f"{(proc.get('description') or '')[:80]}"
+            + (proc.get("description") or "")[:80]
         )
 
-    # --- Edges ---
-    edge_x: list[float | None] = []
-    edge_y: list[float | None] = []
-    edge_labels_x: list[float] = []
-    edge_labels_y: list[float] = []
-    edge_labels_text: list[str] = []
+    # ── 3. Arestas de fatos ────────────────────────────────────────────────────
+    edge_x: list[float | None] = []; edge_y: list[float | None] = []
+    elbl_x: list[float] = []; elbl_y: list[float] = []; elbl_t: list[str] = []
 
-    fact_id_set = {f["id"] for f in facts}
+    all_x = node_x + proc_x
+    all_y = node_y + proc_y
 
     for fact in facts:
-        s = fact.get("subject_entity_id")
-        o = fact.get("object_entity_id")
+        s, o = fact.get("subject_entity_id"), fact.get("object_entity_id")
         if not (s in id_to_idx and o and o in id_to_idx):
             continue
         si, oi = id_to_idx[s], id_to_idx[o]
-        x0, y0 = node_x[si], node_y[si]
-        x1, y1 = node_x[oi], node_y[oi]
-        edge_x += [x0, x1, None]
-        edge_y += [y0, y1, None]
-        mx, my = (x0 + x1) / 2, (y0 + y1) / 2
-        edge_labels_x.append(mx)
-        edge_labels_y.append(my)
-        edge_labels_text.append(fact.get("predicate", "")[:30])
+        x0, y0, x1, y1 = all_x[si], all_y[si], all_x[oi], all_y[oi]
+        edge_x += [x0, x1, None]; edge_y += [y0, y1, None]
+        elbl_x.append((x0 + x1) / 2); elbl_y.append((y0 + y1) / 2)
+        elbl_t.append(fact.get("predicate", "")[:28])
 
     for proc in processes:
         pid = f"proc_{proc['id']}"
@@ -291,72 +301,101 @@ def _build_graph(data: dict, max_nodes: int, show_facts: bool, show_processes: b
             if eid not in id_to_idx:
                 continue
             si = id_to_idx[eid]
-            x0, y0 = node_x[si], node_y[si]
-            x1, y1 = node_x[oi], node_y[oi]
-            edge_x += [x0, x1, None]
-            edge_y += [y0, y1, None]
+            x0, y0, x1, y1 = all_x[si], all_y[si], all_x[oi], all_y[oi]
+            edge_x += [x0, x1, None]; edge_y += [y0, y1, None]
 
-    # --- Contradiction edges ---
-    contra_x: list[float | None] = []
-    contra_y: list[float | None] = []
+    # ── 4. Arestas de contradição ──────────────────────────────────────────────
+    contra_x: list[float | None] = []; contra_y: list[float | None] = []
     for c in contradictions:
-        # Use fact subject ids to find entity positions
-        fa_id = c.get("fact_a_id")
-        fb_id = c.get("fact_b_id")
-        # Try to find entities that own these facts
-        fa_ent = next((f.get("subject_entity_id") for f in facts if f["id"] == fa_id), None)
-        fb_ent = next((f.get("subject_entity_id") for f in facts if f["id"] == fb_id), None)
+        fa_ent = next((f.get("subject_entity_id") for f in facts if f["id"] == c.get("fact_a_id")), None)
+        fb_ent = next((f.get("subject_entity_id") for f in facts if f["id"] == c.get("fact_b_id")), None)
         if fa_ent in id_to_idx and fb_ent and fb_ent in id_to_idx:
             si, oi = id_to_idx[fa_ent], id_to_idx[fb_ent]
-            contra_x += [node_x[si], node_x[oi], None]
-            contra_y += [node_y[si], node_y[oi], None]
+            contra_x += [all_x[si], all_x[oi], None]
+            contra_y += [all_y[si], all_y[oi], None]
 
-    # --- Assemble figure ---
+    # ── 5. Montar figura ───────────────────────────────────────────────────────
     fig = go.Figure()
 
+    # Arestas (abaixo dos nós)
     if edge_x:
         fig.add_trace(go.Scatter(
             x=edge_x, y=edge_y, mode="lines",
-            line=dict(color=_COLORS["edge"], width=1.2),
+            line=dict(color="#475569", width=1.2),
             hoverinfo="skip", showlegend=False,
         ))
-
     if contra_x:
         fig.add_trace(go.Scatter(
             x=contra_x, y=contra_y, mode="lines",
-            line=dict(color="#ef4444", width=1.5, dash="dot"),
-            hoverinfo="skip", showlegend=False, name="Contradicao",
+            line=dict(color="#ef4444", width=2, dash="dot"),
+            hoverinfo="skip", name="Contradicao detectada", showlegend=True,
         ))
 
-    if node_x:
-        # Camada 1: marcadores (nós coloridos)
+    # ── Um trace de marcadores por tipo — gera legenda nativa do Plotly ──
+    type_indices: dict[str, list[int]] = defaultdict(list)
+    for i, et in enumerate(node_etype):
+        type_indices[et].append(i)
+
+    for etype in sorted(type_indices.keys()):
+        idxs   = type_indices[etype]
+        color  = _TYPE_COLOR.get(etype, "#94a3b8")
+        symbol = _TYPE_SYMBOL.get(etype, "circle")
+        label  = _TYPE_LABEL.get(etype, etype)
+        xs   = [node_x[i] for i in idxs]
+        ys   = [node_y[i] for i in idxs]
+        sizes = [node_size[i] for i in idxs]
+        texts = [node_text[i] for i in idxs]
+        hovers = [node_hover[i] for i in idxs]
+
+        # Marcadores — com legenda
         fig.add_trace(go.Scatter(
-            x=node_x, y=node_y, mode="markers",
+            x=xs, y=ys, mode="markers",
+            name=label,
             marker=dict(
-                color=node_color, size=node_size,
-                symbol=node_symbol,
-                line=dict(color="#0f172a", width=2),
-                opacity=0.92,
+                color=color, size=sizes, symbol=symbol,
+                line=dict(color="#0a0f1a", width=2),
+                opacity=0.95,
             ),
-            hovertext=node_hover,
-            hoverinfo="text",
-            showlegend=False,
+            hovertext=hovers, hoverinfo="text",
+            showlegend=True,
+            legendgroup=etype,
         ))
-        # Camada 2: labels acima dos nós — fonte maior e branca pura para legibilidade
+        # Labels (sem entrar na legenda)
         fig.add_trace(go.Scatter(
-            x=node_x, y=node_y, mode="text",
-            text=[f"<b>{t}</b>" for t in node_text],
+            x=xs, y=ys, mode="text",
+            text=[f"<b>{t}</b>" for t in texts],
             textposition="top center",
-            textfont=dict(size=11, color=_COLORS["label"],
-                          family="Segoe UI, system-ui"),
-            hoverinfo="skip",
-            showlegend=False,
+            textfont=dict(size=11, color="#ffffff", family="Segoe UI, system-ui"),
+            hoverinfo="skip", showlegend=False,
+            legendgroup=etype,
         ))
 
-    if edge_labels_text and any(t for t in edge_labels_text):
+    # Nós de processo KH
+    if proc_x:
         fig.add_trace(go.Scatter(
-            x=edge_labels_x, y=edge_labels_y, mode="text",
-            text=edge_labels_text,
+            x=proc_x, y=proc_y, mode="markers",
+            name=_TYPE_LABEL["_PROC"],
+            marker=dict(
+                color=_TYPE_COLOR["_PROC"], size=proc_size,
+                symbol=_TYPE_SYMBOL["_PROC"],
+                line=dict(color="#0a0f1a", width=2), opacity=0.95,
+            ),
+            hovertext=proc_hover, hoverinfo="text",
+            showlegend=True, legendgroup="_PROC",
+        ))
+        fig.add_trace(go.Scatter(
+            x=proc_x, y=proc_y, mode="text",
+            text=[f"<b>{t}</b>" for t in proc_text],
+            textposition="top center",
+            textfont=dict(size=10, color="#ffffff", family="Segoe UI, system-ui"),
+            hoverinfo="skip", showlegend=False, legendgroup="_PROC",
+        ))
+
+    # Labels das arestas
+    if elbl_t and any(t for t in elbl_t):
+        fig.add_trace(go.Scatter(
+            x=elbl_x, y=elbl_y, mode="text",
+            text=elbl_t,
             textfont=dict(size=8, color="#94a3b8", family="Segoe UI, system-ui"),
             hoverinfo="skip", showlegend=False,
         ))
@@ -366,43 +405,24 @@ def _build_graph(data: dict, max_nodes: int, show_facts: bool, show_processes: b
         plot_bgcolor=_COLORS["bg"],
         font=dict(color=_COLORS["text"], family="Segoe UI, system-ui"),
         margin=dict(l=10, r=10, t=10, b=10),
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False,
-                   showspikes=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False,
-                   showspikes=False),
-        height=620,
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, showspikes=False),
+        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False, showspikes=False),
+        height=640,
         dragmode="pan",
-        hoverlabel=dict(bgcolor="#1e293b", font_size=12, font_color="#f1f5f9",
-                        bordercolor="#475569"),
+        hoverlabel=dict(bgcolor="#1e293b", font_size=12,
+                        font_color="#f1f5f9", bordercolor="#475569"),
+        legend=dict(
+            bgcolor="#111f30", bordercolor="#334155", borderwidth=1,
+            font=dict(color="#f1f5f9", size=12),
+            title=dict(text="<b>Tipo de entidade</b>",
+                       font=dict(color="#fbbf24", size=12)),
+            itemsizing="constant",
+            x=1.01, y=1, xanchor="left", yanchor="top",
+        ),
     )
     return fig
 
 
-# ── Legend helper ──────────────────────────────────────────────────────────────
-
-def _legend_html() -> str:
-    items = [
-        ("ACTOR",    _COLORS["ACTOR"],    "●", "Ator / Pessoa"),
-        ("SYSTEM",   _COLORS["SYSTEM"],   "◆", "Sistema"),
-        ("PROCESS",  _COLORS["PROCESS"],  "■", "Processo"),
-        ("CONCEPT",  _COLORS["CONCEPT"],  "▲", "Conceito"),
-        ("DOCUMENT", _COLORS["DOCUMENT"], "⬡", "Documento"),
-        ("LOCATION", _COLORS["LOCATION"], "★", "Local"),
-    ]
-    parts = [
-        f'<span style="margin-right:14px;white-space:nowrap;">'
-        f'<span style="color:{color};font-size:1.1em;">{sym}</span>'
-        f' <span style="font-size:0.82em;color:#94a3b8;">{label}</span></span>'
-        for _, color, sym, label in items
-    ]
-    return (
-        '<div style="display:flex;flex-wrap:wrap;gap:4px;padding:8px 0;">'
-        + "".join(parts)
-        + '<span style="margin-left:16px;white-space:nowrap;">'
-          '<span style="color:#ef4444;font-size:0.9em;">- - -</span>'
-          ' <span style="font-size:0.82em;color:#94a3b8;">Contradicao</span></span>'
-        + "</div>"
-    )
 
 
 # ── Main render ────────────────────────────────────────────────────────────────
@@ -476,7 +496,7 @@ with st.sidebar:
     show_processes = st.toggle("Mostrar processos", value=True, key="kg_procs")
     max_nodes = st.slider("Max entidades no grafo", 10, min(150, len(entities)), min(60, len(entities)), key="kg_maxn")
     st.markdown("---")
-    st.markdown(_legend_html(), unsafe_allow_html=True)
+    st.caption("A legenda de cores aparece dentro do grafico (canto superior direito).")
 
 # ── Main graph ────────────────────────────────────────────────────────────────
 tab_graph, tab_table, tab_facts = st.tabs(["🕸️ Grafo", "📋 Entidades", "🔗 Relacoes"])
