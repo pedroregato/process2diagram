@@ -29,53 +29,53 @@ apply_auth_gate()
 
 # ── Palette ───────────────────────────────────────────────────────────────────
 
-# Cores maximamente distintas — distribuídas ao longo do círculo cromático
-_TYPE_COLOR: dict[str, str] = {
-    "ACTOR":    "#f87171",   # vermelho     — o ator humano mais proeminente
-    "SYSTEM":   "#38bdf8",   # azul-ciano   — sistemas / ferramentas
-    "PROCESS":  "#fbbf24",   # âmbar/ouro   — processos de negócio
-    "CONCEPT":  "#4ade80",   # verde        — conceitos e temas
-    "DOCUMENT": "#c084fc",   # roxo         — documentos e artefatos
-    "LOCATION": "#f472b6",   # rosa/magenta — locais e ambientes
-    "ROLE":     "#34d399",   # esmeralda    — papéis organizacionais
-    "TERM":     "#fb923c",   # laranja      — termos técnicos
-    "OTHER":    "#94a3b8",   # cinza-ardósia — outros
-    "_PROC":    "#fde047",   # amarelo-vivo  — nós de Processo (KH)
-}
+# 12 cores maximamente distintas no círculo cromático — atribuídas
+# dinamicamente aos tipos presentes nos dados (ordem alfabética dos tipos).
+# Desta forma funciona independentemente dos nomes que o LLM usa para os tipos.
+_PALETTE = [
+    "#f87171",  # vermelho
+    "#38bdf8",  # azul-ciano
+    "#4ade80",  # verde
+    "#fbbf24",  # âmbar
+    "#c084fc",  # roxo
+    "#f472b6",  # rosa
+    "#34d399",  # esmeralda
+    "#fb923c",  # laranja
+    "#fde047",  # amarelo
+    "#22d3ee",  # ciano claro
+    "#a78bfa",  # violeta
+    "#86efac",  # verde-claro
+]
 
-_TYPE_LABEL: dict[str, str] = {
-    "ACTOR":    "Ator / Pessoa",
-    "SYSTEM":   "Sistema / Ferramenta",
-    "PROCESS":  "Processo de negocio",
-    "CONCEPT":  "Conceito / Tema",
-    "DOCUMENT": "Documento / Artefato",
-    "LOCATION": "Local / Ambiente",
-    "ROLE":     "Papel / Funcao",
-    "TERM":     "Termo tecnico",
-    "OTHER":    "Outro",
-    "_PROC":    "Processo (Knowledge Hub)",
-}
+_SYMBOL_LIST = [
+    "circle", "diamond", "square", "triangle-up", "star",
+    "hexagon2", "circle-open", "triangle-down", "cross",
+    "pentagon", "diamond-open", "square-open",
+]
 
-_TYPE_SYMBOL: dict[str, str] = {
-    "ACTOR":    "circle",
-    "SYSTEM":   "diamond",
-    "PROCESS":  "square",
-    "CONCEPT":  "triangle-up",
-    "DOCUMENT": "hexagon2",
-    "LOCATION": "star",
-    "ROLE":     "circle-open",
-    "TERM":     "triangle-down",
-    "OTHER":    "cross",
-    "_PROC":    "square-dot",
-}
+# Cor fixa para nós de Processo do Knowledge Hub
+_PROC_COLOR  = "#fde047"
+_PROC_SYMBOL = "square-dot"
+_PROC_LABEL  = "Processo (Knowledge Hub)"
 
-# Mantidos para compatibilidade com a sidebar legend
 _COLORS = {
-    "edge": "#475569",
-    "bg":   "#0d1b2a",
-    "text": "#f1f5f9",
+    "edge":  "#475569",
+    "bg":    "#0d1b2a",
+    "text":  "#f1f5f9",
     "label": "#ffffff",
 }
+
+
+def _type_styles(unique_types: list[str]) -> dict[str, dict]:
+    """Atribui cor e símbolo distintos a cada tipo presente nos dados."""
+    styles: dict[str, dict] = {}
+    for i, t in enumerate(sorted(unique_types)):
+        styles[t] = {
+            "color":  _PALETTE[i % len(_PALETTE)],
+            "symbol": _SYMBOL_LIST[i % len(_SYMBOL_LIST)],
+            "label":  t.replace("_", " ").title(),
+        }
+    return styles
 
 # ── Data loading ───────────────────────────────────────────────────────────────
 
@@ -217,6 +217,10 @@ def _build_graph(
 
     entity_ids = {e["id"] for e in entities}
 
+    # ── 0. Estilos dinâmicos — cor/símbolo atribuídos aos tipos reais nos dados ─
+    unique_types = sorted({e.get("entity_type", "unknown") for e in entities})
+    styles = _type_styles(unique_types)
+
     # ── 1. Spring layout (coordenadas) ─────────────────────────────────────────
     all_node_ids = list(entity_ids) + [f"proc_{p['id']}" for p in processes]
     edge_pairs: list[tuple[str, str]] = []
@@ -251,9 +255,10 @@ def _build_graph(
         node_size.append(max(14, min(42, 14 + count * 3)))
         node_etype.append(etype)
         aliases = ", ".join((e.get("aliases") or [])[:3])
+        type_label = styles.get(etype, {}).get("label", etype)
         node_hover.append(
             f"<b>{e.get('canonical_name')}</b><br>"
-            f"Tipo: {_TYPE_LABEL.get(etype, etype)}<br>"
+            f"Tipo: {type_label}<br>"
             f"Ocorrencias: {count}"
             + (f"<br>Aliases: {aliases}" if aliases else "")
         )
@@ -338,9 +343,10 @@ def _build_graph(
 
     for etype in sorted(type_indices.keys()):
         idxs   = type_indices[etype]
-        color  = _TYPE_COLOR.get(etype, "#94a3b8")
-        symbol = _TYPE_SYMBOL.get(etype, "circle")
-        label  = _TYPE_LABEL.get(etype, etype)
+        st_    = styles.get(etype, {})
+        color  = st_.get("color",  _PALETTE[0])
+        symbol = st_.get("symbol", "circle")
+        label  = st_.get("label",  etype)
         xs   = [node_x[i] for i in idxs]
         ys   = [node_y[i] for i in idxs]
         sizes = [node_size[i] for i in idxs]
@@ -374,10 +380,10 @@ def _build_graph(
     if proc_x:
         fig.add_trace(go.Scatter(
             x=proc_x, y=proc_y, mode="markers",
-            name=_TYPE_LABEL["_PROC"],
+            name=_PROC_LABEL,
             marker=dict(
-                color=_TYPE_COLOR["_PROC"], size=proc_size,
-                symbol=_TYPE_SYMBOL["_PROC"],
+                color=_PROC_COLOR, size=proc_size,
+                symbol=_PROC_SYMBOL,
                 line=dict(color="#0a0f1a", width=2), opacity=0.95,
             ),
             hovertext=proc_hover, hoverinfo="text",
