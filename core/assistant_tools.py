@@ -4672,15 +4672,16 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             )
 
             agents_config = {
-                "run_minutes":      True,
-                "run_requirements": True,
-                "run_sbvr":         True,
-                "run_bmm":          True,
-                "run_dmn":          True,
+                "run_minutes":       True,
+                "run_requirements":  True,
+                "run_sbvr":          True,
+                "run_bmm":           True,
+                "run_dmn":           True,
                 "run_argumentation": True,
-                "run_quality":      run_quality,
-                "run_bpmn":         run_bpmn,
-                "run_synthesizer":  False,
+                "run_synthesizer":   True,
+                "run_ckf_updater":   True,
+                "run_quality":       run_quality,
+                "run_bpmn":          run_bpmn,
             }
 
             result: FileResult = pipeline._reprocess_one(m, self.project_id, agents_config)
@@ -4696,6 +4697,12 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 f"  Requisitos novos     : {result.req_new}",
                 f"  Termos SBVR          : {result.n_terms}",
                 f"  Regras SBVR          : {result.n_rules}",
+                f"  Ata+BABOK            : regenerada",
+                f"  DMN                  : regenerado",
+                f"  Argumentação IBIS    : regenerada",
+                f"  Relatório Executivo  : regenerado",
+                f"  CKF Contexto         : atualizado",
+                f"  Knowledge Graph      : extraído",
             ]
             if run_bpmn:
                 lines.append("  BPMN                 : regenerado")

@@ -26,17 +26,17 @@ def init_session_state():
     if "run_requirements" not in st.session_state:
         st.session_state.run_requirements = True
     if "run_sbvr" not in st.session_state:
-        st.session_state.run_sbvr = False
+        st.session_state.run_sbvr = True
     if "run_bmm" not in st.session_state:
-        st.session_state.run_bmm = False
+        st.session_state.run_bmm = True
     if "run_synthesizer" not in st.session_state:
-        st.session_state.run_synthesizer = False
+        st.session_state.run_synthesizer = True
     if "run_ckf_updater" not in st.session_state:
-        st.session_state.run_ckf_updater = False
+        st.session_state.run_ckf_updater = True
     if "run_dmn" not in st.session_state:
-        st.session_state.run_dmn = False
+        st.session_state.run_dmn = True
     if "run_argumentation" not in st.session_state:
-        st.session_state.run_argumentation = False
+        st.session_state.run_argumentation = True
     if "n_bpmn_runs" not in st.session_state:
         st.session_state.n_bpmn_runs = 1
     if "bpmn_weights" not in st.session_state:
@@ -48,7 +48,7 @@ def init_session_state():
     if "transcript_text" not in st.session_state:
         st.session_state.transcript_text = ""
     if "use_langgraph" not in st.session_state:
-        st.session_state.use_langgraph = False
+        st.session_state.use_langgraph = True
     if "validation_threshold" not in st.session_state:
         st.session_state.validation_threshold = 6.0
     if "max_bpmn_retries" not in st.session_state:
