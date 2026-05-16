@@ -560,7 +560,7 @@ def _build_html_report(project_name, health, roi_data, reqs, sbvr, n_files,
             req_contra_html += (
                 f'<div class="contra-item">'
                 f'<strong>REQ-{rd.get("req_number","?")} — {rd.get("title","—")}</strong><br>'
-                f'<span class="sub">{c.get("change_summary") or "Sem detalhes"}</span></div>'
+                f'<span class="sub">{c.get("contradiction_detail") or c.get("change_summary") or c.get("description") or "Sem detalhes"}</span></div>'
             )
 
     kh_contra_html = ""
@@ -568,9 +568,9 @@ def _build_html_report(project_name, health, roi_data, reqs, sbvr, n_files,
         for c in kh_contra[:10]:
             kh_contra_html += (
                 f'<div class="contra-item">'
-                f'<strong>{c.get("fact_a_content","?")[:80]}</strong><br>'
-                f'<span class="sub">↔ {c.get("fact_b_content","?")[:80]}</span>'
-                f'<br><span class="sub">{c.get("explanation","")[:120]}</span></div>'
+                f'<strong>{c.get("description","?")[:100]}</strong><br>'
+                f'<span class="sub">Processo: {c.get("process_name","—")} · Severidade: {c.get("severity","—")}</span>'
+                f'<br><span class="sub">{c.get("clarifying_question","")[:120]}</span></div>'
             )
 
     charts_html = ""
@@ -1109,7 +1109,7 @@ with tab_alerts:
             rd  = c.get("requirements") or {}
             st.error(
                 f"**REQ-{rd.get('req_number','?')} — {rd.get('title','—')}**  \n"
-                f"{c.get('change_summary') or c.get('notes') or 'Sem detalhes'}"
+                f"{c.get('contradiction_detail') or c.get('change_summary') or c.get('description') or 'Sem detalhes'}"
             )
         if len(req_contra) > 10:
             st.caption(f"+ {len(req_contra)-10} adicionais — ver Req. Tracker.")
@@ -1129,14 +1129,20 @@ with tab_alerts:
     if kh_contra:
         for c in kh_contra[:10]:
             with st.expander(
-                f"⚡ {(c.get('fact_a_content') or 'Fato A')[:70]}…",
+                f"⚡ {(c.get('description') or c.get('process_name') or 'Contradição')[:70]}…",
                 expanded=False,
             ):
-                col_a, col_b = st.columns(2)
-                col_a.caption(f"**Fato A:** {c.get('fact_a_content','—')}")
-                col_b.caption(f"**Fato B:** {c.get('fact_b_content','—')}")
-                if c.get("explanation"):
-                    st.info(c["explanation"])
+                if c.get('process_name'):
+                    st.caption(f"**Processo:** {c['process_name']}")
+                st.write(c.get('description') or '—')
+                cols = st.columns(3)
+                cols[0].caption(f"**Severidade:** {c.get('severity','—')}")
+                cols[1].caption(f"**Tipo:** {c.get('relation_type','—')}")
+                cols[2].caption(f"**Confiança:** {c.get('confidence') or '—'}")
+                if c.get('clarifying_question'):
+                    st.info(f"❓ {c['clarifying_question']}")
+                if c.get('suggested_rewrite'):
+                    st.success(f"💡 Sugestão: {c['suggested_rewrite']}")
         if len(kh_contra) > 10:
             st.caption(f"+ {len(kh_contra)-10} adicionais — ver Knowledge Hub.")
         st.page_link("pages/KnowledgeHub.py", label="Abrir Knowledge Hub")
