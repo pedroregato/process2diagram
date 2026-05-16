@@ -194,22 +194,26 @@ with st.expander("🔄 Reprocessar Reuniões Existentes", expanded=False):
                 )
 
             st.markdown("**Agentes a executar:**")
-            _rc1, _rc2, _rc3, _rc4, _rc5, _rc6 = st.columns(6)
+            _rc1, _rc2, _rc3, _rc4, _rc5, _rc6, _rc7, _rc8 = st.columns(8)
             _rp_minutes      = _rc1.checkbox("📋 Ata",          value=True,  key="rp_minutes")
             _rp_requirements = _rc2.checkbox("📝 Requisitos",   value=True,  key="rp_req")
             _rp_sbvr         = _rc3.checkbox("📖 SBVR",         value=True,  key="rp_sbvr")
             _rp_bmm          = _rc4.checkbox("🎯 BMM",          value=True,  key="rp_bmm")
-            _rp_quality      = _rc5.checkbox("🔬 Qualidade",    value=False, key="rp_quality")
-            _rp_bpmn         = _rc6.checkbox("📐 BPMN (lento)", value=False, key="rp_bpmn")
+            _rp_dmn          = _rc5.checkbox("⚖️ DMN",          value=True,  key="rp_dmn")
+            _rp_ibis         = _rc6.checkbox("🗺️ IBIS",         value=True,  key="rp_ibis")
+            _rp_quality      = _rc7.checkbox("🔬 Qualidade",    value=False, key="rp_quality")
+            _rp_bpmn         = _rc8.checkbox("📐 BPMN (lento)", value=False, key="rp_bpmn")
 
             _rp_agents_config = {
-                "run_minutes":      _rp_minutes,
-                "run_requirements": _rp_requirements,
-                "run_sbvr":         _rp_sbvr,
-                "run_bmm":          _rp_bmm,
-                "run_quality":      _rp_quality,
-                "run_bpmn":         _rp_bpmn,
-                "run_synthesizer":  False,
+                "run_minutes":       _rp_minutes,
+                "run_requirements":  _rp_requirements,
+                "run_sbvr":          _rp_sbvr,
+                "run_bmm":           _rp_bmm,
+                "run_dmn":           _rp_dmn,
+                "run_argumentation": _rp_ibis,
+                "run_quality":       _rp_quality,
+                "run_bpmn":          _rp_bpmn,
+                "run_synthesizer":   False,
             }
 
             _rp_runnable = [
@@ -314,22 +318,26 @@ st.markdown("---")
 st.markdown("## 3️⃣ Agentes")
 
 with st.expander("Configurar agentes a executar", expanded=True):
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
     run_minutes      = col1.checkbox("📋 Ata",          value=True,  key="br_minutes")
     run_requirements = col2.checkbox("📝 Requisitos",   value=True,  key="br_req")
     run_sbvr         = col3.checkbox("📖 SBVR",         value=True,  key="br_sbvr")
     run_bmm          = col4.checkbox("🎯 BMM",          value=True,  key="br_bmm")
-    run_quality      = col5.checkbox("🔬 Qualidade",    value=False, key="br_quality")
-    run_bpmn         = col6.checkbox("📐 BPMN (lento)", value=False, key="br_bpmn")
+    run_dmn          = col5.checkbox("⚖️ DMN",          value=True,  key="br_dmn")
+    run_ibis         = col6.checkbox("🗺️ IBIS",         value=True,  key="br_ibis")
+    run_quality      = col7.checkbox("🔬 Qualidade",    value=False, key="br_quality")
+    run_bpmn         = col8.checkbox("📐 BPMN (lento)", value=False, key="br_bpmn")
 
 agents_config = {
-    "run_minutes":      run_minutes,
-    "run_requirements": run_requirements,
-    "run_sbvr":         run_sbvr,
-    "run_bmm":          run_bmm,
-    "run_quality":      run_quality,
-    "run_bpmn":         run_bpmn,
-    "run_synthesizer":  False,
+    "run_minutes":       run_minutes,
+    "run_requirements":  run_requirements,
+    "run_sbvr":          run_sbvr,
+    "run_bmm":           run_bmm,
+    "run_dmn":           run_dmn,
+    "run_argumentation": run_ibis,
+    "run_quality":       run_quality,
+    "run_bpmn":          run_bpmn,
+    "run_synthesizer":   False,
 }
 
 st.markdown("---")

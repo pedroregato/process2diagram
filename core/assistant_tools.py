@@ -723,9 +723,9 @@ def get_tool_schemas_openai() -> list[dict]:
                 "name": "reprocess_meeting_full",
                 "description": (
                     "Reprocessa completamente uma reunião existente re-executando o pipeline "
-                    "completo (Ata, Requisitos, SBVR, BMM e opcionalmente BPMN e Qualidade) "
-                    "sobre a transcrição armazenada. Atualiza todos os artefatos no Supabase "
-                    "sem criar uma nova reunião. "
+                    "completo (Ata+BABOK, Requisitos, SBVR, BMM, DMN, Argumentação IBIS e "
+                    "opcionalmente BPMN e Qualidade) sobre a transcrição armazenada. "
+                    "Atualiza todos os artefatos no Supabase sem criar uma nova reunião. "
                     "USE quando o usuário pedir para reprocessar, atualizar ou corrigir todos "
                     "os artefatos de uma reunião de uma só vez. "
                     "Para reprocessar apenas requisitos, prefira reprocess_meeting_requirements. "
@@ -4676,6 +4676,8 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 "run_requirements": True,
                 "run_sbvr":         True,
                 "run_bmm":          True,
+                "run_dmn":          True,
+                "run_argumentation": True,
                 "run_quality":      run_quality,
                 "run_bpmn":         run_bpmn,
                 "run_synthesizer":  False,
