@@ -9,7 +9,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- ─────────────────────────────────────────────────────────────────────────────
 -- PROJETOS / INICIATIVAS
 -- ─────────────────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS projects (
+CREATE TABLE IF NOT EXISTS contexts (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name        TEXT NOT NULL,
     sigla       TEXT NOT NULL DEFAULT '',  -- sigla/acrônimo; usado como prefixo nos artefatos exportados
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS projects (
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS meetings (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id      UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    project_id      UUID NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
     title           TEXT NOT NULL,
     meeting_date    DATE,
     meeting_number  INTEGER,          -- sequencial dentro do projeto
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS meetings (
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS requirements (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id       UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    project_id       UUID NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
     req_number       INTEGER NOT NULL,   -- 1, 2, 3... (exibido como REQ-001)
     title            TEXT NOT NULL,
     description      TEXT,
@@ -108,7 +108,7 @@ $$ LANGUAGE SQL STABLE;
 CREATE TABLE IF NOT EXISTS sbvr_terms (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     meeting_id  UUID NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
-    project_id  UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    project_id  UUID NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
     term        TEXT NOT NULL,
     definition  TEXT,
     category    TEXT DEFAULT 'concept',  -- concept | fact_type | role | process
@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS sbvr_terms (
 CREATE TABLE IF NOT EXISTS sbvr_rules (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     meeting_id  UUID NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
-    project_id  UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    project_id  UUID NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
     rule_id     TEXT,           -- ex: "BR-001" (id gerado pelo LLM)
     statement   TEXT NOT NULL,
     rule_type   TEXT DEFAULT 'constraint',  -- constraint | operational | behavioral | structural
@@ -138,7 +138,7 @@ CREATE INDEX IF NOT EXISTS idx_sbvr_rules_meeting  ON sbvr_rules(meeting_id);
 -- RLS — habilitado; acesso público (anon) bloqueado.
 -- O backend usa service_role (st.secrets), que ignora RLS automaticamente.
 -- ─────────────────────────────────────────────────────────────────────────────
-ALTER TABLE projects              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE contexts              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE meetings              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE requirements          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE requirement_versions  ENABLE ROW LEVEL SECURITY;

@@ -14,7 +14,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS kh_entities (
     id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id           UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    project_id           UUID        NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
     entity_type          TEXT        NOT NULL
                                      CHECK (entity_type IN ('person','team','system','department','process','other')),
     canonical_name       TEXT        NOT NULL,
@@ -42,7 +42,7 @@ COMMENT ON COLUMN kh_entities.occurrence_count  IS 'Numero de reunioes onde esta
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS kh_processes (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id        UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    project_id        UUID        NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
     process_name      TEXT        NOT NULL,
     description       TEXT,
     version_count     INT         NOT NULL DEFAULT 1,
@@ -68,7 +68,7 @@ COMMENT ON COLUMN kh_processes.meeting_ids   IS 'Todas as reunioes que mencionar
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS kh_facts (
     id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id          UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    project_id          UUID        NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
     fact_type           TEXT        NOT NULL
                                     CHECK (fact_type IN ('rule','decision','constraint','nomenclature','insight')),
     content             TEXT        NOT NULL,
@@ -94,7 +94,7 @@ COMMENT ON COLUMN kh_facts.is_active    IS 'FALSE quando superseded ou descartad
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS kh_contradictions (
     id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id      UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    project_id      UUID        NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
     process_name    TEXT,
     description     TEXT        NOT NULL,
     meeting_a_id    UUID        REFERENCES meetings(id) ON DELETE SET NULL,

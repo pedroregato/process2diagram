@@ -7,7 +7,7 @@
 --   supabase db push --file migration_roster.sql
 --
 -- Ordem de execução:
---   1. project_roster       (depende de projects)
+--   1. project_roster       (depende de contexts)
 --   2. meeting_participants  (depende de meetings + project_roster)
 --   3. Índices
 --   4. RLS policies
@@ -26,7 +26,7 @@
 CREATE TABLE IF NOT EXISTS project_roster (
     id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id   UUID        NOT NULL
-                             REFERENCES projects(id)
+                             REFERENCES contexts(id)
                              ON DELETE CASCADE
                              ON UPDATE CASCADE,
 
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS project_roster (
 
     -- Slug do projeto para geração das chaves de localStorage da ata
     -- Ex: "sdea", "p2d", "portal"
-    -- Quando NULL, herda do campo slug da tabela projects (ver função get_project_slug)
+    -- Quando NULL, herda do campo slug da tabela contexts (ver função get_project_slug)
     project_slug TEXT        CONSTRAINT roster_slug_format
                              CHECK (project_slug IS NULL OR project_slug ~ '^[a-z0-9_-]{1,30}$'),
 
@@ -112,17 +112,17 @@ COMMENT ON COLUMN meeting_participants.source     IS 'auto=AgentMinutes, manual=
 -- ─────────────────────────────────────────────────────────────────────────────
 -- FASE 3 — CAMPOS NOVOS EM TABELAS EXISTENTES
 -- ─────────────────────────────────────────────────────────────────────────────
--- Campos adicionados à tabela projects para suportar geração da ata.
+-- Campos adicionados à tabela contexts para suportar geração da ata.
 -- ALTER TABLE é seguro com IF NOT EXISTS — idempotente.
 
-ALTER TABLE projects
+ALTER TABLE contexts
     ADD COLUMN IF NOT EXISTS ata_slug         TEXT
         CONSTRAINT projects_ata_slug_format
         CHECK (ata_slug IS NULL OR ata_slug ~ '^[a-z0-9_-]{1,30}$'),
     ADD COLUMN IF NOT EXISTS meeting_location TEXT DEFAULT 'Videoconferência';
 
-COMMENT ON COLUMN projects.ata_slug         IS 'Slug usado nas chaves localStorage das atas (ex: sdea). Fallback para project_roster.project_slug';
-COMMENT ON COLUMN projects.meeting_location IS 'Local padrão das reuniões do projeto — usado no hero da ata';
+COMMENT ON COLUMN contexts.ata_slug         IS 'Slug usado nas chaves localStorage das atas (ex: sdea). Fallback para project_roster.project_slug';
+COMMENT ON COLUMN contexts.meeting_location IS 'Local padrão das reuniões do projeto — usado no hero da ata';
 
 
 -- ─────────────────────────────────────────────────────────────────────────────

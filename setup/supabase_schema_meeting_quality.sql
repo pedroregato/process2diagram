@@ -11,7 +11,7 @@
 -- ── 1. Tabela de scores ───────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS meeting_quality_scores (
     id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id          UUID        NOT NULL REFERENCES projects(id)  ON DELETE CASCADE,
+    project_id          UUID        NOT NULL REFERENCES contexts(id)  ON DELETE CASCADE,
     meeting_id          UUID        NOT NULL REFERENCES meetings(id)  ON DELETE CASCADE,
     meeting_number      INTEGER     NOT NULL,
     computed_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),

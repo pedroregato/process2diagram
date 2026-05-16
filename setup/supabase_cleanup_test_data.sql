@@ -9,7 +9,7 @@
 -- ⚠️  IRREVERSÍVEL — faça backup se necessário.
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- Substitua o valor abaixo pelo UUID do seu projeto (consulte: SELECT id, name FROM projects)
+-- Substitua o valor abaixo pelo UUID do seu projeto (consulte: SELECT id, name FROM contexts)
 -- ou use a subquery comentada para selecionar o único projeto existente.
 
 -- Opção A: informar o project_id diretamente
@@ -20,7 +20,7 @@ DO $$
 DECLARE
     v_project_id UUID;
 BEGIN
-    SELECT id INTO v_project_id FROM projects ORDER BY created_at LIMIT 1;
+    SELECT id INTO v_project_id FROM contexts ORDER BY created_at LIMIT 1;
 
     IF v_project_id IS NULL THEN
         RAISE EXCEPTION 'Nenhum projeto encontrado.';

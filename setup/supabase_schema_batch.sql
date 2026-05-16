@@ -1,12 +1,12 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Process2Diagram — Batch Runner Schema
 -- Execute este script no SQL Editor do Supabase Dashboard
--- Pré-requisito: supabase_schema.sql já executado (tabelas projects e meetings existem)
+-- Pré-requisito: supabase_schema.sql já executado (tabelas contexts e meetings existem)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS batch_log (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id       UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    project_id       UUID NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
     meeting_id       UUID REFERENCES meetings(id) ON DELETE SET NULL,
     filename         TEXT NOT NULL,
     file_hash        TEXT NOT NULL,     -- SHA-256 parcial do conteúdo (deduplicação)

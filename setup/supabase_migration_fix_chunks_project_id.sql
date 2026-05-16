@@ -41,6 +41,6 @@ SELECT
     COUNT(tc.id)         AS total_chunks
 FROM transcript_chunks tc
 JOIN meetings m ON m.id = tc.meeting_id
-JOIN projects p ON p.id = m.project_id
+JOIN contexts p ON p.id = m.project_id
 GROUP BY p.name
 ORDER BY p.name;

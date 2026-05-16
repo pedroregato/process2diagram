@@ -9,7 +9,7 @@
 
 -- ── INSTALAÇÃO COMPLETA (ambiente novo) ──────────────────────────────────────
 --
--- Passo 1 — Esquema principal (projects, meetings, requirements, SBVR, índices)
+-- Passo 1 — Esquema principal (contexts, meetings, requirements, SBVR, índices)
 --   → supabase_schema.sql
 --
 -- Passo 2 — Tabelas SBVR (sbvr_terms, sbvr_rules + nucleo_nominal)
@@ -29,7 +29,7 @@
 
 -- ── MIGRAÇÕES (ambiente existente — execute apenas o que ainda não rodou) ────
 --
--- M1 — Adiciona coluna sigla à tabela projects
+-- M1 — Adiciona coluna sigla à tabela contexts
 --      (necessário se supabase_schema.sql foi executado antes de jun/2025)
 --   → supabase_migration_sigla.sql
 --

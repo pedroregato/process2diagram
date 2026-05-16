@@ -10,7 +10,7 @@
 CREATE TABLE IF NOT EXISTS meeting_entities (
     id               UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     meeting_id       UUID         NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
-    project_id       UUID         NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    project_id       UUID         NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
     entity_text      TEXT         NOT NULL,
     entity_type      TEXT         NOT NULL,   -- 'PESSOA' | 'AREA' | 'UNIDADE' | 'CARGO'
     normalized_name  TEXT,
@@ -37,7 +37,7 @@ ALTER TABLE meeting_entities ENABLE ROW LEVEL SECURITY;
 -- ── Dicionário de entidades conhecidas (curado por projeto) ──────────────────
 CREATE TABLE IF NOT EXISTS entity_dictionary (
     id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id      UUID         NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    project_id      UUID         NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
     entity_text     TEXT         NOT NULL,
     normalized_name TEXT         NOT NULL,
     entity_type     TEXT         NOT NULL,   -- 'PESSOA' | 'AREA' | 'UNIDADE' | 'CARGO'

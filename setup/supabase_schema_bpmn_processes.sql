@@ -11,7 +11,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS bpmn_processes (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id       UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    project_id       UUID NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
     name             TEXT NOT NULL,          -- nome de exibição (ex: "Gestão de Contratos")
     slug             TEXT NOT NULL,          -- normalizado p/ matching auto (ex: "gestao_contratos")
     description      TEXT,
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS bpmn_versions (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     process_id   UUID NOT NULL REFERENCES bpmn_processes(id) ON DELETE CASCADE,
     meeting_id   UUID NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
-    project_id   UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    project_id   UUID NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
     version      INTEGER NOT NULL,    -- 1, 2, 3... (sequencial por processo)
     bpmn_xml     TEXT,
     mermaid_code TEXT,

@@ -6,7 +6,7 @@
 -- -----------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS project_calendar_config (
-    project_id  UUID PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+    project_id  UUID PRIMARY KEY REFERENCES contexts(id) ON DELETE CASCADE,
     calendar_id TEXT NOT NULL,
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );

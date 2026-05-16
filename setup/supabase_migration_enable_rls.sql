@@ -16,7 +16,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- ── Schema principal ─────────────────────────────────────────────────────────
-ALTER TABLE projects             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE contexts             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE meetings             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE requirements         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE requirement_versions ENABLE ROW LEVEL SECURITY;

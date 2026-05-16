@@ -10,7 +10,7 @@
 CREATE TABLE IF NOT EXISTS kh_analyses (
     id           UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id   UUID         NOT NULL
-                               REFERENCES projects(id)
+                               REFERENCES contexts(id)
                                ON DELETE CASCADE
                                ON UPDATE CASCADE,
 
