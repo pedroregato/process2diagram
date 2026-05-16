@@ -30,17 +30,18 @@ apply_auth_gate()
 # ── Palette ───────────────────────────────────────────────────────────────────
 
 _COLORS = {
-    "ACTOR":     "#3b82f6",
-    "SYSTEM":    "#8b5cf6",
-    "PROCESS":   "#f59e0b",
-    "CONCEPT":   "#22c55e",
-    "DOCUMENT":  "#06b6d4",
-    "LOCATION":  "#f97316",
+    "ACTOR":     "#60a5fa",   # blue-400  — mais luminoso para contraste
+    "SYSTEM":    "#a78bfa",   # violet-400
+    "PROCESS":   "#fbbf24",   # amber-400
+    "CONCEPT":   "#4ade80",   # green-400
+    "DOCUMENT":  "#22d3ee",   # cyan-400
+    "LOCATION":  "#fb923c",   # orange-400
     "fact":      "#94a3b8",
-    "process":   "#f59e0b",
-    "edge":      "#334155",
-    "bg":        "rgba(0,0,0,0)",
-    "text":      "#e0e7f0",
+    "process":   "#fbbf24",
+    "edge":      "#475569",
+    "bg":        "#0d1b2a",   # fundo escuro fixo — garante contraste independente do tema
+    "text":      "#f1f5f9",   # branco-gelo — legível sobre fundo escuro
+    "label":     "#ffffff",   # labels dos nós: branco puro
 }
 
 _NODE_SYMBOLS = {
@@ -316,7 +317,7 @@ def _build_graph(data: dict, max_nodes: int, show_facts: bool, show_processes: b
     if edge_x:
         fig.add_trace(go.Scatter(
             x=edge_x, y=edge_y, mode="lines",
-            line=dict(color="#334155", width=1),
+            line=dict(color=_COLORS["edge"], width=1.2),
             hoverinfo="skip", showlegend=False,
         ))
 
@@ -328,18 +329,27 @@ def _build_graph(data: dict, max_nodes: int, show_facts: bool, show_processes: b
         ))
 
     if node_x:
+        # Camada 1: marcadores (nós coloridos)
         fig.add_trace(go.Scatter(
-            x=node_x, y=node_y, mode="markers+text",
+            x=node_x, y=node_y, mode="markers",
             marker=dict(
                 color=node_color, size=node_size,
                 symbol=node_symbol,
-                line=dict(color="#0f172a", width=1.5),
+                line=dict(color="#0f172a", width=2),
+                opacity=0.92,
             ),
-            text=node_text,
-            textposition="top center",
-            textfont=dict(size=9, color=_COLORS["text"]),
             hovertext=node_hover,
             hoverinfo="text",
+            showlegend=False,
+        ))
+        # Camada 2: labels acima dos nós — fonte maior e branca pura para legibilidade
+        fig.add_trace(go.Scatter(
+            x=node_x, y=node_y, mode="text",
+            text=[f"<b>{t}</b>" for t in node_text],
+            textposition="top center",
+            textfont=dict(size=11, color=_COLORS["label"],
+                          family="Segoe UI, system-ui"),
+            hoverinfo="skip",
             showlegend=False,
         ))
 
@@ -347,7 +357,7 @@ def _build_graph(data: dict, max_nodes: int, show_facts: bool, show_processes: b
         fig.add_trace(go.Scatter(
             x=edge_labels_x, y=edge_labels_y, mode="text",
             text=edge_labels_text,
-            textfont=dict(size=7, color="#64748b"),
+            textfont=dict(size=8, color="#94a3b8", family="Segoe UI, system-ui"),
             hoverinfo="skip", showlegend=False,
         ))
 
@@ -355,11 +365,15 @@ def _build_graph(data: dict, max_nodes: int, show_facts: bool, show_processes: b
         paper_bgcolor=_COLORS["bg"],
         plot_bgcolor=_COLORS["bg"],
         font=dict(color=_COLORS["text"], family="Segoe UI, system-ui"),
-        margin=dict(l=0, r=0, t=10, b=10),
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        height=600,
+        margin=dict(l=10, r=10, t=10, b=10),
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False,
+                   showspikes=False),
+        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False,
+                   showspikes=False),
+        height=620,
         dragmode="pan",
+        hoverlabel=dict(bgcolor="#1e293b", font_size=12, font_color="#f1f5f9",
+                        bordercolor="#475569"),
     )
     return fig
 
@@ -368,7 +382,7 @@ def _build_graph(data: dict, max_nodes: int, show_facts: bool, show_processes: b
 
 def _legend_html() -> str:
     items = [
-        ("ACTOR",    _COLORS["ACTOR"],    "●", "Pessoa / Ator"),
+        ("ACTOR",    _COLORS["ACTOR"],    "●", "Ator / Pessoa"),
         ("SYSTEM",   _COLORS["SYSTEM"],   "◆", "Sistema"),
         ("PROCESS",  _COLORS["PROCESS"],  "■", "Processo"),
         ("CONCEPT",  _COLORS["CONCEPT"],  "▲", "Conceito"),
@@ -396,11 +410,38 @@ def _legend_html() -> str:
 project_id, project_name = require_active_project()
 
 st.markdown(f"## 🕸️ Grafo de Conhecimento")
-st.caption(
-    f"Projeto: **{project_name}** — "
-    "Visualizacao das entidades, processos e relacoes extraidos automaticamente das reunioes. "
-    "Baseado no Knowledge Hub (BMIF Fase D)."
-)
+st.caption(f"Projeto: **{project_name}**")
+
+with st.expander("O que e um Grafo de Conhecimento e por que ele importa?", expanded=False):
+    st.markdown("""
+Um **Grafo de Conhecimento** (Knowledge Graph) representa o conhecimento organizacional
+como uma rede de **entidades** (pessoas, sistemas, conceitos, documentos) ligadas por
+**relacoes semanticas** (fatos extraidos das transcricoes das reunioes).
+
+#### Por que usar?
+
+| Perspectiva | Valor gerado |
+|---|---|
+| **Rastreabilidade** | Quem mencionou o que, em qual reuniao, com qual frequencia |
+| **Descoberta de padroes** | Entidades que aparecem juntas frequentemente sinalizam dependencias nao documentadas |
+| **Deteccao de conflitos** | Contradicoes entre fatos de reunioes diferentes ficam visiveis como arestas vermelhas |
+| **Auditoria de decisoes** | Quais atores estiveram envolvidos em cada processo ou decisao |
+| **Inteligencia organizacional** | A base para o Assistente responder perguntas com contexto historico |
+
+#### Como ler o grafo
+
+- **No (bolinha/forma):** cada entidade ou processo extraido das reunioes
+- **Tamanho do no:** proporcional ao numero de ocorrencias — entidades mais citadas ficam maiores
+- **Aresta cinza:** relacao (fato) entre duas entidades — o predicado aparece no meio da aresta
+- **Aresta vermelha tracejada:** contradicao detectada entre dois fatos
+- **Forma do no:** indica o tipo — circulo=Ator, losango=Sistema, quadrado=Processo, triangulo=Conceito
+
+#### Interacao
+
+Use o mouse para **arrastar** o grafo, **rolar** para zoom e **clicar com hover** para ver
+detalhes de cada entidade. Os filtros na barra lateral permitem isolar tipos especificos
+de entidades ou desativar as relacoes para uma visao mais limpa.
+    """)
 
 data = _load_graph_data(project_id)
 entities = data["entities"]
