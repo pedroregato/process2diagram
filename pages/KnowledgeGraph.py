@@ -27,13 +27,6 @@ from modules.supabase_client import get_supabase_client
 
 apply_auth_gate()
 
-st.set_page_config(
-    page_title="Grafo de Conhecimento — P2D",
-    page_icon="🕸️",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
-
 # ── Palette ───────────────────────────────────────────────────────────────────
 
 _COLORS = {
