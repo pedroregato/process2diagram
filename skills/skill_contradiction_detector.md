@@ -104,7 +104,7 @@ Retorne APENAS JSON válido, sem comentários, sem markdown wrapper:
       "fact_a_id": "uuid da primeira afirmação",
       "fact_b_id": "uuid da segunda afirmação",
       "relation_type": "contradiction_direct|contradiction_conditional|contradiction_temporal|contradiction_responsibility|exception|superseded|ambiguous",
-      "description": "Descrição objetiva da relação detectada, citando os trechos relevantes de cada afirmação",
+      "description": "Descrição objetiva da relação detectada. OBRIGATÓRIO: cite o conteúdo textual dos fatos (não os IDs). Exemplo: 'A reunião X afirma que [trecho A], enquanto a reunião Y afirma que [trecho B].'",
       "severity": "low|medium|high|critical",
       "confidence": 0.85,
       "process_name": "Nome do processo afetado, se aplicável",
@@ -116,6 +116,7 @@ Retorne APENAS JSON válido, sem comentários, sem markdown wrapper:
 ```
 
 Notas sobre os campos:
+- `description`: cite o **texto** dos fatos conflitantes, nunca os IDs (UUIDs). Escreva frases como "Fato A afirma que [conteúdo]; Fato B afirma que [conteúdo]".
 - `confidence`: 0.0–1.0. Use < 0.70 para casos ambíguos. Omitir contradições com confidence < 0.50.
 - `clarifying_question`: sempre presente para `exception` e `ambiguous`; recomendado para contradições
 - `suggested_rewrite`: quando possível, mostre como as duas afirmações poderiam ser harmonizadas
