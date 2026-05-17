@@ -65,6 +65,17 @@ def _render_from_supabase() -> None:
     with col1:
         proj_names = [p["name"] for p in projects]
         proj_map   = {p["name"]: p for p in projects}
+
+        # Sync to active_project_id (Central de Operações) when it changes
+        active_pid = st.session_state.get("active_project_id")
+        _last_synced = st.session_state.get("_diag_synced_pid")
+        if active_pid and active_pid != _last_synced:
+            for p in projects:
+                if p["id"] == active_pid:
+                    st.session_state["diag_sb_proj"]    = p["name"]
+                    st.session_state["_diag_synced_pid"] = active_pid
+                    break
+
         sel_proj   = st.selectbox("Contexto", proj_names, key="diag_sb_proj")
         project_id = proj_map[sel_proj]["id"]
 

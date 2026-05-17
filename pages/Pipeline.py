@@ -257,8 +257,16 @@ else:
         st.info("Nenhum contexto encontrado no banco de dados.")
         st.stop()
 
-    # Context selector
+    # Context selector — sync to active_project_id (Central de Operações)
     proj_options = {p["name"]: p["id"] for p in projects}
+    active_pid = st.session_state.get("active_project_id")
+    _last_load_pid = st.session_state.get("_load_synced_pid")
+    if active_pid and active_pid != _last_load_pid:
+        for p in projects:
+            if p["id"] == active_pid:
+                st.session_state["load_proj_select"] = p["name"]
+                st.session_state["_load_synced_pid"] = active_pid
+                break
     selected_proj_name = st.selectbox(
         "Contexto",
         list(proj_options.keys()),

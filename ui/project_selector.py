@@ -48,6 +48,18 @@ def _init():
         if key not in st.session_state:
             st.session_state[key] = default
 
+    # ── Sync active_project_id (Central de Operações) → project context ──────
+    # When the user changes the working context in Home.py, reset project_confirmed
+    # so Pipeline.py shows the selector pre-filled with the new context.
+    active_pid = st.session_state.get("active_project_id")
+    if active_pid and active_pid != st.session_state.get("project_id"):
+        st.session_state["project_id"]        = active_pid
+        st.session_state["project_name"]      = st.session_state.get("active_project_name", "")
+        st.session_state["project_confirmed"] = False
+        st.session_state["current_meeting_id"] = None
+        # Clear cached selectbox value so it re-renders with the active project
+        st.session_state.pop("proj_sel", None)
+
 
 def render_context_selector() -> None:
     """Renderiza o seletor de contexto/reunião.
@@ -87,10 +99,20 @@ def render_context_selector() -> None:
         project_names = [p["name"] for p in projects]
         options = project_names + [_NEW]
 
+        # Default to active project (set in Central de Operações)
+        active_pid = st.session_state.get("active_project_id")
+        default_idx = 0
+        if active_pid:
+            for i, p in enumerate(projects):
+                if p["id"] == active_pid:
+                    default_idx = i
+                    break
+
         col_proj, col_title, col_date = st.columns([2, 2, 1])
 
         with col_proj:
             sel = st.selectbox("Contexto / Iniciativa", options,
+                               index=default_idx,
                                key="proj_sel",
                                help="Selecione um contexto existente ou crie um novo")
 
