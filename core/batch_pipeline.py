@@ -113,6 +113,126 @@ def file_hash(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8", errors="replace")).hexdigest()[:16]
 
 
+# ── BPMN pre-loader (reprocess path) ─────────────────────────────────────────
+
+def _preload_bpmn_from_db(hub, meeting_id: str) -> None:
+    """Pre-populate hub.bpmn from the stored BPMN when not re-running the agent.
+
+    Loads XML + Mermaid from bpmn_versions (or bpmn_xml column fallback) and
+    parses the XML to reconstruct lanes and task steps so generate_executive_html
+    can render the full process table and diagram sections.
+    Fail-open: any exception is silently swallowed.
+    """
+    try:
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return
+
+        bv_rows = (
+            db.table("bpmn_versions")
+            .select("bpmn_xml, mermaid_code, bpmn_processes(name)")
+            .eq("meeting_id", meeting_id)
+            .eq("is_current", True)
+            .limit(1)
+            .execute().data or []
+        )
+        if not bv_rows:
+            bv_rows = (
+                db.table("bpmn_versions")
+                .select("bpmn_xml, mermaid_code, bpmn_processes(name)")
+                .eq("meeting_id", meeting_id)
+                .order("version", desc=True)
+                .limit(1)
+                .execute().data or []
+            )
+        if not bv_rows:
+            return
+
+        bpmn_xml     = (bv_rows[0].get("bpmn_xml")     or "").strip()
+        mermaid_code = (bv_rows[0].get("mermaid_code") or "").strip()
+        proc_name    = ((bv_rows[0].get("bpmn_processes") or {}).get("name") or "").strip()
+        if not bpmn_xml:
+            return
+
+        hub.bpmn.bpmn_xml = bpmn_xml
+        hub.bpmn.mermaid  = mermaid_code
+        hub.bpmn.name     = proc_name
+        hub.bpmn.ready    = True
+
+        _parse_bpmn_xml_into_hub(bpmn_xml, hub)
+    except Exception:
+        pass
+
+
+_BPMN_NS = "http://www.omg.org/spec/BPMN/20100524/MODEL"
+
+_TASK_TAGS = {
+    f"{{{_BPMN_NS}}}task":        "task",
+    f"{{{_BPMN_NS}}}userTask":    "userTask",
+    f"{{{_BPMN_NS}}}serviceTask": "serviceTask",
+    f"{{{_BPMN_NS}}}manualTask":  "manualTask",
+    f"{{{_BPMN_NS}}}businessRuleTask": "businessRuleTask",
+    f"{{{_BPMN_NS}}}scriptTask":  "scriptTask",
+    f"{{{_BPMN_NS}}}sendTask":    "sendTask",
+    f"{{{_BPMN_NS}}}receiveTask": "receiveTask",
+}
+
+_GW_TAGS = {
+    f"{{{_BPMN_NS}}}exclusiveGateway",
+    f"{{{_BPMN_NS}}}inclusiveGateway",
+    f"{{{_BPMN_NS}}}parallelGateway",
+    f"{{{_BPMN_NS}}}complexGateway",
+    f"{{{_BPMN_NS}}}eventBasedGateway",
+}
+
+
+def _parse_bpmn_xml_into_hub(bpmn_xml: str, hub) -> None:
+    """Parse stored BPMN XML to populate hub.bpmn.lanes and hub.bpmn.steps."""
+    import xml.etree.ElementTree as ET
+    from core.knowledge_hub import BPMNStep
+
+    try:
+        root = ET.fromstring(bpmn_xml)
+
+        # Map element IDs → lane name
+        elem_to_lane: dict[str, str] = {}
+        lanes: list[str] = []
+        for lane in root.iter(f"{{{_BPMN_NS}}}lane"):
+            lane_name = (lane.get("name") or "").strip()
+            if lane_name and lane_name not in lanes:
+                lanes.append(lane_name)
+            for child in lane:
+                ref = (child.text or "").strip()
+                if ref and lane_name:
+                    elem_to_lane[ref] = lane_name
+        hub.bpmn.lanes = lanes
+
+        # Collect tasks and gateways as BPMNStep entries
+        steps: list[BPMNStep] = []
+        for elem in root.iter():
+            task_type = _TASK_TAGS.get(elem.tag)
+            is_gw = elem.tag in _GW_TAGS
+            if task_type is None and not is_gw:
+                continue
+            eid  = elem.get("id") or ""
+            name = (elem.get("name") or "").strip()
+            if not name:
+                continue
+            lane_name = elem_to_lane.get(eid, "")
+            steps.append(BPMNStep(
+                id=eid,
+                title=name,
+                actor=lane_name or None,
+                lane=lane_name or None,
+                is_decision=is_gw,
+                task_type=task_type or "exclusiveGateway",
+            ))
+        hub.bpmn.steps = steps
+    except Exception:
+        pass
+
+
 # ── Resultado por arquivo ─────────────────────────────────────────────────────
 
 @dataclass
@@ -332,6 +452,11 @@ class BatchPipeline:
         hub = KnowledgeHub.new()
         hub.set_transcript(transcript)
         hub.meta.llm_provider = self.provider_cfg.get("api_key_label", "")
+
+        # Pre-load stored BPMN when not re-running the BPMN agent so the
+        # synthesizer can produce a rich report (diagram, process table, etc.)
+        if not agents_config.get("run_bpmn", True):
+            _preload_bpmn_from_db(hub, meeting_id)
 
         pipeline_config: dict[str, Any] = {
             "client_info":          self.client_info,
