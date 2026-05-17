@@ -529,4 +529,4 @@ Antes de marcar uma feature como concluída:
 - [ ] Agente registrado no Orchestrator._PLAN e rerun_handlers
 - [ ] Tab registrada em ui/tabs/__init__.py
 - [ ] Export adicionado em export_tab.py se gera novo artefato
-- [ ] Versão registrada em claude_guideline/roadmap.md
+- [ ] Versão registrada em `claude_guideline/roadmap.md`
