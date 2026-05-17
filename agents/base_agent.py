@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from core.knowledge_hub import KnowledgeHub
+from modules.pii_sanitizer import sanitize, desanitize
 
 
 # ── Base Agent ────────────────────────────────────────────────────────────────
@@ -99,17 +100,30 @@ class BaseAgent(ABC):
         """
         Provider-agnostic LLM call. Routes by client_type in provider_cfg.
         Updates hub.meta.total_tokens_used on success.
+
+        PII sanitization (Fase A): structured PII in the user prompt
+        (CPF, CNPJ, email, phone, monetary values) is replaced with stable
+        tokens before the text leaves the process. Tokens are restored in the
+        raw LLM response before returning, so callers never see the tokens.
+        Personal names are intentionally preserved (required for BPMN lanes,
+        meeting minutes, and IBIS attribution).
         """
         client_type = self.provider_cfg["client_type"]
         api_key = self.client_info["api_key"]
         model = self.provider_cfg["default_model"]
 
+        # ── PII sanitization ──────────────────────────────────────────────
+        sanitized = sanitize(user)
+        safe_user = sanitized.text
+        token_map = sanitized.token_map
+        # ─────────────────────────────────────────────────────────────────
+
         t0 = time.time()
 
         if client_type == "openai_compatible":
-            raw, tokens = self._call_openai(system, user, api_key, model)
+            raw, tokens = self._call_openai(system, safe_user, api_key, model)
         elif client_type == "anthropic":
-            raw, tokens = self._call_anthropic(system, user, api_key, model)
+            raw, tokens = self._call_anthropic(system, safe_user, api_key, model)
         else:
             raise ValueError(f"Unknown client_type: {client_type}")
 
@@ -119,7 +133,8 @@ class BaseAgent(ABC):
         hub.meta.llm_provider = self.provider_cfg.get("api_key_label", "")
         hub.meta.llm_model = model
 
-        return raw
+        # ── Restore originals in response ─────────────────────────────────
+        return desanitize(raw, token_map)
 
     def _call_openai(self, system: str, user: str, api_key: str, model: str) -> tuple[str, int]:
         from openai import OpenAI
