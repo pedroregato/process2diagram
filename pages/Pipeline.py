@@ -151,7 +151,8 @@ if pipeline_mode == _MODE_NEW:
             "active_project_id":  st.session_state.get("active_project_id", ""),
             "project_slug":       _ata_slug,
             "meeting_location":   "Videoconferência",
-            "run_ckf_updater":    st.session_state.run_ckf_updater,
+            "run_ckf_updater":           st.session_state.run_ckf_updater,
+            "run_knowledge_extractor":   st.session_state.get("run_knowledge_extractor", True),
         }
 
         with st.status("⏳ Executando pipeline de agentes...", expanded=True) as _pipeline_status:

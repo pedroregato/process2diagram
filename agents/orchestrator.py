@@ -65,7 +65,8 @@ class Orchestrator:
     """
 
     _PLAN = ["transcript_quality", "preprocessing", "nlp", "bpmn",
-             "minutes", "requirements", "sbvr", "bmm", "dmn", "argumentation", "synthesizer"]
+             "minutes", "requirements", "sbvr", "bmm", "dmn", "argumentation", "synthesizer",
+             "knowledge_extractor", "contradiction_detector"]
 
     def __init__(
         self,

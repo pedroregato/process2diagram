@@ -37,6 +37,8 @@ def init_session_state():
         st.session_state.run_dmn = True
     if "run_argumentation" not in st.session_state:
         st.session_state.run_argumentation = True
+    if "run_knowledge_extractor" not in st.session_state:
+        st.session_state.run_knowledge_extractor = True
     if "n_bpmn_runs" not in st.session_state:
         st.session_state.n_bpmn_runs = 1
     if "bpmn_weights" not in st.session_state:

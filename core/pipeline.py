@@ -132,25 +132,31 @@ def run_pipeline(hub, config, progress_callback):
     # ── Knowledge extraction (non-fatal, post-pipeline) ───────────────────────
     _kh_meeting_id = config.get("meeting_id")
     _kh_project_id = config.get("project_id")
+    _run_kh = config.get("run_knowledge_extractor", True)
 
-    try:
-        from agents.agent_knowledge_extractor import AgentKnowledgeExtractor
-        _kh_agent = AgentKnowledgeExtractor(client_info, provider_cfg)
-        _kh_agent.run(
-            hub, output_lang,
-            meeting_id=_kh_meeting_id,
-            project_id=_kh_project_id,
-        )
-    except Exception:
-        pass  # non-fatal
-
-    # ── Cross-meeting contradiction detection (non-fatal) ─────────────────────
-    if _kh_project_id and _kh_meeting_id:
+    if _run_kh:
         try:
-            from agents.agent_contradiction_detector import AgentContradictionDetector
-            _cd_agent = AgentContradictionDetector(client_info, provider_cfg)
-            _cd_agent.run_for_meeting(_kh_project_id, _kh_meeting_id)
+            progress_callback("Knowledge Hub", "running")
+            from agents.agent_knowledge_extractor import AgentKnowledgeExtractor
+            _kh_agent = AgentKnowledgeExtractor(client_info, provider_cfg)
+            _kh_agent.run(
+                hub, output_lang,
+                meeting_id=_kh_meeting_id,
+                project_id=_kh_project_id,
+            )
+            progress_callback("Knowledge Hub", "done")
         except Exception:
-            pass  # non-fatal
+            progress_callback("Knowledge Hub", "skipped")
+
+        # ── Cross-meeting contradiction detection (non-fatal) ─────────────────
+        if _kh_project_id and _kh_meeting_id:
+            try:
+                progress_callback("Detecção de Contradições", "running")
+                from agents.agent_contradiction_detector import AgentContradictionDetector
+                _cd_agent = AgentContradictionDetector(client_info, provider_cfg)
+                _cd_agent.run_for_meeting(_kh_project_id, _kh_meeting_id)
+                progress_callback("Detecção de Contradições", "done")
+            except Exception:
+                progress_callback("Detecção de Contradições", "skipped")
 
     return hub

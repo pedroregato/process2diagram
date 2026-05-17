@@ -117,6 +117,14 @@ def render_sidebar():
             st.session_state.run_dmn         = st.checkbox("⚖️ Tabelas de Decisão (DMN)",    value=st.session_state.get("run_dmn", False))
             st.session_state.run_argumentation = st.checkbox("🗺️ Argumentação (IBIS)",         value=st.session_state.get("run_argumentation", False))
             st.session_state.run_synthesizer = st.checkbox("📄 Relatório Executivo",         value=st.session_state.run_synthesizer)
+            st.session_state.run_knowledge_extractor = st.checkbox(
+                "🕸️ Grafo de Conhecimento (KH)",
+                value=st.session_state.get("run_knowledge_extractor", True),
+                help=(
+                    "Extrai fatos, entidades e processos para o Knowledge Hub e detecta "
+                    "contradições entre reuniões. Requer meeting_id salvo no Supabase."
+                ),
+            )
             st.session_state.run_ckf_updater = st.checkbox(
                 "🧠 Atualizar CKF do Contexto",
                 value=st.session_state.run_ckf_updater,
