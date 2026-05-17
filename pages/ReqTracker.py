@@ -81,13 +81,35 @@ with _col_proj:
 with _col_change:
     st.page_link("pages/Home.py", label="Trocar")
 
-# ── Carrega dados ─────────────────────────────────────────────────────────────
-meetings       = list_meetings(project_id)
-requirements   = list_requirements(project_id)
-contradictions = list_contradictions(project_id)
-sbvr_terms     = list_sbvr_terms(project_id)
-sbvr_rules     = list_sbvr_rules(project_id)
-bpmn_procs     = list_bpmn_processes(project_id) if bpmn_tables_exist() else []
+# ── Carrega dados (com cache para evitar queries a cada rerun) ─────────────────
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_meetings(pid):       return list_meetings(pid)
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_requirements(pid):   return list_requirements(pid)
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_contradictions(pid): return list_contradictions(pid)
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_sbvr_terms(pid):     return list_sbvr_terms(pid)
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_sbvr_rules(pid):     return list_sbvr_rules(pid)
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_bpmn_procs(pid):
+    return list_bpmn_processes(pid) if bpmn_tables_exist() else []
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_bpmn_versions(pid):  return list_bpmn_versions(pid)
+
+meetings       = _load_meetings(project_id)
+requirements   = _load_requirements(project_id)
+contradictions = _load_contradictions(project_id)
+sbvr_terms     = _load_sbvr_terms(project_id)
+sbvr_rules     = _load_sbvr_rules(project_id)
+bpmn_procs     = _load_bpmn_procs(project_id)
 
 meet_map = {m["id"]: m for m in meetings}
 
@@ -668,7 +690,7 @@ with tab_bpmn:
                 st.markdown("---")
 
                 # Versões
-                versions = list_bpmn_versions(pid)
+                versions = _load_bpmn_versions(pid)
                 if not versions:
                     st.info("Nenhuma versão registrada ainda.")
                     continue
