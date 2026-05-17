@@ -245,6 +245,38 @@ with tab_contradictions:
         "ambiguous":                    ("🟣", "Ambígua"),
     }
 
+    # ── Full Scan (admin only) ────────────────────────────────────────────────
+    if is_admin():
+        with st.expander("🔍 Reprocessar Contradições (Full Scan)", expanded=False):
+            st.caption(
+                "Analisa todos os fatos do projeto com o agente LLM e insere novas contradições detectadas. "
+                "Use após importar novas reuniões ou para atualizar descrições existentes."
+            )
+            from modules.session_security import get_session_llm_client
+            from modules.config import AVAILABLE_PROVIDERS
+            _scan_provider = st.session_state.get("selected_provider", "")
+            _scan_client   = get_session_llm_client(_scan_provider) if _scan_provider else None
+            if not _scan_client:
+                st.warning("Configure e salve uma API key na sidebar antes de executar o Full Scan.")
+            else:
+                if st.button("▶️ Executar Full Scan", key="kh_full_scan_btn", type="primary"):
+                    _provider_cfg = AVAILABLE_PROVIDERS.get(_scan_provider, {})
+                    from agents.agent_contradiction_detector import AgentContradictionDetector
+                    with st.spinner("Analisando fatos do projeto… pode levar alguns segundos."):
+                        try:
+                            _agent = AgentContradictionDetector(
+                                {"api_key": _scan_client["api_key"]},
+                                _provider_cfg,
+                            )
+                            _n = _agent.run_full_scan(project_id)
+                            st.session_state["_contra_msg"] = (
+                                "success",
+                                f"Full Scan concluído — {_n} nova(s) contradição(ões) inserida(s).",
+                            )
+                        except Exception as _e:
+                            st.session_state["_contra_msg"] = ("error", f"Erro no Full Scan: {_e}")
+                    st.rerun()
+
     if "_contra_msg" in st.session_state:
         level, text = st.session_state.pop("_contra_msg")
         (st.success if level == "success" else st.error)(text)
