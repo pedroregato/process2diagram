@@ -100,7 +100,7 @@ def _load_graph_data(project_id: str) -> dict:
     try:
         processes = (
             db.table("kh_processes")
-            .select("id, process_name, description, version_count, status, involved_entities")
+            .select("id, process_name, description, version_count, status, meeting_ids")
             .eq("project_id", project_id)
             .order("version_count", desc=True)
             .limit(50)
@@ -110,21 +110,21 @@ def _load_graph_data(project_id: str) -> dict:
         processes = []
 
     try:
-        # Tenta com dialogue_act (coluna adicionada em v4.23)
         facts = (
             db.table("kh_facts")
-            .select("id, subject_entity_id, predicate, object_entity_id, object_value, process_id, confidence, dialogue_act")
+            .select("id, fact_type, content, source_meeting_ids, confidence, is_active, dialogue_act")
             .eq("project_id", project_id)
+            .eq("is_active", True)
             .limit(300)
             .execute().data or []
         )
     except Exception:
         try:
-            # Fallback sem dialogue_act (schema anterior à v4.23)
             facts = (
                 db.table("kh_facts")
-                .select("id, subject_entity_id, predicate, object_entity_id, object_value, process_id, confidence")
+                .select("id, fact_type, content, source_meeting_ids, confidence, is_active")
                 .eq("project_id", project_id)
+                .eq("is_active", True)
                 .limit(300)
                 .execute().data or []
             )
@@ -134,7 +134,7 @@ def _load_graph_data(project_id: str) -> dict:
     try:
         contradictions = (
             db.table("kh_contradictions")
-            .select("id, fact_a_id, fact_b_id, severity, relation_type")
+            .select("id, description, meeting_a_id, meeting_b_id, severity, relation_type, status")
             .eq("project_id", project_id)
             .limit(50)
             .execute().data or []
@@ -235,14 +235,7 @@ def _build_graph(
     # ── 1. Spring layout (coordenadas) ─────────────────────────────────────────
     all_node_ids = list(entity_ids) + [f"proc_{p['id']}" for p in processes]
     edge_pairs: list[tuple[str, str]] = []
-    for fact in facts:
-        s, o = fact.get("subject_entity_id"), fact.get("object_entity_id")
-        if s in entity_ids and o and o in entity_ids:
-            edge_pairs.append((s, o))
-    for proc in processes:
-        for eid in (proc.get("involved_entities") or []):
-            if eid in entity_ids:
-                edge_pairs.append((eid, f"proc_{proc['id']}"))
+    # kh_facts are text-based (content field) — no entity edges to draw
 
     pos = _spring_layout(all_node_ids, edge_pairs, iterations=80)
 
@@ -291,44 +284,17 @@ def _build_graph(
             + (proc.get("description") or "")[:80]
         )
 
-    # ── 3. Arestas de fatos ────────────────────────────────────────────────────
+    # ── 3. Arestas (kh_facts são texto — sem arestas entidade→entidade) ────────
     edge_x: list[float | None] = []; edge_y: list[float | None] = []
     elbl_x: list[float] = []; elbl_y: list[float] = []; elbl_t: list[str] = []
 
     all_x = node_x + proc_x
     all_y = node_y + proc_y
 
-    for fact in facts:
-        s, o = fact.get("subject_entity_id"), fact.get("object_entity_id")
-        if not (s in id_to_idx and o and o in id_to_idx):
-            continue
-        si, oi = id_to_idx[s], id_to_idx[o]
-        x0, y0, x1, y1 = all_x[si], all_y[si], all_x[oi], all_y[oi]
-        edge_x += [x0, x1, None]; edge_y += [y0, y1, None]
-        elbl_x.append((x0 + x1) / 2); elbl_y.append((y0 + y1) / 2)
-        elbl_t.append(fact.get("predicate", "")[:28])
-
-    for proc in processes:
-        pid = f"proc_{proc['id']}"
-        if pid not in id_to_idx:
-            continue
-        oi = id_to_idx[pid]
-        for eid in (proc.get("involved_entities") or []):
-            if eid not in id_to_idx:
-                continue
-            si = id_to_idx[eid]
-            x0, y0, x1, y1 = all_x[si], all_y[si], all_x[oi], all_y[oi]
-            edge_x += [x0, x1, None]; edge_y += [y0, y1, None]
-
-    # ── 4. Arestas de contradição ──────────────────────────────────────────────
+    # ── 4. Arestas de contradição (não há fact_a/fact_b com entity refs) ──────
     contra_x: list[float | None] = []; contra_y: list[float | None] = []
-    for c in contradictions:
-        fa_ent = next((f.get("subject_entity_id") for f in facts if f["id"] == c.get("fact_a_id")), None)
-        fb_ent = next((f.get("subject_entity_id") for f in facts if f["id"] == c.get("fact_b_id")), None)
-        if fa_ent in id_to_idx and fb_ent and fb_ent in id_to_idx:
-            si, oi = id_to_idx[fa_ent], id_to_idx[fb_ent]
-            contra_x += [all_x[si], all_x[oi], None]
-            contra_y += [all_y[si], all_y[oi], None]
+    # kh_contradictions use meeting_a_id/meeting_b_id, not entity links —
+    # contradictions are shown as count in KPI only, not as graph edges
 
     # ── 5. Montar figura ───────────────────────────────────────────────────────
     fig = go.Figure()
@@ -563,32 +529,22 @@ with tab_table:
         st.dataframe(proc_rows, use_container_width=True, hide_index=True)
 
 with tab_facts:
-    st.markdown("#### Relacoes / Fatos")
+    st.markdown("#### Fatos / Decisoes / Regras extraidos")
     if facts:
-        entity_name_map = {e["id"]: e.get("canonical_name", e["id"][:8]) for e in entities}
-        proc_name_map = {p["id"]: p.get("process_name", p["id"][:8]) for p in processes}
         fact_rows = []
         for f in facts:
-            subj = entity_name_map.get(f.get("subject_entity_id") or "", "") or (f.get("subject_entity_id") or "")[:8] or "—"
-            obj_e = entity_name_map.get(f.get("object_entity_id") or "", "")
-            obj_v = f.get("object_value") or ""
-            obj   = obj_e or obj_v or "—"
-            proc  = proc_name_map.get(f.get("process_id") or "", "")
-            conf  = f.get("confidence")
+            conf = f.get("confidence")
             fact_rows.append({
-                "Sujeito":     subj[:40],
-                "Predicado":   f.get("predicate") or "—",
-                "Objeto":      obj[:60],
-                "Processo":    proc[:30] if proc else "—",
-                "Confianca":   f"{int((conf or 1.0) * 100)}%" if conf is not None else "—",
-                "Ato Dialogo": f.get("dialogue_act") or "—",
+                "Tipo":         f.get("fact_type") or "—",
+                "Conteudo":     (f.get("content") or "")[:120],
+                "Confianca":    f"{int((conf or 1.0) * 100)}%" if conf is not None else "—",
+                "Ato Dialogo":  f.get("dialogue_act") or "—",
             })
-        st.caption(f"{len(fact_rows)} relacao(oes) extraida(s) das transcricoes.")
+        st.caption(f"{len(fact_rows)} fato(s) extraido(s) das transcricoes.")
         st.dataframe(fact_rows, use_container_width=True, hide_index=True)
     else:
         st.info(
-            "Nenhuma relacao/fato disponivel para este projeto ainda. "
-            "Os fatos sao extraidos pelo **Knowledge Extractor** durante o pipeline. "
-            "Se suas reunioes foram processadas antes da v4.23, reprocesse-as via "
-            "**Assistente** (`reprocess_meeting_full`) ou **Manutenção → Batch Runner**."
+            "Nenhum fato disponivel para este projeto ainda. "
+            "Os fatos sao extraidos pelo **Knowledge Extractor** durante o pipeline "
+            "(ative o checkbox 'Grafo de Conhecimento (KH)' na barra lateral)."
         )
