@@ -33,6 +33,22 @@ _BATCH_SIZE = 40
 _MIN_GROUP_SIZE = 2
 
 
+def _resolve_fact_ids(text: str, fact_map: dict[str, str]) -> str:
+    """Replace fact ID references in text with truncated fact content.
+
+    The LLM sometimes writes 'o fato <uuid>' even when instructed not to.
+    This replaces any occurrence of a known ID (full UUID or first-8-chars)
+    with a quoted excerpt of the fact content so the UI stays human-readable.
+    """
+    for fid, content in fact_map.items():
+        if fid in text:
+            excerpt = content[:70].rstrip()
+            if len(content) > 70:
+                excerpt += "…"
+            text = text.replace(fid, f"'{excerpt}'")
+    return text
+
+
 def _keyword_overlap(a: str, b: str) -> int:
     """Return count of significant words shared between two strings."""
     stop = {
@@ -231,16 +247,31 @@ class AgentContradictionDetector(BaseAgent):
         contradictions = data.get("contradictions") or []
         inserted = 0
 
+        all_facts = new_facts + existing_facts
+
         # Build a fast lookup: fact_id → first source_meeting_id
         all_facts_idx: dict[str, str | None] = {}
-        for f in new_facts + existing_facts:
+        for f in all_facts:
             src = f.get("source_meeting_ids") or []
             all_facts_idx[f["id"]] = src[0] if src else None
+
+        # Build content map for post-processing: replace IDs in LLM text with
+        # human-readable excerpts (LLM sometimes ignores the "no IDs" instruction)
+        fact_content_map: dict[str, str] = {}
+        for f in all_facts:
+            fid     = f["id"]
+            content = (f.get("content") or "").strip()
+            if content:
+                fact_content_map[fid] = content
+                if len(fid) >= 8:
+                    fact_content_map[fid[:8]] = content
 
         for c in contradictions:
             desc = (c.get("description") or "").strip()
             if not desc:
                 continue
+            # Resolve any fact ID references to human-readable content
+            desc = _resolve_fact_ids(desc, fact_content_map)
 
             # Skip very low-confidence detections
             conf = c.get("confidence")
@@ -260,6 +291,13 @@ class AgentContradictionDetector(BaseAgent):
             fact_b_id    = c.get("fact_b_id")
             meeting_b_id = all_facts_idx.get(fact_b_id) if fact_b_id else None
 
+            clarifying = _resolve_fact_ids(
+                c.get("clarifying_question") or "", fact_content_map
+            ) or None
+            suggested = _resolve_fact_ids(
+                c.get("suggested_rewrite") or "", fact_content_map
+            ) or None
+
             payload = {
                 "description":         desc,
                 "process_name":        c.get("process_name") or None,
@@ -268,8 +306,8 @@ class AgentContradictionDetector(BaseAgent):
                 "meeting_b_id":        meeting_b_id,
                 "relation_type":       relation_type or None,
                 "confidence":          conf,
-                "clarifying_question": c.get("clarifying_question") or None,
-                "suggested_rewrite":   c.get("suggested_rewrite") or None,
+                "clarifying_question": clarifying,
+                "suggested_rewrite":   suggested,
             }
             result = insert_contradiction(project_id, payload)
             if result:
