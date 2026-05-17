@@ -729,6 +729,7 @@ def get_tool_schemas_openai() -> list[dict]:
                     "USE quando o usuário pedir para reprocessar, atualizar ou corrigir todos "
                     "os artefatos de uma reunião de uma só vez. "
                     "Para reprocessar apenas requisitos, prefira reprocess_meeting_requirements. "
+                    "Para regenerar apenas o Relatório Executivo, prefira regenerate_executive_report. "
                     "🔒 Requer perfil administrador."
                 ),
                 "parameters": {
@@ -749,6 +750,35 @@ def get_tool_schemas_openai() -> list[dict]:
                         "output_language": {
                             "type": "string",
                             "description": "Idioma dos artefatos gerados. Padrão: 'Auto-detect'.",
+                        },
+                    },
+                    "required": ["meeting_number"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "regenerate_executive_report",
+                "description": (
+                    "Regenera apenas o Relatório Executivo HTML de uma reunião usando os "
+                    "artefatos já armazenados no banco (BPMN, requisitos, SBVR, BMM) mais "
+                    "uma re-execução leve do AgentMinutes sobre a transcrição. "
+                    "Muito mais rápido que reprocess_meeting_full (~2 chamadas LLM vs ~10+). "
+                    "USE quando o usuário pedir para regenerar, atualizar ou corrigir apenas "
+                    "o relatório executivo de uma ou mais reuniões. "
+                    "🔒 Requer perfil administrador."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Número da reunião cujo relatório deve ser regenerado.",
+                        },
+                        "output_language": {
+                            "type": "string",
+                            "description": "Idioma do relatório. Padrão: 'Auto-detect'.",
                         },
                     },
                     "required": ["meeting_number"],
@@ -1731,6 +1761,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "generate_missing_minutes":       "admin",
     "reprocess_meeting_requirements": "admin",
     "reprocess_meeting_full":         "admin",
+    "regenerate_executive_report":    "admin",
     "batch_reprocess_requirements":   "admin",
     # Gráficos
     "generate_requirements_chart":    "grafico",
@@ -1755,6 +1786,7 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "apply_text_correction",
     "reprocess_meeting_requirements",
     "reprocess_meeting_full",
+    "regenerate_executive_report",
     "batch_reprocess_requirements",
     "generate_missing_minutes",
     "calendar_create_event",
@@ -4713,6 +4745,91 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         except Exception as exc:
             return f"❌ Erro ao reprocessar Reunião {meeting_number}: {exc}"
 
+    def regenerate_executive_report(
+        self,
+        meeting_number: int,
+        output_language: str = "Auto-detect",
+    ) -> str:
+        """Regenerate only the executive HTML report for a meeting.
+
+        Strategy (2 LLM calls vs ~10+ for full reprocess):
+          1. Load stored artifacts from Supabase via load_meeting_as_hub
+             (BPMN XML/Mermaid, requirements, SBVR)
+          2. Parse BPMN XML to reconstruct steps/lanes for the process table
+          3. Re-run AgentMinutes on the stored transcript to get structured
+             minutes data (participants, decisions, action_items)
+          4. Run AgentSynthesizer to produce narrative + HTML
+          5. Persist the HTML via save_report_html
+        """
+        if not self.llm_config:
+            return (
+                "❌ Configuração LLM não disponível. "
+                "Certifique-se de que a chave de API está configurada no Assistente."
+            )
+
+        m = self._find_meeting(meeting_number)
+        if not m:
+            return f"Reunião {meeting_number} não encontrada no projeto."
+
+        title      = m.get("title") or f"Reunião {meeting_number}"
+        meeting_id = m["id"]
+        transcript = (m.get("transcript_clean") or m.get("transcript_raw") or "").strip()
+
+        if not transcript:
+            return (
+                f"❌ Reunião {meeting_number} — '{title}' não possui transcrição armazenada. "
+                "Use Manutenção → Transcript Backfill antes de regenerar o relatório."
+            )
+
+        try:
+            from core.project_store import load_meeting_as_hub, save_report_html
+            from core.batch_pipeline import _preload_bpmn_from_db
+            from agents.agent_minutes import AgentMinutes
+            from agents.agent_synthesizer import AgentSynthesizer
+
+            provider_cfg = self.llm_config.get("provider_cfg", {})
+            client_info  = {"api_key": self.llm_config.get("api_key", "")}
+
+            # 1. Load stored hub (BPMN XML/Mermaid, requirements, SBVR)
+            hub = load_meeting_as_hub(meeting_id, self.project_id)
+            if hub is None:
+                from core.knowledge_hub import KnowledgeHub
+                hub = KnowledgeHub.new()
+                hub.set_transcript(transcript)
+
+            # 2. Parse BPMN XML into steps/lanes (if not done by load_meeting_as_hub)
+            if hub.bpmn.ready and hub.bpmn.bpmn_xml and not hub.bpmn.steps:
+                _preload_bpmn_from_db(hub, meeting_id)
+            elif not hub.bpmn.ready:
+                _preload_bpmn_from_db(hub, meeting_id)
+
+            # 3. Re-run AgentMinutes to get structured minutes data
+            hub.set_transcript(transcript)
+            minutes_agent = AgentMinutes(client_info, provider_cfg)
+            hub = minutes_agent.run(hub, output_language)
+
+            # 4. Run AgentSynthesizer
+            synth_agent = AgentSynthesizer(client_info, provider_cfg)
+            hub = synth_agent.run(hub, output_language)
+
+            if not hub.synthesizer.ready or not hub.synthesizer.html:
+                return f"❌ AgentSynthesizer não produziu relatório para Reunião {meeting_number}."
+
+            # 5. Persist HTML
+            save_report_html(
+                meeting_id,
+                hub.synthesizer.html,
+                provider_cfg.get("provider_name", ""),
+            )
+
+            return (
+                f"✅ Relatório Executivo da Reunião {meeting_number} — '{title}' "
+                f"regenerado e salvo com sucesso."
+            )
+
+        except Exception as exc:
+            return f"❌ Erro ao regenerar relatório da Reunião {meeting_number}: {exc}"
+
     # ── Chart tools ───────────────────────────────────────────────────────────
 
     def _dark_layout(self, fig, title: str = "") -> None:
@@ -5584,6 +5701,10 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     tool_input["meeting_number"],
                     bool(tool_input.get("run_bpmn", False)),
                     bool(tool_input.get("run_quality", False)),
+                    tool_input.get("output_language", "Auto-detect"),
+                ),
+                "regenerate_executive_report":    lambda: self.regenerate_executive_report(
+                    tool_input["meeting_number"],
                     tool_input.get("output_language", "Auto-detect"),
                 ),
                 # ── Moedas ───────────────────────────────────────────────
