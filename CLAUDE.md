@@ -1,6 +1,7 @@
 # CLAUDE.md — Process2Diagram
 
-> Read this file in full before making any changes to the codebase.
+> Read this file before making changes to the codebase.
+> Detailed references: `claude_guideline/architecture_details.md`, `claude_guideline/pitfalls.md`, `claude_guideline/roadmap.md`
 
 ## Project Overview
 
@@ -20,10 +21,7 @@ Supported LLM providers: DeepSeek (default), Claude (Anthropic), OpenAI, Groq, G
 
 ```bash
 pip install -r requirements.txt
-
-# Required once — Portuguese NLP model
 python -m spacy download pt_core_news_lg
-
 streamlit run app.py
 # → http://localhost:8501
 ```
@@ -36,136 +34,123 @@ No build step, no test suite, no Makefile.
 
 ```
 process2diagram/
-├── app.py                        # Streamlit entry point — st.navigation() with 5 groups: Início | Pipeline | Análise | Sistema | Manutenção
+├── app.py                        # Streamlit entry point — st.navigation() with 5 groups
 │
 ├── pages/
-│   ├── Home.py                   # 🏠 Landing page (default) — welcome header, active-project selector (global context), KPI strip, workflow guide, quick access, recent meetings
-│   ├── Pipeline.py               # 🚀 Main pipeline page — transcript input, agent run, result tabs
-│   ├── Diagramas.py              # Full-screen multi-page diagram viewer (BPMN, Mermaid, Mind Map)
-│   ├── BpmnEditor.py             # ✏️ BPMN editor — bpmn-js Modeler, version history, save new version to Supabase
-│   ├── Assistente.py             # RAG-powered assistant — conversational Q&A over meeting transcripts
-│   ├── ReqTracker.py             # Requirements tracker — Supabase-backed requirement status board
-│   ├── MeetingROI.py             # 📊 ROI-TR dashboard — type-aware quality indicators (v2)
-│   ├── Settings.py               # ⚙️ Central settings — LLM providers, API keys, embedding, search, tool catalog
-│   ├── DatabaseOverview.py       # Database health dashboard — record counts, embeddings management, integrity fixes
-│   ├── CostEstimator.py          # LLM cost estimator — interactive breakdown per provider/agent
-│   ├── BatchRunner.py            # Batch pipeline — runs the full pipeline on multiple transcripts (Manutenção)
-│   ├── BpmnBackfill.py           # Backfill BPMN XML for meetings stored in Supabase (Manutenção)
-│   ├── TranscriptBackfill.py     # Backfill transcript embeddings for existing meetings (Manutenção)
-│   └── MinutesBackfill.py        # Backfill meeting minutes for existing meetings (Manutenção)
+│   ├── Home.py                   # Landing page — project selector, KPIs, recent meetings
+│   ├── Pipeline.py               # Main pipeline — transcript input, agent run, result tabs
+│   ├── Diagramas.py              # Full-screen diagram viewer (BPMN, Mermaid, Mind Map)
+│   ├── BpmnEditor.py             # BPMN editor — bpmn-js Modeler, version history, Supabase save
+│   ├── Assistente.py             # RAG assistant — conversational Q&A over transcripts
+│   ├── ReqTracker.py             # Requirements tracker — Supabase-backed status board
+│   ├── MeetingROI.py             # ROI-TR dashboard — type-aware quality indicators
+│   ├── Settings.py               # Central settings — LLM providers, API keys, tool catalog
+│   ├── DatabaseOverview.py       # Database health — record counts, embeddings, integrity fixes
+│   ├── CostEstimator.py          # LLM cost estimator
+│   ├── BatchRunner.py            # Batch pipeline (Manutenção)
+│   ├── BpmnBackfill.py           # Backfill BPMN XML (Manutenção)
+│   ├── TranscriptBackfill.py     # Backfill transcript embeddings (Manutenção)
+│   └── MinutesBackfill.py        # Backfill meeting minutes (Manutenção)
 │
 ├── core/
-│   ├── knowledge_hub.py          # KnowledgeHub: central session state shared by all agents
-│   ├── pipeline.py               # run_pipeline() — executes orchestrator with multi-run BPMN support
-│   ├── lg_pipeline.py            # LGBPMNRunner — LangGraph adaptive BPMN retry loop
-│   ├── session_state.py          # init_session_state() — initializes all st.session_state keys
+│   ├── knowledge_hub.py          # KnowledgeHub dataclass — central session state
+│   ├── pipeline.py               # run_pipeline() — multi-run / LangGraph / standard
+│   ├── lg_pipeline.py            # LGBPMNRunner — LangGraph adaptive BPMN retry
+│   ├── session_state.py          # init_session_state() — all st.session_state defaults
 │   ├── rerun_handlers.py         # handle_rerun() — re-executes a single named agent
-│   ├── assistant_tools.py        # Tool schemas + AssistantToolExecutor for AgentAssistant tool-use mode
-│   ├── chart_config.py           # CHART_PALETTES + DEFAULT_PALETTE — zero-dependency constants shared by Assistente and AssistantToolExecutor
-│   └── schema.py                 # Legacy schemas (Process, Step, Edge, BpmnProcess…)
+│   ├── assistant_tools.py        # Tool schemas + AssistantToolExecutor
+│   ├── chart_config.py           # CHART_PALETTES + DEFAULT_PALETTE (zero-dependency)
+│   └── schema.py                 # Legacy schemas
 │
 ├── agents/
 │   ├── base_agent.py             # Abstract base — LLM routing, JSON retry, token tracking
-│   ├── orchestrator.py           # Sequences all agents; Minutes+Requirements run in parallel via ThreadPoolExecutor
-│   ├── nlp_chunker.py            # Pure Python/spaCy preprocessor — no LLM
-│   ├── agent_transcript_quality.py  # Transcript quality gate (grade A–E, criteria)
+│   ├── orchestrator.py           # Sequences all agents; Minutes+Requirements parallel
+│   ├── nlp_chunker.py            # spaCy NER, segmentation, actor detection (no LLM)
+│   ├── agent_transcript_quality.py  # Grade A–E transcript quality gate
 │   ├── agent_bpmn.py             # BPMN extraction + _enforce_rules() + generators
-│   ├── agent_mermaid.py          # MermaidGenerator class — pure Python, no LLM
-│   ├── agent_minutes.py          # Meeting minutes extraction (full transcript, initials)
-│   ├── agent_requirements.py     # Requirements extraction (IEEE 830; speaker attribution)
-│   ├── agent_sbvr.py             # AgentSBVR — OMG SBVR vocabulary (5–15 terms) + rules (3–10)
-│   ├── agent_bmm.py              # AgentBMM — OMG BMM vision/mission/goals/strategies/policies
-│   ├── agent_synthesizer.py      # Executive HTML report synthesis (narrative + HTML gen)
-│   └── agent_validator.py        # AgentValidator — pure Python BPMN quality scorer, no LLM
+│   ├── agent_mermaid.py          # MermaidGenerator — pure Python, no LLM
+│   ├── agent_minutes.py          # Meeting minutes extraction
+│   ├── agent_requirements.py     # Requirements extraction (IEEE 830)
+│   ├── agent_sbvr.py             # OMG SBVR vocabulary + rules
+│   ├── agent_bmm.py              # OMG BMM vision/mission/goals/strategies/policies
+│   ├── agent_synthesizer.py      # Executive HTML report synthesis
+│   └── agent_validator.py        # Pure Python BPMN quality scorer (no LLM)
 │
 ├── modules/
 │   ├── config.py                 # LLM provider registry — add new providers here
-│   ├── session_security.py       # API keys in st.session_state only, never persisted
-│   ├── bpmn_generator.py         # OMG BPMN 2.0 XML generator (absolute coordinates layout)
-│   ├── bpmn_viewer.py            # BPMN viewer component (bpmn-js 17 injected inline, read-only)
-│   ├── bpmn_editor.py            # editor_from_xml() — bpmn-js Modeler HTML template (editable, export XML)
-│   ├── bpmn_auto_repair.py       # repair_bpmn() — 4-pass deterministic repair engine (no LLM)
-│   ├── bpmn_structural_validator.py  # validate_bpmn_structure() — 6 structural checks, severity levels
-│   ├── bpmn_diagnostics.py       # render_bpmn_diagnostics() — BPMN diagnostic panel for Streamlit
-│   ├── mermaid_renderer.py       # render_mermaid_block() — shared Mermaid SVG renderer (pan/zoom/fit)
-│   ├── requirements_mindmap.py   # generate_requirements_mindmap() + build_mindmap_tree()
-│   ├── mindmap_interactive.py    # render_mindmap_from_requirements() — interactive SVG mindmap
-│   ├── diagram_mermaid.py        # Mermaid flowchart generator (legacy)
-│   ├── executive_html.py         # Executive HTML report generator (self-contained, interactive)
-│   ├── minutes_exporter.py       # Export MinutesModel → Word (.docx) and PDF via fpdf2
-│   ├── transcript_preprocessor.py  # Cleans ASR artefacts, fillers, repetitions
-│   ├── diagram_bpmn.py           # Legacy BPMN generator (kept for compatibility)
-│   ├── extract_llm.py            # Legacy LLM adapter (used by app.py v1 flow)
-│   ├── extract_heuristic.py      # Heuristic extractor (no-LLM fallback)
+│   ├── session_security.py       # API keys in st.session_state only
+│   ├── bpmn_generator.py         # BPMN 2.0 XML generator (absolute coordinates)
+│   ├── bpmn_viewer.py            # bpmn-js 17 viewer (server-side assets, no CDN)
+│   ├── bpmn_editor.py            # bpmn-js Modeler HTML template
+│   ├── bpmn_auto_repair.py       # repair_bpmn() — 4-pass deterministic repair
+│   ├── bpmn_structural_validator.py  # 6 structural checks, severity levels
+│   ├── bpmn_diagnostics.py       # BPMN diagnostic panel for Streamlit
+│   ├── mermaid_renderer.py       # render_mermaid_block() — shared SVG renderer
+│   ├── requirements_mindmap.py   # Mermaid mindmap string + tree builder
+│   ├── mindmap_interactive.py    # Interactive SVG mindmap (collapse/expand, pan/zoom)
+│   ├── executive_html.py         # Executive HTML report generator
+│   ├── minutes_exporter.py       # MinutesModel → Word (.docx) and PDF
+│   ├── transcript_preprocessor.py  # ASR artefact cleaner
+│   ├── auth.py                   # SHA-256 session login, is_authenticated(), is_admin()
+│   ├── supabase_client.py        # get_supabase_client() singleton
+│   ├── embeddings.py             # chunk_text(), embed_text(), embed_batch() — 1536 dims
+│   ├── meeting_roi_calculator.py # ROI-TR v2 — type weights, classify_meeting_type()
+│   ├── cross_meeting_analyzer.py # find_recurring_topics() — pgvector + keyword
+│   ├── calendar_client.py        # Google Calendar API — 8 public functions
+│   ├── cost_estimator.py         # PROVIDER_PRICING table + estimate_cost()
 │   ├── ingest.py                 # .txt/.docx/.pdf file loader
-│   ├── preprocess.py             # Basic text cleaning
-│   ├── utils.py                  # Helpers (process_to_json, etc.)
-│   ├── auth.py                   # Session-based login — SHA-256 credential validation, is_authenticated(), is_admin()
-│   ├── supabase_client.py        # get_supabase_client() — singleton Supabase client from st.secrets
-│   ├── reqtracker_exporter.py    # Export RequirementsModel to Excel/CSV for ReqTracker page
-│   ├── text_utils.py             # rule_keyword_pt() — Portuguese keyword normalisation helpers
-│   ├── cost_estimator.py         # Pure-Python LLM cost calculator — PROVIDER_PRICING table, estimate_cost()
-│   ├── embeddings.py             # chunk_text(), embed_text(), embed_batch() — Gemini/OpenAI embeddings (1536 dims)
-│   ├── meeting_roi_calculator.py # ROI-TR v2 — MEETING_TYPES, TYPE_WEIGHTS matrix, classify_meeting_type() LLM, MeetingROIData, compute_project_roi()
-│   ├── cross_meeting_analyzer.py # find_recurring_topics() — semantic (pgvector) + keyword fallback; save_project_scores(); load_score_history()
-│   └── calendar_client.py        # Google Calendar API client — 8 public functions: list_events(), get_event(), create_event(), suggest_time(), schedule_action_items(), share_calendar(), revoke_calendar_access(), diagnose_calendar() (7 steps); _load_calendar_id(project_id) resolves: Supabase project_calendar_config → st.secrets → local file → "primary"; all public functions accept project_id param
+│   ├── text_utils.py             # rule_keyword_pt() — Portuguese text utils
+│   └── reqtracker_exporter.py    # RequirementsModel → Excel/CSV
 │
 ├── ui/
-│   ├── sidebar.py                # render_sidebar() — provider, config, agent toggles, re-run buttons
-│   ├── input_area.py             # render_input_area() — transcript text area + file upload + pre-process
-│   ├── architecture_diagram.py   # render_architecture_diagram() — splash flowchart TD (cached SVG)
-│   ├── auth_gate.py              # apply_auth_gate() / render_login_page() — login wall; st.stop() if unauthenticated
-│   ├── assistant_diagram.py      # render_assistant_diagram() — RAG pipeline architecture splash (Assistente page)
-│   ├── project_selector.py       # render_project_selector() — Supabase project/meeting picker widget; require_active_project() — stops page if no active project, returns (project_id, project_name)
+│   ├── sidebar.py                # render_sidebar() — provider, agents, re-run buttons
+│   ├── input_area.py             # render_input_area() — text area, upload, pre-process
+│   ├── auth_gate.py              # apply_auth_gate() — login wall
+│   ├── project_selector.py       # require_active_project() — global project context
 │   ├── components/
-│   │   ├── copy_button.py        # Copy-to-clipboard button — navigator.clipboard + execCommand fallback (no cross-origin parent exec)
-│   │   ├── download_button.py    # Styled download button wrapper
-│   │   ├── page_header.py        # render_page_header(icon, title, caption) — amber accent HR; applied to Pipeline/Settings/DatabaseOverview/BatchRunner/MeetingROI
-│   │   └── transcript_highlighter.py  # Transcript text highlighter component
+│   │   ├── copy_button.py        # clipboard copy (navigator.clipboard + execCommand)
+│   │   ├── download_button.py    # styled download wrapper
+│   │   └── page_header.py        # render_page_header(icon, title, caption)
 │   └── tabs/
 │       ├── bpmn_tabs.py          # render_bpmn(), render_mermaid(), render_validation()
-│       ├── quality_tab.py        # render() — transcript quality results
-│       ├── minutes_tab.py        # render() — meeting minutes display
-│       ├── requirements_tab.py   # render() — requirements table + mindmap
-│       ├── sbvr_tab.py           # render() — SBVR vocabulary table + rules list + JSON export
-│       ├── bmm_tab.py            # render() — BMM vision/mission/goals/strategies/policies
-│       ├── synthesizer_tab.py    # render() — executive HTML report
-│       ├── export_tab.py         # render() — all download buttons grouped
-│       └── dev_tools_tab.py      # render() — KnowledgeHub JSON debug panel
+│       ├── quality_tab.py        # transcript quality results
+│       ├── minutes_tab.py        # meeting minutes display
+│       ├── requirements_tab.py   # requirements table + mindmap
+│       ├── sbvr_tab.py           # SBVR vocabulary + rules + JSON export
+│       ├── bmm_tab.py            # BMM vision/mission/goals/strategies/policies
+│       ├── synthesizer_tab.py    # executive HTML report
+│       ├── export_tab.py         # all download buttons
+│       └── dev_tools_tab.py      # KnowledgeHub JSON debug panel
 │
 ├── services/
 │   ├── export_service.py         # make_filename(base, ext, prefix, suffix) → str
-│   ├── file_ingest.py            # load_transcript() wrapper over modules/ingest.py
-│   └── preprocessor_service.py  # preprocess_transcript() wrapper over transcript_preprocessor
-│
-├── setup/
-│   ├── setup_v3.py               # Setup helpers
-│   └── supabase_schema_transcript_chunks.sql  # DDL: transcript_chunks table (vector(1536), ivfflat), match_transcript_chunks()
+│   ├── file_ingest.py            # load_transcript() wrapper
+│   └── preprocessor_service.py  # preprocess_transcript() wrapper
 │
 ├── skills/
-│   ├── skill_bpmn.md             # System prompt for AgentBPMN (lowercase)
-│   ├── skill_minutes.md          # System prompt for AgentMinutes (lowercase — SKILL_MINUTES.md also exists, legacy)
-│   ├── skill_transcript_quality.md  # System prompt for AgentTranscriptQuality (lowercase)
-│   ├── skill_sbvr.md             # System prompt for AgentSBVR (lowercase)
-│   ├── skill_bmm.md              # System prompt for AgentBMM (lowercase)
-│   ├── SKILL_REQUIREMENTS.md     # System prompt for AgentRequirements (uppercase — git-tracked name)
-│   └── SKILL_SYNTHESIZER.md      # System prompt for AgentSynthesizer (uppercase — git-tracked name)
+│   ├── skill_bpmn.md             # AgentBPMN system prompt (lowercase)
+│   ├── skill_minutes.md          # AgentMinutes system prompt (lowercase)
+│   ├── skill_transcript_quality.md
+│   ├── skill_sbvr.md
+│   ├── skill_bmm.md
+│   ├── SKILL_REQUIREMENTS.md     # uppercase — git-tracked name
+│   └── SKILL_SYNTHESIZER.md      # uppercase — git-tracked name
 │
 ├── tests/
-│   ├── conftest.py               # Shared factory helpers (step, edge, model, pool, collab)
-│   ├── test_bpmn_auto_repair.py  # 36 tests — dangling edges, isolated nodes, XOR labels, gateway bypass
-│   ├── test_bpmn_structural_validator.py  # 22 tests — all 6 structural checks + collaboration
-│   ├── test_agent_validator.py   # 22 tests — granularity, task type, gateways, structural, weighted
-│   └── test_mermaid_generator.py # 26 tests — sanitize, format_node, format_edge, single/multi generate
+│   ├── conftest.py
+│   ├── test_bpmn_auto_repair.py  # 36 tests
+│   ├── test_bpmn_structural_validator.py  # 22 tests
+│   ├── test_agent_validator.py   # 22 tests
+│   └── test_mermaid_generator.py # 26 tests
 │
-├── requirements.txt              # pinned versions (streamlit, anthropic, openai, python-docx, fpdf2, google-genai…)
-└── CLAUDE.md                     # This file
+└── claude_guideline/
+    ├── roadmap.md                # PC1–PC11 full history
+    ├── architecture_details.md   # BPMN generator internals, RAG details, ROI-TR formulas
+    └── pitfalls.md               # Known pitfalls with full code examples
 ```
 
 > **Linux / Streamlit Cloud — filesystem is case-sensitive.**
 > Skill file names in `skill_path` must match the git-tracked filename exactly.
-> `git ls-files skills/` shows the authoritative names.
-> Mixed-case examples: `skill_bpmn.md` (lowercase) vs `SKILL_REQUIREMENTS.md` (uppercase).
 > **Always verify with `git ls-files skills/` before adding a new skill reference.**
 
 ---
@@ -179,61 +164,43 @@ Transcript (user input)
         │
         ▼
 AgentTranscriptQuality   ← LLM; grades transcript A–E; non-fatal if fails
-        │  hub.transcript_quality.ready = True
+        │
         ▼
 Transcript Preprocessor  ← no LLM; removes ASR fillers/artefacts/repetitions
-        │  hub.transcript_clean = cleaned text
+        │
         ▼
   NLPChunker             ← no LLM; spaCy NER, segmentation, actor detection
-        │  hub.nlp.ready = True
+        │
         ▼
    AgentBPMN             ← LLM; extracts steps/edges/lanes → BPMN XML, Mermaid
-        │  _enforce_rules() post-processes: generic lanes, service-task lanes,
-        │  correction-loop redirect, redundant event steps
-        │  repair_bpmn() auto-repairs 4 structural issue classes (no LLM)
-        │  hub.bpmn.ready = True
-        │
-        │  (if n_bpmn_runs > 1)  → AgentValidator tournament; best candidate selected
-        │  (if use_langgraph)     → LGBPMNRunner adaptive retry until score ≥ threshold
-        │  hub.validation.ready = True (tournament) / hub.bpmn.lg_attempts (LangGraph)
+        │  _enforce_rules() + repair_bpmn() post-process
+        │  (if n_bpmn_runs > 1) → AgentValidator tournament
+        │  (if use_langgraph)   → LGBPMNRunner adaptive retry
         ▼
   AgentMinutes  ┐  parallel via ThreadPoolExecutor (when both enabled)
-AgentRequirements┘  each reads hub.transcript_clean (read-only); writes own section
-        │  hub.minutes.ready = True; hub.requirements.ready = True
+AgentRequirements┘
         ▼
-   AgentSBVR            ← LLM (optional); OMG SBVR; domain vocabulary + business rules
-        │  hub.sbvr.ready = True
+   AgentSBVR → AgentBMM → AgentSynthesizer   (all optional)
         ▼
-   AgentBMM             ← LLM (optional); OMG BMM; vision/mission/goals/strategies/policies
-        │  hub.bmm.ready = True
-        ▼
-AgentSynthesizer         ← LLM (optional); reads all hub artifacts incl. SBVR + BMM;
-        │  executive narrative (JSON) + calls generate_executive_html()
-        │  hub.synthesizer.ready = True; hub.synthesizer.html = full HTML
-        ▼
-   KnowledgeHub          ← fully populated; stored in st.session_state["hub"]
+   KnowledgeHub  ← fully populated; stored in st.session_state["hub"]
 ```
 
-### App.py — Navigation Entry Point
-
-`app.py` (v4.15) uses `st.navigation()` with **role-aware groups** (rebuilt on every rerun so the menu updates immediately after login):
+### Navigation Groups (`app.py`)
 
 | Group | Pages | Visibility |
 |---|---|---|
 | **Início** | Home.py (default) | Todos |
 | **Pipeline** | Pipeline.py, Diagramas.py, BpmnEditor.py | Todos |
-| **Análise** | Assistente.py, ReqTracker.py, ValidationHub.py, MeetingROI.py, EntityRecognition.py | Todos |
+| **Análise** | Assistente.py, ReqTracker.py, ValidationHub.py, MeetingROI.py | Todos |
 | **Sistema** | Settings.py, CostEstimator.py [+ MasterAdmin.py, DatabaseOverview.py] | Todos [admin extra] |
-| **Ajuda** | Orientacoes_ComoIniciar.py, Orientacoes_Arquiteturas.py | Todos |
+| **Ajuda** | Orientacoes_*.py | Todos |
 | **Manutenção** | BatchRunner.py, BpmnBackfill.py, MinutesBackfill.py, TranscriptBackfill.py | Admin only |
 
-`app.py` itself renders no content — it only calls `st.navigation(pages).run()`. All pipeline logic lives in `pages/Pipeline.py`.
+`app.py` renders no content — only calls `st.navigation(pages).run()`. Groups rebuilt every rerun (menu updates immediately after login).
 
-**Important:** `st.page_link()` arguments must reference registered page files (e.g. `"pages/Pipeline.py"`), not `"app.py"` — `app.py` is not a registered navigation page and will raise `StreamlitPageNotFoundError`.
+**Important:** `st.page_link()` must reference registered page files (e.g. `"pages/Pipeline.py"`), never `"app.py"` — raises `StreamlitPageNotFoundError`.
 
 ### KnowledgeHub — Central State
-
-A pure Python dataclass living in `st.session_state["hub"]`. Each agent reads only what it needs and writes only to its own section. Version counter is bumped after every write.
 
 ```python
 @dataclass
@@ -241,38 +208,21 @@ class KnowledgeHub:
     version: int                      # bumped on every .bump() call
     transcript_raw: str
     transcript_clean: str
-    transcript_quality: TranscriptQualityModel  # written by AgentTranscriptQuality
-    preprocessing: PreprocessingModel           # written by Transcript Preprocessor
-    nlp: NLPEnvelope                  # written by NLPChunker
-    bpmn: BPMNModel                   # written by AgentBPMN
-    minutes: MinutesModel             # written by AgentMinutes
-    requirements: RequirementsModel   # written by AgentRequirements
-    synthesizer: SynthesizerModel     # written by AgentSynthesizer
-    validation: ValidationReport      # written by AgentValidator (multi-run BPMN)
-    meta: SessionMetadata             # tokens, timing, provider info
+    transcript_quality: TranscriptQualityModel
+    preprocessing: PreprocessingModel
+    nlp: NLPEnvelope
+    bpmn: BPMNModel
+    minutes: MinutesModel
+    requirements: RequirementsModel
+    synthesizer: SynthesizerModel
+    validation: ValidationReport
+    meta: SessionMetadata
 ```
 
-**Schema evolution:** `KnowledgeHub.migrate(hub)` is the single point for backward-compatibility fixes when fields are added. Always add new field guards here instead of scattered `hasattr` checks in `app.py`.
-
-**Golden rule:** never instantiate an agent directly from `app.py`. Always go through `Orchestrator` (via `run_pipeline`) or `handle_rerun`.
-
-### Orchestrator parallel execution
-
-When both `run_minutes=True` and `run_requirements=True`, `Orchestrator._run_minutes_requirements_parallel()` runs both agents concurrently via `ThreadPoolExecutor(max_workers=2)`.
-
-**Why ThreadPoolExecutor, not asyncio?** Streamlit's synchronous run model is incompatible with `asyncio.gather()`. CPython's threading module works correctly inside a Streamlit session.
-
-**Race-condition isolation:** each worker receives `copy.copy(hub)` with `meta = copy.copy(hub.meta)` and `meta.agents_run = list(...)`. Minutes and Requirements each write only to their own section of the hub. No hub field is written by both workers.
-
-**Token merge:** both copies start from `tokens_base = hub.meta.total_tokens_used`. After join: `hub.meta.total_tokens_used += delta_m + delta_r`.
-
-**Thread-safe progress:** `Orchestrator._progress(name, status)` acquires `threading.Lock()` before calling the raw callback — prevents concurrent Streamlit placeholder writes.
-
-**Automatic fallback:** if `ThreadPoolExecutor` raises any exception, execution falls back to sequential Minutes → Requirements with a `(sequencial)` status label.
+**Schema evolution:** always add new fields via `KnowledgeHub.migrate(hub)` — never scattered `hasattr` checks.
+**Golden rule:** never instantiate agents directly from `app.py` — always go through `Orchestrator` or `handle_rerun`.
 
 ### Agent Pattern
-
-Every LLM agent in `agents/` inherits from `BaseAgent`:
 
 ```python
 class MyAgent(BaseAgent):
@@ -280,46 +230,27 @@ class MyAgent(BaseAgent):
     skill_path = "skills/skill_my.md"   # must match git ls-files exactly
 
     def build_prompt(self, hub, output_language="Auto-detect") -> tuple[str, str]:
-        # returns (system_prompt, user_prompt)
         ...
 
     def run(self, hub, output_language="Auto-detect") -> KnowledgeHub:
         system, user = self.build_prompt(hub, output_language)
-        data = self._call_with_retry(system, user, hub)  # handles JSON, retry, tokens
-        # populate hub.bpmn / hub.minutes / etc.
+        data = self._call_with_retry(system, user, hub)
         hub.mark_agent_run(self.name)
         hub.bump()
         return hub
 ```
 
-`BaseAgent` provides: `_call_llm()`, `_parse_json()`, `_load_skill()`, up to 3 retries on JSON parse failure, and token tracking in `hub.meta.total_tokens_used`.
+`BaseAgent` provides: `_call_llm()`, `_parse_json()`, `_load_skill()` (absolute path, CWD-independent), up to 3 JSON retries, token tracking in `hub.meta.total_tokens_used`.
 
-**`_load_skill()` uses absolute path** based on `Path(__file__).parent.parent / skill_path` so it works correctly regardless of the process CWD (local, PyCharm, Streamlit Cloud). Never rely on CWD for file resolution in agents.
+Provider routing in `_call_llm()`: `"openai_compatible"` → OpenAI SDK with custom `base_url`; `"anthropic"` → native Anthropic SDK.
 
-Provider routing in `BaseAgent._call_llm()`: reads `client_type` from config — `"openai_compatible"` uses the OpenAI SDK with a custom `base_url`; `"anthropic"` uses the native Anthropic SDK.
+### Orchestrator + AgentValidator
 
-### AgentValidator — Pure Python BPMN Scorer
+Minutes + Requirements run via `ThreadPoolExecutor(max_workers=2)` — each worker gets isolated `copy.copy(hub)`. Token deltas merged after join. Falls back to sequential on any exception.
 
-`agents/agent_validator.py` — no LLM call. Used by `core/pipeline.py` when `n_bpmn_runs > 1`.
+`agent_validator.py` — no LLM. Scores granularity / task_type / gateways (each 0–10, weighted). Used when `n_bpmn_runs > 1`. Best candidate → `hub.bpmn`; all scores → `hub.validation`.
 
-Scores a `BPMNModel` on three dimensions (each 0–10):
-- **Granularity** — activity count relative to transcript word count (target: 1 task per 40–100 words)
-- **Task type** — specificity of `task_type` assignments vs. keyword heuristics
-- **Gateways** — XOR edges labeled; AND/OR gateways have matching join
-
-Each dimension is weighted via `bpmn_weights = {"granularity": int, "task_type": int, "gateways": int}` (configurable in sidebar). The candidate with highest `weighted` score is selected and stored in `hub.bpmn`; all scores stored in `hub.validation`.
-
-### Multi-run BPMN Optimization
-
-Controlled by `n_bpmn_runs` (sidebar slider: 1, 3, or 5):
-
-1. Run Quality + NLP (pre-requisites) once
-2. Run `AgentBPMN` N times on separate `hub` copies
-3. `AgentValidator.score()` each candidate
-4. Best-scoring BPMN written to `hub.bpmn`; all scores in `hub.validation`
-5. Continue with Minutes → Requirements → Synthesizer
-
-A "Validação BPMN" tab appears in results when `hub.validation.ready` and `n_bpmn_runs > 1`.
+> Full parallel execution and scoring details: `claude_guideline/architecture_details.md`
 
 ---
 
@@ -329,457 +260,161 @@ Configured in `modules/config.py → AVAILABLE_PROVIDERS`:
 
 | Provider | Default model | client_type | Notes |
 |---|---|---|---|
-| **DeepSeek** (default) | `deepseek-chat` | `openai_compatible` | Cheapest option |
-| Claude (Anthropic) | `claude-sonnet-4-20250514` | `anthropic` | No `json_mode`; use prompt enforcement |
+| **DeepSeek** (default) | `deepseek-chat` | `openai_compatible` | Cheapest |
+| Claude (Anthropic) | `claude-sonnet-4-20250514` | `anthropic` | No `json_mode` — enforce via prompt |
 | OpenAI | `gpt-4o-mini` | `openai_compatible` | |
 | Groq (Llama) | `llama-3.3-70b-versatile` | `openai_compatible` | Fastest |
-| Google Gemini | `gemini-2.0-flash` | `openai_compatible` | Free tier available |
+| Google Gemini | `gemini-2.0-flash` | `openai_compatible` | Free tier |
 
-**Anthropic** does not support `json_mode` — enforce JSON output via the system prompt only.
+To add a new provider: edit `AVAILABLE_PROVIDERS`. If `client_type` is new, add routing in `BaseAgent._call_llm()`.
 
 ---
 
 ## BPMN Generator (`modules/bpmn_generator.py`)
 
-### Layout system
+**Layout:** absolute coordinates — no direction parameter. Constants: `TASK_W=120`, `TASK_H=60`, `GW_W=50`, `H_GAP=70`, `LANE_HEADER_W=100`. Elements without a lane assignment crash the viewer.
 
-- Uses **absolute coordinates** — there is no declarative direction parameter like Mermaid's `TD`/`LR`.
-- Layout constants at top of file: `TASK_W=120`, `TASK_H=60`, `GW_W=50`, `H_GAP=70`, `LANE_HEADER_W=100`.
-- `BPMNPlane` must reference `collab_id` (not `process_id`) when a collaboration element exists.
-- Elements without a lane assignment produce non-finite SVG coordinates → viewer crash.
+**Lane-crossing:** flows spanning ≥ 2 lane boundaries → replaced with throw/catch Link Events. Adjacent-lane flows left as direct arrows.
 
-### Lane-crossing elimination algorithm
+**Parallel branch alignment:** `_align_parallel_branches` snaps shorter branch terminal to `join_col − 1` — eliminates long diagonal arrows on unequal parallel branches.
 
-`bpmn_generator.py` runs a single-pass algorithm:
-
-1. **Column layout** — assigns concrete `(x, y, w, h)` positions to all elements
-2. **Lane-spanning detection** — flags flows whose source and target are separated by **≥ 2 lane boundaries**. Adjacent-lane flows (span = 1) are intentionally left as direct arrows — bpmn-js routes them natively.
-3. **Link Event injection** — replaces each flagged flow with throw/catch Intermediate Link Events.
-
-### Parallel branch alignment (`_align_parallel_branches`)
-
-Post-pass over column assignments, called immediately after `_assign_columns` in `_compute_layout`.
-
-**Problem:** when a split gateway has branches with different numbers of steps, the shorter branch finishes several columns before the join, producing a long diagonal arrow that spans empty column slots.
-
-**Fix:** for each node that is the *terminal step* of a branch (its only successor is a join with ≥ 2 incoming edges), snap its column to `join_col − 1` when it currently sits further left.
-
-Safety conditions that must all hold before a node is moved:
-- Exactly one successor (the join) — so moving right cannot conflict with other downstream nodes
-- Current column strictly less than `join_col − 1`
-- The new column stays strictly greater than `max(col[predecessor])` — topological order preserved
-
-This turns long diagonal arrows into single-column hops without affecting any other layout logic.
-
-### Waypoint routing
-
-`_build_di` emits waypoints for every sequence flow:
-- **Normal flow** (forward, no overlap): right-centre → left-centre (2 points)
-- **Stacked elements** (same column, x-ranges overlap): bottom-centre → top-centre (2 points)
-- **Backward flow** (source column > target column, same lane): U-path with 4 waypoints below elements: `source_right → source_below → target_below → target_left`. The horizontal segment is routed 25 px below the tallest element in the path, within the empty lower portion of the lane.
+> Full column algorithm, waypoint routing, lane-crossing details: `claude_guideline/architecture_details.md`
 
 ### Post-extraction rule enforcement (`_enforce_rules`)
 
-Applied in `agent_bpmn.py` after LLM extraction, before generators. Mutates the model in-place.
-Receives `nlp_actors` from `hub.nlp.actors` to improve lane inference.
+Applied in `agent_bpmn.py` after LLM extraction, before generators. Receives `hub.nlp.actors`.
 
-- **Rule 0** — removes steps the LLM declared as `startEvent`/`endEvent` (generator adds these)
+- **Rule 0** — removes LLM-declared `startEvent`/`endEvent` steps (generator adds these)
 - **Rule 1** — `serviceTask` with unnamed system actor → `lane = None` (OMG §7.4)
-- **Rule 1b** — generic lane names (`usuário`, `validador`, `sistema`…) → infers real organizational name using three-priority lookup: (1) step `actor` fields for that lane, (2) NLP actors appearing in step texts, (3) regex over step descriptions
-- **Rule 2** — correction loop pointing back to **any gateway type** (`exclusiveGateway`, `parallelGateway`, `inclusiveGateway`, `eventBasedGateway`, `complexGateway`) → redirected to the upstream work step that feeds the gateway
+- **Rule 1b** — generic lane names (`usuário`, `validador`, `sistema`…) → infers real org name: (1) step actor fields, (2) NLP actors, (3) regex over step descriptions
+- **Rule 2** — correction loop → any gateway type → redirected to upstream work step
 
-### Rules the LLM must follow (enforced by `skill_bpmn.md`)
+### Rules the LLM must follow (`skill_bpmn.md`)
 
-- The LLM **must not declare** Link Intermediate Events — the generator handles them.
-- Start/End Event lane assignment follows the direct predecessor/successor.
-- System lanes must not receive Start/End Events.
-- Lane ordering: primary initiating actor at the top.
-- End Event inherits the lane of its direct predecessor (Rule 8).
-- Lane names must be organizational units, never generic roles (`usuário`, `sistema`, etc.).
+- Must not declare Link Intermediate Events (generator handles them)
+- Lane names must be organizational units, never generic roles
+- System lanes must not receive Start/End Events
+- End Event inherits the lane of its direct predecessor
 
 ---
 
 ## Mermaid Generator (`agents/agent_mermaid.py`)
 
-`MermaidGenerator` is a pure-Python class (no LLM) that converts a `BPMNModel` to Mermaid flowchart syntax:
-
-- `sanitize_text(text)` — replaces accented chars, removes Mermaid-breaking punctuation
-- `format_node(step)` — `{}` for decisions, `[]` for tasks; always uses quoted labels
-- `format_edge(edge)` — pipe syntax `-->|label|` for labeled edges
-- `generate(model)` — `flowchart LR` with decision node styling
-
-**Entry point:** `generate_mermaid(model: BPMNModel) -> str` (module-level convenience function).
+Pure Python, no LLM. `sanitize_text()` → `format_node()` (`{}` decisions, `[]` tasks) → `format_edge()` (`-->|label|` syntax) → `generate()` (`flowchart LR`).
+Entry point: `generate_mermaid(model: BPMNModel) -> str`.
 
 ---
 
 ## BPMN Viewer (`modules/bpmn_viewer.py`)
 
-- Rendered via `streamlit.components.v1.html` with **bpmn-js 17** injected inline (no external CDN).
-- **Asset loading:** bpmn-js JS (~1.2 MB) and CSS fetched **server-side** via `urllib.request` on first call, cached with `@functools.lru_cache(maxsize=None)`, inlined as `<style>`/`<script>` blocks — no CDN URL in the iframe. Avoids Streamlit Cloud sandbox restriction blocking external `<script src>` in `components.html()` iframes.
-- **Pan/zoom:** bpmn-js native canvas API — `canvas.zoom('fit-viewport')`, `canvas.zoom(factor, 'auto')` — NOT a CSS `transform` wrapper (which conflicted with bpmn-js internal viewport management).
-- **Fit timing:** `canvas.zoom('fit-viewport')` is deferred via `setTimeout(fn, 150)` inside `importXML().then()`. Calling it synchronously causes the iframe container dimensions to be 0 (browser hasn't laid out yet), producing `scale = diagramW/0 = Infinity → SVGMatrix non-finite` error. The guard checks both `inner.width/height > 0` AND `outer.width/height > 0` before calling fit; falls back to `canvas.zoom(0.75)` otherwise.
-- **Zoom label:** synced via `viewer.get('eventBus').on('canvas.viewbox.changed', refreshLabel)`.
-- **Fallback:** `_TEMPLATE_CDN_FALLBACK` used when server-side fetch fails.
-- Public API: `preview_from_xml(xml: str) -> str` and `generate_bpmn_preview(bpmn: BpmnProcess) -> str`.
+bpmn-js 17 injected inline (server-side asset fetch + `lru_cache`, no CDN). `canvas.zoom('fit-viewport')` deferred via `setTimeout(fn, 150)` — prevents SVGMatrix non-finite error on zero-dimension container. CDN fallback when server-side fetch fails.
+
+> Full implementation notes + JS pattern: `claude_guideline/pitfalls.md §bpmn-js fit-viewport`
 
 ---
 
 ## Mermaid Renderer (`modules/mermaid_renderer.py`)
 
-Shared rendering utility used by both `app.py` tabs and `pages/Diagramas.py`.
-
-`render_mermaid_block(mermaid_text, *, show_code, key_suffix, height)`:
-- Fetches both TD and LR SVGs **server-side** from `mermaid.ink/svg/{base64}` — no external CDN inside the iframe.
-- Injects both SVGs inline; client-side JS toggles between them (no Streamlit rerun).
-- Pan/zoom/fit with mouse drag and scroll wheel.
-- For non-flowchart diagrams (mindmap, etc.) the direction toggle is hidden.
-- `robustFit` polling handles SVG dimension timing.
-
-**Why no CDN in the iframe?**
-Streamlit Cloud sandbox blocks external script loading inside `components.html`.
-All JS dependencies must be resolved server-side or injected inline.
+`render_mermaid_block(mermaid_text, *, show_code, key_suffix, height)` — fetches TD/LR SVGs server-side from `mermaid.ink`, injects inline, client-side JS toggles direction. Pan/zoom/fit. No CDN inside iframe (Streamlit Cloud sandbox blocks external scripts in `components.html`).
 
 ---
 
 ## Requirements Mind Map
 
-Two modules cooperate:
+- `modules/requirements_mindmap.py` → Mermaid mindmap string + hierarchical tree dict
+- `modules/mindmap_interactive.py` → interactive SVG mindmap (collapse/expand, pan/zoom)
 
-- `modules/requirements_mindmap.py` — `generate_requirements_mindmap(model)` → Mermaid mindmap string; `build_mindmap_tree(model)` → hierarchical dict for the interactive renderer.
-- `modules/mindmap_interactive.py` — `render_mindmap_from_requirements(model, *, session_title, height)` — renders an interactive SVG mind map (pure JS, pan/zoom, collapse/expand per type group). Falls back to Mermaid code block if tree is empty.
-
-Hierarchy: `root((Process Name)) → Type group → REQ-ID — Title (priority dot)`.
-
-The `pages/Diagramas.py` page also renders this mind map under a "🗺️ Mind Map" tab.
-
----
-
-## Multi-Page App (`pages/Diagramas.py`)
-
-Streamlit multi-page app — accessible via sidebar navigation or `st.page_link`.
-
-- Shares `st.session_state["hub"]` with `app.py` — no re-processing needed.
-- Calls `KnowledgeHub.migrate(hub)` for schema compatibility.
-- Renders three tabs dynamically (only if data is available): **BPMN 2.0** (bpmn-js, 900px), **Mermaid** (render_mermaid_block, 820px), **Mind Map** (interactive, 840px).
-- Page config: `layout="wide"`, `initial_sidebar_state="collapsed"`.
+Hierarchy: `root → Type group → REQ-ID — Title (priority dot)`. Also rendered in `pages/Diagramas.py` under "🗺️ Mind Map" tab.
 
 ---
 
 ## RAG Assistant (`pages/Assistente.py`)
 
-Semantic Q&A over meeting transcripts stored in Supabase. Three modes selectable via the radio button in the page header (next to the title):
+| Mode | Description |
+|---|---|
+| **💬 Assistente** | Interactive Q&A, history-aware, up to 8 tool rounds |
+| **🔬 Análise Autônoma** | Autonomous agent, up to 15 rounds, structured report |
 
-| Mode | Key | Description |
-|---|---|---|
-| **💬 Assistente** | `asst_mode = "💬 Assistente"` | Interactive Q&A — conversational, history-aware, up to 8 tool rounds |
-| **🔬 Análise Autônoma** | `asst_mode = "🔬 Análise Autônoma"` | Autonomous agent — single complex objective, up to 15 tool rounds, structured report with tables/charts |
-
-Within **💬 Assistente** mode, a sidebar toggle `asst_use_tools` (default `True`) switches between:
-- **Modo A: Tool-use** (padrão) — LLM calls tools against Supabase directly
+Within Assistente mode, sidebar toggle `asst_use_tools`:
+- **Modo A: Tool-use** (default) — LLM calls tools against Supabase directly
 - **Modo B: RAG Clássico** — keyword + semantic vector search fallback
 
-A `❓ Modos` popover button in the page header explains the difference to end users.
+### Tool list (`core/assistant_tools.py`)
 
-### Architecture — Modo A: Tool-use (padrão)
+**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `list_bpmn_processes`, `get_sbvr_terms`, `get_sbvr_rules`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`.
 
-```
-User question + History
-        │
-        ▼
-AgentAssistant.chat_with_tools(history, question, project_id)
-        │
-        ├── _build_system_prompt_tools()
-        │       retrieve_data_summary(project_id)      ← compact project overview
-        │       skill_assistant.md                     ← P2D guide
-        │
-        └── LLM (tool_choice="auto")
-                │
-                ▼  [loop ≤ MAX_TOOL_ROUNDS = 5]
-           ┌────────────────────────────────────────────────┐
-           │  Tool calls from LLM                           │
-           │  AssistantToolExecutor.execute(name, args)     │
-           │  ─── admin gate ────────────────────────────── │
-           │  Non-admin tools (always available):           │
-           │    get_meeting_list()                          │
-           │    get_meeting_participants(meeting_number)    │
-           │    get_meeting_decisions(meeting_number)       │
-           │    get_meeting_action_items(meeting_number)    │
-           │    get_meeting_summary(meeting_number)         │
-           │    search_transcript(query, meeting_number?)   │
-           │    get_requirements(keyword?, req_type?, ...)  │
-           │    list_bpmn_processes()                       │
-           │    get_sbvr_terms(keyword?)                    │
-           │    get_sbvr_rules(keyword?)                    │
-           │  Admin-only tools (role = admin | master):     │
-           │    get_database_integrity()                    │
-           │    fix_missing_llm_provider(provider)          │
-           │    generate_meeting_embeddings(api_key, ...)   │
-           │    + other write/generate tools                │
-           │         │                                      │
-           │         └─► direct Supabase queries            │
-           └────────────────────────────────────────────────┘
-                │
-                ▼  stop_reason = "end_turn" / "stop"
-           Final answer → chat UI
-```
+**Admin only (`is_admin()`):** `get_database_integrity`, `fix_missing_llm_provider`, `generate_meeting_embeddings`, `reprocess_meeting_full`, `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`, write/generate tools.
 
-**Tool schemas** live in `core/assistant_tools.py` in two formats:
-- `get_tool_schemas_openai()` — OpenAI/DeepSeek/Groq function-calling format
-- `get_tool_schemas_anthropic()` — Anthropic `tool_use` format (derived from OpenAI schemas)
+**Chart tools (5):** `generate_requirements_chart`, `generate_meetings_timeline`, `generate_action_items_chart`, `generate_roi_chart`, `generate_custom_chart` — Plotly figs returned as 4th element of `chat_with_tools()`, rendered via `st.plotly_chart()`. Palettes defined in `core/chart_config.py`.
 
-**Admin gate:** `AssistantToolExecutor.execute()` checks `is_admin()` before running any tool in `_ADMIN_TOOLS` frozenset. Returns `"⛔ A ferramenta '...' requer perfil administrador."` if role is insufficient.
-
-**Tool catalog:** visible in **Configurações → aba Assistente → "📖 Catálogo de Ferramentas"** expander. Previously was shown inline in Assistente.py (removed in v4.13).
-
-**Chart tools (v4.17):** 5 tools in the `grafico` category generate interactive Plotly figures:
-- `generate_requirements_chart(group_by, meeting_number?)` — bar chart grouped by type or priority
-- `generate_meetings_timeline(metric)` — grouped bars per meeting (requirements / decisions / actions)
-- `generate_action_items_chart(group_by, meeting_number?)` — pie (status) or bar (responsible / meeting)
-- `generate_roi_chart(cost_per_hour)` — bar chart ROI-TR 0–10 per meeting with threshold lines
-- `generate_custom_chart(chart_type, title, labels, values, ...)` — bar/line/pie/scatter/funnel from LLM data
-
-Chart figures are accumulated in `executor._pending_charts` as `fig.to_dict()` dicts during a tool-use turn, returned as the 4th element of `chat_with_tools()`, stored in message history under `"charts"` key, and rendered via `st.plotly_chart()` in the chat loop.
-
-**Colour palettes:** defined in `core/chart_config.py` (zero-dependency). `AssistantToolExecutor.__init__` reads `llm_config.get("chart_palette")` and sets `self._palette`. All chart methods use `self._palette` for bar/pie/line colors. Semantic colors (priority Alta/Média/Baixa, action status) are kept fixed regardless of palette. Palette selection UI lives in the Assistente sidebar under "🎨 Gráficos".
-
-**Message format differences:**
-- OpenAI: `finish_reason == "tool_calls"` → tool results as `{"role": "tool", "tool_call_id": id, "content": text}`
-- Anthropic: `stop_reason == "tool_use"` → assistant turn appends full `content` list; tool results as `{"role": "user", "content": [{"type": "tool_result", "tool_use_id": id, "content": text}]}`
-
-**Fallback:** any exception in `chat_with_tools()` → automatically falls back to Mode B with keyword search.
-
-### Architecture — Modo B: RAG Clássico (fallback / opt-out)
-
-```
-User question
-      │
-      ├── Keyword search  ──► retrieve_context_for_question(project_id, query)
-      │                       ILIKE match on transcripts + minutes_md injection
-      │
-      └── Semantic search ──► embed_text(query, api_key, "Google Gemini")
-                               └─► search_transcript_chunks(project_id, embedding, k=8)
-                                   match_transcript_chunks() SQL (cosine similarity)
-                                          │
-                                          ▼
-                              Retrieved chunks + minutes summaries
-                                          │
-                                          ▼
-                              AgentAssistant.chat()
-                              system: P2D guide + format_context() RAG string
-                              user:   question
-                                          │
-                                          ▼
-                              Answer displayed in chat UI
-```
-
-### Re-edit feature
-
-Users can edit a previous question via the `✏️` button on any user message:
-- `st.session_state["_edit_idx"]` — index of the message being edited
-- `st.session_state["_edit_draft"]` — current draft text
-- `st.session_state["_resubmit_question"]` — populated on "🔄 Reenviar", consumed on next rerun
-- On resubmit: history is truncated to `history[:_edit_idx]`; `chat_input` is disabled while editing
+Tool schemas: `get_tool_schemas_openai()` / `get_tool_schemas_anthropic()`.
 
 ### Embedding pipeline
 
-- Chunks created by `chunk_text(transcript, chunk_size=500, overlap=80)`
-- Each chunk embedded via `embed_text(chunk, api_key, provider)`
-- Embeddings stored in `transcript_chunks` table (`vector(1536)`)
-- `save_transcript_embeddings(meeting_id, project_id, transcript, api_key, provider, fallback_text)` — upserts by `(meeting_id, chunk_index)`
-- Provider: **Google Gemini** (`models/gemini-embedding-001`, `output_dimensionality=1536`) — free tier; 1.2s delay between calls; auto-retry on 429
-- Fallback model: `models/gemini-embedding-2-preview` (tried if 404 on primary)
+- `chunk_text(transcript, chunk_size=500, overlap=80)` → chunks stored in `transcript_chunks` table (`vector(1536)`)
+- Provider: Google Gemini `gemini-embedding-001` with `output_dimensionality=1536`; fallback `gemini-embedding-2-preview` on 404
+- Rate limit: 1.2s delay between calls, 5 retries on 429
+- Search via `match_transcript_chunks()` SQL (pgvector cosine)
 
-**Embedding management UI** lives in **Banco de Dados → aba 🔮 Embeddings** (moved from Assistente.py in v4.13):
-- Coverage table per project
-- Batch generation with progress bar (all meetings in selected project)
-- Per-meeting drill-down: normalization preview, chunk count, individual "🔄 Gerar" button
-- "🧪 Testar gravação no banco" — INSERT/SELECT/DELETE probe without embedding API call
-
-### Error handling
-
-Errors and success messages from the embedding generation flow are persisted in `st.session_state` before `st.rerun()` and displayed+popped immediately after rerun — prevents the instant-disappear bug caused by `st.error()` before `st.rerun()`. Keys used: `_emb_tab_result`, `_emb_tab_single_result`, `_emb_tab_err_{meeting_id}`.
+> Full architecture diagrams (Mode A/B flow, re-edit feature, embedding UI): `claude_guideline/architecture_details.md`
 
 ---
 
-## ROI-TR Dashboard (`pages/MeetingROI.py` + `modules/meeting_roi_calculator.py`)
+## ROI-TR Dashboard (`pages/MeetingROI.py`)
 
-Quality indicator system for corporate meetings — zero new Supabase tables required (reads from existing `meetings`, `requirements`, `sbvr_terms`, `sbvr_rules`, `bpmn_processes`).
+Type-aware quality system — 11 meeting types, each with a weight matrix across 5 artefact dimensions (req/dec/act/sbvr/bpmn). `classify_meeting_type()` uses LLM (1 call/meeting) or heuristic fallback. Results persisted to `meetings.meeting_type`. No new Supabase tables required.
 
-### Meeting type classification
-
-`classify_meeting_type(title, transcript_sample, n_req, n_dec, n_actions, n_sbvr, n_bpmn, llm_config) → (type, confidence)`:
-- **LLM path** (when `llm_config` provided): 1 call per unclassified meeting; JSON `{"type": str, "confidence": float}`; uses `json_mode` for OpenAI-compatible providers.
-- **Heuristic fallback**: keyword matching on meeting title → artefact-count heuristics → `"Híbrida"` (confidence 0.30).
-- Result persisted to `meetings.meeting_type` (SQL: `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS meeting_type TEXT`). Re-classified only when column is NULL.
-
-### Type weight matrix
-
-`TYPE_WEIGHTS: dict[str, dict]` — 11 types, 5 artefact dimensions each (`req`, `dec`, `act`, `sbvr`, `bpmn`) + `min_dc` (minimum DC for full fulfillment):
-
-```python
-"Tomada de Decisão": {"req": 0.5, "dec": 3.0, "act": 2.0, "sbvr": 0.0, "bpmn": 0.0, "min_dc": 6.0}
-"Levantamento de Requisitos": {"req": 3.0, "dec": 1.0, "act": 1.5, "sbvr": 2.0, "bpmn": 1.0, "min_dc": 4.5}
-```
-
-### Formulas
-
-```
-DC_ponderado = n_dec×w[dec] + n_act_done×w[act] + n_reqs×w[req] + n_sbvr×w[sbvr] + min(1,n_bpmn)×w[bpmn]
-fulfillment  = min(1.0, DC_ponderado / min_dc)
-ROI-TR       = min(10, DC_ponderado × 1000 / (n_part × dur_h × custo_h) × 1.5)
-TRC          = min(100, (n_cycle_signals / (word_count / 500)) × 20)
-```
-
-`fulfillment` is a separate display metric — it does not multiply into ROI-TR. DC already captures under-delivery naturally via the type-specific weights.
-
-### Backward compatibility
-
-`compute_project_roi()` catches `Exception` when selecting `meeting_type` (column may not exist) and retries without it — safe to deploy before running the SQL migration.
-
----
-
-## UI Package (`ui/`)
-
-All Streamlit UI code lives in `ui/` — `app.py` only coordinates flow.
-
-### `ui/sidebar.py` — `render_sidebar()`
-Always visible:
-- Provider selector + API key gate
-- Output language selector
-
-Inside `st.expander("⚙️ Configuração Avançada")` (collapsed by default):
-- Prefix/suffix for file naming
-- Agent enable/disable checkboxes (Quality, BPMN, Minutes, Requirements, SBVR, BMM, Executive Report)
-- BPMN optimization passes slider (1/3/5) + weight sliders (only when n > 1)
-- **🔄 Adaptive Retry (LangGraph)** checkbox + Quality Threshold slider + Max Retries selector (only when n_bpmn_runs == 1)
-- Developer Mode toggle (shows Dev Tools tab + Raw JSON option)
-
-Re-run buttons for all agents appear below the expander after a pipeline run (sidebar-only; body re-run buttons were removed).
-
-### `ui/input_area.py` — `render_input_area()`
-- `st.text_area` for pasting transcript
-- File uploader (`.txt`, `.docx`, `.pdf`) via `services/file_ingest.py`
-- "Pre-process" button (no LLM) — shows side-by-side original vs. cleaned with stats
-- Editable cleaned text area (`curated_clean`) — "Use curated text" button sets it as main input
-- Returns `True` when "🚀 Generate Insights" is clicked
-
-### `ui/architecture_diagram.py` — `render_architecture_diagram()`
-- Displays a `flowchart TD` Mermaid architecture diagram as a splash section at app startup.
-- SVG fetched once from mermaid.ink via `@st.cache_data` — zero network overhead on reruns.
-- Pan/zoom/fit viewer injected via `components.html`. No external CDN inside the iframe.
-- Shown in `st.expander` that starts **expanded** when no pipeline results exist yet (`"hub"` not in session state) and collapsed automatically afterwards — no UX friction for repeat users.
-- `ARCHITECTURE_DIAGRAM` constant: `flowchart TD` with nested subgraphs, `classDef` palette matching brand colours (navy=input, amber=LLM, blue=core agents, purple=optional, green=outputs).
-
-### `pages/Pipeline.py` — main pipeline page
-
-Result tabs are split into two groups:
-
-**Primary tabs** (always shown when data is available):
-`📋 Ata de Reunião · 📝 Requisitos · 📐 BPMN 2.0 · 📊 Mermaid · 📄 Relatório Executivo · 📦 Exportar`
-
-**Secondary tabs** inside `st.expander("🔬 Análise Avançada", expanded=False)`:
-`🔬 Qualidade · 📖 SBVR · 🎯 BMM · 🏆 Validação BPMN · 🔍 Dev Tools`
-
-### `ui/tabs/`
-Each tab is a standalone module with a `render(hub, prefix, suffix)` function (or variant):
-- `bpmn_tabs.py` — `render_bpmn()` (structural diagnostics + auto-repair log + LangGraph badge), `render_mermaid()`, `render_validation()`
-- `quality_tab.py`, `minutes_tab.py`, `requirements_tab.py`, `synthesizer_tab.py`
-- `sbvr_tab.py` — vocabulary dataframe (term/category/definition) + rules list with type badges + JSON export
-- `bmm_tab.py` — vision/mission columns + goals/strategies expanders with type badges + policies list
-- `export_tab.py` — all download buttons (BPMN XML, Mermaid, Minutes MD/DOCX/PDF, Requirements MD/JSON, SBVR JSON, BMM JSON, Executive HTML)
-- `dev_tools_tab.py` — KnowledgeHub metadata + optional raw JSON + Hub JSON download
-
----
-
-## Services Package (`services/`)
-
-Thin wrappers that decouple `ui/` from `modules/`:
-
-- `export_service.make_filename(base, ext, prefix, suffix) → str` — e.g. `P2D_process_2026-04-04.bpmn`
-- `file_ingest.load_transcript(uploaded_file)` — delegates to `modules/ingest.py`
-- `preprocessor_service.preprocess_transcript(text)` — delegates to `modules/transcript_preprocessor.preprocess()`
+> Full formulas, TYPE_WEIGHTS matrix: `claude_guideline/architecture_details.md`
 
 ---
 
 ## Core Modules (`core/`)
 
-- `session_state.init_session_state()` — idempotent initialization of all `st.session_state` keys. Must be called immediately after `st.set_page_config()`. Defaults: provider=DeepSeek, run_quality/bpmn/minutes/requirements=True, run_sbvr/bmm/synthesizer=False, n_bpmn_runs=1, use_langgraph=False, validation_threshold=6.0, max_bpmn_retries=3.
-- `pipeline.run_pipeline(hub, config, progress_callback)` — single entry point for pipeline execution. Three paths: (1) multi-run tournament (`n_bpmn_runs > 1`), (2) LangGraph adaptive retry (`use_langgraph=True`), (3) standard single-run. Raises on error (caller catches).
-- `lg_pipeline.LGBPMNRunner` — LangGraph `StateGraph` with BPMN→validate→(retry|proceed) loop. `@st.cache_data` not used here; graph is compiled per run instance. `hub.bpmn.lg_attempts` and `hub.bpmn.lg_final_score` written after completion.
-- `rerun_handlers.handle_rerun(agent_name, hub, client_info, provider_cfg, output_language)` — re-executes one named agent (`"quality"`, `"bpmn"`, `"minutes"`, `"requirements"`, `"sbvr"`, `"bmm"`, `"synthesizer"`). When BPMN is re-run, invalidates `hub.synthesizer`.
-- `project_store` — Supabase CRUD for projects, meetings, requirements, and transcript embeddings. Key functions: `list_projects()`, `list_meetings(project_id)`, `get_global_stats()` (KPI counts for Home page), `list_recent_meetings(limit)` (last N meetings across all projects), `list_bpmn_processes(project_id)`, `list_bpmn_versions(process_id)`, `save_bpmn_new_version(process_id, meeting_id, project_id, bpmn_xml, mermaid_code, version_notes, created_by)` (saves edited XML, demotes previous current version), `get_bpmn_version(version_id)`, `save_transcript_embeddings(meeting_id, project_id, chunks, embeddings)`, `search_transcript_chunks(project_id, query_embedding, match_count)`. Fail-open: returns `[]`/`None` when Supabase is unconfigured.
-- `batch_pipeline.run_batch(transcripts, config, callback)` — runs the full pipeline on a list of transcripts sequentially, accumulating results.
+- `session_state.init_session_state()` — idempotent, call immediately after `st.set_page_config()`. Defaults: provider=DeepSeek, run_quality/bpmn/minutes/requirements=True, run_sbvr/bmm/synthesizer=False, n_bpmn_runs=1, use_langgraph=False.
+- `pipeline.run_pipeline(hub, config, callback)` — 3 paths: multi-run tournament / LangGraph / standard. Raises on error (caller catches).
+- `rerun_handlers.handle_rerun(agent_name, ...)` — re-runs one agent: `"quality"`, `"bpmn"`, `"minutes"`, `"requirements"`, `"sbvr"`, `"bmm"`, `"synthesizer"`. BPMN re-run invalidates `hub.synthesizer`.
+- `project_store` — Supabase CRUD; fail-open (returns `[]`/`None` when unconfigured). Full function list in `claude_guideline/architecture_details.md`.
 
 ---
 
-## Executive HTML Report (`modules/executive_html.py`)
+## Security Model
 
-Generated by `AgentSynthesizer` → `generate_executive_html(hub, narrative) → str`.
+API keys: `st.session_state` only — never logged, written to disk, or persisted.
 
-- **Self-contained HTML** — Google Fonts via CDN (works in browser download), no other external deps.
-- **Sidebar nav** — `data-target` + JS `scrollIntoView` (never `href="#id"` which navigates the Streamlit parent frame).
-- **Sections built from hub (in order):**
-  1. Sumário Executivo (LLM narrative)
-  2. Visão do Processo (LLM narrative + BPMN stats)
-  3. Diagrama BPMN (iframe srcdoc with bpmn-js)
-  4. Fluxograma Mermaid (SVG fetched server-side from mermaid.ink)
-  5. Ata de Reunião (decisions, action items with localStorage status)
-  6. Especificação de Requisitos (filterable table by type + priority)
-  7. **Vocabulário e Regras de Negócio (SBVR)** — two-column: vocabulary table + rules list with type badges (shown only when `hub.sbvr.ready`)
-  8. **Modelo de Motivação do Negócio (BMM)** — vision/mission banner + goals + strategies with goal links + policies (shown only when `hub.bmm.ready`)
-  9. Qualidade da Transcrição (grade badge + criteria progress bars)
-  10. Insights e Recomendações (LLM key_insights + recommendations)
-- **Stats bar** includes SBVR term/rule counts and BMM goal count when available.
-- **Interactive features:** collapsible cards, action item status (localStorage `p2d_ai_{session_id}`), requirements filter by type + priority, comments per action item (localStorage `p2d_cmt_{session_id}`).
-- **Visibility:** cards default to `opacity:1`; animation (`.will-animate`) added only via JS when IntersectionObserver is supported and viewport > 300 px — prevents blank content inside Streamlit iframe.
-- **Displayed in app** via `components.html(syn.html, height=900, scrolling=True)` and downloadable as `.html`.
+**Auth:** `apply_auth_gate()` + SHA-256 hashed credentials in `modules/auth.py → USUARIOS`. Roles: `master > admin > user`. `is_admin()` returns True for both `admin` and `master`. `_role` stored in session_state on login.
 
----
+**Supabase:** `st.secrets["supabase"]["url"]` + `["key"]`. Fail-open when absent.
 
-## Minutes Export (`modules/minutes_exporter.py`)
+**Google Calendar secrets:** `st.secrets["google_calendar"]["calendar_id"]` + `["credentials_json"]`. Always use `'''` (triple-single-quotes) for `credentials_json` in TOML — `"""` corrupts the private key. Resolution order per call: Supabase `project_calendar_config` → secrets → local file → `"primary"`.
 
-`to_docx(minutes: MinutesModel) -> bytes` — uses `python-docx`:
-- Navy title (20pt bold), accent underline section headings, List Bullet/Number styles.
-- Action items table with navy header row, 10pt body text.
-
-`to_pdf(minutes: MinutesModel) -> bytes` — uses `fpdf2` (pure Python, no GTK):
-- Navy fill title block, accent section headers, two-column participants, alternating-row action items table with priority colors.
-
-Both return raw bytes ready for `st.download_button`.
+**MS365 integration:** PENDING — blocked by Azure AD admin consent. Plan in `CLAUDE_MS365.md`.
 
 ---
 
 ## Streamlit Session State
 
-**Critical issue:** clicking any `st.download_button` triggers a full app rerun, wiping any local variable.
-
-**Required pattern:**
+**Critical:** `st.download_button` triggers full rerun — store hub before rendering any widget.
 
 ```python
-# app.py — correct pattern
 if generate_btn:
     hub = run_pipeline(hub, config, callback)
-    st.session_state["hub"] = hub   # ← store BEFORE rendering any widget
+    st.session_state["hub"] = hub   # BEFORE any widget
 
-# Render block lives OUTSIDE the if block
 if "hub" in st.session_state:
     hub = st.session_state["hub"]
-    # render tabs, download buttons, viewers...
+    # render tabs, buttons...
 ```
 
-**Rule:** any state that must survive reruns (hub, generated outputs) must be written to `st.session_state` before the first widget that could trigger a rerun.
-
-**Re-run pattern:** sidebar/body buttons write `st.session_state.rerun_agent = "bpmn"`. On next Streamlit run, `handle_rerun()` picks it up via `st.session_state.pop("rerun_agent")` and re-executes the agent.
+**Re-run pattern:** buttons write `st.session_state.rerun_agent = "bpmn"` → `handle_rerun()` picks it up via `.pop()` on next Streamlit run.
 
 ---
 
 ## Mermaid Syntax Constraints
 
-- Decision nodes: `{}` — not `{{}}`.
-- No quoted labels inside `{}` braces.
-- Avoid reserved words as node IDs: `END`, `START`, `default`.
-- Non-ASCII characters in subgraph IDs must be normalized before use.
-- Mermaid **version 10** is in use.
+- Decision nodes: `{}` not `{{}}`. No quoted labels inside `{}` braces.
+- Avoid reserved node IDs: `END`, `START`, `default`.
+- Non-ASCII characters in subgraph IDs must be normalized.
+- Mermaid version 10 is in use.
 
 ---
 
@@ -789,16 +424,15 @@ if "hub" in st.session_state:
 streamlit==1.45.1
 anthropic==0.49.0
 openai==1.65.0
-python-docx==1.1.2          # Word export (pure Python)
-fpdf2==2.8.2                # PDF export (pure Python, no GTK)
-google-generativeai>=0.8.0  # list_models() diagnostic + embed_content() for embeddings
-google-genai>=1.0.0         # newer Google GenAI SDK (kept for future migration)
-supabase>=2.4.0             # Supabase Python client
-langgraph>=1.0              # LangGraph BPMN adaptive retry
+python-docx==1.1.2
+fpdf2==2.8.2
+google-generativeai>=0.8.0
+google-genai>=1.0.0
+supabase>=2.4.0
+langgraph>=1.0
 ```
 
-Always pin exact versions for Streamlit Cloud reproducibility.
-When adding a new dependency, append it with a pinned version — no version ranges.
+Always pin exact versions for Streamlit Cloud reproducibility. Append with pinned version when adding new dependencies — no version ranges.
 
 ---
 
@@ -806,412 +440,62 @@ When adding a new dependency, append it with a pinned version — no version ran
 
 ```
 Local edit (PyCharm / Windows)
-        │
-        ▼
-git add . && git commit -m "description"
-        │
-        ▼
-git push origin main
-        │
-        ▼
-Streamlit Cloud detects push → automatic rebuild
+    → git add . && git commit -m "description"
+    → git push origin main
+    → Streamlit Cloud detects push → automatic rebuild
 ```
 
-**Warning:** the GitHub web editor corrupts complex files during copy/paste.
-Always push programmatically via terminal or PyCharm — never edit multi-hundred-line files in the GitHub UI.
+Never edit multi-hundred-line files in the GitHub web editor — corrupts complex files on paste.
 
 ---
 
 ## Extending the System
 
-### Adding a new LLM provider
+### Adding a new agent
 
-Edit `modules/config.py` — add an entry to `AVAILABLE_PROVIDERS`:
-
-```python
-"Provider Name": {
-    "default_model": "model-id",
-    "base_url": "https://api.example.com/v1",  # None for Anthropic native SDK
-    "client_type": "openai_compatible",         # or "anthropic"
-    "supports_json_mode": True,
-    "supports_system_prompt": True,
-    "api_key_label": "...",
-    "api_key_help": "...",
-    "api_key_prefix": "...",
-    "cost_hint": "...",
-}
-```
-
-If `client_type` is new, add a routing branch in `BaseAgent._call_llm()`.
+1. Create `agents/agent_new.py` inheriting from `BaseAgent`
+2. Create `skills/skill_new.md` — **use lowercase filename**; verify with `git ls-files skills/`
+3. Add field + migrate guard in `core/knowledge_hub.py`
+4. Register in `agents/orchestrator.py → _PLAN` and `run()` parameters
+5. Add checkbox in `ui/sidebar.py`
+6. Add to `core/rerun_handlers.py`
+7. Create tab in `ui/tabs/` and register in `ui/tabs/__init__.py`
+8. Add export in `ui/tabs/export_tab.py` if it generates a new artefact
 
 ### Adding a new diagram format
 
 1. Create `modules/diagram_newformat.py` → `generate_newformat(bpmn: BPMNModel) -> str`
 2. Add field to `BPMNModel` in `core/knowledge_hub.py`
 3. Call generator in `agents/agent_bpmn.py` after JSON extraction
-4. Add tab module in `ui/tabs/` and register in `ui/tabs/__init__.py`
-5. Add tab to the dynamic tab list in `app.py`
-
-### Adding a new agent
-
-1. Create `agents/agent_new.py` inheriting from `BaseAgent`
-2. Implement `build_prompt(hub)` and `run(hub)`
-3. Create `skills/skill_new.md` with the system prompt — **use lowercase filename**
-4. Run `git ls-files skills/` to confirm the exact tracked name, then set `skill_path` to match
-5. Add field to `KnowledgeHub` in `core/knowledge_hub.py`
-6. Add migrate guard in `KnowledgeHub.migrate()` for the new field
-7. Register in `agents/orchestrator.py → _PLAN` list and `run()` parameters
-8. Add checkbox in `ui/sidebar.py`
-9. Add to `core/rerun_handlers.py` if individual re-run is desired
-10. Create tab module in `ui/tabs/` and register in `ui/tabs/__init__.py`
+4. Add tab module + register in `ui/tabs/__init__.py`
 
 ### Modifying BPMN layout
 
-- Coordinates are absolute — no direction parameter exists.
-- Layout changes affect the constants at the top of `bpmn_generator.py`: `TASK_W`, `H_GAP`, `V_PAD`.
-- After layout changes, always verify the crossing-elimination heuristic still behaves correctly.
+Coordinates are absolute. Edit constants at top of `bpmn_generator.py`: `TASK_W`, `H_GAP`, `V_PAD`. Verify crossing-elimination heuristic after changes.
 
 ---
 
 ## Known Pitfalls
 
-### Skill file case sensitivity (Linux)
-
-Streamlit Cloud runs on Linux (case-sensitive filesystem). A `skill_path` that works on Windows
-(case-insensitive) may silently fail on Linux if the case doesn't match the git-tracked name.
-
-**Diagnosis:** open Knowledge Hub tab → Skills section or Diagnóstico expander.
-**Fix:** always verify with `git ls-files skills/` and match exactly.
-**Rule:** `_load_skill()` uses `Path(__file__).parent.parent / skill_path` — never CWD-relative.
-
-### Stale `.pyc` cache on Streamlit Cloud
-
-When a new symbol is added to an existing module, a stale cached `.pyc` on the server may not
-include it, causing `ImportError`. Use belt-and-suspenders guards in `app.py`:
-
-```python
-if not hasattr(hub, 'new_field'):
-    try:
-        from core.knowledge_hub import NewModel
-        hub.new_field = NewModel()
-    except ImportError:
-        hub.new_field = <inline fallback>
-```
-
-### Streamlit sidebar `href="#id"` navigates parent frame
-
-Inside `components.html()`, anchor links with `href="#section-id"` navigate the **parent** Streamlit
-frame, not the iframe. Use `data-target` + JS `scrollIntoView` instead:
-
-```html
-<a data-target="sec-foo" href="javascript:void(0)">...</a>
-<script>
-  document.querySelectorAll('.sb-link[data-target]').forEach(link => {
-    link.addEventListener('click', e => {
-      e.preventDefault();
-      document.getElementById(link.dataset.target)?.scrollIntoView({behavior:'smooth'});
-    });
-  });
-</script>
-```
-
-### Pages import path on Streamlit Cloud
-
-`pages/Diagramas.py` adds the project root to `sys.path` manually:
-
-```python
-root_dir = Path(__file__).parent.parent.absolute()
-if str(root_dir) not in sys.path:
-    sys.path.insert(0, str(root_dir))
-```
-
-This is required because Streamlit multi-page apps run page files in a different working directory context.
-
-### Gemini embedding model availability per API key
-
-Not all `text-embedding-*` models are available to every AI Studio key. The model namespace varies silently — `text-embedding-004` may return 404 even though Google documentation mentions it. Use the diagnostic button "🔍 Testar chave" in **Configurações → Embeddings & Busca** which calls `list_gemini_embedding_models(api_key)` to enumerate models that actually respond to `embedContent` for the provided key.
-
-**Confirmed working models (for keys that don't have text-embedding-004):**
-- `models/gemini-embedding-001` — 1536 dims via `output_dimensionality=1536` (primary)
-- `models/gemini-embedding-2-preview` — fallback
-
-`_embed_gemini()` tries `gemini-embedding-001` first and falls back to `gemini-embedding-2-preview` on 404.
-
-### Gemini embedding rate limits (free tier: 100 req/min)
-
-The free AI Studio tier allows 100 requests/minute for `gemini-embedding-1.0`. With one API call per chunk, large transcripts easily exceed this.
-
-**Mitigations in `modules/embeddings.py`:**
-- `_GEMINI_RATE_DELAY = 1.2` seconds between batch calls (~50 req/min sustained)
-- `_GEMINI_MAX_RETRIES = 5` automatic retries on 429
-- Retry wait extracts `retry_delay { seconds: N }` from the error body via regex (`r"seconds[\"':\s]+(\d+)"`) and adds a 10-second buffer
-
-### pgvector dimension limit (ivfflat ≤ 2000 dims)
-
-PostgreSQL `ivfflat` index cannot handle vectors with more than 2000 dimensions. `gemini-embedding-001` natively produces 3072 dims. Always use `output_dimensionality=1536` when calling the Gemini embedding API, and create the Supabase column as `vector(1536)`. The SQL schema is in `setup/supabase_schema_transcript_chunks.sql`.
-
-### st.page_link() with app.py raises StreamlitPageNotFoundError
-
-`st.page_link("app.py", ...)` raises `StreamlitPageNotFoundError` because `app.py` is the navigation host, not a registered page. All `page_link` calls must reference actual page files:
-
-```python
-# Wrong — app.py is not a registered page
-st.page_link("app.py", label="← Voltar")
-
-# Correct — reference the actual page file
-st.page_link("pages/Pipeline.py", label="← Voltar")
-```
-
-### Login page HTML rendered as code block
-
-In `ui/auth_gate.py`, HTML injected via `st.markdown(unsafe_allow_html=True)` **must not be indented ≥ 4 spaces after a blank line** — Markdown treats that as a code fence and shows raw HTML. Keep the f-string HTML at zero indentation. Extract labels (`<div class="l-label">`) to separate `st.markdown` calls to avoid the blank-line-from-empty-interpolation trap.
-
-### st.error() / st.success() disappear before st.rerun()
-
-Any `st.error()` or `st.success()` call made immediately before `st.rerun()` is never rendered. The widget is drawn but the rerun clears it before the browser paints.
-
-**Pattern:** persist the message in `st.session_state` before rerunning; pop and display it after the rerun:
-```python
-st.session_state["_embed_error"] = "❌ Falha ao gerar embeddings: ..."
-st.rerun()
-# --- next run ---
-if "_embed_error" in st.session_state:
-    st.error(st.session_state.pop("_embed_error"))
-```
-
-### bpmn-js fit-viewport SVGMatrix non-finite error
-
-**Symptom:** `Failed to execute 'scale' on 'SVGMatrix': The provided float value is non-finite` when rendering BPMN diagrams.
-
-**Root cause:** `canvas.zoom('fit-viewport')` called synchronously inside `importXML().then()` fires before the browser has computed the iframe container dimensions. When `outerW = 0` and `innerW = 0`, the scale calculation produces `0/0 = NaN` or `diagramW/0 = Infinity`.
-
-**Fix (applied in `modules/bpmn_viewer.py`):** defer the zoom call via `setTimeout(fn, 150)` and validate both inner and outer dimensions before calling fit:
-```javascript
-setTimeout(function() {
-  var vb = canvas.viewbox();
-  var inn = vb && vb.inner, outer = vb && vb.outer;
-  if (inn && outer &&
-      isFinite(inn.width) && inn.width > 0 &&
-      isFinite(outer.width) && outer.width > 0) {
-    canvas.zoom('fit-viewport');
-  } else {
-    canvas.zoom(0.75);
-  }
-}, 150);
-```
-This applies to **both** the main inline template and `_TEMPLATE_CDN_FALLBACK`.
-
-### Global active-project context
-
-`active_project_id` and `active_project_name` in `st.session_state` are the single source of truth for the current working project. They are set only from **Home.py** (project selector UI) or via the **`set_active_project` Assistente tool**.
-
-All analysis pages (`Assistente`, `ReqTracker`, `BpmnEditor`, `MeetingROI`, `ValidationHub`) call `require_active_project()` from `ui/project_selector.py` at the top of their render flow. This function either returns `(project_id, project_name)` or calls `st.stop()` with a navigation link to Home.
-
-**Do NOT** add a local project selectbox to these pages — it would fragment the project context.
-
----
-
-## Security Model
-
-API keys are stored exclusively in `st.session_state` (server-side, per-session memory in Streamlit). They are never logged, written to disk, or persisted across sessions.
-
-- `session_security.render_api_key_gate(provider)` — renders the key input in the sidebar
-- `session_security.get_session_llm_client(provider)` — retrieves the live client or `None`
-
-### Login Gate
-
-All pages begin with `ui.auth_gate.apply_auth_gate()` immediately after `st.set_page_config()`. If the user is not authenticated, `render_login_page()` is called and `st.stop()` prevents the rest of the page from rendering.
-
-- Credentials are SHA-256 hashed in `modules/auth.py → USUARIOS` (hardcoded — no `secrets.toml` dependency)
-- Session state keys: `_autenticado` (bool), `_usuario_login` (str), `_usuario_nome` (str), `_role` (str)
-- `is_authenticated()` checks `st.session_state.get("_autenticado", False)`
-- `login_valido(uname, senha)` hashes the input with SHA-256 and compares against stored hash
-- `is_admin()` returns `True` if `_role` in `{"admin", "master"}` — checks session_state first, falls back to USUARIOS dict for pre-role sessions
-- Role hierarchy: `master > admin > user`. Both master and admin pass the `is_admin()` gate.
-- `_handle_local_login()` in `auth_gate.py` stores `_role` from `USUARIOS[uname]["role"]` on successful login
-- Login page HTML pitfall: any content indented ≥ 4 spaces after a blank line inside an `st.markdown(unsafe_allow_html=True)` block is rendered as a Markdown code block — keep HTML zero-indented in the f-string.
-
-### Supabase Secrets
-
-`modules/supabase_client.py` reads `st.secrets["supabase"]["url"]` and `st.secrets["supabase"]["key"]`. If secrets are absent (local dev without `.streamlit/secrets.toml`), `get_supabase_client()` returns `None` and all `project_store` functions fail-open.
-
-### Google Calendar Secrets
-
-`modules/calendar_client.py` reads from `st.secrets["google_calendar"]`:
-
-```toml
-# .streamlit/secrets.toml
-[google_calendar]
-calendar_id      = "...@group.calendar.google.com"
-credentials_json = '''{"type": "service_account", ...}'''  # full JSON — use ''' not """
-```
-
-**TOML encoding:** always use `'''` (literal triple-single-quotes) for `credentials_json`. Using `"""` causes Python to process `\n` escape sequences, corrupting the private key.
-
-**Local dev fallback:** if secrets are absent, `calendar_client.py` looks for `*.json` in `mcp/google_console/` and `.google-calendar` in the same directory. Both files are `.gitignore`d.
-
-**calendar_id resolution order (per call):**
-1. `project_calendar_config` table in Supabase (if `project_id` provided) — per-project override
-2. `st.secrets["google_calendar"]["calendar_id"]` — global default
-3. Local `.google-calendar` file — dev fallback
-4. `"primary"` — final fallback
-
-**Per-project calendar:** admins configure a `calendar_id` per project in **Configurações → Banco de Dados → 📅 Google Calendar por Projeto**. Stored in `project_calendar_config` table. The `AssistantToolExecutor` always passes `self.project_id` to every calendar tool call.
-
-`calendar_configured()` returns `True` when credentials are available. All 9 calendar tools in `AssistantToolExecutor` call this guard and return a friendly message when unconfigured — fail-open, no exception.
-
-**Service Account sharing requirement:** the service account must have **"Fazer alterações e gerenciar compartilhamento"** (owner-level ACL) on the calendar — not just "Fazer alterações nos eventos" — to use `calendar_share_with_user` and `calendar_revoke_access`.
-
-**Admin-only tools** (`calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`) are gated by `is_admin()` in `_ADMIN_TOOLS`.
-
-### User Integration Accounts
-
-`tenant_users` table has two nullable columns for external service accounts:
-- `google_account TEXT` — user's Google account (e.g. `pedro@gmail.com`) for calendar sharing
-- `ms_teams_account TEXT` — user's Microsoft 365 account for Teams/Outlook integration (future)
-
-Managed in **Master Admin → Usuários → Contas de integração** row (💾 button per user).
-Function: `tenant_auth.update_user_accounts(user_id, google_account, ms_teams_account)`.
-
-### Microsoft 365 Integration (PENDING)
-
-Planned integration for Outlook email and Teams scheduling via Microsoft Graph API.
-**Blocked:** requires Azure AD App Registration with admin consent (`Mail.Send`, `Calendars.ReadWrite`, `OnlineMeetings.ReadWrite`). Organization has corporate accounts but no admin access in the project team.
-
-Full implementation plan: `CLAUDE_MS365.md` in project root.
-IT request text: prepared and ready to send.
-When unblocked: create `modules/office_client.py` + 2 tools (`outlook_send_email`, `teams_schedule_meeting`) + `msal==1.31.0` in `requirements.txt`.
-
----
-
-## Roadmap
-
-### PC1 — Concluído (v3.4)
-- [x] Pipeline sequencial: Quality → Preprocessor → NLP → BPMN → Minutes → Requirements → Synthesizer
-- [x] BPMN 2.0 XML com layout absoluto, pools/lanes, Link Events
-- [x] `_enforce_rules()` — defesa programática contra erros LLM de lane/gateway
-- [x] Backward-flow U-routing em `_build_di` — sem invasão visual de elementos
-- [x] `AgentRequirements` — 5 tipos IEEE 830, speaker attribution por citação
-- [x] `AgentTranscriptQuality` — grade A–E, critérios ponderados, recomendação
-- [x] `AgentSynthesizer` — relatório executivo HTML interativo (sidebar, colapsável, filtros, comentários, localStorage)
-- [x] Minutes com transcrição completa + iniciais de participantes
-- [x] Export da Ata em Markdown, Word (.docx) e PDF
-- [x] `KnowledgeHub.migrate()` para evolução de schema sem quebrar sessões
-- [x] `_load_skill()` com path absoluto — resolve CWD e case-sensitivity no Linux
-
-### PC2 — Concluído (v4.6 → v4.7)
-- [x] `AgentValidator` — pure-Python BPMN quality scorer (granularity, task type, gateways)
-- [x] Multi-run BPMN optimization (1/3/5 passes, weighted scoring, best candidate selection)
-- [x] UI modularizada: `ui/sidebar.py`, `ui/input_area.py`, `ui/tabs/*`, `ui/components/*`
-- [x] `core/pipeline.py`, `core/session_state.py`, `core/rerun_handlers.py` — separação de responsabilidades
-- [x] `services/` package — export_service, file_ingest, preprocessor_service
-- [x] Re-execução individual de agentes (sidebar + corpo principal)
-- [x] `MermaidGenerator` classe — sanitização robusta, sem LLM
-- [x] `modules/mermaid_renderer.py` — `render_mermaid_block()` compartilhado (pan/zoom/fit, TD/LR toggle)
-- [x] `modules/requirements_mindmap.py` + `modules/mindmap_interactive.py` — mind map interativo de requisitos
-- [x] `pages/Diagramas.py` — visualizador full-screen multi-diagrama (BPMN, Mermaid, Mind Map)
-- [x] `modules/bpmn_diagnostics.py` — painel de diagnóstico BPMN isolado
-- [x] Upload suporta `.txt`, `.docx`, `.pdf`
-- [x] Pré-processamento com curadoria editável antes de executar o pipeline
-
-### PC2.1 — Melhorias BPMN (v4.7)
-- [x] Mermaid edge label syntax corrigido (`-->|label|` em vez de `-- label -->`) em single e multi-pool
-- [x] `_enforce_rules` Rule 2 expandida para todos os tipos de gateway, não só `is_decision`
-- [x] `_infer_lane_name` — três prioridades: actor fields → NLP actors → regex; recebe `hub.nlp.actors`
-- [x] `modules/bpmn_structural_validator.py` — 6 verificações estruturais (dangling refs, isolated/unreachable nodes, XOR sem labels, AND/OR sem join, gateway com saída única)
-- [x] Diagnóstico estrutural exibido no tab BPMN como expander com severidade (error/warning/info)
-- [x] `_align_parallel_branches` no gerador de layout — elimina setas longas em branches paralelas desiguais
-- [x] `AgentMinutes` + `AgentRequirements` executados em paralelo via `ThreadPoolExecutor` — hub shallow-copied com `meta` isolado por worker; deltas de token mergeados; fallback automático para sequencial; `threading.Lock` protege o progress callback
-
-### PC3 — Concluído
-- [x] `AgentSBVR` — OMG SBVR extraction: business vocabulary (5–15 terms) + business rules (3–10); default OFF; skills/skill_sbvr.md
-- [x] `AgentBMM` — OMG BMM extraction: vision, mission, goals, strategies (with goal links), policies; default OFF; skills/skill_bmm.md
-- [x] Suite de testes automatizados — 106 tests, 0 LLM calls; covers auto-repair, structural validator, AgentValidator, MermaidGenerator
-- [x] LangGraph integration — adaptive BPMN retry loop (`core/lg_pipeline.py`); opt-in "🔄 Adaptive Retry" checkbox (single-pass mode only); configurable quality threshold (0–10, default 6.0) and max retries (1/2/3/5, default 3); best-scoring candidate committed to hub; `hub.bpmn.lg_attempts` + `hub.bpmn.lg_final_score` shown in BPMN tab
-
-### PC4 — Concluído (v4.8 → v4.11)
-- [x] **Authentication layer** — `modules/auth.py` + `ui/auth_gate.py`; SHA-256 session-based login gate; all pages protected; credentials hardcoded (no secrets.toml dependency for auth)
-- [x] **Supabase integration** — `modules/supabase_client.py` + `core/project_store.py`; CRUD for projects, meetings, requirements, transcript chunks; fail-open when unconfigured
-- [x] **Embedding pipeline** — `modules/embeddings.py`; `chunk_text()` + `embed_text()` + `embed_batch()`; Google Gemini (`gemini-embedding-001`) and OpenAI (`text-embedding-3-small`); 1536 dims; auto-retry on 429 with extracted retry_delay; 1.2s inter-call delay for free tier
-- [x] **Supabase schema** — `setup/supabase_schema_transcript_chunks.sql`; `transcript_chunks` table with `vector(1536)` column; `ivfflat` cosine index; `match_transcript_chunks()` SQL function for semantic search
-- [x] **`pages/Assistente.py`** — RAG-powered Q&A over meeting transcripts; keyword search + semantic search via `match_transcript_chunks`; embedding generation with "⚡ Gerar Embeddings" + "🔍 Testar chave" diagnostic; errors persisted in `session_state` to survive `st.rerun()`; re-edit feature (✏️ button, history truncation, `_resubmit_question` pattern)
-- [x] **Tool-use mode** — `core/assistant_tools.py`; `AssistantToolExecutor` with 10 tools mapping to direct Supabase queries; `get_tool_schemas_openai()` + `get_tool_schemas_anthropic()`; `AgentAssistant.chat_with_tools()` with ≤5-round loop; automatic fallback to classic RAG on exception; `asst_use_tools` sidebar toggle (default `True`); tools called shown in response caption
-- [x] **RAG quality improvement** — `project_store._extract_minutes_summary()` extracts Participantes/Pauta/Decisões from `minutes_md`; injected unconditionally in `format_context()` for all meetings regardless of transcript availability
-- [x] **`pages/BatchRunner.py`** — batch pipeline over multiple transcripts via `core/batch_pipeline.py`
-- [x] **`pages/BpmnBackfill.py`** — retroactive BPMN generation for meetings already stored in Supabase
-- [x] **`pages/ReqTracker.py`** — requirement status board backed by Supabase
-- [x] **`pages/TranscriptBackfill.py`** — retroactive embedding generation for meetings already in Supabase
-- [x] **`pages/CostEstimator.py`** — interactive LLM cost calculator using `modules/cost_estimator.py` pricing table
-- [x] **`ui/project_selector.py`** — Supabase project/meeting picker widget shared by Assistente and ReqTracker
-- [x] **`ui/assistant_diagram.py`** — RAG architecture splash diagram (Mermaid, cached SVG) for Assistente page
-- [x] **`modules/cost_estimator.py`** — `PROVIDER_PRICING` table + `estimate_cost()` — pure Python, no LLM calls
-- [x] **`modules/text_utils.py`** — `rule_keyword_pt()` and other Portuguese text utilities
-- [x] **`modules/reqtracker_exporter.py`** — Excel/CSV export for ReqTracker
-- [x] **Google Gemini SDK migration** — use `google-generativeai` (stable) for `embed_content()` + `list_models()`; `google-genai` kept as secondary dependency
-
-### PC11 — Concluído (v4.18 / 2026-05-12)
-- [x] **Projeto de trabalho global** — `active_project_id` + `active_project_name` em `st.session_state` (inicializados em `core/session_state.py`); set only via Home.py ou ferramenta `set_active_project`; persiste por toda a sessão
-- [x] **`require_active_project()`** — nova função em `ui/project_selector.py`; retorna `(project_id, project_name)` ou exibe warning + `st.page_link("pages/Home.py")` + `st.stop()`; chamada no topo de Assistente, ReqTracker, BpmnEditor, MeetingROI, ValidationHub; elimina selectboxes de projeto locais nessas páginas
-- [x] **Home.py — seletor de projeto** — bloco entre header e KPIs; auto-seleciona quando há apenas 1 projeto; mostra badge `st.success` + botão "Trocar" quando projeto já ativo; selectbox + botão "✅ Ativar Projeto" quando nenhum ativo; seta `prefix` = `sigla + "_"` do projeto selecionado
-- [x] **`set_active_project` tool no Assistente** — ferramenta na categoria "escrita" em `AssistantToolExecutor`; match parcial de nome (case-insensitive); atualiza `session_state["active_project_id"]`, `["active_project_name"]` e `["prefix"]`; retorna lista de projetos disponíveis se não encontrar
-- [x] **`delete_meeting` cascade fix** — adicionado Step 1: deleta `requirement_versions` por `meeting_id` (FK direto que bloqueava exclusão); `bpmn_versions` agora deletada via process IDs antes de deletar `bpmn_processes`; `preview_meeting_deletion` atualizado para listar `requirement_versions`
-- [x] **Assistente chat styling** — `[data-testid="stChatMessageContainer"][data-role="user"]`: fundo `#0d2a4a`, borda-esq azul; `[data-role="assistant"]`: fundo `#0f2235`, borda-esq âmbar; chat input e todos os divs filhos: fundo preto, texto/ícone brancos; elimina "meia lua branca" no canto esquerdo do input
-- [x] **BPMN viewer timing fix** — `canvas.zoom('fit-viewport')` adiado via `setTimeout(fn, 150)` em ambos os templates (inline e CDN fallback); guard duplo: `inner.width/height > 0` AND `outer.width/height > 0`; elimina erro `SVGMatrix non-finite` causado por container com dimensões zero no momento do fit
-
-### PC10 — Concluído (v4.17 / 2026-05-11)
-- [x] **Gráficos interativos no Assistente** — 5 ferramentas de gráfico no `AssistantToolExecutor`: `generate_requirements_chart` (barras por tipo/prioridade), `generate_meetings_timeline` (artefatos por reunião), `generate_action_items_chart` (pizza status / barras responsável), `generate_roi_chart` (ROI-TR por reunião), `generate_custom_chart` (bar/line/pie/scatter/funnel com dados do LLM); figuras Plotly serializadas como `fig.to_dict()` em `_pending_charts`, retornadas como 4º elemento da tupla de `chat_with_tools()`, renderizadas com `st.plotly_chart()` no histórico do chat
-- [x] **Paleta de cores configurável** — `core/chart_config.py` (zero imports) define `CHART_PALETTES` (6 paletas nomeadas: P2D Dark, Azul Oceano, Floresta, Laranja, Roxo, Cinza) e `DEFAULT_PALETTE`; `AssistantToolExecutor.__init__` lê `chart_palette` de `llm_config` e expõe `self._palette`; todos os métodos de gráfico usam `self._palette`; cores semânticas (prioridade, status concluído/pendente) mantidas fixas; `Assistente.py` sidebar exibe selectbox + swatches de preview; aviso inline quando paleta é alterada orientando o usuário a repetir o pedido
-- [x] **`core/chart_config.py`** — arquivo independente para constantes de paleta; evita ImportError ao importar `core.assistant_tools` (4000+ linhas) no nível de módulo da página; chaves ASCII-only para evitar problemas de encoding no Streamlit Cloud
-
-### PC9 — Concluído (v4.16 / 2026-05-09)
-- [x] **`modules/bpmn_viewer.py` rewrite** — fetches bpmn-js assets server-side via `urllib` + `lru_cache`, inlines JS/CSS; eliminates CDN `<script src>` blocked by Streamlit sandbox; uses bpmn-js native `canvas.zoom('fit-viewport')` + `eventBus` instead of CSS `transform` wrapper; CDN fallback template when server-side fetch fails
-- [x] **`ui/components/copy_button.py` fix** — removed broken strategies (`window.isSecureContext` false in srcdoc iframes; `window.parent.document` always SecurityError; `opacity:0` prevents focus); new: try `navigator.clipboard.writeText()` unconditionally, fall back to transparent textarea `execCommand` within same user-gesture
-- [x] **`ui/components/page_header.py`** (new) — `render_page_header(icon, title, caption)` — consistent page header with amber accent HR; applied to Pipeline, Settings, DatabaseOverview, BatchRunner, MeetingROI
-- [x] **`pages/Pipeline.py`** — replaced manual progress markdown with `st.status()` context manager
-- [x] **`ui/sidebar.py`** — agent checkboxes grouped (Análise de Reunião / Diagramas / Análise de Negócio); SBVR + BMM rerun buttons added; `st.code` → `st.caption` for model display
-- [x] **`app.py`** — role-aware `st.navigation()`: Manutenção + admin pages (MasterAdmin, DatabaseOverview) only when `is_admin()`; rebuilt every rerun so menu updates immediately post-login
-- [x] **BatchRunner reprocess** — "Reprocessar Reuniões Existentes": `_reprocess_one()` in `core/batch_pipeline.py`; `reprocess_meeting_full` admin tool in `core/assistant_tools.py`
-
-### PC8 — Concluído (v4.15 / 2026-05-03)
-- [x] **`modules/calendar_client.py`** — 8 funções públicas: `list_events()`, `get_event()`, `create_event()`, `suggest_time()`, `schedule_action_items()`, `share_calendar()`, `revoke_calendar_access()`, `diagnose_calendar()` (7 etapas incl. 2b RSA + 4b token); todas aceitam `project_id`; `_load_calendar_id(project_id)` resolve: Supabase → secrets → arquivo → "primary"
-- [x] **9 ferramentas de calendário no Assistente** — `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time` (todos perfis); `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose` (admin); `get_system_capabilities` (todos)
-- [x] **Multi-projeto Google Calendar** — tabela `project_calendar_config (project_id PK, calendar_id, updated_at)` no Supabase; `project_store.py`: `get/set/delete/list_project_calendar_id()`; `AssistantToolExecutor` passa `self.project_id` em todas as chamadas de calendário; UI admin em **Configurações → Banco de Dados → 📅 Google Calendar por Projeto**
-- [x] **Compartilhamento de agenda pelo Assistente** — `calendar_share_with_user(email, role)` via ACL API; `calendar_revoke_access(email)` busca e remove regra ACL; requer permissão "owner" da Service Account na agenda
-- [x] **Contas de integração por usuário** — `tenant_users.google_account` + `tenant_users.ms_teams_account` (nullable); `update_user_accounts()` em `tenant_auth.py`; UI em Master Admin → Usuários → "Contas de integração"; migrations: `supabase_migration_user_accounts.sql`
-- [x] **Google Calendar embed na Home** — iframe construído dinamicamente via `_load_calendar_id()` com `components.html()`; fallback caption quando não configurado
-- [x] **MCP Google Calendar** (`mcp/google_calendar_server.py`) — servidor MCP para Claude Code CLI (8 tools via FastMCP/stdio); timezone bug corrigido (UTC→Sao_Paulo); credentials protegidas no `.gitignore`
-- [x] **Documentação de integrações** — `mcp/integration_guide.html` (guia completo HTML com nav lateral); `CLAUDE_MS365.md` (plano MS365 bloqueado + texto de solicitação ao TI)
-- [ ] **Microsoft 365 (Outlook + Teams)** — PENDENTE: bloqueado por falta de App Registration com admin consent no Azure AD; plano completo em `CLAUDE_MS365.md`
-
-### PC7 — Concluído (v4.14)
-- [x] **`pages/Home.py`** — tela inicial padrão (default) com header de boas-vindas (nome, role badge, tenant, data), 4 KPIs globais (`get_global_stats()`), guia visual de 4 etapas, acesso rápido por área (Pipeline / Análise / Sistema / Orientações), reuniões recentes com links contextuais para Assistente + Validação + Editor BPMN; `@st.cache_data(ttl=60)` para chamadas DB
-- [x] **`pages/BpmnEditor.py`** — editor visual BPMN com bpmn-js Modeler; seletores projeto/processo/versão; histórico de versões em dataframe; session-state-first paste pattern (read `bpme_paste_xml` antes de renderizar o modeler — elimina revert ao base XML); validação estrutural com `xml.etree.ElementTree`; salva nova versão via `save_bpmn_new_version()`; preview e descarte de edições; reset automático ao trocar processo/versão
-- [x] **`modules/bpmn_editor.py`** — `editor_from_xml(xml, height)` → HTML self-contained com bpmn-js Modeler 17 (CDN); toolbar com Ajustar/Desfazer/Refazer/Exportar XML; export button tenta `navigator.clipboard.writeText()` (auto-copy) com fallback para instrução manual (Ctrl+A → Ctrl+C); sem postMessage
-- [x] **`core/project_store.py` — novas funções** — `get_global_stats()`, `list_recent_meetings(limit)`, `list_bpmn_processes()`, `list_bpmn_versions()`, `save_bpmn_new_version()`, `get_bpmn_version()`
-- [x] **Navegação atualizada** — grupo "Início" adicionado como primeiro grupo (default=Home.py); BpmnEditor.py movido para grupo Pipeline
-
-### PC6 — Concluído (v4.13)
-- [x] **Navegação reestruturada** — `app.py` migrado para `st.navigation()` com 4 grupos: Pipeline | Análise | Sistema | Manutenção; pipeline principal movido para `pages/Pipeline.py`
-- [x] **Sidebar simplificada** — opções avançadas (agentes, BPMN, LangGraph, dev mode) movidas para `st.expander("⚙️ Configuração Avançada")` colapsável; apenas provider + API key + idioma sempre visíveis
-- [x] **Tabs do Pipeline reorganizadas** — abas primárias (Ata, Requisitos, BPMN, Mermaid, Relatório, Exportar) + grupo "🔬 Análise Avançada" em expander (Qualidade, SBVR, BMM, Validação, DevTools); re-run buttons movidos exclusivamente para sidebar
-- [x] **DatabaseOverview — Integridade melhorada** — health score panel (%), KPI cards de frequência por campo, 5 expanders de correção inline: llm_provider (SELECT + UPDATE), embeddings (gera inline), ata/BPMN/transcrição (page_link para backfill)
-- [x] **DatabaseOverview — aba 🔮 Embeddings** — gestão completa de embeddings: tabela de cobertura por projeto, geração em lote com progress bar, drill-down por reunião (preview, chunk count, botão individual), teste de gravação no banco
-- [x] **RBAC no Assistente** — `is_admin()` em `modules/auth.py` aceita `admin` e `master`; `_role` persistido no session_state no login; admin gate em `AssistantToolExecutor.execute()` para ferramentas destrutivas/write
-- [x] **3 novas ferramentas admin no Assistente** — `get_database_integrity()`, `fix_missing_llm_provider(provider)`, `generate_meeting_embeddings(api_key, provider, meeting_numbers?)`; categoria "admin" adicionada ao catálogo
-- [x] **Assistente.py limpo** — embedding management UI removido (~600 → ~330 linhas); tool catalog removido; bloco duplicado de handling de perguntas removido; aponta para DatabaseOverview e Configurações para funcionalidades admin
-- [x] **Tool catalog em Configurações** — expander "📖 Catálogo de Ferramentas" na aba Assistente com 4 categorias (consulta, escrita, geração, admin)
-- [x] **Streamlit 1.42.0 → 1.45.1** — fix para "Bad message format" popup interno do Streamlit
-- [x] **Fix `st.page_link("app.py")`** — corrigido em `pages/Diagramas.py` para `pages/Pipeline.py`; `app.py` não é uma página registrada no `st.navigation()`
-
-### PC5 — Concluído (v4.12)
-- [x] **ROI-TR sensível ao tipo de reunião** — `modules/meeting_roi_calculator.py` v2; `MEETING_TYPES` (11 tipos), `TYPE_WEIGHTS` (matriz de pesos por tipo), `TYPE_ICONS`; DC ponderado substitui fórmula linear fixa
-- [x] **`classify_meeting_type()`** — classificação LLM (DeepSeek/qualquer provedor); 1 chamada por reunião; JSON `{type, confidence}`; fallback heurístico por palavras-chave no título + distribuição de artefatos; resultado persistido em `meetings.meeting_type`
-- [x] **`fulfillment_score`** — novo indicador 0–1: proporção entre DC gerado e DC mínimo esperado para o tipo; exibido na tabela, no detalhe e nos gráficos
-- [x] **`MeetingROIData` v2** — novos campos: `meeting_type`, `meeting_type_confidence`, `fulfillment_score`, `n_sbvr`, `n_bpmn_procs`; pesos do tipo exibidos no expander de fórmula
-- [x] **`compute_project_roi()` v2** — busca SBVR (`sbvr_terms` + `sbvr_rules`) e BPMN (`bpmn_processes`) por meeting; aceita `llm_config` opcional; retrocompatível (fallback sem coluna `meeting_type` no schema)
-- [x] **`pages/MeetingROI.py` v2** — sidebar com seletor de provedor + API key + botão "🏷️ Classificar Tipos com IA"; 6 KPIs (inclui "Tipos classificados"); gráfico de Fulfillment e distribuição de tipos; detalhe mostra pesos por artefato e min_dc; recomendações incluem "Baixo Fulfillment"
-- [x] **`delete_meeting` fix** — pré-exclusão limpa FKs em cascata: (1) `requirement_versions` por `meeting_id` (FK direto, descoberto em v4.18); (2) nula `requirements.first_meeting_id/last_meeting_id`; (3) deleta `sbvr_terms`, `sbvr_rules`, `transcript_chunks`; (4) busca IDs de `bpmn_processes`, deleta `bpmn_versions`, depois `bpmn_processes`; (5) deleta o registro de `meetings`
-- [x] **SQL migração** — `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS meeting_type TEXT` adicionado em Configurações → Banco de Dados → Fase 3b
+> Full code examples for all pitfalls: `claude_guideline/pitfalls.md`
+
+| Pitfall | Fix |
+|---|---|
+| **Skill file case sensitivity (Linux)** | Verify with `git ls-files skills/` — `_load_skill()` uses absolute path |
+| **Stale `.pyc` on Streamlit Cloud** | Use `hasattr` guards + `try/except ImportError` in `migrate()` |
+| **`st.page_link("app.py")`** | Use `"pages/Pipeline.py"` — `app.py` is not a registered page |
+| **Login HTML as code block** | Keep `st.markdown(unsafe_allow_html=True)` HTML at zero indentation |
+| **`st.error()` before `st.rerun()`** | Persist message in `st.session_state`; pop+display after rerun |
+| **bpmn-js SVGMatrix non-finite** | Defer `canvas.zoom('fit-viewport')` via `setTimeout(fn, 150)` with dimension guards |
+| **Active-project fragmentation** | Call `require_active_project()` — never add local project selectbox to analysis pages |
+| **`href="#id"` in components.html** | Use `data-target` + JS `scrollIntoView` — anchor hrefs navigate the Streamlit parent frame |
+| **Gemini embedding model 404** | Use `gemini-embedding-001` with `output_dimensionality=1536`; fallback to `gemini-embedding-2-preview` |
+| **Gemini free tier rate limit** | 1.2s delay + 5 retries + extract `retry_delay` from 429 body |
+| **pgvector ivfflat > 2000 dims** | Always use `output_dimensionality=1536`; column must be `vector(1536)` |
+| **Pages import path on Cloud** | Add project root to `sys.path` manually in each page file |
+| **Google Calendar TOML encoding** | Use `'''` not `"""` for `credentials_json` |
+| **delete_meeting cascade order** | `requirement_versions` → FK nullify → SBVR/chunks → bpmn_versions → bpmn_processes → meetings |
+| **Anthropic no json_mode** | Enforce JSON via system prompt only — never pass `response_format` to Anthropic SDK |
 
 ---
 
@@ -1219,20 +503,18 @@ When unblocked: create `modules/office_client.py` + 2 tools (`outlook_send_email
 
 | Resource | Location |
 |---|---|
-| BPMN 2.0 Spec (OMG) | ISO/IEC 19510 / OMG formal/2013-12-09 |
+| BPMN 2.0 Spec | ISO/IEC 19510 / OMG formal/2013-12-09 |
 | bpmn-js | github.com/bpmn-io/bpmn-js (v17) |
 | mermaid.ink SVG endpoint | mermaid.ink |
-| Streamlit session state | docs.streamlit.io/library/api-reference/session-state |
-| Streamlit multi-page apps | docs.streamlit.io/library/advanced-features/multipage-apps |
-| python-docx | python-docx.readthedocs.io |
-| fpdf2 | py-pdf.github.io/fpdf2 |
-| pgvector | github.com/pgvector/pgvector — ivfflat index, max 2000 dims |
-| google-generativeai | pypi.org/project/google-generativeai — embed_content(), list_models() |
+| pgvector | github.com/pgvector/pgvector — ivfflat max 2000 dims |
+| google-generativeai | pypi.org/project/google-generativeai |
 | Supabase Python client | supabase.com/docs/reference/python |
+
+---
 
 ## Decisões Padrão (não perguntar)
 
-- Novos agentes: sempre herdar de BaseAgent, seguir padrão do CLAUDE.md §Agent Pattern
+- Novos agentes: sempre herdar de BaseAgent, seguir padrão §Agent Pattern
 - Novos campos em KnowledgeHub: sempre adicionar guard em migrate()
 - Skill files: sempre lowercase, verificar com git ls-files antes de commitar
 - Supabase: sempre fail-open (retornar [] ou None, nunca deixar exceção vazar)
@@ -1241,10 +523,10 @@ When unblocked: create `modules/office_client.py` + 2 tools (`outlook_send_email
 
 ## Checklist de Entrega
 
-Antes de marcar uma feature como concluída, verificar:
+Antes de marcar uma feature como concluída:
 - [ ] migrate() atualizado se KnowledgeHub foi modificado
 - [ ] Skill file com nome correto (git ls-files)
 - [ ] Agente registrado no Orchestrator._PLAN e rerun_handlers
 - [ ] Tab registrada em ui/tabs/__init__.py
 - [ ] Export adicionado em export_tab.py se gera novo artefato
-- [ ] Versão em CLAUDE.md § Roadmap atualizada
+- [ ] Versão registrada em claude_guideline/roadmap.md
