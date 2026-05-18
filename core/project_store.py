@@ -750,6 +750,264 @@ def save_meeting_artifacts(meeting_id: str, hub) -> bool:
     return True
 
 
+def load_meeting_as_hub(meeting_id: str, project_id: str):
+    """Reconstrói um KnowledgeHub a partir dos artefatos salvos de uma reunião.
+
+    Popula os campos disponíveis no banco — transcript, minutes (markdown),
+    BPMN XML + Mermaid, requirements, SBVR, BMM, DMN, Argumentation,
+    synthesizer HTML.
+    Campos que não são persistidos (quality scores, NLP) ficam vazios.
+
+    Retorna None se a reunião não for encontrada ou Supabase não estiver
+    configurado.
+    """
+    from core.knowledge_hub import (
+        KnowledgeHub, MinutesModel, RequirementsModel, RequirementItem,
+        BPMNModel, SBVRModel, BusinessTerm, BusinessRule,
+        # NEW
+        DMNModel, DMNDecision, DMNInput, DMNOutput, DMNRule,
+        ArgumentationMap, IBISQuestion, IBISAlternative, IBISResolution,
+    )
+    db = _db()
+    if not db:
+        return None
+
+    # ── 1. Reunião base ───────────────────────────────────────────────────────
+    rows = _ok(
+        db.table("meetings")
+        .select(
+            "id, title, meeting_date, meeting_number, "
+            "transcript_clean, transcript_raw, minutes_md, "
+            "bpmn_xml, mermaid_code, report_html, bmm_json, "
+            "dmn_json, argumentation_json, "          # NEW
+            "total_tokens, llm_provider"
+        )
+        .eq("id", meeting_id)
+        .limit(1)
+        .execute()
+    )
+    if not rows:
+        return None
+    m = rows[0]
+
+    hub = KnowledgeHub.new()
+    hub.loaded_from_db = True
+
+    # ── Transcrição ───────────────────────────────────────────────────────────
+    hub.transcript_raw   = (m.get("transcript_raw")   or "").strip()
+    hub.transcript_clean = (m.get("transcript_clean") or "").strip() or hub.transcript_raw
+
+    # ── Metadados ─────────────────────────────────────────────────────────────
+    hub.meta.llm_provider      = m.get("llm_provider") or ""
+    hub.meta.total_tokens_used = m.get("total_tokens") or 0
+
+    # ── Ata (minutes) ─────────────────────────────────────────────────────────
+    minutes_md_text = (m.get("minutes_md") or "").strip()
+    if minutes_md_text:
+        hub.minutes.minutes_md = minutes_md_text
+        hub.minutes.title      = m.get("title") or ""
+        hub.minutes.date       = str(m.get("meeting_date") or "")
+        hub.minutes.ready      = True
+
+    # ── BPMN — prefere bpmn_versions (mais recente), fallback meetings.bpmn_xml ─
+    bpmn_xml     = ""
+    mermaid_code = ""
+    proc_name    = ""
+    try:
+        bv_rows = _ok(
+            db.table("bpmn_versions")
+            .select("bpmn_xml, mermaid_code, bpmn_processes(name)")
+            .eq("meeting_id", meeting_id)
+            .eq("is_current", True)
+            .limit(1)
+            .execute()
+        )
+        if not bv_rows:
+            bv_rows = _ok(
+                db.table("bpmn_versions")
+                .select("bpmn_xml, mermaid_code, bpmn_processes(name)")
+                .eq("meeting_id", meeting_id)
+                .order("version", desc=True)
+                .limit(1)
+                .execute()
+            )
+        if bv_rows:
+            bpmn_xml     = (bv_rows[0].get("bpmn_xml")     or "").strip()
+            mermaid_code = (bv_rows[0].get("mermaid_code") or "").strip()
+            proc_name    = ((bv_rows[0].get("bpmn_processes") or {}).get("name") or "").strip()
+    except Exception:
+        pass
+
+    if not bpmn_xml:
+        bpmn_xml     = (m.get("bpmn_xml")     or "").strip()
+        mermaid_code = (m.get("mermaid_code") or "").strip()
+
+    if bpmn_xml:
+        hub.bpmn.bpmn_xml = bpmn_xml
+        hub.bpmn.mermaid  = mermaid_code
+        hub.bpmn.name     = proc_name or (m.get("title") or "")
+        hub.bpmn.ready    = True
+
+    # ── Requisitos ────────────────────────────────────────────────────────────
+    try:
+        req_rows = _ok(
+            db.table("requirements")
+            .select("req_number, title, description, req_type, priority, status, cited_by, source_quote, actor, process_step")
+            .eq("project_id", project_id)
+            .or_(f"first_meeting_id.eq.{meeting_id},last_meeting_id.eq.{meeting_id}")
+            .order("req_number")
+            .execute()
+        )
+        if req_rows:
+            hub.requirements.requirements = [
+                RequirementItem(
+                    id=f"REQ-{r.get('req_number', i + 1):03d}",
+                    title=r.get("title") or "",
+                    description=r.get("description") or "",
+                    type=r.get("req_type") or "functional",
+                    priority=r.get("priority") or "unspecified",
+                    status=r.get("status") or "active",
+                    source_quote=r.get("source_quote") or "",
+                    speaker=r.get("cited_by") or None,
+                    actor=r.get("actor") or None,
+                    process_step=r.get("process_step") or None,
+                )
+                for i, r in enumerate(req_rows)
+            ]
+            hub.requirements.name          = m.get("title") or ""
+            hub.requirements.session_title = m.get("title") or ""
+            hub.requirements.ready         = True
+    except Exception:
+        pass
+
+    # ── SBVR ──────────────────────────────────────────────────────────────────
+    try:
+        term_rows = _ok(
+            db.table("sbvr_terms")
+            .select("term, definition, category")
+            .eq("meeting_id", meeting_id)
+            .execute()
+        )
+        rule_rows = _ok(
+            db.table("sbvr_rules")
+            .select("rule_id, statement, nucleo_nominal, rule_type, source")
+            .eq("meeting_id", meeting_id)
+            .execute()
+        )
+        if term_rows or rule_rows:
+            hub.sbvr.vocabulary = [
+                BusinessTerm(
+                    term=t.get("term", ""),
+                    definition=t.get("definition", ""),
+                    category=t.get("category", "concept"),
+                )
+                for t in term_rows
+            ]
+            hub.sbvr.rules = [
+                BusinessRule(
+                    id=r.get("rule_id", ""),
+                    statement=r.get("statement", ""),
+                    short_title=r.get("nucleo_nominal", ""),
+                    rule_type=r.get("rule_type", "constraint"),
+                    source=r.get("source", ""),
+                )
+                for r in rule_rows
+            ]
+            hub.sbvr.ready = True
+    except Exception:
+        pass
+
+    # ── BMM ───────────────────────────────────────────────────────────────────
+    bmm_raw = (m.get("bmm_json") or "").strip()
+    if bmm_raw:
+        try:
+            import json as _json
+            from core.knowledge_hub import BMMGoal, BMMStrategy, BMMPolicy, BMMModel
+            bmm_data = _json.loads(bmm_raw)
+            hub.bmm.vision     = bmm_data.get("vision", "")
+            hub.bmm.mission    = bmm_data.get("mission", "")
+            hub.bmm.goals      = [BMMGoal(**g)      for g in bmm_data.get("goals", [])]
+            hub.bmm.strategies = [BMMStrategy(**s)  for s in bmm_data.get("strategies", [])]
+            hub.bmm.policies   = [BMMPolicy(**p)    for p in bmm_data.get("policies", [])]
+            hub.bmm.ready      = True
+        except Exception:
+            pass
+
+    # NEW ── DMN ───────────────────────────────────────────────────────────────
+    dmn_raw = (m.get("dmn_json") or "").strip()
+    if dmn_raw:
+        try:
+            import json as _json
+            dmn_data = _json.loads(dmn_raw)
+            decisions = []
+            for d in dmn_data.get("decisions", []):
+                decisions.append(DMNDecision(
+                    id=d.get("id", ""),
+                    name=d.get("name", ""),
+                    question=d.get("question", ""),
+                    rationale=d.get("rationale", ""),
+                    decided_by=d.get("decided_by", []),
+                    inputs=[DMNInput(**i) for i in d.get("inputs", [])],
+                    outputs=[DMNOutput(**o) for o in d.get("outputs", [])],
+                    rules=[DMNRule(**r) for r in d.get("rules", [])],
+                    hit_policy=d.get("hit_policy", "U"),
+                    confidence=d.get("confidence", 1.0),
+                ))
+            hub.dmn.decisions = decisions
+            hub.dmn.ready     = True
+        except Exception:
+            pass
+
+    # NEW ── Argumentation / IBIS ──────────────────────────────────────────────
+    arg_raw = (m.get("argumentation_json") or "").strip()
+    if arg_raw:
+        try:
+            import json as _json
+            arg_data = _json.loads(arg_raw)
+            questions = []
+            for q in arg_data.get("questions", []):
+                alternatives = [
+                    IBISAlternative(
+                        id=a.get("id", ""),
+                        description=a.get("description", ""),
+                        proposed_by=a.get("proposed_by", ""),
+                        pros=a.get("pros", []),
+                        cons=a.get("cons", []),
+                        supported_by=a.get("supported_by", []),
+                        opposed_by=a.get("opposed_by", []),
+                        was_chosen=a.get("was_chosen", False),
+                    )
+                    for a in q.get("alternatives", [])
+                ]
+                res_data = q.get("resolution", {})
+                resolution = IBISResolution(
+                    type=res_data.get("type", "unresolved"),
+                    chosen_alternative_id=res_data.get("chosen_alternative_id", ""),
+                    rationale=res_data.get("rationale", ""),
+                    with_caveats=res_data.get("with_caveats", []),
+                )
+                questions.append(IBISQuestion(
+                    id=q.get("id", ""),
+                    statement=q.get("statement", ""),
+                    raised_by=q.get("raised_by", ""),
+                    alternatives=alternatives,
+                    resolution=resolution,
+                ))
+            hub.argumentation.questions = questions
+            hub.argumentation.ready     = True
+        except Exception:
+            pass
+
+    # ── Relatório HTML ────────────────────────────────────────────────────────
+    report_html = (m.get("report_html") or "").strip()
+    if report_html:
+        hub.synthesizer.html  = report_html
+        hub.synthesizer.ready = True
+
+    hub.bump()
+    return hub
+
+
 # ── Requisitos ────────────────────────────────────────────────────────────────
 
 def next_req_number(project_id: str) -> int:
