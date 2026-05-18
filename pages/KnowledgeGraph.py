@@ -1,7 +1,7 @@
 # pages/KnowledgeGraph.py
 # ─────────────────────────────────────────────────────────────────────────────
 # Grafo de Conhecimento — visualização interativa das entidades, processos e
-# fatos extraídos do Knowledge Hub via Plotly (sem dependências externas).
+# fatos extraídos do Knowledge Hub via pyvis (física Barnes-Hut, arrastar nós).
 #
 # Fase D do BMIF — Business Meeting Intelligence Framework
 # ─────────────────────────────────────────────────────────────────────────────
@@ -17,9 +17,7 @@ if str(root_dir) not in sys.path:
 
 import json
 import streamlit as st
-import plotly.graph_objects as go
-import math
-import random
+import streamlit.components.v1 as components
 
 from ui.auth_gate import apply_auth_gate
 from ui.project_selector import require_active_project
@@ -29,53 +27,38 @@ apply_auth_gate()
 
 # ── Palette ───────────────────────────────────────────────────────────────────
 
-# 12 cores maximamente distintas no círculo cromático — atribuídas
-# dinamicamente aos tipos presentes nos dados (ordem alfabética dos tipos).
-# Desta forma funciona independentemente dos nomes que o LLM usa para os tipos.
+# 12 cores maximamente distintas — atribuídas por ordem alfabética de tipo.
 _PALETTE = [
     "#f87171",  # vermelho
     "#38bdf8",  # azul-ciano
     "#4ade80",  # verde
-    "#fbbf24",  # âmbar
     "#c084fc",  # roxo
     "#f472b6",  # rosa
     "#34d399",  # esmeralda
     "#fb923c",  # laranja
-    "#fde047",  # amarelo
     "#22d3ee",  # ciano claro
     "#a78bfa",  # violeta
     "#86efac",  # verde-claro
-]
-
-_SYMBOL_LIST = [
-    "circle", "diamond", "square", "triangle-up", "star",
-    "hexagon2", "circle-open", "triangle-down", "cross",
-    "pentagon", "diamond-open", "square-open",
+    "#fbbf24",  # âmbar (reservado para processos KH)
+    "#e2e8f0",  # cinza claro
 ]
 
 # Cor fixa para nós de Processo do Knowledge Hub
-_PROC_COLOR  = "#fde047"
-_PROC_SYMBOL = "square-dot"
-_PROC_LABEL  = "Processo (Knowledge Hub)"
+_PROC_COLOR = "#fde047"
 
-_COLORS = {
-    "edge":  "#475569",
-    "bg":    "#0d1b2a",
-    "text":  "#f1f5f9",
-    "label": "#ffffff",
+# Mapeamento tipo → forma pyvis
+_TYPE_SHAPE: dict[str, str] = {
+    "PERSON":     "dot",
+    "ACTOR":      "dot",
+    "SYSTEM":     "diamond",
+    "PROCESS":    "square",
+    "DOCUMENT":   "triangle",
+    "CONCEPT":    "hexagon",
+    "RULE":       "star",
+    "ROLE":       "triangleDown",
+    "DEPARTMENT": "ellipse",
+    "LOCATION":   "ellipse",
 }
-
-
-def _type_styles(unique_types: list[str]) -> dict[str, dict]:
-    """Atribui cor e símbolo distintos a cada tipo presente nos dados."""
-    styles: dict[str, dict] = {}
-    for i, t in enumerate(sorted(unique_types)):
-        styles[t] = {
-            "color":  _PALETTE[i % len(_PALETTE)],
-            "symbol": _SYMBOL_LIST[i % len(_SYMBOL_LIST)],
-            "label":  t.replace("_", " ").title(),
-        }
-    return styles
 
 # ── Data loading ───────────────────────────────────────────────────────────────
 
@@ -163,80 +146,20 @@ def _load_graph_data(project_id: str) -> dict:
     }
 
 
-# ── Layout helpers ─────────────────────────────────────────────────────────────
+# ── Graph builder (pyvis) ──────────────────────────────────────────────────────
 
-def _circular_layout(n: int, radius: float = 1.0, offset: tuple = (0, 0)) -> list[tuple[float, float]]:
-    """Positions for n nodes evenly on a circle."""
-    positions = []
-    for i in range(n):
-        angle = 2 * math.pi * i / max(n, 1)
-        x = offset[0] + radius * math.cos(angle)
-        y = offset[1] + radius * math.sin(angle)
-        positions.append((x, y))
-    return positions
-
-
-def _spring_layout(nodes: list[str], edges: list[tuple[str, str]], iterations: int = 50) -> dict[str, tuple[float, float]]:
-    """Simple force-directed layout (no external library)."""
-    rng = random.Random(42)
-    pos = {n: (rng.uniform(-1, 1), rng.uniform(-1, 1)) for n in nodes}
-    adj: dict[str, set[str]] = {n: set() for n in nodes}
-    for a, b in edges:
-        if a in adj and b in adj:
-            adj[a].add(b)
-            adj[b].add(a)
-
-    k = 1.0 / math.sqrt(max(len(nodes), 1))
-    for _ in range(iterations):
-        disp: dict[str, list[float]] = {n: [0.0, 0.0] for n in nodes}
-        node_list = list(nodes)
-        for i, u in enumerate(node_list):
-            for v in node_list[i + 1:]:
-                dx = pos[u][0] - pos[v][0]
-                dy = pos[u][1] - pos[v][1]
-                d = max(math.sqrt(dx * dx + dy * dy), 0.01)
-                rep = k * k / d
-                disp[u][0] += dx / d * rep
-                disp[u][1] += dy / d * rep
-                disp[v][0] -= dx / d * rep
-                disp[v][1] -= dy / d * rep
-            for v in adj[u]:
-                if v > u:
-                    continue
-                dx = pos[u][0] - pos[v][0]
-                dy = pos[u][1] - pos[v][1]
-                d = max(math.sqrt(dx * dx + dy * dy), 0.01)
-                attr = d * d / k
-                disp[u][0] -= dx / d * attr
-                disp[u][1] -= dy / d * attr
-                disp[v][0] += dx / d * attr
-                disp[v][1] += dy / d * attr
-
-        t = 0.1
-        for n in nodes:
-            dx, dy = disp[n]
-            d = max(math.sqrt(dx * dx + dy * dy), 0.01)
-            move = min(d, t)
-            pos[n] = (pos[n][0] + dx / d * move, pos[n][1] + dy / d * move)
-
-    return pos
-
-
-# ── Graph builder ──────────────────────────────────────────────────────────────
-
-def _build_graph(
-    data: dict, max_nodes: int, show_facts: bool,
+def _build_pyvis_graph(
+    data: dict, max_nodes: int, show_ep_edges: bool,
     show_processes: bool, entity_types: list[str],
-    min_occurrence: int = 1, show_labels: bool = True,
-    graph_height: int = 640, show_entity_edges: bool = False,
-    min_shared_meetings: int = 2,
-) -> go.Figure:
-    from collections import defaultdict
+    min_occurrence: int = 1, graph_height: int = 720,
+    show_entity_edges: bool = False, min_shared_meetings: int = 2,
+    physics_enabled: bool = True,
+) -> str:
+    """Build a pyvis network and return the full HTML string."""
+    from pyvis.network import Network
 
     entities = data["entities"]
     processes = data["processes"] if show_processes else []
-    facts     = data["facts"] if show_facts else []
-    contradictions = data["contradictions"]
 
     if entity_types:
         entities = [e for e in entities if e.get("entity_type", "ACTOR") in entity_types]
@@ -246,15 +169,11 @@ def _build_graph(
 
     entity_ids = {e["id"] for e in entities}
 
-    # ── 0. Estilos dinâmicos — cor/símbolo atribuídos aos tipos reais nos dados ─
-    unique_types = sorted({e.get("entity_type", "unknown") for e in entities})
-    styles = _type_styles(unique_types)
+    # Cor por tipo (atribuição dinâmica, ordem alfabética)
+    unique_types = sorted({e.get("entity_type", "ACTOR") for e in entities})
+    type_color = {t: _PALETTE[i % len(_PALETTE)] for i, t in enumerate(unique_types)}
 
-    # ── 1. Spring layout (coordenadas) ─────────────────────────────────────────
-    all_node_ids = list(entity_ids) + [f"proc_{p['id']}" for p in processes]
-
-    # Build entity meeting map: prefer meeting_ids[] (full history),
-    # fall back to first/last seen for pre-migration rows.
+    # Entity meeting map — prefere meeting_ids[], fallback a first/last seen
     entity_meeting_map: dict[str, set[str]] = {}
     for e in entities:
         mtgs: set[str] = set(e.get("meeting_ids") or [])
@@ -264,207 +183,149 @@ def _build_graph(
                 mtgs.add(v)
         entity_meeting_map[e["id"]] = mtgs
 
-    edge_pairs: list[tuple[str, str]] = []
+    net = Network(
+        height=f"{graph_height}px",
+        width="100%",
+        bgcolor="#0d1b2a",
+        font_color="#f1f5f9",
+    )
 
-    # Entity → Process edges (meeting co-occurrence)
+    # ── Nós de entidade ────────────────────────────────────────────────────────
+    for e in entities:
+        eid   = e["id"]
+        etype = e.get("entity_type", "ACTOR")
+        count = e.get("occurrence_count") or 1
+        name  = e.get("canonical_name", "?")
+        aliases = ", ".join((e.get("aliases") or [])[:3])
+        size  = max(12, min(40, 12 + count * 2.5))
+        color = type_color.get(etype, _PALETTE[0])
+        shape = _TYPE_SHAPE.get(etype, "dot")
+        tooltip = (
+            f"<b>{name}</b><br>"
+            f"Tipo: {etype.replace('_', ' ').title()}<br>"
+            f"Ocorrências: {count}"
+            + (f"<br>Aliases: {aliases}" if aliases else "")
+        )
+        net.add_node(
+            eid, label=name, title=tooltip,
+            color={
+                "background": color,
+                "border": "#0a0f1a",
+                "highlight": {"background": color, "border": "#ffffff"},
+                "hover":     {"background": color, "border": "#ffffff"},
+            },
+            size=size, shape=shape,
+            font={"color": "#ffffff", "size": 12, "face": "Segoe UI, system-ui"},
+        )
+
+    # ── Nós de processo KH ────────────────────────────────────────────────────
     for proc in processes:
-        proc_meetings = set(proc.get("meeting_ids") or [])
-        if not proc_meetings:
-            continue
-        pid = f"proc_{proc['id']}"
-        for e in entities:
-            eid = e["id"]
-            if eid not in entity_ids:
-                continue
-            if entity_meeting_map.get(eid, set()) & proc_meetings:
-                edge_pairs.append((eid, pid))
+        pid   = f"proc_{proc['id']}"
+        pname = proc.get("process_name", "?")
+        desc  = (proc.get("description") or "")[:80]
+        tooltip = (
+            f"<b>{pname}</b><br>"
+            f"Tipo: Processo (KH)<br>"
+            f"Status: {proc.get('status', '—')}<br>"
+            f"Versões: {proc.get('version_count', 1)}"
+            + (f"<br>{desc}" if desc else "")
+        )
+        net.add_node(
+            pid, label=pname[:24], title=tooltip,
+            color={
+                "background": _PROC_COLOR,
+                "border": "#78350f",
+                "highlight": {"background": _PROC_COLOR, "border": "#ffffff"},
+                "hover":     {"background": _PROC_COLOR, "border": "#ffffff"},
+            },
+            size=22, shape="square",
+            font={"color": "#0a0f1a", "size": 11, "bold": True, "face": "Segoe UI, system-ui"},
+        )
 
-    # Entity → Entity edges (optional — entities sharing N+ meetings)
-    entity_list = [e for e in entities if e["id"] in entity_ids]
+    # ── Arestas entidade → processo (co-ocorrência de reunião) ────────────────
+    if show_ep_edges:
+        for proc in processes:
+            pid = f"proc_{proc['id']}"
+            proc_meetings = set(proc.get("meeting_ids") or [])
+            if not proc_meetings:
+                continue
+            for e in entities:
+                eid = e["id"]
+                shared = entity_meeting_map.get(eid, set()) & proc_meetings
+                if shared:
+                    n = len(shared)
+                    reuniao = "reunião" if n == 1 else "reuniões"
+                    net.add_edge(
+                        eid, pid,
+                        title=f"Participou em {n} {reuniao} onde este processo foi discutido",
+                        color={"color": "#475569", "highlight": "#94a3b8", "hover": "#94a3b8"},
+                        width=max(1.0, 1.0 + n * 0.4),
+                    )
+
+    # ── Arestas entidade → entidade (co-ocorrência opcional) ──────────────────
+    entity_list = list(entities)
     if show_entity_edges and len(entity_list) > 1:
         for i, ea in enumerate(entity_list):
             for eb in entity_list[i + 1:]:
                 shared = entity_meeting_map.get(ea["id"], set()) & entity_meeting_map.get(eb["id"], set())
                 if len(shared) >= min_shared_meetings:
-                    edge_pairs.append((ea["id"], eb["id"]))
+                    n = len(shared)
+                    reuniao = "reunião" if n == 1 else "reuniões"
+                    net.add_edge(
+                        ea["id"], eb["id"],
+                        title=f"Co-ocorreram em {n} {reuniao}",
+                        color={"color": "#334155", "highlight": "#64748b", "hover": "#64748b"},
+                        width=1.0,
+                        dashes=True,
+                    )
 
-    pos = _spring_layout(all_node_ids, edge_pairs, iterations=80)
+    # ── Opções de física (Barnes-Hut) e interação ─────────────────────────────
+    options = {
+        "physics": {
+            "enabled": physics_enabled,
+            "solver": "barnesHut",
+            "barnesHut": {
+                "gravitationalConstant": -8000,
+                "centralGravity": 0.3,
+                "springLength": 130,
+                "springConstant": 0.04,
+                "damping": 0.09,
+                "avoidOverlap": 0.4,
+            },
+            "maxVelocity": 50,
+            "minVelocity": 0.75,
+            "stabilization": {
+                "enabled": True,
+                "iterations": 200,
+                "updateInterval": 25,
+                "onlyDynamicEdges": False,
+                "fit": True,
+            },
+        },
+        "interaction": {
+            "hover": True,
+            "tooltipDelay": 80,
+            "navigationButtons": False,
+            "keyboard": False,
+            "zoomView": True,
+            "dragView": True,
+            "dragNodes": True,
+            "multiselect": False,
+        },
+        "edges": {
+            "smooth": {"type": "continuous"},
+            "arrows": {"to": {"enabled": False}},
+            "hoverWidth": 2,
+            "selectionWidth": 2,
+        },
+        "nodes": {
+            "borderWidth": 2,
+            "borderWidthSelected": 3,
+        },
+    }
+    net.set_options(json.dumps(options))
 
-    # ── 2. Construir arrays paralelos de nós ───────────────────────────────────
-    id_to_idx: dict[str, int] = {}
-    node_x: list[float]  = []
-    node_y: list[float]  = []
-    node_text: list[str] = []
-    node_size: list[float] = []
-    node_hover: list[str] = []
-    node_etype: list[str] = []   # tipo de cada nó (para agrupar por trace)
-
-    for e in entities:
-        eid   = e["id"]
-        etype = e.get("entity_type", "ACTOR")
-        count = e.get("occurrence_count", 1)
-        id_to_idx[eid] = len(id_to_idx)
-        px, py = pos.get(eid, (0.0, 0.0))
-        node_x.append(px);  node_y.append(py)
-        node_text.append(e.get("canonical_name", "?"))
-        node_size.append(max(14, min(42, 14 + count * 3)))
-        node_etype.append(etype)
-        aliases = ", ".join((e.get("aliases") or [])[:3])
-        type_label = styles.get(etype, {}).get("label", etype)
-        node_hover.append(
-            f"<b>{e.get('canonical_name')}</b><br>"
-            f"Tipo: {type_label}<br>"
-            f"Ocorrencias: {count}"
-            + (f"<br>Aliases: {aliases}" if aliases else "")
-        )
-
-    # Nós de processo KH
-    proc_x: list[float] = []; proc_y: list[float] = []
-    proc_text: list[str] = []; proc_size: list[float] = []; proc_hover: list[str] = []
-    for proc in processes:
-        pid = f"proc_{proc['id']}"
-        id_to_idx[pid] = len(id_to_idx)
-        px, py = pos.get(pid, (0.0, 0.0))
-        proc_x.append(px);  proc_y.append(py)
-        proc_text.append(proc.get("process_name", "?")[:22])
-        proc_size.append(20)
-        proc_hover.append(
-            f"<b>{proc.get('process_name')}</b><br>"
-            f"Status: {proc.get('status', '—')}<br>"
-            f"Versoes: {proc.get('version_count', 1)}<br>"
-            + (proc.get("description") or "")[:80]
-        )
-
-    # ── 3. Arestas entidade → processo (co-ocorrência de reunião) ──────────────
-    edge_x: list[float | None] = []; edge_y: list[float | None] = []
-    elbl_x: list[float] = []; elbl_y: list[float] = []; elbl_t: list[str] = []
-
-    all_x = node_x + proc_x
-    all_y = node_y + proc_y
-
-    for eid, pid in edge_pairs:
-        if eid not in id_to_idx or pid not in id_to_idx:
-            continue
-        si, oi = id_to_idx[eid], id_to_idx[pid]
-        x0, y0 = all_x[si], all_y[si]
-        x1, y1 = all_x[oi], all_y[oi]
-        edge_x += [x0, x1, None]
-        edge_y += [y0, y1, None]
-
-    # ── 4. Arestas de contradição (não há entity refs diretas) ────────────────
-    contra_x: list[float | None] = []; contra_y: list[float | None] = []
-    # kh_contradictions use meeting_a_id/meeting_b_id — shown as KPI count only
-
-    # ── 5. Montar figura ───────────────────────────────────────────────────────
-    fig = go.Figure()
-
-    # Arestas (abaixo dos nós)
-    if edge_x:
-        fig.add_trace(go.Scatter(
-            x=edge_x, y=edge_y, mode="lines",
-            line=dict(color="#475569", width=1.2),
-            hoverinfo="skip", showlegend=False,
-        ))
-    if contra_x:
-        fig.add_trace(go.Scatter(
-            x=contra_x, y=contra_y, mode="lines",
-            line=dict(color="#ef4444", width=2, dash="dot"),
-            hoverinfo="skip", name="Contradicao detectada", showlegend=True,
-        ))
-
-    # ── Um trace de marcadores por tipo — gera legenda nativa do Plotly ──
-    type_indices: dict[str, list[int]] = defaultdict(list)
-    for i, et in enumerate(node_etype):
-        type_indices[et].append(i)
-
-    for etype in sorted(type_indices.keys()):
-        idxs   = type_indices[etype]
-        st_    = styles.get(etype, {})
-        color  = st_.get("color",  _PALETTE[0])
-        symbol = st_.get("symbol", "circle")
-        label  = st_.get("label",  etype)
-        xs   = [node_x[i] for i in idxs]
-        ys   = [node_y[i] for i in idxs]
-        sizes = [node_size[i] for i in idxs]
-        texts = [node_text[i] for i in idxs]
-        hovers = [node_hover[i] for i in idxs]
-
-        # Marcadores — com legenda
-        fig.add_trace(go.Scatter(
-            x=xs, y=ys, mode="markers",
-            name=label,
-            marker=dict(
-                color=color, size=sizes, symbol=symbol,
-                line=dict(color="#0a0f1a", width=2),
-                opacity=0.95,
-            ),
-            hovertext=hovers, hoverinfo="text",
-            showlegend=True,
-            legendgroup=etype,
-        ))
-        # Labels (sem entrar na legenda)
-        if show_labels:
-            fig.add_trace(go.Scatter(
-                x=xs, y=ys, mode="text",
-                text=[f"<b>{t}</b>" for t in texts],
-                textposition="top center",
-                textfont=dict(size=11, color="#ffffff", family="Segoe UI, system-ui"),
-                hoverinfo="skip", showlegend=False,
-                legendgroup=etype,
-            ))
-
-    # Nós de processo KH
-    if proc_x:
-        fig.add_trace(go.Scatter(
-            x=proc_x, y=proc_y, mode="markers",
-            name=_PROC_LABEL,
-            marker=dict(
-                color=_PROC_COLOR, size=proc_size,
-                symbol=_PROC_SYMBOL,
-                line=dict(color="#0a0f1a", width=2), opacity=0.95,
-            ),
-            hovertext=proc_hover, hoverinfo="text",
-            showlegend=True, legendgroup="_PROC",
-        ))
-        if show_labels:
-            fig.add_trace(go.Scatter(
-                x=proc_x, y=proc_y, mode="text",
-                text=[f"<b>{t}</b>" for t in proc_text],
-                textposition="top center",
-                textfont=dict(size=10, color="#ffffff", family="Segoe UI, system-ui"),
-                hoverinfo="skip", showlegend=False, legendgroup="_PROC",
-            ))
-
-    # Labels das arestas
-    if elbl_t and any(t for t in elbl_t):
-        fig.add_trace(go.Scatter(
-            x=elbl_x, y=elbl_y, mode="text",
-            text=elbl_t,
-            textfont=dict(size=8, color="#94a3b8", family="Segoe UI, system-ui"),
-            hoverinfo="skip", showlegend=False,
-        ))
-
-    fig.update_layout(
-        paper_bgcolor=_COLORS["bg"],
-        plot_bgcolor=_COLORS["bg"],
-        font=dict(color=_COLORS["text"], family="Segoe UI, system-ui"),
-        margin=dict(l=10, r=10, t=10, b=10),
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, showspikes=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False, showspikes=False),
-        height=graph_height,
-        dragmode="pan",
-        hoverlabel=dict(bgcolor="#1e293b", font_size=12,
-                        font_color="#f1f5f9", bordercolor="#475569"),
-        legend=dict(
-            bgcolor="#111f30", bordercolor="#334155", borderwidth=1,
-            font=dict(color="#f1f5f9", size=12),
-            title=dict(text="<b>Tipo de entidade</b>",
-                       font=dict(color="#fbbf24", size=12)),
-            itemsizing="constant",
-            x=1.01, y=1, xanchor="left", yanchor="top",
-        ),
-    )
-    return fig
+    return net.generate_html(local=False)
 
 
 
@@ -502,9 +363,9 @@ como uma rede de **entidades** (pessoas, sistemas, conceitos, documentos) ligada
 
 #### Interacao
 
-Use o mouse para **arrastar** o grafo, **rolar** para zoom e **clicar com hover** para ver
-detalhes de cada entidade. Os filtros na barra lateral permitem isolar tipos especificos
-de entidades ou desativar as relacoes para uma visao mais limpa.
+Use o mouse para **arrastar nos individualmente** (reorganize o layout), **scroll** para zoom e
+**hover** para ver detalhes de cada entidade ou aresta. A simulacao fisica organiza os nos
+automaticamente — desative em "Simulacao fisica" para fixar o layout apos arrastar.
     """)
 
 data = _load_graph_data(project_id)
@@ -541,16 +402,18 @@ with st.sidebar:
         "Ocorrencias minimas", 1, max(max_occ, 2), 1, key="kg_min_occ",
         help="Oculta entidades com menos ocorrencias — reduz o cluster central.",
     )
-    show_processes = st.toggle("Mostrar processos", value=True, key="kg_procs")
-    show_facts = st.toggle("Mostrar arestas entidade→processo", value=True, key="kg_facts")
-    show_entity_edges = st.toggle("Mostrar arestas entidade→entidade", value=False, key="kg_ent_edges",
+    show_processes = st.toggle("Mostrar processos (KH)", value=True, key="kg_procs")
+    show_ep_edges = st.toggle("Arestas entidade→processo", value=True, key="kg_facts",
+        help="Conecta entidades aos processos do Knowledge Hub com os quais co-ocorreram.")
+    show_entity_edges = st.toggle("Arestas entidade→entidade", value=False, key="kg_ent_edges",
         help="Conecta entidades que co-ocorrem em N+ reunioes. Pode gerar muitas arestas.")
     if show_entity_edges:
         min_shared = st.slider("Reunioes em comum (minimo)", 1, 5, 2, key="kg_shared_mtgs",
             help="Quantas reunioes as duas entidades precisam compartilhar para serem conectadas.")
     else:
         min_shared = 2
-    show_labels = st.toggle("Mostrar rotulos", value=True, key="kg_labels")
+    physics_enabled = st.toggle("Simulacao fisica (mover nos)", value=True, key="kg_physics",
+        help="Ativa a simulacao Barnes-Hut — os nos se atraem/repelem organicamente. Desative para fixar o layout.")
     max_nodes = st.slider(
         "Max entidades no grafo", 10, min(150, len(entities)), min(60, len(entities)), key="kg_maxn"
     )
@@ -558,7 +421,7 @@ with st.sidebar:
         "Altura do grafo", [480, 600, 720, 860, 1000], value=720, key="kg_height"
     )
     st.markdown("---")
-    st.caption("A legenda de cores aparece dentro do grafico (canto superior direito).")
+    st.caption("Passe o mouse sobre os nos e arestas para ver detalhes. Arraste nos para reorganizar.")
 
 # ── Main graph ────────────────────────────────────────────────────────────────
 tab_graph, tab_table, tab_facts, tab_export = st.tabs(
@@ -569,13 +432,19 @@ with tab_graph:
     if not selected_types:
         st.warning("Selecione pelo menos um tipo de entidade no painel lateral.")
     else:
-        fig = _build_graph(
-            data, max_nodes, show_facts, show_processes, selected_types,
-            min_occurrence=min_occurrence, show_labels=show_labels,
-            graph_height=graph_height, show_entity_edges=show_entity_edges,
-            min_shared_meetings=min_shared,
-        )
-        st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True})
+        try:
+            html_graph = _build_pyvis_graph(
+                data, max_nodes, show_ep_edges, show_processes, selected_types,
+                min_occurrence=min_occurrence, graph_height=graph_height,
+                show_entity_edges=show_entity_edges, min_shared_meetings=min_shared,
+                physics_enabled=physics_enabled,
+            )
+            components.html(html_graph, height=graph_height + 30, scrolling=False)
+        except ImportError:
+            st.error(
+                "A biblioteca **pyvis** nao esta instalada. "
+                "Execute `pip install pyvis==0.3.2` e reinicie o servidor."
+            )
 
         if contradictions:
             st.info(
