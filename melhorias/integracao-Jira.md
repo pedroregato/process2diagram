@@ -144,6 +144,115 @@ A automação desse processo permite reduzir o tempo de *grooming* (refinamento)
 
 ===========================================================================
 
+Guia Técnico: Implementação da Camada Agile Bridge via Claude Code
+
+Este documento estabelece as diretrizes de engenharia para a implementação da Agile Bridge (Camada 2) dentro do ecossistema RawToInsights AI. Como Lead Architect, exijo que esta implementação siga rigorosamente os padrões de escalabilidade e desacoplamento definidos na transição para a infraestrutura Google Cloud.
+
+1. Visão Geral e Preparação do Ambiente
+
+A Agile Bridge é o componente crítico da Camada 2 projetado para converter a inteligência bruta extraída pelo AgentRequirements em artefatos executáveis de backlog. Diferente da versão legada (Process2Diagram), o RawToInsights AI opera sob uma estratégia de agnosticismo de provedor e persistência gerenciada no Google Cloud.
+
+Pré-requisitos Técnicos
+
+A implementação deve ser realizada via Claude Code CLI, respeitando o seguinte stack:
+
+* Linguagem: Python 3.13 (obrigatório o uso de Type Hinting rigoroso).
+* IDE: PyCharm com o plugin Google Cloud Code.
+* Engine de IA: Gemini 1.5 Flash (via Google AI Studio) para processamento de alto volume.
+* Infraestrutura: Google Cloud Run (Hosting) e Firestore (Persistência em modo Nativo).
+
+Checklist de Discovery Técnica
+
+* [ ] Google Cloud Project ID: Configurado no ambiente local.
+* [ ] Firestore Collection Configuration: Coleções para backlog_artefacts e traceability_links definidas.
+* [ ] KnowledgeHub Schema: Validação da migração de campos para suporte a metadados do Jira.
+* [ ] Acesso ao Terminal: Claude Code CLI autenticado e com permissão de leitura no diretório /core e /agents.
+
+2. Configuração de Autenticação: Jira API v3
+
+A integração com o ecossistema Atlassian deve ser abstraída para permitir flexibilidade futura (ClickUp/Trello). Utilize o padrão de API Tokens (v3) em vez de autenticação básica.
+
+Gerenciamento de Segredos
+
+As credenciais não devem ser persistidas no código. Em desenvolvimento, utilize .env; em produção, as variáveis devem ser injetadas via Google Secret Manager e acessadas através de um wrapper agnóstico.
+
+# Exemplo de Wrapper Agnóstico para Integração de Gestão de Projetos
+from abc import ABC, abstractmethod
+
+class ProjectManagementBridge(ABC):
+    @abstractmethod
+    def create_issue(self, summary: str, description: str, issue_type: str):
+        pass
+
+class JiraBridge(ProjectManagementBridge):
+    def __init__(self, base_url: str, email: str, token: str):
+        self.auth = (email, token)
+        self.base_url = base_url
+
+    def validate_connection(self) -> bool:
+        # Implementar tratamento de erro 401/403 com log específico
+        pass
+
+
+3. Provisionamento de Contexto para Claude Code
+
+Para garantir que o Claude Code atue com precisão cirúrgica na refatoração, forneça o prompt mestre abaixo no terminal do PyCharm. Este prompt instrui a IA a respeitar a arquitetura de isolamento de condições de corrida (race-condition isolation).
+
+Prompt Mestre de Contextualização
+
+"Claude, atue como Sênior Solutions Architect. Analise os arquivos core/knowledge_hub.py e agents/agent_requirements.py. Note que o KnowledgeHub é uma pure Python dataclass que exige o uso do método hub.migrate() para qualquer evolução de schema. Implemente a Agile Bridge como uma subclasse de BaseAgent, herdando obrigatoriamente os métodos _call_llm() e _parse_json(). Durante a transformação, utilize a lógica de _enforce_rules() para resolver atores identificados pelo NLP (como 'Usuário' ou 'Sistema') em unidades organizacionais reais mapeadas no hub.nlp.actors. Garanta que a escrita no Firestore respeite o isolamento de seções do Hub para evitar sobreposição de dados entre agentes concorrentes."
+
+4. Lógica de Transformação: Requisitos (IEEE 830) para User Stories
+
+A transformação deve converter requisitos classificados em histórias de usuário no formato: "Como [Papel], eu quero [Ação], para que [Valor/Benefício]".
+
+Mapeamento de Requisitos e Estimativa de Complexidade
+
+O sistema deve inferir automaticamente os Story Points com base na taxonomia do requisito:
+
+Tipo IEEE 830	Prioridade Jira	Estimativa (Points)	Justificativa Técnica
+Confiabilidade	Crítica / High	8 - 13	Exige protocolos de segurança/compliance.
+Funcional	High / Medium	3 - 5	Impacto direto no fluxo BPMN.
+Performance	Medium	5 - 8	Envolve otimização de infra e latência.
+Usabilidade	Medium / Low	2 - 3	Ajustes de interface e experiência.
+Suporte	Low	1 - 2	Manutenibilidade e extensibilidade.
+
+Geração de Critérios de Aceitação (Gherkin + SBVR)
+
+Os critérios de aceitação (Dado/Quando/Então) devem ser enriquecidos utilizando o vocabulário de negócios presente em hub.sbvr.rules. Isso garante que as histórias de usuário sejam "bridge-aware" e terminologicamente consistentes com as regras de negócio extraídas na Camada 1.
+
+5. Implementação da Rastreabilidade e Relatório Executivo
+
+A rastreabilidade é a "Single Source of Truth" para auditorias. Cada User Story gerada no Jira deve conter links bidirecionais.
+
+1. URL de Origem: Insira um hyperlink na descrição da issue do Jira apontando para a seção de "Especificação de Requisitos" do Relatório Executivo HTML hospedado no Google Cloud Storage.
+2. ID de Auditoria: O metadado meeting_id deve ser incluído em um campo customizado ou tag no Jira, permitindo que qualquer desenvolvedor rastreie a decisão original na ata da reunião.
+3. Referência Cruzada: Utilize o AgentSynthesizer para injetar o ID da Issue gerada (ex: JIRA-123) de volta no relatório executivo, fechando o ciclo de visibilidade.
+
+6. Tratamento de Erros, Logs e Monitoramento
+
+A resiliência da ponte deve ser garantida via LangGraph Adaptive Retry. Se a sincronização com a API do Jira falhar ou retornar dados malformados, o sistema deve re-executar a lógica de formatação até 3 vezes antes de emitir um alerta de falha crítica.
+
+Diretrizes de Registro (Logs)
+
+Proíbo o uso de strings não estruturadas em logs de produção. Utilize o padrão de dicionário para posterior ingestão no Google Cloud Logging:
+
+* Sucesso/Falha: Status da transação de criação de issue.
+* Token Consumption: Registro via hub.meta.total_tokens_used para monitoramento de custos.
+* Artefact IDs: Lista de IDs de tickets criados e persistidos no Firestore para auditoria posterior.
+
+7. Estratégia de Deploy e Validação (Sandbox)
+
+Mantenha o Streamlit como Sandbox para experimentação rápida de novas "Lentes de Análise". Uma vez validada a lógica de conversão, promova o código para o Google Cloud Run.
+
+Comando Final de Validação (Claude Code CLI)
+
+Após a implementação, execute a validação de integridade para garantir que a transição de dados entre o KnowledgeHub e o Firestore está operando sob latência aceitável:
+
+claude run "Validar integridade da Agile Bridge: Verifique se os objetos UserStory gerados a partir do KnowledgeHub estão sendo persistidos corretamente no Firestore com o meeting_id correto e se os Gherkin Acceptance Criteria estão utilizando os termos definidos em hub.sbvr.vocabulary."
+
+
+Esta arquitetura garante que o RawToInsights AI não seja apenas uma ferramenta de transcrição, mas uma Memória Ativa que reduz o grooming técnico em até 50%, transformando o caos de reuniões em ativos digitais auditáveis.
 
 
 
