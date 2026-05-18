@@ -387,101 +387,107 @@ def _build_pyvis_graph(
     # invertemos o entity_meeting_map e escolhemos a entidade mais representativa
     # (maior occurrence_count) de cada lado da contradição.
     if show_contradictions and contradictions:
-        # Usa TODAS as entidades carregadas (pré-filtro) para mapear reuniões.
-        # Isso garante que entidades filtradas por tipo/ocorrência/max_nodes ainda
-        # possam servir de âncora para arestas de contradição.
+        # ── Mapa meeting → entidades (usa TODA a lista pré-filtro) ────────────
         _all_ents = data["entities"]
-        _full_emmap: dict[str, set[str]] = {}
+        _full_memap: dict[str, list[dict]] = {}
         for _e in _all_ents:
-            _mtgs = set(_e.get("meeting_ids") or [])
+            _mtgs: set[str] = set(_e.get("meeting_ids") or [])
             for _col in ("first_seen_meeting_id", "last_seen_meeting_id"):
                 _v = _e.get(_col)
                 if _v:
                     _mtgs.add(_v)
-            _full_emmap[_e["id"]] = _mtgs
-
-        # meeting_id → entidades (de toda a lista), ordenadas por occurrence desc
-        _full_memap: dict[str, list[dict]] = {}
-        for _e in _all_ents:
-            for _mid in _full_emmap.get(_e["id"], set()):
+            for _mid in _mtgs:
                 _full_memap.setdefault(_mid, []).append(_e)
         for _mid in _full_memap:
             _full_memap[_mid].sort(
                 key=lambda x: x.get("occurrence_count") or 1, reverse=True
             )
 
-        _seen_contra_pairs: set[frozenset] = set()
-        for c in contradictions:
-            mid_a = c.get("meeting_a_id")
-            mid_b = c.get("meeting_b_id")
-            if not mid_a or not mid_b:
-                continue
-            ents_a = _full_memap.get(mid_a, [])
-            ents_b = _full_memap.get(mid_b, [])
-            if not ents_a or not ents_b:
-                continue
+        # ── Cores por severidade ──────────────────────────────────────────────
+        _sev_color = {
+            "critical": "#7f1d1d",
+            "high":     "#dc2626",
+            "medium":   "#ef4444",
+            "low":      "#f87171",
+        }
 
-            # Prefere entidades já no grafo; cai back para qualquer uma do conjunto
-            ea = next((e for e in ents_a if e["id"] in entity_ids), ents_a[0])
-            eb = next(
-                (e for e in ents_b if e["id"] != ea["id"] and e["id"] in entity_ids),
-                next((e for e in ents_b if e["id"] != ea["id"]), None),
-            )
-            if eb is None:
-                ea = next(
-                    (e for e in ents_a if e["id"] != ents_b[0]["id"] and e["id"] in entity_ids),
-                    next((e for e in ents_a if e["id"] != ents_b[0]["id"]), None),
-                )
-                eb = ents_b[0]
-            if ea is None or eb is None or ea["id"] == eb["id"]:
-                continue
+        for _ci, c in enumerate(contradictions):
+            mid_a    = c.get("meeting_a_id")
+            mid_b    = c.get("meeting_b_id")
+            severity = (c.get("severity") or "medium").lower()
+            desc     = (c.get("description") or "Contradição detectada")[:200]
+            rel      = c.get("relation_type") or ""
+            cnode_id = f"_contra_{c['id']}"
+            node_color = _sev_color.get(severity, "#ef4444")
 
-            # Adiciona nós ao grafo se ainda não existirem (entidade filtrada mas necessária)
-            for _e in (ea, eb):
-                if _e["id"] not in entity_ids:
-                    _etype = _e.get("entity_type", "ACTOR")
-                    _count = _e.get("occurrence_count") or 1
-                    _name  = _e.get("canonical_name", "?")
-                    _color = type_color.get(_etype, _PALETTE[0])
-                    _is_p  = _etype in {"PERSON", "ACTOR"} and _is_participant(_e, participant_names)
-                    _rlbl  = "Participante confirmado" if _is_p else _etype.replace("_", " ").title()
-                    net.add_node(
-                        _e["id"], label=_name,
-                        title=f"{_name}\nTipo: {_rlbl}\nOcorrências: {_count}\n(incluído por contradição)",
-                        color={
-                            "background": _color, "border": "#0a0f1a",
-                            "highlight": {"background": _color, "border": "#ffffff"},
-                            "hover":     {"background": _color, "border": "#ffffff"},
-                        },
-                        size=max(10, min(30, 10 + _count * 2)),
-                        shape=_TYPE_SHAPE.get(_etype, "dot"),
-                        font={"color": "#ffffff", "size": 11, "face": "Segoe UI, system-ui"},
-                        borderWidth=3,
-                        borderWidthSelected=4,
-                    )
-                    entity_ids.add(_e["id"])
-
-            pair = frozenset({ea["id"], eb["id"]})
-            if pair in _seen_contra_pairs:
-                continue
-            _seen_contra_pairs.add(pair)
-
-            severity = c.get("severity", "medium")
-            desc = (c.get("description") or "Contradição detectada")[:150]
-            rel  = c.get("relation_type") or ""
             tooltip = (
-                f"Contradição detectada\n"
-                f"Severidade: {severity}"
+                f"Contradição ({severity})"
                 + (f"\nRelação: {rel}" if rel else "")
                 + f"\n\n{desc}"
             )
-            net.add_edge(
-                ea["id"], eb["id"],
+
+            # ── Nó de contradição — sempre adicionado ─────────────────────────
+            net.add_node(
+                cnode_id,
+                label="⚠",
                 title=tooltip,
-                color={"color": "#ef4444", "highlight": "#fca5a5", "hover": "#fca5a5"},
-                width=2.5,
-                dashes=True,
+                color={
+                    "background": node_color,
+                    "border": "#450a0a",
+                    "highlight": {"background": node_color, "border": "#ffffff"},
+                    "hover":     {"background": node_color, "border": "#ffffff"},
+                },
+                size=20,
+                shape="star",
+                font={"color": "#ffffff", "size": 14, "bold": True,
+                      "face": "Segoe UI, system-ui"},
             )
+            entity_ids.add(cnode_id)
+
+            # ── Arestas para até 2 entidades de cada reunião ──────────────────
+            for _mid in (mid_a, mid_b):
+                if not _mid:
+                    continue
+                _ents_side = _full_memap.get(_mid, [])
+                _connected = 0
+                for _e in _ents_side:
+                    if _connected >= 2:
+                        break
+                    _eid = _e["id"]
+                    # Adiciona o nó de entidade se ainda não estiver no grafo
+                    if _eid not in entity_ids:
+                        _etype = _e.get("entity_type", "ACTOR")
+                        _count = _e.get("occurrence_count") or 1
+                        _name  = _e.get("canonical_name", "?")
+                        _color = type_color.get(_etype, _PALETTE[0])
+                        _is_p  = (_etype in {"PERSON", "ACTOR"}
+                                  and _is_participant(_e, participant_names))
+                        _rlbl  = ("Participante confirmado" if _is_p
+                                  else _etype.replace("_", " ").title())
+                        net.add_node(
+                            _eid, label=_name,
+                            title=(f"{_name}\nTipo: {_rlbl}\n"
+                                   f"Ocorrências: {_count}\n(incluído por contradição)"),
+                            color={
+                                "background": _color, "border": "#0a0f1a",
+                                "highlight": {"background": _color, "border": "#ffffff"},
+                                "hover":     {"background": _color, "border": "#ffffff"},
+                            },
+                            size=max(10, min(28, 10 + _count * 2)),
+                            shape=_TYPE_SHAPE.get(_etype, "dot"),
+                            font={"color": "#ffffff", "size": 11,
+                                  "face": "Segoe UI, system-ui"},
+                        )
+                        entity_ids.add(_eid)
+                    net.add_edge(
+                        _eid, cnode_id,
+                        title=f"Envolvido na contradição\nSeveridade: {severity}",
+                        color={"color": node_color,
+                               "highlight": "#fca5a5", "hover": "#fca5a5"},
+                        width=1.5,
+                        dashes=True,
+                    )
+                    _connected += 1
 
     # ── Opções de física (Barnes-Hut) e interação ─────────────────────────────
     options = {
