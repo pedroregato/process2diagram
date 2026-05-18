@@ -88,6 +88,12 @@ with tab_entities:
             _cons_provider = st.session_state.get("selected_provider", "")
             _cons_client   = get_session_llm_client(_cons_provider) if _cons_provider else None
             _prov_cfg      = AVAILABLE_PROVIDERS.get(_cons_provider, {})
+            # Show persisted result from previous run
+            _cons_msg = st.session_state.pop("_cons_msg", None)
+            if _cons_msg:
+                kind, text = _cons_msg
+                (st.success if kind == "success" else st.error)(text)
+
             if not _cons_client:
                 st.warning("Configure e salve uma API key na sidebar antes de consolidar.")
             elif st.button("🔁 Consolidar agora", key="kh_consolidate_btn", use_container_width=False):
@@ -97,16 +103,17 @@ with tab_entities:
                         {"api_key": _cons_client["api_key"]}, _prov_cfg
                     )
                     _stats = _agent.consolidate(project_id)
-                    if _stats.get("error"):
-                        st.error(f"Erro: {_stats['error']}")
-                    elif _stats["merges_done"] == 0:
-                        st.success("Nenhuma duplicata detectada — base já está consolidada.")
-                    else:
-                        st.success(
-                            f"Consolidação concluída: **{_stats['merges_done']}** grupo(s) fundido(s), "
-                            f"**{_stats['entities_removed']}** entidade(s) removida(s)."
-                        )
-                        st.rerun()
+                if _stats.get("error"):
+                    st.session_state["_cons_msg"] = ("error", f"Erro: {_stats['error']}")
+                elif _stats["merges_done"] == 0:
+                    st.session_state["_cons_msg"] = ("success", "Nenhuma duplicata detectada — base já está consolidada.")
+                else:
+                    st.session_state["_cons_msg"] = (
+                        "success",
+                        f"Consolidação concluída: **{_stats['merges_done']}** grupo(s) fundido(s), "
+                        f"**{_stats['entities_removed']}** entidade(s) removida(s).",
+                    )
+                st.rerun()
 
     if not entities:
         st.info("Nenhuma entidade encontrada. Execute o pipeline em uma reunião para popular o Knowledge Hub.")
