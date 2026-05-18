@@ -1688,6 +1688,47 @@ def get_tool_schemas_openai() -> list[dict]:
                 }
             }
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "resolve_entity_ambiguity",
+                "description": (
+                    "Merges two or more entities that represent the same real-world object "
+                    "(person, system, document, concept, etc.) into one canonical entity in the "
+                    "Knowledge Hub. Use when the user identifies duplicates, e.g. 'Pedro Gentil' "
+                    "and 'Pedro Gentil Regato de Oliveira Soares' are the same person. "
+                    "Searches entities by name (case-insensitive, substring match, aliases included). "
+                    "The canonical entity absorbs the occurrence counts, aliases and meeting history "
+                    "of all duplicates, which are then deleted. Admin only."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "canonical_name": {
+                            "type": "string",
+                            "description": (
+                                "Name of the entity to KEEP as the canonical version. "
+                                "Must (partially) match an existing entity in the Knowledge Hub."
+                            ),
+                        },
+                        "duplicate_names": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": (
+                                "Names of the entities to merge INTO the canonical entity. "
+                                "Each name is searched by substring match and aliases. "
+                                "These entities will be absorbed and deleted after the merge."
+                            ),
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "Brief explanation of why these represent the same entity.",
+                        },
+                    },
+                    "required": ["canonical_name", "duplicate_names"],
+                },
+            },
+        },
     ]
 
 
@@ -1773,6 +1814,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "populate_roster":                 "admin",
     "populate_knowledge_hub":          "admin",
     "detect_contradictions":           "admin",
+    "resolve_entity_ambiguity":        "admin",
 }
 
 # Ferramentas que exigem perfil administrador
@@ -1797,6 +1839,7 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "populate_roster",
     "populate_knowledge_hub",
     "detect_contradictions",
+    "resolve_entity_ambiguity",
 })
 
 
@@ -5402,6 +5445,103 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             f"Consulte a aba ⚠️ Contradições na página 🧠 Knowledge Hub para revisar e resolver."
         )
 
+    # ── resolve_entity_ambiguity ──────────────────────────────────────────────
+
+    def _resolve_entity_ambiguity(self, args: dict) -> str:
+        """
+        Merge duplicate entities in kh_entities.
+        Searches by canonical_name and aliases (case-insensitive substring match).
+        """
+        if not self.project_id:
+            return "Nenhum contexto ativo. Selecione um contexto na Home primeiro."
+
+        from core.knowledge_store import get_entities, merge_entities
+
+        canonical_name  = (args.get("canonical_name") or "").strip()
+        duplicate_names = [n.strip() for n in (args.get("duplicate_names") or []) if n.strip()]
+        reason          = (args.get("reason") or "Mesma entidade com nomes diferentes").strip()
+
+        if not canonical_name or not duplicate_names:
+            return "❌ Forneça canonical_name e pelo menos um nome em duplicate_names."
+
+        all_entities = get_entities(self.project_id, limit=500)
+        if not all_entities:
+            return (
+                "Nenhuma entidade encontrada no Knowledge Hub para este projeto. "
+                "Execute populate_knowledge_hub primeiro."
+            )
+
+        def _match(entity: dict, search: str) -> bool:
+            s = search.lower()
+            if s in (entity.get("canonical_name") or "").lower():
+                return True
+            return any(s in (a or "").lower() for a in (entity.get("aliases") or []))
+
+        # Find keep entity
+        keep_candidates = [e for e in all_entities if _match(e, canonical_name)]
+        if not keep_candidates:
+            return (
+                f"❌ Nenhuma entidade encontrada com o nome '{canonical_name}'.\n"
+                f"Sugestão: use parte do nome (ex: 'Pedro Gentil') ou verifique "
+                f"o Grafo de Conhecimento para ver os nomes exatos."
+            )
+        # Prefer exact match; fallback to highest occurrence_count
+        keep_entity = next(
+            (e for e in keep_candidates
+             if (e.get("canonical_name") or "").lower() == canonical_name.lower()),
+            max(keep_candidates, key=lambda e: e.get("occurrence_count") or 1),
+        )
+        keep_id   = keep_entity["id"]
+        keep_name = keep_entity.get("canonical_name", canonical_name)
+
+        # Find discard entities
+        discard_ids:   list[str] = []
+        not_found:     list[str] = []
+        found_names:   list[str] = []
+
+        for dup_name in duplicate_names:
+            candidates = [
+                e for e in all_entities
+                if e["id"] != keep_id and _match(e, dup_name)
+            ]
+            if not candidates:
+                not_found.append(dup_name)
+                continue
+            # Pick best candidate (prefer exact match, else highest occurrence)
+            best = next(
+                (e for e in candidates
+                 if (e.get("canonical_name") or "").lower() == dup_name.lower()),
+                max(candidates, key=lambda e: e.get("occurrence_count") or 1),
+            )
+            if best["id"] not in discard_ids:
+                discard_ids.append(best["id"])
+                found_names.append(best.get("canonical_name", dup_name))
+
+        if not discard_ids:
+            msg = "❌ Nenhum dos nomes duplicados foi encontrado no Knowledge Hub.\n"
+            if not_found:
+                msg += f"Não encontrados: {', '.join(not_found)}\n"
+            msg += f"Use o Grafo de Conhecimento para verificar os nomes exatos das entidades."
+            return msg
+
+        # Execute merge
+        ok = merge_entities(self.project_id, keep_id, discard_ids)
+
+        lines = [
+            f"{'✅' if ok else '❌'} Fusão de entidades {'concluída' if ok else 'falhou'}.\n",
+            f"Entidade mantida: **{keep_name}**",
+            f"Absorvidas e removidas: {', '.join(found_names)}",
+            f"Motivo: {reason}",
+        ]
+        if not_found:
+            lines.append(f"\n⚠️ Não encontrados (verifique os nomes): {', '.join(not_found)}")
+        if ok:
+            lines.append(
+                "\nO Grafo de Conhecimento será atualizado na próxima visualização. "
+                "Os aliases e histórico de reuniões foram transferidos para a entidade canônica."
+            )
+        return "\n".join(lines)
+
     # ── populate_knowledge_hub ────────────────────────────────────────────────
 
     def _populate_knowledge_hub(self, args: dict) -> str:
@@ -5750,8 +5890,9 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     series_name=tool_input.get("series_name", ""),
                 ),
                 "populate_roster":          lambda: self._populate_roster(tool_input),
-                "populate_knowledge_hub":  lambda: self._populate_knowledge_hub(tool_input),
-                "detect_contradictions":   lambda: self._detect_contradictions(),
+                "populate_knowledge_hub":    lambda: self._populate_knowledge_hub(tool_input),
+                "detect_contradictions":     lambda: self._detect_contradictions(),
+                "resolve_entity_ambiguity":  lambda: self._resolve_entity_ambiguity(tool_input),
                 "render_table": lambda: self._render_table(tool_input),
                 "get_executive_report": lambda: self.get_executive_report(
                     tool_input["meeting_number"],
