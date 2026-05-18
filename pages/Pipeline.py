@@ -247,8 +247,7 @@ if pipeline_mode == _MODE_NEW:
             except Exception as e:
                 st.warning(f"⚠️ Erro ao salvar no Supabase: {e}")
 
-        # FIX: rerun limpo após pipeline para que o bloco de resultados
-        # renderize fora do contexto do st.status (que bloqueia st.tabs).
+        # Rerun limpo para renderizar as abas fora do contexto do st.status
         st.rerun()
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -380,36 +379,6 @@ if "hub" in st.session_state:
     prefix = st.session_state.prefix
     suffix = st.session_state.suffix
 
-    # ── Abas primárias (resultados principais) ────────────────────────────────
-    primary = []
-    if hub.minutes.ready:
-        primary.append("minutes")
-    if hub.requirements.ready:
-        primary.append("requirements")
-    if hub.bpmn.ready:
-        primary.append("bpmn")
-        primary.append("mermaid")
-    if hub.synthesizer.ready:
-        primary.append("synthesizer")
-    primary.append("export")
-
-    # ── Abas avançadas (análise complementar) ─────────────────────────────────
-    advanced = []
-    if hub.transcript_quality.ready:
-        advanced.append("quality")
-    if hub.sbvr.ready:
-        advanced.append("sbvr")
-    if hub.bmm.ready:
-        advanced.append("bmm")
-    if getattr(hub, 'dmn', None) and hub.dmn.ready:
-        advanced.append("dmn")
-    if getattr(hub, 'argumentation', None) and hub.argumentation.ready:
-        advanced.append("argumentation")
-    if hub.validation.ready and hub.validation.n_bpmn_runs > 1:
-        advanced.append("validation")
-    if st.session_state.show_dev_tools:
-        advanced.append("devtools")
-
     tab_labels = {
         "minutes":       "📋 Ata de Reunião",
         "requirements":  "📝 Requisitos",
@@ -417,14 +386,45 @@ if "hub" in st.session_state:
         "mermaid":       "📊 Mermaid",
         "synthesizer":   "📄 Relatório Executivo",
         "export":        "📦 Exportar",
-        "quality":       "🔬 Qualidade da Transcrição",
+        "quality":       "🔬 Qualidade",
         "sbvr":          "📖 SBVR",
         "bmm":           "🎯 BMM",
         "validation":    "🏆 Validação BPMN",
         "dmn":           "⚖️ DMN",
-        "argumentation": "🗺️ IBIS / Argumentação",
+        "argumentation": "🗺️ IBIS",
         "devtools":      "🔍 Dev Tools",
     }
+
+    # ── Monta lista única de abas na ordem desejada ───────────────────────────
+    all_tabs = []
+
+    # Primárias
+    if hub.minutes.ready:
+        all_tabs.append("minutes")
+    if hub.requirements.ready:
+        all_tabs.append("requirements")
+    if hub.bpmn.ready:
+        all_tabs.append("bpmn")
+        all_tabs.append("mermaid")
+    if hub.synthesizer.ready:
+        all_tabs.append("synthesizer")
+    all_tabs.append("export")
+
+    # Avançadas — mesmo nível, sem seção separada
+    if hub.transcript_quality.ready:
+        all_tabs.append("quality")
+    if hub.sbvr.ready:
+        all_tabs.append("sbvr")
+    if hub.bmm.ready:
+        all_tabs.append("bmm")
+    if getattr(hub, 'dmn', None) and hub.dmn.ready:
+        all_tabs.append("dmn")
+    if getattr(hub, 'argumentation', None) and hub.argumentation.ready:
+        all_tabs.append("argumentation")
+    if hub.validation.ready and hub.validation.n_bpmn_runs > 1:
+        all_tabs.append("validation")
+    if st.session_state.show_dev_tools:
+        all_tabs.append("devtools")
 
     def _render_tab(tab_id):
         if tab_id == "minutes":        render_minutes(hub, prefix, suffix)
@@ -441,22 +441,11 @@ if "hub" in st.session_state:
         elif tab_id == "argumentation": render_argumentation(hub, prefix, suffix)
         elif tab_id == "devtools":     render_dev_tools(hub, st.session_state.show_raw_json)
 
-    # Renderiza abas primárias
-    tabs = st.tabs([tab_labels[t] for t in primary])
-    for idx, tab_id in enumerate(primary):
+    # Renderiza todas as abas em um único st.tabs
+    tabs = st.tabs([tab_labels[t] for t in all_tabs])
+    for idx, tab_id in enumerate(all_tabs):
         with tabs[idx]:
             _render_tab(tab_id)
-
-    # ── Análise Avançada ──────────────────────────────────────────────────────
-    # FIX v4.15: st.expander removido — tabs internas usam st.expander próprio
-    # e o Streamlit não permite expanders aninhados (StreamlitAPIException).
-    if advanced:
-        st.markdown("---")
-        st.markdown("#### 🔬 Análise Avançada")
-        adv_tabs = st.tabs([tab_labels[t] for t in advanced])
-        for idx, tab_id in enumerate(advanced):
-            with adv_tabs[idx]:
-                _render_tab(tab_id)
 
 # Rodapé
 st.markdown("---")
