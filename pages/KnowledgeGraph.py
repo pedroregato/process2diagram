@@ -46,10 +46,9 @@ _PALETTE = [
 # Cor fixa para nós de Processo do Knowledge Hub
 _PROC_COLOR = "#fde047"
 
-# Verbo semântico por tipo — aresta entidade → processo
+# Verbo semântico por tipo — aresta entidade → processo.
+# PERSON/ACTOR não entram aqui: determinados dinamicamente via roster.
 _EP_VERB: dict[str, str] = {
-    "PERSON":     "Participou de",
-    "ACTOR":      "Participou de",
     "ROLE":       "Esteve presente em",
     "SYSTEM":     "Foi mencionado em",
     "DOCUMENT":   "Foi referenciado em",
@@ -60,6 +59,19 @@ _EP_VERB: dict[str, str] = {
     "PROCESS":    "Relacionou-se com este processo em",
 }
 _EP_VERB_DEFAULT = "Apareceu em"
+
+
+def _is_participant(entity: dict, participant_names: set[str]) -> bool:
+    """Retorna True se a entidade consta no roster de participantes do projeto."""
+    if not participant_names:
+        return False
+    name = (entity.get("canonical_name") or "").lower().strip()
+    if name and name in participant_names:
+        return True
+    for alias in (entity.get("aliases") or []):
+        if alias and alias.lower().strip() in participant_names:
+            return True
+    return False
 
 # Mapeamento tipo → forma pyvis
 _TYPE_SHAPE: dict[str, str] = {
@@ -153,11 +165,32 @@ def _load_graph_data(project_id: str) -> dict:
     except Exception:
         contradictions = []
 
+    # Roster de participantes confirmados do projeto — usado para distinguir
+    # "participou" vs "foi mencionado" nas arestas de pessoas.
+    participant_names: set[str] = set()
+    try:
+        roster = (
+            db.table("project_roster")
+            .select("full_name, name_aliases")
+            .eq("project_id", project_id)
+            .eq("is_active", True)
+            .execute().data or []
+        )
+        for r in roster:
+            if r.get("full_name"):
+                participant_names.add(r["full_name"].lower().strip())
+            for alias in (r.get("name_aliases") or []):
+                if alias:
+                    participant_names.add(alias.lower().strip())
+    except Exception:
+        pass
+
     return {
         "entities": entities,
         "processes": processes,
         "facts": facts,
         "contradictions": contradictions,
+        "participant_names": participant_names,
     }
 
 
@@ -215,6 +248,7 @@ def _build_pyvis_graph(
     entities = entities[:max_nodes]
 
     entity_ids = {e["id"] for e in entities}
+    participant_names: set[str] = data.get("participant_names") or set()
 
     # Cor por tipo (atribuição dinâmica, ordem alfabética)
     unique_types = sorted({e.get("entity_type", "ACTOR") for e in entities})
@@ -248,9 +282,11 @@ def _build_pyvis_graph(
         color = type_color.get(etype, _PALETTE[0])
         shape = _TYPE_SHAPE.get(etype, "dot")
         # Plain text tooltip — vis-network sanitizes HTML in newer versions
+        is_part = etype in {"PERSON", "ACTOR"} and _is_participant(e, participant_names)
+        role_label = "Participante confirmado" if is_part else etype.replace("_", " ").title()
         tooltip = (
             f"{name}\n"
-            f"Tipo: {etype.replace('_', ' ').title()}\n"
+            f"Tipo: {role_label}\n"
             f"Ocorrências: {count}"
             + (f"\nAliases: {aliases}" if aliases else "")
         )
@@ -304,7 +340,10 @@ def _build_pyvis_graph(
                     n = len(shared)
                     reuniao = "reunião" if n == 1 else "reuniões"
                     etype = e.get("entity_type", "")
-                    verb = _EP_VERB.get(etype, _EP_VERB_DEFAULT)
+                    if etype in {"PERSON", "ACTOR"}:
+                        verb = "Participou de" if _is_participant(e, participant_names) else "Foi mencionado em"
+                    else:
+                        verb = _EP_VERB.get(etype, _EP_VERB_DEFAULT)
                     net.add_edge(
                         eid, pid,
                         title=f"{verb} {n} {reuniao} onde este processo foi discutido",
@@ -324,10 +363,14 @@ def _build_pyvis_graph(
                     reuniao = "reunião" if n == 1 else "reuniões"
                     ta = ea.get("entity_type", "")
                     tb = eb.get("entity_type", "")
-                    if ta in _people_types and tb in _people_types:
+                    ea_part = ta in _people_types and _is_participant(ea, participant_names)
+                    eb_part = tb in _people_types and _is_participant(eb, participant_names)
+                    if ea_part and eb_part:
                         ee_title = f"Participaram juntos em {n} {reuniao}"
-                    elif ta in _people_types or tb in _people_types:
+                    elif ea_part or eb_part:
                         ee_title = f"Co-ocorreram em {n} {reuniao}"
+                    elif ta in _people_types and tb in _people_types:
+                        ee_title = f"Foram mencionados juntos em {n} {reuniao}"
                     else:
                         ee_title = f"Foram mencionados juntos em {n} {reuniao}"
                     net.add_edge(
