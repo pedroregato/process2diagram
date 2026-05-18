@@ -407,35 +407,35 @@ if "hub" in st.session_state:
         advanced.append("devtools")
 
     tab_labels = {
-        "minutes":      "📋 Ata de Reunião",
-        "requirements": "📝 Requisitos",
-        "bpmn":         "📐 BPMN 2.0",
-        "mermaid":      "📊 Mermaid",
-        "synthesizer":  "📄 Relatório Executivo",
-        "export":       "📦 Exportar",
-        "quality":      "🔬 Qualidade da Transcrição",
-        "sbvr":         "📖 SBVR",
-        "bmm":          "🎯 BMM",
-        "validation":   "🏆 Validação BPMN",
-        "dmn":          "⚖️ DMN",
+        "minutes":       "📋 Ata de Reunião",
+        "requirements":  "📝 Requisitos",
+        "bpmn":          "📐 BPMN 2.0",
+        "mermaid":       "📊 Mermaid",
+        "synthesizer":   "📄 Relatório Executivo",
+        "export":        "📦 Exportar",
+        "quality":       "🔬 Qualidade da Transcrição",
+        "sbvr":          "📖 SBVR",
+        "bmm":           "🎯 BMM",
+        "validation":    "🏆 Validação BPMN",
+        "dmn":           "⚖️ DMN",
         "argumentation": "🗺️ IBIS / Argumentação",
-        "devtools":     "🔍 Dev Tools",
+        "devtools":      "🔍 Dev Tools",
     }
 
     def _render_tab(tab_id):
-        if tab_id == "minutes":       render_minutes(hub, prefix, suffix)
+        if tab_id == "minutes":        render_minutes(hub, prefix, suffix)
         elif tab_id == "requirements": render_requirements(hub, prefix, suffix)
-        elif tab_id == "bpmn":        render_bpmn(hub, prefix, suffix)
-        elif tab_id == "mermaid":     render_mermaid(hub, prefix, suffix)
-        elif tab_id == "synthesizer": render_synthesizer(hub, prefix, suffix)
-        elif tab_id == "export":      render_export(hub, prefix, suffix)
-        elif tab_id == "quality":     render_quality(hub, prefix, suffix)
-        elif tab_id == "sbvr":        render_sbvr(hub, prefix, suffix)
-        elif tab_id == "bmm":         render_bmm(hub, prefix, suffix)
-        elif tab_id == "validation":  render_validation(hub)
+        elif tab_id == "bpmn":         render_bpmn(hub, prefix, suffix)
+        elif tab_id == "mermaid":      render_mermaid(hub, prefix, suffix)
+        elif tab_id == "synthesizer":  render_synthesizer(hub, prefix, suffix)
+        elif tab_id == "export":       render_export(hub, prefix, suffix)
+        elif tab_id == "quality":      render_quality(hub, prefix, suffix)
+        elif tab_id == "sbvr":         render_sbvr(hub, prefix, suffix)
+        elif tab_id == "bmm":          render_bmm(hub, prefix, suffix)
+        elif tab_id == "validation":   render_validation(hub)
         elif tab_id == "dmn":          render_dmn(hub, prefix, suffix)
         elif tab_id == "argumentation": render_argumentation(hub, prefix, suffix)
-        elif tab_id == "devtools":    render_dev_tools(hub, st.session_state.show_raw_json)
+        elif tab_id == "devtools":     render_dev_tools(hub, st.session_state.show_raw_json)
 
     # Renderiza abas primárias
     tabs = st.tabs([tab_labels[t] for t in primary])
@@ -443,13 +443,16 @@ if "hub" in st.session_state:
         with tabs[idx]:
             _render_tab(tab_id)
 
-    # Renderiza abas avançadas em expander, se houver conteúdo
+    # ── Análise Avançada ──────────────────────────────────────────────────────
+    # FIX v4.15: st.expander removido — tabs internas usam st.expander próprio
+    # e o Streamlit não permite expanders aninhados (StreamlitAPIException).
     if advanced:
-        with st.expander("🔬 Análise Avançada", expanded=False):
-            adv_tabs = st.tabs([tab_labels[t] for t in advanced])
-            for idx, tab_id in enumerate(advanced):
-                with adv_tabs[idx]:
-                    _render_tab(tab_id)
+        st.markdown("---")
+        st.markdown("#### 🔬 Análise Avançada")
+        adv_tabs = st.tabs([tab_labels[t] for t in advanced])
+        for idx, tab_id in enumerate(advanced):
+            with adv_tabs[idx]:
+                _render_tab(tab_id)
 
 # Rodapé
 st.markdown("---")
