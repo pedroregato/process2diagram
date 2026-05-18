@@ -148,14 +148,46 @@ def _load_graph_data(project_id: str) -> dict:
 
 # ── Graph builder (pyvis) ──────────────────────────────────────────────────────
 
+def _render_legend(type_color: dict[str, str]) -> None:
+    """Renders a color legend as styled badges above the graph."""
+    # Dark colors get white text; light colors get dark text
+    _light = {"#fde047", "#fbbf24", "#4ade80", "#86efac", "#22d3ee", "#e2e8f0"}
+    badges = []
+    for etype in sorted(type_color):
+        color = type_color[etype]
+        label = etype.replace("_", " ").title()
+        shape = _TYPE_SHAPE.get(etype, "●")
+        shape_icon = {"dot": "●", "diamond": "◆", "square": "■", "triangle": "▲",
+                      "hexagon": "⬡", "star": "★", "triangleDown": "▼",
+                      "ellipse": "⬭"}.get(shape, "●")
+        txt = "#0a0f1a" if color in _light else "#ffffff"
+        badges.append(
+            f'<span style="background:{color};color:{txt};padding:3px 10px;'
+            f'border-radius:12px;margin:2px 3px;font-size:12px;display:inline-block;'
+            f'font-family:Segoe UI,system-ui,sans-serif">'
+            f'{shape_icon} {label}</span>'
+        )
+    # Processo KH badge
+    badges.append(
+        f'<span style="background:{_PROC_COLOR};color:#0a0f1a;padding:3px 10px;'
+        f'border-radius:12px;margin:2px 3px;font-size:12px;display:inline-block;'
+        f'font-family:Segoe UI,system-ui,sans-serif">'
+        f'■ Processo (KH)</span>'
+    )
+    st.markdown(
+        '<div style="margin-bottom:6px">' + "".join(badges) + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def _build_pyvis_graph(
     data: dict, max_nodes: int, show_ep_edges: bool,
     show_processes: bool, entity_types: list[str],
     min_occurrence: int = 1, graph_height: int = 720,
     show_entity_edges: bool = False, min_shared_meetings: int = 2,
     physics_enabled: bool = True,
-) -> str:
-    """Build a pyvis network and return the full HTML string."""
+) -> tuple[str, dict[str, str]]:
+    """Build a pyvis network. Returns (html_string, type_color_map)."""
     from pyvis.network import Network
 
     entities = data["entities"]
@@ -200,11 +232,12 @@ def _build_pyvis_graph(
         size  = max(12, min(40, 12 + count * 2.5))
         color = type_color.get(etype, _PALETTE[0])
         shape = _TYPE_SHAPE.get(etype, "dot")
+        # Plain text tooltip — vis-network sanitizes HTML in newer versions
         tooltip = (
-            f"<b>{name}</b><br>"
-            f"Tipo: {etype.replace('_', ' ').title()}<br>"
+            f"{name}\n"
+            f"Tipo: {etype.replace('_', ' ').title()}\n"
             f"Ocorrências: {count}"
-            + (f"<br>Aliases: {aliases}" if aliases else "")
+            + (f"\nAliases: {aliases}" if aliases else "")
         )
         net.add_node(
             eid, label=name, title=tooltip,
@@ -224,11 +257,11 @@ def _build_pyvis_graph(
         pname = proc.get("process_name", "?")
         desc  = (proc.get("description") or "")[:80]
         tooltip = (
-            f"<b>{pname}</b><br>"
-            f"Tipo: Processo (KH)<br>"
-            f"Status: {proc.get('status', '—')}<br>"
+            f"{pname}\n"
+            f"Tipo: Processo (KH)\n"
+            f"Status: {proc.get('status', '—')}\n"
             f"Versões: {proc.get('version_count', 1)}"
-            + (f"<br>{desc}" if desc else "")
+            + (f"\n{desc}" if desc else "")
         )
         net.add_node(
             pid, label=pname[:24], title=tooltip,
@@ -325,7 +358,16 @@ def _build_pyvis_graph(
     }
     net.set_options(json.dumps(options))
 
-    return net.generate_html(local=False)
+    html = net.generate_html(local=False)
+    # Inject CSS so \n in tooltip text renders as visual line breaks
+    html = html.replace(
+        "</style>",
+        ".vis-tooltip { white-space: pre-line !important; "
+        "font-family: 'Segoe UI', system-ui, sans-serif !important; "
+        "font-size: 13px !important; line-height: 1.5 !important; }</style>",
+        1,
+    )
+    return html, type_color
 
 
 
@@ -433,12 +475,13 @@ with tab_graph:
         st.warning("Selecione pelo menos um tipo de entidade no painel lateral.")
     else:
         try:
-            html_graph = _build_pyvis_graph(
+            html_graph, type_color = _build_pyvis_graph(
                 data, max_nodes, show_ep_edges, show_processes, selected_types,
                 min_occurrence=min_occurrence, graph_height=graph_height,
                 show_entity_edges=show_entity_edges, min_shared_meetings=min_shared,
                 physics_enabled=physics_enabled,
             )
+            _render_legend(type_color)
             components.html(html_graph, height=graph_height + 30, scrolling=False)
         except ImportError:
             st.error(
