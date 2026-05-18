@@ -5569,27 +5569,54 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
 
         all_entities = get_entities(self.project_id, limit=500)
         s = entity_name.lower()
-        candidates = [
-            e for e in all_entities
-            if s in (e.get("canonical_name") or "").lower()
-            or any(s in (a or "").lower() for a in (e.get("aliases") or []))
-        ]
-        if not candidates:
-            return (
-                f"Nenhuma entidade encontrada com o nome '{entity_name}'.\n"
-                f"Verifique o Grafo de Conhecimento para o nome exato."
-            )
-        if len(candidates) > 1:
-            names = ", ".join(e.get("canonical_name", "?") for e in candidates[:5])
-            return (
-                f"⚠️ '{entity_name}' corresponde a {len(candidates)} entidades: {names}.\n"
-                f"Use um nome mais específico para evitar deleções acidentais."
-            )
 
-        entity = candidates[0]
-        eid    = entity["id"]
-        ename  = entity.get("canonical_name", entity_name)
-        ok     = delete_entity(self.project_id, eid)
+        # 1. Match exato no canonical_name (prioridade máxima)
+        exact = [e for e in all_entities
+                 if (e.get("canonical_name") or "").lower() == s]
+        if exact:
+            entity = exact[0]
+        else:
+            # 2. Substring no canonical_name
+            name_sub = [e for e in all_entities
+                        if s in (e.get("canonical_name") or "").lower()]
+            if len(name_sub) == 1:
+                entity = name_sub[0]
+            elif len(name_sub) > 1:
+                names = "; ".join(
+                    f"'{e.get('canonical_name','?')}'" for e in name_sub[:5]
+                )
+                return (
+                    f"⚠️ '{entity_name}' corresponde a {len(name_sub)} entidades "
+                    f"pelo nome: {names}.\n"
+                    f"Use o nome exato (cópia do Grafo de Conhecimento) para evitar "
+                    f"deleções acidentais."
+                )
+            else:
+                # 3. Substring nos aliases (último recurso)
+                alias_sub = [e for e in all_entities
+                             if any(s in (a or "").lower()
+                                    for a in (e.get("aliases") or []))]
+                if not alias_sub:
+                    return (
+                        f"Nenhuma entidade encontrada com o nome '{entity_name}'.\n"
+                        f"Verifique o Grafo de Conhecimento para o nome exato."
+                    )
+                if len(alias_sub) > 1:
+                    details = "; ".join(
+                        f"'{e.get('canonical_name','?')}' (aliases: "
+                        f"{', '.join((e.get('aliases') or [])[:3])})"
+                        for e in alias_sub[:3]
+                    )
+                    return (
+                        f"⚠️ '{entity_name}' foi encontrado como alias em "
+                        f"{len(alias_sub)} entidades:\n{details}\n\n"
+                        f"Use o canonical_name exato de uma delas para deletar."
+                    )
+                entity = alias_sub[0]
+
+        eid   = entity["id"]
+        ename = entity.get("canonical_name", entity_name)
+        ok    = delete_entity(self.project_id, eid)
 
         if ok:
             return (
@@ -5597,7 +5624,8 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 f"Tipo: {entity.get('entity_type', '—')} | "
                 f"Ocorrências: {entity.get('occurrence_count', 1)}\n"
                 f"Motivo: {reason}\n\n"
-                f"O Grafo de Conhecimento será atualizado na próxima visualização."
+                f"Recarregue a página do Grafo de Conhecimento para ver a alteração "
+                f"(o cache expira em 2 min ou recarregue agora com F5)."
             )
         return f"❌ Falha ao remover '{ename}'. Verifique os logs do servidor."
 

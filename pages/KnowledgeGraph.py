@@ -759,6 +759,10 @@ with st.sidebar:
     )
     st.markdown("---")
     st.caption("Passe o mouse sobre os nos e arestas para ver detalhes. Arraste nos para reorganizar.")
+    if st.button("🔄 Recarregar dados", key="kg_refresh", use_container_width=True,
+                 help="Limpa o cache e recarrega do Supabase. Use após apagar ou fundir entidades."):
+        _load_graph_data.clear()
+        st.rerun()
 
 # ── Main graph ────────────────────────────────────────────────────────────────
 tab_graph, tab_table, tab_facts, tab_export = st.tabs(
