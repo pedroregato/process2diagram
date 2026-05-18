@@ -233,7 +233,7 @@ def _build_pyvis_graph(
     show_processes: bool, entity_types: list[str],
     min_occurrence: int = 1, graph_height: int = 720,
     show_entity_edges: bool = False, min_shared_meetings: int = 2,
-    physics_enabled: bool = True,
+    physics_enabled: bool = True, show_contradictions: bool = True,
 ) -> tuple[str, dict[str, str]]:
     """Build a pyvis network. Returns (html_string, type_color_map)."""
     from pyvis.network import Network
@@ -249,6 +249,7 @@ def _build_pyvis_graph(
 
     entity_ids = {e["id"] for e in entities}
     participant_names: set[str] = data.get("participant_names") or set()
+    contradictions = data.get("contradictions") or []
 
     # Cor por tipo (atribuição dinâmica, ordem alfabética)
     unique_types = sorted({e.get("entity_type", "ACTOR") for e in entities})
@@ -380,6 +381,60 @@ def _build_pyvis_graph(
                         width=1.0,
                         dashes=True,
                     )
+
+    # ── Arestas de contradição (vermelhas tracejadas) ─────────────────────────
+    # kh_contradictions liga reuniões (não entidades). Para representar no grafo,
+    # invertemos o entity_meeting_map e escolhemos a entidade mais representativa
+    # (maior occurrence_count) de cada lado da contradição.
+    if show_contradictions and contradictions:
+        # meeting_id → lista de entidades presentes, ordenada por occurrence_count desc
+        meeting_entity_map: dict[str, list[dict]] = {}
+        for e in entities:
+            for mid in entity_meeting_map.get(e["id"], set()):
+                meeting_entity_map.setdefault(mid, []).append(e)
+        for mid in meeting_entity_map:
+            meeting_entity_map[mid].sort(
+                key=lambda x: x.get("occurrence_count") or 1, reverse=True
+            )
+
+        _seen_contra_pairs: set[frozenset] = set()
+        for c in contradictions:
+            mid_a = c.get("meeting_a_id")
+            mid_b = c.get("meeting_b_id")
+            if not mid_a or not mid_b:
+                continue
+            ents_a = meeting_entity_map.get(mid_a, [])
+            ents_b = meeting_entity_map.get(mid_b, [])
+            if not ents_a or not ents_b:
+                continue
+            # Escolhe entidades distintas dos dois lados
+            ea = ents_a[0]
+            eb = next((e for e in ents_b if e["id"] != ea["id"]), None)
+            if eb is None:
+                ea = next((e for e in ents_a if e["id"] != ents_b[0]["id"]), None)
+                eb = ents_b[0]
+            if ea is None or eb is None or ea["id"] == eb["id"]:
+                continue
+            pair = frozenset({ea["id"], eb["id"]})
+            if pair in _seen_contra_pairs:
+                continue  # já existe aresta entre este par
+            _seen_contra_pairs.add(pair)
+            severity = c.get("severity", "medium")
+            desc = (c.get("description") or "Contradição detectada")[:150]
+            rel = c.get("relation_type") or ""
+            tooltip = (
+                f"Contradição detectada\n"
+                f"Severidade: {severity}"
+                + (f"\nRelação: {rel}" if rel else "")
+                + f"\n\n{desc}"
+            )
+            net.add_edge(
+                ea["id"], eb["id"],
+                title=tooltip,
+                color={"color": "#ef4444", "highlight": "#fca5a5", "hover": "#fca5a5"},
+                width=2.5,
+                dashes=True,
+            )
 
     # ── Opções de física (Barnes-Hut) e interação ─────────────────────────────
     options = {
@@ -523,6 +578,10 @@ with st.sidebar:
             help="Quantas reunioes as duas entidades precisam compartilhar para serem conectadas.")
     else:
         min_shared = 2
+    show_contradictions = st.toggle(
+        "Arestas de contradicao", value=True, key="kg_contras",
+        help="Exibe arestas vermelhas tracejadas entre entidades de reunioes com contradicoes detectadas.",
+    )
     physics_enabled = st.toggle("Simulacao fisica (mover nos)", value=True, key="kg_physics",
         help="Ativa a simulacao Barnes-Hut — os nos se atraem/repelem organicamente. Desative para fixar o layout.")
     max_nodes = st.slider(
@@ -548,9 +607,17 @@ with tab_graph:
                 data, max_nodes, show_ep_edges, show_processes, selected_types,
                 min_occurrence=min_occurrence, graph_height=graph_height,
                 show_entity_edges=show_entity_edges, min_shared_meetings=min_shared,
-                physics_enabled=physics_enabled,
+                physics_enabled=physics_enabled, show_contradictions=show_contradictions,
             )
             _render_legend(type_color)
+            if show_contradictions and contradictions:
+                st.markdown(
+                    '<span style="background:#ef4444;color:#fff;padding:3px 10px;'
+                    'border-radius:12px;margin:2px 3px;font-size:12px;'
+                    'font-family:Segoe UI,system-ui,sans-serif">'
+                    '— Contradição detectada</span>',
+                    unsafe_allow_html=True,
+                )
             components.html(html_graph, height=graph_height + 30, scrolling=False)
         except ImportError:
             st.error(
@@ -558,10 +625,10 @@ with tab_graph:
                 "Execute `pip install pyvis==0.3.2` e reinicie o servidor."
             )
 
-        if contradictions:
+        if contradictions and not show_contradictions:
             st.info(
-                f"**{len(contradictions)} contradicao(oes)** detectada(s). "
-                "Acesse **Saude do Contexto** para detalhes."
+                f"**{len(contradictions)} contradicao(oes)** detectada(s) — "
+                "ative 'Arestas de contradicao' no painel lateral para visualizar no grafo."
             )
 
 with tab_table:
