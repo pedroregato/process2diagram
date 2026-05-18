@@ -215,6 +215,8 @@ def _spring_layout(nodes: list[str], edges: list[tuple[str, str]], iterations: i
 def _build_graph(
     data: dict, max_nodes: int, show_facts: bool,
     show_processes: bool, entity_types: list[str],
+    min_occurrence: int = 1, show_labels: bool = True,
+    graph_height: int = 640,
 ) -> go.Figure:
     from collections import defaultdict
 
@@ -225,6 +227,8 @@ def _build_graph(
 
     if entity_types:
         entities = [e for e in entities if e.get("entity_type", "ACTOR") in entity_types]
+    if min_occurrence > 1:
+        entities = [e for e in entities if (e.get("occurrence_count") or 1) >= min_occurrence]
     entities = entities[:max_nodes]
 
     entity_ids = {e["id"] for e in entities}
@@ -377,14 +381,15 @@ def _build_graph(
             legendgroup=etype,
         ))
         # Labels (sem entrar na legenda)
-        fig.add_trace(go.Scatter(
-            x=xs, y=ys, mode="text",
-            text=[f"<b>{t}</b>" for t in texts],
-            textposition="top center",
-            textfont=dict(size=11, color="#ffffff", family="Segoe UI, system-ui"),
-            hoverinfo="skip", showlegend=False,
-            legendgroup=etype,
-        ))
+        if show_labels:
+            fig.add_trace(go.Scatter(
+                x=xs, y=ys, mode="text",
+                text=[f"<b>{t}</b>" for t in texts],
+                textposition="top center",
+                textfont=dict(size=11, color="#ffffff", family="Segoe UI, system-ui"),
+                hoverinfo="skip", showlegend=False,
+                legendgroup=etype,
+            ))
 
     # Nós de processo KH
     if proc_x:
@@ -399,13 +404,14 @@ def _build_graph(
             hovertext=proc_hover, hoverinfo="text",
             showlegend=True, legendgroup="_PROC",
         ))
-        fig.add_trace(go.Scatter(
-            x=proc_x, y=proc_y, mode="text",
-            text=[f"<b>{t}</b>" for t in proc_text],
-            textposition="top center",
-            textfont=dict(size=10, color="#ffffff", family="Segoe UI, system-ui"),
-            hoverinfo="skip", showlegend=False, legendgroup="_PROC",
-        ))
+        if show_labels:
+            fig.add_trace(go.Scatter(
+                x=proc_x, y=proc_y, mode="text",
+                text=[f"<b>{t}</b>" for t in proc_text],
+                textposition="top center",
+                textfont=dict(size=10, color="#ffffff", family="Segoe UI, system-ui"),
+                hoverinfo="skip", showlegend=False, legendgroup="_PROC",
+            ))
 
     # Labels das arestas
     if elbl_t and any(t for t in elbl_t):
@@ -423,7 +429,7 @@ def _build_graph(
         margin=dict(l=10, r=10, t=10, b=10),
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, showspikes=False),
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False, showspikes=False),
-        height=640,
+        height=graph_height,
         dragmode="pan",
         hoverlabel=dict(bgcolor="#1e293b", font_size=12,
                         font_color="#f1f5f9", bordercolor="#475569"),
@@ -508,26 +514,42 @@ with st.sidebar:
     selected_types = st.multiselect(
         "Tipos de entidade", all_types, default=all_types, key="kg_types"
     )
-    show_facts = st.toggle("Mostrar relacoes (fatos)", value=True, key="kg_facts")
+    max_occ = max((e.get("occurrence_count") or 1) for e in entities) if entities else 1
+    min_occurrence = st.slider(
+        "Ocorrencias minimas", 1, max(max_occ, 2), 1, key="kg_min_occ",
+        help="Oculta entidades com menos ocorrencias — reduz o cluster central.",
+    )
     show_processes = st.toggle("Mostrar processos", value=True, key="kg_procs")
-    max_nodes = st.slider("Max entidades no grafo", 10, min(150, len(entities)), min(60, len(entities)), key="kg_maxn")
+    show_facts = st.toggle("Mostrar arestas entidade→processo", value=True, key="kg_facts")
+    show_labels = st.toggle("Mostrar rotulos", value=True, key="kg_labels")
+    max_nodes = st.slider(
+        "Max entidades no grafo", 10, min(150, len(entities)), min(60, len(entities)), key="kg_maxn"
+    )
+    graph_height = st.select_slider(
+        "Altura do grafo", [480, 600, 720, 860, 1000], value=640, key="kg_height"
+    )
     st.markdown("---")
     st.caption("A legenda de cores aparece dentro do grafico (canto superior direito).")
 
 # ── Main graph ────────────────────────────────────────────────────────────────
-tab_graph, tab_table, tab_facts = st.tabs(["🕸️ Grafo", "📋 Entidades", "🔗 Relacoes"])
+tab_graph, tab_table, tab_facts, tab_export = st.tabs(
+    ["🕸️ Grafo", "📋 Entidades", "🔗 Fatos", "⬇️ Exportar"]
+)
 
 with tab_graph:
     if not selected_types:
         st.warning("Selecione pelo menos um tipo de entidade no painel lateral.")
     else:
-        fig = _build_graph(data, max_nodes, show_facts, show_processes, selected_types)
+        fig = _build_graph(
+            data, max_nodes, show_facts, show_processes, selected_types,
+            min_occurrence=min_occurrence, show_labels=show_labels,
+            graph_height=graph_height,
+        )
         st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True})
 
         if contradictions:
             st.info(
-                f"**{len(contradictions)} contradicao(oes)** detectada(s) — "
-                "representadas como tracejado vermelho. "
+                f"**{len(contradictions)} contradicao(oes)** detectada(s). "
                 "Acesse **Saude do Contexto** para detalhes."
             )
 
@@ -581,3 +603,120 @@ with tab_facts:
             "Os fatos sao extraidos pelo **Knowledge Extractor** durante o pipeline "
             "(ative o checkbox 'Grafo de Conhecimento (KH)' na barra lateral)."
         )
+
+with tab_export:
+    st.markdown("#### Exportar dados do Grafo de Conhecimento")
+    st.caption(
+        "Exporte todos os dados brutos para analise externa ou para compartilhar com o assistente."
+    )
+
+    # Build entity→process edge list for export
+    _entity_meeting_map: dict[str, set[str]] = {}
+    for _e in entities:
+        _mtgs: set[str] = set()
+        for _col in ("first_seen_meeting_id", "last_seen_meeting_id"):
+            _v = _e.get(_col)
+            if _v:
+                _mtgs.add(_v)
+        _entity_meeting_map[_e["id"]] = _mtgs
+
+    _edges_export = []
+    for _p in processes:
+        _pmtgs = set(_p.get("meeting_ids") or [])
+        for _e in entities:
+            if _entity_meeting_map.get(_e["id"], set()) & _pmtgs:
+                _edges_export.append({
+                    "entity_id":    _e["id"],
+                    "entity_name":  _e.get("canonical_name", ""),
+                    "entity_type":  _e.get("entity_type", ""),
+                    "process_id":   _p["id"],
+                    "process_name": _p.get("process_name", ""),
+                })
+
+    export_payload = {
+        "project_id":   project_id,
+        "project_name": project_name,
+        "summary": {
+            "entities":       len(entities),
+            "processes":      len(processes),
+            "facts":          len(facts),
+            "contradictions": len(contradictions),
+            "edges":          len(_edges_export),
+        },
+        "entities": [
+            {
+                "id":               e["id"],
+                "canonical_name":   e.get("canonical_name"),
+                "entity_type":      e.get("entity_type"),
+                "occurrence_count": e.get("occurrence_count"),
+                "aliases":          e.get("aliases") or [],
+                "first_seen_meeting_id": e.get("first_seen_meeting_id"),
+                "last_seen_meeting_id":  e.get("last_seen_meeting_id"),
+            }
+            for e in entities
+        ],
+        "processes": [
+            {
+                "id":            p["id"],
+                "process_name":  p.get("process_name"),
+                "description":   p.get("description"),
+                "version_count": p.get("version_count"),
+                "status":        p.get("status"),
+                "meeting_ids":   p.get("meeting_ids") or [],
+            }
+            for p in processes
+        ],
+        "facts": [
+            {
+                "id":                f["id"],
+                "fact_type":         f.get("fact_type"),
+                "content":           f.get("content"),
+                "confidence":        f.get("confidence"),
+                "dialogue_act":      f.get("dialogue_act"),
+                "source_meeting_ids": f.get("source_meeting_ids") or [],
+            }
+            for f in facts
+        ],
+        "contradictions": [
+            {
+                "id":            c["id"],
+                "description":   c.get("description"),
+                "severity":      c.get("severity"),
+                "relation_type": c.get("relation_type"),
+                "status":        c.get("status"),
+                "meeting_a_id":  c.get("meeting_a_id"),
+                "meeting_b_id":  c.get("meeting_b_id"),
+            }
+            for c in contradictions
+        ],
+        "edges_entity_process": _edges_export,
+    }
+
+    export_json = json.dumps(export_payload, ensure_ascii=False, indent=2)
+
+    col_dl, col_info = st.columns([1, 3])
+    with col_dl:
+        st.download_button(
+            label="⬇️ Baixar JSON",
+            data=export_json,
+            file_name=f"knowledge_graph_{project_name.replace(' ', '_')}.json",
+            mime="application/json",
+            use_container_width=True,
+        )
+    with col_info:
+        st.info(
+            f"**{len(entities)}** entidades · **{len(processes)}** processos · "
+            f"**{len(facts)}** fatos · **{len(contradictions)}** contradições · "
+            f"**{len(_edges_export)}** arestas computadas"
+        )
+
+    with st.expander("Previsualizar JSON (primeiros 3 elementos de cada lista)"):
+        preview = {
+            "summary":    export_payload["summary"],
+            "entities":   export_payload["entities"][:3],
+            "processes":  export_payload["processes"][:3],
+            "facts":      export_payload["facts"][:3],
+            "contradictions": export_payload["contradictions"][:3],
+            "edges_entity_process": export_payload["edges_entity_process"][:5],
+        }
+        st.json(preview)
