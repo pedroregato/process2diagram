@@ -146,7 +146,6 @@ if pipeline_mode == _MODE_NEW:
             "use_langgraph": st.session_state.use_langgraph,
             "validation_threshold": st.session_state.validation_threshold,
             "max_bpmn_retries": st.session_state.max_bpmn_retries,
-            # ATA Engine context — meeting_id left empty until Supabase creates the record
             "project_id":         st.session_state.get("project_id", ""),
             "active_project_id":  st.session_state.get("active_project_id", ""),
             "project_slug":       _ata_slug,
@@ -186,8 +185,6 @@ if pipeline_mode == _MODE_NEW:
                     save_transcript(meeting_id, hub)
                     save_meeting_artifacts(meeting_id, hub)
 
-                    # Regenerate ATA HTML with actual meeting_id so the roster
-                    # matching and participant persistence work correctly
                     if hub.minutes.ready:
                         try:
                             from modules.ata_engine_generator import generate_ata_html
@@ -209,7 +206,7 @@ if pipeline_mode == _MODE_NEW:
                             )
                             st.session_state.hub = hub
                         except Exception:
-                            pass  # non-fatal — first-pass ATA HTML still available
+                            pass
 
                     if hub.sbvr.ready:
                         save_sbvr_from_hub(meeting_id, st.session_state.project_id, hub)
@@ -247,8 +244,9 @@ if pipeline_mode == _MODE_NEW:
             except Exception as e:
                 st.warning(f"⚠️ Erro ao salvar no Supabase: {e}")
 
-        # Rerun limpo para renderizar as abas fora do contexto do st.status
-        st.rerun()
+        # FIX: st.rerun() removido — causava re-avaliação do file_uploader
+        # que apagava o hub do session_state antes de renderizar as abas.
+        # O Streamlit já re-renderiza naturalmente após o bloco if start_process.
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MODO B — REUNIÃO EXISTENTE
@@ -261,7 +259,6 @@ else:
         st.info("Nenhum contexto encontrado no banco de dados.")
         st.stop()
 
-    # Context selector — sync to active_project_id (Central de Operações)
     proj_options = {p["name"]: p["id"] for p in projects}
     active_pid = st.session_state.get("active_project_id")
     _last_load_pid = st.session_state.get("_load_synced_pid")
@@ -278,7 +275,6 @@ else:
     )
     selected_proj_id = proj_options[selected_proj_name]
 
-    # Meeting selector
     meetings = list_meetings(selected_proj_id)
     if not meetings:
         st.info("Nenhuma reunião encontrada para este contexto.")
@@ -313,7 +309,6 @@ else:
         st.session_state["_loaded_project_id"] = selected_proj_id
         st.rerun()
 
-    # Info banner for currently loaded meeting
     _loaded_id = st.session_state.get("_loaded_meeting_id")
     if _loaded_id and _loaded_id == selected_meet_id and "hub" in st.session_state:
         _lhub = st.session_state.hub
@@ -326,7 +321,6 @@ else:
             f"**{_title}** · {_date}  |  provedor: `{_prov}`  |  tokens originais: {_tok:,}"
         )
 
-    # Save-back button (shown after re-run when hub is from DB)
     if "hub" in st.session_state and st.session_state.hub.loaded_from_db:
         _lhub = st.session_state.hub
         _mid  = st.session_state.get("_loaded_meeting_id")
@@ -398,7 +392,6 @@ if "hub" in st.session_state:
     # ── Monta lista única de abas na ordem desejada ───────────────────────────
     all_tabs = []
 
-    # Primárias
     if hub.minutes.ready:
         all_tabs.append("minutes")
     if hub.requirements.ready:
@@ -410,7 +403,6 @@ if "hub" in st.session_state:
         all_tabs.append("synthesizer")
     all_tabs.append("export")
 
-    # Avançadas — mesmo nível, sem seção separada
     if hub.transcript_quality.ready:
         all_tabs.append("quality")
     if hub.sbvr.ready:
@@ -441,7 +433,6 @@ if "hub" in st.session_state:
         elif tab_id == "argumentation": render_argumentation(hub, prefix, suffix)
         elif tab_id == "devtools":     render_dev_tools(hub, st.session_state.show_raw_json)
 
-    # Renderiza todas as abas em um único st.tabs
     tabs = st.tabs([tab_labels[t] for t in all_tabs])
     for idx, tab_id in enumerate(all_tabs):
         with tabs[idx]:
