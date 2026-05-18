@@ -11,7 +11,7 @@
 - **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown / Word / PDF), requirements analysis (JSON/Markdown), executive HTML report, interactive requirements mind map
 - **Deploy:** Streamlit Cloud — auto-deploy on push to `main` branch (`github.com/pedroregato/process2diagram`)
 - **Dev environment:** PyCharm on Windows; Python 3.13
-- **Current version:** v4.20
+- **Current version:** v4.20+
 
 Supported LLM providers: DeepSeek (default), Claude (Anthropic), OpenAI, Groq, Google Gemini.
 
@@ -38,11 +38,12 @@ process2diagram/
 │
 ├── pages/
 │   ├── Home.py                   # Landing page — project selector, KPIs, recent meetings
-│   ├── Pipeline.py               # Main pipeline — transcript input, agent run, result tabs
+│   ├── Pipeline.py               # Main pipeline — dual-mode (Nova transcrição / Reunião existente)
 │   ├── Diagramas.py              # Full-screen diagram viewer (BPMN, Mermaid, Mind Map)
 │   ├── BpmnEditor.py             # BPMN editor — bpmn-js Modeler, version history, Supabase save
 │   ├── Assistente.py             # RAG assistant — conversational Q&A over transcripts
-│   ├── ReqTracker.py             # Requirements tracker — Supabase-backed status board
+│   ├── ReqTracker.py             # Requirements tracker — 9 tabs incl. DMN + IBIS
+│   ├── KnowledgeGraph.py         # Knowledge graph — pyvis physics (Obsidian-like), entity/contradiction viz
 │   ├── MeetingROI.py             # ROI-TR dashboard — type-aware quality indicators
 │   ├── Settings.py               # Central settings — LLM providers, API keys, tool catalog
 │   ├── DatabaseOverview.py       # Database health — record counts, embeddings, integrity fixes
@@ -341,9 +342,11 @@ Within Assistente mode, sidebar toggle `asst_use_tools`:
 
 ### Tool list (`core/assistant_tools.py`)
 
-**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `list_bpmn_processes`, `get_sbvr_terms`, `get_sbvr_rules`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`.
+**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `list_bpmn_processes`, `get_sbvr_terms`, `get_sbvr_rules`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`.
 
-**Admin only (`is_admin()`):** `get_database_integrity`, `fix_missing_llm_provider`, `generate_meeting_embeddings`, `reprocess_meeting_full`, `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`, write/generate tools.
+**Admin only (`is_admin()`):** `get_database_integrity`, `fix_missing_llm_provider`, `generate_meeting_embeddings`, `reprocess_meeting_full`, `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`, `delete_entity`, `resolve_entity_ambiguity`, write/generate tools.
+
+**KnowledgeGraph entity tools (3):** `lookup_entity` — investiga entidade (tipo, aliases, reuniões); `delete_entity` — remove entidade (3-tier match: exact → name-substring → alias-substring, para se houver ambiguidade); `resolve_entity_ambiguity` — funde duplicatas via `merge_entities()`.
 
 **Chart tools (5):** `generate_requirements_chart`, `generate_meetings_timeline`, `generate_action_items_chart`, `generate_roi_chart`, `generate_custom_chart` — Plotly figs returned as 4th element of `chat_with_tools()`, rendered via `st.plotly_chart()`. Palettes defined in `core/chart_config.py`.
 
@@ -370,10 +373,10 @@ Type-aware quality system — 11 meeting types, each with a weight matrix across
 
 ## Core Modules (`core/`)
 
-- `session_state.init_session_state()` — idempotent, call immediately after `st.set_page_config()`. Defaults: provider=DeepSeek, run_quality/bpmn/minutes/requirements=True, run_sbvr/bmm/synthesizer=False, n_bpmn_runs=1, use_langgraph=False.
+- `session_state.init_session_state()` — idempotent, call immediately after `st.set_page_config()`. Defaults: provider=DeepSeek, run_quality/bpmn/minutes/requirements=True, run_sbvr/bmm/synthesizer/dmn/argumentation/ckf_updater=True, n_bpmn_runs=1, use_langgraph=True.
 - `pipeline.run_pipeline(hub, config, callback)` — 3 paths: multi-run tournament / LangGraph / standard. Raises on error (caller catches).
 - `rerun_handlers.handle_rerun(agent_name, ...)` — re-runs one agent: `"quality"`, `"bpmn"`, `"minutes"`, `"requirements"`, `"sbvr"`, `"bmm"`, `"synthesizer"`. BPMN re-run invalidates `hub.synthesizer`.
-- `project_store` — Supabase CRUD; fail-open (returns `[]`/`None` when unconfigured). Full function list in `claude_guideline/architecture_details.md`.
+- `project_store` — Supabase CRUD; fail-open (returns `[]`/`None` when unconfigured). Key functions: `load_meeting_as_hub(meeting_id, project_id)` → reconstructs KnowledgeHub from DB (transcript, BPMN, minutes, requirements, SBVR, BMM, DMN, IBIS); `list_dmn_by_project(project_id)` → flat list of DMN decisions; `list_argumentation_by_project(project_id)` → flat list of IBIS questions. Full function list in `claude_guideline/architecture_details.md`.
 
 ---
 
@@ -406,6 +409,10 @@ if "hub" in st.session_state:
 ```
 
 **Re-run pattern:** buttons write `st.session_state.rerun_agent = "bpmn"` → `handle_rerun()` picks it up via `.pop()` on next Streamlit run.
+
+**Pipeline dual-mode:** `pipeline_mode` radio (`_MODE_NEW` / `_MODE_LOAD`). Modo B calls `load_meeting_as_hub(meeting_id, project_id)` and sets `hub.loaded_from_db = True`. Hub is cleared when modes switch (`_last_pipeline_mode` guard). `st.rerun()` NOT called after pipeline (would erase hub before tab render).
+
+**File uploader guard:** `ui/input_area.py` uses `_last_uploaded_file = f"{name}_{size}"` to detect genuinely new uploads — prevents hub from being erased on every Streamlit rerun after pipeline execution.
 
 ---
 
@@ -484,6 +491,7 @@ Coordinates are absolute. Edit constants at top of `bpmn_generator.py`: `TASK_W`
 | **Skill file case sensitivity (Linux)** | Verify with `git ls-files skills/` — `_load_skill()` uses absolute path |
 | **Stale `.pyc` on Streamlit Cloud** | Use `hasattr` guards + `try/except ImportError` in `migrate()` |
 | **`st.page_link("app.py")`** | Use `"pages/Pipeline.py"` — `app.py` is not a registered page |
+| **GitHub web editor on large files** | Replaces entire file with clipboard content silently — `project_store.py` (3556 lines) was replaced with a 93-line stub (commit 797eb35). Always use PyCharm/CLI for multi-hundred-line files |
 | **Login HTML as code block** | Keep `st.markdown(unsafe_allow_html=True)` HTML at zero indentation |
 | **`st.error()` before `st.rerun()`** | Persist message in `st.session_state`; pop+display after rerun |
 | **bpmn-js SVGMatrix non-finite** | Defer `canvas.zoom('fit-viewport')` via `setTimeout(fn, 150)` with dimension guards |
