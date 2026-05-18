@@ -83,18 +83,20 @@ with tab_entities:
                 "Este agente usa LLM para identificar e fundir duplicatas, "
                 "somando ocorrências e unindo aliases."
             )
-            _api_key  = st.session_state.get("api_key", "")
-            _prov_cfg = st.session_state.get("provider_cfg", {})
-            if st.button("🔁 Consolidar agora", key="kh_consolidate_btn", use_container_width=False):
-                if not _api_key:
-                    st.warning("Configure a chave de API na barra lateral antes de consolidar.")
-                else:
-                    with st.spinner("Analisando duplicatas com LLM…"):
-                        from agents.agent_entity_consolidator import AgentEntityConsolidator
-                        _agent = AgentEntityConsolidator(
-                            {"api_key": _api_key}, _prov_cfg
-                        )
-                        _stats = _agent.consolidate(project_id)
+            from modules.session_security import get_session_llm_client
+            from modules.config import AVAILABLE_PROVIDERS
+            _cons_provider = st.session_state.get("selected_provider", "")
+            _cons_client   = get_session_llm_client(_cons_provider) if _cons_provider else None
+            _prov_cfg      = AVAILABLE_PROVIDERS.get(_cons_provider, {})
+            if not _cons_client:
+                st.warning("Configure e salve uma API key na sidebar antes de consolidar.")
+            elif st.button("🔁 Consolidar agora", key="kh_consolidate_btn", use_container_width=False):
+                with st.spinner("Analisando duplicatas com LLM…"):
+                    from agents.agent_entity_consolidator import AgentEntityConsolidator
+                    _agent = AgentEntityConsolidator(
+                        {"api_key": _cons_client["api_key"]}, _prov_cfg
+                    )
+                    _stats = _agent.consolidate(project_id)
                     if _stats.get("error"):
                         st.error(f"Erro: {_stats['error']}")
                     elif _stats["merges_done"] == 0:
