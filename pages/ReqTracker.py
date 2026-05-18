@@ -25,6 +25,7 @@ from core.project_store import (
     list_meetings, list_requirements, list_contradictions,
     list_sbvr_terms, list_sbvr_rules,
     list_bpmn_processes, list_bpmn_versions, bpmn_tables_exist,
+    list_dmn_by_project, list_argumentation_by_project,
 )
 from ui.project_selector import require_active_project
 
@@ -63,6 +64,18 @@ st.markdown("""
     display: inline-block; width: 10px; height: 10px;
     border-radius: 50%; margin-right: 6px;
 }
+.dmn-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.dmn-table th {
+    background: #1e3a55; color: #93c5fd; padding: 6px 10px;
+    text-align: left; border-bottom: 2px solid #2d5a8e;
+}
+.dmn-table td {
+    padding: 5px 10px; border-bottom: 1px solid #1e293b; color: #e2e8f0;
+}
+.dmn-table tr:hover td { background: rgba(30,58,85,.4); }
+.ibis-badge-decided    { background:#0d4f2e; color:#4ade80; }
+.ibis-badge-deferred   { background:#4a3000; color:#fbbf24; }
+.ibis-badge-unresolved { background:#4a0d0d; color:#f87171; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -83,33 +96,41 @@ with _col_change:
 
 # ── Carrega dados (com cache para evitar queries a cada rerun) ─────────────────
 @st.cache_data(ttl=60, show_spinner=False)
-def _load_meetings(pid):       return list_meetings(pid)
+def _load_meetings(pid):           return list_meetings(pid)
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _load_requirements(pid):   return list_requirements(pid)
+def _load_requirements(pid):       return list_requirements(pid)
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _load_contradictions(pid): return list_contradictions(pid)
+def _load_contradictions(pid):     return list_contradictions(pid)
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _load_sbvr_terms(pid):     return list_sbvr_terms(pid)
+def _load_sbvr_terms(pid):         return list_sbvr_terms(pid)
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _load_sbvr_rules(pid):     return list_sbvr_rules(pid)
+def _load_sbvr_rules(pid):         return list_sbvr_rules(pid)
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_bpmn_procs(pid):
     return list_bpmn_processes(pid) if bpmn_tables_exist() else []
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _load_bpmn_versions(pid):  return list_bpmn_versions(pid)
+def _load_bpmn_versions(pid):      return list_bpmn_versions(pid)
 
-meetings       = _load_meetings(project_id)
-requirements   = _load_requirements(project_id)
-contradictions = _load_contradictions(project_id)
-sbvr_terms     = _load_sbvr_terms(project_id)
-sbvr_rules     = _load_sbvr_rules(project_id)
-bpmn_procs     = _load_bpmn_procs(project_id)
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_dmn(pid):                return list_dmn_by_project(pid)
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_argumentation(pid):      return list_argumentation_by_project(pid)
+
+meetings         = _load_meetings(project_id)
+requirements     = _load_requirements(project_id)
+contradictions   = _load_contradictions(project_id)
+sbvr_terms       = _load_sbvr_terms(project_id)
+sbvr_rules       = _load_sbvr_rules(project_id)
+bpmn_procs       = _load_bpmn_procs(project_id)
+dmn_decisions    = _load_dmn(project_id)
+ibis_questions   = _load_argumentation(project_id)
 
 meet_map = {m["id"]: m for m in meetings}
 
@@ -134,8 +155,12 @@ c4.metric("⚠️ Contradições", n_contradicted, delta=None,
           delta_color="off" if n_contradicted == 0 else "inverse")
 c5.metric("Termos SBVR", len(sbvr_terms))
 c6.metric("Regras SBVR", len(sbvr_rules))
+
+col_m1, col_m2, col_m3 = st.columns(3)
+col_m1.metric("Decisões DMN", len(dmn_decisions))
+col_m2.metric("Questões IBIS", len(ibis_questions))
 if bpmn_procs:
-    st.metric("Processos BPMN", len(bpmn_procs))
+    col_m3.metric("Processos BPMN", len(bpmn_procs))
 
 st.markdown("---")
 
@@ -191,7 +216,7 @@ with st.expander("📦 Exportar Relatório", expanded=False):
 st.markdown("---")
 
 # ── Abas principais ───────────────────────────────────────────────────────────
-tab_req, tab_mindmap, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn = st.tabs([
+tab_req, tab_mindmap, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn, tab_dmn, tab_ibis = st.tabs([
     "📝 Requisitos",
     "🗺️ Mind Map",
     f"⚠️ Contradições ({len(contradictions)})",
@@ -199,6 +224,8 @@ tab_req, tab_mindmap, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn = st.ta
     "🗓️ Reuniões",
     f"📖 SBVR ({len(sbvr_terms)}T · {len(sbvr_rules)}R)",
     f"📐 Processos BPMN ({len(bpmn_procs)})",
+    f"⚖️ DMN ({len(dmn_decisions)})",
+    f"🗺️ IBIS ({len(ibis_questions)})",
 ])
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -208,7 +235,6 @@ with tab_req:
     if not requirements:
         st.info("Nenhum requisito registrado para este projeto.")
     else:
-        # Filtros
         col_f1, col_f2, col_f3 = st.columns(3)
         with col_f1:
             status_opts = [
@@ -223,7 +249,6 @@ with tab_req:
             prios = sorted({r.get("priority", "") for r in requirements if r.get("priority")})
             sel_prio = st.selectbox("Prioridade", ["Todos"] + prios, key="rt_prio")
 
-        # Filtra
         filtered = requirements
         if sel_status != "Todos":
             filtered = [r for r in filtered if r.get("status") == sel_status]
@@ -320,7 +345,6 @@ with tab_mindmap:
             st.error(f"Erro ao carregar módulo de mind map: {_mm_err}")
             _mindmap_ok = False
 
-        # Filtros opcionais do mind map
         col_mm1, col_mm2, col_mm3 = st.columns([2, 2, 2])
         with col_mm1:
             mm_status = st.selectbox(
@@ -380,7 +404,7 @@ with tab_contra:
                     st.info(f"📝 Resumo da mudança: {c['change_summary']}")
 
 # ════════════════════════════════════════════════════════════════════════════
-# TAB 3 — HISTÓRICO POR REQUISITO
+# TAB 4 — HISTÓRICO POR REQUISITO
 # ════════════════════════════════════════════════════════════════════════════
 with tab_hist:
     if not requirements:
@@ -447,7 +471,7 @@ with tab_hist:
                 st.markdown("</div>", unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════════════════════
-# TAB 4 — REUNIÕES
+# TAB 5 — REUNIÕES
 # ════════════════════════════════════════════════════════════════════════════
 with tab_meet:
     if not meetings:
@@ -466,12 +490,10 @@ with tab_meet:
                 c2.metric("Provedor LLM", prov)
                 c3.metric("Data", str(dt))
 
-                # Requisitos originados nesta reunião
                 reqs_originated = [
                     r for r in requirements
                     if r.get("first_meeting_id") == m["id"]
                 ]
-                # Requisitos revisados/confirmados nesta reunião (não originados aqui)
                 reqs_touched = [
                     r for r in requirements
                     if r.get("first_meeting_id") != m["id"]
@@ -491,13 +513,11 @@ with tab_meet:
                         icon = "🔄" if status == "revised" else "⚠️" if status == "contradicted" else "✅"
                         st.markdown(f"- {icon} `REQ-{r['req_number']:03d}` {r.get('title','')}")
 
-                # Termos/regras SBVR desta reunião
                 terms_here = [t for t in sbvr_terms if t.get("meeting_id") == m["id"]]
                 rules_here = [r for r in sbvr_rules if r.get("meeting_id") == m["id"]]
                 if terms_here or rules_here:
                     st.markdown(f"**SBVR:** {len(terms_here)} termo(s) · {len(rules_here)} regra(s)")
 
-                # Ata da reunião
                 minutes_md = m.get("minutes_md") or ""
                 if minutes_md:
                     st.markdown("---")
@@ -523,7 +543,7 @@ with tab_meet:
                     st.caption("_Ata não disponível para esta reunião._")
 
 # ════════════════════════════════════════════════════════════════════════════
-# TAB 5 — SBVR
+# TAB 6 — SBVR
 # ════════════════════════════════════════════════════════════════════════════
 _CATEGORY_BADGE = {
     "concept":   ("badge-new",       "Conceito"),
@@ -544,11 +564,8 @@ with tab_sbvr:
     else:
         col_t, col_r = st.columns(2)
 
-        # ── Vocabulário ──────────────────────────────────────────────────────
         with col_t:
             st.markdown(f"### 📚 Vocabulário ({len(sbvr_terms)} termos)")
-
-            # Filtro por reunião
             meet_ids = sorted({t.get("meeting_id") for t in sbvr_terms if t.get("meeting_id")})
             meet_labels_sbvr = {"Todas": None}
             for mid in meet_ids:
@@ -557,13 +574,10 @@ with tab_sbvr:
             filtered_terms = sbvr_terms if not meet_labels_sbvr[sel_meet_t] else [
                 t for t in sbvr_terms if t.get("meeting_id") == meet_labels_sbvr[sel_meet_t]
             ]
-
-            # Filtro por categoria
             cats = sorted({t.get("category", "") for t in filtered_terms if t.get("category")})
             sel_cat = st.selectbox("Categoria", ["Todas"] + cats, key="sbvr_cat")
             if sel_cat != "Todas":
                 filtered_terms = [t for t in filtered_terms if t.get("category") == sel_cat]
-
             st.caption(f"{len(filtered_terms)} termo(s)")
             st.markdown("")
 
@@ -572,22 +586,14 @@ with tab_sbvr:
                 badge_cls, badge_txt = _CATEGORY_BADGE.get(cat, ("badge-active", cat))
                 meet_info = t.get("meetings") or {}
                 m_num = meet_info.get("meeting_number")
-                if t.get("source") == "assistente" or not m_num:
-                    origin_label = "🤖 Assistente"
-                else:
-                    origin_label = f"🗓️ Reunião {m_num}"
+                origin_label = "🤖 Assistente" if t.get("source") == "assistente" or not m_num else f"🗓️ Reunião {m_num}"
                 with st.expander(f"**{t.get('term', '—')}**", expanded=False):
-                    st.markdown(
-                        f'<span class="badge {badge_cls}">{badge_txt}</span>',
-                        unsafe_allow_html=True,
-                    )
+                    st.markdown(f'<span class="badge {badge_cls}">{badge_txt}</span>', unsafe_allow_html=True)
                     st.markdown(f"**Definição:** {t.get('definition', '—')}")
                     st.caption(origin_label)
 
-        # ── Regras ───────────────────────────────────────────────────────────
         with col_r:
             st.markdown(f"### 📋 Regras de Negócio ({len(sbvr_rules)} regras)")
-
             meet_ids_r = sorted({r.get("meeting_id") for r in sbvr_rules if r.get("meeting_id")})
             meet_labels_sbvr_r = {"Todas": None}
             for mid in meet_ids_r:
@@ -596,12 +602,10 @@ with tab_sbvr:
             filtered_rules = sbvr_rules if not meet_labels_sbvr_r[sel_meet_r] else [
                 r for r in sbvr_rules if r.get("meeting_id") == meet_labels_sbvr_r[sel_meet_r]
             ]
-
             types = sorted({r.get("rule_type", "") for r in filtered_rules if r.get("rule_type")})
             sel_rtype = st.selectbox("Tipo", ["Todos"] + types, key="sbvr_rtype")
             if sel_rtype != "Todos":
                 filtered_rules = [r for r in filtered_rules if r.get("rule_type") == sel_rtype]
-
             st.caption(f"{len(filtered_rules)} regra(s)")
             st.markdown("")
 
@@ -611,26 +615,18 @@ with tab_sbvr:
                 rule_id = r.get("rule_id") or f"BR-{idx:03d}"
                 meet_info = r.get("meetings") or {}
                 m_num = meet_info.get("meeting_number")
-                # nucleo_nominal: lido do banco (gravado na inserção);
-                # fallback on-the-fly para regras gravadas antes da migração.
                 kw = r.get("nucleo_nominal") or rule_keyword_pt(r.get("statement", ""))
                 label = f"**{rule_id}**  —  {kw}" if kw else f"**{rule_id}**"
                 with st.expander(label, expanded=False):
-                    st.markdown(
-                        f'<span class="badge {badge_cls}">{badge_txt}</span>',
-                        unsafe_allow_html=True,
-                    )
+                    st.markdown(f'<span class="badge {badge_cls}">{badge_txt}</span>', unsafe_allow_html=True)
                     st.markdown(f"{r.get('statement', '—')}")
-                    if m_num:
-                        footer = f"🗓️ Reunião {m_num}"
-                    else:
-                        footer = "🤖 Assistente"
+                    footer = f"🗓️ Reunião {m_num}" if m_num else "🤖 Assistente"
                     if r.get("source") and r["source"] not in ("manual", "assistente"):
                         footer += f" · 👤 {r['source']}"
                     st.caption(footer)
 
 # ════════════════════════════════════════════════════════════════════════════
-# TAB 6 — PROCESSOS BPMN
+# TAB 7 — PROCESSOS BPMN
 # ════════════════════════════════════════════════════════════════════════════
 import streamlit.components.v1 as components
 from modules.bpmn_viewer import preview_from_xml
@@ -675,29 +671,22 @@ with tab_bpmn:
                 f'última: {meet_label(last_mid)}'
             )
             with st.expander(header, expanded=(n_ver > 0)):
-                # Metadados do processo
                 col_m1, col_m2, col_m3 = st.columns(3)
                 with col_m1:
-                    st.markdown(
-                        f'<span class="badge {badge_cls}">{badge_txt}</span>',
-                        unsafe_allow_html=True,
-                    )
+                    st.markdown(f'<span class="badge {badge_cls}">{badge_txt}</span>', unsafe_allow_html=True)
                 with col_m2:
                     st.caption(f"🔑 slug: `{slug}`")
                 with col_m3:
                     st.caption(f"🏁 Primeira: {meet_label(proc.get('first_meeting_id'))}")
-
                 st.markdown("---")
 
-                # Versões
                 versions = _load_bpmn_versions(pid)
                 if not versions:
                     st.info("Nenhuma versão registrada ainda.")
                     continue
 
-                # Seletor de versão
                 ver_options = {}
-                for v in versions:   # já vem desc por version
+                for v in versions:
                     m_info = v.get("meetings") or {}
                     m_num  = m_info.get("meeting_number", "?")
                     m_tit  = m_info.get("title", "")
@@ -707,14 +696,9 @@ with tab_bpmn:
                         lbl = "⭐ " + lbl + "  (atual)"
                     ver_options[lbl] = v
 
-                sel_ver_lbl = st.selectbox(
-                    "Versão",
-                    list(ver_options.keys()),
-                    key=f"bpmn_ver_sel_{pid}",
-                )
+                sel_ver_lbl = st.selectbox("Versão", list(ver_options.keys()), key=f"bpmn_ver_sel_{pid}")
                 sel_ver = ver_options[sel_ver_lbl]
 
-                # Diagrama da versão selecionada
                 bpmn_xml     = sel_ver.get("bpmn_xml") or ""
                 mermaid_code = sel_ver.get("mermaid_code") or ""
 
@@ -723,7 +707,6 @@ with tab_bpmn:
                     continue
 
                 sub_bpmn, sub_mermaid = st.tabs(["📐 BPMN 2.0", "📊 Mermaid"])
-
                 with sub_bpmn:
                     if bpmn_xml:
                         try:
@@ -740,14 +723,207 @@ with tab_bpmn:
                         )
                     else:
                         st.info("XML BPMN não disponível para esta versão.")
-
                 with sub_mermaid:
                     if mermaid_code:
                         render_mermaid_block(
                             mermaid_code,
-                            show_code=False,  # expanders cannot be nested inside st.expander
+                            show_code=False,
                             key_suffix=f"rt_mmd_{pid}_{sel_ver['version']}",
                             height=500,
                         )
                     else:
                         st.info("Código Mermaid não disponível para esta versão.")
+
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 8 — DMN
+# ════════════════════════════════════════════════════════════════════════════
+_HIT_POLICY_LABEL = {
+    "U": "Unique — apenas uma regra pode ser satisfeita",
+    "A": "Any — qualquer regra satisfeita produz o mesmo resultado",
+    "F": "First — primeira regra satisfeita vence",
+    "C": "Collect — todas as regras satisfeitas são coletadas",
+}
+
+with tab_dmn:
+    if not dmn_decisions:
+        st.info("Nenhuma tabela de decisão DMN registrada. Execute o pipeline com o agente DMN habilitado.")
+    else:
+        st.caption(
+            f"**{len(dmn_decisions)} decisão(ões)** extraídas de {len({d['_meeting_id'] for d in dmn_decisions})} reunião(ões). "
+            "Cada decisão representa uma tabela de regras DMN 1.4."
+        )
+
+        # Filtro por reunião
+        meet_ids_dmn = sorted({d["_meeting_id"] for d in dmn_decisions})
+        meet_labels_dmn = {"Todas as reuniões": None}
+        for mid in meet_ids_dmn:
+            meet_labels_dmn[meet_label(mid)] = mid
+        sel_meet_dmn = st.selectbox("Filtrar por reunião", list(meet_labels_dmn.keys()), key="dmn_meet_filter")
+        filtered_dmn = dmn_decisions if not meet_labels_dmn[sel_meet_dmn] else [
+            d for d in dmn_decisions if d["_meeting_id"] == meet_labels_dmn[sel_meet_dmn]
+        ]
+
+        st.markdown("")
+        for d in filtered_dmn:
+            dec_id   = d.get("id", "—")
+            dec_name = d.get("name", "—")
+            hp       = d.get("hit_policy", "U")
+            inputs   = d.get("inputs", [])
+            outputs  = d.get("outputs", [])
+            rules    = d.get("rules", [])
+            m_num    = d.get("_meeting_number")
+            origin   = f"🗓️ Reunião {m_num}" if m_num else "—"
+
+            with st.expander(f"**{dec_id}** — {dec_name}  ·  {origin}", expanded=False):
+                # Cabeçalho da decisão
+                col_q, col_hp = st.columns([3, 1])
+                with col_q:
+                    if d.get("question"):
+                        st.markdown(f"**Questão:** {d['question']}")
+                    if d.get("rationale"):
+                        st.caption(f"📝 {d['rationale']}")
+                    if d.get("decided_by"):
+                        st.caption(f"👥 Decidido por: {', '.join(d['decided_by'])}")
+                with col_hp:
+                    st.markdown(
+                        f'<span class="badge badge-new">Hit Policy: {hp}</span>',
+                        unsafe_allow_html=True,
+                    )
+                    st.caption(_HIT_POLICY_LABEL.get(hp, hp))
+
+                if not inputs or not outputs or not rules:
+                    st.info("Tabela de decisão sem regras registradas.")
+                    continue
+
+                # Monta a tabela HTML
+                input_labels  = [i.get("label", f"Input {j+1}") for j, i in enumerate(inputs)]
+                output_labels = [o.get("label", f"Output {k+1}") for k, o in enumerate(outputs)]
+
+                header_cells = "".join(f"<th>{h}</th>" for h in input_labels + output_labels + ["Anotação"])
+                rows_html = ""
+                for idx, rule in enumerate(rules, 1):
+                    rule_inputs  = rule.get("inputs", [])
+                    rule_output  = rule.get("output", "")
+                    annotation   = rule.get("annotation", "")
+                    input_cells  = "".join(
+                        f"<td>{rule_inputs[j] if j < len(rule_inputs) else '—'}</td>"
+                        for j in range(len(input_labels))
+                    )
+                    output_cell  = f"<td><strong>{rule_output}</strong></td>"
+                    annot_cell   = f"<td><em>{annotation}</em></td>" if annotation else "<td>—</td>"
+                    rows_html   += f"<tr>{input_cells}{output_cell}{annot_cell}</tr>"
+
+                st.markdown(
+                    f'<table class="dmn-table"><thead><tr>{header_cells}</tr></thead>'
+                    f'<tbody>{rows_html}</tbody></table>',
+                    unsafe_allow_html=True,
+                )
+
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 9 — IBIS / ARGUMENTAÇÃO
+# ════════════════════════════════════════════════════════════════════════════
+_RESOLUTION_BADGE = {
+    "decided":    ("ibis-badge-decided",    "✅ Decidida"),
+    "deferred":   ("ibis-badge-deferred",   "⏳ Adiada"),
+    "unresolved": ("ibis-badge-unresolved", "❓ Em aberto"),
+}
+
+with tab_ibis:
+    if not ibis_questions:
+        st.info("Nenhum mapa argumentativo IBIS registrado. Execute o pipeline com o agente Argumentação habilitado.")
+    else:
+        n_decided    = sum(1 for q in ibis_questions if q.get("resolution", {}).get("type") == "decided")
+        n_deferred   = sum(1 for q in ibis_questions if q.get("resolution", {}).get("type") == "deferred")
+        n_unresolved = sum(1 for q in ibis_questions if q.get("resolution", {}).get("type") == "unresolved")
+
+        ki1, ki2, ki3, ki4 = st.columns(4)
+        ki1.metric("Total de Questões", len(ibis_questions))
+        ki2.metric("✅ Decididas", n_decided)
+        ki3.metric("⏳ Adiadas", n_deferred)
+        ki4.metric("❓ Em aberto", n_unresolved)
+
+        st.markdown("---")
+
+        # Filtro por reunião
+        meet_ids_ibis = sorted({q["_meeting_id"] for q in ibis_questions})
+        meet_labels_ibis = {"Todas as reuniões": None}
+        for mid in meet_ids_ibis:
+            meet_labels_ibis[meet_label(mid)] = mid
+        sel_meet_ibis = st.selectbox("Filtrar por reunião", list(meet_labels_ibis.keys()), key="ibis_meet_filter")
+
+        # Filtro por resolução
+        sel_res = st.selectbox(
+            "Filtrar por resolução",
+            ["Todas", "decided", "deferred", "unresolved"],
+            format_func=lambda x: {"Todas": "Todas", "decided": "✅ Decididas",
+                                    "deferred": "⏳ Adiadas", "unresolved": "❓ Em aberto"}.get(x, x),
+            key="ibis_res_filter",
+        )
+
+        filtered_ibis = ibis_questions
+        if meet_labels_ibis[sel_meet_ibis]:
+            filtered_ibis = [q for q in filtered_ibis if q["_meeting_id"] == meet_labels_ibis[sel_meet_ibis]]
+        if sel_res != "Todas":
+            filtered_ibis = [q for q in filtered_ibis if q.get("resolution", {}).get("type") == sel_res]
+
+        st.caption(f"Exibindo {len(filtered_ibis)} questão(ões)")
+        st.markdown("")
+
+        for q in filtered_ibis:
+            q_id        = q.get("id", "—")
+            statement   = q.get("statement", "—")
+            raised_by   = q.get("raised_by", "")
+            alternatives = q.get("alternatives", [])
+            resolution  = q.get("resolution", {})
+            res_type    = resolution.get("type", "unresolved")
+            badge_cls, badge_txt = _RESOLUTION_BADGE.get(res_type, ("ibis-badge-unresolved", "❓"))
+            m_num = q.get("_meeting_number")
+            origin = f"🗓️ Reunião {m_num}" if m_num else "—"
+
+            with st.expander(
+                f"**{q_id}** — {statement[:80]}{'…' if len(statement) > 80 else ''}  ·  {origin}",
+                expanded=(res_type == "unresolved"),
+            ):
+                col_s, col_b = st.columns([4, 1])
+                with col_s:
+                    st.markdown(f"**{statement}**")
+                    if raised_by:
+                        st.caption(f"👤 Levantada por: **{raised_by}**")
+                with col_b:
+                    st.markdown(
+                        f'<span class="badge {badge_cls}">{badge_txt}</span>',
+                        unsafe_allow_html=True,
+                    )
+
+                # Alternativas
+                if alternatives:
+                    st.markdown("**Alternativas avaliadas:**")
+                    for alt in alternatives:
+                        chosen_mark = " ✅ **(escolhida)**" if alt.get("was_chosen") else ""
+                        st.markdown(f"**{alt.get('id', '—')}** — {alt.get('description', '—')}{chosen_mark}")
+                        if alt.get("proposed_by"):
+                            st.caption(f"Proposta por: {alt['proposed_by']}")
+                        cols_arg = st.columns(2)
+                        if alt.get("pros"):
+                            cols_arg[0].success("**A favor:**\n" + "\n".join(f"- {p}" for p in alt["pros"]))
+                        if alt.get("cons"):
+                            cols_arg[1].error("**Contra:**\n" + "\n".join(f"- {c}" for c in alt["cons"]))
+                        supporters = ", ".join(alt.get("supported_by", []))
+                        opposers   = ", ".join(alt.get("opposed_by", []))
+                        parts = []
+                        if supporters:
+                            parts.append(f"A favor: {supporters}")
+                        if opposers:
+                            parts.append(f"Contra: {opposers}")
+                        if parts:
+                            st.caption(" | ".join(parts))
+                        st.markdown("---")
+
+                # Resolução
+                if res_type != "unresolved":
+                    if resolution.get("rationale"):
+                        st.info(f"**Resolução:** {resolution['rationale']}")
+                    if resolution.get("with_caveats"):
+                        st.warning("**Ressalvas:**\n" + "\n".join(f"- {c}" for c in resolution["with_caveats"]))
+                else:
+                    st.error("Questão sem resolução ao final da reunião.")
