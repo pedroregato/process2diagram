@@ -278,18 +278,21 @@ def _build_pyvis_graph(
         etype = e.get("entity_type", "ACTOR")
         count = e.get("occurrence_count") or 1
         name  = e.get("canonical_name", "?")
-        aliases = ", ".join((e.get("aliases") or [])[:3])
+        all_aliases = e.get("aliases") or []
         size  = max(12, min(40, 12 + count * 2.5))
         color = type_color.get(etype, _PALETTE[0])
         shape = _TYPE_SHAPE.get(etype, "dot")
         # Plain text tooltip — vis-network sanitizes HTML in newer versions
         is_part = etype in {"PERSON", "ACTOR"} and _is_participant(e, participant_names)
         role_label = "Participante confirmado" if is_part else etype.replace("_", " ").title()
+        meta = e.get("metadata") or {}
+        meta_desc = (meta.get("description") or "").strip()
         tooltip = (
             f"{name}\n"
             f"Tipo: {role_label}\n"
             f"Ocorrências: {count}"
-            + (f"\nAliases: {aliases}" if aliases else "")
+            + (f"\nAliases: {', '.join(all_aliases)}" if all_aliases else "")
+            + (f"\n{meta_desc}" if meta_desc else "")
         )
         net.add_node(
             eid, label=name, title=tooltip,
@@ -307,13 +310,13 @@ def _build_pyvis_graph(
     for proc in processes:
         pid   = f"proc_{proc['id']}"
         pname = proc.get("process_name", "?")
-        desc  = (proc.get("description") or "")[:80]
+        desc  = (proc.get("description") or "").strip()
         tooltip = (
             f"{pname}\n"
             f"Tipo: Processo (KH)\n"
             f"Status: {proc.get('status', '—')}\n"
             f"Versões: {proc.get('version_count', 1)}"
-            + (f"\n{desc}" if desc else "")
+            + (f"\n\n{desc}" if desc else "")
         )
         net.add_node(
             pid, label=pname[:24], title=tooltip,
@@ -542,7 +545,11 @@ def _build_pyvis_graph(
         "</style>",
         ".vis-tooltip{white-space:pre-line!important;"
         "font-family:'Segoe UI',system-ui,sans-serif!important;"
-        "font-size:13px!important;line-height:1.5!important;}"
+        "font-size:13px!important;line-height:1.6!important;"
+        "max-width:440px!important;max-height:none!important;"
+        "overflow:visible!important;word-break:break-word!important;"
+        "box-shadow:0 4px 16px rgba(0,0,0,.6)!important;"
+        "border-radius:8px!important;padding:10px 14px!important;}"
         "#graph-toolbar{display:flex;gap:5px;padding:8px 10px;"
         "background:#1e293b;border-bottom:1px solid #334155;"
         "flex-wrap:wrap;align-items:center;font-family:'Segoe UI',system-ui,sans-serif;}"
@@ -624,17 +631,35 @@ function focusNode(nodeId) {{
     connNodes.add(nodeId);
     var connEdges = new Set(network.getConnectedEdges(nodeId));
 
-    // Update nodes
-    var nodeUpdates = network.body.data.nodes.get().map(function(n) {{
+    // 1. Dim todos os nós fora do foco (zIndex baixo) e destaca os conectados
+    var dimUpdates = [];
+    var focusIds   = [];
+    network.body.data.nodes.get().forEach(function(n) {{
         if (connNodes.has(n.id)) {{
-            var s = _savedNodes[n.id] || {{}};
-            return {{id: n.id, color: s.color, font: s.font}};
+            focusIds.push(n.id);
+        }} else {{
+            dimUpdates.push({{id: n.id, color: _DIM_NODE, font: _DIM_FONT, zIndex: -1}});
         }}
-        return {{id: n.id, color: _DIM_NODE, font: _DIM_FONT}};
     }});
-    network.body.data.nodes.update(nodeUpdates);
+    if (dimUpdates.length) network.body.data.nodes.update(dimUpdates);
 
-    // Update edges
+    // 2. Traz nós em foco para frente: salva posições → remove → reinicia com zIndex alto
+    //    (no canvas do vis.js, nós inseridos por último são desenhados por cima)
+    var focusPositions = network.getPositions(focusIds);
+    var focusData = focusIds.map(function(nid) {{
+        var s = _savedNodes[nid] || {{}};
+        var n = network.body.data.nodes.get(nid);
+        return Object.assign({{}}, n, {{color: s.color, font: s.font, zIndex: 10}});
+    }});
+    network.body.data.nodes.remove(focusIds);
+    network.body.data.nodes.add(focusData);
+    // Restaura posições (remove+add reseta x/y para 0)
+    focusIds.forEach(function(nid) {{
+        var pos = focusPositions[nid];
+        if (pos) network.moveNode(nid, pos.x, pos.y);
+    }});
+
+    // 3. Arestas: destaca as conectadas, esmaesce as demais
     var edgeUpdates = network.body.data.edges.get().map(function(e) {{
         if (connEdges.has(e.id)) {{
             var s = _savedEdges[e.id] || {{}};
@@ -658,14 +683,14 @@ function clearFocus() {{
     _focusMode   = false;
     _focusedNode = null;
 
-    // Restore nodes
+    // Restaura todos os nós (cores + zIndex original = 0)
     var nodeUpdates = network.body.data.nodes.get().map(function(n) {{
         var s = _savedNodes[n.id] || {{}};
-        return {{id: n.id, color: s.color, font: s.font}};
+        return {{id: n.id, color: s.color, font: s.font, zIndex: 0}};
     }});
     network.body.data.nodes.update(nodeUpdates);
 
-    // Restore edges
+    // Restaura todas as arestas
     var edgeUpdates = network.body.data.edges.get().map(function(e) {{
         var s = _savedEdges[e.id] || {{}};
         return {{id: e.id, color: s.color}};
