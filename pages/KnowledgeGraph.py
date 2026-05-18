@@ -46,6 +46,21 @@ _PALETTE = [
 # Cor fixa para nós de Processo do Knowledge Hub
 _PROC_COLOR = "#fde047"
 
+# Verbo semântico por tipo — aresta entidade → processo
+_EP_VERB: dict[str, str] = {
+    "PERSON":     "Participou de",
+    "ACTOR":      "Participou de",
+    "ROLE":       "Esteve presente em",
+    "SYSTEM":     "Foi mencionado em",
+    "DOCUMENT":   "Foi referenciado em",
+    "CONCEPT":    "Foi discutido em",
+    "RULE":       "Foi aplicada em",
+    "DEPARTMENT": "Esteve envolvido em",
+    "LOCATION":   "Foi citado em",
+    "PROCESS":    "Relacionou-se com este processo em",
+}
+_EP_VERB_DEFAULT = "Apareceu em"
+
 # Mapeamento tipo → forma pyvis
 _TYPE_SHAPE: dict[str, str] = {
     "PERSON":     "dot",
@@ -288,14 +303,17 @@ def _build_pyvis_graph(
                 if shared:
                     n = len(shared)
                     reuniao = "reunião" if n == 1 else "reuniões"
+                    etype = e.get("entity_type", "")
+                    verb = _EP_VERB.get(etype, _EP_VERB_DEFAULT)
                     net.add_edge(
                         eid, pid,
-                        title=f"Participou em {n} {reuniao} onde este processo foi discutido",
+                        title=f"{verb} {n} {reuniao} onde este processo foi discutido",
                         color={"color": "#475569", "highlight": "#94a3b8", "hover": "#94a3b8"},
                         width=max(1.0, 1.0 + n * 0.4),
                     )
 
     # ── Arestas entidade → entidade (co-ocorrência opcional) ──────────────────
+    _people_types = {"PERSON", "ACTOR", "ROLE"}
     entity_list = list(entities)
     if show_entity_edges and len(entity_list) > 1:
         for i, ea in enumerate(entity_list):
@@ -304,9 +322,17 @@ def _build_pyvis_graph(
                 if len(shared) >= min_shared_meetings:
                     n = len(shared)
                     reuniao = "reunião" if n == 1 else "reuniões"
+                    ta = ea.get("entity_type", "")
+                    tb = eb.get("entity_type", "")
+                    if ta in _people_types and tb in _people_types:
+                        ee_title = f"Participaram juntos em {n} {reuniao}"
+                    elif ta in _people_types or tb in _people_types:
+                        ee_title = f"Co-ocorreram em {n} {reuniao}"
+                    else:
+                        ee_title = f"Foram mencionados juntos em {n} {reuniao}"
                     net.add_edge(
                         ea["id"], eb["id"],
-                        title=f"Co-ocorreram em {n} {reuniao}",
+                        title=ee_title,
                         color={"color": "#334155", "highlight": "#64748b", "hover": "#64748b"},
                         width=1.0,
                         dashes=True,
