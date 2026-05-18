@@ -186,6 +186,23 @@ def merge_entities(project_id: str, keep_id: str, discard_ids: list[str]) -> boo
         return False
 
 
+def delete_entity(project_id: str, entity_id: str) -> bool:
+    """
+    Permanently delete a single entity from kh_entities.
+    Scoped to project_id for safety. Fail-open — returns False on error.
+    """
+    db = _db()
+    if not db:
+        return False
+    try:
+        db.table("kh_entities").delete().eq("id", entity_id).eq("project_id", project_id).execute()
+        _log.info("delete_entity: removed %s from project %s", entity_id, project_id)
+        return True
+    except Exception as exc:
+        _log.error("delete_entity(%s): %s", entity_id, exc)
+        return False
+
+
 # ── Processes ─────────────────────────────────────────────────────────────────
 
 def get_processes(project_id: str, status: str | None = None) -> list[dict]:

@@ -1691,6 +1691,55 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "lookup_entity",
+                "description": (
+                    "Look up details of a specific entity in the Knowledge Hub by name. "
+                    "Returns entity type, aliases, occurrence count, metadata description, "
+                    "and the list of meetings where it appeared. "
+                    "Use this to investigate unknown or suspicious entities (e.g. ASR artifacts) "
+                    "before deciding to delete or merge them."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "entity_name": {
+                            "type": "string",
+                            "description": "Name (or partial name) of the entity to look up.",
+                        },
+                    },
+                    "required": ["entity_name"],
+                },
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "delete_entity",
+                "description": (
+                    "Permanently delete a spurious, bogus or unrecognised entity from the "
+                    "Knowledge Hub. Use when the entity is confirmed to be an ASR artifact, "
+                    "noise or a mistake — and NOT a duplicate of another entity (use "
+                    "resolve_entity_ambiguity for duplicates). Admin only."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "entity_name": {
+                            "type": "string",
+                            "description": "Name (or partial name) of the entity to delete.",
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "Why this entity should be deleted (e.g. 'ASR artifact', 'does not exist').",
+                        },
+                    },
+                    "required": ["entity_name"],
+                },
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "resolve_entity_ambiguity",
                 "description": (
                     "Merges two or more entities that represent the same real-world object "
@@ -1815,6 +1864,8 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "populate_knowledge_hub":          "admin",
     "detect_contradictions":           "admin",
     "resolve_entity_ambiguity":        "admin",
+    "lookup_entity":                   "consulta",
+    "delete_entity":                   "admin",
 }
 
 # Ferramentas que exigem perfil administrador
@@ -1840,6 +1891,7 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "populate_knowledge_hub",
     "detect_contradictions",
     "resolve_entity_ambiguity",
+    "delete_entity",
 })
 
 
@@ -5445,6 +5497,110 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             f"Consulte a aba ⚠️ Contradições na página 🧠 Knowledge Hub para revisar e resolver."
         )
 
+    # ── lookup_entity ─────────────────────────────────────────────────────────
+
+    def _lookup_entity(self, args: dict) -> str:
+        """Return full details of a KH entity to help identify unknown entries."""
+        if not self.project_id:
+            return "Nenhum contexto ativo."
+
+        from core.knowledge_store import get_entities
+        from core.project_store import get_meetings
+
+        entity_name = (args.get("entity_name") or "").strip()
+        if not entity_name:
+            return "❌ Forneça entity_name."
+
+        all_entities = get_entities(self.project_id, limit=500)
+        s = entity_name.lower()
+        candidates = [
+            e for e in all_entities
+            if s in (e.get("canonical_name") or "").lower()
+            or any(s in (a or "").lower() for a in (e.get("aliases") or []))
+        ]
+        if not candidates:
+            return (
+                f"Nenhuma entidade encontrada com o nome '{entity_name}'.\n"
+                f"Use o Grafo de Conhecimento para ver os nomes exatos."
+            )
+
+        # Build meeting number map for context
+        meetings = get_meetings(self.project_id)
+        mid_to_num = {m["id"]: m.get("meeting_number", "?") for m in meetings}
+
+        lines = [f"**{len(candidates)} entidade(s) encontrada(s) para '{entity_name}':**\n"]
+        for e in candidates[:5]:
+            name     = e.get("canonical_name", "—")
+            etype    = e.get("entity_type", "—")
+            count    = e.get("occurrence_count", 1)
+            aliases  = ", ".join((e.get("aliases") or [])[:6]) or "—"
+            meta     = e.get("metadata") or {}
+            desc     = (meta.get("description") or "")[:120]
+            mids     = e.get("meeting_ids") or []
+            mtg_nums = sorted(set(
+                str(mid_to_num.get(m, "?")) for m in mids
+            ))
+            lines.append(
+                f"• **{name}**\n"
+                f"  Tipo: {etype} | Ocorrências: {count}\n"
+                f"  Aliases: {aliases}\n"
+                + (f"  Descrição: {desc}\n" if desc else "")
+                + f"  Reuniões: {', '.join(mtg_nums) if mtg_nums else '—'}\n"
+            )
+        lines.append(
+            "\nDica: use `search_transcript` com o nome da entidade para ver o contexto "
+            "nas transcrições, ou `delete_entity` para removê-la se for um artefato."
+        )
+        return "\n".join(lines)
+
+    # ── delete_entity ─────────────────────────────────────────────────────────
+
+    def _delete_entity(self, args: dict) -> str:
+        """Delete a spurious/bogus entity from kh_entities."""
+        if not self.project_id:
+            return "Nenhum contexto ativo."
+
+        from core.knowledge_store import get_entities, delete_entity
+
+        entity_name = (args.get("entity_name") or "").strip()
+        reason      = (args.get("reason") or "Não especificado").strip()
+        if not entity_name:
+            return "❌ Forneça entity_name."
+
+        all_entities = get_entities(self.project_id, limit=500)
+        s = entity_name.lower()
+        candidates = [
+            e for e in all_entities
+            if s in (e.get("canonical_name") or "").lower()
+            or any(s in (a or "").lower() for a in (e.get("aliases") or []))
+        ]
+        if not candidates:
+            return (
+                f"Nenhuma entidade encontrada com o nome '{entity_name}'.\n"
+                f"Verifique o Grafo de Conhecimento para o nome exato."
+            )
+        if len(candidates) > 1:
+            names = ", ".join(e.get("canonical_name", "?") for e in candidates[:5])
+            return (
+                f"⚠️ '{entity_name}' corresponde a {len(candidates)} entidades: {names}.\n"
+                f"Use um nome mais específico para evitar deleções acidentais."
+            )
+
+        entity = candidates[0]
+        eid    = entity["id"]
+        ename  = entity.get("canonical_name", entity_name)
+        ok     = delete_entity(self.project_id, eid)
+
+        if ok:
+            return (
+                f"✅ Entidade **'{ename}'** removida do Knowledge Hub.\n"
+                f"Tipo: {entity.get('entity_type', '—')} | "
+                f"Ocorrências: {entity.get('occurrence_count', 1)}\n"
+                f"Motivo: {reason}\n\n"
+                f"O Grafo de Conhecimento será atualizado na próxima visualização."
+            )
+        return f"❌ Falha ao remover '{ename}'. Verifique os logs do servidor."
+
     # ── resolve_entity_ambiguity ──────────────────────────────────────────────
 
     def _resolve_entity_ambiguity(self, args: dict) -> str:
@@ -5893,6 +6049,8 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 "populate_knowledge_hub":    lambda: self._populate_knowledge_hub(tool_input),
                 "detect_contradictions":     lambda: self._detect_contradictions(),
                 "resolve_entity_ambiguity":  lambda: self._resolve_entity_ambiguity(tool_input),
+                "lookup_entity":             lambda: self._lookup_entity(tool_input),
+                "delete_entity":             lambda: self._delete_entity(tool_input),
                 "render_table": lambda: self._render_table(tool_input),
                 "get_executive_report": lambda: self.get_executive_report(
                     tool_input["meeting_number"],
