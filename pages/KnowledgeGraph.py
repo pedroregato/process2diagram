@@ -483,14 +483,134 @@ def _build_pyvis_graph(
     net.set_options(json.dumps(options))
 
     html = net.generate_html(local=False)
-    # Inject CSS so \n in tooltip text renders as visual line breaks
+
+    # ── CSS: tooltip whitespace + toolbar styles ───────────────────────────────
     html = html.replace(
         "</style>",
-        ".vis-tooltip { white-space: pre-line !important; "
-        "font-family: 'Segoe UI', system-ui, sans-serif !important; "
-        "font-size: 13px !important; line-height: 1.5 !important; }</style>",
+        ".vis-tooltip{white-space:pre-line!important;"
+        "font-family:'Segoe UI',system-ui,sans-serif!important;"
+        "font-size:13px!important;line-height:1.5!important;}"
+        "#graph-toolbar{display:flex;gap:5px;padding:8px 10px;"
+        "background:#1e293b;border-bottom:1px solid #334155;"
+        "flex-wrap:wrap;align-items:center;font-family:'Segoe UI',system-ui,sans-serif;}"
+        ".tb-btn{background:#334155;color:#f1f5f9;border:1px solid #475569;"
+        "border-radius:6px;padding:5px 11px;font-size:12px;cursor:pointer;"
+        "white-space:nowrap;transition:background .15s;}"
+        ".tb-btn:hover{background:#475569;}"
+        ".tb-sep{width:1px;background:#475569;height:22px;margin:0 3px;flex-shrink:0;}"
+        "#tb-status{font-size:11px;color:#94a3b8;margin-left:6px;}"
+        "</style>",
         1,
     )
+
+    # ── Toolbar HTML — injetado antes do container do grafo ───────────────────
+    _phys_init = "true" if physics_enabled else "false"
+    toolbar_div = (
+        '<div id="graph-toolbar">'
+        '<button id="btnPhysics" class="tb-btn" onclick="togglePhysics()">⏸ Pausar</button>'
+        '<div class="tb-sep"></div>'
+        '<button class="tb-btn" onclick="zoomIn()" title="Zoom in">＋</button>'
+        '<button class="tb-btn" onclick="zoomOut()" title="Zoom out">－</button>'
+        '<button class="tb-btn" onclick="fitGraph()" title="Ajustar ao ecrã">⊡ Fit</button>'
+        '<div class="tb-sep"></div>'
+        '<button class="tb-btn" onclick="saveImg()" title="Salvar como PNG">💾 Imagem</button>'
+        '<button class="tb-btn" onclick="openNewTab()" title="Abrir em nova aba">⛶ Nova aba</button>'
+        '<span id="tb-status"></span>'
+        '</div>'
+    )
+    html = html.replace('<div id="mynetwork"', toolbar_div + '<div id="mynetwork"', 1)
+
+    # ── JS — injetado antes de </body> para que `network` já esteja definido ──
+    toolbar_js = f"""
+<script>
+var _physicsOn = {_phys_init};
+
+function _setPhysicsBtn() {{
+    var btn = document.getElementById('btnPhysics');
+    if (_physicsOn) {{
+        btn.innerHTML = '⏸ Pausar';
+        btn.style.background = '';
+    }} else {{
+        btn.innerHTML = '▶ Retomar';
+        btn.style.background = '#16a34a';
+        btn.style.borderColor = '#15803d';
+    }}
+}}
+
+function togglePhysics() {{
+    _physicsOn = !_physicsOn;
+    network.setOptions({{physics: {{enabled: _physicsOn}}}});
+    if (!_physicsOn) network.stopSimulation();
+    _setPhysicsBtn();
+}}
+
+function zoomIn() {{
+    network.moveTo({{
+        scale: network.getScale() * 1.3,
+        animation: {{duration: 200, easingFunction: 'easeInOutQuad'}}
+    }});
+}}
+
+function zoomOut() {{
+    network.moveTo({{
+        scale: network.getScale() / 1.3,
+        animation: {{duration: 200, easingFunction: 'easeInOutQuad'}}
+    }});
+}}
+
+function fitGraph() {{
+    network.fit({{animation: {{duration: 500, easingFunction: 'easeInOutQuad'}}}});
+}}
+
+function saveImg() {{
+    try {{
+        var src = network.getCanvas();
+        var dst = document.createElement('canvas');
+        dst.width  = src.width;
+        dst.height = src.height;
+        var ctx = dst.getContext('2d');
+        ctx.fillStyle = '#0d1b2a';
+        ctx.fillRect(0, 0, dst.width, dst.height);
+        ctx.drawImage(src, 0, 0);
+        var link = document.createElement('a');
+        link.href = dst.toDataURL('image/png');
+        link.download = 'grafo_conhecimento.png';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }} catch(e) {{
+        alert('Nao foi possivel salvar: ' + e.message);
+    }}
+}}
+
+function openNewTab() {{
+    try {{
+        var blob = new Blob(
+            ['<!DOCTYPE html>' + document.documentElement.outerHTML],
+            {{type: 'text/html;charset=utf-8'}}
+        );
+        var url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+    }} catch(e) {{
+        alert('Permita pop-ups para esta pagina e tente novamente.');
+    }}
+}}
+
+// Auto-estacionar apos estabilizacao inicial do layout
+network.on('stabilizationIterationsDone', function() {{
+    if (_physicsOn) {{
+        _physicsOn = false;
+        network.stopSimulation();
+        _setPhysicsBtn();
+        var s = document.getElementById('tb-status');
+        s.textContent = '✓ Estabilizado';
+        setTimeout(function() {{ s.textContent = ''; }}, 2500);
+    }}
+}});
+</script>
+"""
+    html = html.replace("</body>", toolbar_js + "</body>", 1)
+
     return html, type_color
 
 
@@ -618,7 +738,7 @@ with tab_graph:
                     '— Contradição detectada</span>',
                     unsafe_allow_html=True,
                 )
-            components.html(html_graph, height=graph_height + 30, scrolling=False)
+            components.html(html_graph, height=graph_height + 80, scrolling=False)
         except ImportError:
             st.error(
                 "A biblioteca **pyvis** nao esta instalada. "
