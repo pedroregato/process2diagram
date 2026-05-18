@@ -550,8 +550,11 @@ def _build_pyvis_graph(
         "border-radius:6px;padding:5px 11px;font-size:12px;cursor:pointer;"
         "white-space:nowrap;transition:background .15s;}"
         ".tb-btn:hover{background:#475569;}"
+        "#btnClearFocus{display:none;background:#1d4ed8;border-color:#1e40af;}"
+        "#btnClearFocus:hover{background:#2563eb;}"
         ".tb-sep{width:1px;background:#475569;height:22px;margin:0 3px;flex-shrink:0;}"
-        "#tb-status{font-size:11px;color:#94a3b8;margin-left:6px;}"
+        "#tb-status{font-size:11px;color:#94a3b8;margin-left:6px;flex:1;}"
+        "#tb-hint{font-size:10px;color:#64748b;margin-left:auto;}"
         "</style>",
         1,
     )
@@ -568,7 +571,10 @@ def _build_pyvis_graph(
         '<div class="tb-sep"></div>'
         '<button class="tb-btn" onclick="saveImg()" title="Salvar como PNG">💾 Imagem</button>'
         '<button class="tb-btn" onclick="openNewTab()" title="Abrir em nova aba">⛶ Nova aba</button>'
+        '<div class="tb-sep"></div>'
+        '<button id="btnClearFocus" class="tb-btn" onclick="clearFocus()" title="Limpar foco e restaurar todas as cores">✕ Limpar foco</button>'
         '<span id="tb-status"></span>'
+        '<span id="tb-hint">Clique em um nó para focar</span>'
         '</div>'
     )
     html = html.replace('<div id="mynetwork"', toolbar_div + '<div id="mynetwork"', 1)
@@ -578,11 +584,120 @@ def _build_pyvis_graph(
 <script>
 var _physicsOn = {_phys_init};
 
+// ── Focus mode state ──────────────────────────────────────────────────────────
+var _focusMode   = false;
+var _focusedNode = null;
+var _savedNodes  = {{}};   // nodeId -> {{color, font}}
+var _savedEdges  = {{}};   // edgeId -> {{color}}
+
+// Cores usadas para elementos fora do foco
+var _DIM_NODE = {{
+    background: '#0d1520',
+    border:     '#1a2535',
+    highlight:  {{background: '#0d1520', border: '#1e2d42'}},
+    hover:      {{background: '#0d1520', border: '#1e2d42'}}
+}};
+var _DIM_FONT  = {{color: '#1e293b'}};
+var _DIM_EDGE  = {{color: 'rgba(15,23,42,0.12)', highlight: 'rgba(15,23,42,0.12)', hover: 'rgba(15,23,42,0.12)'}};
+
+function _saveOriginals() {{
+    if (Object.keys(_savedNodes).length > 0) return;
+    network.body.data.nodes.get().forEach(function(n) {{
+        _savedNodes[n.id] = {{
+            color: JSON.parse(JSON.stringify(n.color || {{}})),
+            font:  JSON.parse(JSON.stringify(n.font  || {{}}))
+        }};
+    }});
+    network.body.data.edges.get().forEach(function(e) {{
+        _savedEdges[e.id] = {{
+            color: JSON.parse(JSON.stringify(e.color || {{}}))
+        }};
+    }});
+}}
+
+function focusNode(nodeId) {{
+    _saveOriginals();
+    _focusMode   = true;
+    _focusedNode = nodeId;
+
+    var connNodes = new Set(network.getConnectedNodes(nodeId));
+    connNodes.add(nodeId);
+    var connEdges = new Set(network.getConnectedEdges(nodeId));
+
+    // Update nodes
+    var nodeUpdates = network.body.data.nodes.get().map(function(n) {{
+        if (connNodes.has(n.id)) {{
+            var s = _savedNodes[n.id] || {{}};
+            return {{id: n.id, color: s.color, font: s.font}};
+        }}
+        return {{id: n.id, color: _DIM_NODE, font: _DIM_FONT}};
+    }});
+    network.body.data.nodes.update(nodeUpdates);
+
+    // Update edges
+    var edgeUpdates = network.body.data.edges.get().map(function(e) {{
+        if (connEdges.has(e.id)) {{
+            var s = _savedEdges[e.id] || {{}};
+            return {{id: e.id, color: s.color}};
+        }}
+        return {{id: e.id, color: _DIM_EDGE}};
+    }});
+    network.body.data.edges.update(edgeUpdates);
+
+    // UI feedback
+    var label = (network.body.data.nodes.get(nodeId) || {{}}).label || nodeId;
+    var nConn  = connNodes.size - 1;
+    document.getElementById('tb-status').textContent =
+        '🔍 ' + label + ' — ' + nConn + ' conex' + (nConn === 1 ? 'ão' : 'ões');
+    document.getElementById('tb-hint').style.display = 'none';
+    document.getElementById('btnClearFocus').style.display = '';
+}}
+
+function clearFocus() {{
+    if (!_focusMode) return;
+    _focusMode   = false;
+    _focusedNode = null;
+
+    // Restore nodes
+    var nodeUpdates = network.body.data.nodes.get().map(function(n) {{
+        var s = _savedNodes[n.id] || {{}};
+        return {{id: n.id, color: s.color, font: s.font}};
+    }});
+    network.body.data.nodes.update(nodeUpdates);
+
+    // Restore edges
+    var edgeUpdates = network.body.data.edges.get().map(function(e) {{
+        var s = _savedEdges[e.id] || {{}};
+        return {{id: e.id, color: s.color}};
+    }});
+    network.body.data.edges.update(edgeUpdates);
+
+    document.getElementById('tb-status').textContent = '';
+    document.getElementById('tb-hint').style.display = '';
+    document.getElementById('btnClearFocus').style.display = 'none';
+}}
+
+// ── Click handler ─────────────────────────────────────────────────────────────
+network.on('click', function(params) {{
+    if (params.nodes.length > 0) {{
+        var nid = params.nodes[0];
+        if (_focusMode && _focusedNode === nid) {{
+            clearFocus();        // segundo clique no mesmo nó → limpa foco
+        }} else {{
+            focusNode(nid);      // primeiro clique → ativa foco
+        }}
+    }} else if (params.edges.length === 0) {{
+        clearFocus();            // clique em área vazia → limpa foco
+    }}
+}});
+
+// ── Physics controls ──────────────────────────────────────────────────────────
 function _setPhysicsBtn() {{
     var btn = document.getElementById('btnPhysics');
     if (_physicsOn) {{
         btn.innerHTML = '⏸ Pausar';
         btn.style.background = '';
+        btn.style.borderColor = '';
     }} else {{
         btn.innerHTML = '▶ Retomar';
         btn.style.background = '#16a34a';
@@ -649,15 +764,18 @@ function openNewTab() {{
     }}
 }}
 
-// Auto-estacionar apos estabilizacao inicial do layout
+// Auto-estacionar após estabilização + pré-salvar cores originais
 network.on('stabilizationIterationsDone', function() {{
+    _saveOriginals();
     if (_physicsOn) {{
         _physicsOn = false;
         network.stopSimulation();
         _setPhysicsBtn();
         var s = document.getElementById('tb-status');
         s.textContent = '✓ Estabilizado';
-        setTimeout(function() {{ s.textContent = ''; }}, 2500);
+        setTimeout(function() {{
+            if (!_focusMode) s.textContent = '';
+        }}, 2500);
     }}
 }});
 </script>
@@ -705,6 +823,10 @@ como uma rede de **entidades** (pessoas, sistemas, conceitos, documentos) ligada
 Use o mouse para **arrastar nos individualmente** (reorganize o layout), **scroll** para zoom e
 **hover** para ver detalhes de cada entidade ou aresta. A simulacao fisica organiza os nos
 automaticamente — desative em "Simulacao fisica" para fixar o layout apos arrastar.
+
+**Modo foco:** clique em qualquer no para destacar apenas ele e suas conexoes diretas —
+os demais elementos ficam esmaecidos. Clique novamente no mesmo no, em area vazia, ou em
+**✕ Limpar foco** na barra de ferramentas para restaurar o grafo completo.
     """)
 
 data = _load_graph_data(project_id)
