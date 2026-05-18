@@ -247,6 +247,10 @@ if pipeline_mode == _MODE_NEW:
             except Exception as e:
                 st.warning(f"⚠️ Erro ao salvar no Supabase: {e}")
 
+        # FIX: rerun limpo após pipeline para que o bloco de resultados
+        # renderize fora do contexto do st.status (que bloqueia st.tabs).
+        st.rerun()
+
 # ─────────────────────────────────────────────────────────────────────────────
 # MODO B — REUNIÃO EXISTENTE
 # ─────────────────────────────────────────────────────────────────────────────
