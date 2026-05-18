@@ -88,7 +88,8 @@ def _load_graph_data(project_id: str) -> dict:
     try:
         entities = (
             db.table("kh_entities")
-            .select("id, entity_type, canonical_name, aliases, occurrence_count, metadata")
+            .select("id, entity_type, canonical_name, aliases, occurrence_count, "
+                    "first_seen_meeting_id, last_seen_meeting_id, metadata")
             .eq("project_id", project_id)
             .order("occurrence_count", desc=True)
             .limit(150)
@@ -234,8 +235,32 @@ def _build_graph(
 
     # ── 1. Spring layout (coordenadas) ─────────────────────────────────────────
     all_node_ids = list(entity_ids) + [f"proc_{p['id']}" for p in processes]
+
+    # Build entity→process edges via meeting co-occurrence:
+    # entity seen in a meeting where the process was discussed → draw edge.
+    # kh_entities has first_seen_meeting_id / last_seen_meeting_id;
+    # kh_processes has meeting_ids (full list).
     edge_pairs: list[tuple[str, str]] = []
-    # kh_facts are text-based (content field) — no entity edges to draw
+    entity_meeting_map: dict[str, set[str]] = {}
+    for e in entities:
+        mtgs: set[str] = set()
+        for col in ("first_seen_meeting_id", "last_seen_meeting_id"):
+            v = e.get(col)
+            if v:
+                mtgs.add(v)
+        entity_meeting_map[e["id"]] = mtgs
+
+    for proc in processes:
+        proc_meetings = set(proc.get("meeting_ids") or [])
+        if not proc_meetings:
+            continue
+        pid = f"proc_{proc['id']}"
+        for e in entities:
+            eid = e["id"]
+            if eid not in entity_ids:
+                continue
+            if entity_meeting_map.get(eid, set()) & proc_meetings:
+                edge_pairs.append((eid, pid))
 
     pos = _spring_layout(all_node_ids, edge_pairs, iterations=80)
 
@@ -284,17 +309,25 @@ def _build_graph(
             + (proc.get("description") or "")[:80]
         )
 
-    # ── 3. Arestas (kh_facts são texto — sem arestas entidade→entidade) ────────
+    # ── 3. Arestas entidade → processo (co-ocorrência de reunião) ──────────────
     edge_x: list[float | None] = []; edge_y: list[float | None] = []
     elbl_x: list[float] = []; elbl_y: list[float] = []; elbl_t: list[str] = []
 
     all_x = node_x + proc_x
     all_y = node_y + proc_y
 
-    # ── 4. Arestas de contradição (não há fact_a/fact_b com entity refs) ──────
+    for eid, pid in edge_pairs:
+        if eid not in id_to_idx or pid not in id_to_idx:
+            continue
+        si, oi = id_to_idx[eid], id_to_idx[pid]
+        x0, y0 = all_x[si], all_y[si]
+        x1, y1 = all_x[oi], all_y[oi]
+        edge_x += [x0, x1, None]
+        edge_y += [y0, y1, None]
+
+    # ── 4. Arestas de contradição (não há entity refs diretas) ────────────────
     contra_x: list[float | None] = []; contra_y: list[float | None] = []
-    # kh_contradictions use meeting_a_id/meeting_b_id, not entity links —
-    # contradictions are shown as count in KPI only, not as graph edges
+    # kh_contradictions use meeting_a_id/meeting_b_id — shown as KPI count only
 
     # ── 5. Montar figura ───────────────────────────────────────────────────────
     fig = go.Figure()
