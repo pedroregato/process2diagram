@@ -3,8 +3,10 @@ import streamlit as st
 from services.file_ingest import load_transcript
 from services.preprocessor_service import preprocess_transcript
 
+
 def update_transcript():
     st.session_state.transcript_text = st.session_state.transcript_input
+
 
 def render_input_area():
     with st.container():
@@ -17,15 +19,25 @@ def render_input_area():
             on_change=update_transcript,
             label_visibility="collapsed"
         )
-        col_up, col_btn = st.columns([1,1])
+        col_up, col_btn = st.columns([1, 1])
         with col_up:
-            uploaded = st.file_uploader("Or upload a file", type=["txt","docx","pdf"], label_visibility="collapsed")
+            uploaded = st.file_uploader(
+                "Or upload a file",
+                type=["txt", "docx", "pdf"],
+                label_visibility="collapsed",
+            )
+            # FIX: só limpa o hub quando um arquivo NOVO é carregado.
+            # Usar o nome+tamanho como chave para detectar mudança real —
+            # evita que o rerun pós-pipeline apague o hub ao re-avaliar o widget.
             if uploaded:
-                st.session_state.transcript_text = load_transcript(uploaded)
-                # limpa estados antigos
-                st.session_state.pop("pp_result", None)
-                st.session_state.pop("curated_clean", None)
-                st.session_state.pop("hub", None)
+                _file_key = f"{uploaded.name}_{uploaded.size}"
+                if st.session_state.get("_last_uploaded_file") != _file_key:
+                    st.session_state["_last_uploaded_file"] = _file_key
+                    st.session_state.transcript_text = load_transcript(uploaded)
+                    st.session_state.pop("pp_result", None)
+                    st.session_state.pop("curated_clean", None)
+                    st.session_state.pop("hub", None)
+
         with col_btn:
             if st.button("🧹 Pré‑processar Transcrição (sem LLM)"):
                 if st.session_state.transcript_text.strip():
@@ -33,10 +45,15 @@ def render_input_area():
                     st.session_state.pp_result = pp
                     st.session_state.curated_clean = pp.clean_text
                     st.success("Pré‑processamento concluído!")
+
         if "pp_result" in st.session_state:
             pp = st.session_state.pp_result
             st.markdown("#### 🧹 Curadoria da Transcrição")
-            st.markdown(f"Fillers removidos: {pp.fillers_removed} | Artefatos: {pp.artifact_turns} | Repetições: {pp.repetitions_collapsed}")
+            st.markdown(
+                f"Fillers removidos: {pp.fillers_removed} | "
+                f"Artefatos: {pp.artifact_turns} | "
+                f"Repetições: {pp.repetitions_collapsed}"
+            )
             for issue in pp.metadata_issues:
                 st.warning(issue)
             col_orig, col_clean = st.columns(2)
@@ -50,4 +67,5 @@ def render_input_area():
             if st.button("✅ Usar texto curado no pipeline"):
                 st.session_state.transcript_text = st.session_state.curated_clean
                 st.success("Texto curado definido como transcrição principal.")
+
         return st.button("🚀 Generate Insights", type="primary", use_container_width=True)
