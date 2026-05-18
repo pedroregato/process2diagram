@@ -89,14 +89,26 @@ def _load_graph_data(project_id: str) -> dict:
         entities = (
             db.table("kh_entities")
             .select("id, entity_type, canonical_name, aliases, occurrence_count, "
-                    "first_seen_meeting_id, last_seen_meeting_id, metadata")
+                    "meeting_ids, first_seen_meeting_id, last_seen_meeting_id, metadata")
             .eq("project_id", project_id)
             .order("occurrence_count", desc=True)
             .limit(150)
             .execute().data or []
         )
     except Exception:
-        entities = []
+        try:
+            # Fallback: schema without meeting_ids (pre-migration)
+            entities = (
+                db.table("kh_entities")
+                .select("id, entity_type, canonical_name, aliases, occurrence_count, "
+                        "first_seen_meeting_id, last_seen_meeting_id, metadata")
+                .eq("project_id", project_id)
+                .order("occurrence_count", desc=True)
+                .limit(150)
+                .execute().data or []
+            )
+        except Exception:
+            entities = []
 
     try:
         processes = (
@@ -216,7 +228,8 @@ def _build_graph(
     data: dict, max_nodes: int, show_facts: bool,
     show_processes: bool, entity_types: list[str],
     min_occurrence: int = 1, show_labels: bool = True,
-    graph_height: int = 640,
+    graph_height: int = 640, show_entity_edges: bool = False,
+    min_shared_meetings: int = 2,
 ) -> go.Figure:
     from collections import defaultdict
 
@@ -240,20 +253,20 @@ def _build_graph(
     # ── 1. Spring layout (coordenadas) ─────────────────────────────────────────
     all_node_ids = list(entity_ids) + [f"proc_{p['id']}" for p in processes]
 
-    # Build entity→process edges via meeting co-occurrence:
-    # entity seen in a meeting where the process was discussed → draw edge.
-    # kh_entities has first_seen_meeting_id / last_seen_meeting_id;
-    # kh_processes has meeting_ids (full list).
-    edge_pairs: list[tuple[str, str]] = []
+    # Build entity meeting map: prefer meeting_ids[] (full history),
+    # fall back to first/last seen for pre-migration rows.
     entity_meeting_map: dict[str, set[str]] = {}
     for e in entities:
-        mtgs: set[str] = set()
+        mtgs: set[str] = set(e.get("meeting_ids") or [])
         for col in ("first_seen_meeting_id", "last_seen_meeting_id"):
             v = e.get(col)
             if v:
                 mtgs.add(v)
         entity_meeting_map[e["id"]] = mtgs
 
+    edge_pairs: list[tuple[str, str]] = []
+
+    # Entity → Process edges (meeting co-occurrence)
     for proc in processes:
         proc_meetings = set(proc.get("meeting_ids") or [])
         if not proc_meetings:
@@ -265,6 +278,15 @@ def _build_graph(
                 continue
             if entity_meeting_map.get(eid, set()) & proc_meetings:
                 edge_pairs.append((eid, pid))
+
+    # Entity → Entity edges (optional — entities sharing N+ meetings)
+    entity_list = [e for e in entities if e["id"] in entity_ids]
+    if show_entity_edges and len(entity_list) > 1:
+        for i, ea in enumerate(entity_list):
+            for eb in entity_list[i + 1:]:
+                shared = entity_meeting_map.get(ea["id"], set()) & entity_meeting_map.get(eb["id"], set())
+                if len(shared) >= min_shared_meetings:
+                    edge_pairs.append((ea["id"], eb["id"]))
 
     pos = _spring_layout(all_node_ids, edge_pairs, iterations=80)
 
@@ -521,6 +543,13 @@ with st.sidebar:
     )
     show_processes = st.toggle("Mostrar processos", value=True, key="kg_procs")
     show_facts = st.toggle("Mostrar arestas entidade→processo", value=True, key="kg_facts")
+    show_entity_edges = st.toggle("Mostrar arestas entidade→entidade", value=False, key="kg_ent_edges",
+        help="Conecta entidades que co-ocorrem em N+ reunioes. Pode gerar muitas arestas.")
+    if show_entity_edges:
+        min_shared = st.slider("Reunioes em comum (minimo)", 1, 5, 2, key="kg_shared_mtgs",
+            help="Quantas reunioes as duas entidades precisam compartilhar para serem conectadas.")
+    else:
+        min_shared = 2
     show_labels = st.toggle("Mostrar rotulos", value=True, key="kg_labels")
     max_nodes = st.slider(
         "Max entidades no grafo", 10, min(150, len(entities)), min(60, len(entities)), key="kg_maxn"
@@ -543,7 +572,8 @@ with tab_graph:
         fig = _build_graph(
             data, max_nodes, show_facts, show_processes, selected_types,
             min_occurrence=min_occurrence, show_labels=show_labels,
-            graph_height=graph_height,
+            graph_height=graph_height, show_entity_edges=show_entity_edges,
+            min_shared_meetings=min_shared,
         )
         st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True})
 
@@ -613,7 +643,7 @@ with tab_export:
     # Build entity→process edge list for export
     _entity_meeting_map: dict[str, set[str]] = {}
     for _e in entities:
-        _mtgs: set[str] = set()
+        _mtgs: set[str] = set(_e.get("meeting_ids") or [])
         for _col in ("first_seen_meeting_id", "last_seen_meeting_id"):
             _v = _e.get(_col)
             if _v:

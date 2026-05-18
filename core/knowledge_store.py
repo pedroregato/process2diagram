@@ -58,7 +58,7 @@ def get_entities(
 def upsert_entity(project_id: str, entity: dict) -> dict | None:
     """
     Create or update an entity. On conflict (project_id, canonical_name, entity_type),
-    increments occurrence_count and merges aliases.
+    increments occurrence_count and merges aliases and meeting_ids.
     entity keys: entity_type, canonical_name, aliases[], meeting_id, metadata{}
     """
     db = _db()
@@ -73,7 +73,7 @@ def upsert_entity(project_id: str, entity: dict) -> dict | None:
         # Check for existing
         existing = _ok(
             db.table("kh_entities")
-            .select("id, occurrence_count, aliases, first_seen_meeting_id")
+            .select("id, occurrence_count, aliases, first_seen_meeting_id, meeting_ids")
             .eq("project_id", project_id)
             .eq("canonical_name", canonical)
             .eq("entity_type", etype)
@@ -87,11 +87,16 @@ def upsert_entity(project_id: str, entity: dict) -> dict | None:
         if existing:
             row = existing[0]
             merged_aliases = list(set((row.get("aliases") or []) + new_aliases))
+            # Merge meeting_ids — append new meeting if not already tracked
+            existing_mids = list(row.get("meeting_ids") or [])
+            if meeting_id and meeting_id not in existing_mids:
+                existing_mids.append(meeting_id)
             patch = {
-                "occurrence_count": (row.get("occurrence_count") or 1) + 1,
-                "aliases": merged_aliases,
+                "occurrence_count":    (row.get("occurrence_count") or 1) + 1,
+                "aliases":             merged_aliases,
                 "last_seen_meeting_id": meeting_id,
-                "metadata": entity.get("metadata") or {},
+                "meeting_ids":         existing_mids,
+                "metadata":            entity.get("metadata") or {},
             }
             result = (
                 db.table("kh_entities")
@@ -100,6 +105,7 @@ def upsert_entity(project_id: str, entity: dict) -> dict | None:
                 .execute()
             )
         else:
+            mids = [meeting_id] if meeting_id else []
             payload = {
                 "project_id":            project_id,
                 "entity_type":           etype,
@@ -107,6 +113,7 @@ def upsert_entity(project_id: str, entity: dict) -> dict | None:
                 "aliases":               new_aliases,
                 "first_seen_meeting_id": meeting_id,
                 "last_seen_meeting_id":  meeting_id,
+                "meeting_ids":           mids,
                 "occurrence_count":      1,
                 "metadata":              entity.get("metadata") or {},
             }
@@ -116,6 +123,67 @@ def upsert_entity(project_id: str, entity: dict) -> dict | None:
     except Exception as exc:
         _log.error("upsert_entity(%s, %s): %s", project_id, entity.get("canonical_name"), exc)
         return None
+
+
+def merge_entities(project_id: str, keep_id: str, discard_ids: list[str]) -> bool:
+    """
+    Merge duplicate entities: absorb aliases/meeting_ids/occurrence_count from
+    discard_ids into keep_id, then delete the discarded rows.
+    Returns True if successful.
+    """
+    db = _db()
+    if not db or not discard_ids:
+        return False
+    try:
+        # Fetch all rows
+        all_ids = [keep_id] + discard_ids
+        rows = _ok(
+            db.table("kh_entities")
+            .select("id, aliases, meeting_ids, occurrence_count")
+            .in_("id", all_ids)
+            .execute()
+        )
+        if not rows:
+            return False
+
+        keep_row = next((r for r in rows if r["id"] == keep_id), None)
+        if not keep_row:
+            return False
+
+        # Merge aliases and meeting_ids from all discarded rows
+        merged_aliases  = list(set(keep_row.get("aliases") or []))
+        merged_mids     = list(keep_row.get("meeting_ids") or [])
+        merged_count    = keep_row.get("occurrence_count") or 1
+
+        for row in rows:
+            if row["id"] == keep_id:
+                continue
+            for a in (row.get("aliases") or []):
+                if a not in merged_aliases:
+                    merged_aliases.append(a)
+            for m in (row.get("meeting_ids") or []):
+                if m not in merged_mids:
+                    merged_mids.append(m)
+            merged_count += (row.get("occurrence_count") or 1)
+
+        # Update keep_id
+        db.table("kh_entities").update({
+            "aliases":         merged_aliases,
+            "meeting_ids":     merged_mids,
+            "occurrence_count": merged_count,
+        }).eq("id", keep_id).execute()
+
+        # Delete discarded rows
+        db.table("kh_entities").delete().in_("id", discard_ids).execute()
+
+        _log.info(
+            "merge_entities: merged %d duplicates into %s (count=%d)",
+            len(discard_ids), keep_id, merged_count,
+        )
+        return True
+    except Exception as exc:
+        _log.error("merge_entities(%s): %s", project_id, exc)
+        return False
 
 
 # ── Processes ─────────────────────────────────────────────────────────────────

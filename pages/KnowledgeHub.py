@@ -74,6 +74,38 @@ with tab_entities:
     etype = None if _type_filter == "Todos" else _type_filter
     entities = get_entities(project_id, entity_type=etype, limit=200)
 
+    # ── Consolidação de duplicatas (admin) ────────────────────────────────────
+    from modules.auth import is_admin
+    if is_admin():
+        with st.expander("🔁 Consolidar Entidades Duplicadas"):
+            st.caption(
+                "O extrator pode criar variações do mesmo objeto (ex: 'SDEA' e 'Portal SDEA'). "
+                "Este agente usa LLM para identificar e fundir duplicatas, "
+                "somando ocorrências e unindo aliases."
+            )
+            _api_key  = st.session_state.get("api_key", "")
+            _prov_cfg = st.session_state.get("provider_cfg", {})
+            if st.button("🔁 Consolidar agora", key="kh_consolidate_btn", use_container_width=False):
+                if not _api_key:
+                    st.warning("Configure a chave de API na barra lateral antes de consolidar.")
+                else:
+                    with st.spinner("Analisando duplicatas com LLM…"):
+                        from agents.agent_entity_consolidator import AgentEntityConsolidator
+                        _agent = AgentEntityConsolidator(
+                            {"api_key": _api_key}, _prov_cfg
+                        )
+                        _stats = _agent.consolidate(project_id)
+                    if _stats.get("error"):
+                        st.error(f"Erro: {_stats['error']}")
+                    elif _stats["merges_done"] == 0:
+                        st.success("Nenhuma duplicata detectada — base já está consolidada.")
+                    else:
+                        st.success(
+                            f"Consolidação concluída: **{_stats['merges_done']}** grupo(s) fundido(s), "
+                            f"**{_stats['entities_removed']}** entidade(s) removida(s)."
+                        )
+                        st.rerun()
+
     if not entities:
         st.info("Nenhuma entidade encontrada. Execute o pipeline em uma reunião para popular o Knowledge Hub.")
     else:
