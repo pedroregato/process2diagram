@@ -526,7 +526,7 @@ with st.sidebar:
         "Max entidades no grafo", 10, min(150, len(entities)), min(60, len(entities)), key="kg_maxn"
     )
     graph_height = st.select_slider(
-        "Altura do grafo", [480, 600, 720, 860, 1000], value=640, key="kg_height"
+        "Altura do grafo", [480, 600, 720, 860, 1000], value=720, key="kg_height"
     )
     st.markdown("---")
     st.caption("A legenda de cores aparece dentro do grafico (canto superior direito).")
