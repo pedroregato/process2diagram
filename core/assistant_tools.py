@@ -723,11 +723,13 @@ def get_tool_schemas_openai() -> list[dict]:
                 "name": "reprocess_meeting_full",
                 "description": (
                     "Reprocessa completamente uma reunião existente re-executando o pipeline "
-                    "completo (Ata+BABOK, Requisitos, SBVR, BMM, DMN, Argumentação IBIS e "
-                    "opcionalmente BPMN e Qualidade) sobre a transcrição armazenada. "
+                    "completo (Ata+BABOK, Requisitos, SBVR, BMM, DMN, Argumentação IBIS, "
+                    "Relatório Executivo, Sumário por Perspectiva, Grafo de Conhecimento e CKF) "
+                    "sobre a transcrição armazenada. "
                     "Atualiza todos os artefatos no Supabase sem criar uma nova reunião. "
                     "USE quando o usuário pedir para reprocessar, atualizar ou corrigir todos "
-                    "os artefatos de uma reunião de uma só vez. "
+                    "os artefatos de uma reunião de uma só vez, ou quando quiser garantir que "
+                    "a reunião tenha todos os artefatos completos e atualizados. "
                     "Para reprocessar apenas requisitos, prefira reprocess_meeting_requirements. "
                     "Para regenerar apenas o Relatório Executivo, prefira regenerate_executive_report. "
                     "🔒 Requer perfil administrador."
@@ -4799,16 +4801,18 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             )
 
             agents_config = {
-                "run_minutes":       True,
-                "run_requirements":  True,
-                "run_sbvr":          True,
-                "run_bmm":           True,
-                "run_dmn":           True,
-                "run_argumentation": True,
-                "run_synthesizer":   True,
-                "run_ckf_updater":   True,
-                "run_quality":       run_quality,
-                "run_bpmn":          run_bpmn,
+                "run_minutes":             True,
+                "run_requirements":        True,
+                "run_sbvr":                True,
+                "run_bmm":                 True,
+                "run_dmn":                 True,
+                "run_argumentation":       True,
+                "run_synthesizer":         True,
+                "run_ckf_updater":         True,
+                "run_query_summarizer":    True,
+                "run_knowledge_extractor": True,
+                "run_quality":             run_quality,
+                "run_bpmn":                run_bpmn,
             }
 
             result: FileResult = pipeline._reprocess_one(m, self.project_id, agents_config)
@@ -4820,21 +4824,22 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 "══════════════════════════════════════════════",
                 f"  Reunião {meeting_number} — '{title}'",
                 "══════════════════════════════════════════════",
-                f"  Status               : ✅ Reprocessada com sucesso",
-                f"  Requisitos novos     : {result.req_new}",
-                f"  Termos SBVR          : {result.n_terms}",
-                f"  Regras SBVR          : {result.n_rules}",
-                f"  Ata+BABOK            : regenerada",
-                f"  DMN                  : regenerado",
-                f"  Argumentação IBIS    : regenerada",
-                f"  Relatório Executivo  : regenerado",
-                f"  CKF Contexto         : atualizado",
-                f"  Knowledge Graph      : extraído",
+                f"  Status                  : ✅ Reprocessada com sucesso",
+                f"  Requisitos novos        : {result.req_new}",
+                f"  Termos SBVR             : {result.n_terms}",
+                f"  Regras SBVR             : {result.n_rules}",
+                f"  Ata+BABOK               : regenerada",
+                f"  DMN                     : regenerado",
+                f"  Argumentação IBIS       : regenerada",
+                f"  Relatório Executivo     : regenerado",
+                f"  Sumário por Perspectiva : regenerado",
+                f"  Knowledge Graph         : extraído",
+                f"  CKF Contexto            : atualizado",
             ]
             if run_bpmn:
-                lines.append("  BPMN                 : regenerado")
+                lines.append("  BPMN                    : regenerado")
             if run_quality:
-                lines.append("  Qualidade            : avaliada")
+                lines.append("  Qualidade               : avaliada")
             return "\n".join(lines)
 
         except Exception as exc:

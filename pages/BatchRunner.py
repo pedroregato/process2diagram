@@ -194,7 +194,7 @@ with st.expander("🔄 Reprocessar Reuniões Existentes", expanded=False):
                 )
 
             st.markdown("**Agentes a executar:**")
-            _rpc = st.columns(10)
+            _rpc = st.columns(12)
             _rp_minutes      = _rpc[0].checkbox("📋 Ata",           value=True,  key="rp_minutes")
             _rp_requirements = _rpc[1].checkbox("📝 Requisitos",    value=True,  key="rp_req")
             _rp_sbvr         = _rpc[2].checkbox("📖 SBVR",          value=True,  key="rp_sbvr")
@@ -205,18 +205,22 @@ with st.expander("🔄 Reprocessar Reuniões Existentes", expanded=False):
             _rp_ckf          = _rpc[7].checkbox("🧠 CKF",           value=True,  key="rp_ckf")
             _rp_quality      = _rpc[8].checkbox("🔬 Qualidade",     value=True,  key="rp_quality")
             _rp_bpmn         = _rpc[9].checkbox("📐 BPMN",          value=True,  key="rp_bpmn")
+            _rp_ke           = _rpc[10].checkbox("🕸️ Grafo",        value=True,  key="rp_ke")
+            _rp_qs           = _rpc[11].checkbox("🔎 Sumário",      value=True,  key="rp_qs")
 
             _rp_agents_config = {
-                "run_minutes":       _rp_minutes,
-                "run_requirements":  _rp_requirements,
-                "run_sbvr":          _rp_sbvr,
-                "run_bmm":           _rp_bmm,
-                "run_dmn":           _rp_dmn,
-                "run_argumentation": _rp_ibis,
-                "run_synthesizer":   _rp_synth,
-                "run_ckf_updater":   _rp_ckf,
-                "run_quality":       _rp_quality,
-                "run_bpmn":          _rp_bpmn,
+                "run_minutes":             _rp_minutes,
+                "run_requirements":        _rp_requirements,
+                "run_sbvr":                _rp_sbvr,
+                "run_bmm":                 _rp_bmm,
+                "run_dmn":                 _rp_dmn,
+                "run_argumentation":       _rp_ibis,
+                "run_synthesizer":         _rp_synth,
+                "run_ckf_updater":         _rp_ckf,
+                "run_quality":             _rp_quality,
+                "run_bpmn":                _rp_bpmn,
+                "run_knowledge_extractor": _rp_ke,
+                "run_query_summarizer":    _rp_qs,
             }
 
             _rp_runnable = [
@@ -321,7 +325,7 @@ st.markdown("---")
 st.markdown("## 3️⃣ Agentes")
 
 with st.expander("Configurar agentes a executar", expanded=True):
-    _bc = st.columns(10)
+    _bc = st.columns(12)
     run_minutes      = _bc[0].checkbox("📋 Ata",        value=True,  key="br_minutes")
     run_requirements = _bc[1].checkbox("📝 Requisitos", value=True,  key="br_req")
     run_sbvr         = _bc[2].checkbox("📖 SBVR",       value=True,  key="br_sbvr")
@@ -332,18 +336,22 @@ with st.expander("Configurar agentes a executar", expanded=True):
     run_ckf          = _bc[7].checkbox("🧠 CKF",        value=True,  key="br_ckf")
     run_quality      = _bc[8].checkbox("🔬 Qualidade",  value=True,  key="br_quality")
     run_bpmn         = _bc[9].checkbox("📐 BPMN",       value=True,  key="br_bpmn")
+    run_ke           = _bc[10].checkbox("🕸️ Grafo",     value=True,  key="br_ke")
+    run_qs           = _bc[11].checkbox("🔎 Sumário",   value=True,  key="br_qs")
 
 agents_config = {
-    "run_minutes":       run_minutes,
-    "run_requirements":  run_requirements,
-    "run_sbvr":          run_sbvr,
-    "run_bmm":           run_bmm,
-    "run_dmn":           run_dmn,
-    "run_argumentation": run_ibis,
-    "run_synthesizer":   run_synth,
-    "run_ckf_updater":   run_ckf,
-    "run_quality":       run_quality,
-    "run_bpmn":          run_bpmn,
+    "run_minutes":             run_minutes,
+    "run_requirements":        run_requirements,
+    "run_sbvr":                run_sbvr,
+    "run_bmm":                 run_bmm,
+    "run_dmn":                 run_dmn,
+    "run_argumentation":       run_ibis,
+    "run_synthesizer":         run_synth,
+    "run_ckf_updater":         run_ckf,
+    "run_quality":             run_quality,
+    "run_bpmn":                run_bpmn,
+    "run_knowledge_extractor": run_ke,
+    "run_query_summarizer":    run_qs,
 }
 
 st.markdown("---")
