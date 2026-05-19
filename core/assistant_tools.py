@@ -1780,6 +1780,57 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_cache_stats",
+                "description": (
+                    "Retorna estatísticas do cache semântico de LLM: total de entradas, "
+                    "hits acumulados, tokens economizados e custo estimado em USD. "
+                    "Inclui breakdown por agente (bpmn, minutes, requirements, sbvr, bmm, etc.). "
+                    "Use quando o usuário perguntar sobre economia de API, hits de cache, "
+                    "desempenho do pipeline ou custo do sistema."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "agent_name": {
+                            "type": "string",
+                            "description": (
+                                "Opcional. Filtrar estatísticas para um agente específico "
+                                "(ex: 'bpmn', 'minutes', 'sbvr', 'bmm', 'requirements'). "
+                                "Se omitido, retorna estatísticas globais."
+                            ),
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "clear_llm_cache",
+                "description": (
+                    "Invalida entradas do cache semântico de LLM. Admin only. "
+                    "Use quando o prompt de um agente foi alterado e as respostas "
+                    "cacheadas estão desatualizadas, ou para forçar reprocessamento limpo."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "agent_name": {
+                            "type": "string",
+                            "description": (
+                                "Opcional. Nome do agente cujo cache deve ser limpo "
+                                "(ex: 'bpmn', 'sbvr'). Se omitido, limpa TODO o cache."
+                            ),
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
     ]
 
 
@@ -1868,6 +1919,8 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "resolve_entity_ambiguity":        "admin",
     "lookup_entity":                   "consulta",
     "delete_entity":                   "admin",
+    "get_cache_stats":                 "consulta",
+    "clear_llm_cache":                 "admin",
 }
 
 # Ferramentas que exigem perfil administrador
@@ -1894,6 +1947,7 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "detect_contradictions",
     "resolve_entity_ambiguity",
     "delete_entity",
+    "clear_llm_cache",
 })
 
 
@@ -2141,6 +2195,66 @@ class AssistantToolExecutor:
         return ""
 
     # ── Tool implementations ──────────────────────────────────────────────────
+
+    def get_cache_stats(self, agent_name: str | None = None) -> str:
+        """Return LLM semantic cache statistics as a formatted Markdown string."""
+        try:
+            from services.semantic_cache import _cache
+            stats = _cache.get_stats(agent_name=agent_name or None)
+        except Exception as exc:
+            return f"⚠️ Não foi possível consultar o cache: {exc}"
+
+        if stats["total_entries"] == 0:
+            scope = f" (agente `{agent_name}`)" if agent_name else ""
+            return (
+                f"O cache LLM{scope} ainda está vazio. "
+                "Ele será preenchido automaticamente após a primeira execução do pipeline."
+            )
+
+        cost = stats["total_tokens_saved"] / 1_000_000 * 0.27
+        hit_ratio = (
+            stats["total_hits"] / (stats["total_hits"] + stats["total_entries"])
+            if stats["total_entries"] > 0 else 0.0
+        )
+
+        lines = [
+            "## 💾 Cache Semântico de LLM\n",
+            f"| Métrica | Valor |",
+            f"|:---|:---|",
+            f"| Entradas em cache | {stats['total_entries']} |",
+            f"| Cache hits totais | {stats['total_hits']} |",
+            f"| Tokens economizados | {stats['total_tokens_saved']:,} |",
+            f"| Economia estimada | ~${cost:.4f} USD |",
+            f"| Hit ratio | {hit_ratio:.1%} |",
+            "",
+        ]
+
+        if stats["by_agent"]:
+            lines += ["### Por agente\n", "| Agente | Entradas | Hits | Tokens economizados | Economia USD |",
+                      "|:---|---:|---:|---:|---:|"]
+            for row in stats["by_agent"]:
+                agent_cost = row["tokens_saved"] / 1_000_000 * 0.27
+                lines.append(
+                    f"| `{row['agent']}` | {row['entries']} | {row['hits']} "
+                    f"| {row['tokens_saved']:,} | ${agent_cost:.4f} |"
+                )
+            lines.append("")
+
+        lines.append(
+            "_Cache armazena respostas LLM pré-desanitize (PII-safe). "
+            "TTL padrão: 30 dias. Veja detalhes em Qualidade ROI-TR → 💾 Cache LLM._"
+        )
+        return "\n".join(lines)
+
+    def clear_llm_cache(self, agent_name: str | None = None) -> str:
+        """Invalidate LLM cache entries (admin only). Returns confirmation."""
+        try:
+            from services.semantic_cache import _cache
+            _cache.invalidate(agent_name=agent_name or None)
+            scope = f"do agente `{agent_name}`" if agent_name else "completo"
+            return f"✅ Cache LLM {scope} invalidado com sucesso."
+        except Exception as exc:
+            return f"❌ Erro ao invalidar cache: {exc}"
 
     def get_system_capabilities(self) -> str:
         """Return a static description of all P2D capabilities and integrations."""
@@ -6084,6 +6198,8 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 "resolve_entity_ambiguity":  lambda: self._resolve_entity_ambiguity(tool_input),
                 "lookup_entity":             lambda: self._lookup_entity(tool_input),
                 "delete_entity":             lambda: self._delete_entity(tool_input),
+                "get_cache_stats":           lambda: self.get_cache_stats(tool_input.get("agent_name")),
+                "clear_llm_cache":           lambda: self.clear_llm_cache(tool_input.get("agent_name")),
                 "render_table": lambda: self._render_table(tool_input),
                 "get_executive_report": lambda: self.get_executive_report(
                     tool_input["meeting_number"],
