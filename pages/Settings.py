@@ -161,15 +161,41 @@ with tab_llm:
     # Show status for all providers
     st.markdown("---")
     st.markdown("#### Status de todas as chaves")
+    import pandas as pd
     rows = []
     for name in provider_names:
-        stored = st.session_state.get(_session_key(name), "")
+        pcfg   = AVAILABLE_PROVIDERS[name]
+        alias  = pcfg.get("api_key_alias")
+        # Providers with api_key_alias share the key of the aliased provider
+        key_provider = alias if alias else name
+        stored = st.session_state.get(_session_key(key_provider), "")
+        label  = "✅ Configurada" if stored else "❌ Não configurada"
+        if alias and stored:
+            label = f"✅ Via {alias}"
         rows.append({
+            "Uso":      "🤖 Pipeline",
             "Provedor": name,
-            "Modelo":   AVAILABLE_PROVIDERS[name]["default_model"],
-            "Chave":    "✅ Configurada" if stored else "❌ Não configurada",
+            "Modelo":   pcfg["default_model"],
+            "Chave":    label,
         })
-    import pandas as pd
+    # Assistente LLM key
+    asst_prov  = st.session_state.get("asst_provider", "")
+    asst_key   = st.session_state.get("asst_api_key", "")
+    rows.append({
+        "Uso":      "💬 Assistente",
+        "Provedor": asst_prov or "—",
+        "Modelo":   AVAILABLE_PROVIDERS.get(asst_prov, {}).get("default_model", "—"),
+        "Chave":    "✅ Configurada" if asst_key else "❌ Não configurada",
+    })
+    # Embedding key
+    emb_prov = st.session_state.get("asst_embed_provider", "")
+    emb_key  = st.session_state.get("asst_embed_key", "")
+    rows.append({
+        "Uso":      "🔮 Embeddings",
+        "Provedor": emb_prov or "—",
+        "Modelo":   "—",
+        "Chave":    "✅ Configurada" if emb_key else "❌ Não configurada",
+    })
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 # ╔══════════════════════════════════════════════════════╗

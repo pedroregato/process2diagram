@@ -68,7 +68,7 @@ with st.expander("ℹ️ Fontes e premissas dos preços", expanded=False):
         })
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
     st.caption(
-        "⚠️ Preços válidos em jun/2025. A relação entrada/saída assume ~70% entrada · 30% saída, "
+        "⚠️ Preços válidos em mai/2026. A relação entrada/saída assume ~70% entrada · 30% saída, "
         "típica para transcrições de 2 000–5 000 palavras com o pipeline completo."
     )
 
@@ -336,6 +336,13 @@ if enabled_agents:
             {"Provedor": r["Provedor"], "Custo (USD)": compare_providers(calc_n, enabled_agents, calc_passes)[i]["Custo total (USD)"]}
             for i, r in enumerate(compare_providers(calc_n, enabled_agents, calc_passes))
         ])
+        # Generate a colour per provider — palette cycles if more than 10 providers
+        _palette = [
+            "#C97B1A", "#1A4B8C", "#1e3a5f", "#1A7F5A", "#6B3FA0",
+            "#B5451B", "#1A7BB5", "#4A7C59", "#7B3F6E", "#5C4A1E",
+        ]
+        _prov_list = list(PROVIDER_PRICING.keys())
+        _colours   = [_palette[i % len(_palette)] for i in range(len(_prov_list))]
         chart = (
             alt.Chart(chart_data)
             .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
@@ -344,10 +351,7 @@ if enabled_agents:
                 y=alt.Y("Custo (USD):Q", title="Custo total (USD)"),
                 color=alt.Color(
                     "Provedor:N",
-                    scale=alt.Scale(
-                        domain=list(PROVIDER_PRICING.keys()),
-                        range=["#C97B1A", "#1A4B8C", "#1e3a5f", "#1A7F5A", "#6B3FA0"],
-                    ),
+                    scale=alt.Scale(domain=_prov_list, range=_colours),
                     legend=None,
                 ),
                 tooltip=["Provedor:N", "Custo (USD):Q"],
@@ -362,7 +366,7 @@ else:
 
 st.markdown("---")
 st.caption(
-    "💡 **Dica**: DeepSeek com cache de prompt ativo pode reduzir o custo de entrada em ~80% "
-    "quando múltiplas reuniões compartilham o mesmo sistema de prompt. "
+    "💡 **Dica**: DeepSeek V4 Flash é o provider padrão — mesmo preço do antigo deepseek-chat ($0.14/1M). "
+    "O cache semântico do Process2Diagram (~$0.003/1M no cache hit) pode reduzir drasticamente o custo real. "
     "Groq e Google Gemini oferecem tiers gratuitos adequados para projetos de pequeno porte."
 )
