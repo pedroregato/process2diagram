@@ -13,7 +13,7 @@
 - **Dev environment:** PyCharm on Windows; Python 3.13
 - **Current version:** v4.20+
 
-Supported LLM providers: DeepSeek (default), Claude (Anthropic), OpenAI, Groq, Google Gemini.
+Supported LLM providers: DeepSeek V4 Flash (default), DeepSeek V4 Pro, DeepSeek V4 Flash (Thinking), Claude (Anthropic), OpenAI, Groq, Google Gemini, Grok (xAI).
 
 ---
 
@@ -268,13 +268,16 @@ Configured in `modules/config.py → AVAILABLE_PROVIDERS`:
 
 | Provider | Default model | client_type | Notes |
 |---|---|---|---|
-| **DeepSeek** (default) | `deepseek-chat` | `openai_compatible` | Cheapest |
+| **DeepSeek** (default) | `deepseek-v4-flash` | `openai_compatible` | Cheapest; 1M context; `deepseek-chat` deprecated 24/07/2026 |
+| DeepSeek V4 Pro | `deepseek-v4-pro` | `openai_compatible` | Premium; 1M context; $0.435/1M input |
+| DeepSeek V4 Flash (Thinking) | `deepseek-v4-flash` | `openai_compatible` | thinking mode via `reasoning_effort=high`; no `json_mode`; no `temperature` |
 | Claude (Anthropic) | `claude-sonnet-4-20250514` | `anthropic` | No `json_mode` — enforce via prompt |
 | OpenAI | `gpt-4o-mini` | `openai_compatible` | |
 | Groq (Llama) | `llama-3.3-70b-versatile` | `openai_compatible` | Fastest |
 | Google Gemini | `gemini-2.0-flash` | `openai_compatible` | Free tier |
+| Grok (xAI) | `grok-4-1-fast-reasoning` | `openai_compatible` | 2M context |
 
-To add a new provider: edit `AVAILABLE_PROVIDERS`. If `client_type` is new, add routing in `BaseAgent._call_llm()`.
+To add a new provider: edit `AVAILABLE_PROVIDERS`. If `client_type` is new, add routing in `BaseAgent._call_llm()`. To enable thinking mode: add `reasoning_effort: "high"` to the provider entry — `_call_openai` handles the rest (passes `extra_body={"thinking": {"type": "enabled"}}`, drops `temperature`).
 
 ---
 
