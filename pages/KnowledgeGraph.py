@@ -489,41 +489,40 @@ def _build_pyvis_graph(
 
             # ── Arestas pré-calculadas ────────────────────────────────────────
             for (_e, _cid) in _pending_edges:
-                    _eid = _e["id"]
-                    # Adiciona o nó de entidade se ainda não estiver no grafo
-                    if _eid not in entity_ids:
-                        _etype = _e.get("entity_type", "ACTOR")
-                        _count = _e.get("occurrence_count") or 1
-                        _name  = _e.get("canonical_name", "?")
-                        _color = type_color.get(_etype, _PALETTE[0])
-                        _is_p  = (_etype in {"PERSON", "ACTOR"}
-                                  and _is_participant(_e, participant_names))
-                        _rlbl  = ("Participante confirmado" if _is_p
-                                  else _etype.replace("_", " ").title())
-                        net.add_node(
-                            _eid, label=_name,
-                            title=(f"{_name}\nTipo: {_rlbl}\n"
-                                   f"Ocorrências: {_count}\n(incluído por contradição)"),
-                            color={
-                                "background": _color, "border": "#0a0f1a",
-                                "highlight": {"background": _color, "border": "#ffffff"},
-                                "hover":     {"background": _color, "border": "#ffffff"},
-                            },
-                            size=max(10, min(28, 10 + _count * 2)),
-                            shape=_TYPE_SHAPE.get(_etype, "dot"),
-                            font={"color": "#ffffff", "size": 11,
-                                  "face": "Segoe UI, system-ui"},
-                        )
-                        entity_ids.add(_eid)
-                    net.add_edge(
-                        _eid, _cid,
-                        title=f"Envolvido na contradição\nSeveridade: {severity}",
-                        color={"color": node_color,
-                               "highlight": "#fca5a5", "hover": "#fca5a5"},
-                        width=1.5,
-                        dashes=True,
+                _eid = _e["id"]
+                # Adiciona o nó de entidade se ainda não estiver no grafo
+                if _eid not in entity_ids:
+                    _etype = _e.get("entity_type", "ACTOR")
+                    _count = _e.get("occurrence_count") or 1
+                    _name  = _e.get("canonical_name", "?")
+                    _color = type_color.get(_etype, _PALETTE[0])
+                    _is_p  = (_etype in {"PERSON", "ACTOR"}
+                              and _is_participant(_e, participant_names))
+                    _rlbl  = ("Participante confirmado" if _is_p
+                              else _etype.replace("_", " ").title())
+                    net.add_node(
+                        _eid, label=_name,
+                        title=(f"{_name}\nTipo: {_rlbl}\n"
+                               f"Ocorrências: {_count}\n(incluído por contradição)"),
+                        color={
+                            "background": _color, "border": "#0a0f1a",
+                            "highlight": {"background": _color, "border": "#ffffff"},
+                            "hover":     {"background": _color, "border": "#ffffff"},
+                        },
+                        size=max(10, min(28, 10 + _count * 2)),
+                        shape=_TYPE_SHAPE.get(_etype, "dot"),
+                        font={"color": "#ffffff", "size": 11,
+                              "face": "Segoe UI, system-ui"},
                     )
-                    _connected += 1
+                    entity_ids.add(_eid)
+                net.add_edge(
+                    _eid, _cid,
+                    title=f"Envolvido na contradição\nSeveridade: {severity}",
+                    color={"color": node_color,
+                           "highlight": "#fca5a5", "hover": "#fca5a5"},
+                    width=1.5,
+                    dashes=True,
+                )
 
     # ── Opções de física (Barnes-Hut) e interação ─────────────────────────────
     options = {
