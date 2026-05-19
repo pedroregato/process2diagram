@@ -162,8 +162,16 @@ if pipeline_mode == _MODE_NEW:
             try:
                 hub = run_pipeline(hub, config, update_progress)
                 st.session_state.hub = hub
+                _cache_hits = getattr(hub.meta, "cache_hits", 0)
+                _cache_label = (
+                    f" · ⚡ {_cache_hits} cache hit(s)"
+                    if _cache_hits else ""
+                )
                 _pipeline_status.update(
-                    label=f"✅ Pipeline concluído · {hub.meta.total_tokens_used:,} tokens usados",
+                    label=(
+                        f"✅ Pipeline concluído · {hub.meta.total_tokens_used:,} tokens usados"
+                        f"{_cache_label}"
+                    ),
                     state="complete",
                     expanded=False,
                 )
@@ -373,6 +381,30 @@ if "hub" in st.session_state:
     hub = st.session_state.hub
     prefix = st.session_state.prefix
     suffix = st.session_state.suffix
+
+    # ── Cache hit indicator ───────────────────────────────────────────────────
+    _hits = getattr(getattr(hub, "meta", None), "cache_hits", 0)
+    _saved = getattr(getattr(hub, "meta", None), "tokens_saved", 0)
+    if _hits > 0:
+        _usd = _saved / 1_000_000 * 0.27
+        _col_msg, _col_help = st.columns([10, 1])
+        _col_msg.success(
+            f"⚡ **{_hits} agente(s) responderam via cache** — "
+            f"{_saved:,} tokens economizados (~${_usd:.4f} USD)"
+        )
+        _col_help.metric(
+            label=" ",
+            value="ⓘ",
+            help=(
+                "**Cache semântico de LLM**\n\n"
+                "Quando o mesmo agente recebe uma transcrição já processada anteriormente, "
+                "a resposta é recuperada diretamente do banco de dados (sem chamar a API). "
+                "O resultado é idêntico ao original — o token_map de PII é reaplicado "
+                "corretamente para cada sessão.\n\n"
+                "Configure TTL e veja estatísticas em **Qualidade ROI-TR → 💾 Cache LLM**."
+            ),
+        )
+    # ─────────────────────────────────────────────────────────────────────────
 
     tab_labels = {
         "minutes":          "📋 Ata de Reunião",
