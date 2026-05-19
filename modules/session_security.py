@@ -33,7 +33,22 @@ def render_api_key_gate(provider: str, provider_cfg: dict) -> None:
     """
     Renders the API key input in the sidebar.
     The key is stored exclusively in st.session_state — never in a file or DB.
+    If provider_cfg has 'api_key_alias', uses that provider's stored key instead
+    of asking for a new one (shared key pattern for provider variants).
     """
+    alias = provider_cfg.get("api_key_alias")
+    if alias:
+        # This provider shares an API key with another provider — don't ask again.
+        sk = _session_key(alias)
+        stored = st.session_state.get(sk, "")
+        st.markdown("### 🔑 API Key")
+        if stored:
+            masked = stored[:8] + "••••••••" + stored[-4:] if len(stored) > 12 else "••••••••"
+            st.success(f"Key active (via **{alias}**): `{masked}`")
+        else:
+            st.warning(f"Chave não configurada. Configure em **{alias}** — esta variante compartilha a mesma API key.")
+        return
+
     sk = _session_key(provider)
     stored = st.session_state.get(sk, "")
 
@@ -66,9 +81,13 @@ def render_api_key_readonly(provider: str) -> str:
     """
     Displays the API key status for the given provider (read-only).
     Reads from the canonical session_state key set by Settings.
+    If the provider has api_key_alias, reads from the aliased provider's key.
     Returns the stored key value (or "" if not configured).
     """
-    sk = _session_key(provider)
+    from modules.config import AVAILABLE_PROVIDERS
+    pcfg = AVAILABLE_PROVIDERS.get(provider, {})
+    key_provider = pcfg.get("api_key_alias", provider)
+    sk = _session_key(key_provider)
     stored = st.session_state.get(sk, "")
     if stored:
         masked = stored[:6] + "••••••••" + stored[-4:] if len(stored) > 10 else "••••••••"
@@ -100,10 +119,16 @@ def get_session_llm_client(provider: str) -> dict | None:
     Returns a dict with the API key and provider config if the key is set,
     or None if the user hasn't entered a key yet.
 
+    If the provider has api_key_alias in AVAILABLE_PROVIDERS, the aliased
+    provider's session key is used (shared key for provider variants).
+
     The caller (extract_llm.py) uses this dict to build the actual client.
     The raw key never leaves this module except to the LLM SDK call.
     """
-    sk = _session_key(provider)
+    from modules.config import AVAILABLE_PROVIDERS
+    pcfg = AVAILABLE_PROVIDERS.get(provider, {})
+    key_provider = pcfg.get("api_key_alias", provider)
+    sk = _session_key(key_provider)
     api_key = st.session_state.get(sk)
     if not api_key:
         return None

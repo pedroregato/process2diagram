@@ -33,6 +33,7 @@ AVAILABLE_PROVIDERS: dict = {
         "supports_system_prompt": True,
         "max_tokens": 8192,
         "long_context_max_tokens": 32768,
+        "api_key_alias": "DeepSeek",       # compartilha a mesma API key do DeepSeek
     },
 
     "DeepSeek V4 Flash (Thinking)": {
@@ -48,6 +49,7 @@ AVAILABLE_PROVIDERS: dict = {
         "max_tokens": 16384,               # inclui tokens de raciocínio interno
         "long_context_max_tokens": 32768,
         "reasoning_effort": "high",        # ativa modo de pensamento (thinking)
+        "api_key_alias": "DeepSeek",       # compartilha a mesma API key do DeepSeek
     },
 
     "Claude (Anthropic)": {
