@@ -209,7 +209,7 @@ class AgentAnalyst:
         from openai import OpenAI
 
         api_key  = self.llm_config.get("api_key", "")
-        model    = self.llm_config.get("model", "deepseek-chat")
+        model    = self.llm_config.get("model", "deepseek-v4-flash")
         base_url = self.llm_config.get("base_url")
 
         client = OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)

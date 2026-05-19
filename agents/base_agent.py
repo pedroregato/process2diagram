@@ -258,6 +258,14 @@ class BaseAgent(ABC):
                     user_msg + "\n\nRespond with valid json only."
                 )
 
+        # Thinking mode — DeepSeek V4 Flash/Pro with reasoning_effort
+        # Temperature is unsupported in thinking mode; extra_body activates it.
+        reasoning_effort = self.provider_cfg.get("reasoning_effort")
+        if reasoning_effort:
+            kwargs["reasoning_effort"] = reasoning_effort
+            kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
+            kwargs.pop("temperature", None)
+
         resp = client.chat.completions.create(**kwargs, timeout=timeout)
         tokens = resp.usage.total_tokens if resp.usage else 0
         return resp.choices[0].message.content, tokens

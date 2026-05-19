@@ -18,12 +18,28 @@ from dataclasses import dataclass, field
 
 PROVIDER_PRICING: dict[str, dict] = {
     "DeepSeek": {
-        "model":      "deepseek-chat (V3)",
-        "input_usd":  0.07,    # cache miss; cache hit = $0.014
+        "model":      "deepseek-v4-flash",
+        "input_usd":  0.14,    # cache miss; cache hit = $0.0028
         "output_usd": 0.28,
-        "note":       "Cache de prompt reduz custo de entrada em ~80%",
+        "note":       "1M context · Cache reduz input em ~98% · deepseek-chat deprecated 24/07/2026",
         "free_tier":  False,
-        "source":     "platform.deepseek.com/docs/api/pricing",
+        "source":     "api-docs.deepseek.com/quick_start/pricing",
+    },
+    "DeepSeek V4 Pro": {
+        "model":      "deepseek-v4-pro",
+        "input_usd":  0.435,   # cache miss; cache hit = $0.003625
+        "output_usd": 0.87,
+        "note":       "1M context · Modelo premium · 75% discount até 31/05/2026",
+        "free_tier":  False,
+        "source":     "api-docs.deepseek.com/quick_start/pricing",
+    },
+    "DeepSeek V4 Flash (Thinking)": {
+        "model":      "deepseek-v4-flash (thinking mode)",
+        "input_usd":  0.14,    # mesmo preço do flash + thinking tokens de saída
+        "output_usd": 0.28,
+        "note":       "Modo raciocínio ativado (reasoning_effort=high) — output inclui tokens de thinking",
+        "free_tier":  False,
+        "source":     "api-docs.deepseek.com/quick_start/pricing",
     },
     "Claude (Anthropic)": {
         "model":      "claude-sonnet-4-20250514",

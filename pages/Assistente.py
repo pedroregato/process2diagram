@@ -78,7 +78,7 @@ def _render_analyst_mode(
         from modules.auth import is_admin
         llm_config = {
             "client_type": provider_cfg.get("client_type", "openai_compatible"),
-            "model":       provider_cfg.get("default_model", "deepseek-chat"),
+            "model":       provider_cfg.get("default_model", "deepseek-v4-flash"),
             "api_key":     api_key,
             "base_url":    provider_cfg.get("base_url"),
         }

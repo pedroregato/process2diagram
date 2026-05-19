@@ -8,16 +8,46 @@
 AVAILABLE_PROVIDERS: dict = {
 
     "DeepSeek": {
-        "default_model": "deepseek-chat",          # DeepSeek-V3.2
+        "default_model": "deepseek-v4-flash",      # DeepSeek V4 Flash (deepseek-chat deprecated 24/07/2026)
         "base_url": "https://api.deepseek.com/v1",
         "api_key_label": "DeepSeek API Key",
         "api_key_help": "Get your key at platform.deepseek.com",
         "api_key_prefix": "sk-",
         "client_type": "openai_compatible",
-        "cost_hint": "$0.28 / $0.42 per 1M tokens (cache miss)",
+        "cost_hint": "$0.14 / $0.28 per 1M tokens (1M context)",
         "supports_json_mode": True,
         "supports_system_prompt": True,
         "max_tokens": 8192,
+        "long_context_max_tokens": 32768,
+    },
+
+    "DeepSeek V4 Pro": {
+        "default_model": "deepseek-v4-pro",
+        "base_url": "https://api.deepseek.com/v1",
+        "api_key_label": "DeepSeek API Key",
+        "api_key_help": "Get your key at platform.deepseek.com",
+        "api_key_prefix": "sk-",
+        "client_type": "openai_compatible",
+        "cost_hint": "$0.435 / $0.87 per 1M tokens (1M context, premium)",
+        "supports_json_mode": True,
+        "supports_system_prompt": True,
+        "max_tokens": 8192,
+        "long_context_max_tokens": 32768,
+    },
+
+    "DeepSeek V4 Flash (Thinking)": {
+        "default_model": "deepseek-v4-flash",
+        "base_url": "https://api.deepseek.com/v1",
+        "api_key_label": "DeepSeek API Key",
+        "api_key_help": "Get your key at platform.deepseek.com",
+        "api_key_prefix": "sk-",
+        "client_type": "openai_compatible",
+        "cost_hint": "$0.14 / $0.28 per 1M tokens + thinking tokens",
+        "supports_json_mode": False,       # não suportado em thinking mode
+        "supports_system_prompt": True,
+        "max_tokens": 16384,               # inclui tokens de raciocínio interno
+        "long_context_max_tokens": 32768,
+        "reasoning_effort": "high",        # ativa modo de pensamento (thinking)
     },
 
     "Claude (Anthropic)": {
