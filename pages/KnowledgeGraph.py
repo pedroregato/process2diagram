@@ -450,7 +450,26 @@ def _build_pyvis_graph(
             if sr:
                 tooltip += f"\n\nSugestão: {sr}"
 
-            # ── Nó de contradição — sempre adicionado ─────────────────────────
+            # ── Pré-calcula as arestas possíveis antes de adicionar o nó ─────
+            # Nó isolado (sem meeting_ids válidos ou sem entidades mapeadas)
+            # ficaria sem arestas e seria repelido para o infinito pela física.
+            _pending_edges: list[tuple] = []   # (entity_dict, cnode_id)
+            for _mid in (mid_a, mid_b):
+                if not _mid:
+                    continue
+                _ents_side = _full_memap.get(_mid, [])
+                _n = 0
+                for _e in _ents_side:
+                    if _n >= 2:
+                        break
+                    _pending_edges.append((_e, cnode_id))
+                    _n += 1
+
+            # Sem nenhuma aresta → não adiciona o nó (evita nó solto voando)
+            if not _pending_edges:
+                continue
+
+            # ── Nó de contradição ─────────────────────────────────────────────
             net.add_node(
                 cnode_id,
                 label="⚠",
@@ -468,15 +487,8 @@ def _build_pyvis_graph(
             )
             entity_ids.add(cnode_id)
 
-            # ── Arestas para até 2 entidades de cada reunião ──────────────────
-            for _mid in (mid_a, mid_b):
-                if not _mid:
-                    continue
-                _ents_side = _full_memap.get(_mid, [])
-                _connected = 0
-                for _e in _ents_side:
-                    if _connected >= 2:
-                        break
+            # ── Arestas pré-calculadas ────────────────────────────────────────
+            for (_e, _cid) in _pending_edges:
                     _eid = _e["id"]
                     # Adiciona o nó de entidade se ainda não estiver no grafo
                     if _eid not in entity_ids:
@@ -504,7 +516,7 @@ def _build_pyvis_graph(
                         )
                         entity_ids.add(_eid)
                     net.add_edge(
-                        _eid, cnode_id,
+                        _eid, _cid,
                         title=f"Envolvido na contradição\nSeveridade: {severity}",
                         color={"color": node_color,
                                "highlight": "#fca5a5", "hover": "#fca5a5"},
