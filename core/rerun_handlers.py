@@ -32,6 +32,12 @@ def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
     elif agent_name == "sbvr":
         agent = AgentSBVR(client_info, provider_cfg)
         hub = agent.run(hub, output_language)
+        # Warn that Requirements traceability is now stale
+        if hub.requirements.ready and hub.requirements.requirements:
+            st.info(
+                "ℹ️ Regras SBVR atualizadas. Re-execute o agente de Requisitos para "
+                "atualizar os campos `business_rule_refs`."
+            )
     elif agent_name == "bmm":
         agent = AgentBMM(client_info, provider_cfg)
         hub = agent.run(hub, output_language)

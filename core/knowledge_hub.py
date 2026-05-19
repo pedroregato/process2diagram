@@ -164,6 +164,9 @@ class RequirementItem:
     source_quote: str = ""
     speaker: Optional[str] = None  # initials of who said source_quote (e.g. "MF")
     status: str = "active"         # active | backlog | approved | in_progress | implemented | revised | contradicted | deprecated | rejected
+    # Multi-sphere traceability (Fase G — v4.24)
+    business_rule_refs: list = field(default_factory=list)  # List[str] — e.g. ["BR001", "BR003"]
+    sphere: Optional[str] = None   # inherited from the most relevant SBVR rule
 
 
 @dataclass
@@ -286,6 +289,11 @@ class BusinessTerm:
     category: str = "concept"   # concept | fact_type | role | process
 
 
+_VALID_SPHERES = frozenset(
+    ["marketing", "financeiro", "rh", "operacoes", "juridico", "tecnologia", "geral"]
+)
+
+
 @dataclass
 class BusinessRule:
     """A business rule extracted by AgentSBVR."""
@@ -294,6 +302,11 @@ class BusinessRule:
     short_title: str = ""           # 2–5 word inferred title; stored as nucleo_nominal in DB
     rule_type: str = "constraint"   # constraint | operational | behavioral | structural
     source: str = ""                # participant initials who stated it
+    # Multi-sphere fields (Fase G — v4.24)
+    sphere: str = "geral"           # marketing | financeiro | rh | operacoes | juridico | tecnologia | geral
+    sphere_owner: str = ""          # typical owner: CMO, CFO, CHRO, COO, CLO, CTO, CEO
+    bmm_policy_ref: Optional[str] = None   # "POL-001" reference to hub.bmm.policies
+    speaker_quote: str = ""         # verbatim quote from transcript
 
 
 @dataclass
@@ -664,6 +677,22 @@ class KnowledgeHub:
         # ── v4.24 BMIF: QuerySummaryModel (Fase F) ───────────────────────────
         if not hasattr(hub, 'query_summary'):
             hub.query_summary = QuerySummaryModel()
+
+        # ── v4.24 Multi-sphere SBVR (Fase G) ─────────────────────────────────
+        for _rule in hub.sbvr.rules:
+            if not hasattr(_rule, 'sphere'):
+                _rule.sphere = "geral"
+            if not hasattr(_rule, 'sphere_owner'):
+                _rule.sphere_owner = ""
+            if not hasattr(_rule, 'bmm_policy_ref'):
+                _rule.bmm_policy_ref = None
+            if not hasattr(_rule, 'speaker_quote'):
+                _rule.speaker_quote = ""
+        for _req in hub.requirements.requirements:
+            if not hasattr(_req, 'business_rule_refs'):
+                _req.business_rule_refs = []
+            if not hasattr(_req, 'sphere'):
+                _req.sphere = None
 
         return hub
 

@@ -182,6 +182,18 @@ class Orchestrator:
                 self._progress("Agente BPMN", f"error: {exc}")
                 raise RuntimeError(f"BPMN Agent failed: {exc}") from exc
 
+        # ── Step 2.5: SBVR Agent (before Minutes+Requirements for traceability) ─
+        # When SBVR is enabled it runs here so Requirements can reference BR-IDs.
+        # When SBVR is disabled, Requirements runs without BR context (legacy path).
+        if run_sbvr:
+            self._progress("Agente SBVR", "running")
+            try:
+                hub = self._agent_sbvr.run(hub, output_language)
+                self._progress("Agente SBVR", "done")
+            except Exception as exc:
+                self._progress("Agente SBVR", f"error: {exc}")
+                hub.bump()
+
         # ── Steps 3 & 4: Minutes + Requirements (parallel when both enabled) ──
         both_enabled = run_minutes and run_requirements
         if both_enabled:
@@ -227,15 +239,9 @@ class Orchestrator:
                     self._progress("Agente Requisitos", f"error: {exc}")
                     raise RuntimeError(f"Requirements Agent failed: {exc}") from exc
 
-        # ── Step 5: SBVR Agent ────────────────────────────────────────────────
-        if run_sbvr:
-            self._progress("Agente SBVR", "running")
-            try:
-                hub = self._agent_sbvr.run(hub, output_language)
-                self._progress("Agente SBVR", "done")
-            except Exception as exc:
-                self._progress("Agente SBVR", f"error: {exc}")
-                hub.bump()
+        # ── Step 5: SBVR Agent (legacy position — only if not already run above) ─
+        # This block is now a no-op (run_sbvr is handled at step 2.5), kept for
+        # clarity and in case the order is changed back in future.
 
         # ── Step 6: BMM Agent ─────────────────────────────────────────────────
         if run_bmm:

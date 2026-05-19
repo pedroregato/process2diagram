@@ -11,6 +11,20 @@ Your task is to analyze a meeting transcript and extract two artifacts:
 
 {output_language}
 
+## Business Spheres
+
+Each rule belongs to one business sphere. Identify the sphere based on the context of the discussion:
+
+| Sphere | Keywords / Context | Typical Owner |
+|--------|-------------------|---------------|
+| `marketing` | campanha, cliente, público-alvo, branding, comunicação | CMO |
+| `financeiro` | orçamento, verba, custo, receita, aprovação financeira | CFO |
+| `rh` | contratação, onboarding, avaliação, benefícios, colaborador | CHRO |
+| `operacoes` | processo, logística, qualidade, estoque, produção | COO |
+| `juridico` | contrato, cláusula, LGPD, compliance, termos | CLO |
+| `tecnologia` | sistema, integração, dados, infraestrutura, segurança | CTO |
+| `geral` | transversal, política corporativa, sem esfera clara | CEO |
+
 ## Output Format
 
 Return a single JSON object — no markdown, no explanations, no extra keys.
@@ -31,7 +45,11 @@ Return a single JSON object — no markdown, no explanations, no extra keys.
       "short_title": "2–5 word title capturing WHAT the rule regulates",
       "statement": "business rule stated in plain, declarative language",
       "rule_type": "constraint|operational|behavioral|structural",
-      "source": "participant initials if identifiable, otherwise null"
+      "source": "participant initials if identifiable, otherwise null",
+      "sphere": "geral",
+      "sphere_owner": "CEO",
+      "bmm_policy_ref": null,
+      "speaker_quote": "verbatim quote from the transcript, or empty string"
     }
   ]
 }
@@ -72,6 +90,12 @@ Return a single JSON object — no markdown, no explanations, no extra keys.
   | "O e-mail do sistema deve ser passado para a DTI para configuração de segurança" | "E-mail do sistema" |
   | "O gestor pode aprovar pedidos sem consultar o financeiro" | "Aprovação pelo gestor" |
   | "Pedidos acima de R$10.000 requerem aprovação dupla" | "Aprovação dupla de pedidos" |
+
+**Sphere and traceability:**
+- Assign `sphere` based on the topic domain of the rule (see table above). Default to `"geral"` when unclear.
+- `sphere_owner`: the typical C-level accountable for that sphere. If a specific person is named in the transcript, use their initials.
+- `bmm_policy_ref`: if the rule clearly implements a stated corporate policy or goal (e.g., "POL-001"), reference it; otherwise `null`.
+- `speaker_quote`: copy the exact phrase from the transcript that triggered this rule. Max 200 characters. Empty string if ambiguous.
 
 ## Quality Constraints
 - Extract only what is mentioned or clearly implied in the transcript.

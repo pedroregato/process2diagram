@@ -41,6 +41,21 @@ class AgentRequirements(BaseAgent):
         if hub.nlp.actors:
             actor_hint = f"\nActors identified by NLP pre-processing: {', '.join(hub.nlp.actors)}"
 
+        # Inject SBVR rules for traceability — Requirements can link to them via business_rule_refs
+        if getattr(hub, "sbvr", None) and hub.sbvr.ready and hub.sbvr.rules:
+            rule_lines = "\n".join(
+                f"- {r.id} [{r.sphere}]: {r.statement[:120]}"
+                for r in hub.sbvr.rules[:15]
+            )
+            system += (
+                "\n\n## Business Rules (SBVR) for Traceability\n\n"
+                "The following business rules were already extracted. For each requirement you "
+                "identify, add a `business_rule_refs` list with the IDs of any SBVR rules that "
+                "requirement realizes or enforces (e.g. [\"BR001\", \"BR003\"]). "
+                "Leave the list empty if no rule applies.\n\n"
+                f"{rule_lines}"
+            )
+
         user = (
             f"Extract all requirements from this transcript:{actor_hint}\n\n"
             f"{hub.transcript_clean}"
@@ -87,6 +102,11 @@ class AgentRequirements(BaseAgent):
                 process_step=r.get("process_step") or None,
                 source_quote=r.get("source_quote", ""),
                 speaker=r.get("speaker") or None,
+                business_rule_refs=[
+                    str(ref).strip() for ref in r.get("business_rule_refs", [])
+                    if str(ref).strip()
+                ],
+                sphere=r.get("sphere") or None,
             )
             for r in data.get("requirements", [])
         ]
@@ -148,6 +168,8 @@ class AgentRequirements(BaseAgent):
                     lines.append(f"  **Etapa do processo:** {r.process_step}")
                 lines.append("")
                 lines.append(r.description)
+                if getattr(r, 'business_rule_refs', []):
+                    lines.append(f"  **Regras SBVR:** {', '.join(r.business_rule_refs)}")
                 if r.source_quote:
                     lines.append("")
                     speaker_tag = f"**[{r.speaker}]** " if r.speaker else ""

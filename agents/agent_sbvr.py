@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from agents.base_agent import BaseAgent
-from core.knowledge_hub import KnowledgeHub, SBVRModel, BusinessTerm, BusinessRule
+from core.knowledge_hub import KnowledgeHub, SBVRModel, BusinessTerm, BusinessRule, _VALID_SPHERES
 
 
 class AgentSBVR(BaseAgent):
@@ -30,6 +30,17 @@ class AgentSBVR(BaseAgent):
 
         if getattr(hub, "context_files_text", "").strip():
             system += f"\n\n## Documentos de Referência do Contexto\n\n{hub.context_files_text.strip()}"
+
+        # Inject BMM policies if available — helps SBVR link rules to stated policies
+        if getattr(hub, "bmm", None) and hub.bmm.ready and hub.bmm.policies:
+            pol_lines = "\n".join(
+                f"- {p.id}: {p.statement[:120]}" for p in hub.bmm.policies[:8]
+            )
+            system += (
+                f"\n\n## Políticas Corporativas (BMM) para Contexto\n\n"
+                f"Para cada regra extraída, verifique se ela implementa uma das políticas "
+                f"abaixo e preencha `bmm_policy_ref` com o ID correspondente:\n\n{pol_lines}"
+            )
 
         user = (
             "Extract the business vocabulary and rules from this transcript:\n\n"
@@ -62,17 +73,23 @@ class AgentSBVR(BaseAgent):
             if t.get("term", "").strip()
         ]
 
-        rules = [
-            BusinessRule(
+        rules = []
+        for i, r in enumerate(data.get("rules", [])):
+            if not r.get("statement", "").strip():
+                continue
+            raw_sphere = str(r.get("sphere", "geral")).lower().strip()
+            sphere = raw_sphere if raw_sphere in _VALID_SPHERES else "geral"
+            rules.append(BusinessRule(
                 id=r.get("id", f"BR{i + 1:03d}"),
                 statement=r.get("statement", "").strip(),
                 short_title=r.get("short_title", "").strip(),
                 rule_type=r.get("rule_type", "constraint"),
                 source=r.get("source") or "",
-            )
-            for i, r in enumerate(data.get("rules", []))
-            if r.get("statement", "").strip()
-        ]
+                sphere=sphere,
+                sphere_owner=str(r.get("sphere_owner", "") or "").strip(),
+                bmm_policy_ref=r.get("bmm_policy_ref") or None,
+                speaker_quote=str(r.get("speaker_quote", "") or "")[:200].strip(),
+            ))
 
         return SBVRModel(
             domain=data.get("domain", "").strip(),
