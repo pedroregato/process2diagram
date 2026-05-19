@@ -277,7 +277,7 @@ Configured in `modules/config.py → AVAILABLE_PROVIDERS`:
 | Google Gemini | `gemini-2.0-flash` | `openai_compatible` | Free tier |
 | Grok (xAI) | `grok-4-1-fast-reasoning` | `openai_compatible` | 2M context |
 
-To add a new provider: edit `AVAILABLE_PROVIDERS`. If `client_type` is new, add routing in `BaseAgent._call_llm()`. To enable thinking mode: add `reasoning_effort: "high"` to the provider entry — `_call_openai` handles the rest (passes `extra_body={"thinking": {"type": "enabled"}}`, drops `temperature`).
+To add a new provider: edit `AVAILABLE_PROVIDERS`. If `client_type` is new, add routing in `BaseAgent._call_llm()`. To enable thinking mode: add `reasoning_effort: "high"` to the provider entry — `_call_openai` handles the rest (passes `extra_body={"thinking": {"type": "enabled"}}`, drops `temperature`). To share an API key with another provider (e.g. model variants): add `api_key_alias: "<provider_name>"` — `session_security` resolves the key from the aliased provider automatically; no re-entry needed.
 
 ---
 
