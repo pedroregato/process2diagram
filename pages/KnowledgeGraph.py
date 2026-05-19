@@ -157,13 +157,24 @@ def _load_graph_data(project_id: str) -> dict:
     try:
         contradictions = (
             db.table("kh_contradictions")
-            .select("id, description, meeting_a_id, meeting_b_id, severity, relation_type, status")
+            .select("id, description, fact_a, fact_b, meeting_a_id, meeting_b_id, "
+                    "severity, relation_type, status, clarifying_question, suggested_rewrite")
             .eq("project_id", project_id)
             .limit(50)
             .execute().data or []
         )
     except Exception:
-        contradictions = []
+        try:
+            # Fallback: colunas fact_a/fact_b/clarifying_question podem não existir ainda
+            contradictions = (
+                db.table("kh_contradictions")
+                .select("id, description, meeting_a_id, meeting_b_id, severity, relation_type, status")
+                .eq("project_id", project_id)
+                .limit(50)
+                .execute().data or []
+            )
+        except Exception:
+            contradictions = []
 
     # Roster de participantes confirmados do projeto — usado para distinguir
     # "participou" vs "foi mencionado" nas arestas de pessoas.
@@ -418,16 +429,26 @@ def _build_pyvis_graph(
             mid_a    = c.get("meeting_a_id")
             mid_b    = c.get("meeting_b_id")
             severity = (c.get("severity") or "medium").lower()
-            desc     = (c.get("description") or "Contradição detectada")[:200]
-            rel      = c.get("relation_type") or ""
-            cnode_id = f"_contra_{c['id']}"
+            desc     = (c.get("description") or "Contradição detectada").strip()
+            fact_a   = (c.get("fact_a") or "").strip()
+            fact_b   = (c.get("fact_b") or "").strip()
+            rel      = (c.get("relation_type") or "").strip()
+            cq       = (c.get("clarifying_question") or "").strip()
+            sr       = (c.get("suggested_rewrite") or "").strip()
+            cnode_id   = f"_contra_{c['id']}"
             node_color = _sev_color.get(severity, "#ef4444")
 
-            tooltip = (
-                f"Contradição ({severity})"
-                + (f"\nRelação: {rel}" if rel else "")
-                + f"\n\n{desc}"
-            )
+            tooltip = f"⚠ Contradição — severidade: {severity}"
+            if rel:
+                tooltip += f"\nRelação: {rel}"
+            if fact_a and fact_b:
+                tooltip += f"\n\nFato A:\n{fact_a}\n\nFato B:\n{fact_b}"
+            elif desc:
+                tooltip += f"\n\n{desc}"
+            if cq:
+                tooltip += f"\n\nQuestão: {cq}"
+            if sr:
+                tooltip += f"\n\nSugestão: {sr}"
 
             # ── Nó de contradição — sempre adicionado ─────────────────────────
             net.add_node(
