@@ -48,6 +48,11 @@ process2diagram/
 │   ├── Settings.py               # Central settings — LLM providers, API keys, tool catalog
 │   ├── DatabaseOverview.py       # Database health — record counts, embeddings, integrity fixes
 │   ├── CostEstimator.py          # LLM cost estimator
+│   ├── Orientacoes_ComoIniciar.py   # Guia de início rápido
+│   ├── Orientacoes_Assistente.py    # Guia de ferramentas do Assistente (33 tools + exemplos)
+│   ├── Orientacoes_Glossario.py     # Glossário de termos e referências
+│   ├── Orientacoes_Arquiteturas.py  # Arquiteturas do sistema
+│   ├── Orientacoes_CKF.py           # Guia CKF
 │   ├── BatchRunner.py            # Batch pipeline (Manutenção)
 │   ├── BpmnBackfill.py           # Backfill BPMN XML (Manutenção)
 │   ├── TranscriptBackfill.py     # Backfill transcript embeddings (Manutenção)
@@ -126,7 +131,8 @@ process2diagram/
 ├── services/
 │   ├── export_service.py         # make_filename(base, ext, prefix, suffix) → str
 │   ├── file_ingest.py            # load_transcript() wrapper
-│   └── preprocessor_service.py  # preprocess_transcript() wrapper
+│   ├── preprocessor_service.py  # preprocess_transcript() wrapper
+│   └── semantic_cache.py        # SemanticCache — SHA256 LLM response cache (Supabase llm_cache)
 │
 ├── skills/
 │   ├── skill_bpmn.md             # AgentBPMN system prompt (lowercase)
@@ -194,7 +200,7 @@ AgentRequirements┘
 | **Pipeline** | Pipeline.py, Diagramas.py, BpmnEditor.py | Todos |
 | **Análise** | Assistente.py, ReqTracker.py, ValidationHub.py, MeetingROI.py | Todos |
 | **Sistema** | Settings.py, CostEstimator.py [+ MasterAdmin.py, DatabaseOverview.py] | Todos [admin extra] |
-| **Ajuda** | Orientacoes_*.py | Todos |
+| **Ajuda** | ComoIniciar, Assistente (tool guide), Glossário, Arquiteturas, CKF | Todos |
 | **Manutenção** | BatchRunner.py, BpmnBackfill.py, MinutesBackfill.py, TranscriptBackfill.py | Admin only |
 
 `app.py` renders no content — only calls `st.navigation(pages).run()`. Groups rebuilt every rerun (menu updates immediately after login).
@@ -241,7 +247,7 @@ class MyAgent(BaseAgent):
         return hub
 ```
 
-`BaseAgent` provides: `_call_llm()`, `_parse_json()`, `_load_skill()` (absolute path, CWD-independent), up to 3 JSON retries, token tracking in `hub.meta.total_tokens_used`.
+`BaseAgent` provides: `_call_llm()`, `_parse_json()`, `_load_skill()` (absolute path, CWD-independent), up to 3 JSON retries, token tracking in `hub.meta.total_tokens_used`. `_call_llm()` checks `services/semantic_cache.SemanticCache` before calling the API (skip_cache=True to bypass); stores raw pre-desanitize output; on hit applies current `token_map` (PII-safe). `hub.meta.cache_hits` + `tokens_saved` tracked per session.
 
 Provider routing in `_call_llm()`: `"openai_compatible"` → OpenAI SDK with custom `base_url`; `"anthropic"` → native Anthropic SDK.
 
@@ -342,11 +348,13 @@ Within Assistente mode, sidebar toggle `asst_use_tools`:
 
 ### Tool list (`core/assistant_tools.py`)
 
-**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `list_bpmn_processes`, `get_sbvr_terms`, `get_sbvr_rules`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`.
+**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `list_bpmn_processes`, `get_sbvr_terms`, `get_sbvr_rules`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`, `get_cache_stats`.
 
-**Admin only (`is_admin()`):** `get_database_integrity`, `fix_missing_llm_provider`, `generate_meeting_embeddings`, `reprocess_meeting_full`, `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`, `delete_entity`, `resolve_entity_ambiguity`, write/generate tools.
+**Admin only (`is_admin()`):** `get_database_integrity`, `fix_missing_llm_provider`, `generate_meeting_embeddings`, `reprocess_meeting_full`, `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`, `delete_entity`, `resolve_entity_ambiguity`, `clear_llm_cache`, write/generate tools.
 
 **KnowledgeGraph entity tools (3):** `lookup_entity` — investiga entidade (tipo, aliases, reuniões); `delete_entity` — remove entidade (3-tier match: exact → name-substring → alias-substring, para se houver ambiguidade); `resolve_entity_ambiguity` — funde duplicatas via `merge_entities()`.
+
+**Cache tools (2):** `get_cache_stats(agent_name?)` — estatísticas do cache LLM (entradas, hits, tokens economizados, USD por agente); `clear_llm_cache(agent_name?)` — invalida entradas (admin). Cache em `services/semantic_cache.py`; tabela `llm_cache` no Supabase (`setup/supabase_migration_llm_cache.sql`).
 
 **Chart tools (5):** `generate_requirements_chart`, `generate_meetings_timeline`, `generate_action_items_chart`, `generate_roi_chart`, `generate_custom_chart` — Plotly figs returned as 4th element of `chat_with_tools()`, rendered via `st.plotly_chart()`. Palettes defined in `core/chart_config.py`.
 
