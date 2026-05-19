@@ -132,7 +132,8 @@ process2diagram/
 │   ├── export_service.py         # make_filename(base, ext, prefix, suffix) → str
 │   ├── file_ingest.py            # load_transcript() wrapper
 │   ├── preprocessor_service.py  # preprocess_transcript() wrapper
-│   └── semantic_cache.py        # SemanticCache — SHA256 LLM response cache (Supabase llm_cache)
+│   ├── semantic_cache.py        # SemanticCache — SHA256 LLM response cache (Supabase llm_cache)
+│   └── context_analyzer.py     # estimate_tokens(), should_use_long_context(), LONG_CONTEXT_AGENTS
 │
 ├── skills/
 │   ├── skill_bpmn.md             # AgentBPMN system prompt (lowercase)
@@ -247,7 +248,7 @@ class MyAgent(BaseAgent):
         return hub
 ```
 
-`BaseAgent` provides: `_call_llm()`, `_parse_json()`, `_load_skill()` (absolute path, CWD-independent), up to 3 JSON retries, token tracking in `hub.meta.total_tokens_used`. `_call_llm()` checks `services/semantic_cache.SemanticCache` before calling the API (skip_cache=True to bypass); stores raw pre-desanitize output; on hit applies current `token_map` (PII-safe). `hub.meta.cache_hits` + `tokens_saved` tracked per session.
+`BaseAgent` provides: `_call_llm()`, `_parse_json()`, `_load_skill()` (absolute path, CWD-independent), up to 3 JSON retries, token tracking in `hub.meta.total_tokens_used`. `_call_llm()` flow: (1) PII sanitize, (2) long context detection via `services/context_analyzer` (injects instruction into system, increases max_tokens to 8192 and timeout to 180s for LONG_CONTEXT_AGENTS={bpmn,sbvr,bmm} when transcript >50k tokens), (3) cache hash of modified system, (4) check `services/semantic_cache.SemanticCache` (stores raw pre-desanitize; on hit applies current `token_map` — PII-safe), (5) API call, (6) cache store, (7) desanitize. `hub.meta.cache_hits` + `tokens_saved` + `long_context_calls` tracked per session. `skip_cache=True` to bypass cache.
 
 Provider routing in `_call_llm()`: `"openai_compatible"` → OpenAI SDK with custom `base_url`; `"anthropic"` → native Anthropic SDK.
 
@@ -381,7 +382,7 @@ Type-aware quality system — 11 meeting types, each with a weight matrix across
 
 ## Core Modules (`core/`)
 
-- `session_state.init_session_state()` — idempotent, call immediately after `st.set_page_config()`. Defaults: provider=DeepSeek, run_quality/bpmn/minutes/requirements=True, run_sbvr/bmm/synthesizer/dmn/argumentation/ckf_updater=True, n_bpmn_runs=1, use_langgraph=True.
+- `session_state.init_session_state()` — idempotent, call immediately after `st.set_page_config()`. Defaults: provider=DeepSeek, run_quality/bpmn/minutes/requirements=True, run_sbvr/bmm/synthesizer/dmn/argumentation/ckf_updater=True, n_bpmn_runs=1, use_langgraph=True, enable_long_context=True.
 - `pipeline.run_pipeline(hub, config, callback)` — 3 paths: multi-run tournament / LangGraph / standard. Raises on error (caller catches).
 - `rerun_handlers.handle_rerun(agent_name, ...)` — re-runs one agent: `"quality"`, `"bpmn"`, `"minutes"`, `"requirements"`, `"sbvr"`, `"bmm"`, `"synthesizer"`. BPMN re-run invalidates `hub.synthesizer`.
 - `project_store` — Supabase CRUD; fail-open (returns `[]`/`None` when unconfigured). Key functions: `load_meeting_as_hub(meeting_id, project_id)` → reconstructs KnowledgeHub from DB (transcript, BPMN, minutes, requirements, SBVR, BMM, DMN, IBIS); `list_dmn_by_project(project_id)` → flat list of DMN decisions; `list_argumentation_by_project(project_id)` → flat list of IBIS questions. Full function list in `claude_guideline/architecture_details.md`.
