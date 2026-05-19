@@ -487,6 +487,7 @@ class SessionMetadata:
     processing_time_ms: int = 0
     cache_hits: int = 0
     tokens_saved: int = 0
+    long_context_calls: int = 0
 
 
 # ── Knowledge Hub (root) ──────────────────────────────────────────────────────
@@ -685,6 +686,8 @@ class KnowledgeHub:
             hub.meta.cache_hits = 0
         if not hasattr(hub.meta, 'tokens_saved'):
             hub.meta.tokens_saved = 0
+        if not hasattr(hub.meta, 'long_context_calls'):
+            hub.meta.long_context_calls = 0
 
         # ── v4.24 Multi-sphere SBVR (Fase G) ─────────────────────────────────
         for _rule in hub.sbvr.rules:

@@ -96,6 +96,14 @@ class BaseAgent(ABC):
 
     # ── LLM call ─────────────────────────────────────────────────────────────
 
+    def _is_long_context_enabled(self) -> bool:
+        """Read the enable_long_context toggle from Streamlit session state."""
+        try:
+            import streamlit as st
+            return bool(st.session_state.get("enable_long_context", True))
+        except Exception:
+            return True  # default on when outside Streamlit (batch mode)
+
     def _call_llm(
         self, system: str, user: str, hub: KnowledgeHub, skip_cache: bool = False
     ) -> str:
@@ -110,10 +118,17 @@ class BaseAgent(ABC):
         Personal names are intentionally preserved (required for BPMN lanes,
         meeting minutes, and IBIS attribution).
 
+        Long context mode (Fase 2): for agents in LONG_CONTEXT_AGENTS and
+        transcripts estimated above 50k tokens, injects an explicit instruction
+        into the system prompt, increases max_tokens output and API timeout.
+        This prevents truncated outputs (e.g. incomplete BPMN for long meetings).
+        No non-standard API parameters are sent.
+
         Semantic cache: checks Supabase llm_cache before calling the API.
         Cache stores the raw output (pre-desanitize); on hit, desanitize is
         applied with the current session's token_map — PII-safe across sessions.
-        Pass skip_cache=True to force a fresh API call (e.g. reprocessing).
+        Cache key includes the (possibly modified) system prompt, so long-context
+        and standard calls are cached separately. Pass skip_cache=True to bypass.
         """
         client_type = self.provider_cfg["client_type"]
         api_key = self.client_info["api_key"]
@@ -123,6 +138,25 @@ class BaseAgent(ABC):
         sanitized = sanitize(user)
         safe_user = sanitized.text
         token_map = sanitized.token_map
+        # ─────────────────────────────────────────────────────────────────
+
+        # ── Long context detection (before cache hash) ────────────────────
+        try:
+            from services.context_analyzer import (
+                should_use_long_context,
+                inject_long_context_instruction,
+            )
+            use_long_ctx = should_use_long_context(
+                safe_user, self.name, enabled=self._is_long_context_enabled()
+            )
+        except Exception:
+            use_long_ctx = False
+
+        if use_long_ctx:
+            system = inject_long_context_instruction(system, True)
+            hub.meta.long_context_calls = getattr(hub.meta, "long_context_calls", 0) + 1
+
+        _timeout = 180 if use_long_ctx else 60
         # ─────────────────────────────────────────────────────────────────
 
         # ── Semantic cache lookup ─────────────────────────────────────────
@@ -148,9 +182,15 @@ class BaseAgent(ABC):
         t0 = time.time()
 
         if client_type == "openai_compatible":
-            raw, tokens = self._call_openai(system, safe_user, api_key, model)
+            raw, tokens = self._call_openai(
+                system, safe_user, api_key, model,
+                timeout=_timeout, long_context=use_long_ctx,
+            )
         elif client_type == "anthropic":
-            raw, tokens = self._call_anthropic(system, safe_user, api_key, model)
+            raw, tokens = self._call_anthropic(
+                system, safe_user, api_key, model,
+                timeout=_timeout, long_context=use_long_ctx,
+            )
         else:
             raise ValueError(f"Unknown client_type: {client_type}")
 
@@ -172,7 +212,15 @@ class BaseAgent(ABC):
         # ── Restore originals in response ─────────────────────────────────
         return desanitize(raw, token_map)
 
-    def _call_openai(self, system: str, user: str, api_key: str, model: str) -> tuple[str, int]:
+    def _call_openai(
+        self,
+        system: str,
+        user: str,
+        api_key: str,
+        model: str,
+        timeout: int = 60,
+        long_context: bool = False,
+    ) -> tuple[str, int]:
         from openai import OpenAI
         client = OpenAI(api_key=api_key, base_url=self.provider_cfg.get("base_url"))
 
@@ -181,13 +229,23 @@ class BaseAgent(ABC):
         system = self._ensure_utf8(system)
         user   = self._ensure_utf8(user)
 
+        # Long context mode: use a higher output token limit to prevent
+        # truncation on complex/long transcripts.
+        if long_context:
+            max_out = self.provider_cfg.get(
+                "long_context_max_tokens",
+                max(self.provider_cfg.get("max_tokens", 4096), 8192),
+            )
+        else:
+            max_out = self.provider_cfg.get("max_tokens", 4096)
+
         kwargs: dict[str, Any] = dict(
             model=model,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user",   "content": user},
             ],
-            max_tokens=self.provider_cfg.get("max_tokens", 4096),
+            max_tokens=max_out,
             temperature=0.1,
         )
         if self.provider_cfg.get("supports_json_mode"):
@@ -200,19 +258,35 @@ class BaseAgent(ABC):
                     user_msg + "\n\nRespond with valid json only."
                 )
 
-        resp = client.chat.completions.create(**kwargs)
+        resp = client.chat.completions.create(**kwargs, timeout=timeout)
         tokens = resp.usage.total_tokens if resp.usage else 0
         return resp.choices[0].message.content, tokens
 
-    def _call_anthropic(self, system: str, user: str, api_key: str, model: str) -> tuple[str, int]:
+    def _call_anthropic(
+        self,
+        system: str,
+        user: str,
+        api_key: str,
+        model: str,
+        timeout: int = 60,
+        long_context: bool = False,
+    ) -> tuple[str, int]:
         import anthropic
         client = anthropic.Anthropic(api_key=api_key)
+        if long_context:
+            max_out = self.provider_cfg.get(
+                "long_context_max_tokens",
+                max(self.provider_cfg.get("max_tokens", 4096), 8192),
+            )
+        else:
+            max_out = self.provider_cfg.get("max_tokens", 4096)
         msg = client.messages.create(
             model=model,
-            max_tokens=self.provider_cfg.get("max_tokens", 4096),
+            max_tokens=max_out,
             temperature=0.1,
             system=system,
             messages=[{"role": "user", "content": user}],
+            timeout=timeout,
         )
         tokens = (msg.usage.input_tokens + msg.usage.output_tokens) if msg.usage else 0
         return msg.content[0].text, tokens

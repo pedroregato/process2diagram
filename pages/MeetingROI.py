@@ -647,6 +647,19 @@ with tab_cache:
                 "reutilizam o resultado em cache sem chamar a API."
             )
 
+        # ── Long context (current session) ────────────────────────────────
+        _hub = st.session_state.get("hub")
+        if _hub is not None:
+            _lc = getattr(getattr(_hub, "meta", None), "long_context_calls", 0)
+            if _lc > 0:
+                st.markdown("---")
+                st.markdown("#### 📄 Contexto Longo (sessão atual)")
+                st.info(
+                    f"**{_lc} chamada(s)** usaram modo de contexto longo nesta sessão "
+                    "(max_tokens de saída aumentado, timeout 180 s).",
+                    icon="📄",
+                )
+
         if _is_admin():
             st.markdown("---")
             col_inv, _ = st.columns([1, 3])

@@ -111,6 +111,15 @@ def render_sidebar():
                             if st.session_state.max_bpmn_retries in [1, 2, 3, 5] else 2,
                         )
 
+                st.session_state.enable_long_context = st.checkbox(
+                    "📄 Contexto Longo (BPMN/SBVR/BMM)",
+                    value=st.session_state.get("enable_long_context", True),
+                    help=(
+                        "Para transcrições longas (>50k tokens): aumenta o limite de tokens de saída "
+                        "e o timeout da API, evitando truncamento em BPMN com muitas etapas."
+                    ),
+                )
+
             st.markdown("**🧠 Análise de Negócio**")
             st.session_state.run_sbvr        = st.checkbox("📖 Vocabulário & Regras (SBVR)", value=st.session_state.run_sbvr)
             st.session_state.run_bmm         = st.checkbox("🎯 Motivação do Negócio (BMM)",  value=st.session_state.run_bmm)

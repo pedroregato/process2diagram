@@ -404,6 +404,15 @@ if "hub" in st.session_state:
                 "Configure TTL e veja estatísticas em **Qualidade ROI-TR → 💾 Cache LLM**."
             ),
         )
+
+    # ── Long context indicator ────────────────────────────────────────────────
+    _lc_calls = getattr(getattr(hub, "meta", None), "long_context_calls", 0)
+    if _lc_calls > 0:
+        st.info(
+            f"📄 **Contexto longo ativado em {_lc_calls} agente(s)** — "
+            "limite de tokens de saída aumentado para evitar truncamento em transcrições longas.",
+            icon="📄",
+        )
     # ─────────────────────────────────────────────────────────────────────────
 
     tab_labels = {

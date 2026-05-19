@@ -53,6 +53,8 @@ def init_session_state():
         st.session_state.transcript_text = ""
     if "use_langgraph" not in st.session_state:
         st.session_state.use_langgraph = True
+    if "enable_long_context" not in st.session_state:
+        st.session_state.enable_long_context = True
     if "validation_threshold" not in st.session_state:
         st.session_state.validation_threshold = 6.0
     if "max_bpmn_retries" not in st.session_state:
