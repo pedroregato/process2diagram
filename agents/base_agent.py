@@ -96,7 +96,9 @@ class BaseAgent(ABC):
 
     # ── LLM call ─────────────────────────────────────────────────────────────
 
-    def _call_llm(self, system: str, user: str, hub: KnowledgeHub) -> str:
+    def _call_llm(
+        self, system: str, user: str, hub: KnowledgeHub, skip_cache: bool = False
+    ) -> str:
         """
         Provider-agnostic LLM call. Routes by client_type in provider_cfg.
         Updates hub.meta.total_tokens_used on success.
@@ -107,6 +109,11 @@ class BaseAgent(ABC):
         raw LLM response before returning, so callers never see the tokens.
         Personal names are intentionally preserved (required for BPMN lanes,
         meeting minutes, and IBIS attribution).
+
+        Semantic cache: checks Supabase llm_cache before calling the API.
+        Cache stores the raw output (pre-desanitize); on hit, desanitize is
+        applied with the current session's token_map — PII-safe across sessions.
+        Pass skip_cache=True to force a fresh API call (e.g. reprocessing).
         """
         client_type = self.provider_cfg["client_type"]
         api_key = self.client_info["api_key"]
@@ -116,6 +123,26 @@ class BaseAgent(ABC):
         sanitized = sanitize(user)
         safe_user = sanitized.text
         token_map = sanitized.token_map
+        # ─────────────────────────────────────────────────────────────────
+
+        # ── Semantic cache lookup ─────────────────────────────────────────
+        if not skip_cache:
+            try:
+                from services.semantic_cache import _cache
+                provider_label = self.provider_cfg.get("api_key_label", client_type)
+                cache_hash = _cache.compute_hash(provider_label, model, system, safe_user)
+                hit = _cache.get(cache_hash)
+                if hit is not None:
+                    cached_raw, cached_tokens = hit
+                    hub.meta.cache_hits = getattr(hub.meta, "cache_hits", 0) + 1
+                    hub.meta.tokens_saved = (
+                        getattr(hub.meta, "tokens_saved", 0) + cached_tokens
+                    )
+                    return desanitize(cached_raw, token_map)
+            except Exception:
+                cache_hash = None  # cache unavailable — proceed to API call
+        else:
+            cache_hash = None
         # ─────────────────────────────────────────────────────────────────
 
         t0 = time.time()
@@ -132,6 +159,15 @@ class BaseAgent(ABC):
         hub.meta.processing_time_ms += elapsed_ms
         hub.meta.llm_provider = self.provider_cfg.get("api_key_label", "")
         hub.meta.llm_model = model
+
+        # ── Store in cache (raw, pre-desanitize) ──────────────────────────
+        if cache_hash is not None:
+            try:
+                from services.semantic_cache import _cache
+                _cache.set(cache_hash, self.name, raw, tokens)
+            except Exception:
+                pass
+        # ─────────────────────────────────────────────────────────────────
 
         # ── Restore originals in response ─────────────────────────────────
         return desanitize(raw, token_map)

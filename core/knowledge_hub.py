@@ -485,6 +485,8 @@ class SessionMetadata:
     agents_run: list[str] = field(default_factory=list)
     total_tokens_used: int = 0
     processing_time_ms: int = 0
+    cache_hits: int = 0
+    tokens_saved: int = 0
 
 
 # ── Knowledge Hub (root) ──────────────────────────────────────────────────────
@@ -677,6 +679,12 @@ class KnowledgeHub:
         # ── v4.24 BMIF: QuerySummaryModel (Fase F) ───────────────────────────
         if not hasattr(hub, 'query_summary'):
             hub.query_summary = QuerySummaryModel()
+
+        # ── v4.25: cache_hits + tokens_saved in SessionMetadata ─────────────
+        if not hasattr(hub.meta, 'cache_hits'):
+            hub.meta.cache_hits = 0
+        if not hasattr(hub.meta, 'tokens_saved'):
+            hub.meta.tokens_saved = 0
 
         # ── v4.24 Multi-sphere SBVR (Fase G) ─────────────────────────────────
         for _rule in hub.sbvr.rules:

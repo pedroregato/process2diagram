@@ -201,11 +201,12 @@ with save_col:
             st.info("Tabela meeting_quality_scores não encontrada. Execute o SQL de migração em Configurações → Banco de Dados.")
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
-tab_charts, tab_table, tab_detail, tab_cross = st.tabs([
+tab_charts, tab_table, tab_detail, tab_cross, tab_cache = st.tabs([
     "📈 Gráficos",
     "📋 Tabela Detalhada",
     "🔍 Detalhes por Reunião",
     "🔄 Tópicos Recorrentes",
+    "💾 Cache LLM",
 ])
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -607,6 +608,58 @@ else:
             "Esses itens não contribuem para o DC. Atualize as atas."
         )
 
+
+# ── Tab: Cache LLM ────────────────────────────────────────────────────────────
+with tab_cache:
+    from modules.auth import is_admin as _is_admin
+    try:
+        from services.semantic_cache import _cache
+        import streamlit as _st  # already imported at top as st
+
+        @st.cache_data(ttl=60, show_spinner=False)
+        def _load_cache_stats():
+            return _cache.get_stats()
+
+        stats = _load_cache_stats()
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Entradas em cache", stats["total_entries"])
+        c2.metric("Cache hits totais", stats["total_hits"])
+        c3.metric("Tokens economizados", f"{stats['total_tokens_saved']:,}")
+
+        # Cost estimate: DeepSeek ~$0.27/1M tokens (input)
+        cost_saved = stats["total_tokens_saved"] / 1_000_000 * 0.27
+        c4.metric("Economia estimada (USD)", f"${cost_saved:.4f}")
+
+        if stats["by_agent"]:
+            st.markdown("#### Por agente")
+            import pandas as pd
+            df = pd.DataFrame(stats["by_agent"])
+            df.columns = ["Agente", "Entradas", "Hits", "Tokens economizados"]
+            df["Economia (USD)"] = (df["Tokens economizados"] / 1_000_000 * 0.27).map("${:.4f}".format)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.info(
+                "Nenhuma entrada em cache ainda. O cache será preenchido automaticamente "
+                "após a primeira execução do pipeline.\n\n"
+                "**Como funciona:** cada chamada ao LLM é salva com hash SHA256 de "
+                "(provedor + modelo + prompt). Reprocessamentos da mesma reunião "
+                "reutilizam o resultado em cache sem chamar a API."
+            )
+
+        if _is_admin():
+            st.markdown("---")
+            col_inv, _ = st.columns([1, 3])
+            agent_opts = ["Todos"] + [r["agent"] for r in stats["by_agent"]]
+            inv_agent = col_inv.selectbox("Invalidar cache do agente", agent_opts, key="roi_cache_inv_agent")
+            if st.button("🗑️ Limpar cache selecionado", key="roi_cache_clear", type="secondary"):
+                _cache.invalidate(None if inv_agent == "Todos" else inv_agent)
+                st.success("Cache limpo.")
+                st.cache_data.clear()
+                st.rerun()
+
+    except Exception as _exc:
+        st.warning(f"Cache não disponível: {_exc}")
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("---")
