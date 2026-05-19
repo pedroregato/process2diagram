@@ -32,7 +32,7 @@ from ui.tabs import (
     render_quality, render_bpmn, render_mermaid, render_validation,
     render_minutes, render_requirements, render_sbvr, render_bmm,
     render_synthesizer, render_export, render_dev_tools,
-    render_dmn, render_argumentation,
+    render_dmn, render_argumentation, render_query_summary,
 )
 from modules.session_security import get_session_llm_client
 
@@ -152,6 +152,7 @@ if pipeline_mode == _MODE_NEW:
             "meeting_location":   "Videoconferência",
             "run_ckf_updater":           st.session_state.run_ckf_updater,
             "run_knowledge_extractor":   st.session_state.get("run_knowledge_extractor", True),
+            "run_query_summarizer":      st.session_state.get("run_query_summarizer", False),
         }
 
         with st.status("⏳ Executando pipeline de agentes...", expanded=True) as _pipeline_status:
@@ -374,19 +375,20 @@ if "hub" in st.session_state:
     suffix = st.session_state.suffix
 
     tab_labels = {
-        "minutes":       "📋 Ata de Reunião",
-        "requirements":  "📝 Requisitos",
-        "bpmn":          "📐 BPMN 2.0",
-        "mermaid":       "📊 Mermaid",
-        "synthesizer":   "📄 Relatório Executivo",
-        "export":        "📦 Exportar",
-        "quality":       "🔬 Qualidade",
-        "sbvr":          "📖 SBVR",
-        "bmm":           "🎯 BMM",
-        "validation":    "🏆 Validação BPMN",
-        "dmn":           "⚖️ DMN",
-        "argumentation": "🗺️ IBIS",
-        "devtools":      "🔍 Dev Tools",
+        "minutes":          "📋 Ata de Reunião",
+        "requirements":     "📝 Requisitos",
+        "bpmn":             "📐 BPMN 2.0",
+        "mermaid":          "📊 Mermaid",
+        "synthesizer":      "📄 Relatório Executivo",
+        "query_summary":    "🔎 Sumário por Perspectiva",
+        "export":           "📦 Exportar",
+        "quality":          "🔬 Qualidade",
+        "sbvr":             "📖 SBVR",
+        "bmm":              "🎯 BMM",
+        "validation":       "🏆 Validação BPMN",
+        "dmn":              "⚖️ DMN",
+        "argumentation":    "🗺️ IBIS",
+        "devtools":         "🔍 Dev Tools",
     }
 
     # ── Monta lista única de abas na ordem desejada ───────────────────────────
@@ -401,6 +403,8 @@ if "hub" in st.session_state:
         all_tabs.append("mermaid")
     if hub.synthesizer.ready:
         all_tabs.append("synthesizer")
+    if getattr(hub, 'query_summary', None) and hub.query_summary.ready:
+        all_tabs.append("query_summary")
     all_tabs.append("export")
 
     if hub.transcript_quality.ready:
@@ -431,6 +435,7 @@ if "hub" in st.session_state:
         elif tab_id == "validation":   render_validation(hub)
         elif tab_id == "dmn":          render_dmn(hub, prefix, suffix)
         elif tab_id == "argumentation": render_argumentation(hub, prefix, suffix)
+        elif tab_id == "query_summary": render_query_summary(hub)
         elif tab_id == "devtools":     render_dev_tools(hub, st.session_state.show_raw_json)
 
     tabs = st.tabs([tab_labels[t] for t in all_tabs])

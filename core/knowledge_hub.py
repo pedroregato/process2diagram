@@ -434,6 +434,33 @@ class ArgumentationMap:
         return sum(1 for q in self.questions if q.resolution.type == "unresolved")
 
 
+# ── Query Summary Model (Fase F — multi-perspective summarization) ────────────
+
+@dataclass
+class PerspectiveSummary:
+    """Summary of the meeting from one stakeholder perspective."""
+    perspective: str          # executive | technical | project_manager | compliance
+    label: str                # display label (PT or EN)
+    headline: str = ""        # one-sentence takeaway
+    highlights: list[str] = field(default_factory=list)   # 3–5 bullet points
+    open_items: list[str] = field(default_factory=list)   # open questions / risks for this perspective
+    recommended_actions: list[str] = field(default_factory=list)
+
+
+@dataclass
+class QuerySummaryModel:
+    """Output of AgentQuerySummarizer — 4-perspective post-pipeline summary."""
+    perspectives: list[PerspectiveSummary] = field(default_factory=list)
+    ready: bool = False
+
+    def get(self, perspective: str) -> Optional["PerspectiveSummary"]:
+        """Return the PerspectiveSummary for the given perspective key, or None."""
+        for p in self.perspectives:
+            if p.perspective == perspective:
+                return p
+        return None
+
+
 # ── Session Metadata ──────────────────────────────────────────────────────────
 
 @dataclass
@@ -482,6 +509,7 @@ class KnowledgeHub:
     bmm: BMMModel = field(default_factory=BMMModel)
     dmn: DMNModel = field(default_factory=DMNModel)                      # Fase A: DMN decisions
     argumentation: ArgumentationMap = field(default_factory=ArgumentationMap)  # Fase C: IBIS map
+    query_summary: QuerySummaryModel = field(default_factory=QuerySummaryModel)  # Fase F: multi-perspective
     validation: ValidationReport = field(default_factory=ValidationReport)
     synthesizer: SynthesizerModel = field(default_factory=SynthesizerModel)
     meta: SessionMetadata = field(default_factory=SessionMetadata)
@@ -632,6 +660,10 @@ class KnowledgeHub:
                        'dependencies', 'stakeholder_needs'):
             if not hasattr(hub.minutes, _field):
                 setattr(hub.minutes, _field, [])
+
+        # ── v4.24 BMIF: QuerySummaryModel (Fase F) ───────────────────────────
+        if not hasattr(hub, 'query_summary'):
+            hub.query_summary = QuerySummaryModel()
 
         return hub
 

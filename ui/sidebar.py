@@ -117,6 +117,14 @@ def render_sidebar():
             st.session_state.run_dmn         = st.checkbox("⚖️ Tabelas de Decisão (DMN)",    value=st.session_state.get("run_dmn", False))
             st.session_state.run_argumentation = st.checkbox("🗺️ Argumentação (IBIS)",         value=st.session_state.get("run_argumentation", False))
             st.session_state.run_synthesizer = st.checkbox("📄 Relatório Executivo",         value=st.session_state.run_synthesizer)
+            st.session_state.run_query_summarizer = st.checkbox(
+                "🔎 Sumário por Perspectiva",
+                value=st.session_state.get("run_query_summarizer", False),
+                help=(
+                    "Gera um sumário automático pós-pipeline com 4 perspectivas: "
+                    "Executivo, Técnico, Gestor de Projeto e Conformidade & Auditoria."
+                ),
+            )
             st.session_state.run_knowledge_extractor = st.checkbox(
                 "🕸️ Grafo de Conhecimento (KH)",
                 value=st.session_state.get("run_knowledge_extractor", True),
@@ -175,3 +183,5 @@ def render_sidebar():
                     st.session_state.rerun_agent = "dmn"
                 if st.button("🗺️ IBIS",       key="rr_arg", use_container_width=True):
                     st.session_state.rerun_agent = "argumentation"
+                if st.button("🔎 Sumário",    key="rr_qs",  use_container_width=True):
+                    st.session_state.rerun_agent = "query_summarizer"

@@ -116,3 +116,28 @@ def render(hub, prefix, suffix):
             file_name=make_filename("executive_report", "html", prefix, suffix),
             key="export_report_html"
         )
+        st.markdown("---")
+
+    if getattr(hub, 'query_summary', None) and hub.query_summary.ready:
+        st.markdown("**Sumário por Perspectiva**")
+        _icons = {"executive": "🏛️", "technical": "⚙️", "project_manager": "📋", "compliance": "⚖️"}
+        _lines = []
+        for _ps in hub.query_summary.perspectives:
+            _icon = _icons.get(_ps.perspective, "📌")
+            _lines.append(f"## {_icon} {_ps.label}\n")
+            if _ps.headline:
+                _lines.append(f"> {_ps.headline}\n")
+            if _ps.highlights:
+                _lines.append("### Destaques\n" + "\n".join(f"- {h}" for h in _ps.highlights))
+            if _ps.open_items:
+                _lines.append("### Pontos em aberto\n" + "\n".join(f"- {o}" for o in _ps.open_items))
+            if _ps.recommended_actions:
+                _lines.append("### Ações recomendadas\n" + "\n".join(f"- {a}" for a in _ps.recommended_actions))
+            _lines.append("")
+        _qs_md = "\n\n".join(_lines)
+        st.download_button(
+            "⬇️ Sumário Perspectivas (.md)",
+            data=_qs_md,
+            file_name=make_filename("summary_perspectives", "md", prefix, suffix),
+            key="export_query_summary_md",
+        )

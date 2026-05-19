@@ -40,6 +40,7 @@ from agents.agent_bmm import AgentBMM
 from agents.agent_dmn import AgentDMN
 from agents.agent_argumentation import AgentArgumentation
 from agents.agent_synthesizer import AgentSynthesizer
+from agents.agent_query_summarizer import AgentQuerySummarizer
 from agents.agent_transcript_quality import AgentTranscriptQuality
 from core.knowledge_hub import KnowledgeHub, PreprocessingModel, SessionMetadata
 from modules.transcript_preprocessor import preprocess
@@ -66,7 +67,7 @@ class Orchestrator:
 
     _PLAN = ["transcript_quality", "preprocessing", "nlp", "bpmn",
              "minutes", "requirements", "sbvr", "bmm", "dmn", "argumentation", "synthesizer",
-             "knowledge_extractor", "contradiction_detector"]
+             "query_summarizer", "knowledge_extractor", "contradiction_detector"]
 
     def __init__(
         self,
@@ -90,6 +91,7 @@ class Orchestrator:
         self._agent_synthesizer  = AgentSynthesizer(client_info, provider_cfg)
         self._agent_dmn          = AgentDMN(client_info, provider_cfg)
         self._agent_argumentation = AgentArgumentation(client_info, provider_cfg)
+        self._agent_query_summarizer = AgentQuerySummarizer(client_info, provider_cfg)
 
     # ── Thread-safe progress callback ─────────────────────────────────────────
 
@@ -113,6 +115,7 @@ class Orchestrator:
         run_dmn: bool = False,
         run_argumentation: bool = False,
         run_synthesizer: bool = False,
+        run_query_summarizer: bool = False,
     ) -> KnowledgeHub:
         """
         Execute the pipeline.
@@ -262,6 +265,16 @@ class Orchestrator:
                 self._progress("Agente Argumentacao (IBIS)", "done")
             except Exception as exc:
                 self._progress("Agente Argumentacao (IBIS)", f"error: {exc}")
+                hub.bump()
+
+        # ── Step 6d: Query Summarizer Agent (Fase F) ──────────────────────────
+        if run_query_summarizer:
+            self._progress("Agente Sumário por Perspectiva", "running")
+            try:
+                hub = self._agent_query_summarizer.run(hub, output_language)
+                self._progress("Agente Sumário por Perspectiva", "done")
+            except Exception as exc:
+                self._progress("Agente Sumário por Perspectiva", f"error: {exc}")
                 hub.bump()
 
         # ── Step 7: Synthesizer Agent ─────────────────────────────────────────
