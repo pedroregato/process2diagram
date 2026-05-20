@@ -86,13 +86,13 @@ def render_sidebar():
                     "Passes de Otimização", [1, 3, 5], value=st.session_state.n_bpmn_runs
                 )
                 if st.session_state.n_bpmn_runs > 1:
-                    with st.expander("Pesos de Seleção"):
-                        st.session_state.bpmn_weights = {
-                            "granularity": st.slider("Granularidade", 0, 10, st.session_state.bpmn_weights.get("granularity", 5)),
-                            "task_type":   st.slider("Tipo de Tarefa", 0, 10, st.session_state.bpmn_weights.get("task_type",   5)),
-                            "gateways":    st.slider("Gateways",       0, 10, st.session_state.bpmn_weights.get("gateways",    5)),
-                            "structural":  st.slider("Estrutural",     0, 10, st.session_state.bpmn_weights.get("structural",  5)),
-                        }
+                    st.caption("⚖️ **Pesos de Seleção**")
+                    st.session_state.bpmn_weights = {
+                        "granularity": st.slider("Granularidade", 0, 10, st.session_state.bpmn_weights.get("granularity", 5)),
+                        "task_type":   st.slider("Tipo de Tarefa", 0, 10, st.session_state.bpmn_weights.get("task_type",   5)),
+                        "gateways":    st.slider("Gateways",       0, 10, st.session_state.bpmn_weights.get("gateways",    5)),
+                        "structural":  st.slider("Estrutural",     0, 10, st.session_state.bpmn_weights.get("structural",  5)),
+                    }
                 if st.session_state.n_bpmn_runs == 1:
                     st.session_state.use_langgraph = st.checkbox(
                         "🔄 Retry Adaptativo (LangGraph)",

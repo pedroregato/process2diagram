@@ -40,7 +40,7 @@ def init_session_state():
     if "run_knowledge_extractor" not in st.session_state:
         st.session_state.run_knowledge_extractor = True
     if "run_query_summarizer" not in st.session_state:
-        st.session_state.run_query_summarizer = False
+        st.session_state.run_query_summarizer = True
     if "n_bpmn_runs" not in st.session_state:
         st.session_state.n_bpmn_runs = 1
     if "bpmn_weights" not in st.session_state:
