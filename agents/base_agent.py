@@ -182,23 +182,44 @@ class BaseAgent(ABC):
         t0 = time.time()
 
         if client_type == "openai_compatible":
-            raw, tokens = self._call_openai(
+            raw, tokens_in, tokens_out = self._call_openai(
                 system, safe_user, api_key, model,
                 timeout=_timeout, long_context=use_long_ctx,
             )
         elif client_type == "anthropic":
-            raw, tokens = self._call_anthropic(
+            raw, tokens_in, tokens_out = self._call_anthropic(
                 system, safe_user, api_key, model,
                 timeout=_timeout, long_context=use_long_ctx,
             )
         else:
             raise ValueError(f"Unknown client_type: {client_type}")
 
+        tokens = tokens_in + tokens_out
         elapsed_ms = int((time.time() - t0) * 1000)
         hub.meta.total_tokens_used += tokens
         hub.meta.processing_time_ms += elapsed_ms
         hub.meta.llm_provider = self.provider_cfg.get("api_key_label", "")
         hub.meta.llm_model = model
+
+        # ── Telemetry record (async, fail-open) ───────────────────────────
+        try:
+            from services.llm_telemetry import _telemetry, TelemetryRecord
+            _telemetry.record(TelemetryRecord(
+                agent_name=self.name,
+                provider=self.provider_cfg.get("api_key_label", client_type),
+                model=model,
+                latency_ms=elapsed_ms,
+                input_tokens=tokens_in,
+                output_tokens=tokens_out,
+                total_tokens=tokens,
+                from_cache=False,
+                long_context=use_long_ctx,
+                is_error=False,
+                benchmark_run=False,
+            ))
+        except Exception:
+            pass
+        # ─────────────────────────────────────────────────────────────────
 
         # ── Store in cache (raw, pre-desanitize) ──────────────────────────
         if cache_hash is not None:
@@ -267,8 +288,9 @@ class BaseAgent(ABC):
             kwargs.pop("temperature", None)
 
         resp = client.chat.completions.create(**kwargs, timeout=timeout)
-        tokens = resp.usage.total_tokens if resp.usage else 0
-        return resp.choices[0].message.content, tokens
+        tokens_in  = resp.usage.prompt_tokens     if resp.usage else 0
+        tokens_out = resp.usage.completion_tokens if resp.usage else 0
+        return resp.choices[0].message.content, tokens_in, tokens_out
 
     def _call_anthropic(
         self,
@@ -296,8 +318,9 @@ class BaseAgent(ABC):
             messages=[{"role": "user", "content": user}],
             timeout=timeout,
         )
-        tokens = (msg.usage.input_tokens + msg.usage.output_tokens) if msg.usage else 0
-        return msg.content[0].text, tokens
+        tokens_in  = msg.usage.input_tokens  if msg.usage else 0
+        tokens_out = msg.usage.output_tokens if msg.usage else 0
+        return msg.content[0].text, tokens_in, tokens_out
 
     # ── JSON parsing ──────────────────────────────────────────────────────────
 

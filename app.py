@@ -39,6 +39,7 @@ _admin = is_admin()
 _sistema_pages = [
     st.Page("pages/Settings.py",         title="Configurações",       icon="⚙️"),
     st.Page("pages/CostEstimator.py",    title="Estimativa de Custo", icon="💰"),
+    st.Page("pages/LLMBenchmark.py",     title="LLM Benchmark",       icon="⚡"),
 ]
 if _admin:
     _sistema_pages += [
