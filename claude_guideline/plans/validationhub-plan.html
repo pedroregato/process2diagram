@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ValidationHub.py — Plano de Implementação</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Fira+Code:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #f9f7f2;
+    --s1: #ffffff;
+    --s2: #f2ede4;
+    --s3: #e8e2d8;
+    --border: #d8d2c4;
+    --ink: #1e1c18;
+    --muted: #8c8478;
+    --hi: #2d5f8a;   /* azul diagnóstico */
+    --hi2: #7a3d8a;  /* violeta validator */
+    --hi3: #2d8a5f;  /* verde qualidade */
+    --hi4: #8a6e2d;  /* âmbar telemetria */
+    --red: #8a2d2d;
+    --mono: 'Fira Code', monospace;
+    --serif: 'Lora', serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.8;
+  }
+
+  /* HEADER */
+  header {
+    background: var(--ink);
+    color: #f9f7f2;
+    padding: 36px 48px 28px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 20px;
+    align-items: end;
+  }
+  .h-eyebrow { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--hi); margin-bottom: 8px; }
+  h1 { font-family: var(--serif); font-size: clamp(24px, 4vw, 40px); font-weight: 600; color: #fff; line-height: 1.1; }
+  h1 em { color: #7ab8e8; font-style: italic; }
+  .h-meta { font-size: 10.5px; color: rgba(249,247,242,0.4); margin-top: 8px; display: flex; gap: 16px; flex-wrap: wrap; }
+  .h-status {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: flex-end;
+  }
+  .status-pill {
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 2px;
+    letter-spacing: 0.08em;
+  }
+  .sp-warn { background: rgba(138,110,45,0.25); color: #e8c87a; border: 1px solid rgba(138,110,45,0.4); }
+  .sp-info { background: rgba(45,95,138,0.25); color: #7ab8e8; border: 1px solid rgba(45,95,138,0.4); }
+
+  /* LAYOUT */
+  .layout { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 130px); }
+
+  /* NAV */
+  nav {
+    background: var(--s1);
+    border-right: 1px solid var(--border);
+    padding: 20px 0;
+    position: sticky; top: 0;
+    height: calc(100vh - 130px);
+    overflow-y: auto;
+  }
+  .nl { padding: 5px 18px 2px; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  .ni {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 18px;
+    font-size: 11px; color: var(--muted);
+    cursor: pointer; border-left: 2px solid transparent;
+    transition: all 0.12s; text-decoration: none;
+  }
+  .ni:hover { color: var(--ink); background: var(--s2); }
+  .ni.active { color: var(--hi); border-left-color: var(--hi); background: rgba(45,95,138,0.06); }
+  .ni .nb { margin-left: auto; font-size: 9px; padding: 1px 5px; border-radius: 2px; }
+  .nb-warn { background: rgba(138,110,45,0.12); color: var(--hi4); }
+  .nb-ok { background: rgba(45,138,95,0.1); color: var(--hi3); }
+  .nb-dec { background: rgba(138,45,45,0.1); color: var(--red); }
+
+  /* MAIN */
+  main { padding: 28px 44px; max-width: 880px; }
+
+  /* SECTION */
+  .section {
+    margin-bottom: 6px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    background: var(--s1);
+  }
+  .section.warn { border-color: rgba(138,45,45,0.35); }
+  .section.ready { border-color: rgba(45,138,95,0.3); }
+
+  .sh {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 18px; cursor: pointer; user-select: none;
+    background: var(--s1); transition: background 0.12s;
+  }
+  .sh:hover { background: var(--s2); }
+  .sn { font-size: 10px; color: var(--muted); min-width: 22px; }
+  .st { font-family: var(--serif); font-size: 15px; font-weight: 600; color: var(--ink); flex: 1; }
+  .sb { font-size: 9px; padding: 2px 7px; border-radius: 2px; }
+  .sb-warn { background: rgba(138,45,45,0.1); color: var(--red); }
+  .sb-ok { background: rgba(45,138,95,0.1); color: var(--hi3); }
+  .sb-info { background: rgba(45,95,138,0.1); color: var(--hi); }
+  .chev { color: var(--muted); font-size: 9px; transition: transform 0.16s; }
+  .section.open .chev { transform: rotate(90deg); }
+
+  .sb-body {
+    display: none; padding: 16px 20px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+    animation: fi 0.13s ease;
+  }
+  .section.open .sb-body { display: block; }
+  @keyframes fi { from { opacity:0; transform:translateY(-3px); } to { opacity:1; transform:none; } }
+
+  p { color: #706a60; font-size: 12px; margin-bottom: 10px; }
+  p:last-child { margin-bottom: 0; }
+  strong { color: var(--ink); font-weight: 500; }
+  code {
+    font-family: var(--mono); font-size: 11px;
+    background: var(--s2); border: 1px solid var(--border);
+    padding: 1px 5px; border-radius: 2px; color: var(--hi);
+  }
+
+  /* DECISION */
+  .dec {
+    background: rgba(138,45,45,0.04);
+    border: 1px solid rgba(138,45,45,0.25);
+    border-radius: 3px; padding: 13px 15px; margin: 11px 0;
+  }
+  .dec-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--red); margin-bottom: 6px; }
+  .dec-q { font-family: var(--serif); font-size: 13.5px; color: var(--ink); margin-bottom: 9px; line-height: 1.4; }
+  .dec-opts { display: flex; flex-wrap: wrap; gap: 5px; }
+  .opt {
+    background: var(--s1); border: 1px solid var(--border);
+    padding: 4px 11px; border-radius: 2px;
+    font-family: var(--mono); font-size: 11px; cursor: pointer;
+    color: var(--muted); transition: all 0.12s;
+  }
+  .opt:hover { border-color: var(--red); color: var(--red); }
+  .opt.sel { background: rgba(138,45,45,0.08); border-color: var(--red); color: var(--red); }
+
+  /* NOTE */
+  .note {
+    display: flex; gap: 9px;
+    background: rgba(45,95,138,0.05);
+    border: 1px solid rgba(45,95,138,0.18);
+    border-radius: 3px; padding: 10px 13px; margin: 10px 0;
+  }
+  .note-i { color: var(--hi); flex-shrink: 0; font-size: 12px; }
+  .note-t { font-size: 11.5px; color: #5a6878; line-height: 1.75; }
+
+  /* TAB MOCKUP */
+  .mockup {
+    background: var(--s1);
+    border: 1px solid var(--border);
+    border-radius: 3px; overflow: hidden; margin: 14px 0;
+  }
+  .mbar {
+    background: var(--s2); border-bottom: 1px solid var(--border);
+    padding: 7px 12px; display: flex; align-items: center; gap: 5px;
+  }
+  .mbar-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .mbar-title { font-size: 10.5px; color: var(--muted); margin-left: 5px; }
+  .mbody { padding: 0; }
+
+  /* TAB NAV */
+  .tabs-nav {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--s2);
+    overflow-x: auto;
+  }
+  .tab-btn {
+    padding: 8px 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: all 0.12s;
+  }
+  .tab-btn:hover { color: var(--ink); background: rgba(0,0,0,0.03); }
+  .tab-btn.active { color: var(--hi); border-bottom-color: var(--hi); background: var(--s1); }
+
+  .tab-content { display: none; padding: 16px; }
+  .tab-content.active { display: block; }
+
+  /* METRIC CARDS */
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .metric-card {
+    background: var(--s2);
+    border: 1px solid var(--border);
+    border-radius: 2px; padding: 10px 12px;
+  }
+  .mc-label { font-size: 9.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+  .mc-value { font-family: var(--serif); font-size: 22px; font-weight: 600; line-height: 1; margin-bottom: 3px; }
+  .mc-source { font-size: 10px; color: var(--muted); }
+  .mc-v1 { color: var(--hi); }
+  .mc-v2 { color: var(--hi2); }
+  .mc-v3 { color: var(--hi3); }
+  .mc-v4 { color: var(--hi4); }
+
+  /* SCORE BAR */
+  .score-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .score-label { font-size: 11px; color: var(--muted); min-width: 120px; }
+  .score-bar { flex: 1; height: 6px; background: var(--s3); border-radius: 3px; overflow: hidden; }
+  .score-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+  .score-num { font-size: 11px; color: var(--ink); min-width: 30px; text-align: right; }
+
+  /* DATA FLOW */
+  .df-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; align-items: center; margin: 12px 0; }
+  .df-src {
+    background: var(--s2); border: 1px solid var(--border);
+    border-radius: 2px; padding: 8px 12px;
+  }
+  .df-src .ds-path { font-size: 10px; color: var(--muted); margin-bottom: 3px; }
+  .df-src .ds-field { font-size: 11.5px; color: var(--hi); }
+  .df-src .ds-type { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .df-arrow { text-align: center; color: var(--muted); font-size: 14px; }
+  .df-dst {
+    background: var(--s1); border: 1px solid rgba(45,95,138,0.3);
+    border-radius: 2px; padding: 8px 12px;
+  }
+  .df-dst .dd-tab { font-size: 10px; color: var(--hi); margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .df-dst .dd-widget { font-size: 11.5px; color: var(--ink); }
+
+  /* CHECKLIST */
+  .checklist { margin: 12px 0; }
+  .cl-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .cl-item:last-child { border-bottom: none; }
+  .cl-item input[type=checkbox] { margin-top: 3px; accent-color: var(--hi3); flex-shrink: 0; }
+  .cl-text { font-size: 11.5px; color: #706a60; line-height: 1.6; flex: 1; }
+  .cl-text strong { color: var(--ink); }
+  .cl-file { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  /* PITFALL */
+  .pitfall {
+    display: flex; gap: 9px;
+    background: rgba(138,45,45,0.04);
+    border: 1px solid rgba(138,45,45,0.18);
+    border-radius: 3px; padding: 10px 13px; margin: 8px 0;
+  }
+  .pf-i { color: var(--red); flex-shrink: 0; }
+  .pf-t { font-size: 11.5px; color: #786050; line-height: 1.7; }
+
+  /* CODE BLOCK */
+  .codeblock {
+    background: var(--ink);
+    border-radius: 3px; overflow: hidden; margin: 12px 0;
+  }
+  .cb-bar {
+    background: #2a2820; border-bottom: 1px solid #3a3830;
+    padding: 6px 14px; font-size: 10px; color: #6a6660;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .cb-lang { color: var(--hi); }
+  .cb-body {
+    padding: 14px 16px;
+    font-family: var(--mono); font-size: 11.5px;
+    color: #c8c4bc; line-height: 1.8;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .cb-kw { color: #7ab8e8; }
+  .cb-str { color: #a8c87a; }
+  .cb-cm { color: #5a5650; font-style: italic; }
+  .cb-hi { color: #e8c87a; }
+
+  /* CLAUDE CODE PROMPT */
+  .cc-prompt {
+    background: var(--ink);
+    border: 1px solid #3a3830;
+    border-left: 3px solid var(--hi3);
+    border-radius: 3px; overflow: hidden; margin: 14px 0;
+  }
+  .cc-bar {
+    background: #2a2820; border-bottom: 1px solid #3a3830;
+    padding: 6px 14px; font-size: 10px;
+    color: var(--hi3); text-transform: uppercase; letter-spacing: 0.1em;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .cc-body {
+    padding: 14px 16px;
+    font-family: var(--mono); font-size: 11.5px;
+    color: #b8b4ac; line-height: 1.8; white-space: pre-wrap;
+  }
+  .cc-body .v { color: #e8c87a; }
+  .cc-body .c { color: #5a5650; font-style: italic; }
+  .copy-btn {
+    background: transparent; border: 1px solid #3a3830;
+    color: #6a6660; padding: 2px 8px; border-radius: 2px;
+    font-family: var(--mono); font-size: 10px; cursor: pointer;
+    transition: all 0.12s;
+  }
+  .copy-btn:hover { border-color: var(--hi3); color: var(--hi3); }
+
+  /* STATUS BAR */
+  .statusbar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--ink); padding: 7px 22px;
+    display: flex; align-items: center; gap: 18px;
+    font-size: 10.5px; color: rgba(249,247,242,0.4); z-index: 100;
+  }
+  .sb-i { display: flex; align-items: center; gap: 5px; }
+  .sbd { width: 6px; height: 6px; border-radius: 50%; }
+  .sbd-warn { background: var(--hi4); }
+  .sbd-red { background: var(--red); }
+  .sbd-ok { background: var(--hi3); }
+
+  @media (max-width: 720px) {
+    .layout { grid-template-columns: 1fr; }
+    nav { display: none; }
+    main { padding: 16px; }
+    header { grid-template-columns: 1fr; padding: 24px 18px; }
+    .df-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="h-eyebrow">Plano de Implementação · spec para Claude Code</div>
+    <h1>pages/<em>ValidationHub</em>.py</h1>
+    <div class="h-meta">
+      <span>Navigation group: Análise</span>
+      <span>Registrada em app.py</span>
+      <span>Status: ausente no repo</span>
+    </div>
+  </div>
+  <div class="h-status">
+    <span class="status-pill sp-warn">⚠ arquivo ausente</span>
+    <span class="status-pill sp-info">4 decisões abertas</span>
+  </div>
+</header>
+
+<div class="layout">
+<nav>
+  <div class="nl">Seções</div>
+  <a class="ni active" onclick="sc('objetivo')">Objetivo</a>
+  <a class="ni" onclick="sc('mockup')">Mockup das tabs
+    <span class="nb nb-ok">interativo</span>
+  </a>
+  <a class="ni" onclick="sc('dataflow')">Fluxo de dados</a>
+  <a class="ni" onclick="sc('estrutura')">Estrutura do arquivo</a>
+  <a class="ni" onclick="sc('checklist')">Checklist de entrega
+    <span class="nb nb-ok">8 itens</span>
+  </a>
+  <a class="ni" onclick="sc('pitfalls')">Pitfalls aplicáveis</a>
+  <a class="ni" onclick="sc('decisoes')">Decisões abertas
+    <span class="nb nb-dec">4</span>
+  </a>
+  <a class="ni" onclick="sc('prompt')">Prompt Claude Code
+    <span class="nb nb-ok">pronto</span>
+  </a>
+</nav>
+
+<main>
+
+<!-- OBJETIVO -->
+<div class="section open" id="objetivo">
+  <div class="sh" onclick="tog(this)">
+    <span class="sn">01</span>
+    <span class="st">Objetivo e contexto</span>
+    <span class="chev">▶</span>
+  </div>
+  <div class="sb-body">
+    <p>A <code>ValidationHub.py</code> está referenciada no navigation group <strong>Análise</strong> de <code>app.py</code> mas o arquivo não existe no repo. Objetivo: criar a página consolidando em um só lugar todos os sinais de qualidade do pipeline — diagnósticos BPMN, scores do validator, quality gate da transcrição e telemetria de LLM.</p>
+    <p>Hoje esses dados estão espalhados: diagnósticos BPMN em <code>modules/bpmn_diagnostics.py</code>, scores em <code>hub.validation</code>, quality gate em <code>ui/tabs/quality_tab.py</code>, e telemetria em <code>pages/LLMBenchmark.py</code>. A ValidationHub consolida tudo para uma visão única de saúde do pipeline para uma reunião aberta.</p>
+    <div class="note">
+      <span class="note-i">◆</span>
+      <span class="note-t"><strong>Regra do projeto:</strong> nunca instanciar agentes diretamente — sempre via <code>Orchestrator</code> ou <code>handle_rerun()</code>. Esta página é somente leitura do <code>hub</code> — não dispara nenhum agente. Usar <code>require_active_project()</code> no topo.</span>
+    </div>
+  </div>
+</div>
+
+<!-- MOCKUP -->
+<div class="section open" id="mockup">
+  <div class="sh" onclick="tog(this)">
+    <span class="sn">02</span>
+    <span class="st">Mockup interativo das tabs</span>
+    <span class="sb sb-info">4 tabs</span>
+    <span class="chev">▶</span>
+  </div>
+  <div class="sb-body">
+    <p>Clique nas tabs para ver o layout de cada uma. Este é o contrato visual para o Claude Code.</p>
+
+    <div class="mockup">
+      <div class="mbar">
+        <div class="mbar-dot" style="background:#e85757"></div>
+        <div class="mbar-dot" style="background:#e8c847"></div>
+        <div class="mbar-dot" style="background:#47e870"></div>
+        <div class="mbar-title">ValidationHub · reunião ativa</div>
+      </div>
+      <div class="mbody">
+        <div class="tabs-nav">
+          <button class="tab-btn active" onclick="switchTab(this,'t1')">🔬 Diagnóstico BPMN</button>
+          <button class="tab-btn" onclick="switchTab(this,'t2')">📊 Scores</button>
+          <button class="tab-btn" onclick="switchTab(this,'t3')">✅ Quality Gate</button>
+          <button class="tab-btn" onclick="switchTab(this,'t4')">⚡ Telemetria</button>
+        </div>
+
+        <!-- TAB 1 -->
+        <div class="tab-content active" id="t1">
+          <div class="metric-grid">
+            <div class="metric-card">
+              <div class="mc-label">Score BPMN</div>
+              <div class="mc-value mc-v1">8.4</div>
+              <div class="mc-source">hub.validation.scores.overall</div>
+            </div>
+            <div class="metric-card">
+              <div class="mc-label">Erros estruturais</div>
+              <div class="mc-value mc-v2">2</div>
+              <div class="mc-source">bpmn_structural_validator</div>
+            </div>
+            <div class="metric-card">
+              <div class="mc-label">Passes de repair</div>
+              <div class="mc-value mc-v3">1</div>
+              <div class="mc-source">hub.bpmn.repair_passes</div>
+            </div>
+            <div class="metric-card">
+              <div class="mc-label">Runs do BPMN</div>
+              <div class="mc-value mc-v4">3</div>
+              <div class="mc-source">hub.meta.n_bpmn_runs</div>
+            </div>
+          </div>
+          <p style="font-size:11px;color:var(--muted);margin-top:4px">↓ Painel de diagnóstico completo (render_bpmn_diagnostics de modules/bpmn_diagnostics.py)</p>
+          <div style="background:var(--s2);border:1px dashed var(--border);border-radius:2px;padding:14px;text-align:center;color:var(--muted);font-size:11px;margin-top:8px">
+            render_bpmn_diagnostics(hub) — componente existente, reusar diretamente
+          </div>
+        </div>
+
+        <!-- TAB 2 -->
+        <div class="tab-content" id="t2">
+          <p style="font-size:11px;color:var(--muted);margin-bottom:12px">Scores por dimensão — agentValidator (sem LLM, pesos: granularity 0.4 · task_type 0.3 · gateways 0.3)</p>
+          <div class="score-row">
+            <span class="score-label">Granularidade</span>
+            <div class="score-bar"><div class="score-fill" style="width:78%;background:var(--hi)"></div></div>
+            <span class="score-num">7.8</span>
+          </div>
+          <div class="score-row">
+            <span class="score-label">Tipo de task</span>
+            <div class="score-bar"><div class="score-fill" style="width:90%;background:var(--hi2)"></div></div>
+            <span class="score-num">9.0</span>
+          </div>
+          <div class="score-row">
+            <span class="score-label">Gateways</span>
+            <div class="score-bar"><div class="score-fill" style="width:85%;background:var(--hi3)"></div></div>
+            <span class="score-num">8.5</span>
+          </div>
+          <div class="score-row" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+            <span class="score-label" style="font-weight:500;color:var(--ink)">Score final (ponderado)</span>
+            <div class="score-bar"><div class="score-fill" style="width:84%;background:var(--hi4)"></div></div>
+            <span class="score-num" style="color:var(--ink);font-weight:500">8.4</span>
+          </div>
+          <div style="margin-top:14px;padding:10px 12px;background:var(--s2);border:1px solid var(--border);border-radius:2px;font-size:11px;color:var(--muted)">
+            Fonte: <code>hub.validation.scores</code> (ValidationReport dataclass) · Exibir também: candidatos de runs anteriores quando n_bpmn_runs &gt; 1
+          </div>
+        </div>
+
+        <!-- TAB 3 -->
+        <div class="tab-content" id="t3">
+          <div class="metric-grid">
+            <div class="metric-card">
+              <div class="mc-label">Grau qualidade</div>
+              <div class="mc-value mc-v3">B</div>
+              <div class="mc-source">hub.transcript_quality.grade</div>
+            </div>
+            <div class="metric-card">
+              <div class="mc-label">Score qualidade</div>
+              <div class="mc-value mc-v1">72</div>
+              <div class="mc-source">hub.transcript_quality.score</div>
+            </div>
+            <div class="metric-card">
+              <div class="mc-label">Chunks NLP</div>
+              <div class="mc-value mc-v4">14</div>
+              <div class="mc-source">hub.nlp.chunks (len)</div>
+            </div>
+            <div class="metric-card">
+              <div class="mc-label">Atores detectados</div>
+              <div class="mc-value mc-v2">4</div>
+              <div class="mc-source">hub.nlp.actors (len)</div>
+            </div>
+          </div>
+          <p style="font-size:11px;color:var(--muted);margin-top:8px">↓ Detalhes completos da quality gate (reusar render de ui/tabs/quality_tab.py)</p>
+          <div style="background:var(--s2);border:1px dashed var(--border);border-radius:2px;padding:14px;text-align:center;color:var(--muted);font-size:11px;margin-top:8px">
+            render_quality_tab(hub) — componente existente, reusar
+          </div>
+        </div>
+
+        <!-- TAB 4 -->
+        <div class="tab-content" id="t4">
+          <div class="metric-grid">
+            <div class="metric-card">
+              <div class="mc-label">Total tokens</div>
+              <div class="mc-value mc-v1">42k</div>
+              <div class="mc-source">hub.meta.total_tokens_used</div>
+            </div>
+            <div class="metric-card">
+              <div class="mc-label">Cache hits</div>
+              <div class="mc-value mc-v3">2</div>
+              <div class="mc-source">hub.meta.cache_hits</div>
+            </div>
+            <div class="metric-card">
+              <div class="mc-label">Tokens economizados</div>
+              <div class="mc-value mc-v4">8.1k</div>
+              <div class="mc-source">hub.meta.tokens_saved</div>
+            </div>
+            <div class="metric-card">
+              <div class="mc-label">Long context calls</div>
+              <div class="mc-value mc-v2">0</div>
+              <div class="mc-source">hub.meta.long_context_calls</div>
+            </div>
+          </div>
+          <p style="font-size:11px;color:var(--muted);margin-top:8px">Provider e modelo usados · Custo estimado (via modules/cost_estimator.py) · Latência por agente se disponível no hub</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <span class="note-i">◆</span>
+      <span class="note-t">Tabs 1 e 3 reutilizam componentes existentes (<code>render_bpmn_diagnostics</code>, <code>render_quality_tab</code>). Tabs 2 e 4 são novas, mas só leem <code>hub</code> — sem lógica nova de negócio.</span>
+    </div>
+  </div>
+</div>
+
+<!-- DATA FLOW -->
+<div class="section open" id="dataflow">
+  <div class="sh" onclick="tog(this)">
+    <span class="sn">03</span>
+    <span class="st">Fluxo de dados — fontes no KnowledgeHub</span>
+    <span class="chev">▶</span>
+  </div>
+  <div class="sb-body">
+    <p>Cada campo exibido na página e sua origem exata no hub. Sem ambiguidade para o Claude Code.</p>
+
+    <div class="df-grid">
+      <div class="df-src"><div class="ds-path">hub.validation</div><div class="ds-field">ValidationReport</div><div class="ds-type">dataclass · scores, issues, passed</div></div>
+      <div class="df-arrow">→</div>
+      <div class="df-dst"><div class="dd-tab">Tab Scores</div><div class="dd-widget">barras de score por dimensão</div></div>
+    </div>
+    <div class="df-grid">
+      <div class="df-src"><div class="ds-path">hub.bpmn</div><div class="ds-field">BPMNModel</div><div class="ds-type">xml, repair_passes, n_runs</div></div>
+      <div class="df-arrow">→</div>
+      <div class="df-dst"><div class="dd-tab">Tab Diagnóstico</div><div class="dd-widget">render_bpmn_diagnostics(hub)</div></div>
+    </div>
+    <div class="df-grid">
+      <div class="df-src"><div class="ds-path">hub.transcript_quality</div><div class="ds-field">TranscriptQualityModel</div><div class="ds-type">grade A–E, score 0–100, issues</div></div>
+      <div class="df-arrow">→</div>
+      <div class="df-dst"><div class="dd-tab">Tab Quality Gate</div><div class="dd-widget">render_quality_tab(hub)</div></div>
+    </div>
+    <div class="df-grid">
+      <div class="df-src"><div class="ds-path">hub.meta</div><div class="ds-field">SessionMetadata</div><div class="ds-type">total_tokens_used, cache_hits, tokens_saved, long_context_calls</div></div>
+      <div class="df-arrow">→</div>
+      <div class="df-dst"><div class="dd-tab">Tab Telemetria</div><div class="dd-widget">métricas + custo estimado</div></div>
+    </div>
+    <div class="df-grid">
+      <div class="df-src"><div class="ds-path">hub.nlp</div><div class="ds-field">NLPEnvelope</div><div class="ds-type">chunks, actors, segments</div></div>
+      <div class="df-arrow">→</div>
+      <div class="df-dst"><div class="dd-tab">Tab Quality Gate</div><div class="dd-widget">contagens NLP (chunks, atores)</div></div>
+    </div>
+
+    <div class="note" style="margin-top:14px">
+      <span class="note-i">◆</span>
+      <span class="note-t">A página é <strong>somente leitura</strong> — só consome <code>st.session_state["hub"]</code>. Nenhum agente é chamado. Se <code>hub</code> não estiver no session_state, exibir mensagem orientando executar o pipeline primeiro.</span>
+    </div>
+  </div>
+</div>
+
+<!-- ESTRUTURA DO ARQUIVO -->
+<div class="section open" id="estrutura">
+  <div class="sh" onclick="tog(this)">
+    <span class="sn">04</span>
+    <span class="st">Estrutura do arquivo ValidationHub.py</span>
+    <span class="chev">▶</span>
+  </div>
+  <div class="sb-body">
+    <div class="codeblock">
+      <div class="cb-bar"><span class="cb-lang">python</span><span style="font-size:10px">pages/ValidationHub.py — esqueleto</span></div>
+      <div class="cb-body"><span class="cb-cm"># Adicionar ao sys.path — padrão do projeto</span>
+<span class="cb-kw">import</span> sys, os
+sys.path.insert(<span class="cb-hi">0</span>, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+<span class="cb-kw">import</span> streamlit <span class="cb-kw">as</span> st
+<span class="cb-kw">from</span> ui.components.page_header <span class="cb-kw">import</span> render_page_header
+<span class="cb-kw">from</span> ui.project_selector <span class="cb-kw">import</span> require_active_project
+<span class="cb-kw">from</span> modules.bpmn_diagnostics <span class="cb-kw">import</span> render_bpmn_diagnostics
+<span class="cb-kw">from</span> ui.tabs.quality_tab <span class="cb-kw">import</span> render_quality_tab
+<span class="cb-kw">from</span> modules.cost_estimator <span class="cb-kw">import</span> estimate_cost
+
+st.set_page_config(page_title=<span class="cb-str">"ValidationHub"</span>, layout=<span class="cb-str">"wide"</span>)
+require_active_project()
+render_page_header(<span class="cb-str">"🔬"</span>, <span class="cb-str">"ValidationHub"</span>, <span class="cb-str">"Diagnóstico consolidado do pipeline"</span>)
+
+<span class="cb-cm"># Guard — hub deve existir no session_state</span>
+<span class="cb-kw">if</span> <span class="cb-str">"hub"</span> <span class="cb-kw">not in</span> st.session_state:
+    st.info(<span class="cb-str">"Execute o pipeline em Pipeline.py para ver os diagnósticos."</span>)
+    st.stop()
+
+hub = st.session_state[<span class="cb-str">"hub"</span>]
+
+<span class="cb-cm"># 4 tabs</span>
+t1, t2, t3, t4 = st.tabs([
+    <span class="cb-str">"🔬 Diagnóstico BPMN"</span>,
+    <span class="cb-str">"📊 Scores"</span>,
+    <span class="cb-str">"✅ Quality Gate"</span>,
+    <span class="cb-str">"⚡ Telemetria"</span>
+])
+
+<span class="cb-kw">with</span> t1:
+    <span class="cb-cm"># reusar render_bpmn_diagnostics + KPIs do hub.validation</span>
+    ...
+
+<span class="cb-kw">with</span> t2:
+    <span class="cb-cm"># scores de hub.validation.scores — barras por dimensão</span>
+    ...
+
+<span class="cb-kw">with</span> t3:
+    <span class="cb-cm"># reusar render_quality_tab + contagens hub.nlp</span>
+    ...
+
+<span class="cb-kw">with</span> t4:
+    <span class="cb-cm"># hub.meta tokens/cache + estimate_cost()</span>
+    ...</div>
+    </div>
+
+    <div class="note">
+      <span class="note-i">◆</span>
+      <span class="note-t">O <code>sys.path.insert</code> no topo é obrigatório em todas as pages do projeto (pitfall: "Pages import path on Cloud").</span>
+    </div>
+  </div>
+</div>
+
+<!-- CHECKLIST -->
+<div class="section open" id="checklist">
+  <div class="sh" onclick="tog(this)">
+    <span class="sn">05</span>
+    <span class="st">Checklist de entrega</span>
+    <span class="sb sb-ok">8 itens</span>
+    <span class="chev">▶</span>
+  </div>
+  <div class="sb-body">
+    <p>Checklist do CLAUDE.md mapeado para esta feature. Marque conforme implementar.</p>
+    <div class="checklist">
+      <div class="cl-item">
+        <input type="checkbox" id="c1">
+        <div>
+          <div class="cl-text"><strong>migrate()</strong> — verificar se ValidationReport já tem todos os campos necessários em KnowledgeHub. Se não, adicionar com guard em migrate().</div>
+          <div class="cl-file">core/knowledge_hub.py</div>
+        </div>
+      </div>
+      <div class="cl-item">
+        <input type="checkbox" id="c2">
+        <div>
+          <div class="cl-text"><strong>Arquivo criado</strong> — pages/ValidationHub.py (atenção: case-sensitive no Linux/Streamlit Cloud)</div>
+          <div class="cl-file">pages/ValidationHub.py</div>
+        </div>
+      </div>
+      <div class="cl-item">
+        <input type="checkbox" id="c3">
+        <div>
+          <div class="cl-text"><strong>sys.path.insert</strong> no topo do arquivo (padrão obrigatório de todas as pages)</div>
+          <div class="cl-file">pages/ValidationHub.py — linha 1</div>
+        </div>
+      </div>
+      <div class="cl-item">
+        <input type="checkbox" id="c4">
+        <div>
+          <div class="cl-text"><strong>require_active_project()</strong> chamado logo após set_page_config (padrão de todas as páginas de análise)</div>
+          <div class="cl-file">pages/ValidationHub.py</div>
+        </div>
+      </div>
+      <div class="cl-item">
+        <input type="checkbox" id="c5">
+        <div>
+          <div class="cl-text"><strong>Registrar em app.py</strong> — a página já está referenciada no navigation group Análise. Confirmar que o nome do arquivo bate exatamente.</div>
+          <div class="cl-file">app.py — navigation group Análise</div>
+        </div>
+      </div>
+      <div class="cl-item">
+        <input type="checkbox" id="c6">
+        <div>
+          <div class="cl-text"><strong>Sem st.expander aninhado</strong> — não usar expander dentro de expander (Streamlit lança exceção). Usar st.caption() como header de sub-seção se necessário.</div>
+          <div class="cl-file">pitfall ativo do projeto</div>
+        </div>
+      </div>
+      <div class="cl-item">
+        <input type="checkbox" id="c7">
+        <div>
+          <div class="cl-text"><strong>Hub guard antes de qualquer widget</strong> — verificar "hub" in st.session_state logo após o set_page_config, antes de renderizar qualquer componente.</div>
+          <div class="cl-file">pitfall: st.download_button dispara rerun</div>
+        </div>
+      </div>
+      <div class="cl-item">
+        <input type="checkbox" id="c8">
+        <div>
+          <div class="cl-text"><strong>Registrar em roadmap.md</strong> — adicionar entrada no claude_guideline/roadmap.md após concluir.</div>
+          <div class="cl-file">claude_guideline/roadmap.md</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PITFALLS -->
+<div class="section" id="pitfalls">
+  <div class="sh" onclick="tog(this)">
+    <span class="sn">06</span>
+    <span class="st">Pitfalls aplicáveis a esta feature</span>
+    <span class="chev">▶</span>
+  </div>
+  <div class="sb-body">
+    <div class="pitfall">
+      <span class="pf-i">⚠</span>
+      <span class="pf-t"><strong>st.page_link() para app.py:</strong> nunca usar "app.py" em st.page_link — usar "pages/ValidationHub.py". O arquivo app.py não é uma página registrada.</span>
+    </div>
+    <div class="pitfall">
+      <span class="pf-i">⚠</span>
+      <span class="pf-t"><strong>Nested expander:</strong> Streamlit lança StreamlitAPIException se expander estiver dentro de outro expander. Esta página pode ter diagnósticos detalhados — usar st.caption() como header de seção ao invés de expanders aninhados.</span>
+    </div>
+    <div class="pitfall">
+      <span class="pf-i">⚠</span>
+      <span class="pf-t"><strong>href="#id" em components.html:</strong> se render_bpmn_diagnostics usar HTML com âncoras internas, as âncoras navegam o frame pai do Streamlit. Verificar a implementação em bpmn_diagnostics.py antes de reusar.</span>
+    </div>
+    <div class="pitfall">
+      <span class="pf-i">⚠</span>
+      <span class="pf-t"><strong>GitHub web editor:</strong> ValidationHub.py é um arquivo novo — criar via PyCharm/CLI, nunca pelo editor web do GitHub (risco de truncar conteúdo em edições futuras se o arquivo crescer).</span>
+    </div>
+  </div>
+</div>
+
+<!-- DECISÕES -->
+<div class="section warn open" id="decisoes">
+  <div class="sh" onclick="tog(this)">
+    <span class="sn">07</span>
+    <span class="st">Decisões abertas</span>
+    <span class="sb sb-warn">resolver antes de implementar</span>
+    <span class="chev">▶</span>
+  </div>
+  <div class="sb-body">
+
+    <div class="dec">
+      <div class="dec-lbl">⚠ D-01 · Dados disponíveis</div>
+      <div class="dec-q">O ValidationReport (hub.validation) já está populado no hub atual, ou depende de n_bpmn_runs > 1?</div>
+      <div class="dec-opts">
+        <button class="opt" onclick="sel(this)">Sempre populado após pipeline</button>
+        <button class="opt" onclick="sel(this)">Só quando n_bpmn_runs > 1 (tournament)</button>
+        <button class="opt" onclick="sel(this)">Verificar em agent_validator.py</button>
+      </div>
+    </div>
+
+    <div class="dec">
+      <div class="dec-lbl">⚠ D-02 · Tab Telemetria</div>
+      <div class="dec-q">A tab de Telemetria exibe só dados do hub.meta (sessão atual) ou também puxa histórico do Supabase llm_telemetry?</div>
+      <div class="dec-opts">
+        <button class="opt" onclick="sel(this)">Só sessão atual (hub.meta) — MVP simples</button>
+        <button class="opt" onclick="sel(this)">Hub.meta + últimas N chamadas do Supabase</button>
+        <button class="opt" onclick="sel(this)">Delegar ao LLMBenchmark.py — link para lá</button>
+      </div>
+    </div>
+
+    <div class="dec">
+      <div class="dec-lbl">⚠ D-03 · Candidatos do tournament</div>
+      <div class="dec-q">Quando n_bpmn_runs > 1, mostrar os scores dos candidatos descartados na Tab Scores?</div>
+      <div class="dec-opts">
+        <button class="opt" onclick="sel(this)">Sim — tabela comparativa de candidatos</button>
+        <button class="opt" onclick="sel(this)">Não — só o score do vencedor</button>
+        <button class="opt" onclick="sel(this)">Só se hub.validation tiver os dados</button>
+      </div>
+    </div>
+
+    <div class="dec">
+      <div class="dec-lbl">⚠ D-04 · Custo estimado</div>
+      <div class="dec-q">Exibir custo estimado em USD na Tab Telemetria?</div>
+      <div class="dec-opts">
+        <button class="opt" onclick="sel(this)">Sim — usar estimate_cost() de cost_estimator.py</button>
+        <button class="opt" onclick="sel(this)">Não — só tokens</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- PROMPT CLAUDE CODE -->
+<div class="section ready open" id="prompt">
+  <div class="sh" onclick="tog(this)">
+    <span class="sn">08</span>
+    <span class="st">Prompt pronto para Claude Code</span>
+    <span class="sb sb-ok">copiar e usar</span>
+    <span class="chev">▶</span>
+  </div>
+  <div class="sb-body">
+    <p>Após resolver as decisões abertas acima, use este prompt no Claude Code. Salve o HTML em <code>claude_guideline/plans/validationhub-plan.html</code> antes.</p>
+
+    <div class="cc-prompt">
+      <div class="cc-bar">
+        <span>prompt para claude code</span>
+        <button class="copy-btn" onclick="copyPrompt(this)">copiar</button>
+      </div>
+      <div class="cc-body" id="cc-text">Leia o CLAUDE.md e o arquivo <span class="v">claude_guideline/plans/validationhub-plan.html</span> antes de qualquer ação.
+
+Crie a página <span class="v">pages/ValidationHub.py</span> conforme especificado no plano HTML.
+
+Instruções específicas:
+1. Siga o esqueleto da Seção 04 do HTML
+2. Reutilize <span class="v">render_bpmn_diagnostics(hub)</span> na Tab 1 e <span class="v">render_quality_tab(hub)</span> na Tab 3
+3. Execute o checklist da Seção 05 na ordem — comece pelo migrate() se necessário
+4. Respeite os pitfalls da Seção 06 (sys.path, no nested expanders, hub guard)
+5. Decisões tomadas: <span class="v">[cole aqui suas escolhas das 4 decisões abertas]</span>
+
+Após criar o arquivo, confirme:
+- Nome exato do arquivo corresponde ao registrado em app.py
+- sys.path.insert está na linha 1
+- require_active_project() é chamado antes de qualquer render
+- Hub guard está antes do primeiro st.tabs()</div>
+    </div>
+
+    <div class="note" style="margin-top:12px">
+      <span class="note-i">◆</span>
+      <span class="note-t"><strong>Como usar:</strong> (1) resolva as 4 decisões abertas acima clicando nos botões, (2) salve este HTML no repo em <code>claude_guideline/plans/</code>, (3) copie o prompt, substitua o campo amarelo pelas decisões tomadas, (4) cole no Claude Code na raiz do projeto.</span>
+    </div>
+  </div>
+</div>
+
+<div style="height:50px"></div>
+</main>
+</div>
+
+<div class="statusbar">
+  <div class="sb-i"><div class="sbd sbd-red"></div> ValidationHub.py ausente no repo</div>
+  <div class="sb-i"><div class="sbd sbd-warn"></div> 4 decisões abertas</div>
+  <div class="sb-i"><div class="sbd sbd-ok"></div> Prompt pronto após resolver decisões</div>
+  <div style="margin-left:auto;font-size:10px">claude_guideline/plans/validationhub-plan.html</div>
+</div>
+
+<script>
+  function tog(sh) { sh.parentElement.classList.toggle('open'); }
+
+  function switchTab(btn, id) {
+    btn.closest('.mockup').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.closest('.mockup').querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(id).classList.add('active');
+  }
+
+  function sel(btn) {
+    btn.closest('.dec-opts').querySelectorAll('.opt').forEach(b => b.classList.remove('sel'));
+    btn.classList.add('sel');
+    updatePrompt();
+  }
+
+  function updatePrompt() {
+    const decisions = [];
+    document.querySelectorAll('.dec').forEach((d, i) => {
+      const sel = d.querySelector('.opt.sel');
+      if (sel) decisions.push(`D-0${i+1}: ${sel.textContent.trim()}`);
+    });
+    const txt = document.getElementById('cc-text');
+    if (decisions.length > 0) {
+      txt.innerHTML = txt.innerHTML.replace(
+        /\[cole aqui suas escolhas das 4 decisões abertas\]/,
+        decisions.join(' · ')
+      );
+    }
+  }
+
+  function sc(id) {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.querySelectorAll('.ni').forEach(n => n.classList.remove('active'));
+    event.target.classList.add('active');
+  }
+
+  function copyPrompt(btn) {
+    const text = document.getElementById('cc-text').innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'copiado ✓';
+      setTimeout(() => btn.textContent = 'copiar', 2000);
+    });
+  }
+</script>
+</body>
+</html>
