@@ -407,7 +407,7 @@ Type-aware quality system — 11 meeting types, each with a weight matrix across
 
 ## Core Modules (`core/`)
 
-- `session_state.init_session_state()` — idempotent, call immediately after `st.set_page_config()`. Defaults: provider=DeepSeek, run_quality/bpmn/minutes/requirements=True, run_sbvr/bmm/synthesizer/dmn/argumentation/ckf_updater=True, n_bpmn_runs=1, use_langgraph=True, enable_long_context=True.
+- `session_state.init_session_state()` — idempotent, call immediately after `st.set_page_config()`. Defaults: provider=DeepSeek, run_quality/bpmn/minutes/requirements=True, run_sbvr/bmm/synthesizer/dmn/argumentation/ckf_updater/query_summarizer=True, n_bpmn_runs=3, use_langgraph=True, enable_long_context=True.
 - `pipeline.run_pipeline(hub, config, callback)` — 3 paths: multi-run tournament / LangGraph / standard. Raises on error (caller catches).
 - `rerun_handlers.handle_rerun(agent_name, ...)` — re-runs one agent: `"quality"`, `"bpmn"`, `"minutes"`, `"requirements"`, `"sbvr"`, `"bmm"`, `"synthesizer"`. BPMN re-run invalidates `hub.synthesizer`.
 - `project_store` — Supabase CRUD; fail-open (returns `[]`/`None` when unconfigured). Key functions: `load_meeting_as_hub(meeting_id, project_id)` → reconstructs KnowledgeHub from DB (transcript, BPMN, minutes, requirements, SBVR, BMM, DMN, IBIS); `list_dmn_by_project(project_id)` → flat list of DMN decisions; `list_argumentation_by_project(project_id)` → flat list of IBIS questions. Full function list in `claude_guideline/architecture_details.md`.
@@ -538,6 +538,8 @@ Coordinates are absolute. Edit constants at top of `bpmn_generator.py`: `TASK_W`
 | **Google Calendar TOML encoding** | Use `'''` not `"""` for `credentials_json` |
 | **delete_meeting cascade order** | `requirement_versions` → FK nullify → SBVR/chunks → bpmn_versions → bpmn_processes → meetings |
 | **Anthropic no json_mode** | Enforce JSON via system prompt only — never pass `response_format` to Anthropic SDK |
+| **Nested `st.expander`** | Streamlit raises `StreamlitAPIException` if an expander is inside another expander (e.g. sidebar Configuração Avançada). Use `st.caption()` or `st.markdown()` as section header instead |
+| **Settings Domínio tab provider list** | Must iterate `AVAILABLE_PROVIDERS` (not `PROVIDER_KEY_MAP`) and skip providers with `api_key_alias` — `PROVIDER_KEY_MAP` is only the Supabase storage schema, not the source of truth for which providers exist |
 
 ---
 
