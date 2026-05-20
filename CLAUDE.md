@@ -48,6 +48,7 @@ process2diagram/
 │   ├── Settings.py               # Central settings — LLM providers, API keys, tool catalog
 │   ├── DatabaseOverview.py       # Database health — record counts, embeddings, integrity fixes
 │   ├── CostEstimator.py          # LLM cost estimator
+│   ├── LLMBenchmark.py           # LLM Benchmark & Telemetria — on-demand benchmark + passive telemetry analysis
 │   ├── Orientacoes_ComoIniciar.py   # Guia de início rápido
 │   ├── Orientacoes_Assistente.py    # Guia de ferramentas do Assistente (33 tools + exemplos)
 │   ├── Orientacoes_Glossario.py     # Glossário de termos e referências
@@ -133,7 +134,8 @@ process2diagram/
 │   ├── file_ingest.py            # load_transcript() wrapper
 │   ├── preprocessor_service.py  # preprocess_transcript() wrapper
 │   ├── semantic_cache.py        # SemanticCache — SHA256 LLM response cache (Supabase llm_cache)
-│   └── context_analyzer.py     # estimate_tokens(), should_use_long_context(), LONG_CONTEXT_AGENTS
+│   ├── context_analyzer.py     # estimate_tokens(), should_use_long_context(), LONG_CONTEXT_AGENTS
+│   └── llm_telemetry.py        # LLMTelemetry (async Supabase write), run_benchmark_call(), BENCHMARK_TASKS, _telemetry singleton
 │
 ├── skills/
 │   ├── skill_bpmn.md             # AgentBPMN system prompt (lowercase)
@@ -200,7 +202,7 @@ AgentRequirements┘
 | **Início** | Home.py (default) | Todos |
 | **Pipeline** | Pipeline.py, Diagramas.py, BpmnEditor.py | Todos |
 | **Análise** | Assistente.py, ReqTracker.py, ValidationHub.py, MeetingROI.py | Todos |
-| **Sistema** | Settings.py, CostEstimator.py [+ MasterAdmin.py, DatabaseOverview.py] | Todos [admin extra] |
+| **Sistema** | Settings.py, CostEstimator.py, LLMBenchmark.py [+ MasterAdmin.py, DatabaseOverview.py] | Todos [admin extra] |
 | **Ajuda** | ComoIniciar, Assistente (tool guide), Glossário, Arquiteturas, CKF | Todos |
 | **Manutenção** | BatchRunner.py, BpmnBackfill.py, MinutesBackfill.py, TranscriptBackfill.py | Admin only |
 
@@ -248,7 +250,7 @@ class MyAgent(BaseAgent):
         return hub
 ```
 
-`BaseAgent` provides: `_call_llm()`, `_parse_json()`, `_load_skill()` (absolute path, CWD-independent), up to 3 JSON retries, token tracking in `hub.meta.total_tokens_used`. `_call_llm()` flow: (1) PII sanitize, (2) long context detection via `services/context_analyzer` (injects instruction into system, increases max_tokens to 8192 and timeout to 180s for LONG_CONTEXT_AGENTS={bpmn,sbvr,bmm} when transcript >50k tokens), (3) cache hash of modified system, (4) check `services/semantic_cache.SemanticCache` (stores raw pre-desanitize; on hit applies current `token_map` — PII-safe), (5) API call, (6) cache store, (7) desanitize. `hub.meta.cache_hits` + `tokens_saved` + `long_context_calls` tracked per session. `skip_cache=True` to bypass cache.
+`BaseAgent` provides: `_call_llm()`, `_parse_json()`, `_load_skill()` (absolute path, CWD-independent), up to 3 JSON retries, token tracking in `hub.meta.total_tokens_used`. `_call_llm()` flow: (1) PII sanitize, (2) long context detection via `services/context_analyzer` (injects instruction into system, increases max_tokens to 8192 and timeout to 180s for LONG_CONTEXT_AGENTS={bpmn,sbvr,bmm} when transcript >50k tokens), (3) cache hash of modified system, (4) check `services/semantic_cache.SemanticCache` (stores raw pre-desanitize; on hit applies current `token_map` — PII-safe), (5) API call, (6) record telemetry via `services/llm_telemetry._telemetry` (async, fail-open — latency_ms, tokens_in/out, provider, model, long_context, benchmark_run=False), (7) cache store, (8) desanitize. `hub.meta.cache_hits` + `tokens_saved` + `long_context_calls` tracked per session. `skip_cache=True` to bypass cache. `_call_openai`/`_call_anthropic` return `(raw, tokens_in, tokens_out)`.
 
 Provider routing in `_call_llm()`: `"openai_compatible"` → OpenAI SDK with custom `base_url`; `"anthropic"` → native Anthropic SDK.
 
@@ -278,6 +280,26 @@ Configured in `modules/config.py → AVAILABLE_PROVIDERS`:
 | Grok (xAI) | `grok-4-1-fast-reasoning` | `openai_compatible` | 2M context |
 
 To add a new provider: edit `AVAILABLE_PROVIDERS`. If `client_type` is new, add routing in `BaseAgent._call_llm()`. To enable thinking mode: add `reasoning_effort: "high"` to the provider entry — `_call_openai` handles the rest (passes `extra_body={"thinking": {"type": "enabled"}}`, drops `temperature`). To share an API key with another provider (e.g. model variants): add `api_key_alias: "<provider_name>"` — `session_security` resolves the key from the aliased provider automatically; no re-entry needed.
+
+---
+
+## LLM Telemetry (`services/llm_telemetry.py`)
+
+Passive telemetry is recorded automatically by `BaseAgent._call_llm()` on every real API call (not cache hits). Records are written asynchronously via a daemon thread — never blocks the pipeline. Stored in Supabase `llm_telemetry` table (90-day auto-cleanup).
+
+**`TelemetryRecord` fields:** `agent_name`, `provider`, `model`, `latency_ms`, `input_tokens`, `output_tokens`, `total_tokens`, `from_cache`, `long_context`, `is_error`, `benchmark_run`.
+
+**`run_benchmark_call(provider_name, provider_cfg, api_key, system, user)`** — standalone timed call (no hub/cache/PII). Used by `pages/LLMBenchmark.py` for on-demand benchmarks.
+
+**`BENCHMARK_TASKS`** — 5 representative tasks: `bpmn`, `minutes`, `requirements`, `sbvr`, `bmm`. Each has a concise `system` + `user` prompt with `{transcript}` placeholder.
+
+**`TRANSCRIPTS`** — 2 synthetic transcripts: `"Curta (~150 palavras)"` / `"Media (~350 palavras)"`.
+
+**`pages/LLMBenchmark.py`** (Sistema group) — two tabs:
+- **🧪 Benchmark On-Demand:** multi-select configured providers + agents, N runs slider, transcript selector, progress bar, results table, latency bar chart, throughput bar chart.
+- **📊 Telemetria Real:** filters (provider/agent/days/include_cache/include_benchmark), 4 KPIs, 4 sub-tabs: Latência (box plot p5/p25/median/p75/p95), Throughput (tokens/s grouped bar), Histórico (line chart by day), Heatmap (agent × provider median latency).
+
+**Migration:** `setup/supabase_migration_llm_telemetry.sql` — must be run once in Supabase SQL Editor.
 
 ---
 
