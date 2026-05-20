@@ -574,3 +574,6 @@ Antes de marcar uma feature como concluída:
 - [ ] Tab registrada em ui/tabs/__init__.py
 - [ ] Export adicionado em export_tab.py se gera novo artefato
 - [ ] Versão registrada em `claude_guideline/roadmap.md`
+
+## Planos de Implementação
+Planos HTML detalhados para features em desenvolvimento: `claude_guideline/plans/`
