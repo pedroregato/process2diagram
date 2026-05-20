@@ -367,23 +367,39 @@ _guide_html = """<!DOCTYPE html>
   <p>O <strong>CKF Evolutivo</strong> é um agente pós-pipeline opcional (<code>AgentCKFUpdater</code>) que analisa os artefatos produzidos pela reunião e <em>mescla automaticamente</em> novos insights no CKF existente.</p>
 
   <div class="arch">
-Pipeline principal concluído
-    │
-    ▼ (se "🧠 Atualizar CKF do Contexto" está habilitado)
-<span class="hl">AgentCKFUpdater</span>
-    │
-    ├── Lê: hub.minutes    (participantes, pauta, decisões)
-    ├── Lê: hub.bpmn       (nome do processo, lanes)
-    ├── Lê: hub.sbvr       (vocabulário, regras)
-    ├── Lê: hub.bmm        (visão, metas, estratégias)
-    ├── Lê: hub.requirements (títulos dos requisitos)
-    └── Lê: hub.context_skill (CKF atual — para mesclagem)
-           │
-           ▼  (1 chamada LLM, output: Markdown puro)
-    <span class="ok">CKF atualizado</span>
-           │
-           ├── hub.context_skill ← atualizado na sessão
-           └── Supabase: contexts.skill_md ← persistido
+<span class="dim">─────────────────────────────────────────────────────────</span>
+  Pipeline principal concluído
+  (BPMN · Ata · Requisitos · SBVR · BMM já em KnowledgeHub)
+<span class="dim">─────────────────────────────────────────────────────────</span>
+                    │
+     <span class="dim">⚙️ "Atualizar CKF do Contexto" habilitado?</span>
+                    │ Sim
+                    ▼
+         ┌──────────────────────┐
+         │  <span class="hl">AgentCKFUpdater</span>      │
+         │  (1 chamada LLM)     │
+         └──────────┬───────────┘
+                    │
+        <span class="dim">Lê do KnowledgeHub:</span>
+        <span class="ok">hub.minutes</span>       <span class="dim">→ participantes, pauta, decisões</span>
+        <span class="ok">hub.bpmn</span>          <span class="dim">→ nome do processo, lanes</span>
+        <span class="ok">hub.sbvr</span>          <span class="dim">→ vocabulário, regras</span>
+        <span class="ok">hub.bmm</span>           <span class="dim">→ visão, metas, estratégias</span>
+        <span class="ok">hub.requirements</span>  <span class="dim">→ títulos dos requisitos</span>
+        <span class="ok">hub.context_skill</span> <span class="dim">→ CKF atual (base para mesclagem)</span>
+                    │
+                    │  output: Markdown puro
+                    ▼
+         ┌──────────────────────┐
+         │   <span class="hl">CKF Atualizado</span>       │
+         └──────────┬───────────┘
+                    │
+          ┌─────────┴──────────┐
+          ▼                    ▼
+  <span class="ok">hub.context_skill</span>    <span class="ok">Supabase</span>
+  <span class="dim">atualizado na sessão</span>  <span class="dim">contexts.skill_md</span>
+                             <span class="dim">persistido</span>
+<span class="dim">─────────────────────────────────────────────────────────</span>
   </div>
 
   <h3>Regras de mesclagem (garantidas pelo prompt do agente)</h3>

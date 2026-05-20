@@ -21,6 +21,9 @@ PROVIDER_KEY_MAP: dict[str, str] = {
     "OpenAI":             "openai_key",
     "Groq (Llama)":       "groq_key",
     "Google Gemini":      "gemini_key",
+    "Grok (xAI)":         "grok_key",
+    # DeepSeek V4 Pro e DeepSeek V4 Flash (Thinking) usam api_key_alias="DeepSeek"
+    # — não precisam de entrada própria aqui.
 }
 
 # Chaves extras de API (não vinculadas a provider do pipeline)

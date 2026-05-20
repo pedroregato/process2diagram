@@ -1163,10 +1163,34 @@ with tab_domain:
             st.page_link("pages/MasterAdmin.py", label="Abrir Master Admin →", icon="🛡️")
             st.markdown("---")
             st.markdown("#### Configurações do seu domínio (leitura)")
-            all_keys = {**PROVIDER_KEY_MAP, **{"Embedding": "embedding_key", "Assistente": "assistant_key"}}
-            for label, key_name in all_keys.items():
-                val = current_cfg.get(key_name, "")
-                status = f"`{mask_key(val)}`" if val else "❌ Não configurada"
+            # Fonte única: AVAILABLE_PROVIDERS — skip alias providers (compartilham chave)
+            _domain_prov = {
+                p: PROVIDER_KEY_MAP[p]
+                for p, _cfg in AVAILABLE_PROVIDERS.items()
+                if not _cfg.get("api_key_alias") and p in PROVIDER_KEY_MAP
+            }
+            _master_extra = {"Embedding": ("embedding_key", "asst_embed_key"),
+                             "Assistente": ("assistant_key", "asst_api_key")}
+            for label, db_key in _domain_prov.items():
+                val = current_cfg.get(db_key, "")
+                sess_val = st.session_state.get(_session_key(label), "")
+                if val:
+                    status = f"✅ `{mask_key(val)}`"
+                elif sess_val:
+                    status = f"🟡 sessão `{mask_key(sess_val)}`"
+                else:
+                    status = "❌ Não configurada"
+                model = AVAILABLE_PROVIDERS.get(label, {}).get("default_model", "")
+                st.markdown(f"**{label}** `{model}`: {status}")
+            for label, (db_key, ss_key) in _master_extra.items():
+                val = current_cfg.get(db_key, "")
+                sess_val = st.session_state.get(ss_key, "")
+                if val:
+                    status = f"✅ `{mask_key(val)}`"
+                elif sess_val:
+                    status = f"🟡 sessão `{mask_key(sess_val)}`"
+                else:
+                    status = "❌ Não configurada"
                 st.markdown(f"**{label}:** {status}")
 
         # ── Modo admin ────────────────────────────────────────────────────────
@@ -1174,14 +1198,30 @@ with tab_domain:
             from modules.tenant_config import save_all_prefs, PREFS_MAP, PREFS_LABELS
             st.markdown("#### 🤖 Provedores LLM")
 
-            for provider, key_name in PROVIDER_KEY_MAP.items():
-                pcfg    = AVAILABLE_PROVIDERS.get(provider, {})
-                cur_val = current_cfg.get(key_name, "")
-                icon    = "✅" if cur_val else "⬜"
-
-                with st.expander(f"{icon} {provider}", expanded=not bool(cur_val)):
+            # Fonte única: AVAILABLE_PROVIDERS — skip alias providers
+            for provider, pcfg in AVAILABLE_PROVIDERS.items():
+                if pcfg.get("api_key_alias"):
+                    continue  # compartilha chave com o provider de origem
+                key_name = PROVIDER_KEY_MAP.get(provider)
+                if not key_name:
+                    continue  # provider sem mapeamento de domínio ainda
+                cur_val  = current_cfg.get(key_name, "")
+                sess_val = st.session_state.get(_session_key(provider), "")
+                if cur_val:
+                    icon = "✅"        # chave no domínio (Supabase)
+                elif sess_val:
+                    icon = "🟡"       # chave na sessão, não salva no domínio
+                else:
+                    icon = "⬜"
+                _model = pcfg.get("default_model", "")
+                with st.expander(
+                    f"{icon} {provider}  ·  `{_model}`",
+                    expanded=not bool(cur_val) and not bool(sess_val),
+                ):
                     if cur_val:
-                        st.success(f"Chave ativa: `{mask_key(cur_val)}`")
+                        st.success(f"Chave no domínio: `{mask_key(cur_val)}`")
+                    elif sess_val:
+                        st.info(f"🟡 Chave ativa na sessão (não salva no domínio): `{mask_key(sess_val)}`")
 
                     col_inp, col_save, col_del = st.columns([5, 1, 1])
                     new_val = col_inp.text_input(
@@ -1189,7 +1229,7 @@ with tab_domain:
                         type="password",
                         placeholder=(
                             f"{pcfg.get('api_key_prefix', '')}..."
-                            + (" (vazio = manter atual)" if cur_val else "")
+                            + (" (vazio = manter atual)" if cur_val or sess_val else "")
                         ),
                         key=f"dom_inp_{key_name}",
                         label_visibility="collapsed",
