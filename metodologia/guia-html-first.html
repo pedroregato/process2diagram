@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTML-first · Guia do Método</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Source+Code+Pro:wght@300;400;500&display=swap');
+
+  :root {
+    --bg:       #faf8f4;
+    --s1:       #ffffff;
+    --s2:       #f3f0e8;
+    --s3:       #e8e3d8;
+    --border:   #d8d2c4;
+    --ink:      #1c1a16;
+    --muted:    #8c8478;
+    --dim:      #b0a898;
+    --gold:     #b07d2a;
+    --blue:     #2a5d8a;
+    --green:    #2a7a52;
+    --red:      #8a2a2a;
+    --serif:    'Playfair Display', Georgia, serif;
+    --mono:     'Source Code Pro', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.85;
+  }
+
+  /* ── CAPA ─────────────────────────────────────────── */
+  .cover {
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: 1fr auto;
+    background: var(--ink);
+    color: #faf8f4;
+    padding: 64px 72px;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      repeating-linear-gradient(0deg,   transparent, transparent 59px, rgba(255,255,255,.018) 59px, rgba(255,255,255,.018) 60px),
+      repeating-linear-gradient(90deg,  transparent, transparent 59px, rgba(255,255,255,.018) 59px, rgba(255,255,255,.018) 60px);
+    pointer-events: none;
+  }
+  .cover::after {
+    content: 'HTML';
+    position: absolute;
+    right: -20px; bottom: -60px;
+    font-family: var(--serif);
+    font-size: 260px;
+    font-weight: 900;
+    color: rgba(255,255,255,.03);
+    letter-spacing: -10px;
+    pointer-events: none;
+    line-height: 1;
+  }
+  .cover-top { position: relative; }
+  .cover-label {
+    font-size: 10px;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 20px;
+  }
+  .cover h1 {
+    font-family: var(--serif);
+    font-size: clamp(40px, 7vw, 80px);
+    font-weight: 900;
+    line-height: 1.0;
+    letter-spacing: -.02em;
+    color: #fff;
+    margin-bottom: 12px;
+  }
+  .cover h1 em { color: #e8c87a; font-style: italic; }
+  .cover-sub {
+    font-size: 14px;
+    color: rgba(250,248,244,.55);
+    max-width: 560px;
+    line-height: 1.7;
+    margin-top: 18px;
+  }
+  .cover-meta {
+    position: relative;
+    display: flex;
+    gap: 28px;
+    flex-wrap: wrap;
+    padding-top: 32px;
+    border-top: 1px solid rgba(255,255,255,.1);
+    font-size: 11px;
+    color: rgba(250,248,244,.35);
+    letter-spacing: .06em;
+  }
+  .cover-nav {
+    position: absolute;
+    top: 0; right: 0;
+    display: flex; flex-direction: column; gap: 8px;
+    align-items: flex-end;
+  }
+  .cna {
+    font-size: 11px;
+    color: rgba(250,248,244,.4);
+    text-decoration: none;
+    padding: 3px 0;
+    border-bottom: 1px solid transparent;
+    transition: all .15s;
+  }
+  .cna:hover { color: #e8c87a; border-bottom-color: rgba(232,200,122,.4); }
+
+  /* ── CORPO ────────────────────────────────────────── */
+  .body { max-width: 860px; margin: 0 auto; padding: 56px 48px 80px; }
+
+  /* ── CAPÍTULOS ───────────────────────────────────── */
+  .chapter {
+    margin-bottom: 64px;
+    padding-bottom: 64px;
+    border-bottom: 1px solid var(--border);
+  }
+  .chapter:last-child { border-bottom: none; }
+
+  .ch-header {
+    display: flex; align-items: baseline; gap: 16px;
+    margin-bottom: 28px;
+  }
+  .ch-num {
+    font-family: var(--serif);
+    font-size: 48px;
+    font-weight: 900;
+    color: var(--s3);
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .ch-titles { flex: 1; }
+  .ch-label {
+    font-size: 9.5px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 4px;
+  }
+  .ch-title {
+    font-family: var(--serif);
+    font-size: clamp(22px, 3.5vw, 32px);
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.15;
+  }
+  .ch-title em { color: var(--gold); font-style: italic; }
+
+  p { color: #6a6258; font-size: 12.5px; margin-bottom: 12px; line-height: 1.85; }
+  p:last-child { margin-bottom: 0; }
+  strong { color: var(--ink); font-weight: 500; }
+  em { font-style: italic; }
+
+  /* ── PULL QUOTE ──────────────────────────────────── */
+  .pullquote {
+    border-left: 3px solid var(--gold);
+    padding: 14px 20px;
+    margin: 24px 0;
+    background: rgba(176,125,42,.05);
+  }
+  .pq-text {
+    font-family: var(--serif);
+    font-size: 16px;
+    font-style: italic;
+    color: var(--ink);
+    line-height: 1.5;
+    margin-bottom: 6px;
+  }
+  .pq-attr { font-size: 10.5px; color: var(--muted); letter-spacing: .06em; }
+
+  /* ── COMPARAÇÃO ANTES/DEPOIS ─────────────────────── */
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 20px 0;
+  }
+  .cmp-card {
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .cmp-head {
+    padding: 8px 14px;
+    font-size: 10px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .cmp-head.before { background: rgba(138,42,42,.08); color: var(--red); border-bottom: 1px solid rgba(138,42,42,.15); }
+  .cmp-head.after  { background: rgba(42,122,82,.08);  color: var(--green); border-bottom: 1px solid rgba(42,122,82,.15); }
+  .cmp-body { padding: 14px; background: var(--s1); font-size: 12px; color: #6a6258; line-height: 1.8; }
+  .cmp-body strong { color: var(--ink); }
+
+  /* ── VANTAGENS (lista visual) ────────────────────── */
+  .advantage-list { margin: 20px 0; display: flex; flex-direction: column; gap: 10px; }
+  .adv {
+    display: flex; gap: 14px; align-items: flex-start;
+    background: var(--s1);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 14px 16px;
+  }
+  .adv-icon {
+    width: 32px; height: 32px;
+    border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .adv-body { flex: 1; }
+  .adv-title { font-size: 13px; color: var(--ink); font-weight: 500; margin-bottom: 3px; }
+  .adv-desc { font-size: 11.5px; color: var(--muted); line-height: 1.75; }
+
+  /* ── ANATOMIA ────────────────────────────────────── */
+  .anatomy { background: var(--s1); border: 1px solid var(--border); border-radius: 3px; overflow: hidden; margin: 20px 0; }
+  .anat-head { background: var(--s2); border-bottom: 1px solid var(--border); padding: 10px 16px; font-size: 11px; color: var(--muted); font-weight: 500; }
+  .anat-row {
+    display: grid; grid-template-columns: 110px 1fr;
+    border-bottom: 1px solid var(--border);
+  }
+  .anat-row:last-child { border-bottom: none; }
+  .anat-tag {
+    padding: 12px 14px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    border-right: 1px solid var(--border);
+    display: flex; align-items: center;
+    font-weight: 500;
+  }
+  .anat-tag.must   { color: var(--red);   background: rgba(138,42,42,.04); }
+  .anat-tag.should { color: var(--blue);  background: rgba(42,93,138,.04); }
+  .anat-tag.opt    { color: var(--green); background: rgba(42,122,82,.04); }
+  .anat-content { padding: 12px 14px; font-size: 12px; color: #6a6258; line-height: 1.75; }
+  .anat-content strong { color: var(--ink); }
+
+  /* ── FLUXO DE PASSOS ────────────────────────────── */
+  .steps { margin: 20px 0; }
+  .step {
+    display: grid; grid-template-columns: 56px 1fr;
+    margin-bottom: 3px;
+    position: relative;
+  }
+  .step::before {
+    content: '';
+    position: absolute;
+    left: 27px; top: 46px; bottom: -3px;
+    width: 1px;
+    background: var(--border);
+  }
+  .step:last-child::before { display: none; }
+  .step-l { display: flex; flex-direction: column; align-items: center; padding-top: 12px; }
+  .step-circle {
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 500;
+    border: 1.5px solid var(--border);
+    background: var(--s1);
+    position: relative; z-index: 1; flex-shrink: 0;
+  }
+  .sc-you  { border-color: var(--gold);  color: var(--gold);  background: rgba(176,125,42,.07); }
+  .sc-ai   { border-color: var(--blue);  color: var(--blue);  background: rgba(42,93,138,.07); }
+  .sc-both { border-color: var(--green); color: var(--green); background: rgba(42,122,82,.07); }
+  .step-r {
+    background: var(--s1); border: 1px solid var(--border);
+    border-radius: 3px; padding: 14px 18px;
+    margin-left: 14px; margin-bottom: 3px;
+    transition: border-color .12s;
+  }
+  .step-r:hover { border-color: var(--dim); }
+  .step-actor { font-size: 9.5px; text-transform: uppercase; letter-spacing: .12em; margin-bottom: 4px; }
+  .sa-you  { color: var(--gold); }
+  .sa-ai   { color: var(--blue); }
+  .sa-both { color: var(--green); }
+  .step-title { font-family: var(--serif); font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 5px; }
+  .step-desc { font-size: 12px; color: #6a6258; line-height: 1.8; }
+  .step-desc strong { color: var(--ink); }
+
+  /* ── CÓDIGO / PROMPT ────────────────────────────── */
+  .codeblock {
+    background: var(--ink);
+    border-radius: 3px; overflow: hidden; margin: 16px 0;
+  }
+  .cb-bar {
+    background: #252320; border-bottom: 1px solid #333028;
+    padding: 7px 14px; font-size: 10px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .cb-label { color: var(--gold); text-transform: uppercase; letter-spacing: .1em; font-size: 9.5px; }
+  .cb-body {
+    padding: 16px 18px;
+    font-family: var(--mono); font-size: 12px;
+    color: #c8c4bc; line-height: 1.85;
+    white-space: pre-wrap;
+  }
+  .cb-body .v  { color: #e8c87a; }
+  .cb-body .kw { color: #7ab8e8; }
+  .cb-body .cm { color: #4a4840; font-style: italic; }
+  .cb-body .ok { color: #7ad8a8; }
+  .copy-btn {
+    background: transparent; border: 1px solid #333028;
+    color: #5a5650; padding: 2px 8px; border-radius: 2px;
+    font-family: var(--mono); font-size: 10px; cursor: pointer;
+    transition: all .12s;
+  }
+  .copy-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+  /* ── CALLOUT ─────────────────────────────────────── */
+  .callout {
+    border-radius: 3px; padding: 14px 18px; margin: 16px 0;
+    font-size: 12px; line-height: 1.8;
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .callout-i { flex-shrink: 0; font-size: 14px; }
+  .callout-t { color: #6a6258; }
+  .callout-t strong { color: var(--ink); }
+  .callout.gold { background: rgba(176,125,42,.06); border: 1px solid rgba(176,125,42,.2); }
+  .callout.gold .callout-i { color: var(--gold); }
+  .callout.blue { background: rgba(42,93,138,.05); border: 1px solid rgba(42,93,138,.18); }
+  .callout.blue .callout-i { color: var(--blue); }
+  .callout.green { background: rgba(42,122,82,.05); border: 1px solid rgba(42,122,82,.18); }
+  .callout.green .callout-i { color: var(--green); }
+
+  /* ── CHECKLIST INTERATIVO ────────────────────────── */
+  .checklist-wrap { background: var(--s1); border: 1px solid var(--border); border-radius: 3px; overflow: hidden; margin: 16px 0; }
+  .cl-head { background: var(--s2); border-bottom: 1px solid var(--border); padding: 9px 16px; font-size: 10px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
+  .cl-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 11px 16px; border-bottom: 1px solid var(--border);
+    transition: background .12s;
+  }
+  .cl-item:last-child { border-bottom: none; }
+  .cl-item:hover { background: var(--s2); }
+  .cl-item input { margin-top: 3px; accent-color: var(--green); flex-shrink: 0; cursor: pointer; }
+  .cl-text { font-size: 12px; color: #6a6258; line-height: 1.7; }
+  .cl-text strong { color: var(--ink); }
+  .cl-item.done .cl-text { color: var(--dim); text-decoration: line-through; }
+
+  /* ── DECISION ────────────────────────────────────── */
+  .decision {
+    background: rgba(138,42,42,.04);
+    border: 1px solid rgba(138,42,42,.22);
+    border-radius: 3px; padding: 14px 16px; margin: 14px 0;
+  }
+  .dec-lbl { font-size: 9.5px; text-transform: uppercase; letter-spacing: .12em; color: var(--red); margin-bottom: 6px; }
+  .dec-q { font-family: var(--serif); font-size: 14px; color: var(--ink); margin-bottom: 10px; line-height: 1.4; }
+  .dec-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .opt {
+    background: var(--s1); border: 1px solid var(--border);
+    padding: 4px 12px; border-radius: 2px;
+    font-family: var(--mono); font-size: 11px;
+    cursor: pointer; color: var(--muted); transition: all .12s;
+  }
+  .opt:hover { border-color: var(--red); color: var(--red); }
+  .opt.sel { background: rgba(138,42,42,.08); border-color: var(--red); color: var(--red); }
+
+  /* ── TABELA ──────────────────────────────────────── */
+  .table-wrap { overflow-x: auto; margin: 16px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { background: var(--s2); border: 1px solid var(--border); padding: 8px 12px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 400; }
+  td { border: 1px solid var(--border); padding: 8px 12px; color: #6a6258; vertical-align: top; }
+  tr:hover td { background: rgba(0,0,0,.02); }
+  .t-gold  { color: var(--gold); }
+  .t-blue  { color: var(--blue); }
+  .t-green { color: var(--green); }
+
+  /* ── INLINE CODE ─────────────────────────────────── */
+  code {
+    font-family: var(--mono); font-size: 11px;
+    background: var(--s2); border: 1px solid var(--border);
+    padding: 1px 5px; border-radius: 2px; color: var(--blue);
+  }
+
+  /* ── SEPARADOR ───────────────────────────────────── */
+  hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+
+  /* ── TEMPLATE INTERATIVO ─────────────────────────── */
+  .template-builder {
+    background: var(--s1);
+    border: 1px solid var(--border);
+    border-radius: 3px; overflow: hidden; margin: 20px 0;
+  }
+  .tb-head {
+    background: var(--ink); color: #faf8f4;
+    padding: 12px 18px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .tb-title { font-family: var(--serif); font-size: 15px; }
+  .tb-body { padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .tb-field label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 5px; }
+  .tb-field input, .tb-field select, .tb-field textarea {
+    width: 100%; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 2px;
+    padding: 8px 10px; font-family: var(--mono); font-size: 12px;
+    color: var(--ink); transition: border-color .12s; resize: vertical;
+  }
+  .tb-field input:focus, .tb-field select:focus, .tb-field textarea:focus {
+    outline: none; border-color: var(--gold);
+  }
+  .tb-field.full { grid-column: 1 / -1; }
+  .tb-actions { padding: 0 20px 20px; display: flex; gap: 8px; }
+  .btn-gen {
+    background: var(--ink); color: #faf8f4;
+    border: none; border-radius: 2px;
+    padding: 9px 20px; font-family: var(--mono); font-size: 12px;
+    cursor: pointer; transition: opacity .15s; font-weight: 500;
+  }
+  .btn-gen:hover { opacity: .8; }
+  .btn-copy {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted); border-radius: 2px;
+    padding: 9px 16px; font-family: var(--mono); font-size: 12px;
+    cursor: pointer; transition: all .12s;
+  }
+  .btn-copy:hover { border-color: var(--gold); color: var(--gold); }
+  .tb-output {
+    margin: 0 20px 20px;
+    background: var(--ink);
+    border-radius: 3px; overflow: hidden;
+    display: none;
+  }
+  .tb-output.visible { display: block; }
+  .tbo-bar { background: #252320; border-bottom: 1px solid #333028; padding: 7px 14px; font-size: 10px; color: var(--gold); text-transform: uppercase; letter-spacing: .1em; }
+  .tbo-body { padding: 16px 18px; font-family: var(--mono); font-size: 11.5px; color: #c8c4bc; line-height: 1.85; white-space: pre-wrap; }
+
+  /* ── RESPONSIVO ──────────────────────────────────── */
+  @media (max-width: 680px) {
+    .cover { padding: 36px 24px; }
+    .body { padding: 32px 18px; }
+    .compare, .tb-body { grid-template-columns: 1fr; }
+    .cover-nav { display: none; }
+    .ch-num { font-size: 36px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     CAPA
+══════════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-top">
+    <div class="cover-nav">
+      <a class="cna" href="#cap1">O que é</a>
+      <a class="cna" href="#cap2">Por que funciona</a>
+      <a class="cna" href="#cap3">Anatomia</a>
+      <a class="cna" href="#cap4">O fluxo</a>
+      <a class="cna" href="#cap5">Iniciando uma spec</a>
+      <a class="cna" href="#cap6">Erros comuns</a>
+      <a class="cna" href="#cap7">Gerador de prompt</a>
+    </div>
+    <div class="cover-label">Método · HTML-first Workflow</div>
+    <h1>Especificações<br>que o <em>AI</em> lê<br>de verdade</h1>
+    <div class="cover-sub">Um guia prático do método HTML-first: como substituir descrições em texto por artefatos visuais interativos que eliminam ambiguidade, aceleram implementação e vivem junto ao código.</div>
+  </div>
+  <div class="cover-meta">
+    <span>Baseado em Thariq Shihipar · Anthropic / Claude Code</span>
+    <span>Aplicável a qualquer projeto com LLM</span>
+    <span>Independente de linguagem ou framework</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     CORPO
+══════════════════════════════════════════════════ -->
+<div class="body">
+
+  <!-- ── CAP 1 ── O QUE É ──────────────────────────── -->
+  <div class="chapter" id="cap1">
+    <div class="ch-header">
+      <div class="ch-num">01</div>
+      <div class="ch-titles">
+        <div class="ch-label">Conceito</div>
+        <h2 class="ch-title">O que é o método <em>HTML-first</em></h2>
+      </div>
+    </div>
+
+    <p>O método HTML-first é uma prática de desenvolvimento com IA onde <strong>a especificação de uma feature é escrita como um documento HTML interativo</strong> antes de qualquer linha de código de produção ser escrita.</p>
+
+    <p>A ideia veio de Thariq Shihipar, engenheiro do time do Claude Code na Anthropic: ao perceber que o Markdown — formato padrão de specs e documentação — é fundamentalmente plano, ele passou a usar HTML para criar especificações visuais, com mockups inline, campos editáveis, decisões clicáveis e checklists funcionais.</p>
+
+    <div class="pullquote">
+      <div class="pq-text">"O HTML não é um relatório para ler. É um contrato entre você e o Claude Code."</div>
+      <div class="pq-attr">— Thariq Shihipar, Anthropic · Code with Claude, 2026</div>
+    </div>
+
+    <p>O princípio central é o <strong>"compute allocator mindset"</strong>: 99% dos tokens gerados pela IA devem ir para planejamento, especificação e comunicação — não para código de produção. O HTML é onde você aloca esses tokens com máximo retorno.</p>
+
+    <div class="compare">
+      <div class="cmp-card">
+        <div class="cmp-head before">✗ Antes — spec em Markdown</div>
+        <div class="cmp-body">
+          "Criar uma página de dashboard com 3 tabs: métricas, histórico e configurações. Mostrar os dados do banco."
+          <br><br>
+          <strong>O que o Claude Code vê:</strong> texto ambíguo. Inventa estrutura, escolhe campos, decide sozinho — e provavelmente diferente do que você queria.
+        </div>
+      </div>
+      <div class="cmp-card">
+        <div class="cmp-head after">✓ Depois — spec em HTML</div>
+        <div class="cmp-body">
+          HTML com mockup das 3 tabs, cada métrica com sua fonte de dados exata (<code>hub.meta.tokens</code>), campos editáveis, checklist de entrega e decisões abertas clicáveis.
+          <br><br>
+          <strong>O que o Claude Code vê:</strong> contrato visual sem ambiguidade. Implementa mais rápido e erra menos.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CAP 2 ── POR QUE FUNCIONA ─────────────────── -->
+  <div class="chapter" id="cap2">
+    <div class="ch-header">
+      <div class="ch-num">02</div>
+      <div class="ch-titles">
+        <div class="ch-label">Fundamentos</div>
+        <h2 class="ch-title">Por que <em>funciona</em> — as 5 vantagens</h2>
+      </div>
+    </div>
+
+    <div class="advantage-list">
+      <div class="adv">
+        <div class="adv-icon" style="background:rgba(176,125,42,.1)">👁</div>
+        <div class="adv-body">
+          <div class="adv-title">Você lê mais um HTML do que um texto plano</div>
+          <div class="adv-desc">É psicológico: um documento visual com tabs, cores e hierarquia prende a atenção. Uma lista Markdown de requisitos não prende. Quanto mais você lê o plano, mais erros você pega antes do código.</div>
+        </div>
+      </div>
+      <div class="adv">
+        <div class="adv-icon" style="background:rgba(42,93,138,.1)">🎯</div>
+        <div class="adv-body">
+          <div class="adv-title">Elimina ambiguidade de interpretação</div>
+          <div class="adv-desc">Um mockup inline mostra exatamente o layout esperado. Uma fonte de dados anotada (<code>hub.meta.tokens</code>) não deixa dúvida de onde vem o dado. O Claude Code não precisa inferir — ele executa.</div>
+        </div>
+      </div>
+      <div class="adv">
+        <div class="adv-icon" style="background:rgba(42,122,82,.1)">⚡</div>
+        <div class="adv-body">
+          <div class="adv-title">Decisões são tomadas antes do código, não durante</div>
+          <div class="adv-desc">Cada "decisão aberta" no HTML é uma escolha que o Claude Code faria sozinho se não fosse forçada explicitamente. Clicar em uma opção antes de implementar é ordens de grandeza mais barato do que refatorar depois.</div>
+        </div>
+      </div>
+      <div class="adv">
+        <div class="adv-icon" style="background:rgba(138,42,42,.1)">📁</div>
+        <div class="adv-body">
+          <div class="adv-title">O plano vive no repo como documentação</div>
+          <div class="adv-desc">Commitar o HTML junto com o código significa que em qualquer sessão futura, você ou o Claude Code podem abrir o plano e ver: o que estava planejado, o que foi decidido, o que foi entregue. Sem perda de contexto entre sessões.</div>
+        </div>
+      </div>
+      <div class="adv">
+        <div class="adv-icon" style="background:rgba(42,93,138,.1)">🔁</div>
+        <div class="adv-body">
+          <div class="adv-title">O LLM já sabe gerar HTML muito bem</div>
+          <div class="adv-desc">Não há curva de aprendizado extra para o modelo. O Claude gera HTML de qualidade com uma instrução simples. O custo de criação do plano é baixo; o retorno em clareza e velocidade de implementação é alto.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CAP 3 ── ANATOMIA ──────────────────────────── -->
+  <div class="chapter" id="cap3">
+    <div class="ch-header">
+      <div class="ch-num">03</div>
+      <div class="ch-titles">
+        <div class="ch-label">Estrutura</div>
+        <h2 class="ch-title">Anatomia de um <em>bom plano</em></h2>
+      </div>
+    </div>
+
+    <p>Um plano HTML eficaz tem elementos obrigatórios, recomendados e opcionais. A combinação certa depende do tamanho e complexidade da feature.</p>
+
+    <div class="anatomy">
+      <div class="anat-head">Elementos do plano HTML — o que incluir</div>
+
+      <div class="anat-row">
+        <div class="anat-tag must">obrigatório</div>
+        <div class="anat-content"><strong>Fluxo de dados</strong> — de onde vem cada dado, qual é o formato, para onde vai. Ex: "AgentBPMN → BPMNModel.xml → bpmn_generator → coordenadas absolutas". Sem isso o Claude Code inventa a arquitetura de dados.</div>
+      </div>
+      <div class="anat-row">
+        <div class="anat-tag must">obrigatório</div>
+        <div class="anat-content"><strong>Decisões abertas clicáveis</strong> — qualquer escolha não feita vira um botão. Você clica antes de implementar. Uma decisão não resolvida = uma escolha silenciosa do Claude Code.</div>
+      </div>
+      <div class="anat-row">
+        <div class="anat-tag must">obrigatório</div>
+        <div class="anat-content"><strong>Checklist de entrega do projeto</strong> — os itens específicos do seu CLAUDE.md/AGENTS.md mapeados para esta feature. O Claude Code usa como lista de tarefas ordenada.</div>
+      </div>
+      <div class="anat-row">
+        <div class="anat-tag should">recomendado</div>
+        <div class="anat-content"><strong>Mockup da interface</strong> — para qualquer coisa com UI. Não precisa ser pixel-perfect. Mostra estrutura, hierarquia e quais dados aparecem onde. HTML interativo com tabs clicáveis é o ideal.</div>
+      </div>
+      <div class="anat-row">
+        <div class="anat-tag should">recomendado</div>
+        <div class="anat-content"><strong>Pitfalls aplicáveis</strong> — subset dos pitfalls conhecidos do projeto que são relevantes para esta feature. Economiza tokens do Claude Code procurando no arquivo completo.</div>
+      </div>
+      <div class="anat-row">
+        <div class="anat-tag should">recomendado</div>
+        <div class="anat-content"><strong>Esqueleto do arquivo</strong> — para novos arquivos, mostrar a estrutura de imports e funções principais. Não o código completo — só o esqueleto com comentários.</div>
+      </div>
+      <div class="anat-row">
+        <div class="anat-tag opt">opcional</div>
+        <div class="anat-content"><strong>Exemplos de input/output</strong> — para agentes LLM, um exemplo real de entrada e o JSON esperado de saída. O Claude Code usa como few-shot interno.</div>
+      </div>
+      <div class="anat-row">
+        <div class="anat-tag opt">opcional</div>
+        <div class="anat-content"><strong>Contexto de negócio</strong> — por que a feature existe, qual problema resolve. Útil quando as decisões de design dependem do objetivo, não apenas da técnica.</div>
+      </div>
+    </div>
+
+    <div class="callout gold">
+      <span class="callout-i">◆</span>
+      <div class="callout-t"><strong>Regra da complexidade:</strong> "Complexity has to earn its keep" (Thariq). Um plano de feature pequena deve levar menos de 5 minutos para gerar. Se está crescendo demais, a feature está grande demais — quebre em sub-features.</div>
+    </div>
+  </div>
+
+  <!-- ── CAP 4 ── O FLUXO ───────────────────────────── -->
+  <div class="chapter" id="cap4">
+    <div class="ch-header">
+      <div class="ch-num">04</div>
+      <div class="ch-titles">
+        <div class="ch-label">Processo</div>
+        <h2 class="ch-title">O fluxo completo em <em>5 passos</em></h2>
+      </div>
+    </div>
+
+    <div class="callout blue">
+      <span class="callout-i">◆</span>
+      <div class="callout-t"><strong>Divisão fundamental:</strong> Claude.ai chat = planejamento e especificação. Claude Code = implementação. O HTML é a ponte. Nunca misture: pedir implementação no chat não tem acesso ao filesystem; pedir planejamento no Code sem contexto gera arquitetura inventada.</div>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-l"><div class="step-circle sc-you">V</div></div>
+        <div class="step-r">
+          <div class="step-actor sa-you">▸ Você</div>
+          <div class="step-title">1 — Defina o que quer construir com precisão</div>
+          <div class="step-desc">Não comece pelo código. Comece pela pergunta: <strong>qual é a próxima coisa concreta a entregar?</strong> Quanto mais específico o objetivo, melhor o plano gerado. Exemplos bons: "criar a página X que mostra Y" · "refatorar o módulo Z para suportar W" · "adicionar o campo A ao agente B".</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-l"><div class="step-circle sc-ai">AI</div></div>
+        <div class="step-r">
+          <div class="step-actor sa-ai">▸ Claude.ai chat</div>
+          <div class="step-title">2 — Gere o plano HTML</div>
+          <div class="step-desc">Cole o CLAUDE.md (ou a seção relevante) e use o prompt de geração de plano. O resultado é o artefato HTML. Use o gerador de prompt da <a href="#cap7" style="color:var(--blue)">Seção 7</a> deste guia para montar a instrução certa.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-l"><div class="step-circle sc-you">V</div></div>
+        <div class="step-r">
+          <div class="step-actor sa-you">▸ Você — momento crítico</div>
+          <div class="step-title">3 — Revise e resolva as decisões abertas</div>
+          <div class="step-desc">Abra o HTML no browser. <strong>Este é o passo mais importante.</strong> Você lê mais um HTML visual do que um texto plano — é exatamente por isso que o formato funciona. Resolva cada decisão aberta clicando nos botões. Corrija o mockup se não representa o que você quer. Cada decisão não resolvida aqui vira uma escolha silenciosa do Claude Code.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-l"><div class="step-circle sc-ai">AI</div></div>
+        <div class="step-r">
+          <div class="step-actor sa-ai">▸ Claude Code</div>
+          <div class="step-title">4 — Passe o HTML como spec de implementação</div>
+          <div class="step-desc">Salve o HTML no repo. Abra o Claude Code na raiz do projeto e passe a instrução apontando para o arquivo — não descrevendo em texto. Use a fórmula: <code>claude "Implemente conforme [arquivo-plan.html]. Leia o CLAUDE.md primeiro."</code></div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-l"><div class="step-circle sc-both">✓</div></div>
+        <div class="step-r">
+          <div class="step-actor sa-both">▸ Você</div>
+          <div class="step-title">5 — Atualize o HTML e commite junto</div>
+          <div class="step-desc">Marque os itens do checklist como concluídos. Atualize o status da feature. <strong>Commite o HTML junto com o código de produção.</strong> Na próxima sessão, você e o Claude Code partem de um estado conhecido.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CAP 5 ── INICIANDO UMA SPEC ───────────────── -->
+  <div class="chapter" id="cap5">
+    <div class="ch-header">
+      <div class="ch-num">05</div>
+      <div class="ch-titles">
+        <div class="ch-label">Prática</div>
+        <h2 class="ch-title">Iniciando uma nova <em>especificação</em></h2>
+      </div>
+    </div>
+
+    <p>Guia passo a passo para criar sua primeira spec HTML do zero. Siga na ordem — cada etapa depende da anterior.</p>
+
+    <div class="checklist-wrap">
+      <div class="cl-head">Checklist de criação de spec — marque conforme avança</div>
+      <div class="cl-item" id="ci1">
+        <input type="checkbox" onchange="markDone('ci1',this)">
+        <div class="cl-text"><strong>Defina o objetivo em uma frase.</strong> Se não couber em uma frase, quebre em sub-features. Exemplo: "Criar a página ValidationHub consolidando diagnósticos BPMN, scores e telemetria."</div>
+      </div>
+      <div class="cl-item" id="ci2">
+        <input type="checkbox" onchange="markDone('ci2',this)">
+        <div class="cl-text"><strong>Identifique as fontes de dados.</strong> Liste cada dado que a feature precisa e de onde vem no estado do sistema (hub, banco, sessão, API). Isso vira o fluxo de dados no HTML.</div>
+      </div>
+      <div class="cl-item" id="ci3">
+        <input type="checkbox" onchange="markDone('ci3',this)">
+        <div class="cl-text"><strong>Liste as decisões não tomadas.</strong> O que você ainda não decidiu? Qual formato de output? Qual fonte de dados? Onde fica o arquivo? Cada uma vira um bloco de decisão no HTML.</div>
+      </div>
+      <div class="cl-item" id="ci4">
+        <input type="checkbox" onchange="markDone('ci4',this)">
+        <div class="cl-text"><strong>Gere o plano HTML no chat.</strong> Use o gerador de prompt da Seção 7, cole o CLAUDE.md do projeto, envie. Salve o HTML retornado.</div>
+      </div>
+      <div class="cl-item" id="ci5">
+        <input type="checkbox" onchange="markDone('ci5',this)">
+        <div class="cl-text"><strong>Abra no browser e revise.</strong> O mockup representa o que você quer? Os dados exibidos têm a fonte certa? O checklist está completo? Algum pitfall esquecido?</div>
+      </div>
+      <div class="cl-item" id="ci6">
+        <input type="checkbox" onchange="markDone('ci6',this)">
+        <div class="cl-text"><strong>Resolva todas as decisões abertas</strong> clicando nos botões. Não deixe nenhuma aberta para o Claude Code decidir.</div>
+      </div>
+      <div class="cl-item" id="ci7">
+        <input type="checkbox" onchange="markDone('ci7',this)">
+        <div class="cl-text"><strong>Salve no repo</strong> em <code>claude_guideline/plans/nome-da-feature-plan.html</code> (ou equivalente no seu projeto).</div>
+      </div>
+      <div class="cl-item" id="ci8">
+        <input type="checkbox" onchange="markDone('ci8',this)">
+        <div class="cl-text"><strong>Copie o prompt de implementação</strong> da Seção 08 do HTML gerado (com as decisões já preenchidas) e execute no Claude Code.</div>
+      </div>
+    </div>
+
+    <div class="callout green">
+      <span class="callout-i">◆</span>
+      <div class="callout-t"><strong>Onde guardar os planos:</strong> crie uma pasta <code>claude_guideline/plans/</code> (ou <code>docs/plans/</code>, <code>.claude/plans/</code>) no repositório do projeto. Nomeie os arquivos como <code>nome-da-feature-plan.html</code>. Referencie essa pasta no CLAUDE.md para que o Claude Code saiba que ela existe.</div>
+    </div>
+
+    <hr>
+
+    <p><strong>Três tipos de spec, três tamanhos:</strong></p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Tipo</th><th>Quando usar</th><th>O que incluir</th><th>Tamanho esperado</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="t-gold">Feature nova</td>
+            <td>Nova page, novo agente, novo módulo</td>
+            <td>Tudo: mockup, fluxo de dados, esqueleto, checklist, pitfalls, decisões</td>
+            <td>200–400 linhas HTML</td>
+          </tr>
+          <tr>
+            <td class="t-blue">Refatoração</td>
+            <td>Mudar lógica existente sem nova interface</td>
+            <td>Before/after do fluxo de dados, o que NÃO muda, pitfalls aplicáveis</td>
+            <td>80–150 linhas HTML</td>
+          </tr>
+          <tr>
+            <td class="t-green">Diagnóstico/bug</td>
+            <td>Bug ou comportamento inesperado</td>
+            <td>Reprodução, hipóteses ordenadas, módulos suspeitos</td>
+            <td>50–100 linhas HTML</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── CAP 6 ── ERROS COMUNS ─────────────────────── -->
+  <div class="chapter" id="cap6">
+    <div class="ch-header">
+      <div class="ch-num">06</div>
+      <div class="ch-titles">
+        <div class="ch-label">Armadilhas</div>
+        <h2 class="ch-title">Erros comuns e como <em>evitá-los</em></h2>
+      </div>
+    </div>
+
+    <div class="compare">
+      <div class="cmp-card">
+        <div class="cmp-head before">✗ Erro 1 — Plano grande demais</div>
+        <div class="cmp-body">Criar um único HTML para toda a feature de uma vez. O plano cresce, fica difícil de revisar, perde o foco.<br><br><strong>Solução:</strong> um HTML por sub-feature. Se o plano demora mais de 5 min para gerar, a feature está grande demais.</div>
+      </div>
+      <div class="cmp-card">
+        <div class="cmp-head before">✗ Erro 2 — Deixar decisões abertas</div>
+        <div class="cmp-body">Passar o HTML ao Claude Code sem resolver todas as decisões. O modelo escolhe silenciosamente — quase sempre diferente do que você queria.<br><br><strong>Solução:</strong> zero decisões abertas antes de implementar. Clique em todos os botões.</div>
+      </div>
+      <div class="cmp-card">
+        <div class="cmp-head before">✗ Erro 3 — Pedir implementação no chat</div>
+        <div class="cmp-body">Misturar planejamento e implementação no mesmo lugar. O chat não tem acesso ao filesystem, não lê o código existente, não vê a estrutura real do projeto.<br><br><strong>Solução:</strong> chat = plano HTML. Code = implementação. Sempre.</div>
+      </div>
+      <div class="cmp-card">
+        <div class="cmp-head before">✗ Erro 4 — Não commitar o HTML</div>
+        <div class="cmp-body">Usar o HTML só como rascunho descartável. Na próxima sessão, você perde o contexto de o que foi decidido, e o Claude Code também.<br><br><strong>Solução:</strong> sempre commitar o plano junto com o código de produção.</div>
+      </div>
+      <div class="cmp-card">
+        <div class="cmp-head before">✗ Erro 5 — HTML sem fontes de dados</div>
+        <div class="cmp-body">Mockup bonito mas sem indicar de onde vem cada dado. O Claude Code vai buscar os dados em qualquer lugar que encontrar — não necessariamente no lugar correto.<br><br><strong>Solução:</strong> anotar cada campo do mockup com sua fonte exata (<code>hub.meta.tokens</code>, não "os tokens").</div>
+      </div>
+      <div class="cmp-card">
+        <div class="cmp-head before">✗ Erro 6 — Plano desatualizado</div>
+        <div class="cmp-body">Commitar o HTML com o checklist vazio após a implementação. O plano deixa de ser documentação confiável.<br><br><strong>Solução:</strong> marcar os itens do checklist como concluídos antes do commit final. 2 minutos de trabalho.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CAP 7 ── GERADOR DE PROMPT ────────────────── -->
+  <div class="chapter" id="cap7">
+    <div class="ch-header">
+      <div class="ch-num">07</div>
+      <div class="ch-titles">
+        <div class="ch-label">Ferramenta</div>
+        <h2 class="ch-title">Gerador de prompt para <em>nova spec</em></h2>
+      </div>
+    </div>
+
+    <p>Preencha os campos abaixo e clique em <strong>Gerar prompt</strong>. O resultado é o prompt pronto para colar no Claude.ai chat junto com o seu CLAUDE.md.</p>
+
+    <div class="template-builder">
+      <div class="tb-head">
+        <span class="tb-title">Monte seu prompt de planejamento</span>
+      </div>
+      <div class="tb-body">
+        <div class="tb-field full">
+          <label>O que quer construir (seja específico)</label>
+          <input type="text" id="f-objetivo" placeholder="Ex: Criar a página ValidationHub consolidando diagnósticos BPMN, scores e telemetria em 4 tabs">
+        </div>
+        <div class="tb-field">
+          <label>Tipo de feature</label>
+          <select id="f-tipo">
+            <option value="nova page Streamlit">Nova page Streamlit</option>
+            <option value="novo agente LLM">Novo agente LLM</option>
+            <option value="novo módulo Python">Novo módulo Python</option>
+            <option value="refatoração de módulo existente">Refatoração</option>
+            <option value="nova integração/API">Nova integração / API</option>
+            <option value="correção de bug">Correção de bug</option>
+            <option value="feature de UI">Feature de UI (componente)</option>
+          </select>
+        </div>
+        <div class="tb-field">
+          <label>Interface (se houver)</label>
+          <select id="f-interface">
+            <option value="sim — inclua mockup das tabs/componentes no plano">Sim — tem interface</option>
+            <option value="não — é um módulo backend sem UI">Não — é backend</option>
+          </select>
+        </div>
+        <div class="tb-field full">
+          <label>Fontes de dados conhecidas (onde vivem os dados que a feature precisa)</label>
+          <input type="text" id="f-dados" placeholder="Ex: hub.validation.scores, hub.meta.cache_hits, Supabase llm_telemetry">
+        </div>
+        <div class="tb-field full">
+          <label>Decisões que você JÁ tomou</label>
+          <input type="text" id="f-decididas" placeholder="Ex: Arquivo será pages/ValidationHub.py, só lê o hub sem chamar agentes">
+        </div>
+        <div class="tb-field full">
+          <label>Decisões que você AINDA NÃO tomou (vão virar blocos clicáveis no HTML)</label>
+          <input type="text" id="f-abertas" placeholder="Ex: Tab Telemetria mostra só sessão atual ou também histórico Supabase?">
+        </div>
+        <div class="tb-field full">
+          <label>Pitfalls do projeto aplicáveis (opcional — cole os relevantes)</label>
+          <textarea id="f-pitfalls" rows="3" placeholder="Ex: Nested st.expander lança exceção · sys.path.insert obrigatório no topo · hub guard antes do primeiro widget"></textarea>
+        </div>
+      </div>
+      <div class="tb-actions">
+        <button class="btn-gen" onclick="gerarPrompt()">Gerar prompt →</button>
+        <button class="btn-copy" onclick="copiarPrompt()">Copiar resultado</button>
+      </div>
+      <div class="tb-output" id="tb-output">
+        <div class="tbo-bar">prompt gerado — cole no Claude.ai chat junto com o CLAUDE.md</div>
+        <div class="tbo-body" id="tb-result"></div>
+      </div>
+    </div>
+
+    <div class="callout gold">
+      <span class="callout-i">◆</span>
+      <div class="callout-t"><strong>Após gerar o prompt:</strong> cole-o no Claude.ai chat seguido do conteúdo do seu CLAUDE.md. O resultado será o plano HTML completo. Salve como <code>nome-da-feature-plan.html</code> na pasta <code>claude_guideline/plans/</code> do projeto antes de passar ao Claude Code.</div>
+    </div>
+  </div>
+
+</div><!-- /body -->
+
+<script>
+  function markDone(id, cb) {
+    document.getElementById(id).classList.toggle('done', cb.checked);
+  }
+
+  function gerarPrompt() {
+    const objetivo   = document.getElementById('f-objetivo').value.trim()   || '[descreva o objetivo]';
+    const tipo       = document.getElementById('f-tipo').value;
+    const interface_ = document.getElementById('f-interface').value;
+    const dados      = document.getElementById('f-dados').value.trim();
+    const decididas  = document.getElementById('f-decididas').value.trim();
+    const abertas    = document.getElementById('f-abertas').value.trim();
+    const pitfalls   = document.getElementById('f-pitfalls').value.trim();
+
+    let prompt = `Leia o CLAUDE.md abaixo.
+
+Quero criar: ${objetivo}
+Tipo de feature: ${tipo}
+Interface: ${interface_}`;
+
+    if (dados) prompt += `\n\nFontes de dados conhecidas:\n${dados}`;
+    if (decididas) prompt += `\n\nDecisões já tomadas:\n${decididas}`;
+    if (abertas) prompt += `\n\nDecisões ainda em aberto (gere como blocos clicáveis no HTML):\n${abertas}`;
+    if (pitfalls) prompt += `\n\nPitfalls do projeto aplicáveis a esta feature:\n${pitfalls}`;
+
+    prompt += `
+
+Gere um plano de implementação em HTML interativo com:
+1. Objetivo e contexto da feature
+2. Fluxo de dados (fontes → transformações → destino), com cada campo anotado com sua origem exata
+3. ${interface_.startsWith('sim') ? 'Mockup interativo da interface com tabs clicáveis e campos com fonte de dados anotada' : 'Esqueleto do arquivo com imports e estrutura principal'}
+4. Estrutura do arquivo (imports, funções principais, padrões do projeto)
+5. Checklist de entrega do CLAUDE.md mapeado para esta feature (com checkboxes funcionais)
+6. Pitfalls aplicáveis desta feature específica
+7. Blocos de decisão clicáveis para cada item ainda em aberto
+8. Prompt pronto para Claude Code na última seção (que se auto-preenche com as decisões marcadas)
+
+O HTML deve ser autossuficiente: ao abri-lo no browser, eu devo conseguir revisar, decidir e extrair o prompt de implementação sem abrir nenhum outro arquivo.
+
+[cole o CLAUDE.md aqui]`;
+
+    document.getElementById('tb-result').textContent = prompt;
+    document.getElementById('tb-output').classList.add('visible');
+  }
+
+  function copiarPrompt() {
+    const txt = document.getElementById('tb-result').textContent;
+    if (!txt) { gerarPrompt(); }
+    navigator.clipboard.writeText(document.getElementById('tb-result').textContent).then(() => {
+      const btn = document.querySelector('.btn-copy');
+      btn.textContent = 'copiado ✓';
+      setTimeout(() => btn.textContent = 'Copiar resultado', 2000);
+    });
+  }
+</script>
+</body>
+</html>
