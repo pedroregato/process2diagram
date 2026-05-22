@@ -66,6 +66,7 @@ pages = {
         st.Page("pages/EntityRecognition.py", title="Entidades (NER)",       icon="🔍"),
         st.Page("pages/KnowledgeHub.py",      title="Knowledge Hub",         icon="🧠"),
         st.Page("pages/KnowledgeGraph.py",    title="Grafo de Conhecimento", icon="🕸️"),
+        st.Page("pages/DocumentManager.py",   title="Documentos",            icon="📄"),
     ],
     "Sistema": _sistema_pages,
     "Ajuda": [

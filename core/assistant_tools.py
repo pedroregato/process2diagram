@@ -1831,6 +1831,105 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_meeting_documents",
+                "description": (
+                    "Lista os documentos de apoio cadastrados no projeto (contratos, "
+                    "especificações, fluxogramas, BRDs, atas externas, etc.). "
+                    "Use quando o usuário perguntar sobre documentos apresentados em reuniões "
+                    "ou quiser saber quais documentos estão disponíveis. "
+                    "Pode filtrar por reunião específica ou tipo de documento."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Filtrar documentos vinculados a uma reunião específica (opcional)",
+                        },
+                        "doc_type": {
+                            "type": "string",
+                            "description": (
+                                "Código do tipo de documento para filtrar (opcional). "
+                                "Ex: SRS, BRD, TAP, ASIS, TOBE, CONTRATO, SLA. "
+                                "Use get_document_types para ver todos os códigos disponíveis."
+                            ),
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_document_content",
+                "description": (
+                    "Retorna o conteúdo completo de um documento específico pelo ID. "
+                    "Use quando o usuário pedir para ler, resumir ou analisar o conteúdo de um documento. "
+                    "Obtenha o doc_id chamando list_meeting_documents primeiro."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "doc_id": {
+                            "type": "string",
+                            "description": "UUID do documento (obtido via list_meeting_documents)",
+                        },
+                    },
+                    "required": ["doc_id"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "search_documents",
+                "description": (
+                    "Pesquisa documentos do projeto por similaridade semântica (embeddings) "
+                    "ou por palavra-chave. Use quando o usuário quiser encontrar documentos "
+                    "sobre um tema específico, cláusula contratual, requisito ou processo. "
+                    "Retorna trechos relevantes com o documento de origem."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Texto da busca — frase ou palavras-chave",
+                        },
+                        "mode": {
+                            "type": "string",
+                            "enum": ["semantic", "keyword"],
+                            "description": (
+                                "Modo de busca: 'semantic' usa embeddings pgvector (melhor para conceitos), "
+                                "'keyword' usa ILIKE (melhor para termos exatos). Padrão: semantic."
+                            ),
+                        },
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_document_types",
+                "description": (
+                    "Retorna a taxonomia completa de tipos de documentos suportados, "
+                    "agrupados por categoria (Planejamento, Requisitos, Processos, etc.). "
+                    "Use quando o usuário perguntar que tipos de documentos podem ser cadastrados "
+                    "ou quiser entender a classificação de documentos."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                },
+            },
+        },
     ]
 
 
@@ -1921,6 +2020,11 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "delete_entity":                   "admin",
     "get_cache_stats":                 "consulta",
     "clear_llm_cache":                 "admin",
+    # Documentos
+    "list_meeting_documents":          "consulta",
+    "get_document_content":            "consulta",
+    "search_documents":                "consulta",
+    "get_document_types":              "consulta",
 }
 
 # Ferramentas que exigem perfil administrador
@@ -5948,6 +6052,111 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         )
         return "\n".join(lines)
 
+    # ── Document tools ────────────────────────────────────────────────────────
+
+    def list_meeting_documents(
+        self,
+        meeting_number: int | None = None,
+        doc_type: str | None = None,
+    ) -> str:
+        """List documents stored for this project."""
+        from modules.document_store import list_documents, get_document_types
+        meeting_id: str | None = None
+        if meeting_number is not None:
+            meetings = self._get_meetings()
+            if meeting_number < 1 or meeting_number > len(meetings):
+                return f"Reunião #{meeting_number} não encontrada."
+            meeting_id = meetings[meeting_number - 1]["id"]
+
+        docs = list_documents(
+            project_id=self.project_id,
+            meeting_id=meeting_id,
+            doc_type=doc_type,
+            limit=100,
+        )
+        if not docs:
+            return "Nenhum documento cadastrado para este projeto."
+
+        type_labels = {t["code"]: t["label"] for t in get_document_types()}
+        lines = [f"**{len(docs)} documento(s) encontrado(s):**\n"]
+        for i, d in enumerate(docs, 1):
+            tipo = type_labels.get(d.get("doc_type", ""), d.get("doc_type", "—"))
+            date = (d.get("created_at") or "")[:10]
+            lines.append(
+                f"{i}. **{d['title']}**\n"
+                f"   - ID: `{d['id']}`\n"
+                f"   - Tipo: {tipo}\n"
+                f"   - Arquivo: {d.get('file_name') or '—'}\n"
+                f"   - Cadastrado em: {date}\n"
+            )
+        return "\n".join(lines)
+
+    def get_document_content(self, doc_id: str) -> str:
+        """Return the full content of a document by ID."""
+        from modules.document_store import get_document
+        doc = get_document(doc_id)
+        if not doc:
+            return f"Documento com ID `{doc_id}` não encontrado."
+        content = doc.get("content_text", "")
+        if not content:
+            return f"O documento **{doc['title']}** não tem conteúdo armazenado."
+        header = (
+            f"**{doc['title']}**\n"
+            f"Tipo: {doc.get('doc_type', '—')} | "
+            f"Arquivo: {doc.get('file_name') or '—'} | "
+            f"Cadastrado: {(doc.get('created_at') or '')[:10]}\n\n"
+        )
+        # Cap at 8 000 chars for assistant context
+        if len(content) > 8000:
+            body = content[:6000] + "\n\n[... conteúdo truncado ...]\n\n" + content[-1000:]
+        else:
+            body = content
+        return header + body
+
+    def search_documents(self, query: str, mode: str = "semantic") -> str:
+        """Search documents semantically or by keyword."""
+        from modules.document_store import search_documents_semantic, search_documents_keyword
+        if mode == "keyword":
+            results = search_documents_keyword(query, self.project_id, limit=10)
+            if not results:
+                return f"Nenhum documento encontrado com a palavra-chave: '{query}'."
+            lines = [f"**{len(results)} documento(s) encontrado(s) para '{query}':**\n"]
+            for d in results:
+                lines.append(
+                    f"- **{d['title']}** (Tipo: {d.get('doc_type', '—')}) — ID: `{d['id']}`"
+                )
+            return "\n".join(lines)
+        else:
+            results = search_documents_semantic(query, self.project_id, limit=5, threshold=0.35)
+            if not results:
+                return (
+                    f"Nenhum trecho encontrado semanticamente para: '{query}'. "
+                    "Verifique se os documentos foram indexados (aba Biblioteca → Re-indexar)."
+                )
+            lines = [f"**Trechos relevantes encontrados para '{query}':**\n"]
+            for r in results:
+                sim = r.get("similarity", 0)
+                lines.append(
+                    f"---\n"
+                    f"**Documento:** {r['doc_title']} (tipo: {r.get('doc_type', '—')}) "
+                    f"· Similaridade: {sim:.2f}\n\n"
+                    f"{r['content']}\n"
+                )
+            return "\n".join(lines)
+
+    def get_document_types_tool(self) -> str:
+        """Return the full document taxonomy grouped by category."""
+        from modules.document_store import get_types_by_category
+        grouped = get_types_by_category()
+        if not grouped:
+            return "Taxonomia não disponível. Execute a migration SQL de documentos."
+        lines = ["**Taxonomia de tipos de documentos:**\n"]
+        for category, types in grouped.items():
+            lines.append(f"\n**{category}**")
+            for t in types:
+                lines.append(f"- `{t['code']}` — {t['label']}")
+        return "\n".join(lines)
+
     # ── Dispatcher ────────────────────────────────────────────────────────────
 
     def execute(self, tool_name: str, tool_input: dict) -> str:
@@ -6203,7 +6412,18 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 "render_table": lambda: self._render_table(tool_input),
                 "get_executive_report": lambda: self.get_executive_report(
                     tool_input["meeting_number"],
-                ),                
+                ),
+                # Document tools
+                "list_meeting_documents": lambda: self.list_meeting_documents(
+                    meeting_number=tool_input.get("meeting_number"),
+                    doc_type=tool_input.get("doc_type"),
+                ),
+                "get_document_content":   lambda: self.get_document_content(tool_input["doc_id"]),
+                "search_documents":       lambda: self.search_documents(
+                    query=tool_input["query"],
+                    mode=tool_input.get("mode", "semantic"),
+                ),
+                "get_document_types":     lambda: self.get_document_types_tool(),
             }
             if tool_name not in dispatch:
                 return f"Ferramenta desconhecida: '{tool_name}'"
