@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glossário · pedro-lab</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@300;400&display=swap');
+
+  :root {
+    --bg:     #f8f5ef;
+    --s1:     #ffffff;
+    --s2:     #f0ece2;
+    --s3:     #e4ded2;
+    --border: #d4cec0;
+    --ink:    #1e1a12;
+    --muted:  #8a8070;
+    --dim:    #b8b0a0;
+
+    --ai:   #7a4a10;
+    --dev:  #1a4a7a;
+    --met:  #2a6a3a;
+    --ux:   #6a1a5a;
+    --gen:  #3a3030;
+
+    --serif: 'Libre Baskerville', Georgia, serif;
+    --mono:  'IBM Plex Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 14px;
+    line-height: 1.85;
+  }
+
+  /* ── CAPA ──────────────────────────────── */
+  header {
+    background: var(--ink);
+    color: #f8f5ef;
+    padding: 52px 64px 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  header::after {
+    content: 'G';
+    position: absolute;
+    right: 40px; bottom: -80px;
+    font-family: var(--serif);
+    font-size: 320px;
+    font-weight: 700;
+    font-style: italic;
+    color: rgba(255,255,255,.03);
+    pointer-events: none;
+    line-height: 1;
+  }
+  .h-label {
+    font-family: var(--mono);
+    font-size: 10px; letter-spacing: .18em;
+    text-transform: uppercase; color: rgba(248,245,239,.4);
+    margin-bottom: 12px;
+  }
+  header h1 {
+    font-size: clamp(36px, 6vw, 64px);
+    font-weight: 700; font-style: italic;
+    line-height: 1.05; letter-spacing: -.02em;
+    color: #fff; margin-bottom: 14px;
+  }
+  header h1 span { color: #c8a44a; font-style: normal; }
+  .h-sub {
+    font-family: var(--mono);
+    font-size: 12px; color: rgba(248,245,239,.45);
+    max-width: 560px; line-height: 1.7;
+  }
+  .h-stats {
+    margin-top: 24px;
+    display: flex; gap: 24px; flex-wrap: wrap;
+    font-family: var(--mono); font-size: 11px;
+    color: rgba(248,245,239,.3);
+  }
+
+  /* ── PESQUISA ──────────────────────────── */
+  .search-bar {
+    background: var(--s1); border-bottom: 1px solid var(--border);
+    padding: 16px 64px; position: sticky; top: 0; z-index: 100;
+    display: flex; gap: 12px; align-items: center;
+  }
+  .search-input {
+    flex: 1; background: var(--s2); border: 1px solid var(--border);
+    border-radius: 2px; padding: 9px 14px;
+    font-family: var(--mono); font-size: 13px; color: var(--ink);
+    transition: border-color .12s;
+  }
+  .search-input:focus { outline: none; border-color: var(--ink); }
+  .search-input::placeholder { color: var(--dim); }
+  .search-count {
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+    white-space: nowrap;
+  }
+
+  /* ── FILTROS ───────────────────────────── */
+  .filters {
+    background: var(--s2); border-bottom: 1px solid var(--border);
+    padding: 10px 64px; display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .filter-btn {
+    font-family: var(--mono); font-size: 10px;
+    letter-spacing: .08em; text-transform: uppercase;
+    padding: 4px 12px; border-radius: 1px;
+    border: 1px solid var(--border); background: transparent;
+    color: var(--muted); cursor: pointer; transition: all .12s;
+  }
+  .filter-btn:hover { color: var(--ink); border-color: var(--ink); }
+  .filter-btn.active { color: #fff; border-color: transparent; }
+  .fb-all  { }
+  .fb-ai   { }  .fb-ai.active   { background: var(--ai); }
+  .fb-dev  { }  .fb-dev.active  { background: var(--dev); }
+  .fb-met  { }  .fb-met.active  { background: var(--met); }
+  .fb-ux   { }  .fb-ux.active   { background: var(--ux); }
+  .fb-gen  { }  .fb-gen.active  { background: var(--gen); }
+  .fb-all.active { background: var(--ink); color: #fff; }
+
+  /* ── LAYOUT ────────────────────────────── */
+  .layout {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    min-height: calc(100vh - 200px);
+  }
+
+  /* ── ÍNDICE LATERAL ─────────────────────── */
+  nav {
+    border-right: 1px solid var(--border);
+    padding: 20px 0;
+    position: sticky; top: 97px;
+    height: calc(100vh - 97px);
+    overflow-y: auto;
+    background: var(--s1);
+  }
+  nav::-webkit-scrollbar { width: 3px; }
+  nav::-webkit-scrollbar-thumb { background: var(--border); }
+  .nav-label {
+    padding: 4px 20px 2px;
+    font-family: var(--mono); font-size: 9px;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--dim);
+  }
+  .nav-letter {
+    display: block; padding: 5px 20px;
+    font-family: var(--serif); font-size: 16px; font-weight: 700;
+    color: var(--muted); text-decoration: none;
+    transition: color .1s;
+  }
+  .nav-letter:hover { color: var(--ink); }
+  .nav-letter.has-entries { color: var(--ink); }
+
+  /* ── CONTEÚDO ───────────────────────────── */
+  .content { padding: 0 64px 64px; }
+
+  /* ── LETRA ──────────────────────────────── */
+  .letter-section { margin-top: 40px; }
+  .letter-heading {
+    font-size: clamp(48px, 8vw, 80px);
+    font-weight: 700; font-style: italic;
+    color: var(--s3); line-height: 1;
+    margin-bottom: 16px; padding-bottom: 12px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -.02em;
+  }
+
+  /* ── VERBETE ────────────────────────────── */
+  .entry {
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 24px;
+    transition: background .1s;
+  }
+  .entry:last-child { border-bottom: none; }
+  .entry:hover { background: rgba(0,0,0,.01); }
+
+  .entry-left { padding-top: 2px; }
+  .entry-term {
+    font-size: 17px; font-weight: 700;
+    color: var(--ink); line-height: 1.2; margin-bottom: 6px;
+  }
+  .entry-en {
+    font-family: var(--mono); font-size: 10.5px;
+    color: var(--dim); font-style: normal;
+    margin-bottom: 8px; display: block;
+  }
+  .entry-tag {
+    display: inline-block;
+    font-family: var(--mono); font-size: 9px;
+    letter-spacing: .1em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 1px;
+  }
+  .tag-ai  { background: rgba(122,74,16,.1);  color: var(--ai);  border: 1px solid rgba(122,74,16,.2); }
+  .tag-dev { background: rgba(26,74,122,.1);  color: var(--dev); border: 1px solid rgba(26,74,122,.2); }
+  .tag-met { background: rgba(42,106,58,.1);  color: var(--met); border: 1px solid rgba(42,106,58,.2); }
+  .tag-ux  { background: rgba(106,26,90,.1);  color: var(--ux);  border: 1px solid rgba(106,26,90,.2); }
+  .tag-gen { background: rgba(58,48,48,.1);   color: var(--gen); border: 1px solid rgba(58,48,48,.2); }
+
+  .entry-right {}
+  .entry-def {
+    font-size: 13.5px; color: #4a4438; line-height: 1.9;
+    margin-bottom: 10px;
+  }
+  .entry-def strong { color: var(--ink); font-weight: 700; }
+  .entry-def em { font-style: italic; color: var(--muted); }
+
+  .entry-example {
+    background: var(--s2); border-left: 3px solid var(--border);
+    padding: 10px 14px; margin-top: 10px;
+    font-size: 12.5px; color: var(--muted);
+    font-style: italic; line-height: 1.75;
+  }
+  .entry-example strong { color: var(--ink); font-style: normal; font-weight: 700; }
+  .entry-example::before {
+    content: 'Exemplo: ';
+    font-family: var(--mono); font-size: 9.5px;
+    letter-spacing: .1em; text-transform: uppercase;
+    color: var(--dim); font-style: normal; display: block;
+    margin-bottom: 4px;
+  }
+
+  .entry-related {
+    margin-top: 10px; display: flex; align-items: center; gap: 8px;
+    flex-wrap: wrap;
+  }
+  .er-label {
+    font-family: var(--mono); font-size: 9.5px;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--dim);
+  }
+  .er-link {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--dev); text-decoration: underline;
+    text-underline-offset: 3px; cursor: pointer;
+    transition: color .1s;
+  }
+  .er-link:hover { color: var(--ink); }
+
+  /* ── SEM RESULTADOS ─────────────────────── */
+  .no-results {
+    padding: 48px 0; text-align: center;
+    font-family: var(--mono); font-size: 13px; color: var(--dim);
+    display: none;
+  }
+
+  @media (max-width: 720px) {
+    header { padding: 32px 20px; }
+    .search-bar, .filters { padding: 12px 18px; }
+    .layout { grid-template-columns: 1fr; }
+    nav { display: none; }
+    .content { padding: 0 18px 48px; }
+    .entry { grid-template-columns: 1fr; gap: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="h-label">pedro-lab · metodologia</div>
+  <h1><span>Glossário</span> de Termos</h1>
+  <div class="h-sub">Termos técnicos usados no dia a dia de desenvolvimento com IA, metodologia de software e gestão de projetos — explicados em português claro.</div>
+  <div class="h-stats">
+    <span id="total-count">— verbetes</span>
+    <span>5 categorias</span>
+    <span>pedro-lab · versão 1.0</span>
+  </div>
+</header>
+
+<div class="search-bar">
+  <input class="search-input" id="search" type="text" placeholder="Buscar termo..." oninput="buscar()">
+  <span class="search-count" id="result-count"></span>
+</div>
+
+<div class="filters">
+  <button class="filter-btn fb-all active" onclick="filtrar('all', this)">Todos</button>
+  <button class="filter-btn fb-ai"  onclick="filtrar('ai',  this)">🤖 AI &amp; LLM</button>
+  <button class="filter-btn fb-dev" onclick="filtrar('dev', this)">⚙️ Desenvolvimento</button>
+  <button class="filter-btn fb-met" onclick="filtrar('met', this)">📐 Metodologia</button>
+  <button class="filter-btn fb-ux"  onclick="filtrar('ux',  this)">🎨 UX &amp; Interface</button>
+  <button class="filter-btn fb-gen" onclick="filtrar('gen', this)">📖 Geral</button>
+</div>
+
+<div class="layout">
+
+<nav id="nav-index">
+  <div class="nav-label">Índice</div>
+</nav>
+
+<div class="content" id="glossary-content">
+  <div class="no-results" id="no-results">Nenhum termo encontrado para esta busca.</div>
+</div>
+
+</div><!-- /layout -->
+
+<script>
+const ENTRIES = [
+
+  // ── A ──────────────────────────────────────────────────────────────
+  {
+    term: "Agente (AI)",
+    en: "Agent",
+    tag: "ai",
+    def: "Um programa de IA que não apenas responde a uma pergunta, mas <strong>toma decisões e executa ações</strong> em sequência para atingir um objetivo. Diferente de um simples chatbot, um agente pode chamar ferramentas, ler arquivos, fazer buscas e encadear várias etapas automaticamente.",
+    example: "O process2diagram usa um agente orquestrador que decide quais sub-agentes executar, em que ordem, e consolida os resultados no KnowledgeHub.",
+    related: ["Orquestrador", "Pipeline", "Tool use"]
+  },
+  {
+    term: "API",
+    en: "Application Programming Interface",
+    tag: "dev",
+    def: "Uma <strong>interface de comunicação entre sistemas</strong>. Define como um programa pode pedir serviços a outro — quais comandos existem, o que enviar e o que receber. Pense como um garçom: você não vai à cozinha, você faz o pedido ao garçom (API) e recebe o prato pronto.",
+    example: "A API da Anthropic recebe seu texto, processa no Claude e devolve a resposta. Você não precisa saber como o modelo funciona internamente.",
+    related: ["SOAP", "REST", "Endpoint"]
+  },
+  {
+    term: "Artefato",
+    en: "Artifact",
+    tag: "dev",
+    def: "Qualquer <strong>produto concreto gerado</strong> durante o desenvolvimento: um arquivo de código, um documento HTML, um diagrama, uma spec. No contexto do Claude, artefato é o resultado tangível que fica — diferente da conversa em si, que é temporária.",
+    example: "O plano HTML da ValidationHub.py é um artefato — existe como arquivo, pode ser commitado no repo e referenciado em outra sessão.",
+    related: ["Spec", "Deliverable", "Output"]
+  },
+
+  // ── B ──────────────────────────────────────────────────────────────
+  {
+    term: "Backfill",
+    en: "Backfill",
+    tag: "dev",
+    def: "<strong>Preencher retroativamente</strong> dados ou processamentos que não existiam quando registros anteriores foram criados. Quando você adiciona uma nova funcionalidade que precisa de dados históricos, é necessário rodar um backfill para processar o que já estava no banco.",
+    example: "O TranscriptBackfill.py no process2diagram reprocessa transcrições antigas para gerar embeddings que não existiam quando foram salvas.",
+    related: ["Embedding", "Migração"]
+  },
+  {
+    term: "Branch",
+    en: "Branch",
+    tag: "dev",
+    def: "Uma <strong>ramificação independente do código</strong> dentro de um repositório Git. Permite trabalhar em uma feature nova sem afetar o código principal (main). Quando a feature fica pronta, o branch é fundido de volta (merge) ao principal.",
+    example: "Você cria o branch 'feature/validationhub' para desenvolver a nova página sem risco de quebrar o que está em produção.",
+    related: ["Git", "Commit", "Merge", "Main"]
+  },
+
+  // ── C ──────────────────────────────────────────────────────────────
+  {
+    term: "Cache semântico",
+    en: "Semantic cache",
+    tag: "ai",
+    def: "Um sistema que <strong>guarda respostas de LLM</strong> para reutilizar quando a mesma pergunta (ou uma muito parecida) for feita de novo. Economiza tempo e dinheiro evitando chamadas repetidas à API. 'Semântico' porque identifica similaridade de significado, não só texto idêntico.",
+    example: "Se o AgentBPMN já processou uma transcrição igual antes, o cache semântico retorna o resultado salvo sem chamar o LLM novamente.",
+    related: ["LLM", "Token", "API"]
+  },
+  {
+    term: "Checklist de entrega",
+    en: "Definition of Done / Delivery checklist",
+    tag: "met",
+    def: "Uma <strong>lista de verificação</strong> que define o que precisa estar feito para considerar uma tarefa concluída. No contexto do CLAUDE.md, lista os passos obrigatórios que devem ser seguidos antes de marcar qualquer feature como pronta.",
+    example: "Antes de fechar uma feature no process2diagram: ✓ migrate() atualizado ✓ skill file com nome correto ✓ agente registrado no Orchestrator ✓ tab registrada.",
+    related: ["CLAUDE.md", "Spec", "Pipeline"]
+  },
+  {
+    term: "CLAUDE.md",
+    en: "CLAUDE.md",
+    tag: "ai",
+    def: "Um arquivo de instruções que fica na raiz de um projeto e <strong>contextualiza o Claude Code</strong> sobre a arquitetura, regras, pitfalls e padrões daquele projeto específico. O Claude Code lê esse arquivo antes de qualquer ação — é o 'manual do projeto' para a IA.",
+    example: "O CLAUDE.md do process2diagram descreve os 20+ módulos, o padrão de agentes, os pitfalls conhecidos e o checklist de entrega. Sem ele, o Claude Code não saberia as regras do projeto.",
+    related: ["Claude Code", "Pitfall", "Agente (AI)"]
+  },
+  {
+    term: "Claude Code",
+    en: "Claude Code",
+    tag: "ai",
+    def: "Uma ferramenta de linha de comando da Anthropic que permite ao Claude <strong>interagir diretamente com o seu código</strong>: ler arquivos, criar funções, fazer commits, rodar testes. Diferente do chat do Claude.ai, ele tem acesso real ao seu sistema de arquivos.",
+    example: "Você escreve o plano HTML no Claude.ai (chat), depois passa para o Claude Code: 'Implemente conforme validationhub-plan.html.' O Code lê o arquivo e implementa.",
+    related: ["CLAUDE.md", "Terminal", "Git"]
+  },
+  {
+    term: "Commit",
+    en: "Commit",
+    tag: "dev",
+    def: "Um <strong>registro permanente de alterações</strong> no código, salvo no histórico do Git. Cada commit tem uma mensagem descrevendo o que mudou e um identificador único. É como um 'salvar com histórico' — você pode voltar a qualquer commit anterior.",
+    example: "git commit -m 'feat: adiciona ValidationHub.py com 4 tabs de diagnóstico'",
+    related: ["Git", "Branch", "Push"]
+  },
+  {
+    term: "Context window",
+    en: "Context window",
+    tag: "ai",
+    def: "A <strong>quantidade máxima de texto</strong> que um LLM consegue 'ver' de uma vez — sua memória de trabalho imediata. Inclui o sistema prompt, o histórico da conversa e o texto atual. Quando a conversa fica longa demais, informações antigas 'saem' da janela.",
+    example: "O DeepSeek tem context window de 1 milhão de tokens — consegue processar transcrições muito longas sem perder o início.",
+    related: ["Token", "LLM", "System prompt"]
+  },
+
+  // ── D ──────────────────────────────────────────────────────────────
+  {
+    term: "Dataclass",
+    en: "Dataclass",
+    tag: "dev",
+    def: "Em Python, uma forma simplificada de criar <strong>classes que representam estruturas de dados</strong>. Define quais campos existem e seus tipos, com código mínimo. Gera automaticamente funções básicas como comparação e representação em texto.",
+    example: "O KnowledgeHub é um dataclass com campos como transcript_raw, bpmn, minutes, requirements — define o estado central do pipeline.",
+    related: ["KnowledgeHub", "Schema", "Python"]
+  },
+  {
+    term: "Deploy",
+    en: "Deploy / Deployment",
+    tag: "dev",
+    def: "<strong>Publicar uma versão do software</strong> para que usuários reais possam acessar. Pode ser automático (toda vez que você dá push no main, o Streamlit Cloud detecta e publica) ou manual.",
+    example: "O process2diagram tem deploy automático: git push origin main → Streamlit Cloud detecta a mudança → reconstrói e publica em minutos.",
+    related: ["Streamlit Cloud", "Git", "Push"]
+  },
+  {
+    term: "Digest",
+    en: "Digest",
+    tag: "gen",
+    def: "Um <strong>resumo periódico</strong> das informações mais relevantes de um período — diário, semanal ou mensal. Concentra o essencial para quem não tem tempo de acompanhar tudo em tempo real.",
+    example: "O agente curator do pedro-lab pode gerar um digest semanal com as novidades mais importantes de AI, BPM e Data Analysis.",
+    related: ["Radar", "Curadoria"]
+  },
+
+  // ── E ──────────────────────────────────────────────────────────────
+  {
+    term: "Embedding",
+    en: "Embedding",
+    tag: "ai",
+    def: "Uma <strong>representação numérica do significado de um texto</strong> — uma lista de centenas de números que captura o conteúdo semântico. Textos com significados parecidos têm embeddings próximos numericamente. Permite busca por similaridade de conteúdo, não só de palavras.",
+    example: "A busca do Assistente no process2diagram usa embeddings: 'decisões sobre aprovação de fornecedores' encontra trechos relevantes mesmo que não usem essas palavras exatas.",
+    related: ["RAG", "pgvector", "Busca semântica"]
+  },
+  {
+    term: "Endpoint",
+    en: "Endpoint",
+    tag: "dev",
+    def: "Um <strong>ponto de acesso específico em uma API</strong> — uma URL que aceita um tipo de requisição e retorna um resultado. Cada endpoint tem uma função definida.",
+    example: "A API da Anthropic tem o endpoint /v1/messages — você envia texto para ele e recebe a resposta do Claude.",
+    related: ["API", "SOAP", "REST"]
+  },
+
+  // ── F ──────────────────────────────────────────────────────────────
+  {
+    term: "Fail-open",
+    en: "Fail-open",
+    tag: "dev",
+    def: "Uma estratégia de tratamento de erros onde, <strong>quando algo falha, o sistema continua funcionando</strong> com comportamento degradado em vez de parar completamente. O oposto de fail-safe (que para tudo para evitar consequências piores).",
+    example: "A integração com o Supabase no process2diagram é fail-open: se o banco estiver indisponível, retorna lista vazia em vez de lançar um erro que travaria toda a aplicação.",
+    related: ["Try/catch", "Supabase"]
+  },
+  {
+    term: "Feature",
+    en: "Feature",
+    tag: "dev",
+    def: "Uma <strong>funcionalidade específica</strong> de um software — algo que o sistema faz e que tem valor para o usuário. Pode ser grande (um módulo inteiro) ou pequena (um botão que exporta em PDF).",
+    example: "A ValidationHub.py é uma feature do process2diagram: a funcionalidade de visualizar diagnósticos consolidados do pipeline.",
+    related: ["Spec", "Branch", "Checklist de entrega"]
+  },
+  {
+    term: "Few-shot",
+    en: "Few-shot prompting",
+    tag: "ai",
+    def: "Uma técnica de prompting onde você <strong>fornece exemplos concretos</strong> do que quer antes de fazer o pedido. Em vez de só descrever, você mostra. O LLM aprende o padrão esperado pelos exemplos.",
+    example: "No skill_bpmn.md: 'Entrada: texto da reunião → Saída esperada: {json com steps e edges}. Agora processe esta transcrição: ...'",
+    related: ["Prompt engineering", "System prompt", "Skill"]
+  },
+  {
+    term: "Filesystem",
+    en: "Filesystem",
+    tag: "dev",
+    def: "O <strong>sistema de arquivos do computador</strong> — a estrutura de pastas e arquivos no disco. Quando se diz que o Claude Code 'tem acesso ao filesystem', significa que ele pode ler e escrever arquivos reais no seu computador.",
+    example: "O Claude.ai (chat) não tem acesso ao filesystem. O Claude Code tem — por isso pode criar o arquivo pages/ValidationHub.py diretamente no seu projeto.",
+    related: ["Claude Code", "Deploy"]
+  },
+
+  // ── G ──────────────────────────────────────────────────────────────
+  {
+    term: "Git",
+    en: "Git",
+    tag: "dev",
+    def: "Um sistema de <strong>controle de versão de código</strong>. Registra todas as alterações feitas nos arquivos ao longo do tempo, permite voltar a versões anteriores, trabalhar em paralelo e colaborar com outras pessoas sem conflito.",
+    example: "git add . → git commit -m 'mensagem' → git push. Esses três comandos salvam suas alterações localmente e enviam ao GitHub.",
+    related: ["Commit", "Branch", "GitHub", "Push"]
+  },
+  {
+    term: "GitHub",
+    en: "GitHub",
+    tag: "dev",
+    def: "Uma <strong>plataforma online para hospedar repositórios Git</strong>. É onde o código fica armazenado na nuvem, pode ser acessado de qualquer lugar e compartilhado (ou mantido privado). Também serve como backup automático do seu código.",
+    example: "github.com/pedroregato/process2diagram — o Streamlit Cloud monitora este repositório e faz deploy automático quando há push no main.",
+    related: ["Git", "Deploy", "Repositório"]
+  },
+  {
+    term: "Guard (código)",
+    en: "Guard clause",
+    tag: "dev",
+    def: "Uma <strong>verificação no início de uma função</strong> que interrompe a execução se uma condição necessária não for atendida. Evita erros de 'objeto não encontrado' ou processamento inválido.",
+    example: "if 'hub' not in st.session_state: st.stop() — esse guard garante que a página não tenta renderizar dados que não existem.",
+    related: ["Session state", "Fail-open"]
+  },
+
+  // ── H ──────────────────────────────────────────────────────────────
+  {
+    term: "HTML-first",
+    en: "HTML-first workflow",
+    tag: "met",
+    def: "Um método de trabalho onde <strong>a especificação de uma feature é escrita como um documento HTML interativo</strong> antes de qualquer código de produção. O HTML serve de contrato visual entre você e o Claude Code — elimina ambiguidade de interpretação.",
+    example: "Antes de criar a ValidationHub.py, você gera validationhub-plan.html com mockup das tabs, fontes de dados, checklist e decisões clicáveis. Só então passa ao Claude Code.",
+    related: ["Spec", "Mockup", "Checklist de entrega", "CLAUDE.md"]
+  },
+
+  // ── I ──────────────────────────────────────────────────────────────
+  {
+    term: "IDE",
+    en: "Integrated Development Environment",
+    tag: "dev",
+    def: "Um <strong>ambiente completo de programação</strong> — editor de código, terminal, gerenciador de arquivos e ferramentas de debug integrados em um só programa. Você usa o PyCharm, que é um IDE especializado em Python.",
+    example: "PyCharm é o IDE. Dentro dele você edita código, roda o servidor Streamlit no terminal integrado e faz commits Git — tudo no mesmo lugar.",
+    related: ["PyCharm", "Terminal", "Git"]
+  },
+
+  // ── J ──────────────────────────────────────────────────────────────
+  {
+    term: "JSON",
+    en: "JavaScript Object Notation",
+    tag: "dev",
+    def: "Um <strong>formato de texto para representar dados estruturados</strong> — listas e dicionários aninhados. É o formato mais usado para trocar informações entre sistemas e entre o LLM e o código.",
+    example: '{"steps": [{"id": "s1", "name": "Aprovar pedido", "lane": "Gestor"}], "edges": [{"from": "s1", "to": "s2"}]}',
+    related: ["API", "Schema", "Dataclass"]
+  },
+
+  // ── L ──────────────────────────────────────────────────────────────
+  {
+    term: "LLM",
+    en: "Large Language Model",
+    tag: "ai",
+    def: "Um <strong>modelo de linguagem de grande escala</strong> — o tipo de IA por trás do Claude, GPT, Gemini e DeepSeek. Treinado em enormes volumes de texto, aprende padrões de linguagem e é capaz de gerar texto, responder perguntas e executar tarefas complexas.",
+    example: "Claude, GPT-4, DeepSeek, Gemini e Llama são todos LLMs. No process2diagram você pode escolher qual usar — cada um tem custo, velocidade e qualidade diferentes.",
+    related: ["Token", "Context window", "Provider", "API"]
+  },
+  {
+    term: "Long context",
+    en: "Long context",
+    tag: "ai",
+    def: "A capacidade de processar <strong>textos muito longos de uma vez</strong> sem perder informação. LLMs com context window grande (como DeepSeek com 1M tokens) conseguem analisar transcrições longas inteiras, sem precisar quebrar em pedaços.",
+    example: "O process2diagram detecta automaticamente quando a transcrição é muito longa e ativa o modo long context — aumenta max_tokens e timeout.",
+    related: ["Context window", "Token", "LLM"]
+  },
+
+  // ── M ──────────────────────────────────────────────────────────────
+  {
+    term: "Main (branch)",
+    en: "Main branch",
+    tag: "dev",
+    def: "O <strong>branch principal do repositório</strong> — onde fica o código estável e em produção. No process2diagram, qualquer push para o main dispara o deploy automático no Streamlit Cloud.",
+    example: "Você nunca edita diretamente no main via GitHub web editor (pitfall conhecido). Sempre edita localmente no PyCharm e dá push.",
+    related: ["Branch", "Git", "Deploy"]
+  },
+  {
+    term: "Migrate / migrate()",
+    en: "Migration / migrate()",
+    tag: "dev",
+    def: "Uma função que <strong>atualiza estruturas de dados existentes</strong> para um novo formato, de forma segura. No process2diagram, todo novo campo adicionado ao KnowledgeHub precisa de uma entrada em migrate() para garantir que registros antigos do banco não causem erro.",
+    example: "Se você adiciona o campo 'validation_score' ao KnowledgeHub, o migrate() garante que hubs salvos antes dessa mudança recebam um valor padrão (ex: None) ao serem carregados.",
+    related: ["KnowledgeHub", "Dataclass", "Backfill"]
+  },
+  {
+    term: "Mockup",
+    en: "Mockup / Wireframe",
+    tag: "ux",
+    def: "Uma <strong>representação visual prévia de uma interface</strong> — mostra o layout, os componentes e a organização da tela antes de qualquer código de produção ser escrito. Pode ser desde um rascunho simples até um protótipo interativo.",
+    example: "No plano HTML da ValidationHub, o mockup mostra as 4 tabs clicáveis com as métricas em seus lugares — para você confirmar 'é isso que quero' antes de implementar.",
+    related: ["HTML-first", "Spec", "UI"]
+  },
+  {
+    term: "Módulo",
+    en: "Module",
+    tag: "dev",
+    def: "Um <strong>arquivo de código com uma responsabilidade específica</strong>, reutilizável em outras partes do sistema. Em Python, cada arquivo .py é potencialmente um módulo. Organizar o código em módulos torna o sistema mais fácil de entender e manter.",
+    example: "bpmn_generator.py é um módulo responsável exclusivamente por gerar o XML do BPMN. bpmn_viewer.py é outro módulo responsável por exibir esse XML.",
+    related: ["Refatoração", "Arquitetura"]
+  },
+
+  // ── O ──────────────────────────────────────────────────────────────
+  {
+    term: "Orquestrador",
+    en: "Orchestrator",
+    tag: "ai",
+    def: "Um componente que <strong>coordena a execução de vários agentes</strong> em sequência ou em paralelo, decidindo quem executa, em que ordem e como os resultados são combinados.",
+    example: "O Orchestrator do process2diagram executa: quality → preprocessor → NLP → BPMN → (minutes + requirements em paralelo) → SBVR → BMM → synthesizer.",
+    related: ["Agente (AI)", "Pipeline", "Paralelo"]
+  },
+
+  // ── P ──────────────────────────────────────────────────────────────
+  {
+    term: "Paralelo (execução)",
+    en: "Parallel execution",
+    tag: "dev",
+    def: "Executar <strong>duas ou mais tarefas simultaneamente</strong>, em vez de uma após a outra. Reduz o tempo total quando as tarefas são independentes entre si.",
+    example: "O AgentMinutes e o AgentRequirements rodam em paralelo via ThreadPoolExecutor — os dois processam ao mesmo tempo, economizando metade do tempo comparado à execução sequencial.",
+    related: ["Orquestrador", "Pipeline"]
+  },
+  {
+    term: "pgvector",
+    en: "pgvector",
+    tag: "dev",
+    def: "Uma <strong>extensão do banco de dados PostgreSQL</strong> (usado pelo Supabase) que permite armazenar e buscar vetores de embeddings. Habilita busca por similaridade semântica diretamente no banco.",
+    example: "Quando você faz uma pergunta no Assistente do process2diagram, ele converte a pergunta em embedding e usa pgvector para encontrar os trechos de transcrição mais relevantes.",
+    related: ["Embedding", "Supabase", "RAG"]
+  },
+  {
+    term: "Pipeline",
+    en: "Pipeline",
+    tag: "dev",
+    def: "Uma <strong>sequência de etapas de processamento</strong> onde a saída de uma etapa é a entrada da próxima. Como uma linha de montagem: cada estação faz sua parte e passa adiante.",
+    example: "O pipeline do process2diagram: transcrição → qualidade → limpeza → NLP → BPMN → ata + requisitos → SBVR → BMM → relatório.",
+    related: ["Orquestrador", "Agente (AI)", "Paralelo"]
+  },
+  {
+    term: "Pitfall",
+    en: "Pitfall",
+    tag: "met",
+    def: "Uma <strong>armadilha conhecida</strong> — um erro que já aconteceu ou que é fácil de cometer, documentado para que não se repita. No contexto de desenvolvimento, pitfalls são registrados com o problema, a causa e a solução correta.",
+    example: "Pitfall do process2diagram: editar arquivos grandes pelo GitHub web editor substitui o arquivo inteiro silenciosamente. Solução: sempre usar PyCharm/CLI. Isso já causou perda de 3.463 linhas de código (commit 797eb35).",
+    related: ["CLAUDE.md", "Checklist de entrega"]
+  },
+  {
+    term: "Prompt",
+    en: "Prompt",
+    tag: "ai",
+    def: "O <strong>texto que você envia a um LLM</strong> para obter uma resposta. Pode ser uma pergunta simples ou uma instrução complexa com contexto, exemplos e formato esperado. A qualidade do prompt determina diretamente a qualidade da resposta.",
+    example: "'Leia o CLAUDE.md abaixo e gere um plano HTML para criar a ValidationHub.py, com mockup das 4 tabs, fluxo de dados e checklist.' — isso é um prompt bem estruturado.",
+    related: ["System prompt", "Few-shot", "LLM"]
+  },
+  {
+    term: "Prompt engineering",
+    en: "Prompt engineering",
+    tag: "ai",
+    def: "A prática de <strong>escrever e refinar prompts</strong> para obter os melhores resultados de um LLM. Envolve técnicas como ser específico, dar exemplos (few-shot), pedir passo a passo e definir o formato de saída.",
+    example: "Em vez de 'explique BPMN', um prompt engenheirado seria: 'Explique BPMN 2.0 em 5 pontos práticos para alguém que já usa automação de processos. Foque nos elementos mais usados: tasks, gateways e pools.'",
+    related: ["Prompt", "Few-shot", "System prompt"]
+  },
+  {
+    term: "Provider (LLM)",
+    en: "LLM Provider",
+    tag: "ai",
+    def: "A <strong>empresa ou serviço que fornece o modelo de linguagem</strong>. Cada provider tem seus modelos, preços, limites de uso e características. Você escolhe qual usar dependendo da tarefa.",
+    example: "No process2diagram: DeepSeek (barato, padrão), Anthropic/Claude (sem json_mode), OpenAI, Groq (mais rápido), Google Gemini (free tier). Cada um com tradeoffs diferentes.",
+    related: ["LLM", "API", "Token"]
+  },
+  {
+    term: "Push",
+    en: "Git push",
+    tag: "dev",
+    def: "<strong>Enviar commits locais para o repositório remoto</strong> (GitHub). O que está só no seu computador sobe para a nuvem, fica disponível de qualquer lugar e aciona deploys automáticos se configurados.",
+    example: "git push origin main — envia as alterações locais para o GitHub, que aciona o rebuild automático no Streamlit Cloud.",
+    related: ["Git", "Commit", "Deploy", "GitHub"]
+  },
+
+  // ── R ──────────────────────────────────────────────────────────────
+  {
+    term: "RAG",
+    en: "Retrieval-Augmented Generation",
+    tag: "ai",
+    def: "Uma técnica onde o LLM <strong>busca informações relevantes em uma base de dados antes de responder</strong> — em vez de depender só do que aprendeu no treinamento. Resultado: respostas mais precisas e baseadas nos seus dados reais.",
+    example: "O Assistente do process2diagram usa RAG: quando você pergunta sobre uma reunião específica, ele busca os trechos relevantes no Supabase e os inclui no contexto do LLM antes de responder.",
+    related: ["Embedding", "pgvector", "Context window"]
+  },
+  {
+    term: "Refatoração",
+    en: "Refactoring",
+    tag: "dev",
+    def: "<strong>Reorganizar o código existente sem mudar o comportamento externo</strong>. O software continua fazendo a mesma coisa, mas o código interno fica mais limpo, legível e fácil de manter.",
+    example: "Separar a lógica de lane-crossing do bpmn_generator.py em uma função isolada é uma refatoração — o resultado final (o XML) é o mesmo, mas o código fica mais fácil de entender e testar.",
+    related: ["Módulo", "Pitfall", "Teste"]
+  },
+  {
+    term: "Repositório",
+    en: "Repository (repo)",
+    tag: "dev",
+    def: "A <strong>pasta do projeto controlada pelo Git</strong> — contém todo o código, histórico de versões e configurações. Pode ser local (no seu computador) ou remoto (no GitHub).",
+    example: "github.com/pedroregato/process2diagram é o repositório remoto do project. A pasta C:\\projetos\\process2diagram no seu PC é o repositório local.",
+    related: ["Git", "GitHub", "Branch"]
+  },
+
+  // ── S ──────────────────────────────────────────────────────────────
+  {
+    term: "Session state",
+    en: "Session state",
+    tag: "dev",
+    def: "No Streamlit, um <strong>dicionário que persiste dados entre reruns</strong> da aplicação. Como o Streamlit reexecuta o script inteiro a cada interação do usuário, o session_state é a forma de manter informações entre essas execuções.",
+    example: "st.session_state['hub'] guarda o KnowledgeHub. Sem isso, toda vez que o usuário clica em um botão, os dados do pipeline processado seriam perdidos.",
+    related: ["Streamlit", "KnowledgeHub", "Guard (código)"]
+  },
+  {
+    term: "Skill (AI)",
+    en: "Agent Skill / SKILL.md",
+    tag: "ai",
+    def: "Um <strong>arquivo de instruções especializadas para um agente</strong> — define o sistema prompt, o formato de saída esperado e as regras que aquele agente deve seguir. É o 'manual de operação' de um agente específico.",
+    example: "skill_bpmn.md instrui o AgentBPMN: quais regras seguir para nomear lanes, que elementos não declarar (o gerador cuida), qual JSON retornar.",
+    related: ["Agente (AI)", "System prompt", "CLAUDE.md"]
+  },
+  {
+    term: "SOAP",
+    en: "Simple Object Access Protocol",
+    tag: "dev",
+    def: "Um <strong>protocolo de comunicação entre sistemas via XML</strong>, mais antigo e mais formal que REST/JSON. Ainda muito usado em sistemas corporativos como o SE Suite.",
+    example: "O Telegram Approval Bridge usa a API SOAP do SE Suite para consultar pendências e registrar aprovações — a comunicação é via XML estruturado.",
+    related: ["API", "Endpoint", "XML"]
+  },
+  {
+    term: "Spec",
+    en: "Specification",
+    tag: "met",
+    def: "Uma <strong>especificação detalhada</strong> do que deve ser construído — o quê, como, de onde vêm os dados, quais são os limites. No método HTML-first, a spec é um documento HTML interativo em vez de um texto plano.",
+    example: "O validationhub-plan.html é a spec da ValidationHub.py: define as 4 tabs, as fontes de dados de cada métrica, o esqueleto do arquivo e o checklist de entrega.",
+    related: ["HTML-first", "Mockup", "Checklist de entrega"]
+  },
+  {
+    term: "Streamlit",
+    en: "Streamlit",
+    tag: "dev",
+    def: "Um framework Python que permite <strong>criar aplicações web interativas com código Python puro</strong>, sem precisar escrever HTML/CSS/JavaScript. Muito usado para dashboards de dados e ferramentas internas.",
+    example: "O process2diagram é uma aplicação Streamlit — você escreve Python, e o Streamlit cuida de renderizar a interface, os gráficos e os botões no browser.",
+    related: ["Session state", "Deploy", "Python"]
+  },
+  {
+    term: "Supabase",
+    en: "Supabase",
+    tag: "dev",
+    def: "Uma <strong>plataforma de banco de dados PostgreSQL na nuvem</strong>, com APIs automáticas e suporte a vetores (pgvector). Funciona como backend-as-a-service: você tem banco de dados, autenticação e storage sem gerenciar servidores.",
+    example: "O process2diagram usa o Supabase para armazenar reuniões, embeddings de transcrições, cache de respostas LLM e telemetria de uso.",
+    related: ["pgvector", "PostgreSQL", "Embedding"]
+  },
+  {
+    term: "System prompt",
+    en: "System prompt",
+    tag: "ai",
+    def: "Um conjunto de <strong>instruções enviadas ao LLM antes da conversa começar</strong>, definindo seu comportamento, papel e restrições. O usuário normalmente não vê o system prompt — ele configura como o modelo vai responder.",
+    example: "O skill_bpmn.md contém o system prompt do AgentBPMN: instrui o modelo a extrair steps, edges e lanes no formato JSON específico, seguindo as regras BPMN do projeto.",
+    related: ["Prompt", "Few-shot", "Skill (AI)"]
+  },
+
+  // ── T ──────────────────────────────────────────────────────────────
+  {
+    term: "Telemetria",
+    en: "Telemetry",
+    tag: "dev",
+    def: "A <strong>coleta automática de dados de uso e performance</strong> de um sistema — latência, erros, quantidade de chamadas, tokens usados. Permite entender como o sistema está se comportando em produção.",
+    example: "O LLMTelemetry do process2diagram registra automaticamente: qual agente chamou, qual provider, quantos tokens usou, quanto tempo levou — sem interferir no funcionamento.",
+    related: ["Provider (LLM)", "Token", "Cache semântico"]
+  },
+  {
+    term: "Terminal",
+    en: "Terminal / Command line",
+    tag: "dev",
+    def: "Uma <strong>interface de texto para executar comandos</strong> no sistema operacional — ao contrário de clicar em ícones, você digita instruções. No PyCharm, é o painel inferior onde você executa Python, Git e outros comandos.",
+    example: "streamlit run app.py — digitado no terminal, inicia o servidor local do process2diagram em http://localhost:8501.",
+    related: ["Git", "Claude Code", "IDE"]
+  },
+  {
+    term: "Token",
+    en: "Token",
+    tag: "ai",
+    def: "A <strong>unidade básica de texto</strong> que um LLM processa — aproximadamente uma palavra ou parte de uma palavra. LLMs cobram por tokens usados (entrada + saída), e têm um limite máximo de tokens por chamada.",
+    example: "1000 tokens ≈ 750 palavras. Uma transcrição de reunião de 1 hora pode ter 8.000–15.000 tokens. O DeepSeek cobra $0.07 por 1 milhão de tokens de entrada.",
+    related: ["LLM", "Context window", "Provider (LLM)"]
+  },
+  {
+    term: "Tool use",
+    en: "Tool use / Function calling",
+    tag: "ai",
+    def: "A capacidade de um LLM de <strong>chamar funções externas</strong> durante uma conversa — buscar dados, executar código, consultar um banco. O modelo decide quando e como usar cada ferramenta disponível.",
+    example: "No Assistente do process2diagram, o LLM pode chamar a tool get_meeting_decisions para buscar decisões de uma reunião específica no Supabase — sem você precisar buscar manualmente.",
+    related: ["Agente (AI)", "RAG", "API"]
+  },
+  {
+    term: "Throwaway",
+    en: "Throwaway (software)",
+    tag: "met",
+    def: "Código ou documentação criada <strong>temporariamente para um propósito específico</strong>, descartável após o uso. No método HTML-first, planos simples podem ser throwaway — valem para guiar a implementação, não precisam ser perfeitos ou mantidos para sempre.",
+    example: "Um HTML rápido para visualizar como ficaria uma refatoração de 2 horas é throwaway — cumpre o papel de esclarecer, depois vai para o lixo.",
+    related: ["HTML-first", "Spec"]
+  },
+
+  // ── V ──────────────────────────────────────────────────────────────
+  {
+    term: "Versionamento",
+    en: "Version control",
+    tag: "dev",
+    def: "O <strong>controle de todas as versões</strong> de um arquivo ou projeto ao longo do tempo. Com Git, cada commit é uma versão salva — você pode comparar qualquer duas versões ou voltar a qualquer ponto da história.",
+    example: "O pitfall do GitHub web editor foi descoberto porque o versionamento mostrou que o commit 797eb35 trocou 3.556 linhas por 93 — o histórico Git evidenciou o problema.",
+    related: ["Git", "Commit", "Repositório"]
+  },
+
+];
+
+// ── RENDER ─────────────────────────────────────────────
+let activeFilter = 'all';
+
+function tagLabel(t) {
+  const m = { ai:'AI & LLM', dev:'Desenvolvimento', met:'Metodologia', ux:'UX & Interface', gen:'Geral' };
+  return m[t] || t;
+}
+function tagClass(t) {
+  return 'tag-' + t;
+}
+
+function render(entries) {
+  const content = document.getElementById('glossary-content');
+  const noRes   = document.getElementById('no-results');
+
+  // Limpa tudo exceto no-results
+  Array.from(content.children).forEach(c => { if (c.id !== 'no-results') c.remove(); });
+
+  if (entries.length === 0) {
+    noRes.style.display = 'block';
+    document.getElementById('result-count').textContent = '0 termos';
+    return;
+  }
+  noRes.style.display = 'none';
+
+  // Agrupa por letra
+  const byLetter = {};
+  entries.forEach(e => {
+    const l = e.term[0].toUpperCase();
+    if (!byLetter[l]) byLetter[l] = [];
+    byLetter[l].push(e);
+  });
+
+  const letters = Object.keys(byLetter).sort();
+  letters.forEach(letter => {
+    const sec = document.createElement('div');
+    sec.className = 'letter-section';
+    sec.id = 'letter-' + letter;
+
+    const heading = document.createElement('div');
+    heading.className = 'letter-heading';
+    heading.textContent = letter;
+    sec.appendChild(heading);
+
+    byLetter[letter].forEach(e => {
+      const entry = document.createElement('div');
+      entry.className = 'entry';
+      entry.dataset.tag = e.tag;
+
+      const related = e.related
+        ? `<div class="entry-related">
+            <span class="er-label">Ver também:</span>
+            ${e.related.map(r => `<span class="er-link" onclick="searchTerm('${r}')">${r}</span>`).join('')}
+           </div>`
+        : '';
+
+      const example = e.example
+        ? `<div class="entry-example">${e.example}</div>`
+        : '';
+
+      entry.innerHTML = `
+        <div class="entry-left">
+          <div class="entry-term">${e.term}</div>
+          <span class="entry-en">${e.en}</span>
+          <span class="entry-tag ${tagClass(e.tag)}">${tagLabel(e.tag)}</span>
+        </div>
+        <div class="entry-right">
+          <div class="entry-def">${e.def}</div>
+          ${example}
+          ${related}
+        </div>`;
+
+      sec.appendChild(entry);
+    });
+
+    content.insertBefore(sec, noRes);
+  });
+
+  // Nav lateral
+  const nav = document.getElementById('nav-index');
+  nav.innerHTML = '<div class="nav-label">Índice</div>';
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(l => {
+    const a = document.createElement('a');
+    a.className = 'nav-letter' + (byLetter[l] ? ' has-entries' : '');
+    a.textContent = l;
+    if (byLetter[l]) {
+      a.onclick = () => document.getElementById('letter-' + l)?.scrollIntoView({ behavior: 'smooth' });
+    }
+    nav.appendChild(a);
+  });
+
+  document.getElementById('result-count').textContent =
+    entries.length + ' termo' + (entries.length !== 1 ? 's' : '');
+}
+
+function buscar() {
+  const q = document.getElementById('search').value.toLowerCase();
+  let filtered = ENTRIES;
+  if (activeFilter !== 'all') filtered = filtered.filter(e => e.tag === activeFilter);
+  if (q) filtered = filtered.filter(e =>
+    e.term.toLowerCase().includes(q) ||
+    e.def.toLowerCase().includes(q) ||
+    (e.example || '').toLowerCase().includes(q) ||
+    (e.related || []).some(r => r.toLowerCase().includes(q))
+  );
+  render(filtered);
+}
+
+function filtrar(tag, btn) {
+  activeFilter = tag;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  buscar();
+}
+
+function searchTerm(term) {
+  document.getElementById('search').value = term;
+  activeFilter = 'all';
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.fb-all').classList.add('active');
+  buscar();
+  document.querySelector('.search-bar')?.scrollIntoView({ behavior: 'smooth' });
+}
+
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('total-count').textContent = ENTRIES.length + ' verbetes';
+  render(ENTRIES);
+});
+</script>
+</body>
+</html>
