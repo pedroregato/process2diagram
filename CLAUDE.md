@@ -11,7 +11,7 @@
 - **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown / Word / PDF), requirements analysis (JSON/Markdown), executive HTML report, interactive requirements mind map
 - **Deploy:** Streamlit Cloud — auto-deploy on push to `main` branch (`github.com/pedroregato/process2diagram`)
 - **Dev environment:** PyCharm on Windows; Python 3.13
-- **Current version:** v4.23
+- **Current version:** v4.24
 
 Supported LLM providers: DeepSeek V4 Flash (default), DeepSeek V4 Pro, DeepSeek V4 Flash (Thinking), Claude (Anthropic), OpenAI, Groq, Google Gemini, Grok (xAI).
 
@@ -42,7 +42,7 @@ process2diagram/
 │   ├── Diagramas.py              # Full-screen diagram viewer (BPMN, Mermaid, Mind Map)
 │   ├── BpmnEditor.py             # BPMN editor — bpmn-js Modeler, version history, Supabase save
 │   ├── Assistente.py             # RAG assistant — conversational Q&A over transcripts
-│   ├── ReqTracker.py             # Requirements tracker — 9 tabs incl. DMN + IBIS
+│   ├── Artefatos.py              # Central de Artefatos — 10 abas: req, mind map, contradições, histórico, reuniões, SBVR, BPMN, DMN, IBIS, rastreabilidade
 │   ├── KnowledgeGraph.py         # Knowledge graph — pyvis physics (Obsidian-like), entity/contradiction viz
 │   ├── MeetingROI.py             # ROI-TR dashboard — type-aware quality indicators
 │   ├── DocumentManager.py        # Document management — 5 tabs: upload, library, extract artifacts, cross-ref, taxonomy
@@ -110,7 +110,7 @@ process2diagram/
 │   ├── cost_estimator.py         # PROVIDER_PRICING table + estimate_cost()
 │   ├── ingest.py                 # .txt/.docx/.pdf file loader
 │   ├── text_utils.py             # rule_keyword_pt() — Portuguese text utils
-│   ├── reqtracker_exporter.py    # RequirementsModel → Excel/CSV
+│   ├── reqtracker_exporter.py    # RequirementsModel → HTML/PDF (usado por Artefatos.py)
 │   └── document_store.py         # Document CRUD + embedding + semantic/keyword search (Supabase)
 │
 ├── ui/
@@ -207,7 +207,7 @@ AgentRequirements┘
 |---|---|---|
 | **Início** | Home.py (default) | Todos |
 | **Pipeline** | Pipeline.py, Diagramas.py, BpmnEditor.py | Todos |
-| **Análise** | Assistente.py, ReqTracker.py, ValidationHub.py, MeetingROI.py, DocumentManager.py | Todos |
+| **Análise** | Assistente.py, Artefatos.py, ValidationHub.py, MeetingROI.py, DocumentManager.py | Todos |
 | **Sistema** | Settings.py, CostEstimator.py, LLMBenchmark.py [+ MasterAdmin.py, DatabaseOverview.py] | Todos [admin extra] |
 | **Ajuda** | ComoIniciar, Assistente (tool guide), Glossário, Arquiteturas, CKF | Todos |
 | **Manutenção** | BatchRunner.py, BpmnBackfill.py, MinutesBackfill.py, TranscriptBackfill.py | Admin only |
