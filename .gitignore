@@ -1,5 +1,6 @@
 # Secrets — never commit credentials
 .streamlit/secrets.toml
+.claude/settings.local.json
 mcp/google_console/*.json
 mcp/google_console/.google-calendar
 
