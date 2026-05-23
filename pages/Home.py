@@ -257,7 +257,7 @@ if _ap_id:
 elif _all_projects:
     with st.container(border=True):
         st.markdown("#### 📁 Selecione o Contexto de Trabalho")
-        st.caption("O contexto ativo é usado em todas as páginas: Assistente, ReqTracker, Editor BPMN, ROI-TR e ValidationHub.")
+        st.caption("O contexto ativo é usado em todas as páginas: Assistente, Artefatos, Editor BPMN, ROI-TR e ValidationHub.")
         _proj_map = {p["name"]: p for p in _all_projects}
         _proj_sel = st.selectbox(
             "Contexto", list(_proj_map.keys()),
@@ -293,16 +293,17 @@ recent = _load_recent()
 def _fmt(n: int, available: bool) -> str:
     return str(n) if available else "—"
 
-_KPI_ACCENTS = ["#C97B1A", "#3b82f6", "#10b981", "#8b5cf6"]
-_KPI_ICONS   = ["📁", "🗓️", "📝", "📐"]
+_KPI_ACCENTS = ["#C97B1A", "#3b82f6", "#10b981", "#8b5cf6", "#ec4899"]
+_KPI_ICONS   = ["📁", "🗓️", "📝", "📐", "📄"]
 _KPI_DATA    = [
     ("n_projects",   "Contextos"),
     ("n_meetings",   "Reuniões"),
     ("n_reqs",       "Requisitos"),
     ("n_bpmn_procs", "Processos BPMN"),
+    ("n_documents",  "Documentos"),
 ]
 
-cols = st.columns(4)
+cols = st.columns(5)
 for col, (key, label), accent, icon in zip(cols, _KPI_DATA, _KPI_ACCENTS, _KPI_ICONS):
     val = _fmt(stats[key], stats["available"])
     with col:
@@ -383,7 +384,7 @@ with col_nav:
     with b5:
         st.page_link("pages/ValidationHub.py",  label="✅ Validação",     use_container_width=True)
     with b6:
-        st.page_link("pages/ReqTracker.py",     label="📋 Req. Tracker",  use_container_width=True)
+        st.page_link("pages/Artefatos.py",       label="🗂️ Artefatos",     use_container_width=True)
     with b7:
         st.page_link("pages/MeetingROI.py",     label="📊 ROI-TR",        use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)

@@ -59,7 +59,7 @@ pages = {
     "Análise": [
         st.Page("pages/ContextHealth.py",     title="Saúde do Contexto",     icon="🏥"),
         st.Page("pages/Assistente.py",        title="Assistente",            icon="💬"),
-        st.Page("pages/ReqTracker.py",        title="Req. Tracker",          icon="📋"),
+        st.Page("pages/Artefatos.py",          title="Artefatos",             icon="🗂️"),
         st.Page("pages/ValidationHub.py",     title="Validação",             icon="✅"),
         st.Page("pages/MeetingROI.py",        title="Qualidade ROI-TR",      icon="📊"),
         st.Page("pages/ReportBackfill.py",    title="Relatório Executivo",   icon="📄"),

@@ -1512,7 +1512,7 @@ def get_tool_schemas_openai() -> list[dict]:
                 "name": "set_active_project",
                 "description": (
                     "Define o contexto de trabalho ativo para toda a aplicação. "
-                    "Após a mudança, todas as páginas (Assistente, ReqTracker, Editor BPMN, ROI-TR, ValidationHub) "
+                    "Após a mudança, todas as páginas (Assistente, Artefatos, Editor BPMN, ROI-TR, ValidationHub) "
                     "passarão a usar o novo contexto automaticamente. "
                     "Use quando o usuário pedir para mudar, selecionar ou trocar o contexto de trabalho."
                 ),
@@ -2415,7 +2415,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
 
 ## Outras páginas
   • BpmnEditor       — editor visual BPMN com histórico de versões
-  • ReqTracker       — rastreamento de requisitos ao longo das reuniões
+  • Artefatos        — central de artefatos: requisitos, SBVR, BMM, DMN, IBIS com rastreabilidade de origem
   • MeetingROI       — dashboard ROI-TR por tipo de reunião
   • DatabaseOverview — saúde do banco + gestão de embeddings
   • BatchRunner      — processamento em lote de múltiplas transcrições

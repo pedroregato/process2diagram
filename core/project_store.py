@@ -2218,11 +2218,12 @@ def get_global_stats() -> dict:
     Sempre retorna um dict com chaves definidas — nunca lança exceção.
     """
     base: dict = {
-        "n_projects":  0,
-        "n_meetings":  0,
-        "n_reqs":      0,
+        "n_projects":   0,
+        "n_meetings":   0,
+        "n_reqs":       0,
         "n_bpmn_procs": 0,
-        "available":   False,
+        "n_documents":  0,
+        "available":    False,
     }
     db = _db()
     if not db:
@@ -2239,6 +2240,10 @@ def get_global_stats() -> dict:
         pass
     try:
         base["n_bpmn_procs"] = len(_ok(db.table("bpmn_processes").select("id").execute()))
+    except Exception:
+        pass
+    try:
+        base["n_documents"] = len(_ok(db.table("meeting_documents").select("id").execute()))
     except Exception:
         pass
     return base

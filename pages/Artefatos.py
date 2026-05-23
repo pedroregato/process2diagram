@@ -1,7 +1,8 @@
-# pages/ReqTracker.py
+# pages/Artefatos.py
 # ─────────────────────────────────────────────────────────────────────────────
-# Rastreador de Requisitos — painel consolidado por projeto.
-# Mostra requisitos, histórico de versões e contradições detectadas.
+# Central de Artefatos — painel consolidado de todos os artefatos do projeto.
+# Cobre: Requisitos, Mind Map, Contradições, Histórico, Reuniões, SBVR,
+#        Processos BPMN, DMN, IBIS e Rastreabilidade de Origem (PC24).
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
@@ -28,6 +29,14 @@ from core.project_store import (
     list_dmn_by_project, list_argumentation_by_project,
 )
 from ui.project_selector import require_active_project
+
+try:
+    from modules.document_store import list_documents
+    _has_doc_store = True
+except ImportError:
+    _has_doc_store = False
+    def list_documents(project_id, **_):  # type: ignore
+        return []
 
 apply_auth_gate()
 
@@ -76,11 +85,13 @@ st.markdown("""
 .ibis-badge-decided    { background:#0d4f2e; color:#4ade80; }
 .ibis-badge-deferred   { background:#4a3000; color:#fbbf24; }
 .ibis-badge-unresolved { background:#4a0d0d; color:#f87171; }
+.badge-transcricao { background:#1e3a6e; color:#93c5fd; }
+.badge-documento   { background:#0d3f2e; color:#6ee7b7; }
 </style>
 """, unsafe_allow_html=True)
 
 # ── Header ────────────────────────────────────────────────────────────────────
-st.markdown("# 📋 Rastreador de Requisitos")
+st.markdown("# 🗂️ Central de Artefatos")
 
 if not supabase_configured():
     st.error("⚙️ Supabase não configurado. Adicione as credenciais em Settings → Secrets.")
@@ -123,6 +134,9 @@ def _load_dmn(pid):                return list_dmn_by_project(pid)
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_argumentation(pid):      return list_argumentation_by_project(pid)
 
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_documents(pid):          return list_documents(pid)
+
 meetings         = _load_meetings(project_id)
 requirements     = _load_requirements(project_id)
 contradictions   = _load_contradictions(project_id)
@@ -131,8 +145,10 @@ sbvr_rules       = _load_sbvr_rules(project_id)
 bpmn_procs       = _load_bpmn_procs(project_id)
 dmn_decisions    = _load_dmn(project_id)
 ibis_questions   = _load_argumentation(project_id)
+documents        = _load_documents(project_id)
 
 meet_map = {m["id"]: m for m in meetings}
+doc_map  = {d["id"]: d for d in documents}
 
 def meet_label(mid: str | None) -> str:
     if not mid or mid not in meet_map:
@@ -141,26 +157,40 @@ def meet_label(mid: str | None) -> str:
     dt = m.get("meeting_date") or ""
     return f"Reunião {m.get('meeting_number', '?')} — {m.get('title', '')} ({dt})"
 
+def doc_label(doc_id: str | None) -> str:
+    if not doc_id or doc_id not in doc_map:
+        return "—"
+    return doc_map[doc_id].get("title", "Documento")
+
+def _origin_badge(origin: str | None) -> str:
+    """Retorna HTML de badge para a origem do artefato."""
+    if origin == "documento":
+        return '<span class="badge badge-documento">📄 Documento</span>'
+    return '<span class="badge badge-transcricao">🎙️ Transcrição</span>'
+
 # ── Métricas resumo ───────────────────────────────────────────────────────────
 n_total        = len(requirements)
 n_contradicted = sum(1 for r in requirements if r.get("status") == "contradicted")
 n_revised      = sum(1 for r in requirements if r.get("status") == "revised")
 n_meetings     = len(meetings)
+n_req_doc      = sum(1 for r in requirements if r.get("origin") == "documento")
+n_terms_doc    = sum(1 for t in sbvr_terms if t.get("origin") == "documento")
+n_rules_doc    = sum(1 for r in sbvr_rules if r.get("origin") == "documento")
 
 c1, c2, c3, c4, c5, c6 = st.columns(6)
-c1.metric("Total de Requisitos", n_total)
+c1.metric("Requisitos", n_total, help=f"{n_req_doc} de documentos · {n_total - n_req_doc} de transcrições")
 c2.metric("Reuniões", n_meetings)
 c3.metric("Revisados", n_revised)
 c4.metric("⚠️ Contradições", n_contradicted, delta=None,
           delta_color="off" if n_contradicted == 0 else "inverse")
-c5.metric("Termos SBVR", len(sbvr_terms))
-c6.metric("Regras SBVR", len(sbvr_rules))
+c5.metric("Termos SBVR", len(sbvr_terms), help=f"{n_terms_doc} de documentos")
+c6.metric("Regras SBVR", len(sbvr_rules), help=f"{n_rules_doc} de documentos")
 
-col_m1, col_m2, col_m3 = st.columns(3)
+col_m1, col_m2, col_m3, col_m4 = st.columns(4)
 col_m1.metric("Decisões DMN", len(dmn_decisions))
 col_m2.metric("Questões IBIS", len(ibis_questions))
-if bpmn_procs:
-    col_m3.metric("Processos BPMN", len(bpmn_procs))
+col_m3.metric("Processos BPMN", len(bpmn_procs))
+col_m4.metric("Documentos", len(documents))
 
 st.markdown("---")
 
@@ -199,7 +229,7 @@ with st.expander("📦 Exportar Relatório", expanded=False):
         st.download_button(
             label="⬇️ Download HTML",
             data=st.session_state["rt_html"],
-            file_name=f"ReqTracker_{fname}.html",
+            file_name=f"Artefatos_{fname}.html",
             mime="text/html",
             key="rt_dl_html",
         )
@@ -208,7 +238,7 @@ with st.expander("📦 Exportar Relatório", expanded=False):
         st.download_button(
             label="⬇️ Download PDF",
             data=st.session_state["rt_pdf"],
-            file_name=f"ReqTracker_{fname}.pdf",
+            file_name=f"Artefatos_{fname}.pdf",
             mime="application/pdf",
             key="rt_dl_pdf",
         )
@@ -216,7 +246,7 @@ with st.expander("📦 Exportar Relatório", expanded=False):
 st.markdown("---")
 
 # ── Abas principais ───────────────────────────────────────────────────────────
-tab_req, tab_mindmap, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn, tab_dmn, tab_ibis = st.tabs([
+tab_req, tab_mindmap, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn, tab_dmn, tab_ibis, tab_trace = st.tabs([
     "📝 Requisitos",
     "🗺️ Mind Map",
     f"⚠️ Contradições ({len(contradictions)})",
@@ -226,6 +256,7 @@ tab_req, tab_mindmap, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn, tab_dm
     f"📐 Processos BPMN ({len(bpmn_procs)})",
     f"⚖️ DMN ({len(dmn_decisions)})",
     f"🗺️ IBIS ({len(ibis_questions)})",
+    "🔗 Rastreabilidade",
 ])
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -235,7 +266,7 @@ with tab_req:
     if not requirements:
         st.info("Nenhum requisito registrado para este projeto.")
     else:
-        col_f1, col_f2, col_f3 = st.columns(3)
+        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
         with col_f1:
             status_opts = [
                 "Todos", "backlog", "active", "approved", "in_progress",
@@ -248,6 +279,10 @@ with tab_req:
         with col_f3:
             prios = sorted({r.get("priority", "") for r in requirements if r.get("priority")})
             sel_prio = st.selectbox("Prioridade", ["Todos"] + prios, key="rt_prio")
+        with col_f4:
+            sel_origin_req = st.selectbox(
+                "Origem", ["Todas", "Transcrição", "Documento"], key="rt_origin"
+            )
 
         filtered = requirements
         if sel_status != "Todos":
@@ -256,6 +291,10 @@ with tab_req:
             filtered = [r for r in filtered if r.get("req_type") == sel_type]
         if sel_prio != "Todos":
             filtered = [r for r in filtered if r.get("priority") == sel_prio]
+        if sel_origin_req == "Transcrição":
+            filtered = [r for r in filtered if r.get("origin", "transcricao") != "documento"]
+        elif sel_origin_req == "Documento":
+            filtered = [r for r in filtered if r.get("origin") == "documento"]
 
         st.caption(f"Exibindo {len(filtered)} de {n_total} requisito(s)")
         st.markdown("")
@@ -293,16 +332,22 @@ with tab_req:
             ):
                 col_d, col_m = st.columns([3, 1])
                 with col_d:
-                    st.markdown(f'<span class="badge {badge_cls}">{badge_txt}</span>',
-                                unsafe_allow_html=True)
+                    st.markdown(
+                        f'<span class="badge {badge_cls}">{badge_txt}</span> '
+                        f'{_origin_badge(req.get("origin"))}',
+                        unsafe_allow_html=True,
+                    )
                     st.markdown(f"**Descrição:** {req.get('description', '—')}")
                     if req.get("cited_by"):
                         st.caption(f"👤 Proponente: **{req['cited_by']}**")
                     if req.get("source_quote"):
                         st.caption(f'💬 *"{req["source_quote"]}"*')
                 with col_m:
-                    st.caption(f"🏁 {meet_label(req.get('first_meeting_id'))}")
-                    st.caption(f"🔄 {meet_label(req.get('last_meeting_id'))}")
+                    if req.get("origin") == "documento":
+                        st.caption(f"📄 {doc_label(req.get('doc_ref'))}")
+                    else:
+                        st.caption(f"🏁 {meet_label(req.get('first_meeting_id'))}")
+                        st.caption(f"🔄 {meet_label(req.get('last_meeting_id'))}")
                     st.caption(f"📌 {n_ver} versão(ões)")
                     if req.get("owner"):
                         st.caption(f"🙋 {req['owner']}")
@@ -586,11 +631,21 @@ with tab_sbvr:
                 badge_cls, badge_txt = _CATEGORY_BADGE.get(cat, ("badge-active", cat))
                 meet_info = t.get("meetings") or {}
                 m_num = meet_info.get("meeting_number")
-                origin_label = "🤖 Assistente" if t.get("source") == "assistente" or not m_num else f"🗓️ Reunião {m_num}"
+                t_origin = t.get("origin", "transcricao")
+                if t_origin == "documento":
+                    source_label = f"📄 {doc_label(t.get('doc_ref'))}"
+                elif t.get("source") == "assistente" or not m_num:
+                    source_label = "🤖 Assistente"
+                else:
+                    source_label = f"🗓️ Reunião {m_num}"
                 with st.expander(f"**{t.get('term', '—')}**", expanded=False):
-                    st.markdown(f'<span class="badge {badge_cls}">{badge_txt}</span>', unsafe_allow_html=True)
+                    st.markdown(
+                        f'<span class="badge {badge_cls}">{badge_txt}</span> '
+                        f'{_origin_badge(t_origin)}',
+                        unsafe_allow_html=True,
+                    )
                     st.markdown(f"**Definição:** {t.get('definition', '—')}")
-                    st.caption(origin_label)
+                    st.caption(source_label)
 
         with col_r:
             st.markdown(f"### 📋 Regras de Negócio ({len(sbvr_rules)} regras)")
@@ -615,12 +670,22 @@ with tab_sbvr:
                 rule_id = r.get("rule_id") or f"BR-{idx:03d}"
                 meet_info = r.get("meetings") or {}
                 m_num = meet_info.get("meeting_number")
+                r_origin = r.get("origin", "transcricao")
                 kw = r.get("nucleo_nominal") or rule_keyword_pt(r.get("statement", ""))
                 label = f"**{rule_id}**  —  {kw}" if kw else f"**{rule_id}**"
                 with st.expander(label, expanded=False):
-                    st.markdown(f'<span class="badge {badge_cls}">{badge_txt}</span>', unsafe_allow_html=True)
+                    st.markdown(
+                        f'<span class="badge {badge_cls}">{badge_txt}</span> '
+                        f'{_origin_badge(r_origin)}',
+                        unsafe_allow_html=True,
+                    )
                     st.markdown(f"{r.get('statement', '—')}")
-                    footer = f"🗓️ Reunião {m_num}" if m_num else "🤖 Assistente"
+                    if r_origin == "documento":
+                        footer = f"📄 {doc_label(r.get('doc_ref'))}"
+                    elif m_num:
+                        footer = f"🗓️ Reunião {m_num}"
+                    else:
+                        footer = "🤖 Assistente"
                     if r.get("source") and r["source"] not in ("manual", "assistente"):
                         footer += f" · 👤 {r['source']}"
                     st.caption(footer)
@@ -927,3 +992,148 @@ with tab_ibis:
                         st.warning("**Ressalvas:**\n" + "\n".join(f"- {c}" for c in resolution["with_caveats"]))
                 else:
                     st.error("Questão sem resolução ao final da reunião.")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 10 — RASTREABILIDADE DE ORIGEM
+# ════════════════════════════════════════════════════════════════════════════
+
+with tab_trace:
+    st.subheader("Matriz de Rastreabilidade de Origem")
+    st.caption(
+        "Visão consolidada de todos os artefatos com sua fonte de origem: "
+        "reunião (transcrição) ou documento. "
+        "Use os filtros para localizar artefatos por tipo ou origem."
+    )
+
+    # ── Filtros ────────────────────────────────────────────────────────────────
+    tf1, tf2 = st.columns(2)
+    with tf1:
+        sel_trace_tipo = st.selectbox(
+            "Tipo de artefato",
+            ["Todos", "Requisito", "Termo SBVR", "Regra SBVR"],
+            key="trace_tipo",
+        )
+    with tf2:
+        sel_trace_origin = st.selectbox(
+            "Origem",
+            ["Todas", "Transcrição", "Documento"],
+            key="trace_origin",
+        )
+
+    # ── Montar linhas da matriz ────────────────────────────────────────────────
+    import pandas as pd
+
+    rows = []
+
+    if sel_trace_tipo in ("Todos", "Requisito"):
+        for r in requirements:
+            orig = r.get("origin", "transcricao")
+            if sel_trace_origin == "Transcrição" and orig == "documento":
+                continue
+            if sel_trace_origin == "Documento" and orig != "documento":
+                continue
+            num = r.get("req_number", 0)
+            if orig == "documento":
+                fonte = doc_label(r.get("doc_ref"))
+                origem_txt = "📄 Documento"
+            else:
+                mid = r.get("first_meeting_id")
+                fonte = meet_label(mid) if mid else "—"
+                origem_txt = "🎙️ Transcrição"
+            rows.append({
+                "Tipo":    "Requisito",
+                "ID":      f"REQ-{num:03d}",
+                "Título":  r.get("title", "—"),
+                "Origem":  origem_txt,
+                "Fonte":   fonte,
+                "Status":  r.get("status", "—"),
+                "Prio.":   r.get("priority", "—"),
+            })
+
+    if sel_trace_tipo in ("Todos", "Termo SBVR"):
+        for t in sbvr_terms:
+            orig = t.get("origin", "transcricao")
+            if sel_trace_origin == "Transcrição" and orig == "documento":
+                continue
+            if sel_trace_origin == "Documento" and orig != "documento":
+                continue
+            if orig == "documento":
+                fonte = doc_label(t.get("doc_ref"))
+                origem_txt = "📄 Documento"
+            else:
+                meet_info = t.get("meetings") or {}
+                m_num = meet_info.get("meeting_number")
+                fonte = f"Reunião {m_num}" if m_num else "Assistente"
+                origem_txt = "🎙️ Transcrição"
+            rows.append({
+                "Tipo":    "Termo SBVR",
+                "ID":      "—",
+                "Título":  t.get("term", "—"),
+                "Origem":  origem_txt,
+                "Fonte":   fonte,
+                "Status":  t.get("category", "—"),
+                "Prio.":   "—",
+            })
+
+    if sel_trace_tipo in ("Todos", "Regra SBVR"):
+        for idx, r in enumerate(sbvr_rules, 1):
+            orig = r.get("origin", "transcricao")
+            if sel_trace_origin == "Transcrição" and orig == "documento":
+                continue
+            if sel_trace_origin == "Documento" and orig != "documento":
+                continue
+            if orig == "documento":
+                fonte = doc_label(r.get("doc_ref"))
+                origem_txt = "📄 Documento"
+            else:
+                meet_info = r.get("meetings") or {}
+                m_num = meet_info.get("meeting_number")
+                fonte = f"Reunião {m_num}" if m_num else "Assistente"
+                origem_txt = "🎙️ Transcrição"
+            rows.append({
+                "Tipo":    "Regra SBVR",
+                "ID":      r.get("rule_id") or f"BR-{idx:03d}",
+                "Título":  r.get("nucleo_nominal") or r.get("statement", "—")[:80],
+                "Origem":  origem_txt,
+                "Fonte":   fonte,
+                "Status":  r.get("rule_type", "—"),
+                "Prio.":   "—",
+            })
+
+    if not rows:
+        st.info("Nenhum artefato encontrado para os filtros selecionados.")
+    else:
+        # KPIs de rastreabilidade
+        n_doc_rows = sum(1 for row in rows if row["Origem"].startswith("📄"))
+        n_tra_rows = len(rows) - n_doc_rows
+        tk1, tk2, tk3 = st.columns(3)
+        tk1.metric("Total de artefatos", len(rows))
+        tk2.metric("🎙️ De transcrições", n_tra_rows)
+        tk3.metric("📄 De documentos", n_doc_rows)
+        st.markdown("")
+
+        df_trace = pd.DataFrame(rows)
+        st.dataframe(
+            df_trace,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Tipo":   st.column_config.TextColumn(width="small"),
+                "ID":     st.column_config.TextColumn(width="small"),
+                "Título": st.column_config.TextColumn(width="large"),
+                "Origem": st.column_config.TextColumn(width="medium"),
+                "Fonte":  st.column_config.TextColumn(width="large"),
+                "Status": st.column_config.TextColumn(width="small"),
+                "Prio.":  st.column_config.TextColumn(width="small"),
+            },
+        )
+
+        # Download CSV
+        st.download_button(
+            label="⬇️ Exportar CSV",
+            data=df_trace.to_csv(index=False).encode("utf-8"),
+            file_name=f"rastreabilidade_{project_name.replace(' ', '_')}.csv",
+            mime="text/csv",
+            key="trace_csv",
+        )
