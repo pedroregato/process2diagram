@@ -2,9 +2,10 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Document Manager — upload, index, search, and cross-reference meeting documents.
 #
-# 4 tabs:
+# 5 tabs:
 #   📤 Enviar       — upload + embed document
 #   📚 Biblioteca   — list, search, preview, delete
+#   ⚗️ Extrair      — extract requirements / SBVR / BMM / DMN from document (LLM)
 #   🔍 Análise      — cross-reference document vs meeting artifacts (LLM agent)
 #   🏷️ Taxonomia    — browse the document type taxonomy
 # ─────────────────────────────────────────────────────────────────────────────
@@ -93,6 +94,19 @@ def _get_agent():
         provider_cfg = provider_cfg,
     )
 
+def _get_extractor():
+    """Instantiate DocumentExtractorAgent using current session provider."""
+    from modules.config import AVAILABLE_PROVIDERS
+    from modules.session_security import get_api_key
+    provider_name = st.session_state.get("selected_provider", "DeepSeek")
+    provider_cfg  = AVAILABLE_PROVIDERS.get(provider_name, {})
+    api_key       = get_api_key(provider_name)
+    from agents.agent_document_extractor import DocumentExtractorAgent
+    return DocumentExtractorAgent(
+        client_info  = {"api_key": api_key},
+        provider_cfg = provider_cfg,
+    )
+
 def _load_file_content(uploaded_file) -> str:
     """Extract plain text from uploaded .txt / .pdf / .docx file."""
     try:
@@ -107,9 +121,10 @@ def _load_file_content(uploaded_file) -> str:
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
 
-tab_upload, tab_library, tab_analysis, tab_taxonomy = st.tabs([
+tab_upload, tab_library, tab_extract, tab_analysis, tab_taxonomy = st.tabs([
     "📤 Enviar Documento",
     "📚 Biblioteca",
+    "⚗️ Extrair Artefatos",
     "🔍 Análise Cruzada",
     "🏷️ Taxonomia",
 ])
@@ -353,7 +368,181 @@ with tab_library:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 3 — CROSS-REFERENCE ANALYSIS
+# TAB 3 — EXTRACT ARTIFACTS
+# ══════════════════════════════════════════════════════════════════════════════
+
+with tab_extract:
+    st.subheader("Extrair artefatos de documento")
+    st.caption(
+        "Leia um documento e extraia automaticamente requisitos, termos SBVR, "
+        "regras de negócio, metas BMM, estratégias, políticas e decisões DMN."
+    )
+
+    docs_ext = list_documents(project_id)
+    if not docs_ext:
+        st.info("Nenhum documento disponível. Envie um documento na aba **📤 Enviar Documento**.")
+        st.stop()
+
+    # Document selector
+    doc_options_ext = {d["title"]: d["id"] for d in docs_ext}
+    selected_doc_label_ext = st.selectbox(
+        "Documento",
+        list(doc_options_ext.keys()),
+        key="ext_doc_select",
+    )
+    selected_doc_id_ext = doc_options_ext[selected_doc_label_ext]
+
+    ext_lang = st.selectbox(
+        "Idioma dos artefatos extraídos",
+        ["Auto-detect", "Português (Brasil)", "English"],
+        index=0,
+        key="ext_lang",
+    )
+
+    extract_btn = st.button("⚗️ Extrair Artefatos", type="primary", key="ext_btn")
+
+    if extract_btn:
+        doc_content_ext = get_document_content(selected_doc_id_ext)
+        if not doc_content_ext or not doc_content_ext.strip():
+            st.error("O documento selecionado não tem conteúdo armazenado.")
+            st.stop()
+
+        with st.spinner("Extraindo artefatos (LLM)... isso pode levar 20–40 segundos."):
+            try:
+                extractor = _get_extractor()
+                extracted = extractor.extract(selected_doc_label_ext, doc_content_ext, ext_lang)
+            except Exception as exc:
+                extracted = None
+                st.error(f"Erro no agente extrator: {exc}")
+
+        if not extracted:
+            st.error("A extração não retornou resultado. Verifique a chave da API e tente novamente.")
+            st.stop()
+
+        st.session_state["_ext_result"]    = extracted
+        st.session_state["_ext_doc_id"]    = selected_doc_id_ext
+        st.session_state["_ext_doc_title"] = selected_doc_label_ext
+
+    # ── Preview & Save ─────────────────────────────────────────────────────────
+    if st.session_state.get("_ext_result"):
+        extracted   = st.session_state["_ext_result"]
+        ext_doc_id  = st.session_state["_ext_doc_id"]
+        ext_doc_ttl = st.session_state["_ext_doc_title"]
+
+        st.success(f"Extração concluída para: **{ext_doc_ttl}**")
+        st.divider()
+
+        # Summary counts
+        n_req   = len(extracted.get("requirements", []))
+        n_terms = len(extracted.get("sbvr_terms", []))
+        n_rules = len(extracted.get("sbvr_rules", []))
+        n_goals = len(extracted.get("bmm_goals", []))
+        n_strat = len(extracted.get("bmm_strategies", []))
+        n_pol   = len(extracted.get("bmm_policies", []))
+        n_dmn   = len(extracted.get("dmn_decisions", []))
+
+        cols_kpi = st.columns(7)
+        for col, label, val in zip(
+            cols_kpi,
+            ["Requisitos", "Termos SBVR", "Regras SBVR", "Metas BMM", "Estratégias", "Políticas", "Decisões DMN"],
+            [n_req, n_terms, n_rules, n_goals, n_strat, n_pol, n_dmn],
+        ):
+            col.metric(label, val)
+
+        st.divider()
+
+        # Preview per artifact type
+        if n_req:
+            with st.expander(f"📋 Requisitos ({n_req})"):
+                import pandas as pd
+                df_req = pd.DataFrame([
+                    {
+                        "Título": r.get("title", ""),
+                        "Tipo": r.get("req_type", ""),
+                        "Prioridade": r.get("priority", ""),
+                        "Descrição": r.get("description", ""),
+                    }
+                    for r in extracted["requirements"]
+                ])
+                st.dataframe(df_req, use_container_width=True, hide_index=True)
+
+        if n_terms:
+            with st.expander(f"📖 Termos SBVR ({n_terms})"):
+                import pandas as pd
+                df_terms = pd.DataFrame([
+                    {"Termo": t.get("term", ""), "Categoria": t.get("category", ""), "Definição": t.get("definition", "")}
+                    for t in extracted["sbvr_terms"]
+                ])
+                st.dataframe(df_terms, use_container_width=True, hide_index=True)
+
+        if n_rules:
+            with st.expander(f"⚖️ Regras SBVR ({n_rules})"):
+                import pandas as pd
+                df_rules = pd.DataFrame([
+                    {"ID": r.get("id", ""), "Tipo": r.get("rule_type", ""), "Enunciado": r.get("statement", "")}
+                    for r in extracted["sbvr_rules"]
+                ])
+                st.dataframe(df_rules, use_container_width=True, hide_index=True)
+
+        if n_goals or n_strat or n_pol:
+            with st.expander(f"🎯 BMM — Metas / Estratégias / Políticas ({n_goals + n_strat + n_pol})"):
+                if n_goals:
+                    st.markdown("**Metas**")
+                    for g in extracted["bmm_goals"]:
+                        st.markdown(f"- **{g.get('id', '')}** {g.get('description', '')}")
+                if n_strat:
+                    st.markdown("**Estratégias**")
+                    for s in extracted["bmm_strategies"]:
+                        st.markdown(f"- **{s.get('id', '')}** {s.get('description', '')} _(suporta {s.get('supports', '—')})_")
+                if n_pol:
+                    st.markdown("**Políticas**")
+                    for p in extracted["bmm_policies"]:
+                        st.markdown(f"- **{p.get('id', '')}** {p.get('description', '')}")
+
+        if n_dmn:
+            with st.expander(f"🔀 Decisões DMN ({n_dmn})"):
+                import pandas as pd
+                df_dmn = pd.DataFrame([
+                    {"ID": d.get("id", ""), "Nome": d.get("name", ""), "Pergunta": d.get("question", ""), "Resultado": d.get("outcome", "")}
+                    for d in extracted["dmn_decisions"]
+                ])
+                st.dataframe(df_dmn, use_container_width=True, hide_index=True)
+
+        st.divider()
+
+        # JSON download
+        import json
+        st.download_button(
+            label="⬇️ Baixar JSON completo",
+            data=json.dumps(extracted, ensure_ascii=False, indent=2),
+            file_name=f"artefatos_{ext_doc_ttl[:40].replace(' ', '_')}.json",
+            mime="application/json",
+        )
+
+        # Save to project
+        if st.button("💾 Salvar artefatos no projeto", type="primary", key="ext_save_btn"):
+            with st.spinner("Salvando no Supabase..."):
+                try:
+                    from core.project_store import save_artifacts_from_document
+                    counts = save_artifacts_from_document(project_id, ext_doc_id, extracted)
+                    st.success(
+                        f"Salvo: {counts['requirements']} requisitos · "
+                        f"{counts['terms']} termos SBVR · "
+                        f"{counts['rules']} regras SBVR"
+                        + (" · BMM" if counts.get("bmm") else "")
+                        + (" · DMN" if counts.get("dmn") else "")
+                    )
+                    # Clear cached results so button disappears
+                    st.session_state.pop("_ext_result", None)
+                    st.session_state.pop("_ext_doc_id", None)
+                    st.session_state.pop("_ext_doc_title", None)
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Erro ao salvar: {exc}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 4 — CROSS-REFERENCE ANALYSIS
 # ══════════════════════════════════════════════════════════════════════════════
 
 with tab_analysis:
@@ -585,7 +774,7 @@ with tab_analysis:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 4 — TAXONOMY
+# TAB 5 — TAXONOMY
 # ══════════════════════════════════════════════════════════════════════════════
 
 with tab_taxonomy:

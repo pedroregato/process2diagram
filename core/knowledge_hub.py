@@ -167,6 +167,9 @@ class RequirementItem:
     # Multi-sphere traceability (Fase G — v4.24)
     business_rule_refs: list = field(default_factory=list)  # List[str] — e.g. ["BR001", "BR003"]
     sphere: Optional[str] = None   # inherited from the most relevant SBVR rule
+    # Origin traceability (v4.23)
+    origin: str = "transcricao"    # 'transcricao' | 'documento'
+    doc_ref: Optional[str] = None  # UUID of source meeting_document when origin='documento'
 
 
 @dataclass
@@ -287,6 +290,9 @@ class BusinessTerm:
     term: str
     definition: str
     category: str = "concept"   # concept | fact_type | role | process
+    # Origin traceability (v4.23)
+    origin: str = "transcricao"
+    doc_ref: Optional[str] = None
 
 
 _VALID_SPHERES = frozenset(
@@ -307,6 +313,9 @@ class BusinessRule:
     sphere_owner: str = ""          # typical owner: CMO, CFO, CHRO, COO, CLO, CTO, CEO
     bmm_policy_ref: Optional[str] = None   # "POL-001" reference to hub.bmm.policies
     speaker_quote: str = ""         # verbatim quote from transcript
+    # Origin traceability (v4.23)
+    origin: str = "transcricao"
+    doc_ref: Optional[str] = None
 
 
 @dataclass
@@ -328,6 +337,9 @@ class BMMGoal:
     description: str = ""
     goal_type: str = "strategic"   # strategic | tactical | operational
     horizon: str = "medium"        # short | medium | long
+    # Origin traceability (v4.23)
+    origin: str = "transcricao"
+    doc_ref: Optional[str] = None
 
 
 @dataclass
@@ -337,6 +349,9 @@ class BMMStrategy:
     name: str
     description: str = ""
     supports: list[str] = field(default_factory=list)   # goal ids
+    # Origin traceability (v4.23)
+    origin: str = "transcricao"
+    doc_ref: Optional[str] = None
 
 
 @dataclass
@@ -345,6 +360,9 @@ class BMMPolicy:
     id: str
     statement: str
     category: str = ""   # governance | compliance | operational | financial
+    # Origin traceability (v4.23)
+    origin: str = "transcricao"
+    doc_ref: Optional[str] = None
 
 
 @dataclass
@@ -392,6 +410,9 @@ class DMNDecision:
     rules: list[DMNRule] = field(default_factory=list)
     hit_policy: str = "U"    # U=Unique, A=Any, F=First, C=Collect
     confidence: float = 1.0
+    # Origin traceability (v4.23)
+    origin: str = "transcricao"
+    doc_ref: Optional[str] = None
 
 
 @dataclass
@@ -704,6 +725,43 @@ class KnowledgeHub:
                 _req.business_rule_refs = []
             if not hasattr(_req, 'sphere'):
                 _req.sphere = None
+
+        # ── v4.23: origin + doc_ref para artefatos de documentos ─────────────
+        for _req in hub.requirements.requirements:
+            if not hasattr(_req, 'origin'):
+                _req.origin = "transcricao"
+            if not hasattr(_req, 'doc_ref'):
+                _req.doc_ref = None
+        for _term in hub.sbvr.vocabulary:
+            if not hasattr(_term, 'origin'):
+                _term.origin = "transcricao"
+            if not hasattr(_term, 'doc_ref'):
+                _term.doc_ref = None
+        for _rule in hub.sbvr.rules:
+            if not hasattr(_rule, 'origin'):
+                _rule.origin = "transcricao"
+            if not hasattr(_rule, 'doc_ref'):
+                _rule.doc_ref = None
+        for _goal in hub.bmm.goals:
+            if not hasattr(_goal, 'origin'):
+                _goal.origin = "transcricao"
+            if not hasattr(_goal, 'doc_ref'):
+                _goal.doc_ref = None
+        for _strat in hub.bmm.strategies:
+            if not hasattr(_strat, 'origin'):
+                _strat.origin = "transcricao"
+            if not hasattr(_strat, 'doc_ref'):
+                _strat.doc_ref = None
+        for _pol in hub.bmm.policies:
+            if not hasattr(_pol, 'origin'):
+                _pol.origin = "transcricao"
+            if not hasattr(_pol, 'doc_ref'):
+                _pol.doc_ref = None
+        for _dec in hub.dmn.decisions:
+            if not hasattr(_dec, 'origin'):
+                _dec.origin = "transcricao"
+            if not hasattr(_dec, 'doc_ref'):
+                _dec.doc_ref = None
 
         return hub
 

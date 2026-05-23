@@ -841,7 +841,7 @@ def next_req_number(project_id: str) -> int:
 
 def save_new_requirement(
     project_id: str,
-    meeting_id: str,
+    meeting_id,           # str | None — None when origin='documento'
     req_number: int,
     title: str,
     description: str,
@@ -851,6 +851,8 @@ def save_new_requirement(
     cited_by: str = "",
     actor: str = "",
     process_step: str = "",
+    origin: str = "transcricao",
+    doc_ref=None,         # str | None — UUID of meeting_document
 ) -> dict | None:
     """Insere um requisito novo (primeira aparição) e sua versão inicial.
 
@@ -869,18 +871,19 @@ def save_new_requirement(
         return None
 
     base_req = {
-        "project_id":       project_id,
-        "req_number":       req_number,
-        "title":            title,
-        "description":      description,
-        "req_type":         req_type,
-        "priority":         priority,
-        "status":           "active",
-        "first_meeting_id": meeting_id,
-        "last_meeting_id":  meeting_id,
+        "project_id":  project_id,
+        "req_number":  req_number,
+        "title":       title,
+        "description": description,
+        "req_type":    req_type,
+        "priority":    priority,
+        "status":      "active",
     }
+    if meeting_id:
+        base_req["first_meeting_id"] = meeting_id
+        base_req["last_meeting_id"]  = meeting_id
+
     base_ver = {
-        "meeting_id":  meeting_id,
         "version":     1,
         "title":       title,
         "description": description,
@@ -888,6 +891,8 @@ def save_new_requirement(
         "priority":    priority,
         "change_type": "new",
     }
+    if meeting_id:
+        base_ver["meeting_id"] = meeting_id
 
     req_row: dict | None = None
 
@@ -899,6 +904,9 @@ def save_new_requirement(
             req_payload["cited_by"]     = cited_by or None
             req_payload["actor"]        = actor or None
             req_payload["process_step"] = process_step or None
+            req_payload["origin"]       = origin
+            if doc_ref:
+                req_payload["doc_ref"]  = doc_ref
         try:
             # Do NOT wrap in _ok() — let PostgREST errors raise so the except
             # below can trigger the fallback instead of silently returning None.
@@ -924,6 +932,9 @@ def save_new_requirement(
         if use_new_fields:
             ver_payload["source_quote"] = source_quote or None
             ver_payload["cited_by"]     = cited_by or None
+            ver_payload["origin"]       = origin
+            if doc_ref:
+                ver_payload["doc_ref"]  = doc_ref
         try:
             db.table("requirement_versions").insert(ver_payload).execute()
             break   # version saved
@@ -1090,6 +1101,8 @@ def save_requirements_from_hub(meeting_id: str, project_id: str, hub) -> int:
             cited_by=getattr(item, "speaker", "") or "",
             actor=getattr(item, "actor", "") or "",
             process_step=getattr(item, "process_step", "") or "",
+            origin=getattr(item, "origin", "transcricao"),
+            doc_ref=getattr(item, "doc_ref", None),
         )
         if result:
             next_num += 1
@@ -1100,9 +1113,10 @@ def save_requirements_from_hub(meeting_id: str, project_id: str, hub) -> int:
 
 # ── SBVR ──────────────────────────────────────────────────────────────────────
 
-def save_sbvr_from_hub(meeting_id: str, project_id: str, hub) -> tuple[int, int]:
+def save_sbvr_from_hub(meeting_id, project_id: str, hub) -> tuple[int, int]:
     """Persiste termos e regras SBVR do hub no Supabase.
 
+    meeting_id — str | None (None quando origin='documento').
     Retorna (n_terms, n_rules) salvos.
     """
     db = _db()
@@ -1114,34 +1128,60 @@ def save_sbvr_from_hub(meeting_id: str, project_id: str, hub) -> tuple[int, int]
     n_terms = n_rules = 0
 
     for t in hub.sbvr.vocabulary:
-        try:
-            db.table("sbvr_terms").insert({
-                "meeting_id": meeting_id,
-                "project_id": project_id,
-                "term":       t.term,
-                "definition": t.definition,
-                "category":   t.category,
-            }).execute()
-            n_terms += 1
-        except Exception:
-            pass
+        t_origin  = getattr(t, "origin", "transcricao")
+        t_doc_ref = getattr(t, "doc_ref", None)
+        base = {
+            "project_id": project_id,
+            "term":       t.term,
+            "definition": t.definition,
+            "category":   t.category,
+        }
+        if meeting_id:
+            base["meeting_id"] = meeting_id
+        for use_new_fields in (True, False):
+            payload = dict(base)
+            if use_new_fields:
+                payload["origin"] = t_origin
+                if t_doc_ref:
+                    payload["doc_ref"] = t_doc_ref
+            try:
+                db.table("sbvr_terms").insert(payload).execute()
+                n_terms += 1
+                break
+            except Exception:
+                if not use_new_fields:
+                    break
+                continue
 
     for r in hub.sbvr.rules:
-        try:
-            # nucleo_nominal: LLM short_title preferred; heuristic fallback
-            nucleo = getattr(r, "short_title", "").strip() or rule_keyword_pt(r.statement)
-            db.table("sbvr_rules").insert({
-                "meeting_id":     meeting_id,
-                "project_id":     project_id,
-                "rule_id":        r.id,
-                "statement":      r.statement,
-                "nucleo_nominal": nucleo,
-                "rule_type":      r.rule_type,
-                "source":         r.source,
-            }).execute()
-            n_rules += 1
-        except Exception:
-            pass
+        r_origin  = getattr(r, "origin", "transcricao")
+        r_doc_ref = getattr(r, "doc_ref", None)
+        # nucleo_nominal: LLM short_title preferred; heuristic fallback
+        nucleo = getattr(r, "short_title", "").strip() or rule_keyword_pt(r.statement)
+        base = {
+            "project_id":     project_id,
+            "rule_id":        r.id,
+            "statement":      r.statement,
+            "nucleo_nominal": nucleo,
+            "rule_type":      r.rule_type,
+            "source":         r.source,
+        }
+        if meeting_id:
+            base["meeting_id"] = meeting_id
+        for use_new_fields in (True, False):
+            payload = dict(base)
+            if use_new_fields:
+                payload["origin"] = r_origin
+                if r_doc_ref:
+                    payload["doc_ref"] = r_doc_ref
+            try:
+                db.table("sbvr_rules").insert(payload).execute()
+                n_rules += 1
+                break
+            except Exception:
+                if not use_new_fields:
+                    break
+                continue
 
     return n_terms, n_rules
 
@@ -3407,6 +3447,125 @@ def list_dmn_by_project(project_id: str) -> list[dict]:
         except Exception:
             continue
     return result
+
+
+def save_artifacts_from_document(
+    project_id: str,
+    doc_id: str,
+    extracted: dict,
+) -> dict:
+    """Persiste artefatos extraídos de um documento (DocumentExtractorAgent).
+
+    extracted — dict retornado pelo agente com chaves opcionais:
+        requirements    list[dict]  — title, description, req_type, priority, source_quote
+        sbvr_terms      list[dict]  — term, definition, category
+        sbvr_rules      list[dict]  — id, statement, rule_type, source, short_title
+        bmm_goals       list[dict]  — (armazenados no metadata do documento, não em tabela)
+        bmm_strategies  list[dict]  — idem
+        bmm_policies    list[dict]  — idem
+        dmn_decisions   list[dict]  — idem
+
+    BMM e DMN não têm tabelas dedicadas: persistidos via update_document_meta().
+    Retorna {"requirements": n, "terms": n, "rules": n, "bmm": bool, "dmn": bool}.
+    """
+    db = _db()
+    if not db:
+        return {"requirements": 0, "terms": 0, "rules": 0, "bmm": False, "dmn": False}
+
+    n_req = n_terms = n_rules = 0
+
+    # ── Requirements ───────────────────────────────────────────────────────────
+    next_num = next_req_number(project_id)
+    for item in (extracted.get("requirements") or []):
+        result = save_new_requirement(
+            project_id=project_id,
+            meeting_id=None,
+            req_number=next_num,
+            title=item.get("title", ""),
+            description=item.get("description", ""),
+            req_type=item.get("req_type", ""),
+            priority=item.get("priority", ""),
+            source_quote=item.get("source_quote", "") or "",
+            origin="documento",
+            doc_ref=doc_id,
+        )
+        if result:
+            next_num += 1
+            n_req += 1
+
+    # ── SBVR Terms ─────────────────────────────────────────────────────────────
+    for t in (extracted.get("sbvr_terms") or []):
+        base = {
+            "project_id": project_id,
+            "term":       t.get("term", ""),
+            "definition": t.get("definition", ""),
+            "category":   t.get("category", ""),
+        }
+        for use_new_fields in (True, False):
+            payload = dict(base)
+            if use_new_fields:
+                payload["origin"] = "documento"
+                payload["doc_ref"] = doc_id
+            try:
+                db.table("sbvr_terms").insert(payload).execute()
+                n_terms += 1
+                break
+            except Exception:
+                if not use_new_fields:
+                    break
+                continue
+
+    # ── SBVR Rules ─────────────────────────────────────────────────────────────
+    for r in (extracted.get("sbvr_rules") or []):
+        nucleo = r.get("short_title", "").strip() or rule_keyword_pt(r.get("statement", ""))
+        base = {
+            "project_id":     project_id,
+            "rule_id":        r.get("id", ""),
+            "statement":      r.get("statement", ""),
+            "nucleo_nominal": nucleo,
+            "rule_type":      r.get("rule_type", ""),
+            "source":         r.get("source", ""),
+        }
+        for use_new_fields in (True, False):
+            payload = dict(base)
+            if use_new_fields:
+                payload["origin"] = "documento"
+                payload["doc_ref"] = doc_id
+            try:
+                db.table("sbvr_rules").insert(payload).execute()
+                n_rules += 1
+                break
+            except Exception:
+                if not use_new_fields:
+                    break
+                continue
+
+    # ── BMM + DMN: store in document metadata ─────────────────────────────────
+    has_bmm = bool(
+        extracted.get("bmm_goals")
+        or extracted.get("bmm_strategies")
+        or extracted.get("bmm_policies")
+    )
+    has_dmn = bool(extracted.get("dmn_decisions"))
+
+    if has_bmm or has_dmn:
+        try:
+            from modules.document_store import update_document_meta
+            meta_patch = {}
+            if has_bmm:
+                meta_patch["bmm"] = {
+                    "goals":      extracted.get("bmm_goals", []),
+                    "strategies": extracted.get("bmm_strategies", []),
+                    "policies":   extracted.get("bmm_policies", []),
+                }
+            if has_dmn:
+                meta_patch["dmn_decisions"] = extracted.get("dmn_decisions", [])
+            update_document_meta(doc_id, meta_patch)
+        except Exception:
+            pass
+
+    return {"requirements": n_req, "terms": n_terms, "rules": n_rules,
+            "bmm": has_bmm, "dmn": has_dmn}
 
 
 def list_argumentation_by_project(project_id: str) -> list[dict]:
