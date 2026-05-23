@@ -11,7 +11,7 @@
 - **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown / Word / PDF), requirements analysis (JSON/Markdown), executive HTML report, interactive requirements mind map
 - **Deploy:** Streamlit Cloud — auto-deploy on push to `main` branch (`github.com/pedroregato/process2diagram`)
 - **Dev environment:** PyCharm on Windows; Python 3.13
-- **Current version:** v4.20+
+- **Current version:** v4.23
 
 Supported LLM providers: DeepSeek V4 Flash (default), DeepSeek V4 Pro, DeepSeek V4 Flash (Thinking), Claude (Anthropic), OpenAI, Groq, Google Gemini, Grok (xAI).
 
@@ -45,6 +45,7 @@ process2diagram/
 │   ├── ReqTracker.py             # Requirements tracker — 9 tabs incl. DMN + IBIS
 │   ├── KnowledgeGraph.py         # Knowledge graph — pyvis physics (Obsidian-like), entity/contradiction viz
 │   ├── MeetingROI.py             # ROI-TR dashboard — type-aware quality indicators
+│   ├── DocumentManager.py        # Document management — 5 tabs: upload, library, extract artifacts, cross-ref, taxonomy
 │   ├── Settings.py               # Central settings — LLM providers, API keys, tool catalog
 │   ├── DatabaseOverview.py       # Database health — record counts, embeddings, integrity fixes
 │   ├── CostEstimator.py          # LLM cost estimator
@@ -81,7 +82,9 @@ process2diagram/
 │   ├── agent_sbvr.py             # OMG SBVR vocabulary + rules
 │   ├── agent_bmm.py              # OMG BMM vision/mission/goals/strategies/policies
 │   ├── agent_synthesizer.py      # Executive HTML report synthesis
-│   └── agent_validator.py        # Pure Python BPMN quality scorer (no LLM)
+│   ├── agent_validator.py        # Pure Python BPMN quality scorer (no LLM)
+│   ├── agent_document_analyzer.py  # On-demand: cross-references a document vs meeting artifacts
+│   └── agent_document_extractor.py # On-demand: extracts req/SBVR/BMM/DMN artifacts from a document
 │
 ├── modules/
 │   ├── config.py                 # LLM provider registry — add new providers here
@@ -107,7 +110,8 @@ process2diagram/
 │   ├── cost_estimator.py         # PROVIDER_PRICING table + estimate_cost()
 │   ├── ingest.py                 # .txt/.docx/.pdf file loader
 │   ├── text_utils.py             # rule_keyword_pt() — Portuguese text utils
-│   └── reqtracker_exporter.py    # RequirementsModel → Excel/CSV
+│   ├── reqtracker_exporter.py    # RequirementsModel → Excel/CSV
+│   └── document_store.py         # Document CRUD + embedding + semantic/keyword search (Supabase)
 │
 ├── ui/
 │   ├── sidebar.py                # render_sidebar() — provider, agents, re-run buttons
@@ -143,6 +147,8 @@ process2diagram/
 │   ├── skill_transcript_quality.md
 │   ├── skill_sbvr.md
 │   ├── skill_bmm.md
+│   ├── skill_document_analyzer.md   # DocumentAnalyzerAgent — cross-reference analysis
+│   ├── skill_document_extractor.md  # DocumentExtractorAgent — artifact extraction from docs
 │   ├── SKILL_REQUIREMENTS.md     # uppercase — git-tracked name
 │   └── SKILL_SYNTHESIZER.md      # uppercase — git-tracked name
 │
@@ -201,7 +207,7 @@ AgentRequirements┘
 |---|---|---|
 | **Início** | Home.py (default) | Todos |
 | **Pipeline** | Pipeline.py, Diagramas.py, BpmnEditor.py | Todos |
-| **Análise** | Assistente.py, ReqTracker.py, ValidationHub.py, MeetingROI.py | Todos |
+| **Análise** | Assistente.py, ReqTracker.py, ValidationHub.py, MeetingROI.py, DocumentManager.py | Todos |
 | **Sistema** | Settings.py, CostEstimator.py, LLMBenchmark.py [+ MasterAdmin.py, DatabaseOverview.py] | Todos [admin extra] |
 | **Ajuda** | ComoIniciar, Assistente (tool guide), Glossário, Arquiteturas, CKF | Todos |
 | **Manutenção** | BatchRunner.py, BpmnBackfill.py, MinutesBackfill.py, TranscriptBackfill.py | Admin only |
@@ -374,13 +380,15 @@ Within Assistente mode, sidebar toggle `asst_use_tools`:
 
 ### Tool list (`core/assistant_tools.py`)
 
-**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `list_bpmn_processes`, `get_sbvr_terms`, `get_sbvr_rules`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`, `get_cache_stats`.
+**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `list_bpmn_processes`, `get_sbvr_terms`, `get_sbvr_rules`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`, `get_cache_stats`, `list_meeting_documents`, `get_document_content`, `search_documents`, `get_document_types`.
 
 **Admin only (`is_admin()`):** `get_database_integrity`, `fix_missing_llm_provider`, `generate_meeting_embeddings`, `reprocess_meeting_full`, `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`, `delete_entity`, `resolve_entity_ambiguity`, `clear_llm_cache`, write/generate tools.
 
 **KnowledgeGraph entity tools (3):** `lookup_entity` — investiga entidade (tipo, aliases, reuniões); `delete_entity` — remove entidade (3-tier match: exact → name-substring → alias-substring, para se houver ambiguidade); `resolve_entity_ambiguity` — funde duplicatas via `merge_entities()`.
 
 **Cache tools (2):** `get_cache_stats(agent_name?)` — estatísticas do cache LLM (entradas, hits, tokens economizados, USD por agente); `clear_llm_cache(agent_name?)` — invalida entradas (admin). Cache em `services/semantic_cache.py`; tabela `llm_cache` no Supabase (`setup/supabase_migration_llm_cache.sql`).
+
+**Document tools (4):** `list_meeting_documents(meeting_number?, doc_type?)` — lista documentos do projeto com filtro opcional; `get_document_content(doc_id)` — conteúdo completo (cap 8k chars); `search_documents(query, mode)` — busca semantic|keyword nos documentos; `get_document_types()` — taxonomia completa (53 tipos / 9 categorias). Tabelas: `meeting_documents`, `document_chunks vector(1536)`; migration: `setup/supabase_migration_documents.sql`.
 
 **Chart tools (5):** `generate_requirements_chart`, `generate_meetings_timeline`, `generate_action_items_chart`, `generate_roi_chart`, `generate_custom_chart` — Plotly figs returned as 4th element of `chat_with_tools()`, rendered via `st.plotly_chart()`. Palettes defined in `core/chart_config.py`.
 
@@ -405,12 +413,24 @@ Type-aware quality system — 11 meeting types, each with a weight matrix across
 
 ---
 
+## Document Management (`pages/DocumentManager.py`)
+
+5 tabs: **📤 Enviar** (upload .txt/.pdf/.docx or paste, category→type taxonomy, auto-embed) · **📚 Biblioteca** (keyword + semantic search, preview, delete, re-index) · **⚗️ Extrair Artefatos** (run `DocumentExtractorAgent` → preview 7 artifact types → save via `save_artifacts_from_document()`) · **🔍 Análise Cruzada** (doc × meeting hub → `DocumentAnalyzerAgent` → alignment score 0–100 + report) · **🏷️ Taxonomia** (53 types / 9 categories).
+
+**`modules/document_store.py`** — CRUD + embedding pipeline + search. Key functions: `upload_document`, `embed_document` (chunks 500/80 via `chunk_text`+`embed_batch`), `search_documents_semantic` (pgvector RPC), `search_documents_keyword`, `update_document_meta`.
+
+**Artifact origin traceability (PC23):** all analytical artifacts have `origin: str = "transcricao"|"documento"` + `doc_ref: Optional[str]` (UUID of `meeting_documents`). Pipeline artifacts always have `origin="transcricao"`. Document-extracted artifacts have `origin="documento"` + `doc_ref=<doc_id>`. `save_artifacts_from_document(project_id, doc_id, extracted)` persists req/SBVR/BMM/DMN; `meeting_id` is nullable for document-sourced artifacts.
+
+**SQL migration required:** `setup/supabase_migration_documents.sql` (tables) + `setup/supabase_migration_artifact_origin.sql` (origin/doc_ref columns + nullable meeting FKs).
+
+---
+
 ## Core Modules (`core/`)
 
 - `session_state.init_session_state()` — idempotent, call immediately after `st.set_page_config()`. Defaults: provider=DeepSeek, run_quality/bpmn/minutes/requirements=True, run_sbvr/bmm/synthesizer/dmn/argumentation/ckf_updater/query_summarizer=True, n_bpmn_runs=3, use_langgraph=True, enable_long_context=True.
 - `pipeline.run_pipeline(hub, config, callback)` — 3 paths: multi-run tournament / LangGraph / standard. Raises on error (caller catches).
 - `rerun_handlers.handle_rerun(agent_name, ...)` — re-runs one agent: `"quality"`, `"bpmn"`, `"minutes"`, `"requirements"`, `"sbvr"`, `"bmm"`, `"synthesizer"`. BPMN re-run invalidates `hub.synthesizer`.
-- `project_store` — Supabase CRUD; fail-open (returns `[]`/`None` when unconfigured). Key functions: `load_meeting_as_hub(meeting_id, project_id)` → reconstructs KnowledgeHub from DB (transcript, BPMN, minutes, requirements, SBVR, BMM, DMN, IBIS); `list_dmn_by_project(project_id)` → flat list of DMN decisions; `list_argumentation_by_project(project_id)` → flat list of IBIS questions. Full function list in `claude_guideline/architecture_details.md`.
+- `project_store` — Supabase CRUD; fail-open (returns `[]`/`None` when unconfigured). Key functions: `load_meeting_as_hub(meeting_id, project_id)` → reconstructs KnowledgeHub from DB (transcript, BPMN, minutes, requirements, SBVR, BMM, DMN, IBIS); `list_dmn_by_project(project_id)` → flat list of DMN decisions; `list_argumentation_by_project(project_id)` → flat list of IBIS questions; `save_artifacts_from_document(project_id, doc_id, extracted)` → persists all artifact types extracted from a document. Full function list in `claude_guideline/architecture_details.md`.
 
 ---
 
