@@ -177,6 +177,21 @@ with tab_upload:
         )
         linked_meeting_id = None if linked_meeting_raw.startswith("(") else linked_meeting_raw
 
+        st.markdown("**Data de referência do documento**")
+        _date_col, _est_col = st.columns([1, 1])
+        with _date_col:
+            doc_date_input = st.date_input(
+                "Data exata",
+                value=None,
+                help="Data de publicação, emissão ou referência do documento.",
+            )
+        with _est_col:
+            doc_date_estimated_input = st.text_input(
+                "Data estimada",
+                placeholder='Ex.: "Meados de 2023", "Q2 2022"',
+                help="Preencha quando a data exata não é conhecida.",
+            )
+
     with col_source:
         input_mode = st.radio(
             "Fonte do conteúdo",
@@ -223,13 +238,15 @@ with tab_upload:
             user_label = st.session_state.get("username", "")
             with st.spinner("Salvando documento..."):
                 doc_id = upload_document(
-                    project_id   = project_id,
-                    title        = doc_title.strip(),
-                    doc_type     = doc_type_code,
-                    content_text = doc_content,
-                    file_name    = file_name,
-                    meeting_id   = linked_meeting_id,
-                    created_by   = user_label,
+                    project_id          = project_id,
+                    title               = doc_title.strip(),
+                    doc_type            = doc_type_code,
+                    content_text        = doc_content,
+                    file_name           = file_name,
+                    meeting_id          = linked_meeting_id,
+                    created_by          = user_label,
+                    doc_date            = str(doc_date_input) if doc_date_input else None,
+                    doc_date_estimated  = doc_date_estimated_input.strip() or None,
                 )
             if not doc_id:
                 st.error("Erro ao salvar o documento. Verifique a conexão com o banco de dados.")
@@ -329,6 +346,10 @@ with tab_library:
                         st.caption(f"Arquivo: `{doc['file_name']}`")
                     if doc.get("meeting_id"):
                         st.caption(f"Reunião vinculada: `{doc['meeting_id'][:8]}...`")
+                    if doc.get("doc_date"):
+                        st.caption(f"Data do documento: {doc['doc_date']}")
+                    elif doc.get("doc_date_estimated"):
+                        st.caption(f"Data estimada: {doc['doc_date_estimated']}")
 
                     # Semantic match snippet
                     if "_matched_chunk" in doc:

@@ -62,6 +62,8 @@ def upload_document(
     meeting_id: Optional[str] = None,
     created_by: str = "",
     metadata: Optional[dict] = None,
+    doc_date: Optional[str] = None,
+    doc_date_estimated: Optional[str] = None,
 ) -> Optional[str]:
     """Insert a document record. Returns the new UUID or None on failure."""
     try:
@@ -79,6 +81,10 @@ def upload_document(
         }
         if meeting_id:
             row["meeting_id"] = meeting_id
+        if doc_date:
+            row["doc_date"] = doc_date
+        if doc_date_estimated:
+            row["doc_date_estimated"] = doc_date_estimated.strip()
         result = db.table("meeting_documents").insert(row).execute()
         return result.data[0]["id"] if result.data else None
     except Exception as exc:
@@ -123,7 +129,7 @@ def list_documents(
             return []
         q = (
             db.table("meeting_documents")
-            .select("id, project_id, meeting_id, title, doc_type, file_name, created_by, created_at, updated_at, metadata")
+            .select("id, project_id, meeting_id, title, doc_type, file_name, created_by, created_at, updated_at, metadata, doc_date, doc_date_estimated")
             .eq("project_id", project_id)
             .order("created_at", desc=True)
             .limit(limit)
@@ -142,6 +148,8 @@ def update_document_meta(
     title: Optional[str] = None,
     doc_type: Optional[str] = None,
     meeting_id: Optional[str] = None,
+    doc_date: Optional[str] = None,
+    doc_date_estimated: Optional[str] = None,
 ) -> bool:
     """Patch mutable fields of a document record."""
     try:
@@ -155,6 +163,10 @@ def update_document_meta(
             patch["doc_type"] = doc_type
         if meeting_id is not None:
             patch["meeting_id"] = meeting_id
+        if doc_date is not None:
+            patch["doc_date"] = doc_date or None   # empty string → NULL
+        if doc_date_estimated is not None:
+            patch["doc_date_estimated"] = doc_date_estimated.strip() or None
         if not patch:
             return True
         db.table("meeting_documents").update(patch).eq("id", doc_id).execute()
@@ -294,7 +306,7 @@ def search_documents_keyword(
         # Search in title
         by_title = (
             db.table("meeting_documents")
-            .select("id, title, doc_type, file_name, created_at, meeting_id")
+            .select("id, title, doc_type, file_name, created_at, meeting_id, doc_date, doc_date_estimated")
             .eq("project_id", project_id)
             .ilike("title", f"%{query}%")
             .order("created_at", desc=True)
@@ -304,7 +316,7 @@ def search_documents_keyword(
         # Search in content
         by_content = (
             db.table("meeting_documents")
-            .select("id, title, doc_type, file_name, created_at, meeting_id")
+            .select("id, title, doc_type, file_name, created_at, meeting_id, doc_date, doc_date_estimated")
             .eq("project_id", project_id)
             .ilike("content_text", f"%{query}%")
             .order("created_at", desc=True)
