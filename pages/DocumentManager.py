@@ -39,7 +39,7 @@ require_active_project()
 project_id   = st.session_state.get("active_project_id", "")
 project_name = st.session_state.get("active_project_name", "Projeto")
 
-render_page_header("📄", "Documentos de Reunião", f"Projeto: {project_name}")
+render_page_header("📄", "Documentos do Contexto", f"Projeto: {project_name}")
 
 if not project_id:
     st.warning("Selecione um projeto ativo para gerenciar documentos.")
@@ -84,26 +84,26 @@ def _score_color(score: int) -> str:
 def _get_agent():
     """Instantiate DocumentAnalyzerAgent using current session provider."""
     from modules.config import AVAILABLE_PROVIDERS
-    from modules.session_security import get_api_key
+    from modules.session_security import get_session_llm_client
     provider_name = st.session_state.get("selected_provider", "DeepSeek")
     provider_cfg  = AVAILABLE_PROVIDERS.get(provider_name, {})
-    api_key       = get_api_key(provider_name)
+    client_info   = get_session_llm_client(provider_name) or {}
     from agents.agent_document_analyzer import DocumentAnalyzerAgent
     return DocumentAnalyzerAgent(
-        client_info  = {"api_key": api_key},
+        client_info  = client_info,
         provider_cfg = provider_cfg,
     )
 
 def _get_extractor():
     """Instantiate DocumentExtractorAgent using current session provider."""
     from modules.config import AVAILABLE_PROVIDERS
-    from modules.session_security import get_api_key
+    from modules.session_security import get_session_llm_client
     provider_name = st.session_state.get("selected_provider", "DeepSeek")
     provider_cfg  = AVAILABLE_PROVIDERS.get(provider_name, {})
-    api_key       = get_api_key(provider_name)
+    client_info   = get_session_llm_client(provider_name) or {}
     from agents.agent_document_extractor import DocumentExtractorAgent
     return DocumentExtractorAgent(
-        client_info  = {"api_key": api_key},
+        client_info  = client_info,
         provider_cfg = provider_cfg,
     )
 

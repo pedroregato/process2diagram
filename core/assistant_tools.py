@@ -1836,11 +1836,12 @@ def get_tool_schemas_openai() -> list[dict]:
             "function": {
                 "name": "list_meeting_documents",
                 "description": (
-                    "Lista os documentos de apoio cadastrados no projeto (contratos, "
-                    "especificações, fluxogramas, BRDs, atas externas, etc.). "
-                    "Use quando o usuário perguntar sobre documentos apresentados em reuniões "
-                    "ou quiser saber quais documentos estão disponíveis. "
-                    "Pode filtrar por reunião específica ou tipo de documento."
+                    "Lista os documentos do contexto/projeto (contratos, especificações, "
+                    "requisitos, fluxogramas, BRDs, atas externas, critérios de aceite, etc.). "
+                    "Use quando o usuário perguntar sobre documentos disponíveis, quais documentos "
+                    "existem em uma categoria, ou quiser filtrar por tipo específico. "
+                    "Documentos não precisam estar vinculados a uma reunião. "
+                    "Pode filtrar por categoria (ex: 'Requisitos'), tipo exato ou reunião."
                 ),
                 "parameters": {
                     "type": "object",
@@ -1853,8 +1854,16 @@ def get_tool_schemas_openai() -> list[dict]:
                             "type": "string",
                             "description": (
                                 "Código do tipo de documento para filtrar (opcional). "
-                                "Ex: SRS, BRD, TAP, ASIS, TOBE, CONTRATO, SLA. "
+                                "Ex: SRS, BRD, TAP, ASIS, TOBE, CONTRATO, SLA, ACCEPTANCE_CRITERIA. "
                                 "Use get_document_types para ver todos os códigos disponíveis."
+                            ),
+                        },
+                        "category": {
+                            "type": "string",
+                            "description": (
+                                "Nome da categoria para filtrar todos os tipos dessa categoria (opcional). "
+                                "Ex: 'Requisitos', 'Planejamento', 'Processos', 'Contratual', 'Qualidade'. "
+                                "Use get_document_types para ver todas as categorias disponíveis."
                             ),
                         },
                     },
@@ -6058,9 +6067,10 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         self,
         meeting_number: int | None = None,
         doc_type: str | None = None,
+        category: str | None = None,
     ) -> str:
-        """List documents stored for this project."""
-        from modules.document_store import list_documents, get_document_types
+        """List documents stored for this project, optionally filtered by category or type."""
+        from modules.document_store import list_documents, get_document_types, get_types_by_category
         meeting_id: str | None = None
         if meeting_number is not None:
             meetings = self._get_meetings()
@@ -6068,26 +6078,78 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 return f"Reunião #{meeting_number} não encontrada."
             meeting_id = meetings[meeting_number - 1]["id"]
 
-        docs = list_documents(
-            project_id=self.project_id,
-            meeting_id=meeting_id,
-            doc_type=doc_type,
-            limit=100,
-        )
+        # Resolve category → list of doc_type codes
+        category_codes: list[str] | None = None
+        if category:
+            grouped = get_types_by_category()
+            # Case-insensitive match on category name
+            cat_lower = category.strip().lower()
+            matched_cat = next(
+                (k for k in grouped if k.lower() == cat_lower or cat_lower in k.lower()),
+                None,
+            )
+            if matched_cat:
+                category_codes = [t["code"] for t in grouped[matched_cat]]
+            else:
+                return (
+                    f"Categoria '{category}' não encontrada. "
+                    "Use get_document_types para ver as categorias disponíveis."
+                )
+
+        # Fetch — if category filter, fetch all and filter client-side
+        # (Supabase doesn't support IN filter easily in list_documents)
+        if category_codes:
+            all_docs: list[dict] = []
+            for code in category_codes:
+                all_docs.extend(list_documents(
+                    project_id=self.project_id,
+                    meeting_id=meeting_id,
+                    doc_type=code,
+                    limit=200,
+                ))
+            # Deduplicate by id
+            seen: set[str] = set()
+            docs = [d for d in all_docs if not (d["id"] in seen or seen.add(d["id"]))]  # type: ignore[func-returns-value]
+        else:
+            docs = list_documents(
+                project_id=self.project_id,
+                meeting_id=meeting_id,
+                doc_type=doc_type,
+                limit=100,
+            )
+
         if not docs:
-            return "Nenhum documento cadastrado para este projeto."
+            filtro = f" na categoria '{category}'" if category else (f" do tipo '{doc_type}'" if doc_type else "")
+            return f"Nenhum documento encontrado{filtro} para este projeto."
 
         type_labels = {t["code"]: t["label"] for t in get_document_types()}
-        lines = [f"**{len(docs)} documento(s) encontrado(s):**\n"]
+
+        filter_desc = ""
+        if category:
+            filter_desc = f" — categoria **{category}**"
+        elif doc_type:
+            filter_desc = f" — tipo **{type_labels.get(doc_type, doc_type)}**"
+
+        lines = [
+            f"**{len(docs)} documento(s) encontrado(s){filter_desc}:**\n",
+            f"> Para visualizar o conteúdo completo acesse **📄 Documentos do Contexto** no menu lateral.\n",
+        ]
         for i, d in enumerate(docs, 1):
             tipo = type_labels.get(d.get("doc_type", ""), d.get("doc_type", "—"))
-            date = (d.get("created_at") or "")[:10]
+            # Prefer doc_date, then doc_date_estimated, then created_at
+            ref_date = (
+                d.get("doc_date")
+                or d.get("doc_date_estimated")
+                or (d.get("created_at") or "")[:10]
+            )
+            date_label = "Data ref." if d.get("doc_date") or d.get("doc_date_estimated") else "Cadastrado"
+            meeting_note = f" · vinculado à reunião" if d.get("meeting_id") else ""
             lines.append(
                 f"{i}. **{d['title']}**\n"
-                f"   - ID: `{d['id']}`\n"
-                f"   - Tipo: {tipo}\n"
+                f"   - Tipo: {tipo}{meeting_note}\n"
+                f"   - {date_label}: {ref_date or '—'}\n"
                 f"   - Arquivo: {d.get('file_name') or '—'}\n"
-                f"   - Cadastrado em: {date}\n"
+                f"   - ID: `{d['id']}`\n"
             )
         return "\n".join(lines)
 
@@ -6115,15 +6177,20 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
 
     def search_documents(self, query: str, mode: str = "semantic") -> str:
         """Search documents semantically or by keyword."""
-        from modules.document_store import search_documents_semantic, search_documents_keyword
+        from modules.document_store import search_documents_semantic, search_documents_keyword, get_document_types
+        type_labels = {t["code"]: t["label"] for t in get_document_types()}
+        nav_hint = "> Para ver o documento completo acesse **📄 Documentos do Contexto** no menu lateral.\n"
+
         if mode == "keyword":
             results = search_documents_keyword(query, self.project_id, limit=10)
             if not results:
                 return f"Nenhum documento encontrado com a palavra-chave: '{query}'."
-            lines = [f"**{len(results)} documento(s) encontrado(s) para '{query}':**\n"]
+            lines = [f"**{len(results)} documento(s) encontrado(s) para '{query}':**\n", nav_hint]
             for d in results:
+                tipo = type_labels.get(d.get("doc_type", ""), d.get("doc_type", "—"))
+                ref_date = d.get("doc_date") or d.get("doc_date_estimated") or (d.get("created_at") or "")[:10]
                 lines.append(
-                    f"- **{d['title']}** (Tipo: {d.get('doc_type', '—')}) — ID: `{d['id']}`"
+                    f"- **{d['title']}** · {tipo} · {ref_date or '—'} — ID: `{d['id']}`"
                 )
             return "\n".join(lines)
         else:
@@ -6131,15 +6198,15 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             if not results:
                 return (
                     f"Nenhum trecho encontrado semanticamente para: '{query}'. "
-                    "Verifique se os documentos foram indexados (aba Biblioteca → Re-indexar)."
+                    "Verifique se os documentos foram indexados (📄 Documentos do Contexto → aba Biblioteca → Re-indexar)."
                 )
-            lines = [f"**Trechos relevantes encontrados para '{query}':**\n"]
+            lines = [f"**Trechos relevantes encontrados para '{query}':**\n", nav_hint]
             for r in results:
                 sim = r.get("similarity", 0)
+                tipo = type_labels.get(r.get("doc_type", ""), r.get("doc_type", "—"))
                 lines.append(
                     f"---\n"
-                    f"**Documento:** {r['doc_title']} (tipo: {r.get('doc_type', '—')}) "
-                    f"· Similaridade: {sim:.2f}\n\n"
+                    f"**{r['doc_title']}** · {tipo} · Similaridade: {sim:.2f}\n\n"
                     f"{r['content']}\n"
                 )
             return "\n".join(lines)
@@ -6417,6 +6484,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 "list_meeting_documents": lambda: self.list_meeting_documents(
                     meeting_number=tool_input.get("meeting_number"),
                     doc_type=tool_input.get("doc_type"),
+                    category=tool_input.get("category"),
                 ),
                 "get_document_content":   lambda: self.get_document_content(tool_input["doc_id"]),
                 "search_documents":       lambda: self.search_documents(
