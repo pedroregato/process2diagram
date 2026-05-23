@@ -251,26 +251,33 @@ with tab_upload:
             if not doc_id:
                 st.error("Erro ao salvar o documento. Verifique a conexão com o banco de dados.")
             else:
-                gemini_key = st.session_state.get("google_gemini_key", "")
-                if not gemini_key:
+                from modules.embeddings import get_active_embedding_params
+                try:
+                    _emb_provider, _emb_key = get_active_embedding_params()
+                    _emb_configured = True
+                except RuntimeError as _emb_err:
+                    _emb_configured = False
+                    _emb_err_msg = str(_emb_err)
+
+                if not _emb_configured:
                     st.warning(
-                        f"Documento salvo (ID: `{doc_id[:8]}...`), mas **embeddings não foram gerados** "
-                        "porque a chave Google Gemini não está configurada. "
-                        "Configure em Configurações → Google Gemini para habilitar busca semântica."
+                        f"Documento salvo (ID: `{doc_id[:8]}...`), mas **embeddings não foram gerados**: "
+                        f"{_emb_err_msg}"
                     )
                 else:
-                    with st.spinner("Gerando embeddings (pode demorar alguns segundos)..."):
-                        ok = embed_document(doc_id, doc_content)
+                    with st.spinner(f"Gerando embeddings via {_emb_provider}..."):
+                        ok = embed_document(doc_id, doc_content, api_key=_emb_key, provider=_emb_provider)
                     n_chunks = get_chunks_count(doc_id)
                     if ok and n_chunks:
                         st.success(
                             f"Documento salvo e indexado com sucesso!\n\n"
-                            f"**ID:** `{doc_id}`  |  **Chunks:** {n_chunks}"
+                            f"**ID:** `{doc_id}`  |  **Chunks:** {n_chunks}  |  "
+                            f"**Provedor:** {_emb_provider}"
                         )
                     else:
                         st.warning(
                             f"Documento salvo (ID: `{doc_id}`), mas a indexação de embeddings falhou. "
-                            "Verifique a chave Google Gemini e tente re-indexar na aba Biblioteca."
+                            f"Verifique a chave do provedor '{_emb_provider}' e tente re-indexar na aba Biblioteca."
                         )
                 # Clear caches so Library tab refreshes
                 st.cache_data.clear()
@@ -375,17 +382,24 @@ with tab_library:
 
                     if st.button("♻️ Re-indexar", key=f"reindex_{doc_id}", use_container_width=True,
                                  help="Regenera embeddings para este documento"):
-                        full_content = get_document_content(doc_id)
-                        if full_content:
-                            with st.spinner("Re-indexando..."):
-                                ok = embed_document(doc_id, full_content)
-                            if ok:
-                                n = get_chunks_count(doc_id)
-                                st.success(f"{n} chunks indexados.")
+                        from modules.embeddings import get_active_embedding_params
+                        try:
+                            _ri_provider, _ri_key = get_active_embedding_params()
+                        except RuntimeError as _ri_err:
+                            st.error(str(_ri_err))
+                            _ri_provider = _ri_key = ""
+                        if _ri_provider:
+                            full_content = get_document_content(doc_id)
+                            if full_content:
+                                with st.spinner(f"Re-indexando via {_ri_provider}..."):
+                                    ok = embed_document(doc_id, full_content, api_key=_ri_key, provider=_ri_provider)
+                                if ok:
+                                    n = get_chunks_count(doc_id)
+                                    st.success(f"{n} chunks indexados via {_ri_provider}.")
+                                else:
+                                    st.error("Falha na indexação.")
                             else:
-                                st.error("Falha na indexação.")
-                        else:
-                            st.error("Conteúdo não encontrado.")
+                                st.error("Conteúdo não encontrado.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

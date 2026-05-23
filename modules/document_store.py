@@ -189,16 +189,27 @@ def delete_document(doc_id: str) -> bool:
 
 # ── Embedding pipeline ────────────────────────────────────────────────────────
 
-def embed_document(doc_id: str, content_text: str) -> bool:
+def embed_document(
+    doc_id: str,
+    content_text: str,
+    api_key: str = "",
+    provider: str = "",
+) -> bool:
     """
-    Chunk content_text, embed each chunk via Gemini, store in document_chunks.
+    Chunk content_text, embed each chunk, store in document_chunks.
     Re-indexing: deletes existing chunks before inserting new ones.
+
+    api_key / provider: quando não fornecidos, resolvidos via
+    get_active_embedding_params() (lê st.session_state).
     """
     try:
-        from modules.embeddings import chunk_text, embed_batch
+        from modules.embeddings import chunk_text, embed_batch, get_active_embedding_params
         db = _db()
         if not db:
             return False
+
+        if not api_key or not provider:
+            provider, api_key = get_active_embedding_params()
 
         # Remove existing chunks for a clean re-index
         db.table("document_chunks").delete().eq("document_id", doc_id).execute()
@@ -207,7 +218,7 @@ def embed_document(doc_id: str, content_text: str) -> bool:
         if not chunks:
             return False
 
-        embeddings = embed_batch(chunks)
+        embeddings = embed_batch(chunks, api_key, provider)
         if not embeddings:
             return False
 
@@ -257,18 +268,25 @@ def search_documents_semantic(
     limit: int = 5,
     threshold: float = 0.4,
     meeting_id: Optional[str] = None,
+    api_key: str = "",
+    provider: str = "",
 ) -> list[dict]:
     """
     Embed the query and run pgvector cosine similarity search over document_chunks.
     Returns rows with: id, document_id, chunk_index, content, similarity,
                        doc_title, doc_type, doc_file_name.
+
+    api_key / provider: quando não fornecidos, resolvidos via
+    get_active_embedding_params() (lê st.session_state).
     """
     try:
-        from modules.embeddings import embed_text
+        from modules.embeddings import embed_text, get_active_embedding_params
         db = _db()
         if not db:
             return []
-        embedding = embed_text(query)
+        if not api_key or not provider:
+            provider, api_key = get_active_embedding_params()
+        embedding = embed_text(query, api_key, provider)
         if not embedding:
             return []
         result = db.rpc(

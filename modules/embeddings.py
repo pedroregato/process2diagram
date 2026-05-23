@@ -43,6 +43,59 @@ EMBEDDING_PROVIDERS = {
 }
 
 
+# ── Resolução do provedor ativo ───────────────────────────────────────────────
+
+def get_active_embedding_params() -> tuple[str, str]:
+    """
+    Retorna (provider, api_key) do provedor de embedding configurado no session_state.
+
+    Lê st.session_state["asst_embed_provider"] e st.session_state["asst_embed_key"].
+    É a função central que todos os pontos de embedding devem chamar quando não
+    recebem provider/api_key explícitos.
+
+    Raises:
+        RuntimeError: quando nenhum provedor ou chave estiver configurado.
+    """
+    try:
+        import streamlit as st
+        provider = st.session_state.get("asst_embed_provider", "").strip()
+        api_key  = st.session_state.get("asst_embed_key", "").strip()
+    except Exception:
+        provider = ""
+        api_key  = ""
+
+    if not provider or provider not in EMBEDDING_PROVIDERS:
+        # Fallback: use o primeiro provedor disponível com chave configurada
+        try:
+            import streamlit as st
+            for prov in EMBEDDING_PROVIDERS:
+                candidate_key = ""
+                if prov == "Google Gemini":
+                    candidate_key = st.session_state.get("google_gemini_key", "").strip()
+                elif prov == "OpenAI":
+                    candidate_key = st.session_state.get("openai_key", "").strip()
+                elif prov == "Grok (xAI)":
+                    candidate_key = st.session_state.get("grok_key", "").strip()
+                if candidate_key:
+                    provider = prov
+                    api_key  = candidate_key
+                    break
+        except Exception:
+            pass
+
+    if not provider:
+        raise RuntimeError(
+            "Provedor de embedding não configurado. "
+            "Acesse Sistema → Configurações → aba Embeddings e selecione um provedor."
+        )
+    if not api_key:
+        raise RuntimeError(
+            f"Chave de API para o provedor de embedding '{provider}' não configurada. "
+            "Acesse Sistema → Configurações → aba Embeddings."
+        )
+    return provider, api_key
+
+
 # ── Normalização para embedding ───────────────────────────────────────────────
 
 def normalize_for_embedding(text: str) -> str:
