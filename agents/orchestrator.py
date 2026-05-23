@@ -42,8 +42,12 @@ from agents.agent_argumentation import AgentArgumentation
 from agents.agent_synthesizer import AgentSynthesizer
 from agents.agent_query_summarizer import AgentQuerySummarizer
 from agents.agent_transcript_quality import AgentTranscriptQuality
-from core.knowledge_hub import KnowledgeHub, PreprocessingModel, SessionMetadata
+from core.knowledge_hub import KnowledgeHub, MeetingTimeModel, PreprocessingModel, SessionMetadata
 from modules.transcript_preprocessor import preprocess
+from modules.transcript_time_parser import (
+    parse_transcript_timings,
+    estimate_timings_from_wordcount,
+)
 
 
 # Type alias for progress callbacks
@@ -171,6 +175,23 @@ class Orchestrator:
             self._progress("NLP / Chunker", f"error: {exc}")
             hub.transcript_clean = hub.transcript_raw
             hub.bump()
+
+        # ── Step 1.5: Transcript Time Parser (no LLM) ────────────────────────
+        try:
+            _timings = parse_transcript_timings(hub.transcript_raw)
+            if not _timings.has_timestamps:
+                _timings = estimate_timings_from_wordcount(hub.transcript_raw)
+            hub.meeting_time = MeetingTimeModel(
+                has_timestamps=_timings.has_timestamps,
+                format_detected=_timings.format_detected,
+                duration_seconds=_timings.duration_seconds,
+                speaker_times=_timings.speaker_times,
+                speaker_turns=_timings.speaker_turns,
+                ready=True,
+            )
+            hub.bump()
+        except Exception:
+            pass   # non-fatal — leave meeting_time in default state
 
         # ── Step 2: BPMN Agent ────────────────────────────────────────────────
         if run_bpmn:

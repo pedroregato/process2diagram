@@ -415,6 +415,54 @@ if "hub" in st.session_state:
         )
     # ─────────────────────────────────────────────────────────────────────────
 
+    # ── Sugestão de título ────────────────────────────────────────────────────
+    _suggested_title = ""
+    if hub.minutes.ready and hub.minutes.title:
+        _suggested_title = hub.minutes.title.strip()
+    _current_title = st.session_state.get("meeting_title", "").strip()
+
+    if _suggested_title and _suggested_title.lower() != _current_title.lower():
+        with st.container(border=True):
+            _tc, _tb = st.columns([5, 1])
+            _tc.markdown(
+                f"**💡 Título sugerido pelo agente de ata:**  \n> {_suggested_title}"
+            )
+            if _tb.button("Usar este título", key="btn_use_suggested_title", use_container_width=True):
+                st.session_state.meeting_title = _suggested_title
+                _mid_for_title = st.session_state.get("current_meeting_id")
+                if _mid_for_title:
+                    try:
+                        from core.project_store import update_meeting_title
+                        update_meeting_title(_mid_for_title, _suggested_title)
+                    except Exception:
+                        pass
+                st.rerun()
+
+    # ── Tempo de reunião + fala por participante ───────────────────────────────
+    _mt = getattr(hub, "meeting_time", None)
+    if _mt and _mt.ready and (_mt.duration_seconds or _mt.speaker_times):
+        from modules.transcript_time_parser import format_duration, format_speaker_table
+        import pandas as pd
+        with st.expander("⏱️ Tempo de reunião e fala por participante", expanded=False):
+            _source_label = (
+                "extraído de timestamps da transcrição"
+                if _mt.has_timestamps
+                else "estimado por contagem de palavras (sem timestamps detectados)"
+            )
+            _dur_col, _note_col = st.columns([1, 3])
+            _dur_col.metric("Duração total", format_duration(_mt))
+            _note_col.caption(f"Fonte: {_source_label}")
+
+            if _mt.speaker_times:
+                _rows = format_speaker_table(_mt)
+                st.dataframe(
+                    pd.DataFrame(_rows),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+    # ─────────────────────────────────────────────────────────────────────────
+
     tab_labels = {
         "minutes":          "📋 Ata de Reunião",
         "requirements":     "📝 Requisitos",

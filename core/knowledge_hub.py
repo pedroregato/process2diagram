@@ -495,6 +495,29 @@ class QuerySummaryModel:
         return None
 
 
+# ── Meeting Time Model ────────────────────────────────────────────────────────
+
+@dataclass
+class MeetingTimeModel:
+    """
+    Meeting duration and per-speaker talk time extracted from transcript timestamps.
+    Populated by transcript_time_parser (pure Python, no LLM).
+    When has_timestamps=False the values are word-count estimates.
+    """
+    has_timestamps: bool = False
+    format_detected: str = ""          # e.g. "bracket_ts_speaker" or "word_count_estimate"
+    duration_seconds: Optional[int] = None
+    speaker_times: dict = field(default_factory=dict)   # name → seconds
+    speaker_turns: dict = field(default_factory=dict)   # name → turn count
+    ready: bool = False
+
+    @property
+    def duration_minutes(self) -> Optional[int]:
+        if self.duration_seconds is None:
+            return None
+        return max(1, round(self.duration_seconds / 60))
+
+
 # ── Session Metadata ──────────────────────────────────────────────────────────
 
 @dataclass
@@ -549,6 +572,7 @@ class KnowledgeHub:
     query_summary: QuerySummaryModel = field(default_factory=QuerySummaryModel)  # Fase F: multi-perspective
     validation: ValidationReport = field(default_factory=ValidationReport)
     synthesizer: SynthesizerModel = field(default_factory=SynthesizerModel)
+    meeting_time: MeetingTimeModel = field(default_factory=MeetingTimeModel)
     meta: SessionMetadata = field(default_factory=SessionMetadata)
 
     # ── Factory ──────────────────────────────────────────────────────────────
@@ -762,6 +786,10 @@ class KnowledgeHub:
                 _dec.origin = "transcricao"
             if not hasattr(_dec, 'doc_ref'):
                 _dec.doc_ref = None
+
+        # ── v4.25: MeetingTimeModel ───────────────────────────────────────────
+        if not hasattr(hub, 'meeting_time'):
+            hub.meeting_time = MeetingTimeModel()
 
         return hub
 

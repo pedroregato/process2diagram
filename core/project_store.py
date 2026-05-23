@@ -545,6 +545,13 @@ def save_meeting_artifacts(meeting_id: str, hub) -> bool:
                 payload1["bmm_json"] = json.dumps(dataclasses.asdict(hub.bmm))
             except Exception:
                 pass
+        if hasattr(hub, "meeting_time") and hub.meeting_time.ready:
+            import json as _json2
+            _mt = hub.meeting_time
+            if _mt.duration_minutes is not None:
+                payload1["duration_minutes"] = _mt.duration_minutes
+            if _mt.speaker_times:
+                payload1["speaker_times"] = _json2.dumps(_mt.speaker_times, ensure_ascii=False)
         db.table("meetings").update(payload1).eq("id", meeting_id).execute()
     except Exception:
         return False
