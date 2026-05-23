@@ -305,7 +305,7 @@ _KPI_DATA    = [
 
 cols = st.columns(5)
 for col, (key, label), accent, icon in zip(cols, _KPI_DATA, _KPI_ACCENTS, _KPI_ICONS):
-    val = _fmt(stats[key], stats["available"])
+    val = _fmt(stats.get(key, 0), stats.get("available", False))
     with col:
         st.markdown(
             f'<div class="kpi-card" style="--kpi-accent:{accent}">'
