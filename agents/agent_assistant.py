@@ -509,6 +509,36 @@ Google Calendar, MCP ou "o que você pode fazer":
    não as funcionalidades do sistema P2D.
 ════════════════════════════════════════════════════════════════
 
+════════════════════════════════════════════════════════════════
+REGRA PRIORITÁRIA — PERGUNTAS CONCEITUAIS / DEFINIÇÕES DO SISTEMA:
+════════════════════════════════════════════════════════════════
+Quando o usuário perguntar o significado, definição ou explicação de um
+TERMO TÉCNICO, SIGLA ou CONCEITO relacionado ao Process2Diagram ou às
+metodologias que ele usa, incluindo (mas não limitado a):
+  BPMN, Gateway, Lane, Pool, DMN, SBVR, BMM, IBIS, NER, RAG, CKF, ROI-TR,
+  embedding, token, spaCy, LLM, pipeline, skill, KnowledgeHub, pgvector,
+  Supabase, Mermaid, Torneio BPMN, LangGraph, Semantic Cache, PII, RLS,
+  Qualidade de Transcrição, Reconciliação de Requisitos, ASR etc.
+
+FLUXO OBRIGATÓRIO:
+  1. Chame IMEDIATAMENTE search_glossary(query="<termo>")
+     → NÃO chame search_transcript — as transcrições descrevem o PROJETO DO CLIENTE,
+       não os conceitos técnicos do sistema.
+     → NÃO chame get_system_capabilities — ela lista capacidades, não definições.
+     → NÃO responda "não encontrei" antes de tentar search_glossary.
+  2. Apresente a definição retornada pelo glossário.
+  3. Se search_glossary não retornar resultado, aí sim responda que não há entrada
+     no glossário e ofereça uma explicação baseada no seu conhecimento geral.
+
+Exemplos:
+  "O que é IBIS?"           → search_glossary(query="IBIS")
+  "Explique SBVR"           → search_glossary(query="SBVR")
+  "O que significa RAG?"    → search_glossary(query="RAG")
+  "O que é um gateway?"     → search_glossary(query="gateway")
+  "Como funciona o torneio BPMN?" → search_glossary(query="Torneio BPMN")
+  "O que é CKF?"            → search_glossary(query="CKF")
+════════════════════════════════════════════════════════════════
+
 INSTRUÇÕES DE USO DAS FERRAMENTAS:
 - Use as ferramentas disponíveis para obter dados precisos antes de responder.
 - Estratégia recomendada por tipo de pergunta:
@@ -532,6 +562,9 @@ INSTRUÇÕES DE USO DAS FERRAMENTAS:
   • Reprocessar requisitos de uma reunião (com source_quote/cited_by) → reprocess_meeting_requirements
   • Reprocessar requisitos de todas as reuniões em lote → batch_reprocess_requirements
   • Funcionalidades do P2D / integrações / "o que você pode fazer" → get_system_capabilities
+  • Significado de termo técnico / sigla / conceito do P2D (BPMN, SBVR, BMM, DMN,
+    RAG, NER, CKF, ROI-TR, IBIS, gateway, lane, pool, embedding, token, spaCy etc.)
+    → search_glossary ← USE SEMPRE PARA PERGUNTAS CONCEITUAIS DO SISTEMA
   • Próximos eventos / agenda / compromissos do projeto → calendar_list_events
   • Detalhes de um evento específico → calendar_get_event
   • Horários livres / disponibilidade para reunião → calendar_suggest_time
