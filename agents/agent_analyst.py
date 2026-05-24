@@ -221,17 +221,24 @@ class AgentAnalyst:
         total_tk = 0
         steps: list[ReActStep] = []
 
-        for iteration in range(MAX_ITERATIONS):
-            tool_choice = "required" if iteration == 0 else "auto"
+        _thinking_mode     = bool(self.llm_config.get("reasoning_effort"))
+        _supports_required = not _thinking_mode and "deepseek-v4" not in model.lower()
 
-            resp = client.chat.completions.create(
-                model       = model,
-                messages    = msgs,
-                tools       = tools,
-                tool_choice = tool_choice,
-                max_tokens  = 4096,
-                temperature = 0,
+        for iteration in range(MAX_ITERATIONS):
+            _call_kwargs: dict = dict(
+                model      = model,
+                messages   = msgs,
+                tools      = tools,
+                max_tokens = 4096,
             )
+            if _thinking_mode:
+                _call_kwargs["reasoning_effort"] = self.llm_config["reasoning_effort"]
+                _call_kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
+            else:
+                _call_kwargs["tool_choice"] = ("required" if iteration == 0 else "auto") if _supports_required else "auto"
+                _call_kwargs["temperature"] = 0
+
+            resp = client.chat.completions.create(**_call_kwargs)
             total_tk += resp.usage.total_tokens if resp.usage else 0
             choice = resp.choices[0]
             content = choice.message.content or ""

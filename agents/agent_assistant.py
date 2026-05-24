@@ -806,6 +806,12 @@ class AgentAssistant(BaseAgent):
         called: list[str] = []
         _force_required = False  # Strategy 3: force "required" on the very next round
 
+        # DeepSeek V4 models (flash and pro) operate in thinking mode internally and
+        # reject tool_choice="required". They call tools correctly with "auto".
+        # Explicit thinking providers (reasoning_effort) also do not support tool_choice.
+        _thinking_mode = bool(self.provider_cfg.get("reasoning_effort"))
+        _supports_required = not _thinking_mode and "deepseek-v4" not in model.lower()
+
         for round_n in range(MAX_TOOL_ROUNDS):
             if cancel_event and cancel_event.is_set():
                 return "⏹ Processamento interrompido pelo usuário.", total_tk, called
@@ -817,20 +823,26 @@ class AgentAssistant(BaseAgent):
             # on the very first response.  Subsequent rounds use "auto" so the model
             # can return a final text answer when it has enough data.
             # _force_required overrides to "required" for one round (Strategy 3 retry).
-            if round_n == 0 or _force_required:
+            if _supports_required and (round_n == 0 or _force_required):
                 effective_tool_choice = "required"
-                _force_required = False
             else:
                 effective_tool_choice = "auto"
+            _force_required = False
 
-            resp = client.chat.completions.create(
+            _call_kwargs: dict = dict(
                 model=model,
                 messages=_enforce_budget(msgs),
                 tools=tools,
-                tool_choice=effective_tool_choice,
                 max_tokens=self.provider_cfg.get("max_tokens", 2048),
-                temperature=0.3,
             )
+            if _thinking_mode:
+                # Explicit thinking mode (reasoning_effort): no tool_choice, no temperature
+                _call_kwargs["reasoning_effort"] = self.provider_cfg["reasoning_effort"]
+                _call_kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
+            else:
+                _call_kwargs["tool_choice"] = effective_tool_choice
+                _call_kwargs["temperature"] = 0.3
+            resp = client.chat.completions.create(**_call_kwargs)
             total_tk += resp.usage.total_tokens if resp.usage else 0
             choice = resp.choices[0]
 
