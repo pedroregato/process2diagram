@@ -1255,6 +1255,7 @@ if _asst_running:
             "tokens": tokens_used,
             "tools": tools_called,
             "mode": "tools",
+            "error": error,
         }
 
         for _k in ("_asst_running", "_asst_thread", "_asst_cancel_event",
@@ -1273,6 +1274,8 @@ if "_asst_last_caption" in st.session_state:
         st.caption(f"🔢 {tokens_used} tokens · 🔧 ferramentas usadas: {tools_str}")
     else:
         st.caption(f"🔢 {tokens_used} tokens · 🔧 tool-use (sem chamadas externas)")
+    if cap.get("error"):
+        st.warning(f"⚠️ Erro interno: {cap['error']}")
 
 # ── New message input ─────────────────────────────────────────────────────────
 question = st.chat_input(

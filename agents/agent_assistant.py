@@ -748,17 +748,10 @@ class AgentAssistant(BaseAgent):
         project_id: str,
     ) -> str:
         """Build the system prompt for tool-use mode (compact data summary, no raw context)."""
-        # No tool-use mode, NÃO injetamos o guia completo no system prompt.
-        # Isso forçaria o LLM a responder de contexto em vez de chamar get_p2d_help.
-        # O conteúdo detalhado fica disponível apenas via ferramenta.
-        p2d_guide = (
-            "O Process2Diagram é uma plataforma que converte transcrições de reuniões "
-            "em diagramas e artefatos (BPMN, Mermaid, ata, requisitos, SBVR, BMM, "
-            "DMN, IBIS, relatório executivo) usando múltiplos LLMs. "
-            "Para explicar QUALQUER conceito, sigla, agente, página ou funcionalidade "
-            "da plataforma, chame get_p2d_help(topic) — essa ferramenta retorna a "
-            "definição completa do glossário e seções relevantes do guia do sistema."
-        )
+        try:
+            p2d_guide = self._load_skill()
+        except Exception:
+            p2d_guide = "(guia do Process2Diagram não disponível)"
 
         from core.project_store import retrieve_data_summary
         ds = retrieve_data_summary(project_id)
