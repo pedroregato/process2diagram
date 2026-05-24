@@ -1939,6 +1939,41 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "search_glossary",
+                "description": (
+                    "Busca termos no Glossário técnico do Process2Diagram e retorna "
+                    "definições, exemplos e termos relacionados. "
+                    "Use quando o usuário perguntar o significado de um termo técnico, "
+                    "quiser entender um conceito do sistema, ou pedir explicação de siglas "
+                    "como BPMN, SBVR, BMM, DMN, RAG, NER, RLS, ASR, KPI, ROI-TR, CKF etc."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": (
+                                "Termo ou conceito a buscar "
+                                "(ex: 'BPMN', 'embedding', 'gateway', 'rastreabilidade')"
+                            ),
+                        },
+                        "tag": {
+                            "type": "string",
+                            "enum": ["bpmn", "req", "ai", "dev", "neg"],
+                            "description": (
+                                "Filtro opcional por categoria: "
+                                "bpmn=Modelagem & BPMN, req=Requisitos & Spec, "
+                                "ai=IA & LLM, dev=Dev & Infra, neg=Negócios & Metodologia"
+                            ),
+                        },
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
     ]
 
 
@@ -2034,6 +2069,8 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "get_document_content":            "consulta",
     "search_documents":                "consulta",
     "get_document_types":              "consulta",
+    # Glossário
+    "search_glossary":                 "consulta",
 }
 
 # Ferramentas que exigem perfil administrador
@@ -6224,6 +6261,38 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 lines.append(f"- `{t['code']}` — {t['label']}")
         return "\n".join(lines)
 
+    # ── Glossário ─────────────────────────────────────────────────────────────
+
+    def search_glossary(self, query: str, tag: str | None = None) -> str:
+        """Busca termos no Glossário técnico do Process2Diagram."""
+        try:
+            from modules.glossary_data import search_glossary as _search, TAG_META
+            results = _search(query, tag=tag, max_results=6)
+        except Exception as exc:
+            return f"Erro ao acessar o glossário: {exc}"
+
+        if not results:
+            tag_hint = f" na categoria '{TAG_META.get(tag, {}).get('label', tag)}'" if tag else ""
+            return (
+                f"Nenhum termo encontrado no glossário para **'{query}'**{tag_hint}. "
+                f"Tente termos como: BPMN, gateway, embedding, RAG, SBVR, BMM, DMN, "
+                f"KnowledgeHub, pipeline, token, spaCy, Supabase, pgvector."
+            )
+
+        from modules.glossary_data import TAG_META
+        lines = [f"**Glossário Process2Diagram — '{query}'**\n"]
+        for e in results:
+            en_part = f" *(en: {e['en']})*" if e.get("en") else ""
+            tag_label = TAG_META.get(e.get("tag", ""), {}).get("label", e.get("tag", ""))
+            lines.append(f"### {e['term']}{en_part}  `{tag_label}`")
+            lines.append(e.get("def_", ""))
+            if e.get("example"):
+                lines.append(f"> **Exemplo:** {e['example']}")
+            if e.get("related"):
+                lines.append(f"*Ver também: {', '.join(e['related'])}*")
+            lines.append("")
+        return "\n".join(lines)
+
     # ── Dispatcher ────────────────────────────────────────────────────────────
 
     def execute(self, tool_name: str, tool_input: dict) -> str:
@@ -6492,6 +6561,11 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     mode=tool_input.get("mode", "semantic"),
                 ),
                 "get_document_types":     lambda: self.get_document_types_tool(),
+                # Glossário
+                "search_glossary":        lambda: self.search_glossary(
+                    query=tool_input["query"],
+                    tag=tool_input.get("tag"),
+                ),
             }
             if tool_name not in dispatch:
                 return f"Ferramenta desconhecida: '{tool_name}'"
