@@ -52,7 +52,7 @@ process2diagram/
 │   ├── LLMBenchmark.py           # LLM Benchmark & Telemetria — on-demand benchmark + passive telemetry analysis
 │   ├── Orientacoes_ComoIniciar.py   # Guia de início rápido
 │   ├── Orientacoes_Assistente.py    # Guia de ferramentas do Assistente (33 tools + exemplos)
-│   ├── Orientacoes_Glossario.py     # Glossário de termos e referências
+│   ├── Orientacoes_Glossario.py     # Glossário interativo (components.v1.html — busca + filtros + índice alfabético)
 │   ├── Orientacoes_Arquiteturas.py  # Arquiteturas do sistema
 │   ├── Orientacoes_CKF.py           # Guia CKF
 │   ├── BatchRunner.py            # Batch pipeline (Manutenção)
@@ -111,6 +111,7 @@ process2diagram/
 │   ├── ingest.py                 # .txt/.docx/.pdf file loader
 │   ├── text_utils.py             # rule_keyword_pt() — Portuguese text utils
 │   ├── reqtracker_exporter.py    # RequirementsModel → HTML/PDF (usado por Artefatos.py)
+│   ├── glossary_data.py          # 80 verbetes do glossário técnico + search_glossary() + TAG_META
 │   └── document_store.py         # Document CRUD + embedding + semantic/keyword search (Supabase)
 │
 ├── ui/
@@ -305,7 +306,7 @@ Passive telemetry is recorded automatically by `BaseAgent._call_llm()` on every 
 - **🧪 Benchmark On-Demand:** multi-select configured providers + agents, N runs slider, transcript selector, progress bar, results table, latency bar chart, throughput bar chart.
 - **📊 Telemetria Real:** filters (provider/agent/days/include_cache/include_benchmark), 4 KPIs, 4 sub-tabs: Latência (box plot p5/p25/median/p75/p95), Throughput (tokens/s grouped bar), Histórico (line chart by day), Heatmap (agent × provider median latency).
 
-**Migration:** `setup/supabase_migration_llm_telemetry.sql` — must be run once in Supabase SQL Editor.
+**Migration:** `setup/supabase_migration_llm_telemetry.sql` — ✅ EXECUTADO (2026-05-23).
 
 ---
 
@@ -380,7 +381,7 @@ Within Assistente mode, sidebar toggle `asst_use_tools`:
 
 ### Tool list (`core/assistant_tools.py`)
 
-**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `list_bpmn_processes`, `get_sbvr_terms`, `get_sbvr_rules`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`, `get_cache_stats`, `list_meeting_documents`, `get_document_content`, `search_documents`, `get_document_types`.
+**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `list_bpmn_processes`, `get_sbvr_terms`, `get_sbvr_rules`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`, `get_cache_stats`, `list_meeting_documents`, `get_document_content`, `search_documents`, `get_document_types`, `search_glossary`.
 
 **Admin only (`is_admin()`):** `get_database_integrity`, `fix_missing_llm_provider`, `generate_meeting_embeddings`, `reprocess_meeting_full`, `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`, `delete_entity`, `resolve_entity_ambiguity`, `clear_llm_cache`, write/generate tools.
 
@@ -389,6 +390,8 @@ Within Assistente mode, sidebar toggle `asst_use_tools`:
 **Cache tools (2):** `get_cache_stats(agent_name?)` — estatísticas do cache LLM (entradas, hits, tokens economizados, USD por agente); `clear_llm_cache(agent_name?)` — invalida entradas (admin). Cache em `services/semantic_cache.py`; tabela `llm_cache` no Supabase (`setup/supabase_migration_llm_cache.sql`).
 
 **Document tools (4):** `list_meeting_documents(meeting_number?, doc_type?)` — lista documentos do projeto com filtro opcional; `get_document_content(doc_id)` — conteúdo completo (cap 8k chars); `search_documents(query, mode)` — busca semantic|keyword nos documentos; `get_document_types()` — taxonomia completa (53 tipos / 9 categorias). Tabelas: `meeting_documents`, `document_chunks vector(1536)`; migration: `setup/supabase_migration_documents.sql`.
+
+**Glossário tool (1):** `search_glossary(query, tag?)` — busca os 80 verbetes do glossário técnico por termo, definição, exemplo ou termos relacionados. `tag` filtra por categoria: `bpmn` | `req` | `ai` | `dev` | `neg`. Dados em `modules/glossary_data.py` (sem Supabase — busca local em memória). Use quando o usuário perguntar o significado de siglas ou conceitos (BPMN, SBVR, RAG, NER, ROI-TR, CKF etc.).
 
 **Chart tools (5):** `generate_requirements_chart`, `generate_meetings_timeline`, `generate_action_items_chart`, `generate_roi_chart`, `generate_custom_chart` — Plotly figs returned as 4th element of `chat_with_tools()`, rendered via `st.plotly_chart()`. Palettes defined in `core/chart_config.py`.
 
@@ -421,7 +424,7 @@ Type-aware quality system — 11 meeting types, each with a weight matrix across
 
 **Artifact origin traceability (PC23):** all analytical artifacts have `origin: str = "transcricao"|"documento"` + `doc_ref: Optional[str]` (UUID of `meeting_documents`). Pipeline artifacts always have `origin="transcricao"`. Document-extracted artifacts have `origin="documento"` + `doc_ref=<doc_id>`. `save_artifacts_from_document(project_id, doc_id, extracted)` persists req/SBVR/BMM/DMN; `meeting_id` is nullable for document-sourced artifacts.
 
-**SQL migration required:** `setup/supabase_migration_documents.sql` (tables) + `setup/supabase_migration_artifact_origin.sql` (origin/doc_ref columns + nullable meeting FKs).
+**SQL migrations:** `setup/supabase_migration_documents.sql` + `setup/supabase_migration_artifact_origin.sql` — ✅ EXECUTADOS.
 
 ---
 
@@ -441,6 +444,8 @@ API keys: `st.session_state` only — never logged, written to disk, or persiste
 **Auth:** `apply_auth_gate()` + SHA-256 hashed credentials in `modules/auth.py → USUARIOS`. Roles: `master > admin > user`. `is_admin()` returns True for both `admin` and `master`. `_role` stored in session_state on login.
 
 **Supabase:** `st.secrets["supabase"]["url"]` + `["key"]`. Fail-open when absent.
+
+**Database (DDL / migrations):** `st.secrets["database"]["connection_string"]` — direct PostgreSQL via `psycopg2`. Password is URL-encoded (special chars: `?`→`%3F`, `#`→`%23`, `/`→`%2F`). Use this for running migrations programmatically (`conn.autocommit = True`). Only in local `secrets.toml` — never deployed to Streamlit Cloud.
 
 **Google Calendar secrets:** `st.secrets["google_calendar"]["calendar_id"]` + `["credentials_json"]`. Always use `'''` (triple-single-quotes) for `credentials_json` in TOML — `"""` corrupts the private key. Resolution order per call: Supabase `project_calendar_config` → secrets → local file → `"primary"`.
 
