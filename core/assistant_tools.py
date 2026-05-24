@@ -1942,6 +1942,37 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "get_p2d_help",
+                "description": (
+                    "Ferramenta especializada para responder perguntas sobre o "
+                    "Process2Diagram: conceitos, termos técnicos, siglas, agentes, "
+                    "páginas e funcionalidades da plataforma. "
+                    "Use SEMPRE que o usuário perguntar 'O que é X?', 'Explique X', "
+                    "'Como funciona X?', 'Para que serve X?' onde X é qualquer "
+                    "componente, sigla ou conceito do P2D (BPMN, SBVR, BMM, DMN, "
+                    "IBIS, RAG, NER, gateway, lane, pool, embedding, KnowledgeHub, "
+                    "pipeline, Mermaid, pgvector, spaCy, Supabase, CKF, ROI-TR, "
+                    "agente, assistente, diagrama, ata, artefato, etc.)."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "topic": {
+                            "type": "string",
+                            "description": (
+                                "Conceito, termo, sigla ou funcionalidade a explicar "
+                                "(ex: 'IBIS', 'SBVR', 'gateway exclusivo', 'RAG', "
+                                "'KnowledgeHub', 'embedding', 'pipeline')"
+                            ),
+                        },
+                    },
+                    "required": ["topic"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "search_glossary",
                 "description": (
                     "Busca termos no Glossário técnico do Process2Diagram e retorna "
@@ -2069,6 +2100,8 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "get_document_content":            "consulta",
     "search_documents":                "consulta",
     "get_document_types":              "consulta",
+    # Ajuda P2D
+    "get_p2d_help":                    "consulta",
     # Glossário
     "search_glossary":                 "consulta",
 }
@@ -6261,6 +6294,69 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 lines.append(f"- `{t['code']}` — {t['label']}")
         return "\n".join(lines)
 
+    # ── Ajuda P2D — conceitos, funcionalidades, componentes ───────────────────
+
+    def get_p2d_help(self, topic: str) -> str:
+        """Responde perguntas sobre o P2D buscando no glossário e no skill guide."""
+        import re
+        topic_lower = topic.lower().strip()
+
+        # 1. Busca no glossário
+        try:
+            from modules.glossary_data import search_glossary as _search, TAG_META
+            gloss_results = _search(topic, max_results=4)
+        except Exception:
+            gloss_results = []
+
+        # 2. Busca por seções relevantes em skill_assistant.md
+        skill_sections: list[str] = []
+        try:
+            import os
+            skill_path = os.path.join(os.path.dirname(__file__), "..", "skills", "skill_assistant.md")
+            skill_path = os.path.abspath(skill_path)
+            with open(skill_path, encoding="utf-8") as f:
+                skill_text = f.read()
+            # Split on ## headers (keep header with content)
+            raw_sections = re.split(r"\n(?=## )", skill_text)
+            for sec in raw_sections:
+                if topic_lower in sec.lower():
+                    # Trim to 800 chars to avoid huge blocks
+                    skill_sections.append(sec[:800].strip())
+        except Exception:
+            pass
+
+        if not gloss_results and not skill_sections:
+            return (
+                f"Não encontrei informações sobre **'{topic}'** no glossário ou "
+                f"no guia do Process2Diagram.\n\n"
+                f"Tente termos mais específicos como: BPMN, gateway, lane, pool, "
+                f"embedding, RAG, SBVR, BMM, DMN, IBIS, KnowledgeHub, pipeline, "
+                f"spaCy, Supabase, pgvector, CKF, ROI-TR, token, Mermaid."
+            )
+
+        parts: list[str] = [f"## Informações sobre '{topic}' no Process2Diagram\n"]
+
+        if gloss_results:
+            parts.append("### Glossário\n")
+            for e in gloss_results:
+                en_part = f" *(en: {e['en']})*" if e.get("en") else ""
+                tag_label = TAG_META.get(e.get("tag", ""), {}).get("label", "") if gloss_results else ""
+                parts.append(f"**{e['term']}**{en_part}  `{tag_label}`")
+                parts.append(e.get("def_", ""))
+                if e.get("example"):
+                    parts.append(f"> Exemplo: {e['example']}")
+                if e.get("related"):
+                    parts.append(f"*Ver também: {', '.join(e['related'])}*")
+                parts.append("")
+
+        if skill_sections:
+            parts.append("### Guia do Process2Diagram\n")
+            for sec in skill_sections[:3]:
+                parts.append(sec)
+                parts.append("")
+
+        return "\n".join(parts)
+
     # ── Glossário ─────────────────────────────────────────────────────────────
 
     def search_glossary(self, query: str, tag: str | None = None) -> str:
@@ -6561,6 +6657,8 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     mode=tool_input.get("mode", "semantic"),
                 ),
                 "get_document_types":     lambda: self.get_document_types_tool(),
+                # Ajuda P2D
+                "get_p2d_help":           lambda: self.get_p2d_help(tool_input["topic"]),
                 # Glossário
                 "search_glossary":        lambda: self.search_glossary(
                     query=tool_input["query"],
