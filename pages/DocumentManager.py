@@ -161,11 +161,12 @@ def _suggest_doc_title(content: str) -> str:
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
 
-tab_upload, tab_library, tab_extract, tab_analysis, tab_taxonomy = st.tabs([
+tab_upload, tab_library, tab_extract, tab_analysis, tab_crossdoc, tab_taxonomy = st.tabs([
     "📤 Enviar Documento",
     "📚 Biblioteca",
     "⚗️ Extrair Artefatos",
     "🔍 Análise Cruzada",
+    "🔗 Doc × Doc",
     "🏷️ Taxonomia",
 ])
 
@@ -913,7 +914,199 @@ with tab_analysis:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 5 — TAXONOMY
+# TAB 5 — DOC × DOC CROSS-ANALYSIS
+# ══════════════════════════════════════════════════════════════════════════════
+
+with tab_crossdoc:
+    st.subheader("Análise Cruzada: Documento × Documento")
+    st.caption(
+        "Compara dois documentos da biblioteca — conteúdo e artefatos extraídos — "
+        "identificando equivalências, complementaridades, contradições e gaps."
+    )
+
+    _all_docs = list_documents(project_id)
+    if len(_all_docs) < 2:
+        st.info("É necessário ter pelo menos 2 documentos na biblioteca para usar esta análise.")
+        st.stop()
+
+    # ── Document selectors ────────────────────────────────────────────────
+    _doc_map = {d["title"]: d for d in _all_docs}
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.markdown("**Documento A**")
+        _sel_a = st.selectbox("Documento A", list(_doc_map.keys()), key="cda_sel_a", label_visibility="collapsed")
+    with col_b:
+        st.markdown("**Documento B**")
+        _opts_b = [t for t in _doc_map if t != _sel_a]
+        _sel_b  = st.selectbox("Documento B", _opts_b, key="cda_sel_b", label_visibility="collapsed")
+
+    _doc_a_meta = _doc_map[_sel_a]
+    _doc_b_meta = _doc_map[_opts_b[0] if _sel_b not in _doc_map else _sel_b]
+
+    # ── Artifact counts preview ───────────────────────────────────────────
+    from modules.document_store import get_document_artifacts
+    col_ka, col_kb = st.columns(2)
+    with col_ka:
+        _art_a = get_document_artifacts(project_id, _doc_a_meta["id"])
+        st.caption(
+            f"Requisitos: {len(_art_a['requirements'])} · "
+            f"Termos SBVR: {len(_art_a['sbvr_terms'])} · "
+            f"Regras SBVR: {len(_art_a['sbvr_rules'])} · "
+            f"DMN: {len(_art_a['dmn'])}"
+        )
+    with col_kb:
+        _art_b = get_document_artifacts(project_id, _doc_b_meta["id"])
+        st.caption(
+            f"Requisitos: {len(_art_b['requirements'])} · "
+            f"Termos SBVR: {len(_art_b['sbvr_terms'])} · "
+            f"Regras SBVR: {len(_art_b['sbvr_rules'])} · "
+            f"DMN: {len(_art_b['dmn'])}"
+        )
+
+    _cda_lang = st.selectbox(
+        "Idioma do relatório",
+        ["Português (Brasil)", "Auto-detect", "English"],
+        key="cda_lang",
+    )
+
+    _run_btn = st.button("🔗 Analisar documentos", type="primary", key="cda_run_btn")
+
+    if _run_btn:
+        _content_a = get_document_content(_doc_a_meta["id"]) or ""
+        _content_b = get_document_content(_doc_b_meta["id"]) or ""
+        _doc_a_info = {
+            "id":           _doc_a_meta["id"],
+            "title":        _doc_a_meta["title"],
+            "content":      _content_a,
+            **_art_a,
+        }
+        _doc_b_info = {
+            "id":           _doc_b_meta["id"],
+            "title":        _doc_b_meta["title"],
+            "content":      _content_b,
+            **_art_b,
+        }
+        with st.spinner("Analisando documentos com IA… isso pode levar 30–60 segundos."):
+            try:
+                from modules.config import AVAILABLE_PROVIDERS
+                from modules.session_security import get_session_llm_client
+                from agents.agent_cross_doc_analyzer import CrossDocAnalyzerAgent
+                _pname  = st.session_state.get("selected_provider", "DeepSeek")
+                _pcfg   = AVAILABLE_PROVIDERS.get(_pname, {})
+                _cinfo  = get_session_llm_client(_pname) or {}
+                _agent  = CrossDocAnalyzerAgent(_cinfo, _pcfg)
+                _result = _agent.analyze(_doc_a_info, _doc_b_info, _cda_lang)
+                st.session_state["_cda_result"] = _result
+                st.session_state["_cda_title_a"] = _doc_a_meta["title"]
+                st.session_state["_cda_title_b"] = _doc_b_meta["title"]
+            except Exception as _e:
+                st.error(f"Erro na análise: {_e}")
+
+    # ── Results ───────────────────────────────────────────────────────────
+    if st.session_state.get("_cda_result"):
+        import pandas as pd
+        _r      = st.session_state["_cda_result"]
+        _ttl_a  = st.session_state.get("_cda_title_a", "Doc A")
+        _ttl_b  = st.session_state.get("_cda_title_b", "Doc B")
+
+        if _r.get("error"):
+            st.error(f"Erro retornado pelo agente: {_r['error']}")
+        else:
+            # ── Score + summary ───────────────────────────────────────────
+            score = _r.get("alignment_score", 0)
+            _sc_color = "green" if score >= 70 else "orange" if score >= 40 else "red"
+            st.markdown(
+                f"### Score de alinhamento: "
+                f"<span style='color:{_sc_color};font-size:1.4em'><b>{score}/100</b></span>",
+                unsafe_allow_html=True,
+            )
+            st.info(_r.get("summary", ""))
+            st.divider()
+
+            # ── Relationship map ──────────────────────────────────────────
+            rels = _r.get("relationships", [])
+            if rels:
+                st.markdown(f"#### Mapa de Relacionamentos ({len(rels)} itens)")
+                _TYPE_ICONS = {
+                    "equivalent":    "🟰",
+                    "related":       "🔗",
+                    "complementary": "➕",
+                    "conflicting":   "⚡",
+                }
+                _rows = []
+                for rel in rels:
+                    _rows.append({
+                        "Tipo":          _TYPE_ICONS.get(rel.get("type", ""), "?") + " " + rel.get("type", ""),
+                        f"Doc A — {_ttl_a[:25]}": f"{rel['doc_a'].get('item_id', '')} · {rel['doc_a'].get('description', '')[:60]}",
+                        f"Doc B — {_ttl_b[:25]}": f"{rel['doc_b'].get('item_id', '')} · {rel['doc_b'].get('description', '')[:60]}",
+                        "Explicação":    rel.get("explanation", "")[:120],
+                        "Confiança":     f"{int(rel.get('confidence', 0) * 100)}%",
+                    })
+                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True)
+            else:
+                st.caption("Nenhum relacionamento identificado.")
+
+            st.divider()
+
+            # ── Contradictions ────────────────────────────────────────────
+            contras = _r.get("contradictions", [])
+            _SEV_COLOR = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
+            if contras:
+                st.markdown(f"#### Contradições ({len(contras)})")
+                for _c in contras:
+                    _sev   = _c.get("severity", "medium")
+                    _icon  = _SEV_COLOR.get(_sev, "⚪")
+                    _label = f"{_icon} [{_sev.upper()}] {_c.get('topic', '')}"
+                    with st.expander(_label):
+                        col_ca, col_cb = st.columns(2)
+                        with col_ca:
+                            st.markdown(f"**{_ttl_a}:**")
+                            st.write(_c.get("doc_a_position", ""))
+                            if _c.get("evidence_a"):
+                                st.caption(f"Evidência: {_c['evidence_a']}")
+                        with col_cb:
+                            st.markdown(f"**{_ttl_b}:**")
+                            st.write(_c.get("doc_b_position", ""))
+                            if _c.get("evidence_b"):
+                                st.caption(f"Evidência: {_c['evidence_b']}")
+                        st.markdown(f"**Impacto:** {_c.get('explanation', '')}")
+            else:
+                st.success("Nenhuma contradição identificada entre os documentos.")
+
+            st.divider()
+
+            # ── Gaps ──────────────────────────────────────────────────────
+            gaps    = _r.get("gaps", {})
+            only_a  = gaps.get("only_in_a", [])
+            only_b  = gaps.get("only_in_b", [])
+            if only_a or only_b:
+                st.markdown("#### Gaps")
+                col_ga, col_gb = st.columns(2)
+                with col_ga:
+                    st.markdown(f"**Apenas em {_ttl_a[:30]}** ({len(only_a)})")
+                    for g in only_a:
+                        st.markdown(f"- `{g.get('item_id', '—')}` {g.get('description', '')[:80]}")
+                with col_gb:
+                    st.markdown(f"**Apenas em {_ttl_b[:30]}** ({len(only_b)})")
+                    for g in only_b:
+                        st.markdown(f"- `{g.get('item_id', '—')}` {g.get('description', '')[:80]}")
+            else:
+                st.caption("Sem gaps identificados.")
+
+            # ── Export ───────────────────────────────────────────────────
+            st.divider()
+            import json as _json
+            st.download_button(
+                "⬇️ Baixar análise JSON",
+                data=_json.dumps(_r, ensure_ascii=False, indent=2),
+                file_name=f"crossdoc_{_ttl_a[:20]}_{_ttl_b[:20]}.json".replace(" ", "_"),
+                mime="application/json",
+                use_container_width=False,
+            )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 6 — TAXONOMY
 # ══════════════════════════════════════════════════════════════════════════════
 
 with tab_taxonomy:

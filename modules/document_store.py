@@ -187,6 +187,74 @@ def delete_document(doc_id: str) -> bool:
         return False
 
 
+def get_document_artifacts(project_id: str, doc_id: str) -> dict:
+    """
+    Return all artifacts extracted from a specific document
+    (origin='documento', doc_ref=doc_id).
+
+    Returns:
+        {
+            "requirements": list[dict],
+            "sbvr_terms":   list[dict],
+            "sbvr_rules":   list[dict],
+            "bmm":          {"goals": [...], "strategies": [...], "policies": [...]},
+            "dmn":          list[dict],
+        }
+    """
+    db = _db()
+    result: dict = {
+        "requirements": [],
+        "sbvr_terms":   [],
+        "sbvr_rules":   [],
+        "bmm":          {"goals": [], "strategies": [], "policies": []},
+        "dmn":          [],
+    }
+    if not db:
+        return result
+    try:
+        rows = db.table("requirements").select(
+            "id, req_id, title, description, req_type, priority, status, source_quote"
+        ).eq("project_id", project_id).eq("doc_ref", doc_id).order("req_id").execute()
+        result["requirements"] = rows.data or []
+    except Exception:
+        pass
+    try:
+        rows = db.table("sbvr_terms").select(
+            "id, term, definition, category"
+        ).eq("project_id", project_id).eq("doc_ref", doc_id).execute()
+        result["sbvr_terms"] = rows.data or []
+    except Exception:
+        pass
+    try:
+        rows = db.table("sbvr_rules").select(
+            "id, rule_id, statement, rule_type, source_term"
+        ).eq("project_id", project_id).eq("doc_ref", doc_id).execute()
+        result["sbvr_rules"] = rows.data or []
+    except Exception:
+        pass
+    try:
+        rows = db.table("dmn_decisions").select(
+            "id, decision_id, name, question, outcome, information_required"
+        ).eq("project_id", project_id).eq("doc_ref", doc_id).execute()
+        result["dmn"] = rows.data or []
+    except Exception:
+        pass
+    try:
+        rows = db.table("argumentation_maps").select(
+            "bmm_payload"
+        ).eq("project_id", project_id).eq("doc_ref", doc_id).limit(1).execute()
+        if rows.data:
+            bmm_raw = rows.data[0].get("bmm_payload") or {}
+            result["bmm"] = {
+                "goals":      bmm_raw.get("goals", []),
+                "strategies": bmm_raw.get("strategies", []),
+                "policies":   bmm_raw.get("policies", []),
+            }
+    except Exception:
+        pass
+    return result
+
+
 # ── Embedding pipeline ────────────────────────────────────────────────────────
 
 def embed_document(
