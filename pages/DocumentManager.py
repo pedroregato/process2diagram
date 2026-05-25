@@ -417,15 +417,40 @@ with tab_library:
                         st.markdown("**Trecho correspondente:**")
                         st.text(doc["_matched_chunk"])
                     else:
-                        # Show content preview
+                        # Show content preview + full text toggle
                         full_content = get_document_content(doc_id)
                         if full_content:
-                            st.markdown("**Prévia:**")
-                            st.text(full_content[:500] + ("..." if len(full_content) > 500 else ""))
                             n_chunks = get_chunks_count(doc_id)
                             st.caption(f"Tamanho: {len(full_content):,} chars · {n_chunks} chunks indexados")
+                            _show_full = st.session_state.get(f"_show_full_{doc_id}", False)
+                            if _show_full:
+                                st.markdown("**Conteúdo completo:**")
+                                st.text(full_content)
+                                if st.button("▲ Recolher", key=f"collapse_{doc_id}"):
+                                    st.session_state[f"_show_full_{doc_id}"] = False
+                                    st.rerun()
+                            else:
+                                st.markdown("**Prévia:**")
+                                st.text(full_content[:500] + ("..." if len(full_content) > 500 else ""))
+                                if len(full_content) > 500:
+                                    if st.button("▼ Ver texto completo", key=f"expand_{doc_id}"):
+                                        st.session_state[f"_show_full_{doc_id}"] = True
+                                        st.rerun()
 
                 with col_actions:
+                    _dl_content = get_document_content(doc_id)
+                    if _dl_content:
+                        _dl_filename = (doc.get("file_name") or doc["title"]).rsplit(".", 1)[0] + ".txt"
+                        st.download_button(
+                            "📥 Baixar texto",
+                            data=_dl_content.encode("utf-8"),
+                            file_name=_dl_filename,
+                            mime="text/plain",
+                            key=f"dl_{doc_id}",
+                            use_container_width=True,
+                            help="Baixa o texto completo extraído do documento",
+                        )
+
                     if st.button("✨ Sugerir título", key=f"suggest_{doc_id}", use_container_width=True,
                                  help="IA analisa o conteúdo e propõe um título"):
                         _content = get_document_content(doc_id)
