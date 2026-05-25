@@ -118,6 +118,46 @@ def _load_file_content(uploaded_file) -> str:
         except Exception:
             return ""
 
+def _suggest_doc_title(content: str) -> str:
+    """Call current LLM provider to suggest a document title from its content."""
+    try:
+        from modules.config import AVAILABLE_PROVIDERS
+        from modules.session_security import get_session_llm_client
+        provider_name = st.session_state.get("selected_provider", "DeepSeek")
+        provider_cfg  = AVAILABLE_PROVIDERS.get(provider_name, {})
+        client_info   = get_session_llm_client(provider_name) or {}
+        api_key       = client_info.get("api_key", "")
+        model         = provider_cfg.get("default_model", "deepseek-v4-flash")
+        client_type   = provider_cfg.get("client_type", "openai_compatible")
+        if not api_key:
+            return ""
+        system = "Você é um assistente especialista em gestão documental."
+        user = (
+            "Analise o início do documento abaixo e proponha um título conciso e descritivo "
+            "(máximo 80 caracteres). Responda APENAS com o título sugerido, sem aspas, sem explicação.\n\n"
+            + content[:3000]
+        )
+        if client_type == "anthropic":
+            import anthropic
+            ac  = anthropic.Anthropic(api_key=api_key)
+            msg = ac.messages.create(model=model, max_tokens=100, system=system,
+                                     messages=[{"role": "user", "content": user}])
+            return (msg.content[0].text or "").strip()
+        else:
+            from openai import OpenAI
+            client = OpenAI(api_key=api_key, base_url=provider_cfg.get("base_url"))
+            kwargs: dict = dict(
+                model=model,
+                messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+                max_tokens=100,
+            )
+            if not provider_cfg.get("reasoning_effort") and "deepseek-v4" not in model.lower():
+                kwargs["temperature"] = 0.3
+            resp = client.chat.completions.create(**kwargs)
+            return (resp.choices[0].message.content or "").strip()
+    except Exception:
+        return ""
+
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
 
@@ -149,7 +189,11 @@ with tab_upload:
     col_meta, col_source = st.columns([1, 1], gap="large")
 
     with col_meta:
-        doc_title = st.text_input("Título do documento *", placeholder="Ex.: SRS do Módulo de Cadastro v2.1")
+        doc_title = st.text_input(
+            "Título do documento *",
+            placeholder="Ex.: SRS do Módulo de Cadastro v2.1",
+            key="doc_title_input",
+        )
 
         categories = list(types_by_cat.keys())
         category   = st.selectbox("Categoria", categories)
@@ -215,6 +259,16 @@ with tab_upload:
                     st.success(f"Arquivo carregado — {char_count:,} caracteres")
                     with st.expander("Prévia do texto extraído"):
                         st.text(doc_content[:1500] + ("..." if char_count > 1500 else ""))
+                    if not st.session_state.get("doc_title_input", "").strip():
+                        if st.button("✨ Sugerir título com IA", key="suggest_title_btn",
+                                     help="O agente lê o conteúdo e propõe um título"):
+                            with st.spinner("Analisando conteúdo…"):
+                                suggestion = _suggest_doc_title(doc_content)
+                            if suggestion:
+                                st.session_state["doc_title_input"] = suggestion
+                                st.rerun()
+                            else:
+                                st.warning("Não foi possível sugerir um título. Verifique a chave da API.")
                 else:
                     st.error("Não foi possível extrair texto. Verifique o arquivo.")
         else:
