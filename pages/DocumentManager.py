@@ -426,6 +426,31 @@ with tab_library:
                             st.caption(f"Tamanho: {len(full_content):,} chars · {n_chunks} chunks indexados")
 
                 with col_actions:
+                    if st.button("✨ Sugerir título", key=f"suggest_{doc_id}", use_container_width=True,
+                                 help="IA analisa o conteúdo e propõe um título"):
+                        _content = get_document_content(doc_id)
+                        if _content:
+                            with st.spinner("Analisando…"):
+                                _suggestion = _suggest_doc_title(_content)
+                            if _suggestion:
+                                st.session_state[f"_title_suggestion_{doc_id}"] = _suggestion
+                            else:
+                                st.warning("Não foi possível sugerir um título.")
+                        else:
+                            st.warning("Documento sem conteúdo armazenado.")
+
+                    if st.session_state.get(f"_title_suggestion_{doc_id}"):
+                        _sug = st.session_state[f"_title_suggestion_{doc_id}"]
+                        st.info(f"Sugestão: **{_sug}**")
+                        if st.button("✅ Aplicar", key=f"apply_title_{doc_id}", use_container_width=True):
+                            if update_document_meta(doc_id, title=_sug):
+                                st.success("Título atualizado.")
+                                st.session_state.pop(f"_title_suggestion_{doc_id}", None)
+                                st.cache_data.clear()
+                                st.rerun()
+                            else:
+                                st.error("Falha ao salvar.")
+
                     if st.button("🗑️ Excluir", key=f"del_{doc_id}", use_container_width=True):
                         if delete_document(doc_id):
                             st.success("Documento excluído.")

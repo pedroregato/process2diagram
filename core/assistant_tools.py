@@ -1942,6 +1942,35 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "suggest_document_title",
+                "description": (
+                    "Analisa o conteúdo de um documento da biblioteca e sugere um título mais "
+                    "adequado usando IA. Também atualiza o título no banco de dados se confirmado. "
+                    "Use quando o usuário pedir para renomear, melhorar o nome ou sugerir título "
+                    "para um documento da biblioteca."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "doc_id": {
+                            "type": "string",
+                            "description": "UUID do documento (obtido via list_meeting_documents ou search_documents).",
+                        },
+                        "apply": {
+                            "type": "boolean",
+                            "description": (
+                                "Se true, salva o título sugerido no banco imediatamente. "
+                                "Se false (padrão), apenas exibe a sugestão sem salvar."
+                            ),
+                        },
+                    },
+                    "required": ["doc_id"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "get_p2d_help",
                 "description": (
                     "Ferramenta especializada para responder perguntas sobre o "
@@ -2100,6 +2129,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "get_document_content":            "consulta",
     "search_documents":                "consulta",
     "get_document_types":              "consulta",
+    "suggest_document_title":          "escrita",
     # Ajuda P2D
     "get_p2d_help":                    "consulta",
     # Glossário
@@ -6294,6 +6324,70 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 lines.append(f"- `{t['code']}` — {t['label']}")
         return "\n".join(lines)
 
+    def suggest_document_title(self, doc_id: str, apply: bool = False) -> str:
+        """Suggest (and optionally apply) an AI-generated title for a document."""
+        from modules.document_store import get_document, update_document_meta
+        doc = get_document(doc_id)
+        if not doc:
+            return f"Documento com ID `{doc_id}` não encontrado."
+        content = doc.get("content_text", "")
+        if not content:
+            return f"O documento **{doc['title']}** não tem conteúdo armazenado — não é possível sugerir título."
+
+        # LLM call using current provider
+        try:
+            provider_cfg = self.llm_config.get("provider_cfg", {})
+            api_key      = self.llm_config.get("api_key", "")
+            model        = self.llm_config.get("model", "deepseek-v4-flash")
+            client_type  = provider_cfg.get("client_type", "openai_compatible")
+            system = "Você é um assistente especialista em gestão documental."
+            user   = (
+                "Analise o início do documento abaixo e proponha um título conciso e descritivo "
+                "(máximo 80 caracteres). Responda APENAS com o título sugerido, sem aspas, sem explicação.\n\n"
+                + content[:3000]
+            )
+            if client_type == "anthropic":
+                import anthropic
+                ac  = anthropic.Anthropic(api_key=api_key)
+                msg = ac.messages.create(model=model, max_tokens=100, system=system,
+                                         messages=[{"role": "user", "content": user}])
+                suggestion = (msg.content[0].text or "").strip()
+            else:
+                from openai import OpenAI
+                client = OpenAI(api_key=api_key, base_url=provider_cfg.get("base_url"))
+                kwargs: dict = dict(
+                    model=model,
+                    messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+                    max_tokens=100,
+                )
+                if not provider_cfg.get("reasoning_effort") and "deepseek-v4" not in model.lower():
+                    kwargs["temperature"] = 0.3
+                resp   = client.chat.completions.create(**kwargs)
+                suggestion = (resp.choices[0].message.content or "").strip()
+        except Exception as e:
+            return f"Erro ao chamar o LLM para sugestão de título: {e}"
+
+        if not suggestion:
+            return "O modelo não retornou uma sugestão de título."
+
+        old_title = doc.get("title", "")
+        if apply:
+            ok = update_document_meta(doc_id, title=suggestion)
+            if ok:
+                return (
+                    f"Título atualizado com sucesso!\n"
+                    f"- **Anterior:** {old_title}\n"
+                    f"- **Novo:** {suggestion}"
+                )
+            return f"Sugestão gerada (**{suggestion}**) mas falhou ao salvar no banco."
+        else:
+            return (
+                f"Sugestão de título para o documento:\n"
+                f"- **Atual:** {old_title}\n"
+                f"- **Sugerido:** {suggestion}\n\n"
+                f"Para aplicar, use `suggest_document_title(doc_id='{doc_id}', apply=true)`."
+            )
+
     # ── Ajuda P2D — conceitos, funcionalidades, componentes ───────────────────
 
     def get_p2d_help(self, topic: str) -> str:
@@ -6657,6 +6751,10 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     mode=tool_input.get("mode", "semantic"),
                 ),
                 "get_document_types":     lambda: self.get_document_types_tool(),
+                "suggest_document_title": lambda: self.suggest_document_title(
+                    doc_id=tool_input["doc_id"],
+                    apply=tool_input.get("apply", False),
+                ),
                 # Ajuda P2D
                 "get_p2d_help":           lambda: self.get_p2d_help(tool_input["topic"]),
                 # Glossário
