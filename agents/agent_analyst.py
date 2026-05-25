@@ -242,6 +242,7 @@ class AgentAnalyst:
             total_tk += resp.usage.total_tokens if resp.usage else 0
             choice = resp.choices[0]
             content = choice.message.content or ""
+            _reasoning = getattr(choice.message, "reasoning_content", None) or ""
 
             if choice.finish_reason != "tool_calls" or not choice.message.tool_calls:
                 # Final answer
@@ -249,7 +250,7 @@ class AgentAnalyst:
 
             # Build clean assistant message (avoid SDK-specific extra fields)
             tc_list = choice.message.tool_calls or []
-            msgs.append({
+            _amsg = {
                 "role":    "assistant",
                 "content": content,
                 "tool_calls": [
@@ -263,7 +264,10 @@ class AgentAnalyst:
                     }
                     for tc in tc_list
                 ],
-            })
+            }
+            if _reasoning:
+                _amsg["reasoning_content"] = _reasoning
+            msgs.append(_amsg)
 
             for tc in tc_list:
                 fn_name = tc.function.name

@@ -847,6 +847,9 @@ class AgentAssistant(BaseAgent):
             choice = resp.choices[0]
 
             content = choice.message.content or ""
+            # DeepSeek V4 thinking models return reasoning_content; the API requires
+            # it to be echoed back in every subsequent assistant message in the thread.
+            _reasoning = getattr(choice.message, "reasoning_content", None) or ""
 
             if choice.finish_reason != "tool_calls" or not choice.message.tool_calls:
                 # ── Strategy 4: Regex interceptor for declared-intent ──────────
@@ -860,7 +863,10 @@ class AgentAssistant(BaseAgent):
                             status_fn("🔧 Executando `search_transcript` (interceptor)…")
                         result = executor.execute("search_transcript", {"query": query})
                         called.append("search_transcript")
-                        msgs.append({"role": "assistant", "content": content})
+                        _amsg = {"role": "assistant", "content": content}
+                        if _reasoning:
+                            _amsg["reasoning_content"] = _reasoning
+                        msgs.append(_amsg)
                         msgs.append({
                             "role": "user",
                             "content": (
@@ -872,7 +878,10 @@ class AgentAssistant(BaseAgent):
                         continue  # proceed to next round with real data
                     else:
                         # Strategy 3: no extractable query — retry with tool_choice="required"
-                        msgs.append({"role": "assistant", "content": content})
+                        _amsg = {"role": "assistant", "content": content}
+                        if _reasoning:
+                            _amsg["reasoning_content"] = _reasoning
+                        msgs.append(_amsg)
                         msgs.append({
                             "role": "user",
                             "content": "Chame a ferramenta agora. Não descreva o que vai fazer.",
@@ -887,7 +896,10 @@ class AgentAssistant(BaseAgent):
                         # Execute the DSML-encoded tool calls
                         # Use stripped content for history; if nothing remains (pure DSML),
                         # use a neutral placeholder — never store raw DSML in conversation history.
-                        msgs.append({"role": "assistant", "content": _strip_dsml(content) or "…"})
+                        _amsg = {"role": "assistant", "content": _strip_dsml(content) or "…"}
+                        if _reasoning:
+                            _amsg["reasoning_content"] = _reasoning
+                        msgs.append(_amsg)
                         for dc in dsml_calls:
                             called.append(dc["name"])
                             if status_fn:
@@ -945,7 +957,7 @@ class AgentAssistant(BaseAgent):
             # include a `refusal` field (and other extras) in ChatCompletionMessage
             # that DeepSeek's API rejects as "Bad message format".
             _tc_list = choice.message.tool_calls or []
-            msgs.append({
+            _amsg = {
                 "role": "assistant",
                 "content": choice.message.content,
                 "tool_calls": [
@@ -959,7 +971,10 @@ class AgentAssistant(BaseAgent):
                     }
                     for tc in _tc_list
                 ],
-            })
+            }
+            if _reasoning:
+                _amsg["reasoning_content"] = _reasoning
+            msgs.append(_amsg)
             for tc in _tc_list:
                 if cancel_event and cancel_event.is_set():
                     return "⏹ Processamento interrompido pelo usuário.", total_tk, called
