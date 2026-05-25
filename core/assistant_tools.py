@@ -6358,7 +6358,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 kwargs: dict = dict(
                     model=model,
                     messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-                    max_tokens=100,
+                    max_tokens=512,  # deepseek-v4 uses thinking tokens before content — 100 is not enough
                 )
                 if not provider_cfg.get("reasoning_effort") and "deepseek-v4" not in model.lower():
                     kwargs["temperature"] = 0.3
