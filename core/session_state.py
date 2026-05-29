@@ -67,7 +67,7 @@ def init_session_state():
     if "asst_use_semantic" not in st.session_state:
         st.session_state["asst_use_semantic"] = False
     if "asst_embed_provider" not in st.session_state:
-        st.session_state["asst_embed_provider"] = "Google Gemini"
+        st.session_state["asst_embed_provider"] = "OpenAI"
 
     # ── Projeto / Reunião (F2) ─────────────────────────────────────────────
     if "project_id" not in st.session_state:

@@ -11,7 +11,7 @@
 - **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown / Word / PDF), requirements analysis (JSON/Markdown), executive HTML report, interactive requirements mind map
 - **Deploy:** Streamlit Cloud — auto-deploy on push to `main` branch (`github.com/pedroregato/process2diagram`)
 - **Dev environment:** PyCharm on Windows; Python 3.13
-- **Current version:** v4.24
+- **Current version:** v4.25
 
 Supported LLM providers: DeepSeek V4 Flash (default), DeepSeek V4 Pro, DeepSeek V4 Flash (Thinking), Claude (Anthropic), OpenAI, Groq, Google Gemini, Grok (xAI).
 
@@ -46,6 +46,7 @@ process2diagram/
 │   ├── KnowledgeGraph.py         # Knowledge graph — pyvis physics (Obsidian-like), entity/contradiction viz
 │   ├── MeetingROI.py             # ROI-TR dashboard — type-aware quality indicators
 │   ├── DocumentManager.py        # Document management — 5 tabs: upload, library, extract artifacts, cross-ref, taxonomy
+│   ├── CostBenefitScenarios.py   # Cenários de Custo-Benefício — compara até 5 combinações agente→modelo, presets, gráficos Plotly, apply ao pipeline
 │   ├── Settings.py               # Central settings — LLM providers, API keys, tool catalog
 │   ├── DatabaseOverview.py       # Database health — record counts, embeddings, integrity fixes
 │   ├── CostEstimator.py          # LLM cost estimator
@@ -68,6 +69,7 @@ process2diagram/
 │   ├── rerun_handlers.py         # handle_rerun() — re-executes a single named agent
 │   ├── assistant_tools.py        # Tool schemas + AssistantToolExecutor
 │   ├── chart_config.py           # CHART_PALETTES + DEFAULT_PALETTE (zero-dependency)
+│   ├── cost_model.py             # ModelPricing, AgentTokenProfile, ScenarioConfig, ScenarioResult, PRICING_CATALOG, project_cost()
 │   └── schema.py                 # Legacy schemas
 │
 ├── agents/
@@ -208,7 +210,7 @@ AgentRequirements┘
 |---|---|---|
 | **Início** | Home.py (default) | Todos |
 | **Pipeline** | Pipeline.py, Diagramas.py, BpmnEditor.py | Todos |
-| **Análise** | Assistente.py, Artefatos.py, ValidationHub.py, MeetingROI.py, DocumentManager.py | Todos |
+| **Análise** | Assistente.py, Artefatos.py, ValidationHub.py, MeetingROI.py, DocumentManager.py, CostBenefitScenarios.py | Todos |
 | **Sistema** | Settings.py, CostEstimator.py, LLMBenchmark.py [+ MasterAdmin.py, DatabaseOverview.py] | Todos [admin extra] |
 | **Ajuda** | ComoIniciar, Assistente (tool guide), Glossário, Arquiteturas, CKF | Todos |
 | **Manutenção** | BatchRunner.py, BpmnBackfill.py, MinutesBackfill.py, TranscriptBackfill.py | Admin only |
@@ -400,7 +402,7 @@ Tool schemas: `get_tool_schemas_openai()` / `get_tool_schemas_anthropic()`.
 ### Embedding pipeline
 
 - `chunk_text(transcript, chunk_size=500, overlap=80)` → chunks stored in `transcript_chunks` table (`vector(1536)`)
-- Provider: Google Gemini `gemini-embedding-001` with `output_dimensionality=1536`; fallback `gemini-embedding-2-preview` on 404
+- Provider padrão: OpenAI `text-embedding-3-small` (default em `asst_embed_provider`); alternativas: Google Gemini `gemini-embedding-001` (`output_dimensionality=1536`, fallback `gemini-embedding-2-preview` on 404), Grok `grok-embedding-small`
 - Rate limit: 1.2s delay between calls, 5 retries on 429
 - Search via `match_transcript_chunks()` SQL (pgvector cosine)
 
@@ -430,9 +432,10 @@ Type-aware quality system — 11 meeting types, each with a weight matrix across
 
 ## Core Modules (`core/`)
 
-- `session_state.init_session_state()` — idempotent, call immediately after `st.set_page_config()`. Defaults: provider=DeepSeek, run_quality/bpmn/minutes/requirements=True, run_sbvr/bmm/synthesizer/dmn/argumentation/ckf_updater/query_summarizer=True, n_bpmn_runs=3, use_langgraph=True, enable_long_context=True.
+- `session_state.init_session_state()` — idempotent, call immediately after `st.set_page_config()`. Defaults: provider=DeepSeek, embed_provider=OpenAI, run_quality/bpmn/minutes/requirements=True, run_sbvr/bmm/synthesizer/dmn/argumentation/ckf_updater/query_summarizer=True, n_bpmn_runs=3, use_langgraph=True, enable_long_context=True.
 - `pipeline.run_pipeline(hub, config, callback)` — 3 paths: multi-run tournament / LangGraph / standard. Raises on error (caller catches).
 - `rerun_handlers.handle_rerun(agent_name, ...)` — re-runs one agent: `"quality"`, `"bpmn"`, `"minutes"`, `"requirements"`, `"sbvr"`, `"bmm"`, `"synthesizer"`. BPMN re-run invalidates `hub.synthesizer`.
+- `cost_model.py` — modelo de dados para Cenários de Custo-Benefício (sem Streamlit, sem rede). Exporta: `ModelPricing`, `AgentTokenProfile`, `ScenarioConfig`, `ScenarioResult`, `PRICING_CATALOG` (17 modelos / 6 provedores), `DEFAULT_TOKEN_PROFILES` (9 agentes com perfis heurísticos), `project_cost(scenario, word_count, catalog) → ScenarioResult`. Catálogo editável via `st.session_state["cost_catalog_overrides"]`; cenário ativo em `st.session_state["scenario_assignments"]` (dict agent_name→model_id) — lido por `BaseAgent._call_llm()` para sobrescrever `model` por agente (fail-open se ausente).
 - `project_store` — Supabase CRUD; fail-open (returns `[]`/`None` when unconfigured). Key functions: `load_meeting_as_hub(meeting_id, project_id)` → reconstructs KnowledgeHub from DB (transcript, BPMN, minutes, requirements, SBVR, BMM, DMN, IBIS); `list_dmn_by_project(project_id)` → flat list of DMN decisions; `list_argumentation_by_project(project_id)` → flat list of IBIS questions; `save_artifacts_from_document(project_id, doc_id, extracted)` → persists all artifact types extracted from a document. Full function list in `claude_guideline/architecture_details.md`.
 
 ---
