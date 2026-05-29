@@ -48,6 +48,19 @@ render_page_header(
     "Cole ou faça upload de uma transcrição e execute o pipeline de agentes LLM.",
 )
 
+# ── Badge de cenário ativo ────────────────────────────────────────────────────
+_active_assignments = st.session_state.get("scenario_assignments")
+if _active_assignments:
+    _scen_name = st.session_state.get("scenario_name", "Cenário ativo")
+    _badge_parts = " | ".join(
+        f"{k}: `{v}`" for k, v in list(_active_assignments.items())[:4]
+    )
+    _more = f" + {len(_active_assignments) - 4} mais" if len(_active_assignments) > 4 else ""
+    st.info(
+        f"**Cenário ativo: \"{_scen_name}\"** — {_badge_parts}{_more}",
+        icon="ℹ️",
+    )
+
 # ─────────────────────────────────────────────────────────────────────────────
 # MODO: Nova transcrição vs. Reunião existente
 # ─────────────────────────────────────────────────────────────────────────────
@@ -157,7 +170,14 @@ if pipeline_mode == _MODE_NEW:
 
         with st.status("⏳ Executando pipeline de agentes...", expanded=True) as _pipeline_status:
             def update_progress(step, status):
-                icon = "✅" if "done" in status else "⏳" if "running" in status else "❌"
+                if "done" in status:
+                    icon = "✅"
+                elif "running" in status:
+                    icon = "⏳"
+                elif "skipped" in status:
+                    icon = "⏭️"
+                else:
+                    icon = "❌"
                 st.write(f"{icon} **{step}** — {status}")
             try:
                 hub = run_pipeline(hub, config, update_progress)

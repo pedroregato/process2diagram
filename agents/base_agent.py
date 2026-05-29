@@ -134,6 +134,16 @@ class BaseAgent(ABC):
         api_key = self.client_info["api_key"]
         model = self.provider_cfg["default_model"]
 
+        # ── Scenario model override (NF-5: safe — scenario_assignments may be absent) ─
+        try:
+            import streamlit as st
+            _assignments = st.session_state.get("scenario_assignments", {})
+            if self.name in _assignments:
+                model = _assignments[self.name]
+        except Exception:
+            pass
+        # ─────────────────────────────────────────────────────────────────────
+
         # ── PII sanitization ──────────────────────────────────────────────
         sanitized = sanitize(user)
         safe_user = sanitized.text
