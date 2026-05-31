@@ -265,6 +265,19 @@ class BPMNValidationScore:
 
 
 @dataclass
+class AgentOutcomeScore:
+    """
+    Resultado da validação de outcome para um agente específico.
+    Produzido por AgentValidator.validate_all() — pure Python, sem LLM.
+    """
+    agent_name: str
+    passed: bool                    # True se todos os critérios obrigatórios passaram
+    score: float                    # 0.0–10.0 derivado do % de checks passing
+    checks: dict = field(default_factory=dict)   # {"label": True/False}
+    warnings: list = field(default_factory=list) # critérios opcionais falhos / observações
+
+
+@dataclass
 class ValidationReport:
     score: int = 100    # 0–100 (legacy)
     issues: list[ValidationIssue] = field(default_factory=list)
@@ -272,6 +285,8 @@ class ValidationReport:
     bpmn_candidates: list[BPMNValidationScore] = field(default_factory=list)
     n_bpmn_runs: int = 1
     ready: bool = False
+    # v4.26: per-agent outcome scores (populated by AgentValidator.validate_all)
+    agent_scores: dict = field(default_factory=dict)  # agent_name → AgentOutcomeScore
 
     @property
     def errors(self):
@@ -790,6 +805,10 @@ class KnowledgeHub:
         # ── v4.25: MeetingTimeModel ───────────────────────────────────────────
         if not hasattr(hub, 'meeting_time'):
             hub.meeting_time = MeetingTimeModel()
+
+        # ── v4.26: ValidationReport.agent_scores ─────────────────────────────
+        if not hasattr(hub.validation, 'agent_scores'):
+            hub.validation.agent_scores = {}
 
         return hub
 

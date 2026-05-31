@@ -6,10 +6,14 @@ from ui.components.transcript_highlighter import render_highlighted_transcript
 from services.export_service import make_filename
 
 def render(hub, prefix, suffix):
+    from ui.components.quality_badge import render_quality_badge
     tq = hub.transcript_quality
     pp = getattr(hub, 'preprocessing', None)
     grade_colors = {"A":"#16a34a","B":"#65a30d","C":"#ca8a04","D":"#ea580c","E":"#dc2626"}
     color = grade_colors.get(tq.grade, "#64748b")
+    _hc1, _hc2 = st.columns([8, 2])
+    with _hc2:
+        render_quality_badge(hub, "transcript_quality")
     col1, col2 = st.columns([1,3])
     with col1:
         st.markdown(f"<div style='text-align:center;padding:2rem;border:2px solid {color}'><h1>{tq.grade}</h1><h3>{tq.overall_score:.1f}/100</h3></div>", unsafe_allow_html=True)

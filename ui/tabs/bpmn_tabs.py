@@ -7,7 +7,11 @@ from agents.agent_mermaid import generate_mermaid
 from services.export_service import make_filename
 
 def render_bpmn(hub, prefix, suffix):
-    st.markdown("### 📐 BPMN Process Model")
+    from ui.components.quality_badge import render_quality_badge
+    _c1, _c2 = st.columns([8, 2])
+    _c1.markdown("### 📐 BPMN Process Model")
+    with _c2:
+        render_quality_badge(hub, "bpmn")
     if hub.bpmn.bpmn_xml:
         bpmn_html = preview_from_xml(hub.bpmn.bpmn_xml)
         components.html(bpmn_html, height=800, scrolling=False)
@@ -56,7 +60,11 @@ def render_bpmn(hub, prefix, suffix):
         st.warning("BPMN XML not available")
 
 def render_mermaid(hub, prefix, suffix):
-    st.markdown("### 📊 Mermaid Flowchart")
+    from ui.components.quality_badge import render_quality_badge
+    _c1, _c2 = st.columns([8, 2])
+    _c1.markdown("### 📊 Mermaid Flowchart")
+    with _c2:
+        render_quality_badge(hub, "mermaid")
     render_mermaid_block(hub.bpmn.mermaid, show_code=True, key_suffix="modular_mermaid")
 
 def render_validation(hub):

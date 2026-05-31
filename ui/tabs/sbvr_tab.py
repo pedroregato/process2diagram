@@ -45,8 +45,12 @@ def _sphere_badge(sphere: str) -> str:
 
 
 def render(hub, prefix, suffix):
+    from ui.components.quality_badge import render_quality_badge
+    _c1, _c2 = st.columns([8, 2])
+    _c1.markdown("### 📖 Business Vocabulary & Rules (SBVR)")
+    with _c2:
+        render_quality_badge(hub, "sbvr")
     sbvr = hub.sbvr
-    st.markdown("### 📖 Business Vocabulary & Rules (SBVR)")
 
     if sbvr.domain:
         st.caption(f"**Domínio:** {sbvr.domain}")

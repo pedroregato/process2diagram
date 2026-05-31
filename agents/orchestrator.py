@@ -314,6 +314,16 @@ class Orchestrator:
                 self._progress("Agente Sintetizador", f"error: {exc}")
                 hub.bump()
 
+        # ── Step 8: Outcome validation (pure Python, fail-open) ───────────────
+        # Populates hub.validation.agent_scores for every pipeline run.
+        try:
+            from agents.agent_validator import AgentValidator as _AV
+            _bpmn_weights = getattr(self, "_pipeline_config", {}).get("bpmn_weights", {})
+            hub.validation.agent_scores = _AV().validate_all(hub, _bpmn_weights)
+            hub.bump()
+        except Exception:
+            pass  # never break the pipeline
+
         return hub
 
     # ── Parallel execution helper ─────────────────────────────────────────────

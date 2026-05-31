@@ -4,6 +4,11 @@ from agents.agent_minutes import AgentMinutes
 from services.export_service import make_filename
 
 def render(hub, prefix, suffix):
+    from ui.components.quality_badge import render_quality_badge
+    _c1, _c2 = st.columns([8, 2])
+    _c1.markdown("### 📝 Ata da Reunião")
+    with _c2:
+        render_quality_badge(hub, "minutes")
     m = hub.minutes
 
     # When loaded from DB, structured fields may be empty — render raw markdown

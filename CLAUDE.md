@@ -2,6 +2,7 @@
 
 > Read this file before making changes to the codebase.
 > Detailed references: `claude_guideline/architecture_details.md`, `claude_guideline/pitfalls.md`, `claude_guideline/roadmap.md`
+> Critérios de aceite por agente (outcomes): `claude_guideline/acceptance_criteria.md`
 
 ## Project Overview
 

@@ -11,8 +11,12 @@ _POLICY_ICON    = {
 
 
 def render(hub, prefix, suffix):
+    from ui.components.quality_badge import render_quality_badge
+    _c1, _c2 = st.columns([8, 2])
+    _c1.markdown("### 🎯 Business Motivation Model (BMM)")
+    with _c2:
+        render_quality_badge(hub, "bmm")
     bmm = hub.bmm
-    st.markdown("### 🎯 Business Motivation Model (BMM)")
 
     # ── Vision / Mission ──────────────────────────────────────────────────────
     col1, col2 = st.columns(2)

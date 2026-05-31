@@ -35,6 +35,11 @@ _STATUS_BADGE = {
 
 
 def render(hub, prefix, suffix):
+    from ui.components.quality_badge import render_quality_badge
+    _c1, _c2 = st.columns([8, 2])
+    _c1.markdown("### 📋 Requisitos")
+    with _c2:
+        render_quality_badge(hub, "requirements")
     req = hub.requirements
     if not req.requirements:
         st.warning("Nenhum requisito extraído.")
