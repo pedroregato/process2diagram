@@ -139,14 +139,28 @@ _START_TYPES = {"noneStartEvent", "startMessageEvent", "startTimerEvent", "start
 _END_TYPES   = {"noneEndEvent", "endMessageEvent", "errorEndEvent", "endEvent", "end"}
 
 _TASK_TYPE_MAP = {
-    "userTask":         "userTask",
-    "serviceTask":      "serviceTask",
-    "scriptTask":       "scriptTask",
-    "manualTask":       "manualTask",
-    "businessRuleTask": "businessRuleTask",
-    "parallelGateway":  "parallelGateway",
-    "exclusiveGateway": "exclusiveGateway",
-    "inclusiveGateway": "inclusiveGateway",
+    # Standard tasks
+    "userTask":          "userTask",
+    "serviceTask":       "serviceTask",
+    "scriptTask":        "scriptTask",
+    "manualTask":        "manualTask",
+    "businessRuleTask":  "businessRuleTask",
+    "sendTask":          "sendTask",
+    "receiveTask":       "receiveTask",
+    # Hierarchical (Silver Level 1) — generator renders as callActivity with double border
+    "callActivity":      "callActivity",
+    # Iteration markers — PC27b will add loop/MI XML markers; render as userTask for now
+    "loopTask":          "userTask",
+    "multiInstanceTask": "userTask",
+    # Boundary events — PC27b will anchor to task boundary; render as userTask for now
+    "boundaryTimerEvent": "userTask",
+    "boundaryErrorEvent": "userTask",
+    # Gateways
+    "parallelGateway":   "parallelGateway",
+    "exclusiveGateway":  "exclusiveGateway",
+    "inclusiveGateway":  "inclusiveGateway",
+    "eventBasedGateway": "eventBasedGateway",
+    "complexGateway":    "complexGateway",
 }
 
 

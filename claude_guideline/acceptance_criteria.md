@@ -26,6 +26,7 @@
 
 ## AgentBPMN
 
+**Structural correctness:**
 - `hub.bpmn.steps` has at least 3 items
 - `hub.bpmn.lanes` has at least 1 item with a non-generic name (not `"usuário"`, `"sistema"`, `"validador"`)
 - `hub.bpmn.bpmn_xml` is valid XML parseable by `xml.etree.ElementTree`
@@ -33,6 +34,18 @@
 - Exactly one `startEvent` and at least one `endEvent` present in XML
 - `_enforce_rules()` has been applied (no raw LLM output bypasses it)
 - If `n_bpmn_runs > 1`: `hub.validation.ready` is `True` and winning score is stored
+
+**Skill v7.0 — Bruce Silver Level 1 quality criteria:**
+- Processes with > 10 activities must use at least one `callActivity` step (density rule)
+- No linear sequence of more than 10 task/gateway nodes without a `callActivity` grouping
+- Every `exclusiveGateway` (`is_decision: true`) edge must carry a non-empty `label`
+- Task titles follow "[Verb Infinitive] + [Object]" pattern — no noun-phrase titles (e.g. "Validação de X" is a failure)
+- Start Event title must not be "Início", "Start", "Begin", or equivalent generic trigger
+- End Event title must not be "Fim", "End", "Encerramento", or equivalent generic state
+- `callActivity` steps must have non-empty `description` listing the sub-activities they represent
+- `loopTask` and `multiInstanceTask` used only when transcript explicitly indicates iteration or batch patterns
+- `boundaryTimerEvent`/`boundaryErrorEvent` used only for mid-task interruptions, not post-task decisions
+- `sendTask`/`receiveTask` used exclusively in multi-pool collaboration (never in single-pool flat format)
 
 ## AgentMermaid (MermaidGenerator — pure Python)
 
