@@ -27,6 +27,7 @@ from core.project_store import (
     list_sbvr_terms, list_sbvr_rules,
     list_bpmn_processes, list_bpmn_versions, bpmn_tables_exist,
     list_dmn_by_project, list_argumentation_by_project,
+    load_meeting_as_hub, save_bpmn_from_hub,
 )
 from ui.project_selector import require_active_project
 
@@ -694,6 +695,70 @@ with tab_sbvr:
 # TAB 7 — PROCESSOS BPMN
 # ════════════════════════════════════════════════════════════════════════════
 import streamlit.components.v1 as components
+
+
+def _do_bpmn_reconvert(process_id: str, meeting_id: str, project_id: str) -> None:
+    """Re-run AgentBPMN (skill v7.0) sobre uma reunião e salva como nova versão."""
+    from modules.session_security import get_session_llm_client
+
+    client_info  = get_session_llm_client(st.session_state.get("selected_provider", ""))
+    provider_cfg = st.session_state.get("provider_cfg") or {}
+
+    if not client_info:
+        st.error("Configure um provedor LLM em **Sistema → Configurações** antes de reconverter.")
+        return
+
+    with st.spinner("Carregando transcrição da reunião..."):
+        hub = load_meeting_as_hub(meeting_id, project_id)
+
+    if not hub:
+        st.error("Reunião não encontrada no banco de dados.")
+        return
+
+    transcript = (hub.transcript_clean or hub.transcript_raw or "").strip()
+    if len(transcript) < 50:
+        st.error(
+            "Transcrição não disponível ou muito curta para esta reunião. "
+            "Reprocesse a transcrição pelo Pipeline antes de reconverter."
+        )
+        return
+
+    with st.spinner("Reconvertendo com AgentBPMN (Method & Style v7.0)..."):
+        try:
+            from agents.agent_bpmn import AgentBPMN
+            agent = AgentBPMN(client_info, provider_cfg)
+            hub   = agent.run(hub)
+        except Exception as exc:
+            st.error(f"Erro na reconversão: {exc}")
+            return
+
+    if not getattr(hub.bpmn, "ready", False):
+        st.error("O agente não produziu um modelo BPMN válido.")
+        return
+
+    n_steps    = len(hub.bpmn.steps)
+    n_call_act = sum(1 for s in hub.bpmn.steps if s.task_type == "callActivity")
+    n_loops    = sum(1 for s in hub.bpmn.steps if s.task_type in ("loopTask", "multiInstanceTask"))
+
+    with st.spinner("Salvando nova versão..."):
+        saved = save_bpmn_from_hub(meeting_id, project_id, hub, bpmn_process_id=process_id)
+
+    if saved:
+        st.success("Diagrama reconvertido e salvo como nova versão!")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Nós no nível 1", n_steps,
+                  help="Steps + gateways no nível principal do diagrama")
+        c2.metric("callActivities", n_call_act,
+                  help="Fases agrupadas pela regra de densidade Silver Level 1 (>10 atividades)")
+        c3.metric("Loop / Multi-instance", n_loops,
+                  help="Tarefas loopTask ou multiInstanceTask identificadas")
+        if hub.bpmn.repair_log:
+            st.caption(f"Reparos automáticos aplicados: {len(hub.bpmn.repair_log)}")
+        _load_bpmn_versions.clear()
+        _load_bpmn_procs.clear()
+        st.rerun()
+    else:
+        st.error("Erro ao salvar a nova versão. Verifique a conexão com o banco de dados.")
 from modules.bpmn_viewer import preview_from_xml
 from modules.mermaid_renderer import render_mermaid_block
 
@@ -798,6 +863,30 @@ with tab_bpmn:
                         )
                     else:
                         st.info("Código Mermaid não disponível para esta versão.")
+
+                # ── Reconversão Method & Style v7.0 ──────────────────────
+                st.markdown("---")
+                st.markdown("##### Reconverter com Method & Style v7.0")
+                st.caption(
+                    "Re-executa o AgentBPMN aplicando a metodologia Top-Down de Bruce Silver "
+                    "(skill v7.0): regra de densidade, callActivity, Verbo+Objeto, boundary events). "
+                    "Salva como nova versão — a versão atual é preservada no histórico."
+                )
+                _reconv_mid = sel_ver.get("meeting_id")
+                if _reconv_mid:
+                    st.caption(
+                        f"Origem: {meet_label(_reconv_mid)}  "
+                        f"·  versão selecionada: v{sel_ver['version']}"
+                    )
+                    if st.button(
+                        "Reconverter este diagrama",
+                        key=f"reconvert_{pid}_{sel_ver['version']}",
+                        type="primary",
+                        use_container_width=True,
+                    ):
+                        _do_bpmn_reconvert(pid, _reconv_mid, project_id)
+                else:
+                    st.warning("Reunião origem não identificada nesta versão.")
 
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 8 — DMN
