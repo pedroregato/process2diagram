@@ -284,11 +284,11 @@ def _load_stats():
     return get_global_stats()
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _load_recent():
-    return list_recent_meetings(limit=6)
+def _load_recent(project_id: str | None = None):
+    return list_recent_meetings(limit=6, project_id=project_id)
 
 stats  = _load_stats()
-recent = _load_recent()
+recent = _load_recent(_ap_id)
 
 def _fmt(n: int, available: bool) -> str:
     return str(n) if available else "—"
