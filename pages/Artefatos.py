@@ -832,44 +832,43 @@ with tab_bpmn:
                 bpmn_xml     = sel_ver.get("bpmn_xml") or ""
                 mermaid_code = sel_ver.get("mermaid_code") or ""
 
-                if not bpmn_xml and not mermaid_code:
-                    st.warning("Esta versão não possui diagrama armazenado.")
-                    continue
-
-                sub_bpmn, sub_mermaid = st.tabs(["📐 BPMN 2.0", "📊 Mermaid"])
-                with sub_bpmn:
-                    if bpmn_xml:
-                        try:
-                            bpmn_html = preview_from_xml(bpmn_xml)
-                            components.html(bpmn_html, height=700, scrolling=False)
-                        except Exception as e:
-                            st.error(f"Erro ao renderizar BPMN: {e}")
-                        st.download_button(
-                            "⬇️ Download BPMN XML",
-                            data=bpmn_xml.encode("utf-8"),
-                            file_name=f"{slug}_v{sel_ver['version']}.bpmn",
-                            mime="application/xml",
-                            key=f"dl_bpmn_{pid}_{sel_ver['version']}",
-                        )
-                    else:
-                        st.info("XML BPMN não disponível para esta versão.")
-                with sub_mermaid:
-                    if mermaid_code:
-                        render_mermaid_block(
-                            mermaid_code,
-                            show_code=False,
-                            key_suffix=f"rt_mmd_{pid}_{sel_ver['version']}",
-                            height=500,
-                        )
-                    else:
-                        st.info("Código Mermaid não disponível para esta versão.")
+                if bpmn_xml or mermaid_code:
+                    sub_bpmn, sub_mermaid = st.tabs(["📐 BPMN 2.0", "📊 Mermaid"])
+                    with sub_bpmn:
+                        if bpmn_xml:
+                            try:
+                                bpmn_html = preview_from_xml(bpmn_xml)
+                                components.html(bpmn_html, height=700, scrolling=False)
+                            except Exception as e:
+                                st.error(f"Erro ao renderizar BPMN: {e}")
+                            st.download_button(
+                                "⬇️ Download BPMN XML",
+                                data=bpmn_xml.encode("utf-8"),
+                                file_name=f"{slug}_v{sel_ver['version']}.bpmn",
+                                mime="application/xml",
+                                key=f"dl_bpmn_{pid}_{sel_ver['version']}",
+                            )
+                        else:
+                            st.info("XML BPMN não disponível para esta versão.")
+                    with sub_mermaid:
+                        if mermaid_code:
+                            render_mermaid_block(
+                                mermaid_code,
+                                show_code=False,
+                                key_suffix=f"rt_mmd_{pid}_{sel_ver['version']}",
+                                height=500,
+                            )
+                        else:
+                            st.info("Código Mermaid não disponível para esta versão.")
+                else:
+                    st.info("Esta versão não possui diagrama armazenado. Use a reconversão abaixo para gerar um novo.")
 
                 # ── Reconversão Method & Style v7.0 ──────────────────────
                 st.markdown("---")
                 st.markdown("##### Reconverter com Method & Style v7.0")
                 st.caption(
                     "Re-executa o AgentBPMN aplicando a metodologia Top-Down de Bruce Silver "
-                    "(skill v7.0): regra de densidade, callActivity, Verbo+Objeto, boundary events). "
+                    "(skill v7.0): regra de densidade, callActivity, Verbo+Objeto, boundary events. "
                     "Salva como nova versão — a versão atual é preservada no histórico."
                 )
                 _reconv_mid = sel_ver.get("meeting_id")
