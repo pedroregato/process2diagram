@@ -430,7 +430,7 @@ with col_recent:
             num   = mtg.get("meeting_number", "?")
             title = mtg.get("title", "(sem título)")
             date  = mtg.get("meeting_date", "—")
-            proj  = mtg.get("project_name", "—")
+            proj  = _ap_name or "—"
 
             label_short = title if len(title) <= 38 else title[:35] + "…"
 

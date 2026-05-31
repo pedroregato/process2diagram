@@ -2257,35 +2257,30 @@ def get_global_stats() -> dict:
 
 
 def list_recent_meetings(limit: int = 6, project_id: str | None = None) -> list[dict]:
-    """Retorna as N reuniões mais recentes, opcionalmente filtradas por projeto.
-
-    Cada item inclui project_name para exibição contextual.
-    """
+    """Retorna as N reuniões mais recentes, opcionalmente filtradas por projeto."""
     db = _db()
     if not db:
         return []
     try:
         q = (
             db.table("meetings")
-            .select("id, title, meeting_date, meeting_number, project_id, projects(name)")
+            .select("id, title, meeting_date, meeting_number, project_id")
             .order("created_at", desc=True)
             .limit(limit)
         )
         if project_id:
             q = q.eq("project_id", project_id)
         rows = _ok(q.execute())
-        result = []
-        for r in rows:
-            proj = r.get("projects") or {}
-            result.append({
-                "id":            r.get("id"),
-                "title":         r.get("title") or "(sem título)",
-                "meeting_date":  str(r.get("meeting_date") or "—"),
+        return [
+            {
+                "id":             r.get("id"),
+                "title":          r.get("title") or "(sem título)",
+                "meeting_date":   str(r.get("meeting_date") or "—"),
                 "meeting_number": r.get("meeting_number"),
-                "project_id":    r.get("project_id"),
-                "project_name":  proj.get("name") or "—",
-            })
-        return result
+                "project_id":     r.get("project_id"),
+            }
+            for r in rows
+        ]
     except Exception:
         return []
 
