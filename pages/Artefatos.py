@@ -23,7 +23,8 @@ from modules.supabase_client import supabase_configured
 from modules.text_utils import rule_keyword_pt
 from modules.reqtracker_exporter import to_html as export_html, to_pdf as export_pdf
 from core.project_store import (
-    list_meetings, list_requirements, list_contradictions,
+    list_meetings, list_requirements, list_requirements_light,
+    list_requirement_versions, list_contradictions,
     list_sbvr_terms, list_sbvr_rules,
     list_bpmn_processes, list_bpmn_versions, bpmn_tables_exist,
     list_dmn_by_project, list_argumentation_by_project,
@@ -107,36 +108,54 @@ with _col_change:
     st.page_link("pages/Home.py", label="Trocar")
 
 # ── Carrega dados (com cache para evitar queries a cada rerun) ─────────────────
-@st.cache_data(ttl=60, show_spinner=False)
+# TTLs calibrados pelo ritmo de mudança dos dados:
+#   meetings/contradictions: 120s (podem mudar após pipeline)
+#   requirements/SBVR/BPMN/docs: 300s (mudam raramente)
+#   bpmn_tables_exist: 3600s (estrutura permanente — elimina 2 pings desnecessários)
+#   DMN/IBIS: carregados sob demanda via session_state (JSONs pesados, abas raramente visitadas)
+
+@st.cache_data(ttl=120, show_spinner=False)
 def _load_meetings(pid):           return list_meetings(pid)
 
-@st.cache_data(ttl=60, show_spinner=False)
-def _load_requirements(pid):       return list_requirements(pid)
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_requirements(pid):       return list_requirements_light(pid)
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_req_versions(req_id):    return list_requirement_versions(req_id)
+
+@st.cache_data(ttl=120, show_spinner=False)
 def _load_contradictions(pid):     return list_contradictions(pid)
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def _load_sbvr_terms(pid):         return list_sbvr_terms(pid)
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def _load_sbvr_rules(pid):         return list_sbvr_rules(pid)
 
-@st.cache_data(ttl=60, show_spinner=False)
-def _load_bpmn_procs(pid):
-    return list_bpmn_processes(pid) if bpmn_tables_exist() else []
+@st.cache_data(ttl=3600, show_spinner=False)
+def _bpmn_tables_exist_cached() -> bool:
+    return bpmn_tables_exist()
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_bpmn_procs(pid):
+    return list_bpmn_processes(pid) if _bpmn_tables_exist_cached() else []
+
+@st.cache_data(ttl=300, show_spinner=False)
 def _load_bpmn_versions(pid):      return list_bpmn_versions(pid)
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def _load_dmn(pid):                return list_dmn_by_project(pid)
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def _load_argumentation(pid):      return list_argumentation_by_project(pid)
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def _load_documents(pid):          return list_documents(pid)
+
+# ── Carregamento inicial: dados leves apenas ──────────────────────────────────
+# DMN e IBIS buscam dmn_json/argumentation_json de TODAS as reuniões (JSONs pesados).
+# São carregados sob demanda na primeira visita à respectiva aba, via session_state.
+# Isso reduz o carregamento inicial de 10-11 queries para 7-8 queries sequenciais.
 
 meetings         = _load_meetings(project_id)
 requirements     = _load_requirements(project_id)
@@ -144,9 +163,14 @@ contradictions   = _load_contradictions(project_id)
 sbvr_terms       = _load_sbvr_terms(project_id)
 sbvr_rules       = _load_sbvr_rules(project_id)
 bpmn_procs       = _load_bpmn_procs(project_id)
-dmn_decisions    = _load_dmn(project_id)
-ibis_questions   = _load_argumentation(project_id)
 documents        = _load_documents(project_id)
+
+# DMN e IBIS: lê do session_state se já carregados nesta sessão.
+# None = ainda não carregado (primeira visita). [] = carregado, sem dados.
+_DMN_SS  = f"_art_dmn_{project_id}"
+_IBIS_SS = f"_art_ibis_{project_id}"
+dmn_decisions  = st.session_state.get(_DMN_SS,  None)
+ibis_questions = st.session_state.get(_IBIS_SS, None)
 
 meet_map = {m["id"]: m for m in meetings}
 doc_map  = {d["id"]: d for d in documents}
@@ -188,8 +212,10 @@ c5.metric("Termos SBVR", len(sbvr_terms), help=f"{n_terms_doc} de documentos")
 c6.metric("Regras SBVR", len(sbvr_rules), help=f"{n_rules_doc} de documentos")
 
 col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-col_m1.metric("Decisões DMN", len(dmn_decisions))
-col_m2.metric("Questões IBIS", len(ibis_questions))
+col_m1.metric("Decisões DMN",  len(dmn_decisions)  if dmn_decisions  is not None else "—",
+              help="Acesse a aba DMN para carregar" if dmn_decisions is None else None)
+col_m2.metric("Questões IBIS", len(ibis_questions) if ibis_questions is not None else "—",
+              help="Acesse a aba IBIS para carregar" if ibis_questions is None else None)
 col_m3.metric("Processos BPMN", len(bpmn_procs))
 col_m4.metric("Documentos", len(documents))
 
@@ -255,36 +281,62 @@ tab_req, tab_mindmap, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn, tab_dm
     "🗓️ Reuniões",
     f"📖 SBVR ({len(sbvr_terms)}T · {len(sbvr_rules)}R)",
     f"📐 Processos BPMN ({len(bpmn_procs)})",
-    f"⚖️ DMN ({len(dmn_decisions)})",
-    f"🗺️ IBIS ({len(ibis_questions)})",
+    f"⚖️ DMN ({len(dmn_decisions) if dmn_decisions is not None else '…'})",
+    f"🗺️ IBIS ({len(ibis_questions) if ibis_questions is not None else '…'})",
     "🔗 Rastreabilidade",
 ])
 
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 1 — REQUISITOS
 # ════════════════════════════════════════════════════════════════════════════
+_STATUS_BADGE = {
+    "backlog":      ("badge-backlog",      "Backlog"),
+    "active":       ("badge-active",       "Ativo"),
+    "approved":     ("badge-approved",     "Aprovado"),
+    "in_progress":  ("badge-in-progress",  "Em Desenvolvimento"),
+    "implemented":  ("badge-implemented",  "Implementado"),
+    "revised":      ("badge-revised",      "Revisado"),
+    "contradicted": ("badge-contradicted", "Contradição"),
+    "deprecated":   ("badge-deprecated",   "Depreciado"),
+    "rejected":     ("badge-rejected",     "Rejeitado"),
+}
+_DOT_COLOR = {
+    "new":          "#60a5fa",
+    "confirmed":    "#34d399",
+    "revised":      "#fbbf24",
+    "contradicted": "#f87171",
+}
+_REQ_PAGE_SIZE = 25
+
 with tab_req:
     if not requirements:
         st.info("Nenhum requisito registrado para este projeto.")
     else:
-        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+        # ── Filtros ──────────────────────────────────────────────────────
+        col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5)
         with col_f1:
-            status_opts = [
-                "Todos", "backlog", "active", "approved", "in_progress",
-                "implemented", "revised", "contradicted", "deprecated", "rejected",
-            ]
-            sel_status = st.selectbox("Status", status_opts, key="rt_status")
+            sel_status = st.selectbox(
+                "Status",
+                ["Todos", "backlog", "active", "approved", "in_progress",
+                 "implemented", "revised", "contradicted", "deprecated", "rejected"],
+                key="rt_status",
+            )
         with col_f2:
-            types = sorted({r.get("req_type", "") for r in requirements if r.get("req_type")})
-            sel_type = st.selectbox("Tipo", ["Todos"] + types, key="rt_type")
+            _types = sorted({r.get("req_type", "") for r in requirements if r.get("req_type")})
+            sel_type = st.selectbox("Tipo", ["Todos"] + _types, key="rt_type")
         with col_f3:
-            prios = sorted({r.get("priority", "") for r in requirements if r.get("priority")})
-            sel_prio = st.selectbox("Prioridade", ["Todos"] + prios, key="rt_prio")
+            _prios = sorted({r.get("priority", "") for r in requirements if r.get("priority")})
+            sel_prio = st.selectbox("Prioridade", ["Todos"] + _prios, key="rt_prio")
         with col_f4:
             sel_origin_req = st.selectbox(
                 "Origem", ["Todas", "Transcrição", "Documento"], key="rt_origin"
             )
+        with col_f5:
+            sel_search = st.text_input(
+                "Buscar", placeholder="título ou descrição…", key="rt_search"
+            )
 
+        # ── Aplicar filtros ───────────────────────────────────────────────
         filtered = requirements
         if sel_status != "Todos":
             filtered = [r for r in filtered if r.get("status") == sel_status]
@@ -296,85 +348,159 @@ with tab_req:
             filtered = [r for r in filtered if r.get("origin", "transcricao") != "documento"]
         elif sel_origin_req == "Documento":
             filtered = [r for r in filtered if r.get("origin") == "documento"]
+        if sel_search:
+            _q = sel_search.lower()
+            filtered = [
+                r for r in filtered
+                if _q in (r.get("title") or "").lower()
+                or _q in (r.get("description") or "").lower()
+            ]
 
-        st.caption(f"Exibindo {len(filtered)} de {n_total} requisito(s)")
-        st.markdown("")
+        n_filtered = len(filtered)
 
-        _STATUS_BADGE = {
-            "backlog":      ("badge-backlog",      "Backlog"),
-            "active":       ("badge-active",       "Ativo"),
-            "approved":     ("badge-approved",     "Aprovado"),
-            "in_progress":  ("badge-in-progress",  "Em Desenvolvimento"),
-            "implemented":  ("badge-implemented",  "Implementado"),
-            "revised":      ("badge-revised",      "Revisado"),
-            "contradicted": ("badge-contradicted", "Contradição"),
-            "deprecated":   ("badge-deprecated",   "Depreciado"),
-            "rejected":     ("badge-rejected",     "Rejeitado"),
+        # ── Paginação — reset ao mudar filtros ou projeto ─────────────────
+        _filter_sig = f"{project_id}|{sel_status}|{sel_type}|{sel_prio}|{sel_origin_req}|{sel_search}"
+        if st.session_state.get("_rt_last_filter") != _filter_sig:
+            st.session_state["rt_page"] = 0
+            st.session_state["_rt_last_filter"] = _filter_sig
+
+        _page       = min(st.session_state.get("rt_page", 0),
+                          max(0, (n_filtered - 1) // _REQ_PAGE_SIZE))
+        _n_pages    = max(1, (n_filtered + _REQ_PAGE_SIZE - 1) // _REQ_PAGE_SIZE)
+        _page_start = _page * _REQ_PAGE_SIZE
+        _page_end   = min(_page_start + _REQ_PAGE_SIZE, n_filtered)
+        page_items  = filtered[_page_start:_page_end]
+
+        # ── Navegação de página (topo) ────────────────────────────────────
+        _nav1, _nav2, _nav3, _nav4 = st.columns([1, 1, 4, 1])
+        with _nav1:
+            if st.button("← Anterior", key="rt_prev", disabled=(_page == 0)):
+                st.session_state["rt_page"] = _page - 1
+                st.rerun()
+        with _nav2:
+            if st.button("Próximo →", key="rt_next", disabled=(_page == _n_pages - 1)):
+                st.session_state["rt_page"] = _page + 1
+                st.rerun()
+        with _nav3:
+            st.caption(
+                f"Itens **{_page_start + 1}–{_page_end}** de **{n_filtered}** "
+                f"· Página **{_page + 1}** de **{_n_pages}**"
+                + (f"  ·  *(filtro ativo)*" if n_filtered < n_total else "")
+            )
+        with _nav4:
+            _go = st.number_input(
+                "Ir para", min_value=1, max_value=_n_pages, value=_page + 1,
+                step=1, key="rt_goto", label_visibility="collapsed",
+            )
+            if _go - 1 != _page:
+                st.session_state["rt_page"] = int(_go) - 1
+                st.rerun()
+
+        # ── Tabela compacta ───────────────────────────────────────────────
+        _rows_html = ""
+        for _idx, _r in enumerate(page_items, start=_page_start + 1):
+            _num   = _r.get("req_number", 0)
+            _title = (_r.get("title") or "—")[:60]
+            _rtype = _r.get("req_type") or "—"
+            _prio  = _r.get("priority") or "—"
+            _st    = _r.get("status", "active")
+            _bc, _bt = _STATUS_BADGE.get(_st, ("badge-active", _st))
+            _orig_icon = "📄" if _r.get("origin") == "documento" else "🎙️"
+            _rows_html += (
+                f"<tr>"
+                f"<td style='color:#64748b;text-align:right;padding:4px 6px'>{_idx}</td>"
+                f"<td style='padding:4px 8px'><code>REQ-{_num:03d}</code></td>"
+                f"<td style='padding:4px 8px'>{_title}</td>"
+                f"<td style='padding:4px 8px;white-space:nowrap'>{_rtype}</td>"
+                f"<td style='padding:4px 8px'><span class='badge {_bc}'>{_bt}</span></td>"
+                f"<td style='padding:4px 8px;white-space:nowrap'>{_prio}</td>"
+                f"<td style='padding:4px 8px;text-align:center'>{_orig_icon}</td>"
+                f"</tr>"
+            )
+        st.markdown(
+            "<table style='width:100%;font-size:0.83em;border-collapse:collapse'>"
+            "<thead><tr style='border-bottom:1px solid #334155'>"
+            "<th style='padding:4px 6px;color:#64748b;text-align:right'>#</th>"
+            "<th align='left' style='padding:4px 8px'>ID</th>"
+            "<th align='left' style='padding:4px 8px'>Título</th>"
+            "<th align='left' style='padding:4px 8px'>Tipo</th>"
+            "<th align='left' style='padding:4px 8px'>Status</th>"
+            "<th align='left' style='padding:4px 8px'>Prioridade</th>"
+            "<th align='center' style='padding:4px 8px'>Origem</th>"
+            "</tr></thead>"
+            f"<tbody>{_rows_html}</tbody></table>",
+            unsafe_allow_html=True,
+        )
+
+        # ── Painel de detalhes (um requisito por vez) ─────────────────────
+        st.markdown("---")
+        st.markdown("##### Detalhes do requisito")
+        st.caption(
+            "Selecione um requisito para ver descrição completa e histórico de versões. "
+            "O histórico é carregado do banco de dados apenas quando solicitado."
+        )
+
+        _detail_opts = {
+            f"REQ-{r['req_number']:03d} — {r['title']}": r
+            for r in filtered
         }
-        _DOT_COLOR = {
-            "new":          "#60a5fa",
-            "confirmed":    "#34d399",
-            "revised":      "#fbbf24",
-            "contradicted": "#f87171",
-        }
+        if _detail_opts:
+            _sel_det_lbl = st.selectbox(
+                "Selecionar requisito",
+                list(_detail_opts.keys()),
+                key="rt_detail_sel",
+            )
+            _det_req = _detail_opts[_sel_det_lbl]
+            _det_status = _det_req.get("status", "active")
+            _det_bc, _det_bt = _STATUS_BADGE.get(_det_status, ("badge-active", _det_status))
 
-        for req in filtered:
-            num     = req.get("req_number", 0)
-            label   = f"REQ-{num:03d}"
-            status  = req.get("status", "active")
-            badge_cls, badge_txt = _STATUS_BADGE.get(status, ("badge-active", status))
-            versions = req.get("requirement_versions") or []
-            n_ver    = len(versions)
+            _dd1, _dd2 = st.columns([3, 1])
+            with _dd1:
+                st.markdown(
+                    f'<span class="badge {_det_bc}">{_det_bt}</span> '
+                    f'{_origin_badge(_det_req.get("origin"))}',
+                    unsafe_allow_html=True,
+                )
+                st.markdown(f"**Descrição:** {_det_req.get('description') or '—'}")
+                if _det_req.get("cited_by"):
+                    st.caption(f"👤 Proponente: **{_det_req['cited_by']}**")
+                if _det_req.get("source_quote"):
+                    st.caption(f'💬 *"{_det_req["source_quote"]}"*')
+                if _det_req.get("status_note"):
+                    st.caption(f"📝 {_det_req['status_note']}")
+            with _dd2:
+                if _det_req.get("origin") == "documento":
+                    st.caption(f"📄 {doc_label(_det_req.get('doc_ref'))}")
+                else:
+                    st.caption(f"🏁 {meet_label(_det_req.get('first_meeting_id'))}")
+                    st.caption(f"🔄 {meet_label(_det_req.get('last_meeting_id'))}")
+                if _det_req.get("owner"):
+                    st.caption(f"🙋 {_det_req['owner']}")
 
-            with st.expander(
-                f"**{label}** — {req.get('title', '')}  "
-                f"·  {req.get('req_type', '')}  ·  {req.get('priority', '')}",
-                expanded=(status == "contradicted"),
-            ):
-                col_d, col_m = st.columns([3, 1])
-                with col_d:
-                    st.markdown(
-                        f'<span class="badge {badge_cls}">{badge_txt}</span> '
-                        f'{_origin_badge(req.get("origin"))}',
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown(f"**Descrição:** {req.get('description', '—')}")
-                    if req.get("cited_by"):
-                        st.caption(f"👤 Proponente: **{req['cited_by']}**")
-                    if req.get("source_quote"):
-                        st.caption(f'💬 *"{req["source_quote"]}"*')
-                with col_m:
-                    if req.get("origin") == "documento":
-                        st.caption(f"📄 {doc_label(req.get('doc_ref'))}")
-                    else:
-                        st.caption(f"🏁 {meet_label(req.get('first_meeting_id'))}")
-                        st.caption(f"🔄 {meet_label(req.get('last_meeting_id'))}")
-                    st.caption(f"📌 {n_ver} versão(ões)")
-                    if req.get("owner"):
-                        st.caption(f"🙋 {req['owner']}")
-                    if req.get("status_note"):
-                        st.caption(f"📝 {req['status_note']}")
-
-                if versions:
-                    st.markdown("**Versões:**")
-                    for v in sorted(versions, key=lambda x: x.get("version", 0)):
-                        ct  = v.get("change_type", "")
-                        dot = _DOT_COLOR.get(ct, "#aaa")
-                        flag = " ⚠️" if v.get("contradiction_flag") else ""
+            # Histórico de versões — carregado sob demanda (1 query por seleção)
+            _det_vers = _load_req_versions(_det_req["id"])
+            if _det_vers:
+                with st.expander(f"📋 Histórico de versões ({len(_det_vers)})", expanded=False):
+                    for _v in _det_vers:
+                        _ct  = _v.get("change_type", "")
+                        _dot = _DOT_COLOR.get(_ct, "#aaa")
+                        _flag = " ⚠️" if _v.get("contradiction_flag") else ""
                         st.markdown(
-                            f'<span class="version-dot" style="background:{dot}"></span>'
-                            f'**v{v.get("version","?")}** — {meet_label(v.get("meeting_id"))} '
-                            f'· `{ct}`{flag}',
+                            f'<span class="version-dot" style="background:{_dot}"></span>'
+                            f'**v{_v.get("version","?")}** — {meet_label(_v.get("meeting_id"))} '
+                            f'· `{_ct}`{_flag}',
                             unsafe_allow_html=True,
                         )
-                        if v.get("change_summary"):
-                            st.caption(f"   ↳ {v['change_summary']}")
-                        if v.get("cited_by"):
-                            st.caption(f"   👤 {v['cited_by']}")
-                        if v.get("source_quote"):
-                            st.caption(f'   💬 *"{v["source_quote"]}"*')
-                        if v.get("contradiction_detail"):
-                            st.error(v["contradiction_detail"])
+                        if _v.get("change_summary"):
+                            st.caption(f"   ↳ {_v['change_summary']}")
+                        if _v.get("cited_by"):
+                            st.caption(f"   👤 {_v['cited_by']}")
+                        if _v.get("source_quote"):
+                            st.caption(f'   💬 *"{_v["source_quote"]}"*')
+                        if _v.get("contradiction_detail"):
+                            st.error(_v["contradiction_detail"])
+        else:
+            st.info("Nenhum requisito corresponde aos filtros aplicados.")
 
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 2 — MIND MAP
@@ -463,10 +589,7 @@ with tab_hist:
         sel_req_label = st.selectbox("Selecione o requisito", list(req_options.keys()),
                                      key="rt_hist_sel")
         sel_req = req_options[sel_req_label]
-        versions = sorted(
-            sel_req.get("requirement_versions") or [],
-            key=lambda x: x.get("version", 0),
-        )
+        versions = _load_req_versions(sel_req["id"])
 
         if not versions:
             st.info("Nenhuma versão registrada.")
@@ -540,13 +663,12 @@ with tab_meet:
                     r for r in requirements
                     if r.get("first_meeting_id") == m["id"]
                 ]
+                # Aproximação: requisitos cuja última versão foi nesta reunião
+                # (sem join de requirement_versions para manter a query leve)
                 reqs_touched = [
                     r for r in requirements
                     if r.get("first_meeting_id") != m["id"]
-                    and any(
-                        v.get("meeting_id") == m["id"]
-                        for v in (r.get("requirement_versions") or [])
-                    )
+                    and r.get("last_meeting_id") == m["id"]
                 ]
                 if reqs_originated:
                     st.markdown(f"**{len(reqs_originated)} requisito(s) originado(s) nesta reunião:**")
@@ -780,112 +902,169 @@ with tab_bpmn:
                 "Execute o pipeline com BPMN habilitado ou use o **📐 BPMN Backfill**."
             )
     else:
+        # ── Reordena processos por número de reunião (ascendente) ─────────
+        def _proc_meet_num(p):
+            mid = p.get("first_meeting_id") or p.get("last_meeting_id")
+            if mid and mid in meet_map:
+                return meet_map[mid].get("meeting_number") or 9999
+            return 9999
+
+        bpmn_procs_sorted = sorted(bpmn_procs, key=_proc_meet_num)
+        total_vers = sum(p.get("version_count") or 0 for p in bpmn_procs_sorted)
+
         st.caption(
-            f"**{len(bpmn_procs)} processo(s)** registrado(s). "
-            "Expanda um processo para ver o histórico de versões e visualizar o diagrama."
+            f"**{len(bpmn_procs_sorted)} processo(s)** · "
+            f"**{total_vers} versão(ões)** no total."
         )
+
+        # ── Tabela-resumo (colapsável) ────────────────────────────────────
+        with st.expander("Ver lista de todos os processos", expanded=False):
+            _tbl_rows = []
+            for _i, _p in enumerate(bpmn_procs_sorted, 1):
+                _mid = _p.get("first_meeting_id") or _p.get("last_meeting_id")
+                _m   = meet_map.get(_mid or "", {})
+                _mnum = _m.get("meeting_number", "—")
+                _status_cls, _status_txt = _STATUS_PROC_BADGE.get(
+                    _p.get("status", "active"), ("badge-active", "Ativo")
+                )
+                _tbl_rows.append(
+                    f"<tr>"
+                    f"<td style='padding:3px 8px;color:#64748b'>{_i}</td>"
+                    f"<td style='padding:3px 8px;white-space:nowrap'>Reunião {_mnum}</td>"
+                    f"<td style='padding:3px 8px'><b>{_p.get('name') or '—'}</b></td>"
+                    f"<td style='padding:3px 8px'>{_p.get('version_count') or 0}</td>"
+                    f"<td style='padding:3px 8px'>"
+                    f"<span class='badge {_status_cls}'>{_status_txt}</span></td>"
+                    f"</tr>"
+                )
+            st.markdown(
+                "<table style='width:100%;font-size:0.83em;border-collapse:collapse'>"
+                "<thead><tr style='border-bottom:1px solid #334155'>"
+                "<th style='padding:3px 8px;color:#64748b'>#</th>"
+                "<th align='left' style='padding:3px 8px'>Reunião</th>"
+                "<th align='left' style='padding:3px 8px'>Processo</th>"
+                "<th align='left' style='padding:3px 8px'>Versões</th>"
+                "<th align='left' style='padding:3px 8px'>Status</th>"
+                "</tr></thead><tbody>"
+                + "".join(_tbl_rows)
+                + "</tbody></table>",
+                unsafe_allow_html=True,
+            )
+
         st.markdown("")
 
-        for proc in bpmn_procs:
-            pid        = proc["id"]
-            proc_name  = proc.get("name") or "Processo"
-            n_ver      = proc.get("version_count") or 0
-            status     = proc.get("status", "active")
-            slug       = proc.get("slug", "")
-            last_mid   = proc.get("last_meeting_id")
-            badge_cls, badge_txt = _STATUS_PROC_BADGE.get(status, ("badge-active", status))
+        # ── Seletor por reunião (ordem numérica) ──────────────────────────
+        _proc_sel_labels = []
+        _proc_sel_map    = {}
+        for _p in bpmn_procs_sorted:
+            _mid  = _p.get("first_meeting_id") or _p.get("last_meeting_id")
+            _m    = meet_map.get(_mid or "", {})
+            _mnum = _m.get("meeting_number", "?")
+            _mtit = _m.get("title", "") or _p.get("name") or ""
+            _mdt  = _m.get("meeting_date", "") or ""
+            _lbl  = f"Reunião {_mnum} — {_mtit}"
+            if _mdt:
+                _lbl += f"  ({_mdt})"
+            # garante unicidade de label em caso de colisão
+            if _lbl in _proc_sel_map:
+                _lbl += f"  [{_p['id'][:6]}]"
+            _proc_sel_labels.append(_lbl)
+            _proc_sel_map[_lbl] = _p
 
-            header = (
-                f"**{proc_name}**  ·  "
-                f'{n_ver} versão(ões)  ·  '
-                f'última: {meet_label(last_mid)}'
+        _sel_proc_lbl = st.selectbox(
+            "Selecionar reunião",
+            _proc_sel_labels,
+            key="bpmn_proc_selector",
+            help="Lista ordenada por número de reunião.",
+        )
+        sel_proc = _proc_sel_map[_sel_proc_lbl]
+        pid      = sel_proc["id"]
+        slug     = sel_proc.get("slug", "")
+
+        st.markdown("---")
+
+        # ── Versões do processo selecionado (1 query) ────────────────────
+        versions = _load_bpmn_versions(pid)
+        if not versions:
+            st.info("Nenhuma versão registrada ainda para este processo.")
+        else:
+            ver_options = {}
+            for v in versions:
+                m_info = v.get("meetings") or {}
+                m_num  = m_info.get("meeting_number", "?")
+                m_tit  = m_info.get("title", "")
+                m_dt   = m_info.get("meeting_date", "")
+                lbl    = f"v{v['version']}  ·  Reunião {m_num} — {m_tit} ({m_dt})"
+                if v.get("is_current"):
+                    lbl = "⭐ " + lbl + "  (atual)"
+                ver_options[lbl] = v
+
+            sel_ver_lbl = st.selectbox(
+                "Versão", list(ver_options.keys()), key=f"bpmn_ver_sel_{pid}"
             )
-            with st.expander(header, expanded=(n_ver > 0)):
-                col_m1, col_m2, col_m3 = st.columns(3)
-                with col_m1:
-                    st.markdown(f'<span class="badge {badge_cls}">{badge_txt}</span>', unsafe_allow_html=True)
-                with col_m2:
-                    st.caption(f"🔑 slug: `{slug}`")
-                with col_m3:
-                    st.caption(f"🏁 Primeira: {meet_label(proc.get('first_meeting_id'))}")
-                st.markdown("---")
+            sel_ver      = ver_options[sel_ver_lbl]
+            bpmn_xml     = sel_ver.get("bpmn_xml") or ""
+            mermaid_code = sel_ver.get("mermaid_code") or ""
 
-                versions = _load_bpmn_versions(pid)
-                if not versions:
-                    st.info("Nenhuma versão registrada ainda.")
-                    continue
-
-                ver_options = {}
-                for v in versions:
-                    m_info = v.get("meetings") or {}
-                    m_num  = m_info.get("meeting_number", "?")
-                    m_tit  = m_info.get("title", "")
-                    m_dt   = m_info.get("meeting_date", "")
-                    lbl    = f"v{v['version']}  ·  Reunião {m_num} — {m_tit} ({m_dt})"
-                    if v.get("is_current"):
-                        lbl = "⭐ " + lbl + "  (atual)"
-                    ver_options[lbl] = v
-
-                sel_ver_lbl = st.selectbox("Versão", list(ver_options.keys()), key=f"bpmn_ver_sel_{pid}")
-                sel_ver = ver_options[sel_ver_lbl]
-
-                bpmn_xml     = sel_ver.get("bpmn_xml") or ""
-                mermaid_code = sel_ver.get("mermaid_code") or ""
-
-                if bpmn_xml or mermaid_code:
-                    sub_bpmn, sub_mermaid = st.tabs(["📐 BPMN 2.0", "📊 Mermaid"])
-                    with sub_bpmn:
-                        if bpmn_xml:
+            # ── Diagramas ────────────────────────────────────────────────
+            if bpmn_xml or mermaid_code:
+                sub_bpmn, sub_mermaid = st.tabs(["📐 BPMN 2.0", "📊 Mermaid"])
+                with sub_bpmn:
+                    if bpmn_xml:
+                        st.download_button(
+                            "⬇️ Download BPMN XML",
+                            data=bpmn_xml.encode("utf-8"),
+                            file_name=f"{slug}_v{sel_ver['version']}.bpmn",
+                            mime="application/xml",
+                            key=f"dl_bpmn_{pid}_{sel_ver['version']}",
+                        )
+                        if st.toggle(
+                            "Visualizar diagrama interativo",
+                            key=f"bpmn_show_{pid}_{sel_ver['version']}",
+                        ):
                             try:
                                 bpmn_html = preview_from_xml(bpmn_xml)
                                 components.html(bpmn_html, height=700, scrolling=False)
                             except Exception as e:
                                 st.error(f"Erro ao renderizar BPMN: {e}")
-                            st.download_button(
-                                "⬇️ Download BPMN XML",
-                                data=bpmn_xml.encode("utf-8"),
-                                file_name=f"{slug}_v{sel_ver['version']}.bpmn",
-                                mime="application/xml",
-                                key=f"dl_bpmn_{pid}_{sel_ver['version']}",
-                            )
-                        else:
-                            st.info("XML BPMN não disponível para esta versão.")
-                    with sub_mermaid:
-                        if mermaid_code:
-                            render_mermaid_block(
-                                mermaid_code,
-                                show_code=False,
-                                key_suffix=f"rt_mmd_{pid}_{sel_ver['version']}",
-                                height=500,
-                            )
-                        else:
-                            st.info("Código Mermaid não disponível para esta versão.")
-                else:
-                    st.info("Esta versão não possui diagrama armazenado. Use a reconversão abaixo para gerar um novo.")
+                    else:
+                        st.info("XML BPMN não disponível para esta versão.")
+                with sub_mermaid:
+                    if mermaid_code:
+                        render_mermaid_block(
+                            mermaid_code,
+                            show_code=False,
+                            key_suffix=f"rt_mmd_{pid}_{sel_ver['version']}",
+                            height=500,
+                        )
+                    else:
+                        st.info("Código Mermaid não disponível para esta versão.")
+            else:
+                st.info("Esta versão não possui diagrama armazenado. Use a reconversão abaixo para gerar um novo.")
 
-                # ── Reconversão Method & Style v7.0 ──────────────────────
-                st.markdown("---")
-                st.markdown("##### Reconverter com Method & Style v7.0")
+            # ── Reconversão Method & Style v7.0 ──────────────────────────
+            st.markdown("---")
+            st.markdown("##### Reconverter com Method & Style v7.0")
+            st.caption(
+                "Re-executa o AgentBPMN aplicando a metodologia Top-Down de Bruce Silver "
+                "(skill v7.0): regra de densidade, callActivity, Verbo+Objeto, boundary events. "
+                "Salva como nova versão — a versão atual é preservada no histórico."
+            )
+            _reconv_mid = sel_ver.get("meeting_id")
+            if _reconv_mid:
                 st.caption(
-                    "Re-executa o AgentBPMN aplicando a metodologia Top-Down de Bruce Silver "
-                    "(skill v7.0): regra de densidade, callActivity, Verbo+Objeto, boundary events. "
-                    "Salva como nova versão — a versão atual é preservada no histórico."
+                    f"Origem: {meet_label(_reconv_mid)}  "
+                    f"·  versão selecionada: v{sel_ver['version']}"
                 )
-                _reconv_mid = sel_ver.get("meeting_id")
-                if _reconv_mid:
-                    st.caption(
-                        f"Origem: {meet_label(_reconv_mid)}  "
-                        f"·  versão selecionada: v{sel_ver['version']}"
-                    )
-                    if st.button(
-                        "Reconverter este diagrama",
-                        key=f"reconvert_{pid}_{sel_ver['version']}",
-                        type="primary",
-                        use_container_width=True,
-                    ):
-                        _do_bpmn_reconvert(pid, _reconv_mid, project_id)
-                else:
-                    st.warning("Reunião origem não identificada nesta versão.")
+                if st.button(
+                    "Reconverter este diagrama",
+                    key=f"reconvert_{pid}_{sel_ver['version']}",
+                    type="primary",
+                    use_container_width=True,
+                ):
+                    _do_bpmn_reconvert(pid, _reconv_mid, project_id)
+            else:
+                st.warning("Reunião origem não identificada nesta versão.")
 
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 8 — DMN
@@ -898,6 +1077,13 @@ _HIT_POLICY_LABEL = {
 }
 
 with tab_dmn:
+    # Carregamento sob demanda: só busca do Supabase se ainda não foi feito nesta sessão
+    if _DMN_SS not in st.session_state:
+        with st.spinner("Buscando decisões DMN..."):
+            st.session_state[_DMN_SS] = _load_dmn(project_id)
+        st.rerun()  # re-renderiza para atualizar contador no cabeçalho e métricas
+    dmn_decisions = st.session_state[_DMN_SS]  # agora é lista (pode ser [])
+
     if not dmn_decisions:
         st.info("Nenhuma tabela de decisão DMN registrada. Execute o pipeline com o agente DMN habilitado.")
     else:
@@ -982,6 +1168,13 @@ _RESOLUTION_BADGE = {
 }
 
 with tab_ibis:
+    # Carregamento sob demanda: só busca do Supabase se ainda não foi feito nesta sessão
+    if _IBIS_SS not in st.session_state:
+        with st.spinner("Buscando questões IBIS..."):
+            st.session_state[_IBIS_SS] = _load_argumentation(project_id)
+        st.rerun()  # re-renderiza para atualizar contador no cabeçalho e métricas
+    ibis_questions = st.session_state[_IBIS_SS]  # agora é lista (pode ser [])
+
     if not ibis_questions:
         st.info("Nenhum mapa argumentativo IBIS registrado. Execute o pipeline com o agente Argumentação habilitado.")
     else:

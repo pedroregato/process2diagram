@@ -970,6 +970,48 @@ def list_requirements(project_id: str) -> list[dict]:
         return []
 
 
+def list_requirements_light(project_id: str) -> list[dict]:
+    """Retorna requisitos sem histórico de versões — query leve para listagem.
+
+    Ideal para painéis que só precisam de metadados (título, status, tipo, prioridade).
+    Use list_requirement_versions(req_id) para carregar versões sob demanda.
+    """
+    db = _db()
+    if not db:
+        return []
+    try:
+        return _ok(
+            db.table("requirements")
+            .select(
+                "id, req_number, title, description, req_type, priority, status, "
+                "origin, doc_ref, first_meeting_id, last_meeting_id, "
+                "owner, status_note, cited_by, source_quote, speaker, project_id"
+            )
+            .eq("project_id", project_id)
+            .order("req_number")
+            .execute()
+        )
+    except Exception:
+        return []
+
+
+def list_requirement_versions(requirement_id: str) -> list[dict]:
+    """Retorna todas as versões de um requisito específico, ordenadas cronologicamente."""
+    db = _db()
+    if not db:
+        return []
+    try:
+        return _ok(
+            db.table("requirement_versions")
+            .select("*")
+            .eq("requirement_id", requirement_id)
+            .order("version")
+            .execute()
+        )
+    except Exception:
+        return []
+
+
 def add_requirement_version(
     requirement_id: str,
     meeting_id: str,
