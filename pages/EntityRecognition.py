@@ -24,7 +24,7 @@ import streamlit as st
 
 from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured, get_supabase_client
-from core.project_store import list_projects
+from ui.project_selector import require_active_project
 
 apply_auth_gate()
 
@@ -76,14 +76,13 @@ if not _entities_tables_exist():
     st.stop()
 
 # ── Projeto ───────────────────────────────────────────────────────────────────
-projects = list_projects()
-if not projects:
-    st.warning("Nenhum projeto encontrado no banco de dados.")
-    st.stop()
+project_id, project_name = require_active_project()
 
-proj_map        = {p["name"]: p for p in projects}
-sel_proj        = st.selectbox("Contexto", list(proj_map.keys()), key="er_proj")
-project_id: str = proj_map[sel_proj]["id"]
+_col_proj, _col_change = st.columns([5, 1])
+with _col_proj:
+    st.success(f"📁 **Contexto:** {project_name}")
+with _col_change:
+    st.page_link("pages/Home.py", label="Trocar")
 
 st.markdown("---")
 
@@ -377,7 +376,7 @@ with tab_view:
             st.download_button(
                 "⬇️ Baixar CSV",
                 data=csv_bytes,
-                file_name=f"entidades_{sel_proj.replace(' ', '_')}.csv",
+                file_name=f"entidades_{project_name.replace(' ', '_')}.csv",
                 mime="text/csv",
                 key="er_csv",
             )
