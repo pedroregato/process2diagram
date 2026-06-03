@@ -3,7 +3,7 @@ agent: bpmn
 iniciativa: Pedro Regato
 project: process2diagram
 spec: BPMN 2.0 (OMG — ISO/IEC 19510) · Bruce Silver Method and Style
-version: 7.0
+version: 7.1
 ---
 
 # BPMN Agent — Instruções de Execução
@@ -51,6 +51,13 @@ Antes de qualquer outra análise, responda mentalmente:
   Use o nome real da unidade organizacional (ex: "Equipe de Cadastro", "Auditoria Interna").
 - Se o nome for ambíguo, registre com `[AMBIGUIDADE: não ficou claro quem executa — assumido como 'X']` na `description`.
 - Ordene as lanes: **ator principal no topo**, suporte abaixo, sistemas nomeados por último.
+
+**Message flows e comunicação intra-pool:**
+- `message_flows` existem **exclusivamente entre pools distintos** — nunca dentro do mesmo pool.
+- Comunicação entre lanes do mesmo pool (ex: Comitê envia lista para Especialista) é modelada como **sequence flow** com `description` descrevendo o artefato trocado, ou como **data association** se for documento.
+- `sendTask` e `receiveTask` são **exclusivos do formato pools** — nunca use em processo flat de pool único.
+  - ✗ Errado: usar `sendTask` numa lane de processo single-pool para "notificar o cliente"
+  - ✓ Correto: `userTask` "Notificar Cliente" com `description` descrevendo o canal
 
 ### Passo 2 — High-Level Map (processos com > 10 atividades)
 
@@ -108,8 +115,8 @@ Regras de eventos:
 | Regra de negócio / classificação | `businessRuleTask` |
 | Script ou transformação interna | `scriptTask` |
 | Ação física offline sem sistema | `manualTask` |
-| Envio de mensagem para outro pool | `sendTask` |
-| Recebimento de mensagem de outro pool | `receiveTask` |
+| Envio de mensagem para outro pool (**somente formato pools**) | `sendTask` |
+| Recebimento de mensagem de outro pool (**somente formato pools**) | `receiveTask` |
 | Fase que agrupa subatividades (> 10 atividades no processo) | `callActivity` |
 | Tarefa que repete até condição satisfeita | `loopTask` |
 | Tarefa executada para cada item de uma coleção | `multiInstanceTask` |
@@ -128,10 +135,12 @@ Regras de `serviceTask`:
 - Se o sistema **não é nomeado** → use `serviceTask` com `lane: null`.
 - Só crie Lane de sistema se o sistema for nomeado e tiver mais de uma tarefa.
 
-Regras de `loopTask`:
-- Use quando a **tarefa em si** é repetitiva por natureza: "revisar até aprovação", "tentar novamente até X vezes".
-- Distinto de loop de gateway: aqui a repetição está embutida na atividade, não em uma decisão posterior.
-- Padrões na transcrição: "repetir até", "corrigir e reenviar várias vezes", "tentar enquanto".
+Regras de `loopTask` vs gateway com back-edge:
+- Use `loopTask` quando a **mesma tarefa** é repetida pelo **mesmo ator** até uma condição ser satisfeita — a decisão de continuar está embutida na própria atividade.
+  - Padrões: "tentar novamente até X vezes", "processar até que o lote esgote", "aguardar confirmação em loop".
+- Use **gateway com back-edge** (`exclusiveGateway` → tarefa de correção → tarefa original) quando a **decisão de devolver** pertence a um **ator diferente** do que executou a tarefa.
+  - Padrão: "gestor devolve para a equipe corrigir" — o gestor decide, a equipe reexecuta → gateway + aresta de retorno.
+- Ambiguidade: se não está claro quem decide o loop → prefira gateway com back-edge e registre `[AMBIGUIDADE: ...]`.
 
 Regras de `multiInstanceTask`:
 - Use quando a ação ocorre **para cada item** de uma coleção: "notificar cada aprovador", "processar cada pedido do lote".
@@ -194,6 +203,17 @@ Modelagem de Boundary Events:
 
 **Toda saída de gateway `is_decision: true` deve ter `label` preenchido descrevendo a condição de negócio.**
 
+**Regras do `eventBasedGateway`:**
+- As saídas de um `eventBasedGateway` devem ser **exclusivamente** nós do tipo:
+  `intermediateTimerCatchEvent`, `intermediateMessageCatchEvent` ou `receiveTask`.
+- **Nunca** conecte um `eventBasedGateway` diretamente a uma tarefa comum (`userTask`, `serviceTask`, etc.) ou a outro gateway.
+- Padrão correto (OMG BPMN 2.0 §10.6):
+  ```
+  [eventBasedGateway] ──► [intermediateTimerCatchEvent]  → tratar timeout
+                     └──► [intermediateMessageCatchEvent] → tratar resposta
+  ```
+- Use `eventBasedGateway` apenas quando o processo **aguarda competitivamente** dois ou mais eventos externos — o primeiro a ocorrer determina o caminho.
+
 ### Passo 5 — Regra de Loop de Correção
 
 Quando houver devolução para correção, o fluxo de retorno deve apontar para a
@@ -213,6 +233,8 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 - [ ] Toda saída de gateway `is_decision: true` tem `label` preenchido
 - [ ] IDs de steps são sequenciais S01, S02, S03... sem lacunas
 - [ ] Message flows existem apenas entre pools distintos
+- [ ] `sendTask`/`receiveTask` aparecem **somente** no formato pools
+- [ ] Saídas de `eventBasedGateway` são apenas eventos intermediários ou `receiveTask`
 - [ ] Situações ambíguas estão registradas com `[AMBIGUIDADE: ...]`
 
 **Hierarquia e Densidade (Bruce Silver Level 1):**
@@ -226,13 +248,15 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 - [ ] Start Event tem `title` descrevendo o **gatilho real** (não "Início"/"Start")?
 - [ ] End Event tem `title` descrevendo o **estado de negócio alcançado** (não "Fim"/"End")?
 - [ ] Nenhuma lane tem nome genérico (`usuário`, `sistema`, `validador`...)?
+- [ ] O campo `description` raiz do JSON está preenchido com 1–3 frases do objetivo?
 
 **Tipos e Padrões Especiais:**
 - [ ] `serviceTask` sem sistema nomeado tem `lane: null`?
 - [ ] Ações físicas offline usam `manualTask` (não `userTask`)?
 - [ ] Padrões "ao mesmo tempo / em paralelo" usam `parallelGateway`?
 - [ ] Padrões "para cada X" usam `multiInstanceTask`?
-- [ ] Padrões "repetir até / corrigir e reenviar" usam `loopTask`?
+- [ ] Loops com mesmo ator sem decisão externa usam `loopTask`?
+- [ ] Loops com ator diferente decidindo a devolução usam gateway + back-edge?
 - [ ] Exceções durante tarefas (timeout, falha de sistema) usam boundary events?
 - [ ] `actor` é `null` em todos os start/end events?
 
@@ -371,8 +395,9 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 
 *Observacoes:*
 - 4 atividades — modelo flat, sem callActivity
-- S02 e o gateway; S03 retorna para S01 (tarefa original), nao para S02
-- XOR sem join explicito: S04 vai para end event gerado automaticamente
+- S02 é o gateway de decisão — ator diferente (Gestao) decide a devolução → gateway + back-edge, não `loopTask`
+- S03 retorna para S01 (tarefa original), nunca para S02 (gateway)
+- XOR sem join explícito: S04 vai para end event gerado automaticamente
 
 ---
 
