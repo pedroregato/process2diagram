@@ -10,6 +10,7 @@
 #   Pass 2 — Remove isolated nodes  (no incoming AND no outgoing edges) — loop
 #   Pass 3 — Label XOR edges        (infer Sim/Não or generic Opção N)
 #   Pass 4 — Bypass redundant GW    (single-in, single-out gateway) — loop
+#   Pass 5 — Insert XOR join GW     (task fan-in from common XOR ancestor)
 #
 # Safety rules:
 #   - Never runs if model has ≤ 2 steps (too sparse to repair safely)
@@ -196,3 +197,129 @@ def _repair_pool(
             )
             changed = True
             break   # restart loop with fresh adjacency
+
+    # ── Pass 5: Insert XOR join gateway for task fan-in ───────────────────────
+    # Pattern: non-gateway step N with in_degree >= 2, where ALL predecessors
+    # are non-gateway tasks that share a single common XOR-gateway grandparent.
+    # In that case, insert an explicit XOR-join between the branch tasks and N.
+    #
+    # Algorithm (conservative — only fires on clean 2-hop XOR pattern):
+    #   predecessors(N) = [T1, T2, …]     ← all non-gateway
+    #   grandparents(Ti) for each Ti       ← set of Ti's predecessors
+    #   common_gp = ∩ grandparents(Ti)
+    #   if common_gp contains exactly one XOR gateway → insert join
+    #
+    # Skips AND/OR fan-in (grandparent would be parallelGateway/inclusiveGateway)
+    # and any mixed or multi-source patterns.
+    _EVENT_TASK_TYPES = {
+        "noneStartEvent", "startEvent", "start",
+        "noneEndEvent", "endEvent", "end",
+        "startMessageEvent", "startTimerEvent",
+        "errorEndEvent", "endMessageEvent",
+        "intermediateTimerCatchEvent", "intermediateMessageCatchEvent",
+        "intermediateMessageThrowEvent",
+    }
+    _XOR_TYPES = {"exclusiveGateway", "gateway"}
+
+    # One import at module level is fine; BPMNStep/BPMNEdge available at runtime
+    try:
+        from core.knowledge_hub import BPMNStep as _BPMNStep, BPMNEdge as _BPMNEdge
+    except ImportError:
+        _BPMNStep = None
+        _BPMNEdge = None
+
+    if _BPMNStep is not None:
+        _pass5_changed = True
+        while _pass5_changed:
+            _pass5_changed = False
+
+            # Rebuild adjacency
+            _s_by_id: dict[str, object] = {s.id: s for s in steps}
+            _in5:  dict[str, list[str]] = {s.id: [] for s in steps}
+            _out5: dict[str, list[str]] = {s.id: [] for s in steps}
+            for e in edges:
+                if e.source in _in5 and e.target in _in5:
+                    _out5[e.source].append(e.target)
+                    _in5[e.target].append(e.source)
+
+            for s in list(steps):
+                # Must be a non-gateway, non-event task with fan-in >= 2
+                if s.task_type in _EVENT_TASK_TYPES:
+                    continue
+                is_gw = s.is_decision or s.task_type in _GATEWAY_TYPES
+                if is_gw:
+                    continue
+                preds = _in5.get(s.id, [])
+                if len(preds) < 2:
+                    continue
+
+                # All predecessors must be non-gateway (task-level fan-in)
+                if any(
+                    (_s_by_id[p].is_decision if p in _s_by_id else False)
+                    or (_s_by_id[p].task_type in _GATEWAY_TYPES if p in _s_by_id else False)
+                    for p in preds
+                ):
+                    continue
+
+                # Compute grandparents for each predecessor
+                gp_sets = [set(_in5.get(p, [])) for p in preds]
+                if not gp_sets:
+                    continue
+                common_gp = gp_sets[0].intersection(*gp_sets[1:])
+
+                # Must be exactly one common grandparent and it must be XOR
+                if len(common_gp) != 1:
+                    continue
+                gp_id = next(iter(common_gp))
+                gp = _s_by_id.get(gp_id)
+                if gp is None:
+                    continue
+                is_xor_gp = gp.is_decision or gp.task_type in _XOR_TYPES
+                if not is_xor_gp:
+                    continue
+
+                # ── Insert XOR join gateway ──────────────────────────────────
+                join_id = f"gw_join_{s.id}"
+                if join_id in _s_by_id:
+                    continue  # already exists (safety guard)
+
+                join_gw = _BPMNStep(
+                    id=join_id,
+                    title="",               # join gateways are anonymous per OMG style
+                    description="",
+                    is_decision=True,
+                    task_type="exclusiveGateway",
+                    lane=s.lane,
+                )
+
+                # Insert join_gw just before target step s in the steps list
+                target_idx = next(
+                    (i for i, st in enumerate(steps) if st.id == s.id), len(steps)
+                )
+                steps.insert(target_idx, join_gw)
+
+                # Reroute: pred → s  becomes  pred → join_gw
+                # Add: join_gw → s
+                new_edges: list = []
+                join_edge_added = False
+                for e in edges:
+                    if e.target == s.id and e.source in preds:
+                        ne = copy.copy(e)
+                        ne.target = join_id
+                        new_edges.append(ne)
+                    else:
+                        new_edges.append(e)
+                    if not join_edge_added and e.target == s.id and e.source in preds:
+                        pass  # will add the join→target edge once after loop
+
+                # Add the single edge from join_gw to s
+                new_edges.append(_BPMNEdge(source=join_id, target=s.id, label=""))
+                edges[:] = new_edges
+
+                report.repairs.append(
+                    f"{prefix}Inserted XOR join gateway '{join_id}' before "
+                    f"'{s.title}' ({s.id}) — {len(preds)} branches from "
+                    f"'{gp.title}' ({gp_id}) now converge properly"
+                )
+                _pass5_changed = True
+                break  # restart with fresh adjacency

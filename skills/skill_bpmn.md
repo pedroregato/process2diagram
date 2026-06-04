@@ -190,7 +190,7 @@ Modelagem de Boundary Events:
 |---|---|---|
 | `parallelGateway` (AND) | **Obrigatória** | Todas as N ramificações DEVEM convergir no AND-join. Sem exceção. |
 | `inclusiveGateway` (OR) | **Obrigatória** | Todas as N ramificações DEVEM convergir no OR-join. |
-| `exclusiveGateway` (XOR) | **Recomendada** | Convergência pode ser implícita. Use join XOR apenas para controle explícito. |
+| `exclusiveGateway` (XOR) | **Obrigatória** | Toda ramificação XOR DEVE convergir em um XOR-join explícito antes da próxima tarefa. Nunca conecte N branches diretamente a uma mesma tarefa. |
 | `eventBasedGateway` | **Não aplicável** | Cada saída é um evento distinto; não usa join simétrico. |
 | `complexGateway` | **Obrigatória** | Mesmo padrão do tipo que a condição emular (AND/OR). |
 
@@ -229,7 +229,7 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 **Estrutura e Completude:**
 - [ ] Todo nó tem ao menos uma entrada e uma saída (exceto start/end)
 - [ ] Todo caminho termina em um end event
-- [ ] Todo AND/OR/complexGateway split tem join correspondente do outro lado das atividades
+- [ ] Todo AND/OR/XOR/complexGateway split tem join correspondente do mesmo tipo do outro lado das atividades — nunca múltiplos fluxos convergindo diretamente em uma tarefa
 - [ ] Toda saída de gateway `is_decision: true` tem `label` preenchido
 - [ ] IDs de steps são sequenciais S01, S02, S03... sem lacunas
 - [ ] Message flows existem apenas entre pools distintos

@@ -161,4 +161,32 @@ def _run_checks(model: "BPMNModel") -> list[BPMNIssue]:
                 f"Gateway '{s.title}' ({s.id}) has only one outgoing edge — "
                 f"may be a redundant decision point"))
 
+    # ── Check 7: Task/event fan-in without explicit join gateway ──────────────
+    # Detects when a task receives flows from multiple predecessors that are
+    # themselves non-gateway nodes — indicating a XOR split converging directly
+    # on a task instead of on an explicit join gateway.
+    for s in model.steps:
+        if s.task_type in _EVENT_TYPES:
+            continue
+        is_gw = s.is_decision or s.task_type in _GATEWAY_TYPES
+        if is_gw:
+            continue
+        preds = incoming.get(s.id, [])
+        if len(preds) < 2:
+            continue
+        # Only flag if ALL predecessors are non-gateway nodes (task-level fan-in)
+        step_by_id = {st.id: st for st in model.steps}
+        non_gw_preds = [
+            p for p in preds
+            if not (
+                (step_by_id[p].is_decision if p in step_by_id else False)
+                or (step_by_id[p].task_type in _GATEWAY_TYPES if p in step_by_id else False)
+            )
+        ]
+        if len(non_gw_preds) == len(preds):
+            issues.append(BPMNIssue("warning", s.id,
+                f"'{s.title}' ({s.id}) receives {len(preds)} flows directly from tasks "
+                f"— add an explicit XOR join gateway before this step "
+                f"(Method & Style: never merge branches directly into a task)"))
+
     return issues
