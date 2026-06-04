@@ -33,8 +33,13 @@ from ui.tabs import (
     render_minutes, render_requirements, render_sbvr, render_bmm,
     render_synthesizer, render_export, render_dev_tools,
     render_dmn, render_argumentation, render_query_summary,
-    render_communication_noise,
 )
+try:
+    from ui.tabs import render_communication_noise
+except ImportError:
+    def render_communication_noise(hub, prefix=None, suffix=None):  # type: ignore[misc]
+        import streamlit as st
+        st.info("Análise de ruídos indisponível nesta versão.")
 from modules.session_security import get_session_llm_client
 
 apply_auth_gate()
