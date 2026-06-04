@@ -81,7 +81,15 @@ with col_proc:
     if not processes:
         st.info("Nenhum processo BPMN registrado para este projeto.")
         st.stop()
-    proc_opts = {f"{p['name']} ({p.get('version_count', 0)} versão(ões))": p["id"] for p in processes}
+    def _proc_label(p: dict) -> str:
+        mtg = p.get("meetings") or {}
+        label = f"{p['name']} ({p.get('version_count', 0)} versão(ões))"
+        mtg_num = mtg.get("meeting_number")
+        if mtg_num:
+            label += f" — Reunião #{mtg_num}"
+        return label
+
+    proc_opts = {_proc_label(p): p["id"] for p in processes}
     proc_label = st.selectbox("Processo BPMN", list(proc_opts.keys()), key="bpme_process")
     process_id = proc_opts[proc_label]
 
