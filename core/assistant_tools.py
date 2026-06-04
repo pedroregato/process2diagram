@@ -256,6 +256,54 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "list_bpmn_versions",
+                "description": (
+                    "Lista todas as versões de um processo BPMN, mostrando ID, número de versão, "
+                    "status (atual/histórico), reunião de origem e notas de alteração. "
+                    "Use antes de delete_bpmn_version para obter o version_id correto."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "process_name": {
+                            "type": "string",
+                            "description": "Nome (ou parte do nome) do processo BPMN a consultar.",
+                        },
+                    },
+                    "required": ["process_name"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "delete_bpmn_version",
+                "description": (
+                    "Exclui permanentemente uma versão específica de um diagrama BPMN. "
+                    "Seguro: recusa excluir a única versão de um processo; se a versão "
+                    "excluída for a atual, promove automaticamente a versão anterior. "
+                    "Use list_bpmn_versions para obter o version_id antes de chamar esta tool. "
+                    "Admin only."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "version_id": {
+                            "type": "string",
+                            "description": "UUID da versão BPMN a excluir (obtido via list_bpmn_versions).",
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "Motivo da exclusão (ex: 'versão duplicada', 'gerada com erro').",
+                        },
+                    },
+                    "required": ["version_id"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "get_sbvr_terms",
                 "description": "Busca termos do vocabulário de negócio (SBVR) do projeto.",
                 "parameters": {
@@ -2062,6 +2110,8 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "count_artifacts":              "consulta",
     "get_requirements":             "consulta",
     "list_bpmn_processes":          "consulta",
+    "list_bpmn_versions":           "consulta",
+    "delete_bpmn_version":          "admin",
     "get_sbvr_terms":               "consulta",
     "get_sbvr_rules":               "consulta",
     "list_context_files":           "consulta",
@@ -2160,6 +2210,7 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "detect_contradictions",
     "resolve_entity_ambiguity",
     "delete_entity",
+    "delete_bpmn_version",
     "clear_llm_cache",
 })
 
@@ -2496,7 +2547,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
   Consulta (todos os perfis):
     get_meeting_list, get_meeting_participants, get_meeting_decisions,
     get_meeting_action_items, get_meeting_summary, search_transcript,
-    get_requirements, list_bpmn_processes, get_sbvr_terms, get_sbvr_rules,
+    get_requirements, list_bpmn_processes, list_bpmn_versions, get_sbvr_terms, get_sbvr_rules,
     list_context_files, calculate_meeting_roi, get_recurring_topics, get_meeting_metadata,
     preview_meeting_deletion, preview_text_correction, get_speaker_contributions
 
@@ -2507,7 +2558,8 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
     apply_text_correction, rename_meeting, delete_meeting, reprocess_meeting_requirements,
     reprocess_meeting_full, batch_reprocess_requirements, generate_missing_minutes,
     get_database_integrity, fix_missing_llm_provider,
-    embed_meeting (reunião única), generate_meeting_embeddings (em lote)
+    embed_meeting (reunião única), generate_meeting_embeddings (em lote),
+    delete_bpmn_version (exclui versão específica de diagrama BPMN)
 
 ## Integração Google Calendar ({cal_status})
   Consulta (todos os perfis):
@@ -2959,6 +3011,57 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 f"[status: {p.get('status', '—')}]"
             )
         return "\n".join(lines)
+
+    def _list_bpmn_versions(self, args: dict) -> str:
+        from core.project_store import list_bpmn_processes, list_bpmn_versions
+
+        process_name = (args.get("process_name") or "").strip().lower()
+        if not process_name:
+            return "Informe o nome (ou parte do nome) do processo BPMN."
+
+        procs = list_bpmn_processes(self.project_id)
+        matches = [p for p in procs if process_name in (p.get("name") or "").lower()]
+        if not matches:
+            return f"Nenhum processo BPMN encontrado com nome contendo '{process_name}'."
+        if len(matches) > 1:
+            names = "\n".join(f"  • {p['name']}" for p in matches)
+            return f"Múltiplos processos encontrados — seja mais específico:\n{names}"
+
+        proc = matches[0]
+        versions = list_bpmn_versions(proc["id"])
+        if not versions:
+            return f"Processo '{proc['name']}' não possui versões registradas."
+
+        lines = [f"Versões de '{proc['name']}' ({len(versions)} total):"]
+        for v in versions:
+            mtg   = v.get("meetings") or {}
+            atual = " ✅ atual" if v.get("is_current") else ""
+            notes = v.get("change_notes") or "—"
+            mtg_info = (
+                f"Reunião #{mtg.get('meeting_number', '?')} — {mtg.get('title', '')}"
+                if mtg else "sem reunião"
+            )
+            lines.append(
+                f"  v{v.get('version', '?')}{atual}  |  {mtg_info}  |  "
+                f"notas: {notes}  |  ID: {v['id']}"
+            )
+        return "\n".join(lines)
+
+    def _delete_bpmn_version(self, args: dict) -> str:
+        from core.project_store import delete_bpmn_version
+
+        if not self.is_admin:
+            return "Permissão negada — apenas administradores podem excluir versões BPMN."
+
+        version_id = (args.get("version_id") or "").strip()
+        reason     = (args.get("reason") or "Não especificado").strip()
+        if not version_id:
+            return "Informe o version_id da versão a excluir (use list_bpmn_versions)."
+
+        result = delete_bpmn_version(version_id)
+        if result["ok"]:
+            return f"✅ {result['message']} (motivo: {reason})"
+        return f"❌ {result['message']}"
 
     def get_sbvr_terms(self, keyword: str | None = None) -> str:
         from core.project_store import list_sbvr_terms
@@ -6541,6 +6644,8 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     )
                 ),
                 "list_bpmn_processes":       lambda: self.list_bpmn_processes(),
+                "list_bpmn_versions":        lambda: self._list_bpmn_versions(tool_input),
+                "delete_bpmn_version":       lambda: self._delete_bpmn_version(tool_input),
                 "get_sbvr_terms":            lambda: self.get_sbvr_terms(tool_input.get("keyword")),
                 "get_sbvr_rules":            lambda: self.get_sbvr_rules(tool_input.get("keyword")),
                 "list_context_files":        lambda: self.list_context_files(),

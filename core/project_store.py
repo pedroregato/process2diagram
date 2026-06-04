@@ -1659,6 +1659,69 @@ def get_bpmn_version(version_id: str) -> dict | None:
         return None
 
 
+def delete_bpmn_version(version_id: str) -> dict:
+    """
+    Exclui uma versão BPMN pelo ID.
+
+    Regras de segurança:
+    - Recusa se for a única versão do processo (evita processo órfão).
+    - Se for is_current=True, promove a versão mais recente restante como atual.
+    - Atualiza version_count em bpmn_processes.
+
+    Retorna dict com: ok (bool), message (str).
+    """
+    db = _db()
+    if not db:
+        return {"ok": False, "message": "Banco de dados não disponível."}
+    try:
+        version = get_bpmn_version(version_id)
+        if not version:
+            return {"ok": False, "message": f"Versão '{version_id}' não encontrada."}
+
+        process_id  = version["process_id"]
+        is_current  = version.get("is_current", False)
+        ver_num     = version.get("version", "?")
+
+        all_versions = list_bpmn_versions(process_id)
+        if len(all_versions) <= 1:
+            return {
+                "ok": False,
+                "message": (
+                    "Não é possível excluir a única versão de um processo. "
+                    "Delete o processo inteiro se necessário."
+                ),
+            }
+
+        # Se for a versão atual, promove a próxima mais recente
+        promoted_ver: dict | None = None
+        if is_current:
+            promoted_ver = next(
+                (v for v in all_versions if v["id"] != version_id), None
+            )
+            if promoted_ver:
+                db.table("bpmn_versions").update({"is_current": True}).eq(
+                    "id", promoted_ver["id"]
+                ).execute()
+
+        db.table("bpmn_versions").delete().eq("id", version_id).execute()
+
+        remaining = len(all_versions) - 1
+        db.table("bpmn_processes").update({"version_count": remaining}).eq(
+            "id", process_id
+        ).execute()
+
+        proc      = get_bpmn_process(process_id)
+        proc_name = (proc or {}).get("name", process_id)
+
+        msg = f"Versão v{ver_num} do processo '{proc_name}' excluída."
+        if is_current and promoted_ver:
+            msg += f" Versão v{promoted_ver.get('version', '?')} promovida como atual."
+
+        return {"ok": True, "message": msg}
+    except Exception as exc:
+        return {"ok": False, "message": f"Erro ao excluir versão: {exc}"}
+
+
 # ── RAG context retrieval ─────────────────────────────────────────────────────
 
 _PT_STOPWORDS = {
