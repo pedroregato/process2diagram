@@ -188,6 +188,7 @@ Histórico completo de entregas por ciclo de projeto.
 ### PC30 — Concluído (v4.26 / 2026-06-04)
 - [x] **`core/project_store.py`** — `delete_bpmn_version(version_id)`: exclui versão BPMN com segurança (recusa única versão; promove versão anterior se is_current; atualiza version_count)
 - [x] **`core/assistant_tools.py`** — `list_bpmn_versions` (consulta): lista versões de um processo por nome com ID, status, reunião e notas; `delete_bpmn_version` (admin): exclui versão pelo version_id; ambas registradas em schemas OpenAI/Anthropic, `_TOOL_CATEGORIES`, `_ADMIN_TOOLS` e dispatcher
+- [x] **`CLAUDE.md`** + **`pages/Orientacoes_Assistente.py`** — documentação atualizada: tool list e cards do Guia de Ferramentas com `list_bpmn_versions` e `delete_bpmn_version`
 - [x] **Check 8** (`bpmn_structural_validator.py`): detecta coreografia desbalanceada em colaborações — sender não-sendTask ou receiver não-receiveTask em message flows; `skill_bpmn.md` atualizado com regra de balanceamento sendTask↔receiveTask
 
 ### PC29 — Concluído (v4.26 / 2026-06-04)
