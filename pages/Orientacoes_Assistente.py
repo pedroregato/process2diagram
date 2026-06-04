@@ -359,6 +359,18 @@ with tab_analise:
     ), unsafe_allow_html=True)
 
     st.markdown(_card(
+        "list_bpmn_versions", "consulta",
+        "Lista todas as versões de um processo BPMN pelo nome, mostrando ID único, "
+        "número de versão, status (atual ✅ ou histórico), reunião de origem e notas "
+        "de alteração. Use antes de delete_bpmn_version para obter o version_id correto.",
+        [
+            "Liste as versões do processo 'Validação de Catálogo'",
+            "Quais versões existem do processo de onboarding?",
+            "Mostre o histórico de versões do diagrama de aprovação",
+        ]
+    ), unsafe_allow_html=True)
+
+    st.markdown(_card(
         "get_sbvr_terms", "consulta",
         "Retorna o vocabulário SBVR do projeto: termos de negócio com definição, "
         "sinônimos e referência à fonte.",
@@ -598,6 +610,19 @@ with tab_hub:
             "Remova a entidade 'Hmm' — é ruído de transcrição",
             "Delete a entidade 'Sistema' — é genérica demais para ser útil",
             "Apague 'um' do grafo — foi capturado por erro",
+        ]
+    ), unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "delete_bpmn_version", "admin",
+        "Exclui permanentemente uma versão específica de um diagrama BPMN. "
+        "Seguro: recusa excluir a única versão de um processo; se a versão excluída "
+        "for a atual, promove automaticamente a versão anterior. "
+        "Use list_bpmn_versions primeiro para obter o version_id.",
+        [
+            "Delete a versão 2 do processo 'Validação de Catálogo' — foi gerada com erro",
+            "Remova as versões antigas do processo de onboarding, mantendo apenas a atual",
+            "Exclua a versão 1 do diagrama de aprovação — era um rascunho",
         ]
     ), unsafe_allow_html=True)
 
