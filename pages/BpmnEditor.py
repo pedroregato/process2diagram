@@ -75,7 +75,10 @@ with _col_proj:
 with _col_change:
     st.page_link("pages/Home.py", label="Trocar")
 
-processes = list_bpmn_processes(project_id)
+processes = sorted(
+    list_bpmn_processes(project_id),
+    key=lambda p: (p.get("meetings") or {}).get("meeting_number") or 0,
+)
 col_proc = st.columns(1)[0]
 with col_proc:
     if not processes:
