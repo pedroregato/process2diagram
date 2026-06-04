@@ -24,6 +24,7 @@ def run_pipeline(hub, config, progress_callback):
     run_argumentation = config.get("run_argumentation", False)
     run_synthesizer = config["run_synthesizer"]
     run_query_summarizer = config.get("run_query_summarizer", False)
+    run_communication_noise = config.get("run_communication_noise", False)
     n_bpmn_runs = config["n_bpmn_runs"]
     bpmn_weights = config["bpmn_weights"]
 
@@ -69,7 +70,8 @@ def run_pipeline(hub, config, progress_callback):
                                run_dmn=run_dmn,
                                run_argumentation=run_argumentation,
                                run_synthesizer=run_synthesizer,
-                               run_query_summarizer=run_query_summarizer)
+                               run_query_summarizer=run_query_summarizer,
+                               run_communication_noise=run_communication_noise)
 
     elif run_bpmn and config.get("use_langgraph", False):
         # ── LangGraph adaptive retry: run until score ≥ threshold or max retries ─
@@ -100,7 +102,8 @@ def run_pipeline(hub, config, progress_callback):
                                run_dmn=run_dmn,
                                run_argumentation=run_argumentation,
                                run_synthesizer=run_synthesizer,
-                               run_query_summarizer=run_query_summarizer)
+                               run_query_summarizer=run_query_summarizer,
+                               run_communication_noise=run_communication_noise)
 
     else:
         # ── Standard single‑run (no validation) ──────────────────────────────────
@@ -114,7 +117,8 @@ def run_pipeline(hub, config, progress_callback):
                                run_dmn=run_dmn,
                                run_argumentation=run_argumentation,
                                run_synthesizer=run_synthesizer,
-                               run_query_summarizer=run_query_summarizer)
+                               run_query_summarizer=run_query_summarizer,
+                               run_communication_noise=run_communication_noise)
 
     # ── CKF Updater (non-fatal, post-pipeline) ────────────────────────────────
     if config.get("run_ckf_updater", False):

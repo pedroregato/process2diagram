@@ -33,6 +33,7 @@ from ui.tabs import (
     render_minutes, render_requirements, render_sbvr, render_bmm,
     render_synthesizer, render_export, render_dev_tools,
     render_dmn, render_argumentation, render_query_summary,
+    render_communication_noise,
 )
 from modules.session_security import get_session_llm_client
 
@@ -152,6 +153,7 @@ if pipeline_mode == _MODE_NEW:
             "run_sbvr": st.session_state.run_sbvr,
             "run_dmn": st.session_state.get("run_dmn", False),
             "run_argumentation": st.session_state.get("run_argumentation", False),
+            "run_communication_noise": st.session_state.get("run_communication_noise", False),
             "run_bmm": st.session_state.run_bmm,
             "run_synthesizer": st.session_state.run_synthesizer,
             "n_bpmn_runs": st.session_state.n_bpmn_runs,
@@ -497,6 +499,7 @@ if "hub" in st.session_state:
         "validation":       "🏆 Validação BPMN",
         "dmn":              "⚖️ DMN",
         "argumentation":    "🗺️ IBIS",
+        "communication_noise": "🔊 Ruídos",
         "devtools":         "🔍 Dev Tools",
     }
 
@@ -526,6 +529,8 @@ if "hub" in st.session_state:
         all_tabs.append("dmn")
     if getattr(hub, 'argumentation', None) and hub.argumentation.ready:
         all_tabs.append("argumentation")
+    if getattr(hub, 'communication_noise', None) and hub.communication_noise.ready:
+        all_tabs.append("communication_noise")
     if hub.validation.ready and hub.validation.n_bpmn_runs > 1:
         all_tabs.append("validation")
     if st.session_state.show_dev_tools:
@@ -545,6 +550,7 @@ if "hub" in st.session_state:
         elif tab_id == "dmn":          render_dmn(hub, prefix, suffix)
         elif tab_id == "argumentation": render_argumentation(hub, prefix, suffix)
         elif tab_id == "query_summary": render_query_summary(hub)
+        elif tab_id == "communication_noise": render_communication_noise(hub, prefix, suffix)
         elif tab_id == "devtools":     render_dev_tools(hub, st.session_state.show_raw_json)
 
     tabs = st.tabs([tab_labels[t] for t in all_tabs])

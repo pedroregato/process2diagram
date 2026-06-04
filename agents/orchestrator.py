@@ -41,6 +41,7 @@ from agents.agent_dmn import AgentDMN
 from agents.agent_argumentation import AgentArgumentation
 from agents.agent_synthesizer import AgentSynthesizer
 from agents.agent_query_summarizer import AgentQuerySummarizer
+from agents.agent_communication_noise import AgentCommunicationNoise
 from agents.agent_transcript_quality import AgentTranscriptQuality
 from core.knowledge_hub import KnowledgeHub, MeetingTimeModel, PreprocessingModel, SessionMetadata
 from modules.transcript_preprocessor import preprocess
@@ -71,7 +72,8 @@ class Orchestrator:
 
     _PLAN = ["transcript_quality", "preprocessing", "nlp", "bpmn",
              "minutes", "requirements", "sbvr", "bmm", "dmn", "argumentation", "synthesizer",
-             "query_summarizer", "knowledge_extractor", "contradiction_detector"]
+             "query_summarizer", "knowledge_extractor", "contradiction_detector",
+             "communication_noise"]
 
     def __init__(
         self,
@@ -96,6 +98,7 @@ class Orchestrator:
         self._agent_dmn          = AgentDMN(client_info, provider_cfg)
         self._agent_argumentation = AgentArgumentation(client_info, provider_cfg)
         self._agent_query_summarizer = AgentQuerySummarizer(client_info, provider_cfg)
+        self._agent_communication_noise = AgentCommunicationNoise(client_info, provider_cfg)
 
     # ── Thread-safe progress callback ─────────────────────────────────────────
 
@@ -120,6 +123,7 @@ class Orchestrator:
         run_argumentation: bool = False,
         run_synthesizer: bool = False,
         run_query_summarizer: bool = False,
+        run_communication_noise: bool = False,
     ) -> KnowledgeHub:
         """
         Execute the pipeline.
@@ -302,6 +306,16 @@ class Orchestrator:
                 self._progress("Agente Sumário por Perspectiva", "done")
             except Exception as exc:
                 self._progress("Agente Sumário por Perspectiva", f"error: {exc}")
+                hub.bump()
+
+        # ── Step 6e: Communication Noise Agent ───────────────────────────────
+        if run_communication_noise:
+            self._progress("Agente Ruídos de Comunicação", "running")
+            try:
+                hub = self._agent_communication_noise.run(hub, output_language)
+                self._progress("Agente Ruídos de Comunicação", "done")
+            except Exception as exc:
+                self._progress("Agente Ruídos de Comunicação", f"error: {exc}")
                 hub.bump()
 
         # ── Step 7: Synthesizer Agent ─────────────────────────────────────────

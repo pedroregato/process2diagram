@@ -134,6 +134,15 @@ def render_sidebar():
                     "Executivo, Técnico, Gestor de Projeto e Conformidade & Auditoria."
                 ),
             )
+            st.session_state.run_communication_noise = st.checkbox(
+                "🔊 Ruídos de Comunicação",
+                value=st.session_state.get("run_communication_noise", False),
+                help=(
+                    "Detecta ambiguidades (lexicais, referenciais, compromissos vagos) "
+                    "e lacunas (perguntas sem resposta, tópicos abandonados, divergências implícitas). "
+                    "Útil para reuniões com muitos participantes ou decisões complexas."
+                ),
+            )
             st.session_state.run_knowledge_extractor = st.checkbox(
                 "🕸️ Grafo de Conhecimento (KH)",
                 value=st.session_state.get("run_knowledge_extractor", True),
@@ -194,3 +203,5 @@ def render_sidebar():
                     st.session_state.rerun_agent = "argumentation"
                 if st.button("🔎 Sumário",    key="rr_qs",  use_container_width=True):
                     st.session_state.rerun_agent = "query_summarizer"
+                if st.button("🔊 Ruídos",    key="rr_cn",  use_container_width=True):
+                    st.session_state.rerun_agent = "communication_noise"

@@ -483,6 +483,41 @@ class ArgumentationMap:
         return sum(1 for q in self.questions if q.resolution.type == "unresolved")
 
 
+# ── Communication Noise Model ────────────────────────────────────────────────
+
+@dataclass
+class AmbiguityItem:
+    """A term, phrase or commitment with multiple possible interpretations."""
+    text: str                               # verbatim or near-verbatim quote
+    ambiguity_type: str                     # lexical | referential | vague_commitment | syntactic
+    speaker: str                            # participant initials or name
+    possible_interpretations: list[str] = field(default_factory=list)  # 2–3 alternatives
+    suggestion: str = ""                    # recommended clarification action
+    confidence: float = 0.8                 # 0.0–1.0
+
+
+@dataclass
+class CommunicationGap:
+    """A missing, unanswered or abandoned communication thread."""
+    gap_type: str                           # unanswered_question | abandoned_topic | implicit_disagreement | missing_info
+    description: str                        # what the gap is
+    raised_by: str = ""                     # who raised the topic (initials or "–")
+    topic: str = ""                         # thematic category
+    evidence_quote: str = ""               # supporting text from transcript
+    impact: str = ""                        # potential impact if unresolved
+    recommendation: str = ""               # suggested follow-up action
+
+
+@dataclass
+class CommunicationNoiseModel:
+    """Output of AgentCommunicationNoise — ambiguities + gaps detected in transcript."""
+    ambiguities: list[AmbiguityItem] = field(default_factory=list)
+    gaps: list[CommunicationGap] = field(default_factory=list)
+    noise_score: float = 0.0    # 0–10, lower = cleaner communication
+    summary: str = ""
+    ready: bool = False
+
+
 # ── Query Summary Model (Fase F — multi-perspective summarization) ────────────
 
 @dataclass
@@ -585,6 +620,7 @@ class KnowledgeHub:
     dmn: DMNModel = field(default_factory=DMNModel)                      # Fase A: DMN decisions
     argumentation: ArgumentationMap = field(default_factory=ArgumentationMap)  # Fase C: IBIS map
     query_summary: QuerySummaryModel = field(default_factory=QuerySummaryModel)  # Fase F: multi-perspective
+    communication_noise: CommunicationNoiseModel = field(default_factory=CommunicationNoiseModel)
     validation: ValidationReport = field(default_factory=ValidationReport)
     synthesizer: SynthesizerModel = field(default_factory=SynthesizerModel)
     meeting_time: MeetingTimeModel = field(default_factory=MeetingTimeModel)
@@ -809,6 +845,10 @@ class KnowledgeHub:
         # ── v4.26: ValidationReport.agent_scores ─────────────────────────────
         if not hasattr(hub.validation, 'agent_scores'):
             hub.validation.agent_scores = {}
+
+        # ── v4.26: CommunicationNoiseModel ────────────────────────────────────
+        if not hasattr(hub, 'communication_noise'):
+            hub.communication_noise = CommunicationNoiseModel()
 
         return hub
 

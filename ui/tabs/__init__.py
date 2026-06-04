@@ -11,3 +11,4 @@ from .dev_tools_tab import render as render_dev_tools
 from .dmn_tab import render as render_dmn
 from .argumentation_tab import render as render_argumentation
 from .query_summary_tab import render as render_query_summary
+from .communication_noise_tab import render as render_communication_noise
