@@ -36,6 +36,7 @@ from core.project_store import (
     list_bpmn_versions,
     save_bpmn_new_version,
     bpmn_tables_exist,
+    load_meeting_as_hub,
 )
 from ui.project_selector import require_active_project
 from modules.bpmn_editor import editor_from_xml
@@ -133,6 +134,64 @@ if st.session_state.get("_bpme_version_key") != _version_key:
     st.session_state.pop("_bpme_captured_xml", None)
     st.session_state["bpme_paste_xml"]   = ""
     st.session_state["_bpme_version_key"] = _version_key
+
+# ── Reconversão Method & Style v7.0 ──────────────────────────────────────────
+with st.expander("🔄 Reconverter com Method & Style v7.0", expanded=False):
+    st.markdown(
+        "Re-executa o **AgentBPMN** sobre a transcrição desta reunião aplicando as "
+        "regras de notação Method & Style v7.0. O XML gerado é carregado no editor "
+        "abaixo para revisão — salve apenas quando estiver satisfeito."
+    )
+    if not meeting_id_for_version:
+        st.warning("Esta versão não está vinculada a uma reunião — reconversão indisponível.")
+    else:
+        if st.button("🔄 Iniciar Reconversão", key="bpme_reconvert_btn"):
+            from modules.session_security import get_session_llm_client
+            from agents.agent_bpmn import AgentBPMN
+
+            _client_info  = get_session_llm_client(st.session_state.get("selected_provider", ""))
+            _provider_cfg = st.session_state.get("provider_cfg") or {}
+
+            if not _client_info:
+                st.error("Configure um provedor LLM em **Sistema → Configurações** antes de reconverter.")
+            else:
+                with st.spinner("Carregando transcrição da reunião..."):
+                    _reconv_hub = load_meeting_as_hub(meeting_id_for_version, project_id)
+
+                if not _reconv_hub:
+                    st.error("Reunião não encontrada no banco de dados.")
+                else:
+                    _transcript = (
+                        (_reconv_hub.transcript_clean or "") or (_reconv_hub.transcript_raw or "")
+                    ).strip()
+                    if len(_transcript) < 50:
+                        st.error(
+                            "Transcrição não disponível ou muito curta. "
+                            "Reprocesse pelo Pipeline antes de reconverter."
+                        )
+                    else:
+                        with st.spinner("Reconvertendo com AgentBPMN (Method & Style v7.0)…"):
+                            try:
+                                _reconv_hub = AgentBPMN(_client_info, _provider_cfg).run(_reconv_hub)
+                            except Exception as _exc:
+                                st.error(f"Erro na reconversão: {_exc}")
+                                _reconv_hub = None
+
+                        if _reconv_hub and getattr(_reconv_hub.bpmn, "ready", False) and _reconv_hub.bpmn.bpmn_xml:
+                            st.session_state["_bpme_captured_xml"] = _reconv_hub.bpmn.bpmn_xml
+                            _n_steps    = len(_reconv_hub.bpmn.steps)
+                            _n_call_act = sum(1 for s in _reconv_hub.bpmn.steps if s.task_type == "callActivity")
+                            _n_loops    = sum(1 for s in _reconv_hub.bpmn.steps if s.task_type in ("loopTask", "multiInstanceTask"))
+                            _c1, _c2, _c3 = st.columns(3)
+                            _c1.metric("Nós nível 1", _n_steps)
+                            _c2.metric("callActivities", _n_call_act)
+                            _c3.metric("Loop / Multi-instance", _n_loops)
+                            if _reconv_hub.bpmn.repair_log:
+                                st.caption(f"Reparos automáticos aplicados: {len(_reconv_hub.bpmn.repair_log)}")
+                            st.success("✅ XML carregado no editor — revise e salve quando pronto.")
+                            st.rerun()
+                        else:
+                            st.error("O agente não produziu um modelo BPMN válido.")
 
 # ── Lê o XML colado ANTES de renderizar o modeler ────────────────────────────
 # st.session_state["bpme_paste_xml"] já tem o valor do widget do rerun anterior.
