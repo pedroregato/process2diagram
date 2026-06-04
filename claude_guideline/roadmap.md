@@ -185,6 +185,11 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **`pages/Settings.py`** aba Domínio — lista de provedores derivada de `AVAILABLE_PROVIDERS` (única fonte de verdade); alias providers ignorados automaticamente; ícone 🟡 para chave em sessão não salva no domínio; modelo visível no header
 - [x] **`pages/Orientacoes_CKF.py`** seção 5 — diagrama CKF Evolutivo redesenhado: box AgentCKFUpdater, leituras alinhadas com labels dim, dois outputs em colunas (hub.context_skill / Supabase)
 
+### PC30 — Concluído (v4.26 / 2026-06-04)
+- [x] **`core/project_store.py`** — `delete_bpmn_version(version_id)`: exclui versão BPMN com segurança (recusa única versão; promove versão anterior se is_current; atualiza version_count)
+- [x] **`core/assistant_tools.py`** — `list_bpmn_versions` (consulta): lista versões de um processo por nome com ID, status, reunião e notas; `delete_bpmn_version` (admin): exclui versão pelo version_id; ambas registradas em schemas OpenAI/Anthropic, `_TOOL_CATEGORIES`, `_ADMIN_TOOLS` e dispatcher
+- [x] **Check 8** (`bpmn_structural_validator.py`): detecta coreografia desbalanceada em colaborações — sender não-sendTask ou receiver não-receiveTask em message flows; `skill_bpmn.md` atualizado com regra de balanceamento sendTask↔receiveTask
+
 ### PC29 — Concluído (v4.26 / 2026-06-04)
 - [x] **`skills/skill_bpmn.md`** — XOR join promovido de "Recomendada" para "Obrigatória"; checklist atualizado para exigir join em AND/OR/XOR/complex splits
 - [x] **`modules/bpmn_structural_validator.py` Check 7** — detecta task com `in_degree >= 2` cujos predecessores são todos não-gateway (fan-in direto); emite `warning` recomendando XOR join explícito
