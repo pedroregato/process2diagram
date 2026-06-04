@@ -384,13 +384,15 @@ Within Assistente mode, sidebar toggle `asst_use_tools`:
 
 ### Tool list (`core/assistant_tools.py`)
 
-**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `list_bpmn_processes`, `get_sbvr_terms`, `get_sbvr_rules`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`, `get_cache_stats`, `list_meeting_documents`, `get_document_content`, `search_documents`, `get_document_types`, `search_glossary`.
+**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `list_bpmn_processes`, `list_bpmn_versions`, `get_sbvr_terms`, `get_sbvr_rules`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`, `get_cache_stats`, `list_meeting_documents`, `get_document_content`, `search_documents`, `get_document_types`, `search_glossary`.
 
-**Admin only (`is_admin()`):** `get_database_integrity`, `fix_missing_llm_provider`, `generate_meeting_embeddings`, `reprocess_meeting_full`, `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`, `delete_entity`, `resolve_entity_ambiguity`, `clear_llm_cache`, write/generate tools.
+**Admin only (`is_admin()`):** `get_database_integrity`, `fix_missing_llm_provider`, `generate_meeting_embeddings`, `reprocess_meeting_full`, `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`, `delete_entity`, `resolve_entity_ambiguity`, `clear_llm_cache`, `delete_bpmn_version`, write/generate tools.
 
 **KnowledgeGraph entity tools (3):** `lookup_entity` — investiga entidade (tipo, aliases, reuniões); `delete_entity` — remove entidade (3-tier match: exact → name-substring → alias-substring, para se houver ambiguidade); `resolve_entity_ambiguity` — funde duplicatas via `merge_entities()`.
 
 **Cache tools (2):** `get_cache_stats(agent_name?)` — estatísticas do cache LLM (entradas, hits, tokens economizados, USD por agente); `clear_llm_cache(agent_name?)` — invalida entradas (admin). Cache em `services/semantic_cache.py`; tabela `llm_cache` no Supabase (`setup/supabase_migration_llm_cache.sql`).
+
+**BPMN version tools (2):** `list_bpmn_versions(process_name)` — lista versões de um processo por nome (ID, status atual, reunião, notas); `delete_bpmn_version(version_id, reason?)` — exclui versão pelo UUID (admin); recusa única versão; promove anterior se is_current; atualiza version_count. Fluxo: chamar `list_bpmn_versions` primeiro para obter o version_id.
 
 **Document tools (4):** `list_meeting_documents(meeting_number?, doc_type?)` — lista documentos do projeto com filtro opcional; `get_document_content(doc_id)` — conteúdo completo (cap 8k chars); `search_documents(query, mode)` — busca semantic|keyword nos documentos; `get_document_types()` — taxonomia completa (53 tipos / 9 categorias). Tabelas: `meeting_documents`, `document_chunks vector(1536)`; migration: `setup/supabase_migration_documents.sql`.
 
