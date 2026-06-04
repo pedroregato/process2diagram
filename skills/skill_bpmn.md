@@ -234,6 +234,7 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 - [ ] IDs de steps são sequenciais S01, S02, S03... sem lacunas
 - [ ] Message flows existem apenas entre pools distintos
 - [ ] `sendTask`/`receiveTask` aparecem **somente** no formato pools
+- [ ] Coreografia balanceada: todo `sendTask` é recebido por `receiveTask` ou `intermediateMessageCatchEvent`; nunca por `userTask` ou `serviceTask`. Do mesmo modo, todo emissor de message flow é `sendTask` ou evento throw — nunca `userTask`
 - [ ] Saídas de `eventBasedGateway` são apenas eventos intermediários ou `receiveTask`
 - [ ] Situações ambíguas estão registradas com `[AMBIGUIDADE: ...]`
 

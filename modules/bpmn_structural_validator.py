@@ -53,9 +53,85 @@ def validate_bpmn_structure(model: "BPMNModel") -> list[BPMNIssue]:
     Safe to call at any time — never raises.
     """
     try:
-        return _run_checks(model)
+        issues = _run_checks(model)
+        issues += _check_message_flow_balance(model)
+        return issues
     except Exception:
         return []
+
+
+# Task types that are valid message senders in a collaboration
+_VALID_SEND_TYPES = {
+    "sendTask",
+    "intermediateMessageThrowEvent",
+}
+
+# Task types that are valid message receivers in a collaboration
+_VALID_RECEIVE_TYPES = {
+    "receiveTask",
+    "startEvent", "startMessageEvent", "noneStartEvent",
+    "intermediateMessageCatchEvent",
+}
+
+# Task types that are NOT valid for either role (should trigger a warning)
+_IMPROPER_TASK_TYPES = {
+    "userTask", "serviceTask", "businessRuleTask",
+    "scriptTask", "manualTask",
+}
+
+
+def _check_message_flow_balance(model: "BPMNModel") -> list[BPMNIssue]:
+    """
+    Check 8 — Collaboration message flow choreography balance.
+    Verifies that every message flow has:
+      - A proper sender  (sendTask or message throw event)
+      - A proper receiver (receiveTask or message catch/start event)
+    Only runs on collaboration models with message_flows_data.
+    """
+    if not getattr(model, "is_collaboration", False):
+        return []
+    mf_list = getattr(model, "message_flows_data", []) or []
+    if not mf_list:
+        return []
+
+    # Build a flat lookup: step_id → BPMNStep across all pools
+    step_by_id: dict[str, object] = {}
+    for pool in (getattr(model, "pool_models", None) or []):
+        for s in (pool.steps or []):
+            step_by_id[s.id] = s
+
+    issues: list[BPMNIssue] = []
+
+    for mf in mf_list:
+        mf_label = f"'{getattr(mf, 'name', '') or mf.id}'"
+
+        # ── Check sender ──────────────────────────────────────────────────────
+        src_id = getattr(mf, "source_step", None)
+        if src_id and src_id in step_by_id:
+            src = step_by_id[src_id]
+            src_type = getattr(src, "task_type", "")
+            if src_type in _IMPROPER_TASK_TYPES:
+                issues.append(BPMNIssue(
+                    "warning", src_id,
+                    f"Message flow {mf_label}: sender '{src.title}' ({src_id}) "
+                    f"is typed as '{src_type}' — should be 'sendTask' "
+                    f"to make choreography explicit",
+                ))
+
+        # ── Check receiver ────────────────────────────────────────────────────
+        tgt_id = getattr(mf, "target_step", None)
+        if tgt_id and tgt_id in step_by_id:
+            tgt = step_by_id[tgt_id]
+            tgt_type = getattr(tgt, "task_type", "")
+            if tgt_type in _IMPROPER_TASK_TYPES:
+                issues.append(BPMNIssue(
+                    "warning", tgt_id,
+                    f"Message flow {mf_label}: receiver '{tgt.title}' ({tgt_id}) "
+                    f"is typed as '{tgt_type}' — should be 'receiveTask' or "
+                    f"'intermediateMessageCatchEvent' to balance the choreography",
+                ))
+
+    return issues
 
 
 def _run_checks(model: "BPMNModel") -> list[BPMNIssue]:
