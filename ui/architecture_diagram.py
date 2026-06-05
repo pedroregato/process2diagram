@@ -37,13 +37,16 @@ flowchart TD
 
     IN(["📄 Transcrição de Reunião\\n.txt · .docx · .pdf · texto colado"]):::iCls
 
-    subgraph LLM["🤖 5 LLM Providers — configure o de sua preferência"]
+    subgraph LLM["🤖 8 LLM Providers — configure o de sua preferência"]
         direction LR
-        P1["DeepSeek\\nDefault"]:::lCls
+        P1["DeepSeek V4\\nFlash (padrão)"]:::lCls
         P2["Claude\\nAnthropic"]:::lCls
         P3["OpenAI\\nGPT-4o"]:::lCls
         P4["Groq\\nLlama"]:::lCls
         P5["Gemini\\nGoogle"]:::lCls
+        P6["DeepSeek\\nV4 Pro"]:::lCls
+        P7["DeepSeek\\nThinking"]:::lCls
+        P8["Grok\\nxAI"]:::lCls
     end
 
     subgraph PIPE["⚙️ Pipeline Multi-Agente — KnowledgeHub como estado central"]
@@ -59,11 +62,14 @@ flowchart TD
         end
         A7["📖 SBVR\\nVocabulário · Regras de Negócio"]:::optCls
         A8["🎯 BMM\\nVisão · Metas · Estratégias"]:::optCls
-        A9["📄 Executive\\nSynthesizer"]:::optCls
-        A1 --> A2 --> A3 --> A4 --> PAR --> A7 --> A8 --> A9
+        A9["📋 DMN\\nTabelas de Decisão"]:::optCls
+        A10["🗣️ Argumentação\\nIBIS · Questões · Posições"]:::optCls
+        A11["🔊 Análise de Ruído\\nCKF · Comunicação"]:::optCls
+        A12["📄 Executive\\nSynthesizer"]:::optCls
+        A1 --> A2 --> A3 --> A4 --> PAR --> A7 --> A8 --> A9 --> A10 --> A11 --> A12
     end
 
-    subgraph OUTS["📦 7 Artefatos Gerados Automaticamente"]
+    subgraph OUTS["📦 10 Artefatos Gerados Automaticamente"]
         direction LR
         R1["📐 BPMN 2.0\\nXML + bpmn-js"]:::rCls
         R2["📊 Mermaid\\nFlowchart"]:::rCls
@@ -72,13 +78,16 @@ flowchart TD
         R5["📖 Vocabulário\\nSBVR"]:::rCls
         R6["🎯 Motivação\\nBMM"]:::rCls
         R7["📄 Relatório\\nExecutivo HTML"]:::rCls
+        R8["📋 DMN\\nTabelas de Decisão"]:::rCls
+        R9["🗣️ Argumentação\\nIBIS · Mapa"]:::rCls
+        R10["🔊 Análise de Ruído\\nCKF · Comunicação"]:::rCls
     end
 
     subgraph PERSIST["☁️ Persistência & Integrações"]
         direction LR
         SB["🗄️ Supabase\\nReuniões · Requisitos · BPMN versioned\\nSBVR · BMM · Embeddings vector(1536)"]:::aCls
         GC["📅 Google Calendar\\nAgendamento de action items\\nCompartilhamento por projeto"]:::lCls
-        ASST["💬 Assistente RAG\\n21 ferramentas · tool-use + pgvector\\nKeyword + busca semântica"]:::optCls
+        ASST["💬 Assistente RAG\\n35 ferramentas · tool-use + pgvector\\nKeyword + busca semântica"]:::optCls
     end
 
     IN --> A1
@@ -89,7 +98,10 @@ flowchart TD
     A6 --> R4
     A7 --> R5
     A8 --> R6
-    A9 --> R7
+    A9 --> R8
+    A10 --> R9
+    A11 --> R10
+    A12 --> R7
     OUTS -.->|"salvo em"| SB
     SB <-.->|"consulta"| ASST
     SB -.->|"action items"| GC\

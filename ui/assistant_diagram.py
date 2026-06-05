@@ -53,11 +53,11 @@ flowchart TD
         subgraph LOOP["🔄 Loop ≤ 5 rounds"]
             direction LR
             EX["AssistantToolExecutor"]:::tCls
-            subgraph TOOLS["🛠️ 21 Ferramentas (★ = admin)"]
+            subgraph TOOLS["🛠️ 35 Ferramentas (★ = admin)"]
                 direction TB
-                TA["📊 Dados das Reuniões\\nget_meeting_list · participants · decisions\\naction_items · summary · search_transcript\\nget_requirements · list_bpmn_processes\\nget_sbvr_terms · get_sbvr_rules\\nget_system_capabilities"]:::tCls
+                TA["📊 Dados das Reuniões\\nget_meeting_list · participants · decisions\\naction_items · summary · search_transcript\\nget_requirements · list_bpmn_processes\\nlist_bpmn_versions · get_sbvr_terms\\nget_sbvr_rules · get_system_capabilities"]:::tCls
                 TB2["📅 Google Calendar\\ncalendar_list_events · get_event\\ncalendar_suggest_time\\n★ create_event · ★ schedule_action_items\\n★ share_with_user · ★ revoke_access\\n★ calendar_diagnose"]:::tCls
-                TC["🔒 Admin\\n★ get_database_integrity\\n★ fix_missing_llm_provider\\n★ generate_meeting_embeddings\\n★ reprocess_meeting_full"]:::tCls
+                TC["🔒 Admin\\n★ get_database_integrity\\n★ fix_missing_llm_provider\\n★ generate_meeting_embeddings\\n★ reprocess_meeting_full\\n★ delete_bpmn_version"]:::tCls
             end
             EX --> TOOLS
             TOOLS -.->|resultados| EX

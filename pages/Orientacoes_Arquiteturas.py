@@ -50,7 +50,7 @@ st.markdown(
     """
 Dois modos de operação para responder perguntas sobre as reuniões armazenadas:
 
-- **Modo A — Tool-use (padrão):** o LLM decide dinamicamente quais das 22
+- **Modo A — Tool-use (padrão):** o LLM decide dinamicamente quais das 35
   ferramentas chamar — dados de reuniões, requisitos, BPMN, SBVR, Google
   Calendar e ferramentas admin. Até 5 rounds de chamadas antes da resposta final.
 
