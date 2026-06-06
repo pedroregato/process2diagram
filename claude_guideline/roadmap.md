@@ -185,6 +185,22 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **`pages/Settings.py`** aba Domínio — lista de provedores derivada de `AVAILABLE_PROVIDERS` (única fonte de verdade); alias providers ignorados automaticamente; ícone 🟡 para chave em sessão não salva no domínio; modelo visível no header
 - [x] **`pages/Orientacoes_CKF.py`** seção 5 — diagrama CKF Evolutivo redesenhado: box AgentCKFUpdater, leituras alinhadas com labels dim, dois outputs em colunas (hub.context_skill / Supabase)
 
+### PC33 — Concluído (v4.27 / 2026-06-06)
+- [x] **`ensino/ativo-intangivel-de-maior-impacto-tangivel.md`** — white paper completo reescrito: 6 partes estruturadas (O Ativo, Amnésia Corporativa, Tangibilização, ROI-TR/TRC, Implementação, Críticas); Parte VI incorpora análise crítica independente (Manuis AI) com 5 objeções respondidas diretamente (qualidade de entrada, resistência cultural, complexidade, privacidade/LGPD, dependência tecnológica); síntese "IA com limitações gerenciáveis vs. caos institucional crônico"
+
+### PC32 — Concluído (v4.27 / 2026-06-06)
+- [x] **`ensino/`** — curso de aplicações corporativas com 7 módulos + 8 transcrições fictícias realistas:
+  - `PLANO_DO_CURSO.md` — visão geral, público-alvo, 14h de conteúdo, 3 formatos de entrega
+  - `modulo_00_fundamentos/guia.md` — configuração, Quality Inspector, primeiro pipeline
+  - `modulo_01_mapeamento_processos/` — guia + 3 transcrições (aprovação fornecedor, crédito pessoal, onboarding); exercícios de Check 7/Pass 5/Check 8
+  - `modulo_02_rastreabilidade_requisitos/` — guia + kickoff portal cliente (requisitos IEEE 830, LGPD, Assistente RAG)
+  - `modulo_03_auditoria_compliance/` — guia + comitê de contratos R$ 2,3M (SBVR, ata, dossiê de auditoria)
+  - `modulo_04_gestao_conhecimento/` — guia + captura de especialista (conciliação SAP×Salesforce, Knowledge Graph)
+  - `modulo_05_governanca_roi/` — guia + retrospectiva de sprint (ROI-TR, CommunicationNoise, TRC)
+  - `modulo_06_estrategia_bmm/` — guia + planejamento estratégico anual (BMM, IBIS, rastreabilidade vertical)
+- [x] **`pages/Capacitacao.py`** — página Streamlit no grupo Ajuda (🎓 Curso Corporativo): cards por módulo com guia inline, botão "▶ Carregar" injeta transcrição em `session_state.transcript_text` e redireciona para Pipeline, preview + download .txt
+- [x] **`app.py`** — `Capacitacao.py` registrada no grupo Ajuda
+
 ### PC31 — Concluído (v4.27 / 2026-06-04)
 - [x] **`ui/architecture_diagram.py`** — LLM providers 5→8 (DeepSeek V4 Pro, Thinking, Grok xAI adicionados); pipeline estendido com A9(DMN), A10(Argumentation/IBIS), A11(CommunicationNoise/CKF), A12(Synthesizer); artefatos 7→10 (R8 DMN, R9 Argumentação, R10 Análise de Ruído); ASST "21 ferramentas" → "35 ferramentas"
 - [x] **`ui/assistant_diagram.py`** — TOOLS subgraph "21→35 Ferramentas"; TA: `list_bpmn_versions` adicionada após `list_bpmn_processes`; TC Admin: `★ delete_bpmn_version` adicionada
