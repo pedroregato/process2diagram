@@ -185,6 +185,10 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **`pages/Settings.py`** aba Domínio — lista de provedores derivada de `AVAILABLE_PROVIDERS` (única fonte de verdade); alias providers ignorados automaticamente; ícone 🟡 para chave em sessão não salva no domínio; modelo visível no header
 - [x] **`pages/Orientacoes_CKF.py`** seção 5 — diagrama CKF Evolutivo redesenhado: box AgentCKFUpdater, leituras alinhadas com labels dim, dois outputs em colunas (hub.context_skill / Supabase)
 
+### PC34 — Concluído (v4.27 / 2026-06-06)
+- [x] **`ensino/PLANO_DO_CURSO.md`** — narrativa reposicionada com chave "conhecimento rastreável": subtítulo, seção Sobre o Curso (distinção ata vs. conhecimento rastreável, pergunta de valor), Módulo 0 item 1 reformulado, item 5 de rastreabilidade na prática adicionado; Público-Alvo expandido com coluna "Quem é e o que enfrenta" (definição de papel + dor específica para cada um dos 7 perfis)
+- [x] **`ensino/ativo-intangivel-de-maior-impacto-tangivel.md`** — "conhecimento rastreável" inserido como conceito-âncora: Tese Central ("transformar em conhecimento rastreável" + parágrafo de definição), Parte III subtítulo "Da conversa ao conhecimento rastreável" + frase "cada artefato sabe de onde veio" + coluna da tabela renomeada; Conclusão com parágrafo que distingue a categoria ("não é documentação melhorada") + citação final reforçada
+
 ### PC33 — Concluído (v4.27 / 2026-06-06)
 - [x] **`ensino/ativo-intangivel-de-maior-impacto-tangivel.md`** — white paper completo reescrito: 6 partes estruturadas (O Ativo, Amnésia Corporativa, Tangibilização, ROI-TR/TRC, Implementação, Críticas); Parte VI incorpora análise crítica independente (Manuis AI) com 5 objeções respondidas diretamente (qualidade de entrada, resistência cultural, complexidade, privacidade/LGPD, dependência tecnológica); síntese "IA com limitações gerenciáveis vs. caos institucional crônico"
 
