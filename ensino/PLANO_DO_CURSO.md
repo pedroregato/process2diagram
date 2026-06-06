@@ -1,17 +1,27 @@
 # Curso Process2Diagram — Aplicações Corporativas
 
-> Como resolver problemas reais do mundo corporativo com o Process2Diagram.
+> Transformando conversas corporativas em **conhecimento rastreável**.
 
 ---
 
 ## Sobre o Curso
 
-Este curso ensina analistas, gestores e equipes de TI a usar o Process2Diagram para
-resolver problemas concretos: documentar processos, rastrear requisitos, preparar
-auditorias, preservar conhecimento e medir o retorno das reuniões.
+Toda reunião corporativa relevante gera decisões, processos, requisitos e regras de negócio.
+O problema é que esse conhecimento não sobrevive à reunião em forma utilizável —
+ele evapora junto com a memória dos participantes.
 
-Cada módulo parte de um **problema real** → mostra **como o P2D resolve** →
-entrega um **artefato concreto** que o participante pode usar no trabalho imediatamente.
+Este curso ensina analistas, gestores e equipes de TI a usar o Process2Diagram para
+transformar transcrições de reuniões em **conhecimento rastreável**: artefatos com
+origem documentada, consultáveis pelo Assistente RAG, versionáveis e acumuláveis
+ao longo do tempo.
+
+A diferença em relação à documentação tradicional é fundamental: uma ata registra
+o que foi dito; **conhecimento rastreável** permite responder, meses depois,
+"quem decidiu isso, com base em quê, e o que mudou desde então."
+
+Cada módulo parte de um **problema real** → mostra **como o P2D transforma a conversa
+em conhecimento rastreável** → entrega um artefato que o participante pode usar
+ou consultar imediatamente.
 
 As transcrições de exemplo neste curso são ficcionais, mas baseadas em situações
 corporativas reais. Use-as diretamente no pipeline do P2D para ver os artefatos
@@ -21,15 +31,15 @@ sendo gerados.
 
 ## Público-Alvo
 
-| Perfil | Módulos prioritários |
-|---|---|
-| Analista de Negócios / BA | 1, 2, 6 |
-| Gerente de Projetos / PM | 2, 5 |
-| Analista de Processos | 1, 3 |
-| Compliance / Auditoria | 3 |
-| Gestão do Conhecimento | 4 |
-| Liderança / C-Level | 5, 6 |
-| TI / Desenvolvimento | 0, 2 |
+| Perfil | Quem é e o que enfrenta | Módulos prioritários |
+|---|---|---|
+| **Analista de Negócios / BA** | Profissional que faz a ponte entre negócio e TI. Participa de reuniões de levantamento, escreve casos de uso e especificações, mas gasta horas formatando documentos manualmente após cada sessão. | 1, 2, 6 |
+| **Gerente de Projetos / PM** | Responsável por entregas, prazos e comunicação entre stakeholders. Convoca reuniões, registra decisões e cobranças de ação — mas a rastreabilidade de compromissos costuma se perder nos e-mails. | 2, 5 |
+| **Analista de Processos** | Especialista em modelagem de fluxos (BPMN, EPC, SIPOC). Realiza entrevistas com áreas para documentar processos, mas o trabalho de transcrever e diagramar o que foi dito consome a maior parte do tempo. | 1, 3 |
+| **Compliance / Auditoria** | Profissional que garante conformidade com normas (ISO, SOC 2, LGPD, regulação setorial). Precisa de evidências documentadas de decisões e aprovações, frequentemente reconstituídas semanas depois do evento. | 3 |
+| **Gestão do Conhecimento** | Responsável por capturar, organizar e disseminar o saber institucional. Enfrenta o risco de perda de conhecimento tácito quando especialistas saem da empresa e a falta de documentação estruturada para onboarding. | 4 |
+| **Liderança / C-Level** | Executivos e heads que participam de reuniões estratégicas (planejamento anual, comitês, sprints de inovação). Precisam de síntese executiva clara, rastreabilidade de metas e visibilidade sobre o ROI do tempo investido em reuniões. | 5, 6 |
+| **TI / Desenvolvimento** | Desenvolvedores, arquitetos e tech leads que recebem requisitos vagos ou contraditórios, precisam de rastreabilidade de origem e querem entender as dependências entre funcionalidades antes de implementar. | 0, 2 |
 
 ---
 
@@ -54,15 +64,16 @@ sendo gerados.
 **Objetivo:** Dominar a interface e entender o que o pipeline faz em cada etapa.
 
 ### Conteúdo
-1. O problema: reuniões acontecem, documentação não
+1. O problema: reuniões geram conhecimento que desaparece — e como o P2D torna esse conhecimento rastreável
 2. Visão geral do pipeline: Quality → Preprocessor → NLP → BPMN → Requisitos → SBVR → BMM → Synthesizer
 3. Configuração inicial: provider LLM, API key, projeto Supabase
 4. O que é uma boa transcrição? Como interpretar o Grau A–E
-5. Hands-on: rodar a transcrição de exemplo do Módulo 1
+5. Rastreabilidade na prática: o que significa cada artefato carregar a origem do que foi dito
+6. Hands-on: rodar a transcrição de exemplo do Módulo 1 e verificar a origem de um requisito
 
 ### Resultado esperado
-Participante sabe configurar o sistema, entende o significado de cada artefato
-e consegue rodar um pipeline completo.
+Participante sabe configurar o sistema, entende o que torna um artefato rastreável
+(vs. uma documentação estática) e consegue rodar um pipeline completo.
 
 ---
 

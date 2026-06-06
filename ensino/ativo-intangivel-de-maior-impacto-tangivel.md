@@ -6,13 +6,15 @@
 
 ## Tese Central
 
-Reuniões corporativas são sistematicamente tratadas como eventos de agenda — custos a minimizar, interruções ao trabalho "real". Essa percepção é um erro estratégico de primeira ordem.
+Reuniões corporativas são sistematicamente tratadas como eventos de agenda — custos a minimizar, interrupções ao trabalho "real". Essa percepção é um erro estratégico de primeira ordem.
 
 Reuniões são, na verdade, o **principal mecanismo de criação de conhecimento organizacional**. É nelas que estratégias nascem, processos são redesenhados, requisitos tomam forma e decisões com impacto de milhões são tomadas. Nenhum outro evento corporativo concentra tantas variáveis críticas em tão pouco tempo.
 
-O problema não é a reunião. É a **ausência de infraestrutura para capturar o que acontece nela**.
+O problema não é a reunião. É a **ausência de infraestrutura para transformar o que acontece nela em conhecimento rastreável**.
 
 Sem essa infraestrutura, a organização opera com um paradoxo: investe enormes recursos criando conhecimento e, logo em seguida, o descarta. O resultado é o que chamamos de **amnésia corporativa** — uma condição crônica onde o passado não instrui o presente.
+
+**Conhecimento rastreável** é o antídoto: cada decisão, requisito e regra de negócio emerge da conversa com a origem documentada — quem disse, em qual contexto, com base em quê. Não é documentação estática. É memória organizacional que pode ser interrogada, cruzada e auditada.
 
 ---
 
@@ -67,19 +69,19 @@ Em setores como seguros, saúde e serviços financeiros, falhas na interpretaç�
 
 ## Parte III — A Tangibilização
 
-### Da conversa ao artefato executável
+### Da conversa ao conhecimento rastreável
 
-A solução para a amnésia corporativa não está em pedir às pessoas que documentem mais — elas já têm pouco tempo. A solução está em capturar automaticamente o que é gerado nas conversas e convertê-lo em **artefatos de negócio prontos para execução**.
+A solução para a amnésia corporativa não está em pedir às pessoas que documentem mais — elas já têm pouco tempo. A solução está em capturar automaticamente o que é gerado nas conversas e convertê-lo em **conhecimento rastreável**: artefatos formais onde cada item carrega a citação exata de onde foi inferido.
 
-O Process2Diagram / RawToInsights AI opera exatamente nessa camada de conversão:
+O Process2Diagram / RawToInsights AI opera exatamente nessa camada de conversão. A distinção crítica em relação a ferramentas de transcrição ou resumo: cada artefato gerado não apenas existe — ele **sabe de onde veio**.
 
-| O que é dito na reunião | O que é gerado automaticamente |
+| O que é dito na reunião | Conhecimento rastreável gerado |
 |---|---|
-| "Aprovamos compras acima de R$ 500k apenas no comitê" | Regra SBVR + DMN (tabela de decisão) + requisito de sistema |
-| "O RH notifica o TI quando contrata alguém novo" | BPMN 2.0 com message flow entre pools |
-| "Precisamos que o portal responda em menos de 2 segundos" | Requisito não-funcional IEEE 830 com origem rastreada |
-| "Ficou decidido que o CFO aprova o contrato" | Action item com responsável + decisão na ata |
-| "Nossa visão é ser referência em saúde preventiva até 2030" | Componente BMM (Business Motivation Model) |
+| "Aprovamos compras acima de R$ 500k apenas no comitê" | Regra SBVR + DMN (tabela de decisão) + requisito de sistema — com citação da fala original |
+| "O RH notifica o TI quando contrata alguém novo" | BPMN 2.0 com message flow entre pools — rastreável ao participante que descreveu o processo |
+| "Precisamos que o portal responda em menos de 2 segundos" | Requisito não-funcional IEEE 830 — com origem, responsável e número da reunião |
+| "Ficou decidido que o CFO aprova o contrato" | Action item com responsável + decisão na ata — auditável por quem pediu e quando |
+| "Nossa visão é ser referência em saúde preventiva até 2030" | Componente BMM (Business Motivation Model) — rastreável à reunião estratégica de origem |
 
 ### O efeito multiplicador de valor
 
@@ -266,11 +268,13 @@ A questão real não é "IA perfeita versus processo manual perfeito". É **"IA 
 
 O ativo intangível de maior impacto tangível não é a propriedade intelectual registrada, não é a marca, não é o software proprietário. É o **conhecimento vivo que circula nas conversas da organização** — e que, na maioria das empresas, evapora no momento em que o participante sai da sala.
 
-A diferença entre uma organização que aprende e uma organização que repete seus erros é simples: a primeira tem infraestrutura para transformar conversa em memória. A segunda não.
+A diferença entre uma organização que aprende e uma organização que repete seus erros é simples: a primeira transforma conversa em **conhecimento rastreável**. A segunda não.
 
-O Process2Diagram / RawToInsights AI não é uma ferramenta de transcrição. É a infraestrutura que faz essa transformação — da fala bruta ao artefato executável, da reunião efêmera à vantagem competitiva mensurável.
+Conhecimento rastreável não é documentação melhorada. É outra categoria: cada decisão sabe quem a tomou; cada requisito sabe quem o pediu e por quê; cada regra de negócio pode ser interrogada meses depois da reunião em que foi definida. Quando a auditoria perguntar, a resposta não depende da memória de ninguém.
 
-> *"Reuniões são o único momento em que toda a inteligência coletiva da organização está disponível ao mesmo tempo. Desperdiçar isso é um luxo que empresas competitivas não podem mais se dar."*
+O Process2Diagram / RawToInsights AI não é uma ferramenta de transcrição. É a infraestrutura que faz essa transformação — da fala bruta ao conhecimento rastreável, da reunião efêmera à vantagem competitiva mensurável.
+
+> *"Reuniões são o único momento em que toda a inteligência coletiva da organização está disponível ao mesmo tempo. Desperdiçar isso — deixar esse conhecimento morrer sem estrutura — é um luxo que empresas competitivas não podem mais se dar."*
 
 ---
 
