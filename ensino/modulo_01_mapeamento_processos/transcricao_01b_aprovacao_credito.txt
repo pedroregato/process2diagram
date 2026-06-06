@@ -1,0 +1,83 @@
+Reunião de Mapeamento — Processo de Concessão de Crédito Pessoal
+Data: 22 de maio de 2025
+Participantes: Beatriz Moura (Gerente de Risco de Crédito), Fernando Alves (Gerente Comercial), Sandra Lima (Analista de Compliance), Thiago Ramos (Gerente de TI de Sistemas Bancários), Carla Souza (facilitadora — Analista de Processos)
+Duração: 1h30
+
+---
+
+Carla: Bom dia. Vamos mapear hoje o processo de concessão de crédito pessoal da Financeira Meridional, do momento em que o cliente solicita até o crédito ser liberado ou negado. Beatriz, você pode começar descrevendo como o cliente inicia o processo?
+
+Beatriz: Claro. O processo começa com o pedido de crédito. O cliente pode solicitar por três canais: presencialmente na agência, pelo app mobile ou pelo site. Em todos os casos, ele informa o valor desejado, o prazo de pagamento e aceita o termo de consulta ao Serasa e SCR (Sistema de Informações de Crédito do Bacen).
+
+Carla: E o que acontece depois que o pedido é recebido?
+
+Beatriz: O sistema faz automaticamente a consulta ao Serasa e ao SCR. Com base nos dados obtidos, o nosso motor de crédito calcula o Score Meridional — que é o nosso score interno, diferente do score de mercado. Esse cálculo leva em média 45 segundos.
+
+Carla: E aí há uma decisão baseada no score?
+
+Beatriz: Exatamente. Se o score for 700 ou acima, é aprovação automática. O crédito é liberado sem intervenção humana, direto pelo sistema. O cliente recebe a notificação em até 2 minutos.
+
+Fernando: Para deixar claro: aprovação automática só vale para valores de até R$ 15.000. Mesmo com score 700, se o cliente pedir R$ 30.000, vai para análise manual.
+
+Beatriz: Correto, Fernando. Então o processo tem dois critérios simultâneos: score E valor. Vou organizar assim: se o score for abaixo de 500, é recusa automática. Nesse caso o sistema emite uma carta de recusa com os motivos e informa os direitos do cliente para contestação.
+
+Carla: E entre 500 e 699?
+
+Beatriz: Vai para análise manual na minha equipe. O analista de crédito verifica o histórico completo do cliente, o comprometimento de renda, as garantias disponíveis e o relacionamento com o banco. Temos prazo de 1 dia útil para a análise.
+
+Thiago: Deixa eu complementar o fluxo do sistema. Quando vai para análise manual, o sistema abre uma tarefa na nossa fila de análise com todas as informações já coletadas. O analista não precisa buscar dados em diferentes sistemas — tudo está consolidado na interface de decisão.
+
+Carla: Certo. E para valores maiores que R$ 15.000?
+
+Fernando: Depende da faixa. De R$ 15.001 a R$ 80.000, a decisão final é do gerente de agência — mesmo que o score seja 700 ou mais. O analista faz a análise e o gerente aprova ou nega.
+
+Beatriz: De R$ 80.001 a R$ 300.000, vai para o Comitê Regional de Crédito. Esse comitê se reúne toda terça e quinta-feira. O analista prepara um parecer detalhado com recomendação, e o comitê decide.
+
+Sandra: Posso entrar aqui? Compliance tem um papel específico em créditos acima de R$ 100.000. Além da análise de risco de crédito, fazemos uma verificação de PEP — Pessoa Exposta Politicamente. Se o cliente for identificado como PEP, o processo tem monitoramento reforçado, independente do valor.
+
+Carla: E acima de R$ 300.000?
+
+Beatriz: Vai direto para o Comitê Nacional, que se reúne semanalmente. Nesses casos, a análise é muito mais detalhada: visita ao cliente, análise de balanço se for empresarial, colateral obrigatório.
+
+Fernando: No Comitê Nacional, também consideramos o perfil de concentração de crédito. Se a concessão for aprovada, ela pode impactar o limite setorial que o banco tem definido para aquele segmento de risco.
+
+Carla: Voltando ao fluxo após a decisão — seja qual for o caminho. O que acontece quando uma análise manual resulta em aprovação?
+
+Beatriz: O analista registra a aprovação no sistema com o valor aprovado, que pode ser diferente do solicitado. Muitas vezes aprovamos um valor menor. O sistema então gera o contrato de crédito digitalmente.
+
+Fernando: O cliente recebe o contrato por e-mail ou pelo app e tem 48 horas para assinar eletronicamente. Se não assinar no prazo, a proposta expira.
+
+Carla: E após a assinatura?
+
+Fernando: O sistema verifica a assinatura e libera o crédito. Se for transferência bancária, cai na conta do cliente em D+1. Se for linha de crédito rotativo, a disponibilidade é imediata no cartão ou conta.
+
+Sandra: Para créditos acima de R$ 30.000, o compliance faz uma última verificação de prevenção à lavagem de dinheiro antes da liberação. Isso é obrigatório pela regulamentação do Bacen — Circular 3978.
+
+Carla: E quando o resultado é negativo em qualquer etapa?
+
+Beatriz: O sistema gera automaticamente a carta de recusa com os motivos permitidos por lei — a gente não pode dar todos os detalhes do score por questão de proteção das informações do birô. O cliente tem direito de pedir revisão da decisão, que vai para o Comitê de Revisão de Crédito. Esse comitê tem até 5 dias úteis para responder.
+
+Thiago: No sistema, toda decisão fica registrada com o analista responsável, o racional documentado e os dados utilizados. Isso é auditável pelo Bacen a qualquer momento.
+
+Carla: Perfeito. Vou resumir o que entendi. O processo tem os seguintes pontos de decisão principais:
+
+1. Score Meridional calculado automaticamente.
+2. Gateway 1 — Score: abaixo de 500 = recusa automática; entre 500 e 699 = análise manual; 700 ou mais = caminha para o próximo gateway.
+3. Gateway 2 — Valor solicitado: até R$ 15.000 com score 700+ = aprovação automática; R$ 15.001 a R$ 80.000 = gerente de agência; R$ 80.001 a R$ 300.000 = Comitê Regional; acima de R$ 300.000 = Comitê Nacional.
+4. Se aprovado = geração de contrato → assinatura digital em 48h → liberação.
+5. Se negado em qualquer etapa = carta de recusa + direito de revisão.
+
+Beatriz: Correto. Só um ajuste: quando vai para análise manual por score, o analista pode recomendar aprovação ou recusa. Se recomendar aprovação, ainda passa pelo gateway de valor. Se recomendar recusa, já encerra.
+
+Fernando: E existe um caso especial que não mapeamos: cliente com relacionamento premium — Meridional Black. Para esses clientes, o score mínimo para aprovação automática é 650, não 700. É um benefício do plano.
+
+Sandra: Isso precisa estar documentado explicitamente, porque o auditor do Bacen já perguntou sobre tratamento diferenciado entre clientes.
+
+Carla: Ótimo, vou incluir como exceção com condição específica. Alguma outra observação?
+
+Beatriz: O processo de reversão de recusa merece um fluxo próprio. Mas podemos fazer em outra sessão — ficaria muito longo hoje.
+
+Carla: Combinado. Vamos mapear a revisão em uma próxima sessão. Obrigada a todos!
+
+---
+FIM DA TRANSCRIÇÃO

@@ -1,0 +1,96 @@
+Reunião de Sprint Review + Retrospectiva — Sprint 14
+Data: 6 de junho de 2025
+Participantes: Helena Nascimento (Scrum Master), Rodrigo Ferreira (Product Owner), Bruno Carvalho (Dev Backend), Amanda Lopes (Dev Frontend), Caio Mota (QA / Tester), Isabela Santos (Designer)
+Duração: 1h40 (review: 50min / retrospectiva: 50min)
+
+---
+
+Helena: Bom dia pessoal. Vamos começar o review da Sprint 14. Rodrigo, pode abrir com os números gerais?
+
+Rodrigo: Claro. Sprint 14 entregamos 34 dos 42 story points planejados. Taxa de conclusão de 81%. Os 8 pontos que ficaram para trás são do épico de notificações — ficamos bloqueados aguardando a API da SendGrid responder com a configuração correta de templates. Isso não é falha do time, é dependência externa.
+
+Bruno: Posso detalhar? A SendGrid mudou o formato de autenticação de templates na semana passada sem avisar na documentação. Levei dois dias para descobrir que o problema era isso. No total perdi 3 dias úteis só nessa investigação.
+
+Helena: Isso vai entrar na retrospectiva. Vamos terminar o review primeiro. Amanda, as histórias de frontend?
+
+Amanda: Concluímos as 3 histórias do painel de relatórios — filtros por período, exportação CSV e o novo componente de gráfico de barras. Os testes de usabilidade com 5 usuários ficaram acima da meta: NPS de sessão foi 72, contra meta de 65. Feedback principal: os filtros estão intuitivos, mas a exportação demora mais de 5 segundos para arquivos grandes.
+
+Rodrigo: Cinco segundos é inaceitável. O critério de aceite dizia 2 segundos máximo.
+
+Amanda: Reescrevi a query depois que o Caio reportou, mas ainda está lento para bases acima de 50.000 registros. Bruno, você consegue olhar com otimização de índice?
+
+Bruno: Sim. Vou criar um ticket hoje e já ponho no backlog da Sprint 15.
+
+Caio: Só confirmando: os outros critérios de aceite estavam ok. A exportação em si funciona, os dados estão corretos, só o tempo que excedeu. Recomendo aceitar com débito técnico documentado.
+
+Rodrigo: Aceito com débito técnico. Vou registrar no Jira.
+
+Helena: Isabela, os protótipos da nova jornada de onboarding?
+
+Isabela: Protótipos finalizados e aprovados pelo Rodrigo na segunda-feira. Já estão no Figma com anotações para desenvolvimento. Fiz também o handoff para o Bruno e a Amanda — reunião de 1 hora na quarta onde expliquei todos os estados e microinterações.
+
+Bruno: O handoff foi ótimo. Estava bem documentado. Vou começar o desenvolvimento na Sprint 15.
+
+Helena: Ótimo. Agora a retrospectiva. Vou usar o formato Estrela do Mar: o que continuar fazendo, o que parar, o que começar, o que fazer mais, o que fazer menos. Bruno, você já trouxe um ponto. Mais algum para "parar de fazer"?
+
+Caio: Parar de aceitar dependências externas sem SLA documentado. A SendGrid não tinha SLA de suporte para mudanças de API. Se tivéssemos exigido isso no início, teríamos escalado mais rápido.
+
+Amanda: Concordo. Temos que parar de assumir que fornecedores externos vão avisar sobre breaking changes.
+
+Rodrigo: Esse ponto é meu também. Precisamos de um processo formal de onboarding de APIs externas. Incluindo teste de integração automatizado que roda diariamente.
+
+Helena: Anoter como proposta de melhoria de processo. Decisão do time: a partir da Sprint 15, qualquer integração com API externa exige contrato de SLA ou equivalente antes de entrar no sprint. Bruno, você consegue criar um checklist de onboarding de APIs?
+
+Bruno: Sim. Até quinta-feira tenho isso pronto.
+
+Helena: Combinado. "Começar a fazer" — o que o time ainda não faz mas deveria?
+
+Amanda: Começar a fazer code review mais rigoroso para performance. O problema da exportação lenta poderia ter sido pego antes se tivéssemos rodado explain no query durante o review.
+
+Bruno: Concordo. Vou propor que a partir de agora, qualquer query nova precisa ter o plano de execução documentado no pull request.
+
+Caio: Começar a fazer testes de carga antes de entregar histórias que envolvem listagem ou exportação de dados. Esse é o segundo sprint consecutivo que temos problema de performance só descoberto depois que o usuário testa.
+
+Rodrigo: Ótimo ponto. Helena, como a gente formaliza isso?
+
+Helena: Vou atualizar a Definição de Pronto — o DoD — para incluir: toda história que envolva listagem, busca ou exportação de dados acima de 10.000 registros deve passar por teste de carga antes de ser marcada como concluída. Caio, você consegue criar os cenários de teste de carga?
+
+Caio: Consigo usar o k6 para isso. Tenho um framework básico que já posso adaptar. Mas preciso de dados de produção anonimizados para testar com volume real.
+
+Rodrigo: Eu consigo solicitar um dump anonimizado de produção. Até segunda-feira que vem consigo ter isso com você.
+
+Helena: Registrado. Caio recebe dump anonimizado até segunda e cria cenários de teste de carga na Sprint 15.
+
+Helena: "Fazer mais" — o que já funciona mas precisa de mais atenção?
+
+Isabela: Fazer mais sessões de teste com usuários reais. Essa sprint fiz com 5 usuários e o feedback foi valioso. Gostaria de fazer quinzenalmente, não só quando tem protótipo novo.
+
+Rodrigo: Concordo. Vou incluir orçamento para recrutamento de usuários no próximo quarter. Helena, pode incluir no calendário quinzenal?
+
+Helena: Sim. A partir do dia 20, sessão de usabilidade quinzenal. Isabela coordena. Rodrigo aprova participantes.
+
+Helena: "Fazer menos" — o que está consumindo energia sem retorno?
+
+Bruno: Fazer menos reuniões de alinhamento de arquitetura que não chegam a decisão. Temos tido reuniões de uma hora onde saímos sem nenhuma decisão concreta — só "vamos avaliar mais". Isso é frustrante.
+
+Amanda: Concordo. Toda reunião de arquitetura tem que ter uma pergunta específica para decidir. Se não tiver pergunta, não tem reunião.
+
+Rodrigo: Eu me comprometo a definir o objetivo de cada reunião que eu convocar com 24 horas de antecedência. Se alguém não conseguir identificar o objetivo, pode recusar a convocação.
+
+Helena: Boa. Isso é uma mudança de cultura. Vou registrar como acordo de time.
+
+Helena: Vamos fechar com os action items concretos. Estou listando:
+1. Bruno cria checklist de onboarding de APIs externas até quinta-feira.
+2. Bruno cria ticket para otimização de índice na exportação, prioridade alta.
+3. Helena atualiza o DoD incluindo teste de carga para histórias com dados em volume.
+4. Rodrigo solicita dump anonimizado de produção até segunda-feira.
+5. Caio cria cenários de teste de carga com k6 na Sprint 15.
+6. Isabela agenda sessões quinzenais de usabilidade a partir do dia 20.
+7. Rodrigo define objetivo das reuniões que convocar com 24h de antecedência.
+
+Rodrigo: Só completo: o backlog da Sprint 15 eu consolido hoje à tarde e mando para revisão do time até as 17h. Grooming amanhã às 14h.
+
+Helena: Perfeito. Sprint 15 começa segunda. Velocidade de referência ajustada para 38 pontos, considerando a dependência resolvida com a SendGrid. Encerrado.
+
+---
+FIM DA TRANSCRIÇÃO

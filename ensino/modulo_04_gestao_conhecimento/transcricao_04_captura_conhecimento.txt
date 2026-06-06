@@ -1,0 +1,93 @@
+Sessão de Captura de Conhecimento — Processo de Conciliação Financeira SAP × Salesforce
+Data: 12 de junho de 2025
+Participantes: Tadeu Mendes (Analista Sênior de Integração — 28 anos na empresa), Priscila Andrade (Analista de Processos), Eduardo Ramos (Gerente de TI)
+Duração: 1h45
+
+---
+
+Eduardo: Tadeu, obrigado por aceitar participar dessas sessões. Como você sabe, você vai se aposentar em 3 meses e precisamos documentar o que você faz — especialmente a conciliação financeira. Priscila vai fazer as perguntas e mapear o processo. Por favor, seja o mais detalhado possível.
+
+Tadeu: Pode deixar. Estou aqui justamente porque não quero que quando eu sair tudo vire um caos. Essa conciliação eu montei do zero em 2009 quando a empresa implantou o SAP. Conheço cada detalhe.
+
+Priscila: Tadeu, vamos começar pelo início. O que é a conciliação financeira e por que ela existe?
+
+Tadeu: Quando implantamos o Salesforce em 2019, ele virou o sistema de gestão comercial — contratos de clientes, pedidos, faturamento emitido. Mas o SAP R/2 continua sendo o sistema financeiro oficial — é lá que ficam os lançamentos contábeis, as baixas de pagamentos e o fluxo de caixa real. O problema é que os dois sistemas não conversam nativamente. Um cliente pode aparecer com um contrato ativo no Salesforce mas com pagamento em atraso no SAP — e a área comercial não sabe disso.
+
+Priscila: E a conciliação serve para...?
+
+Tadeu: Para sincronizar os dois mundos. Todo dia de madrugada, o processo extrai os dados financeiros do SAP, trata e compara com os dados do Salesforce. Se tudo estiver consistente, o Salesforce é atualizado automaticamente. Se houver divergência, um alerta é gerado para que o analista financeiro verifique.
+
+Priscila: Me explica o processo passo a passo, como se fosse uma receita.
+
+Tadeu: Certo. O processo começa às 23h00 todos os dias, incluindo fins de semana. É um job agendado no servidor de integração — um Linux que fica na sala de servidores, rack 3, servidor INT-02. O nome do job no cron é FIN-CONC-01.
+
+Priscila: E o que esse job faz primeiro?
+
+Tadeu: Primeiro extrai os dados do SAP. Tem uma procedure que criei no SAP — se chama ZFIN_EXPORT — que gera um arquivo CSV com todos os lançamentos financeiros do dia anterior: pagamentos recebidos, notas fiscais emitidas, devoluções. O arquivo cai numa pasta de rede: //FILESERVER01/integracao/sap_export/. O nome do arquivo tem a data no formato YYYYMMDD.
+
+Priscila: E se o arquivo não for gerado?
+
+Tadeu: O job verifica a existência do arquivo. Se não encontrar em até 15 minutos após o horário programado, ele dispara um e-mail de alerta para mim, para o Eduardo, e para o gerente financeiro — é a lista FIN-ALERTA no Exchange. Aí alguém precisa verificar manualmente o SAP.
+
+Eduardo: Tadeu, esse e-mail de alerta vai para você mesmo quando você aposentar, né? Precisamos atualizar essa lista.
+
+Tadeu: Sim, isso é urgente. A lista FIN-ALERTA precisa ser atualizada com o substituto. Mas pode continuar no Eduardo e no gerente financeiro.
+
+Priscila: E quando o arquivo existe, o que acontece?
+
+Tadeu: O job lê o arquivo e faz a transformação. Tem um script Python — está em //FILESERVER01/integracao/scripts/fin_conc.py — que faz o parse do CSV, limpa dados nulos, converte os campos de data para o formato do Salesforce, e converte os valores monetários de centavos do SAP para reais com duas casas decimais. Essa parte é crítica porque o SAP trabalha em centavos e o Salesforce em reais. Já aconteceu erro aqui uma vez em 2021 e o impacto foi grande.
+
+Priscila: Que tipo de impacto?
+
+Tadeu: Os valores de pagamento ficaram 100 vezes maiores no Salesforce por 3 horas antes de alguém perceber. A área comercial ficou chamando clientes agradecendo por pagamentos de R$ 150.000 quando eram de R$ 1.500. Uma situação constrangedora.
+
+Priscila: Entendido. Depois da transformação?
+
+Tadeu: O script envia os dados transformados para a API do Salesforce via REST. Tem uma integration user no Salesforce — usuário FIN-INTEG — que tem permissão só de leitura e atualização no módulo financeiro. As credenciais estão no arquivo de configuração /etc/fin_conc/config.ini — esse arquivo é protegido com chmod 600 e só o usuário de serviço consegue ler.
+
+Eduardo: Tadeu, preciso que você me passe essas credenciais separadamente depois da sessão. E precisamos colocar no cofre de senhas da empresa.
+
+Tadeu: Com certeza. Anotei aqui.
+
+Priscila: Após enviar para o Salesforce, o que acontece?
+
+Tadeu: O Salesforce processa e devolve um relatório de reconciliação no retorno da chamada API. Esse relatório lista item a item: o que foi atualizado, o que teve divergência e o motivo. O script captura isso e calcula a taxa de divergência — o percentual de registros com diferença entre SAP e Salesforce.
+
+Priscila: E qual é a tolerância aceitável?
+
+Tadeu: Menos de 0,01% de divergência é considerado normal — pode ser timing de processamento, diferença de fuso horário em transações de final de dia. Se a taxa estiver entre 0,01% e 0,1%, o script registra em log mas não alerta. Se passar de 0,1%, dispara o alerta para análise manual — a mesma lista FIN-ALERTA.
+
+Priscila: O analista financeiro que recebe o alerta, o que ele faz?
+
+Tadeu: Ele acessa um relatório no Salesforce — chama FIN-CONC-DIVERGENCIAS — que lista todos os registros divergentes com o valor no SAP, o valor no Salesforce e a diferença. O analista verifica caso a caso. As divergências mais comuns são: pagamento processado no SAP depois da meia-noite que não entrou no corte do dia, nota fiscal cancelada no SAP mas ainda ativa no Salesforce, ou diferença de centavos por arredondamento.
+
+Eduardo: Quanto tempo leva a análise manual?
+
+Tadeu: Depende do volume. Em média 30 minutos por dia. Em meses de fechamento contábil — dezembro e junho — pode levar 2 horas.
+
+Priscila: E quando o analista resolve as divergências?
+
+Tadeu: Ele registra no relatório o tipo de divergência e a ação tomada — corrigiu manualmente, ou sinalizou para o time do SAP resolver na origem. Depois marca o processo como concluído no sistema. Todos os logs ficam em //FILESERVER01/logs/fin_conc/ com retenção de 7 anos — exigência da Receita Federal para auditoria fiscal.
+
+Priscila: Há algum dia ou situação em que o processo não roda?
+
+Tadeu: Roda sempre, 365 dias. Feriado, fim de semana, natal — sempre. Já aconteceu uma vez de o servidor cair às 23h15. Nesse caso, o processo precisa ser iniciado manualmente — tem um script para isso: fin_conc_manual.sh. Eu sou o único que sabe rodar isso de cabeça. Preciso documentar e passar para o substituto.
+
+Eduardo: Esse é um ponto crítico que precisamos resolver nas próximas semanas, Tadeu. Você pode preparar um passo a passo desse procedimento manual?
+
+Tadeu: Vou fazer. Também tem o caso de quando a API do Salesforce está fora — acontece umas 3 vezes por ano, em atualizações deles. Quando a chamada falha, o script tenta 3 vezes com intervalo de 10 minutos. Se as 3 falharem, dispara o alerta e aguarda tentativa manual no dia seguinte. Nesse caso, o processo do dia seguinte consolida os dois dias juntos.
+
+Priscila: Tadeu, existe alguma documentação do processo já escrita?
+
+Tadeu: Tem um documento de 2009 que escrevi quando criei o processo. Mas está desatualizado — mudei muita coisa ao longo dos anos. Nunca atualizei porque sempre achei que era fácil de lembrar. Agora estou me arrependendo.
+
+Eduardo: Tudo bem. É exatamente por isso que estamos aqui. Priscila vai documentar tudo e você valida.
+
+Tadeu: Certo. Tem mais uma coisa importante: o arquivo CSV que vem do SAP às vezes vem com codificação ANSI em vez de UTF-8, quando alguém processa uma nota com caractere especial — como cedilha ou acento. O script detecta isso e faz a conversão automática. Mas se a conversão falhar, o job para e alerta. Não pode processar dados com encoding errado porque corrompe os registros.
+
+Priscila: Entendido. Vamos encerrar por hoje. Tadeu, você consegue revisar o mapa de processo que vou montar até o final desta semana?
+
+Tadeu: Com prazer. Podem mandar para o meu e-mail.
+
+---
+FIM DA TRANSCRIÇÃO

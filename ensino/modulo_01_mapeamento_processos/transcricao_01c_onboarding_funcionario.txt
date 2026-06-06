@@ -1,0 +1,75 @@
+Reunião de Mapeamento — Processo de Integração de Novos Colaboradores (Onboarding)
+Data: 3 de junho de 2025
+Participantes: Juliana Marta (Gerente de RH), Rafael Costa (Coordenador de TI), Cláudia Bernardo (Supervisora de Facilities), Marcos Andrade (facilitador — Analista de Processos)
+Duração: 1h
+
+---
+
+Marcos: Bom dia. Hoje vamos mapear o processo de integração de novos colaboradores da Logística TerraFirme. O objetivo é ter um BPMN que mostre claramente o papel de cada departamento. Juliana, quem inicia o processo?
+
+Juliana: O processo começa quando o RH recebe a confirmação da contratação da área requisitante — geralmente o gestor da área envia um formulário de admissão com dados do candidato, cargo, data de início e centro de custo. Isso chega para mim por e-mail e pelo sistema de RH.
+
+Marcos: E o que o RH faz com isso?
+
+Juliana: Primeiro, abro o processo de admissão formal no sistema: envio o link de autodeclaração para o candidato preencher seus dados pessoais, bancários e documentais. Ele tem 3 dias úteis antes da data de início para entregar tudo digitalmente. Ao mesmo tempo — e isso é importante — mando notificações para o TI e para o Facilities informando a data de início e o cargo.
+
+Marcos: Então RH, TI e Facilities trabalham em paralelo a partir desse ponto?
+
+Juliana: Exatamente. O RH cuida da parte documental e do kit de boas-vindas. O TI prepara o equipamento e os acessos. O Facilities prepara o espaço de trabalho. Cada um tem sua trilha independente, mas todos precisam estar prontos antes do primeiro dia.
+
+Rafael: Do lado de TI, quando recebo a notificação do RH, abro uma chamada no nosso sistema de service desk. O processo tem etapas bem definidas. Primeiro, provisiono o usuário no Active Directory com o perfil do cargo. Segundo, configuro o e-mail corporativo com a assinatura padrão. Terceiro, preparo o notebook ou desktop conforme o cargo — para analistas de campo, por exemplo, é notebook com 4G.
+
+Marcos: E a instalação de softwares?
+
+Rafael: Sim, isso faz parte do setup. Instalamos o pacote padrão da empresa: Office 365, VPN, antivírus, e os sistemas específicos do cargo. Isso vem em um checklist no nosso service desk. Todo o processo leva em média 2 dias úteis. Quando tudo está pronto, mando uma confirmação para o RH pelo sistema e uma mensagem pelo WhatsApp para a Juliana, porque às vezes o sistema demora para notificar.
+
+Marcos: E o Facilities, Cláudia?
+
+Cláudia: Quando recebo a notificação do RH, verifico se há estação de trabalho disponível na área designada. Se houver, preparo a estação: limpeza, cadeira regulada, placa de identificação e kit de boas-vindas com caneta, bloco de notas e lanyard com o crachá provisório. Se não houver espaço disponível, comunico o RH imediatamente para que o gestor da área seja avisado e providencie o remanejamento.
+
+Marcos: Quem emite o crachá definitivo?
+
+Cláudia: O crachá definitivo é feito pela portaria, mas quem solicita sou eu. Peço assim que recebo os dados do colaborador — nome, cargo e foto que o RH envia junto com a notificação. O crachá leva 1 dia útil para ficar pronto. Quando está pronto, confirmo para o RH que o espaço e o crachá estão prontos.
+
+Marcos: E quando o RH recebe as confirmações dos dois — TI e Facilities — o que acontece?
+
+Juliana: Aguardo as duas confirmações. Só quando ambas chegam é que processo segue para a próxima etapa: envio ao colaborador o e-mail de boas-vindas com as informações do primeiro dia — horário de chegada, pessoa de contato, localização da empresa, e o que trazer.
+
+Marcos: E no primeiro dia em si?
+
+Juliana: No primeiro dia, o colaborador chega na portaria, onde o Facilities entrega o crachá definitivo e um mapa das instalações. Depois ele vem direto para o RH para a integração formal. Fazemos uma apresentação da empresa, cultura, benefícios e políticas. Isso dura em média 2 horas.
+
+Rafael: O TI também participa do primeiro dia. Agendamos 30 minutos para configurar as senhas pessoais do usuário — ele mesmo define a senha, a gente não acessa. E verificamos se todos os acessos estão funcionando corretamente antes de ele ir para a área.
+
+Juliana: Depois do onboarding formal com o RH e o TI, o colaborador é levado pelo gestor até a área dele. O gestor faz a apresentação para a equipe e conduz o onboarding técnico — que varia por área e não faz parte do processo central que estamos mapeando hoje.
+
+Marcos: Há algum acompanhamento depois do primeiro dia?
+
+Juliana: Sim. Na primeira semana, mando um e-mail de check-in perguntando se está tudo bem com o acesso, equipamento e integração. Se houver qualquer problema, acionamos a área responsável.
+
+Rafael: Também temos um procedimento: se o colaborador não conseguiu acessar algum sistema crítico no primeiro dia, abrimos chamado de urgência. O prazo de resolução é de 4 horas.
+
+Cláudia: E se houver qualquer problema com o espaço físico no primeiro dia — cadeira com defeito, ar-condicionado, iluminação —, o colaborador pode acionar o Facilities pelo ramal ou pelo WhatsApp corporativo. Resolvemos no mesmo dia.
+
+Marcos: Perfeito. Vou resumir a estrutura de colaboração que entendi:
+
+RH é o processo central. Quando inicia, dispara notificações simultâneas para TI e Facilities. TI executa o provisionamento de acessos e devolve confirmação para RH. Facilities prepara o espaço e devolve confirmação para RH. RH aguarda as duas confirmações e só então envia o e-mail de boas-vindas ao colaborador. No primeiro dia: Facilities recebe o colaborador → RH faz integração → TI configura senhas → Gestor assume o colaborador.
+
+Juliana: Perfeito. Só um ponto: o prazo que tenho com TI e Facilities é de até 3 dias antes da data de início do colaborador. Se um deles não confirmar até esse prazo, entro em contato diretamente com o coordenador para entender o que está pendente.
+
+Marcos: Então há um gateway de tempo implícito?
+
+Juliana: Sim. Se 3 dias antes do início eu não tiver confirmação de TI ou Facilities, aciono o escalamento com o gerente da área correspondente.
+
+Rafael: Isso acontece raramente, mas acontece. Principalmente quando há vários colaboradores entrando na mesma semana — o volume aumenta e pode haver gargalo no setup de equipamentos.
+
+Marcos: Anotado. Alguma outra situação excepcional?
+
+Cláudia: Colaboradores em home office têm um fluxo diferente. Eu preparo o kit e mando por transportadora para o endereço deles. O TI envia as credenciais por e-mail e agenda uma videochamada para o setup remoto. Mas isso é um sub-processo que poderíamos mapear separadamente.
+
+Juliana: Concordo. Hoje ficamos com o processo presencial padrão. Podemos fazer uma sessão específica para home office.
+
+Marcos: Combinado. Obrigado a todos!
+
+---
+FIM DA TRANSCRIÇÃO

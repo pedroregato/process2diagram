@@ -1,0 +1,86 @@
+Reunião de Mapeamento — Processo de Homologação de Fornecedores
+Data: 15 de maio de 2025
+Participantes: Ana Figueiredo (Gerente de Compras), Carlos Medeiros (Analista Financeiro Sênior), Mariana Souza (Coordenadora Jurídica), Roberto Campos (Analista de TI — facilitador)
+Duração: 1h15
+
+---
+
+Roberto: Bom dia a todos. Obrigado por participarem. O objetivo hoje é mapear o processo completo de aprovação de novos fornecedores, do início ao fim, para que possamos documentar isso para a certificação ISO. Vou fazendo perguntas e vamos construindo o mapa juntos. Ana, pode começar explicando como nasce a necessidade de um fornecedor novo?
+
+Ana: Claro, Roberto. Tudo começa quando uma área da empresa identifica que precisa de um produto ou serviço que não temos fornecedor cadastrado. Essa área preenche um formulário de requisição de fornecedor no nosso sistema TOTVS e manda para a nossa equipe de Compras.
+
+Roberto: E quando a requisição chega para vocês, qual é o primeiro passo?
+
+Ana: A gente faz uma triagem inicial. A primeira coisa é verificar no sistema se o fornecedor já está cadastrado ou se já passou pelo processo em algum momento. Se já está ativo no cadastro, a gente reaprova em até 24 horas e devolve para a área solicitante, que pode seguir com a ordem de compra.
+
+Roberto: E se não está cadastrado?
+
+Ana: Aí começa o processo de homologação de fato. A gente solicita para o fornecedor um conjunto de documentos obrigatórios: CNPJ ativo, certidões negativas de débito federal, estadual e municipal, contrato social ou estatuto atualizado, e identificação do representante legal com poderes de assinatura. O fornecedor tem 5 dias úteis para enviar tudo.
+
+Roberto: O que acontece se ele não enviar no prazo?
+
+Ana: A gente manda um lembrete no terceiro dia. Se não tiver resposta até o quinto dia, cancelamos a requisição e notificamos a área solicitante pelo sistema, com o motivo do cancelamento. A área pode abrir uma nova requisição depois se quiser, mas precisa reiniciar o processo.
+
+Roberto: Perfeito. E quando os documentos chegam?
+
+Ana: A gente valida se está tudo completo e encaminha simultaneamente para o Financeiro e para o Jurídico. As duas análises acontecem em paralelo para agilizar o processo. Cada área tem 3 dias úteis para concluir a análise.
+
+Carlos: Posso detalhar o lado financeiro? Quando recebo os documentos, faço uma análise de capacidade econômico-financeira. Verifico o balanço patrimonial dos últimos dois exercícios fiscais e calculo o índice de liquidez corrente. Se o índice for menor que 1, a gente reprova automaticamente — significa que a empresa tem mais dívidas de curto prazo do que capacidade de pagamento.
+
+Roberto: E se o índice estiver aprovado, o processo segue?
+
+Carlos: Depende do valor do contrato previsto que a área solicitante informou na requisição. Se for até R$ 50.000, a aprovação financeira fica comigo. Se for entre R$ 50.001 e R$ 500.000, precisa de validação do Gerente Financeiro, que tem prazo de 2 dias úteis. Acima de R$ 500.000, o processo vai para o Comitê Executivo, que se reúne a cada 15 dias — então pode haver uma espera de até 15 dias para a próxima reunião do comitê.
+
+Roberto: Importante. E o Jurídico, Mariana?
+
+Mariana: Em paralelo com o financeiro, a gente faz três verificações. Primeiro, busca de processos judiciais relevantes: se o fornecedor tiver processo ativo relacionado a trabalho escravo, análogo ao escravo, ou lavagem de dinheiro, a reprovação é automática e imediata. Segundo, verificação nos cadastros de impedimentos: CEIS, CNEP e lista de inidôneos do TCU. Se estiver em qualquer uma dessas listas, também reprovamos.
+
+Roberto: E a terceira?
+
+Mariana: A análise do contrato proposto. Se a área solicitante já trouxer uma minuta de contrato, a gente revisa as cláusulas, especialmente limitação de responsabilidade, confidencialidade, vigência e rescisão. Para fornecedores internacionais, temos uma checklist adicional: verificamos o RADAR de exportador/importador, conformidade cambial e se há necessidade de apostilamento de documentos estrangeiros.
+
+Roberto: Mariana, em que situações o Jurídico reprova sozinho, independente do financeiro?
+
+Mariana: Nos casos que mencionei: lista de impedimentos, processos de trabalho escravo ou lavagem de dinheiro. Nesses casos o processo encerra imediatamente e notificamos a área solicitante com o motivo específico. Não precisamos esperar a análise financeira concluir.
+
+Roberto: E se as duas análises forem aprovadas, o que acontece?
+
+Ana: A gente recebe as aprovações pelo sistema, o que dá um status verde para as duas áreas. Aí eu faço o cadastro definitivo do fornecedor no TOTVS. O sistema gera um código de fornecedor automaticamente, e eu configuro os dados bancários, prazo de pagamento padrão e categoria de produto ou serviço.
+
+Carlos: O prazo de pagamento padrão para novos fornecedores é 30 dias corridos. Só depois de 6 meses de relacionamento com histórico positivo podemos negociar prazos menores, que é o que alguns fornecedores pedem.
+
+Ana: Após o cadastro, o fornecedor recebe um e-mail automático do sistema com as boas-vindas, o código de fornecedor, nossas políticas de faturamento, nota fiscal eletrônica obrigatória, e o prazo de pagamento. A área solicitante também recebe uma notificação de que já pode emitir a ordem de compra.
+
+Roberto: Existe alguma etapa após o cadastro? O processo encerra aí?
+
+Ana: Não, há o acompanhamento. A cada 12 meses fazemos uma reavaliação de desempenho. O Compras envia um formulário de avaliação para a área que usa o fornecedor, com critérios de qualidade, prazo e atendimento. A nota vai de 1 a 10.
+
+Carlos: Se o fornecedor receber nota abaixo de 6 em três avaliações consecutivas, ativamos o processo de descredenciamento. Isso inclui notificação ao fornecedor com 30 dias de antecedência.
+
+Mariana: E tem mais uma situação importante: se houver mudança societária do fornecedor, como alteração de sócios ou incorporação por outra empresa, ele precisa passar pelo processo de homologação completo novamente, mesmo estando ativo no cadastro. Isso porque o perfil de risco pode ter mudado.
+
+Roberto: Muito bom. Deixa eu resumir o que entendi para confirmar:
+
+O processo tem quatro atores principais: Área Solicitante, Compras, Financeiro e Jurídico. Os principais decisores são:
+- Gateway 1: Fornecedor já cadastrado? Sim → reaprova em 24h. Não → inicia homologação.
+- Gateway 2: Documentos enviados no prazo? Não → cancela. Sim → análise paralela.
+- Gateway 3 (paralelo): Análise financeira aprovada? E análise jurídica aprovada?
+- Gateway 4: Valor do contrato? Até 50k (Analista aprova), 50k a 500k (Gerente aprova), acima de 500k (Comitê aprova).
+- Resultado: Cadastro definitivo e notificação.
+
+Ana: Perfeito. E não se esqueça de registrar que financeiro e jurídico trabalham em paralelo — isso é importante porque reduz o prazo total.
+
+Carlos: Uma coisa que às vezes gera confusão: quando um dos dois reprova, o processo já encerra, mesmo que o outro ainda não tenha terminado. Se o Jurídico reprovar por impedimento, não precisamos aguardar o Financeiro concluir.
+
+Mariana: Exato. E o oposto também: se o Financeiro reprovar por liquidez, o Jurídico é notificado para encerrar a análise.
+
+Roberto: Anotado. Mais alguma exceção que não mapeamos?
+
+Ana: Tem uma situação emergencial. Se a área solicitante declarar urgência comprovada — por exemplo, um fornecedor atual encerrou atividades de forma abrupta — o prazo de análise pode ser reduzido para 24 horas com autorização do Diretor de Compras. Mas isso é exceção, não regra.
+
+Carlos: E mesmo na emergência, a análise financeira básica é feita — só que de forma simplificada. Não abrimos mão do checklist mínimo.
+
+Roberto: Ótimo, vou registrar como fluxo de exceção com autorização especial. Obrigado a todos, foi muito produtivo!
+
+---
+FIM DA TRANSCRIÇÃO

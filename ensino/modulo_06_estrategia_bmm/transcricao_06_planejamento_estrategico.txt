@@ -1,0 +1,71 @@
+Reunião de Planejamento Estratégico — Triênio 2026–2028
+Data: 20 de junho de 2025
+Participantes: Adriana Cavalcanti (CEO), Marcos Ribeiro (CFO), Patrícia Duarte (CTO), Ricardo Lopes (Head de Operações), Luciana Fonseca (Head de RH e Cultura)
+Duração: 3h (apenas 1h40 transcrita nesta sessão)
+
+---
+
+Adriana: Bom dia. Esta é a reunião mais importante do ano. Vamos definir as diretrizes que vão orientar a MedCenter pelos próximos três anos. Gostaria de começar revisando nossa visão de longo prazo. Patrícia, você trouxe a análise de mercado. Por favor.
+
+Patrícia: Sim. O mercado de saúde suplementar no Brasil vai crescer 14% ao ano até 2028. A grande oportunidade está em regiões com IDH médio-alto que ainda não têm cobertura de redes de clínicas com padrão premium — especialmente o interior de São Paulo, Minas Gerais e sul do país. As cidades menores têm demanda reprimida enorme. E os concorrentes ainda não chegaram lá com qualidade.
+
+Adriana: É exatamente essa janela que precisamos aproveitar. Eu quero que nossa visão para 2030 seja clara e ambiciosa: ser a rede de clínicas de maior confiança do Brasil, reconhecida pela excelência no atendimento e pela liderança em saúde preventiva e bem-estar. Isso é o que nos diferencia — não somos só tratamento de doença, somos saúde integral.
+
+Marcos: Adriana, antes de definir a visão definitiva, precisamos ter clareza sobre a capacidade financeira de execução. Hoje somos 12 unidades, todas lucrativas. Escalar para 20 unidades em 3 anos exige um aporte significativo — ou crescimento via franquias.
+
+Adriana: Esse é o debate central da manhã. Crescimento orgânico versus franquias. Quero que cada um apresente sua posição antes de decidirmos.
+
+Ricardo: Sou favorável ao crescimento orgânico controlado. Nossas 12 unidades têm NPS médio de 82 — muito acima da média do setor que é 55. Isso acontece porque controlamos cada detalhe: o treinamento da equipe, o protocolo de atendimento, o padrão de infraestrutura. No modelo de franquias, delegamos isso a franqueados que podem não ter a mesma cultura. Uma unidade ruim prejudica a marca de todas as outras.
+
+Patrícias: Discordo, com respeito ao Ricardo. A janela de mercado não vai durar indefinidamente. Se demorarmos 6 anos para chegar a 20 unidades com crescimento orgânico, os concorrentes — especialmente a Dasa e a Rede D'Or — vão fechar o espaço nas regiões que identificamos. Com franquias selecionadas, conseguimos escalar em 3 anos.
+
+Marcos: Do ponto de vista financeiro, crescimento orgânico de 8 unidades em 3 anos exige R$ 120 milhões de investimento próprio mais captação externa. Franquias, com taxa de adesão e royalties, geram caixa a partir do segundo ano e exigem menos capital da MedCenter. O modelo financeiro favorece as franquias — mas o risco de marca é real, como o Ricardo apontou.
+
+Luciana: Quero contribuir com uma perspectiva de RH. Se formos para crescimento orgânico acelerado, vamos precisar contratar 180 médicos e 400 profissionais de saúde em 3 anos. O mercado de trabalho médico está aquecido. Nossa política atual de participação nos resultados é competitiva, mas não sei se é suficiente para atrair 180 médicos nesse prazo. Com franquias, os franqueados contratam. Isso não é necessariamente mais fácil para eles, mas alivia a pressão sobre o nosso RH.
+
+Adriana: Obrigada a todos. Aqui está minha posição: vou propor um modelo híbrido. Crescimento orgânico nas regiões onde queremos ter presença estratégica direta — capitais e cidades acima de 500.000 habitantes. Franquias em cidades de 150.000 a 500.000 habitantes onde o custo de operação própria não é viável. A meta: 16 unidades próprias e 4 franqueadas até 2028. Isso equilibra controle de marca e velocidade de crescimento.
+
+Ricardo: Posso aceitar isso se as franquias tiverem um manual operacional rígido e supervisão trimestral da nossa equipe. Não pode ser franquia e esquecer.
+
+Marcos: E as franquias precisam atingir breakeven em no máximo 24 meses. Caso contrário, o modelo financeiro não funciona para o franqueado e nem para nós.
+
+Adriana: Concordo com ambas as condições. Ricardo, você consegue coordenar a elaboração do manual operacional de franquias no segundo semestre?
+
+Ricardo: Consigo. Vou precisar envolver o time de qualidade e o jurídico. Prazo para a primeira versão: dezembro de 2025.
+
+Patrícia: Agora o tema de transformação digital. Nossa estratégia de TI para o triênio tem três pilares. Primeiro: prontuário eletrônico unificado — hoje cada unidade tem seu próprio sistema. Isso é inaceitável para uma rede. Precisamos de um PEP único que permita que o médico em qualquer unidade veja o histórico completo do paciente.
+
+Adriana: Isso é prioridade 1. Um paciente não deve precisar explicar seu histórico toda vez que visita uma unidade diferente. Essa é a base da nossa proposta de valor de saúde integral.
+
+Patrícia: Segundo pilar: telemedicina integrada. Cresceu 340% durante a pandemia e se estabilizou em patamar alto. Precisamos de uma plataforma própria de teleconsulta integrada ao PEP. Não faz sentido o paciente usar o nosso app para agendar e um app terceiro para a consulta online. Terceiro: inteligência artificial para triagem e prevenção. Isso é médio prazo — 2027 — mas precisamos começar o roadmap agora.
+
+Marcos: Os investimentos em TI. Para o PEP unificado, a estimativa de implementação é de R$ 8,5 milhões em 2 anos. Para a plataforma de telemedicina, R$ 3,2 milhões. IA é prioridade para 2027 — orçamento a definir. Total: R$ 11,7 milhões de investimento em tecnologia no triênio. Precisamos incluir isso no plano de captação.
+
+Adriana: Uma política que precisa ficar clara: nenhum investimento em TI acima de R$ 500.000 é aprovado sem passar pelo comitê executivo. Isso inclui os projetos que mencionamos. Patrícia, os projetos precisam de aprovação formal antes de começar.
+
+Patrícia: Entendido. Vou submeter os business cases completos até agosto.
+
+Luciana: Quero apresentar a estratégia de pessoas. Nosso maior problema hoje é o turnover de médicos — 18% ao ano, acima da média do setor que é 15%. Mas o que me preocupa mais é o perfil de quem sai: são os melhores, os que têm opção. Os médicos que ficam são, em média, os menos diferenciados.
+
+Adriana: Isso é um problema sério. Qual é sua proposta?
+
+Luciana: Três frentes. Primeira: ampliar o programa de participação nos resultados para médicos seniores — os que estão há mais de 5 anos. A proposta é oferecer participação em 3% do lucro da unidade onde atuam. Segunda: criar um programa de desenvolvimento profissional com bolsas para especialização e congressos. Terceiro: dar autonomia real para os médicos proporem protocolos clínicos — hoje isso é centralizado na direção médica e gera frustração.
+
+Ricardo: A autonomia em protocolos precisa ter governança. Não podemos ter 12 protocolos diferentes para a mesma condição clínica.
+
+Luciana: Concordo. A proposta é que os médicos proponham e um comitê clínico corporativo avalie e padronize. Não é autonomia irrestrita — é participação no processo.
+
+Adriana: Minha posição: meta de reduzir o turnover de médicos de 18% para menos de 10% até o final de 2027. Luciana, você fica responsável pelo plano de ação. Marco a primeira revisão desta meta para março de 2026.
+
+Marcos: Preciso colocar no plano financeiro o custo da participação nos resultados. Se implementarmos para todos os médicos seniores, o impacto estimado é de R$ 2,8 milhões ao ano. É viável, mas precisa estar no orçamento.
+
+Adriana: Vamos incluir no planejamento financeiro. Marcos, atualiza o modelo até a próxima semana.
+
+Adriana: Vamos encerrar com o resumo das decisões estratégicas do dia. Visão 2030: ser a rede de clínicas de maior confiança do Brasil em saúde integral e preventiva. Metas principais: expandir de 12 para 20 unidades até 2028 no modelo híbrido próprias mais franquias. Atingir NPS igual ou maior que 80 em todas as unidades até 2026. Reduzir turnover médico para menos de 10% até 2027. Implantar PEP unificado até 2027.
+
+Adriana: Estratégias aprovadas: modelo híbrido de expansão com manual operacional de franquias coordenado pelo Ricardo. Implementação do PEP unificado coordenado pela Patrícia com business case em agosto. Programa de retenção médica coordenado pela Luciana. Políticas: toda nova franquia deve atingir breakeven em 24 meses. Investimentos em TI acima de R$ 500.000 exigem aprovação do comitê executivo. Contratações de diretores passam pelo CEO.
+
+Adriana: Próxima etapa: cada head apresenta seu plano de ação detalhado na reunião de agosto. Encerrada a sessão.
+
+---
+FIM DA TRANSCRIÇÃO

@@ -1,0 +1,79 @@
+Reunião de Kick-off — Projeto Portal de Autoatendimento do Cliente
+Data: 10 de junho de 2025
+Participantes: Fernanda Queiroz (Gerente de Projeto), Diego Cavalcanti (Desenvolvedor Sênior), Lívia Mendonça (Designer UX/UI), Paulo Drummond (Product Owner), Kátia Brandão (Gerente de Inovação Digital — SegurançaTotal, cliente)
+Duração: 1h45
+
+---
+
+Fernanda: Bom dia a todos. Estamos aqui hoje para o kick-off oficial do projeto Portal de Autoatendimento da SegurançaTotal. O objetivo desta reunião é alinhar o escopo, levantar os principais requisitos e definir as responsabilidades. Kátia, pode nos contar a visão do que vocês querem?
+
+Kátia: Com certeza. Hoje nossos clientes dependem completamente do call center ou das agências para qualquer coisa — fazer cotação, contratar, atualizar cadastro, registrar sinistro. Isso gera custo operacional alto para a gente e frustração para o cliente. A visão é dar autonomia total ao cliente: que ele consiga fazer tudo sozinho pelo portal, de qualquer dispositivo, a qualquer hora.
+
+Paulo: Posso complementar? Quando levantamos os dados internos, identificamos que 63% das chamadas ao call center são para solicitações que poderiam ser resolvidas de forma digital. O portal precisa resolver pelo menos 80% dessas demandas no primeiro ano.
+
+Fernanda: Ótimo. Diego, do ponto de vista técnico, já fizemos uma análise preliminar. Quais são as principais restrições que precisamos considerar?
+
+Diego: A mais crítica é a integração com o SIS-SEG, o sistema legado de gestão de apólices. Não há uma API moderna — a comunicação é por arquivos flat batch. Vamos precisar criar uma camada de middleware que faça a leitura e transformação desses dados em tempo quase real. Isso é um risco técnico que precisa estar no plano de projeto.
+
+Kátia: A integração é fundamental. Sem ela, o portal não tem dados das apólices dos clientes e não serve para nada. Isso precisa ser prioridade.
+
+Fernanda: Concordo. Vou registrar como requisito de integração crítico. Kátia, quais são as funcionalidades que vocês consideram obrigatórias para o lançamento?
+
+Kátia: Na minha visão, as indispensáveis são: primeiro, cotação e contratação online de seguro residencial e de vida — que são nossos produtos mais vendidos. Segundo, consulta de apólice ativa com todas as coberturas. Terceiro, registro e acompanhamento de sinistros. Quarto, segunda via de boleto e histórico de pagamentos. Quinto, atualização de dados cadastrais.
+
+Paulo: Tenho mais duas que eu considero críticas: emissão de carta verde para seguro de veículo e indicação de beneficiários — essas são as perguntas mais frequentes no call center.
+
+Lívia: Do ponto de vista de UX, precisamos garantir que o fluxo de cotação seja concluído em até 3 minutos. Temos dados de mercado que mostram que abandonos aumentam 68% quando o fluxo ultrapassa 4 minutos. Isso precisa virar um requisito mensurável.
+
+Kátia: Concordo totalmente. 3 minutos é o máximo. E precisa funcionar bem no celular — a maioria dos nossos clientes acessa pelo smartphone.
+
+Fernanda: Vou registrar como requisito não-funcional: tempo de cotação máximo de 3 minutos e design responsivo mobile-first. Diego, quais outros requisitos não-funcionais técnicos devemos considerar?
+
+Diego: Disponibilidade de pelo menos 99,5% ao mês, exceto em janelas de manutenção programadas de 2 horas aos domingos entre meia-noite e 2h. Tempo de resposta de até 2 segundos para 95% das requisições em condições normais de carga. E o portal precisa suportar pelo menos 500 usuários simultâneos — nos primeiros 6 meses. Depois vemos a necessidade de escalar.
+
+Kátia: Ah, e um ponto que nosso jurídico enfatizou: todo o portal precisa estar em conformidade com a LGPD. Principalmente o tratamento de dados sensíveis de saúde nos seguros de vida. Precisamos de consentimento explícito e a possibilidade de o cliente solicitar exclusão dos seus dados.
+
+Fernanda: Importante. Isso vai impactar o design de cadastro e a arquitetura de dados. Diego, conseguimos tratar isso na mesma sprint do cadastro?
+
+Diego: Sim, mas precisamos definir exatamente o que é dado sensível segundo a classificação da SegurançaTotal. Kátia, vocês têm isso documentado?
+
+Kátia: Temos um mapeamento de dados parcial. Posso mandar até amanhã. Mas o princípio é: qualquer dado que apareça na apólice de saúde ou vida é sensível.
+
+Fernanda: Perfeito. Vou registrar como ação: Kátia envia mapeamento de dados LGPD até amanhã. Diego avalia impacto no prazo.
+
+Lívia: Tenho um requisito de acessibilidade que gostaria de incluir. O portal deve seguir as diretrizes WCAG 2.1 nível AA para usuários com deficiência visual ou motora. Além de ser uma boa prática, é obrigatório para empresas que vendem para o setor público — e a SegurançaTotal tem contratos com prefeituras.
+
+Kátia: Correto, Lívia. Isso é obrigatório mesmo.
+
+Paulo: Sobre os navegadores suportados: precisa funcionar em Chrome, Firefox e Safari nas versões dos últimos 18 meses. Internet Explorer não precisa suportar — estamos alinhados nisso internamente.
+
+Fernanda: E sobre o prazo geral, Kátia. O que vocês precisam para o primeiro lançamento?
+
+Kátia: O board aprovou um prazo de 4 meses para o MVP. Isso precisa incluir pelo menos cotação, contratação, consulta de apólice e segunda via de boleto. O registro de sinistros pode ficar para a fase 2.
+
+Paulo: Quatro meses é muito apertado se precisamos fazer a integração com o SIS-SEG do zero. Diego?
+
+Diego: É factível se limitarmos o escopo do MVP e se a integração com o SIS-SEG tiver uma spec técnica detalhada da parte da SegurançaTotal até a semana que vem. Caso contrário, vamos atrasar.
+
+Kátia: Entendo. Vou falar com o nosso time técnico hoje ainda para garantir que a documentação da API do SIS-SEG esteja disponível até sexta-feira.
+
+Fernanda: Ótimo. Vou registrar como action item crítico: time técnico da SegurançaTotal envia documentação técnica do SIS-SEG até sexta-feira. Diego revisa e confirma viabilidade em 2 dias após receber.
+
+Fernanda: Sobre o orçamento, Kátia, vocês aprovaram R$ 380.000 para o projeto completo, certo?
+
+Kátia: Isso. Incluindo desenvolvimento, design, testes e o primeiro ano de hospedagem. Esse valor não pode ser ultrapassado sem aprovação do CFO.
+
+Diego: Precisamos checar se isso é suficiente para a integração do SIS-SEG. Dependendo da complexidade, o middleware sozinho pode consumir 25% do orçamento.
+
+Paulo: Se precisar de mais, a gente apresenta para o CFO com a justificativa. Mas vamos primeiro entender o que a documentação técnica diz antes de alarmar.
+
+Fernanda: Agreed. Qualquer mudança de orçamento será comunicada formalmente ao patrocinador. Fechando a reunião: vou mandar o resumo de escopo e requisitos levantados hoje para todos revisarem até amanhã ao meio-dia. Qualquer ajuste ou item faltante, por favor me comuniquem antes da validação.
+
+Kátia: Só um último ponto: precisamos de um ambiente de testes que seja separado do sistema de produção atual. Não podemos correr risco de impactar as apólices em vigor durante o desenvolvimento.
+
+Diego: Isso já está previsto. Teremos três ambientes: desenvolvimento, homologação e produção. O acesso à produção do SIS-SEG será somente leitura durante o projeto.
+
+Fernanda: Perfeito. Obrigada a todos pela participação. Próxima reunião: kickoff técnico na próxima quinta-feira, 9h.
+
+---
+FIM DA TRANSCRIÇÃO

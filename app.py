@@ -76,6 +76,7 @@ pages = {
         st.Page("pages/Orientacoes_Glossario.py",    title="Glossário",     icon="📚"),
         st.Page("pages/Orientacoes_Arquiteturas.py", title="Arquiteturas",  icon="🏗️"),
         st.Page("pages/Orientacoes_CKF.py",          title="Guia CKF",      icon="🧠"),
+        st.Page("pages/Capacitacao.py",              title="Curso Corporativo", icon="🎓"),
     ],
 }
 if _admin:

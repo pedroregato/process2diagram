@@ -1,0 +1,79 @@
+Reunião do Comitê de Aprovação de Contratos — Sessão Ordinária de Junho
+Data: 5 de junho de 2025
+Participantes: Dr. Marcelo Tavares (CFO — presidente do comitê), Renata Alves (Diretora de Compliance e Proteção de Dados), Jorge Pereira (Diretor Jurídico), Simone Castro (Gerente Sênior de Compras)
+Duração: 1h30
+
+---
+
+Dr. Marcelo: Boa tarde. Estamos iniciando a sessão ordinária do Comitê de Aprovação de Contratos de junho. Para registro: estão presentes todos os membros titulares. Temos quorum para deliberação. Simone, pode apresentar os contratos em pauta?
+
+Simone: Sim, Dr. Marcelo. Temos três contratos na pauta de hoje. O principal é o contrato de infraestrutura de cloud com a CloudBrasil, no valor de R$ 2.340.000 anuais, com vigência de 3 anos. Os outros dois são renovações de menor valor que podemos tratar depois. Vou começar pela CloudBrasil, pois é o mais complexo.
+
+Dr. Marcelo: Correto. CloudBrasil. Simone, contextualize.
+
+Simone: O contrato substitui nossa infraestrutura de servidores físicos, que está com 8 anos e chegando ao fim da vida útil. A CloudBrasil foi vencedora do processo de RFP realizado em abril, com pontuação técnica e comercial superior às outras duas concorrentes avaliadas. O valor de R$ 2,34 milhões ao ano representa uma economia de 23% em relação ao custo total de propriedade atual, considerando hardware, manutenção e energia elétrica. A migração está planejada para setembro de 2025, com prazo de 12 meses.
+
+Dr. Marcelo: Jorge, análise jurídica.
+
+Jorge: Dr. Marcelo, a análise do contrato revelou três pontos que precisam de ajuste antes da assinatura. O primeiro é a cláusula de limitação de responsabilidade. A redação atual limita a responsabilidade da CloudBrasil a 3 meses de faturamento em caso de falha grave. Para um contrato de infraestrutura crítica de R$ 2,3 milhões, isso representa apenas R$ 585.000 de cobertura máxima — insuficiente para cobrir eventuais perdas operacionais da HospitalCorp em caso de indisponibilidade prolongada. Recomendo negociar para pelo menos 12 meses.
+
+Simone: A CloudBrasil já me sinalizou resistência a isso. O máximo que eles aceitaram na RFP foi 6 meses.
+
+Jorge: Seis meses seria aceitável para nós. Mas precisa estar explícito no contrato, não apenas no SLA. O segundo ponto: a cláusula de rescisão imotivada tem multa de 40% sobre o valor remanescente do contrato. Para um contrato de 3 anos, isso pode significar mais de R$ 2 milhões de multa se precisarmos sair antes. Proponho negociar para 20% no primeiro ano, 15% no segundo e 10% no terceiro.
+
+Dr. Marcelo: Faz sentido. E o terceiro ponto?
+
+Jorge: O terceiro é o mais crítico do ponto de vista da Renata. A cláusula de subcontratação permite que a CloudBrasil subcontrate livremente qualquer parte dos serviços, inclusive para empresas fora do Brasil, sem necessidade de comunicação prévia à HospitalCorp. Dado o tipo de dado que vamos processar nessa infraestrutura — prontuários eletrônicos de pacientes —, isso é potencialmente problemático.
+
+Renata: Exatamente, e eu precisava entrar justamente aqui. Do ponto de vista da LGPD e da Resolução CFM 1638/2002, dados de prontuários eletrônicos são dados sensíveis de saúde. O processamento desses dados por terceiros — subprocessadores — exige que a HospitalCorp tenha controle sobre quem são esses subprocessadores, em que países os dados são armazenados, e que exista um Acordo de Processamento de Dados, o DPA, entre nós e cada subprocessador.
+
+Dr. Marcelo: Sem o DPA, não podemos assinar?
+
+Renata: Sem o DPA, incorremos em risco sério de multa da ANPD. A LGPD é clara: o controlador — que somos nós — é responsável pelos atos dos operadores e subprocessadores que contrata. Se um subprocessador da CloudBrasil vazar dados de pacientes, a HospitalCorp responde solidariamente.
+
+Jorge: Proponho incluir no contrato uma cláusula específica: lista de subprocessadores aprovados previamente pela HospitalCorp, vedação expressa de armazenamento de dados de saúde fora do território nacional, e DPA como anexo obrigatório do contrato.
+
+Simone: A CloudBrasil tem data centers apenas no Brasil — São Paulo e Rio de Janeiro. Isso já está no material técnico deles.
+
+Renata: Ótimo, mas precisa estar garantido contratualmente, não apenas na apresentação comercial. E precisa de uma cláusula de notificação imediata em caso de incidente de segurança — no máximo 72 horas, conforme exige a LGPD.
+
+Dr. Marcelo: Concordo. Isso é inegociável. Renata, você consegue redigir as cláusulas complementares?
+
+Renata: Sim. Posso ter uma minuta de DPA e as cláusulas LGPD prontas até a próxima sexta-feira.
+
+Jorge: E eu incorporo à minuta do contrato. Mandamos para a CloudBrasil até segunda-feira da semana que vem para negociação.
+
+Dr. Marcelo: Muito bem. Decisão do comitê: aprovação condicional do contrato CloudBrasil, sujeita a: negociação da limitação de responsabilidade para 6 meses de faturamento, negociação da multa rescisória conforme proposta do Dr. Jorge, e inclusão do DPA e das cláusulas de proteção de dados redigidas pela Renata. Simone, comunique ao fornecedor que a aprovação está condicionada a esses ajustes.
+
+Simone: Entendido. Eles precisam de prazo para resposta?
+
+Dr. Marcelo: Prazo de 10 dias úteis para devolução da minuta com os ajustes. Após isso, a Jurídico e o Compliance revisam em até 3 dias úteis. Se aprovado, o contrato vem para assinatura. Se houver rejeição aos ajustes por parte da CloudBrasil, o item volta para o comitê para deliberação.
+
+Jorge: Fica registrado que nenhum compromisso pode ser assumido com a CloudBrasil antes da assinatura do contrato ajustado. A Simone não deve confirmar data de migração ou realizar qualquer atividade preparatória que gere dependência antes do contrato assinado.
+
+Simone: Compreendido.
+
+Dr. Marcelo: Agora os dois contratos de renovação. Simone?
+
+Simone: Contrato 2: renovação com a TechSupport Ltda., suporte de impressoras, valor de R$ 48.000 anuais. Sem alterações de escopo. Contrato 3: renovação com a Empresa de Limpeza CleanPro, valor de R$ 72.000 anuais, com reajuste de 8,8% pelo IPCA acumulado. Ambos estão dentro do limite de aprovação do Comitê.
+
+Dr. Marcelo: Jorge, alguma pendência jurídica nessas renovações?
+
+Jorge: Verificamos ambos. TechSupport: contrato padrão, sem pendências. CleanPro: reajuste adequado ao índice contratual, sem pendências.
+
+Dr. Marcelo: Renata, compliance?
+
+Renata: Ambos os fornecedores estão com certidões em dia e fora de qualquer lista de impedimentos. Aprovados do ponto de vista de compliance.
+
+Dr. Marcelo: Comitê aprova as duas renovações por unanimidade. Simone, encaminhe os contratos para assinatura.
+
+Simone: Já encaminho hoje.
+
+Dr. Marcelo: Encerrando a sessão. Resumo das deliberações: CloudBrasil — aprovação condicional com prazo de 10 dias úteis para ajustes. TechSupport e CleanPro — aprovadas para assinatura imediata. Renata, prazo para a minuta do DPA?
+
+Renata: Sexta-feira desta semana, conforme combinado.
+
+Dr. Marcelo: Registrado. Ata desta sessão será enviada para todos os membros em até 2 dias úteis para revisão e aprovação. Encerro a sessão às 16h47.
+
+---
+FIM DA TRANSCRIÇÃO
