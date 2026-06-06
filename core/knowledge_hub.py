@@ -143,6 +143,9 @@ class MinutesModel:
     risks_identified: list[str] = field(default_factory=list)  # risks (not formal requirements)
     dependencies: list[str] = field(default_factory=list)      # inter-team/system dependencies
     stakeholder_needs: list[str] = field(default_factory=list) # informal stakeholder needs
+    # Meeting conduct antipatterns detected by AgentMinutes (v4.28)
+    # Each entry: {"type": str, "description": str, "examples": list[str]}
+    meeting_antipatterns: list[dict] = field(default_factory=list)
     # Raw markdown — populated when loading from DB (structured fields may be empty)
     minutes_md: str = ""
     # ATA Engine interactive HTML — generated after pipeline, empty if not available
@@ -725,6 +728,10 @@ class KnowledgeHub:
             hub.minutes.ata_html = ""
         if not hasattr(hub.minutes, 'ata_html_error'):
             hub.minutes.ata_html_error = ""
+
+        # ── v4.28: Meeting conduct antipatterns ───────────────────────────────────
+        if not hasattr(hub.minutes, 'meeting_antipatterns'):
+            hub.minutes.meeting_antipatterns = []
 
         # ── v4.21: Context fields (project → context rename) ──────────────────
         if not hasattr(hub, 'context_id'):

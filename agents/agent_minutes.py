@@ -124,8 +124,79 @@ Se o prazo não for mencionado → null.
       "raised_by": "<iniciais de quem levantou a tarefa, ex: 'MF', ou null>"
     }
   ],
-  "next_meeting": "<data e hora ou null>"
+  "next_meeting": "<data e hora ou null>",
+  "meeting_antipatterns": [
+    {
+      "type": "<nome do antipadrão>",
+      "description": "<como se manifestou>",
+      "examples": ["<citação 1>"]
+    }
+  ]
 }
+
+## Detecção de Antipadrões de Reunião
+
+Após extrair todos os campos acima, analise a transcrição e identifique antipadrões
+de condução que comprometem a rastreabilidade do conhecimento gerado.
+
+Avalie os seguintes antipadrões e inclua apenas os que realmente ocorreram:
+
+- **Participante Ausente**: alguém responde por outro ("vou perguntar para X", "X não pôde vir mas disse que...")
+- **Compromisso Condicional**: comprometimentos vagos ou condicionais ("vou tentar", "se der", "talvez")
+- **Proxy Sem Autonomia**: participante que não consegue decidir nada; tudo fica "para confirmar depois"
+- **Multitarefa**: evidência de distração, falas interrompidas abruptamente, retomadas sem contexto
+- **Patrocinador Ausente**: reunião sem declaração de propósito na abertura; escopo não definido
+- **Facilitador Viesado**: facilitador emite opinião de conteúdo como se fosse decisão do grupo
+- **Decisão Implícita**: grupo age como se uma decisão tivesse sido tomada sem que ninguém a verbalizasse
+
+Para cada antipadrão detectado, inclua:
+- `type`: nome do antipadrão (use exatamente os nomes listados acima)
+- `description`: uma frase descrevendo como se manifestou nesta reunião específica
+- `examples`: lista de 1–3 citações literais (ou próximas do literal) da transcrição que evidenciam o antipadrão
+
+Se nenhum antipadrão for detectado, retorne array vazio `[]`.
+
+Adicione ao JSON de saída o campo:
+```
+"meeting_antipatterns": [
+  {
+    "type": "<nome do antipadrão>",
+    "description": "<como se manifestou>",
+    "examples": ["<citação 1>", "<citação 2>"]
+  }
+]
+```
+
+## Detecção de Antipadrões de Reunião
+
+Após extrair todos os campos acima, analise a transcrição e identifique antipadrões
+de condução que comprometem a rastreabilidade do conhecimento gerado.
+
+Avalie os seguintes antipadrões e inclua apenas os que realmente ocorreram:
+
+- **Participante Ausente**: alguém responde por outro ("vou perguntar para X", "X não pôde vir mas disse que...")
+- **Compromisso Condicional**: comprometimentos vagos ou condicionais ("vou tentar", "se der", "talvez")
+- **Proxy Sem Autonomia**: participante que não consegue decidir nada; tudo fica "para confirmar depois"
+- **Multitarefa**: evidência de distração, falas interrompidas abruptamente, retomadas sem contexto
+- **Patrocinador Ausente**: reunião sem declaração de propósito na abertura; escopo não definido
+- **Facilitador Viesado**: facilitador emite opinião de conteúdo como se fosse decisão do grupo
+- **Decisão Implícita**: grupo age como se uma decisão tivesse sido tomada sem que ninguém a verbalizasse
+
+Para cada antipadrão detectado, inclua:
+- `type`: nome do antipadrão (use exatamente os nomes listados acima)
+- `description`: uma frase descrevendo como se manifestou nesta reunião específica
+- `examples`: lista de 1–3 citações literais (ou próximas do literal) da transcrição
+
+Se nenhum antipadrão for detectado, retorne array vazio [].
+
+Adicione ao JSON de saída:
+"meeting_antipatterns": [
+  {
+    "type": "<nome do antipadrão>",
+    "description": "<como se manifestou>",
+    "examples": ["<citação 1>", "<citação 2>"]
+  }
+]
 
 ## Regras Críticas
 
@@ -209,6 +280,18 @@ class AgentMinutes(BaseAgent):
             )
             for ai in data.get("action_items", [])
         ]
+        # Parse meeting antipatterns
+        raw_antipatterns = data.get("meeting_antipatterns") or []
+        meeting_antipatterns = [
+            {
+                "type": ap.get("type", ""),
+                "description": ap.get("description", ""),
+                "examples": ap.get("examples") or [],
+            }
+            for ap in raw_antipatterns
+            if isinstance(ap, dict) and ap.get("type")
+        ]
+
         return MinutesModel(
             title=data.get("title", "Reunião"),
             date=data.get("date") or "",
@@ -224,6 +307,7 @@ class AgentMinutes(BaseAgent):
             risks_identified=data.get("risks_identified") or [],
             dependencies=data.get("dependencies") or [],
             stakeholder_needs=data.get("stakeholder_needs") or [],
+            meeting_antipatterns=meeting_antipatterns,
         )
 
     # ── Markdown export ───────────────────────────────────────────────────────
@@ -303,9 +387,128 @@ class AgentMinutes(BaseAgent):
         if minutes.next_meeting:
             lines += ["## Próxima Reunião", "", f"**{minutes.next_meeting}**", ""]
 
+        # Meeting antipatterns (if any)
+        antipatterns = getattr(minutes, "meeting_antipatterns", [])
+        if antipatterns:
+            lines += ["## ⚠️ Alertas de Condução", ""]
+            lines.append(
+                "*Os seguintes antipadrões foram detectados nesta reunião. "
+                "Eles podem ter reduzido a qualidade dos artefatos gerados.*"
+            )
+            lines.append("")
+            for ap in antipatterns:
+                ap_type = ap.get("type", "")
+                ap_desc = ap.get("description", "")
+                ap_examples = ap.get("examples", [])
+                lines.append(f"**{ap_type}:** {ap_desc}")
+                for ex in ap_examples:
+                    lines.append(f'  > "{ex}"')
+                lines.append("")
+
         lines += [
             "---",
             f"*Ata gerada automaticamente pelo Process2Diagram — {now}*",
+        ]
+
+        return "\n".join(lines)
+
+    # ── Verification Report ───────────────────────────────────────────────────
+
+    @staticmethod
+    def to_verification_report(minutes: "MinutesModel") -> str:
+        """
+        Generate a structured Markdown verification checklist to be presented
+        back to participants after the pipeline runs.
+
+        Based on the 'verification session' concept from model-based workshop
+        methodology: facilitator presents each artifact element and participants
+        confirm or correct. Helps catch errors and builds SME ownership of artifacts.
+        """
+        lines: list[str] = []
+        now = datetime.now().strftime("%d/%m/%Y")
+
+        lines += [
+            f"# Roteiro de Verificação — {minutes.title}",
+            "",
+            f"**Reunião:** {minutes.date or 'Data não registrada'}  ",
+            f"**Gerado em:** {now}  ",
+            "",
+            "> Este roteiro deve ser apresentado aos participantes da reunião em uma",
+            "> sessão de verificação (presencial ou remota). Para cada item, o facilitador",
+            "> lê em voz alta e aguarda confirmação ou correção dos participantes.",
+            "> Marque ✅ quando confirmado, ✏️ quando corrigido.",
+            "",
+            "---",
+            "",
+        ]
+
+        # Decisions
+        if minutes.decisions:
+            lines += ["## Decisões — Verificar com os Participantes", ""]
+            for i, d in enumerate(minutes.decisions, 1):
+                lines.append(f"- [ ] **Decisão {i}:** {d}")
+            lines.append("")
+            lines.append(
+                "*Perguntar: \"Esta decisão foi tomada conforme registrado? "
+                "Há alguma nuance ou condição que ficou faltando?\"*"
+            )
+            lines.append("")
+
+        # Action Items
+        if minutes.action_items:
+            lines += ["## Encaminhamentos — Confirmar Responsável e Prazo", ""]
+            for i, ai in enumerate(minutes.action_items, 1):
+                deadline = ai.deadline or "prazo a definir"
+                resp = ai.responsible or "responsável a definir"
+                lines.append(f"- [ ] **Encaminhamento {i}:** {ai.task}  ")
+                lines.append(f"  Responsável: **{resp}** · Prazo: **{deadline}**")
+            lines.append("")
+            lines.append(
+                "*Perguntar: \"O responsável confirma a tarefa e o prazo? "
+                "Há alguma dependência ou risco que impede a entrega?\"*"
+            )
+            lines.append("")
+
+        # Open Questions
+        if minutes.open_questions:
+            lines += ["## Perguntas em Aberto — Definir Responsável pela Resposta", ""]
+            for i, q in enumerate(minutes.open_questions, 1):
+                lines.append(f"- [ ] **{i}.** {q}")
+            lines.append("")
+
+        # Risks
+        if minutes.risks_identified:
+            lines += ["## Riscos Identificados — Validar e Decidir Ação", ""]
+            for i, r in enumerate(minutes.risks_identified, 1):
+                lines.append(f"- [ ] **{i}.** {r}")
+            lines.append("")
+
+        # Antipatterns alert
+        antipatterns = getattr(minutes, "meeting_antipatterns", [])
+        if antipatterns:
+            lines += ["## ⚠️ Alertas de Condução — Para Melhorar a Próxima Reunião", ""]
+            lines.append(
+                "Os seguintes antipadrões foram detectados. Discuta com o grupo "
+                "antes de encerrar a sessão de verificação:"
+            )
+            lines.append("")
+            for ap in antipatterns:
+                ap_type = ap.get("type", "")
+                ap_desc = ap.get("description", "")
+                lines.append(f"- **{ap_type}:** {ap_desc}")
+            lines.append("")
+
+        lines += [
+            "---",
+            "",
+            "## Encerramento da Sessão de Verificação",
+            "",
+            "- [ ] Todos os itens foram revisados",
+            "- [ ] Correções foram anotadas e serão aplicadas",
+            "- [ ] Próxima reunião ou follow-up agendado (se necessário)",
+            "",
+            "---",
+            f"*Roteiro gerado pelo Process2Diagram — {now}*",
         ]
 
         return "\n".join(lines)

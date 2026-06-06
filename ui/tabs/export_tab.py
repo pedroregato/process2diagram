@@ -48,6 +48,14 @@ def render(hub, prefix, suffix):
             )
         except Exception:
             pass
+        verification_md = AgentMinutes.to_verification_report(hub.minutes)
+        st.download_button(
+            "⬇️ Roteiro de Verificação (.md)",
+            data=verification_md,
+            file_name=make_filename("verificacao", "md", prefix, suffix),
+            key="export_verification_report",
+            help="Checklist estruturado para apresentar os artefatos de volta aos participantes e validá-los",
+        )
         st.markdown("---")
     if hub.requirements.ready:
         st.markdown("**Requirements**")

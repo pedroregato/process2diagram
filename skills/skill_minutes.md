@@ -110,7 +110,14 @@ Se o prazo não for mencionado → `null`.
   "open_questions": ["<pergunta sem resposta ao final>"],
   "risks_identified": ["<risco mencionado (sem formalização como requisito)>"],
   "dependencies": ["<dependência entre times, sistemas ou entregas identificada>"],
-  "stakeholder_needs": ["<necessidade de stakeholder expressa informalmente>"]
+  "stakeholder_needs": ["<necessidade de stakeholder expressa informalmente>"],
+  "meeting_antipatterns": [
+    {
+      "type": "<nome do antipadrão>",
+      "description": "<como se manifestou nesta reunião>",
+      "examples": ["<citação literal da transcrição>"]
+    }
+  ]
 }
 ```
 
@@ -137,6 +144,39 @@ Extraia adicionalmente, quando presentes na transcrição:
 - Ex: "o diretor quer poder ver o histórico de qualquer transação", "o usuario reclama que o processo é lento"
 
 Se nenhum item for identificado em uma categoria, retorne array vazio `[]`.
+
+## Detecção de Antipadrões de Reunião
+
+Após extrair todos os campos acima, analise a transcrição e identifique antipadrões
+de condução que comprometem a rastreabilidade do conhecimento gerado.
+
+Avalie os seguintes antipadrões e inclua apenas os que realmente ocorreram:
+
+- **Participante Ausente**: alguém responde por outro ("vou perguntar para X", "X não pôde vir mas disse que...")
+- **Compromisso Condicional**: comprometimentos vagos ou condicionais ("vou tentar", "se der", "talvez")
+- **Proxy Sem Autonomia**: participante que não consegue decidir nada; tudo fica "para confirmar depois"
+- **Multitarefa**: evidência de distração, falas interrompidas abruptamente, retomadas sem contexto
+- **Patrocinador Ausente**: reunião sem declaração de propósito na abertura; escopo não definido
+- **Facilitador Viesado**: facilitador emite opinião de conteúdo como se fosse decisão do grupo
+- **Decisão Implícita**: grupo age como se uma decisão tivesse sido tomada sem que ninguém a verbalizasse
+
+Para cada antipadrão detectado, inclua:
+- `type`: nome do antipadrão (use exatamente os nomes listados acima)
+- `description`: uma frase descrevendo como se manifestou nesta reunião específica
+- `examples`: lista de 1–3 citações literais (ou próximas do literal) da transcrição
+
+Se nenhum antipadrão for detectado, retorne array vazio `[]`.
+
+Adicione ao JSON de saída:
+```
+"meeting_antipatterns": [
+  {
+    "type": "<nome do antipadrão>",
+    "description": "<como se manifestou>",
+    "examples": ["<citação 1>", "<citação 2>"]
+  }
+]
+```
 
 ## Regras Críticas
 

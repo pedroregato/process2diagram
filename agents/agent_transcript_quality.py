@@ -27,14 +27,20 @@ from core.knowledge_hub import KnowledgeHub, TranscriptQualityModel, CriterionSc
 
 # Canonical criterion names exactly as the LLM is instructed to return them,
 # paired with their weights.  Order matches the skill file.
+# Weights: ASR quality (85%) + meeting conduct (15%) = 100%
 _CRITERIA_WEIGHTS: list[tuple[str, float]] = [
     ("Inteligibilidade Léxica",  0.20),
     ("Atribuição de Falantes",   0.20),
-    ("Coerência Semântica",      0.20),
+    ("Coerência Semântica",      0.15),
     ("Completude do Conteúdo",   0.15),
-    ("Vocabulário de Domínio",   0.15),
-    ("Qualidade da Pontuação",   0.10),
+    ("Vocabulário de Domínio",   0.10),
+    ("Qualidade da Pontuação",   0.05),
+    ("Condução da Reunião",      0.15),
 ]
+
+# Default score for "Condução da Reunião" when missing from LLM response
+# (e.g. cached responses from before the 7th criterion was added)
+_CONDUCAO_DEFAULT_SCORE = 50
 
 
 def _grade(score: float) -> str:
@@ -139,7 +145,12 @@ class AgentTranscriptQuality(BaseAgent):
 
         for criterion_name, weight in _CRITERIA_WEIGHTS:
             entry = llm_criteria.get(criterion_name, {})
-            raw_score = entry.get("score", 0)
+            # Use neutral default for the conduct criterion to avoid penalising
+            # cached responses generated before this criterion was added.
+            default_score = _CONDUCAO_DEFAULT_SCORE if (
+                criterion_name == "Condução da Reunião" and criterion_name not in llm_criteria
+            ) else 0
+            raw_score = entry.get("score", default_score)
             # Clamp to [0, 100] and cast to int
             score = max(0, min(100, int(raw_score)))
             justification = entry.get("justification", "")
