@@ -215,7 +215,10 @@ def _render_scenario_card(cenario: dict, mod_id: str) -> None:
             st.caption("⚠️ arquivo não encontrado")
 
     if arquivo and arquivo.exists():
-        with st.expander("📄 Ver transcrição", expanded=False):
+        txt_key = f"show_txt_{mod_id}_{arquivo.stem}"
+        if st.button("📄 Ver transcrição", key=f"btn_txt_{mod_id}_{arquivo.stem}"):
+            st.session_state[txt_key] = not st.session_state.get(txt_key, False)
+        if st.session_state.get(txt_key, False):
             txt = _load_transcript(arquivo)
             st.text_area(
                 label="transcrição",
@@ -262,7 +265,10 @@ for mod in _MODULES:
                     break
 
         if guia_found:
-            with st.expander("📚 Ver guia do módulo", expanded=False):
+            guia_key = f"show_guia_{mod['id']}"
+            if st.button("📚 Ver guia do módulo", key=f"btn_guia_{mod['id']}"):
+                st.session_state[guia_key] = not st.session_state.get(guia_key, False)
+            if st.session_state.get(guia_key, False):
                 st.markdown(guia_found.read_text(encoding="utf-8"))
 
         if n_cenarios > 0:
