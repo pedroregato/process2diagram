@@ -54,8 +54,9 @@ sendo gerados.
 | **4 — Gestão do Conhecimento** | Preservar o saber institucional | 2h |
 | **5 — Governança e ROI** | Medir o retorno das reuniões | 2h |
 | **6 — Análise Estratégica** | BMM, IBIS e alinhamento estratégico | 2h |
+| **7 — Reuniões que Geram Conhecimento Rastreável** | Como conduzir reuniões que maximizam a qualidade dos artefatos | 1h |
 
-**Total:** ~14h (workshop de 2 dias ou trilha de 6 semanas)
+**Total:** ~15h (workshop de 2 dias ou trilha de 7 semanas)
 
 ---
 
@@ -204,6 +205,35 @@ as decisões estratégicas aos requisitos operacionais.
 
 ### Artefato entregue
 BMM documentado + mapa IBIS das principais decisões + relatório executivo HTML.
+
+---
+
+## Módulo 7 — Reuniões que Geram Conhecimento Rastreável (1h)
+
+**Problema corporativo:** Os artefatos gerados pelo P2D têm qualidade variável.
+O time não sabe se o problema é a ferramenta ou a forma como as reuniões são conduzidas.
+A resposta, na maioria dos casos, é a segunda opção.
+
+### Cenários
+
+**Cenário 7A — Reunião Mal Conduzida** (`transcricao_07a_reuniao_ruim.txt`)
+Kick-off de implementação do módulo de estoque da RetailPro com os mesmos
+participantes e a mesma pauta do Cenário 7B — mas sem facilitação estruturada.
+Sem identificação de speaker, sem decisões explícitas, sem action items com dono
+e prazo. Execute no pipeline e observe o Grau de Qualidade emitido.
+
+**Cenário 7B — Mesma Reunião, Bem Conduzida** (`transcricao_07b_reuniao_eficaz.txt`)
+A mesma reunião com a mesma pauta, agora com facilitação estruturada: abertura
+com identificação, decisões verbalizadas formalmente, action items com nome e prazo,
+processo descrito com gatilhos e condições, fechamento com resumo explícito.
+Compare o BPMN, os requisitos e a ata gerados em relação ao Cenário 7A.
+
+### Exercício Central
+Rodar 7A → observar Grau de Qualidade e artefatos → rodar 7B → comparar.
+A diferença nos resultados é a lição sobre como conduzir reuniões processáveis.
+
+### Artefato entregue
+Checklist de facilitação + guia de linguagem processável vs. ambígua.
 
 ---
 

@@ -1,0 +1,91 @@
+Reunião de Kick-off — Módulo de Gestão de Estoque RetailPro
+Data: 08/07/2025
+[Gravação iniciada sem anúncio. Participantes não identificados.]
+
+— Bom, vamos começar porque eu tenho outra reunião depois. A pauta é o estoque, né.
+
+— É, a gente precisa resolver esse negócio do sistema.
+
+— Sim, todo mundo sabe o problema. O sistema atual não conversa com o PDV.
+
+— Pois é. Então a ideia é integrar.
+
+— Integrar como? Tem que pensar nisso direito.
+
+— Bom, o jeito que eu pensei é assim... [pausa] quando vende alguma coisa na loja, o estoque tem que baixar automaticamente. Mas hoje isso não acontece.
+
+— E quando repõe?
+
+— Aí é diferente. Acho que tem um processo manual que alguém faz.
+
+— É, tem. A supervisora lá da loja faz um pedido quando acha que tá baixo.
+
+— Então o que a gente quer é automatizar isso também?
+
+— Eu acho que sim. Mas depende do custo.
+
+— Custo de quem? Do sistema ou da implementação?
+
+— Dos dois, né. [risos]
+
+— Olha, eu acho que a gente deveria definir um prazo porque senão isso não anda.
+
+— Concordo. Mas antes a gente precisa saber o que vai ser feito de verdade.
+
+— Bom, a integração com o PDV é certa. O resto a gente vai decidindo.
+
+— E a parte de reposição automática?
+
+— Isso eu acho que vai depender de como o sistema funciona. Tem que levantar.
+
+— Alguém vai levantar isso?
+
+— Acho que o pessoal de loja deveria olhar isso porque eles conhecem o processo.
+
+— Faz sentido. E o prazo?
+
+— Logo, logo. Antes da próxima reunião.
+
+— Qual reunião?
+
+— Não sei, a gente marca.
+
+— Certo. E a integração técnica, quem cuida?
+
+— Isso é TI, né.
+
+— Sim, mas quem especificamente?
+
+— A Adriana deve saber. Ela que conhece os sistemas.
+
+— Mas a Adriana vai embarcar nessa ou tá sobrecarregada?
+
+— Não sei. Acho que ela vai ter que topar porque é responsabilidade dela.
+
+— Ok. E o go-live, quando?
+
+— Setembro, outubro... depende.
+
+— Depende de quê?
+
+— De tudo. [risos] Das integrações, dos testes, do budget...
+
+— Precisamos de um número mais concreto.
+
+— Vamos dizer outubro. Se der, ótimo.
+
+— Então tá decidido: outubro.
+
+— Mais ou menos. Se tudo der certo.
+
+— Ok, então... acho que é isso por hoje? Alguém tem mais alguma coisa?
+
+— Eu queria falar sobre o treinamento dos usuários mas talvez não seja aqui.
+
+— Não, deixa pra próxima. A gente já tá sem tempo.
+
+— Tá bom. Então é isso?
+
+— É. Valeu pessoal.
+
+[Gravação encerrada sem resumo ou confirmação de encaminhamentos.]

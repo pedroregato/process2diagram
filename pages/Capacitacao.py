@@ -19,6 +19,8 @@ if str(root_dir) not in sys.path:
 import streamlit as st
 from ui.auth_gate import apply_auth_gate
 from ui.components.page_header import render_page_header
+from modules.auth import get_current_user
+from core.project_store import list_contexts, create_context
 
 apply_auth_gate()
 
@@ -186,6 +188,35 @@ _MODULES = [
             }
         ],
     },
+    {
+        "id": "07",
+        "titulo": "Reuniões que Geram Conhecimento Rastreável",
+        "icone": "🎙️",
+        "problema": (
+            "Os artefatos gerados pelo P2D têm qualidade variável. "
+            "O time não sabe se o problema é a ferramenta ou a forma como as reuniões são conduzidas."
+        ),
+        "duracao": "1h",
+        "cenarios": [
+            {
+                "label": "7A — Reunião Mal Conduzida (Grau D esperado)",
+                "arquivo": _BASE / "modulo_07_reunioes_eficazes" / "transcricao_07a_reuniao_ruim.txt",
+                "descricao": (
+                    "RetailPro. Kick-off de implementação de módulo de estoque. "
+                    "Sem identificação de speaker, sem decisões explícitas, sem action items com dono e prazo. "
+                    "Execute e observe o Grau de Qualidade."
+                ),
+            },
+            {
+                "label": "7B — Mesma Reunião, Bem Conduzida (Grau A esperado)",
+                "arquivo": _BASE / "modulo_07_reunioes_eficazes" / "transcricao_07b_reuniao_eficaz.txt",
+                "descricao": (
+                    "RetailPro. Mesma pauta e mesmos participantes do 7A — com facilitação estruturada. "
+                    "Compare o BPMN, os requisitos e a ata gerados em relação ao Cenário 7A."
+                ),
+            },
+        ],
+    },
 ]
 
 
@@ -194,6 +225,33 @@ def _load_transcript(path: Path) -> str:
         return path.read_text(encoding="utf-8")
     except Exception as exc:
         return f"[Erro ao carregar transcrição: {exc}]"
+
+
+def _get_or_create_course_project() -> dict | None:
+    """Retorna (ou cria) o projeto 'Curso P2D - {usuario}' para isolar
+    as reuniões de treinamento dos projetos reais da empresa.
+    Fail-open: retorna None se Supabase não estiver configurado.
+    """
+    username = get_current_user() or "default"
+    project_name = f"Curso P2D - {username}"
+    try:
+        contexts = list_contexts()
+        for ctx in contexts:
+            if ctx.get("name") == project_name:
+                return ctx
+        # Não existe — cria automaticamente
+        return create_context(
+            name=project_name,
+            description=(
+                "Projeto de treinamento gerado automaticamente pelo Curso "
+                "de Aplicações Corporativas do Process2Diagram. "
+                "Mantém as reuniões de exemplo separadas dos projetos reais."
+            ),
+            sigla="CURSO",
+            context_type="project",
+        )
+    except Exception:
+        return None
 
 
 def _render_scenario_card(cenario: dict, mod_id: str) -> None:
@@ -206,6 +264,12 @@ def _render_scenario_card(cenario: dict, mod_id: str) -> None:
         if arquivo and arquivo.exists():
             btn_key = f"load_{mod_id}_{arquivo.stem}"
             if st.button("▶ Carregar", key=btn_key, help="Carrega no Pipeline"):
+                # Resolve ou cria o projeto dedicado ao curso deste usuário
+                course_project = _get_or_create_course_project()
+                if course_project:
+                    st.session_state["active_project_id"]   = course_project["id"]
+                    st.session_state["active_project_name"] = course_project["name"]
+                    st.session_state["project_name"]        = course_project["name"]
                 st.session_state.transcript_text = _load_transcript(arquivo)
                 st.session_state.pop("hub", None)
                 st.session_state.pop("pp_result", None)

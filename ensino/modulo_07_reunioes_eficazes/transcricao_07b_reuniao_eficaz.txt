@@ -1,0 +1,62 @@
+Reunião de Kick-off — Módulo de Gestão de Estoque RetailPro
+Data: 08/07/2025
+Participantes: Adriana Lemos (Gerente de TI), Ricardo Fontes (Gerente de Operações), Camila Teixeira (Supervisora de Loja — Unidade Centro)
+Facilitadora: Adriana Lemos
+
+Adriana Lemos: Bom dia a todos. Vou iniciar a gravação agora. Esta reunião será transcrita e processada pelo nosso sistema de documentação. Para garantir que os encaminhamentos fiquem registrados com clareza, peço que cada um se identifique pelo nome antes de falar pela primeira vez e que decisões e compromissos sejam verbalizados explicitamente. Vamos começar com as apresentações rápidas.
+
+Ricardo Fontes: Ricardo Fontes, Gerente de Operações. Presente.
+
+Camila Teixeira: Camila Teixeira, Supervisora da Loja Centro. Presente.
+
+Adriana Lemos: Adriana Lemos, Gerente de TI e facilitadora desta reunião. A pauta de hoje tem dois objetivos: primeiro, alinhar o escopo do módulo de gestão de estoque integrado ao PDV; segundo, definir responsáveis e prazos para os próximos passos. Tempo previsto: 45 minutos.
+
+Ricardo Fontes: Ricardo Fontes. Quero contextualizar o problema operacional. Hoje o estoque da loja é atualizado manualmente: a supervisora conta o que saiu, registra numa planilha e faz o pedido de reposição quando julga que está baixo. Isso gera dois problemas — ruptura de estoque quando a loja esquece de fazer o pedido, e excesso de estoque quando pede mais do que precisa.
+
+Camila Teixeira: Camila Teixeira, confirmando o que o Ricardo disse. Na prática, eu faço esse controle visualmente. Não tem um critério formal de quando pedir. Se estiver corrido, posso demorar a perceber que um produto está acabando.
+
+Adriana Lemos: Entendido. Vou descrever o processo-alvo que estamos propondo implementar, para que fique documentado: o processo começa quando o caixa registra uma venda e confirma o pagamento no PDV. Neste momento, o sistema desconta automaticamente do saldo de estoque da loja os itens vendidos. Após cada desconto, o sistema verifica se o saldo do produto ficou abaixo do estoque mínimo configurado para aquela loja. Se sim, o sistema dispara automaticamente uma solicitação de reposição para o Centro de Distribuição. Se o saldo ainda estiver acima do mínimo, nenhuma ação adicional é tomada — apenas o saldo é atualizado. O pedido de reposição fica em status "pendente" no sistema até que o CD confirme o envio, momento em que o status muda para "em trânsito". A loja recebe a mercadoria, confirma no sistema e o estoque é atualizado para "recebido". Alguma correção nessa descrição?
+
+Ricardo Fontes: Ricardo Fontes. O fluxo está correto. Preciso adicionar uma exceção: se a loja receber uma mercadoria com divergência — quantidade errada ou produto diferente do pedido — ela deve registrar a divergência no sistema antes de confirmar o recebimento. Isso aciona uma tratativa com o CD.
+
+Adriana Lemos: Incorporado. Ficamos com um gateway adicional no recebimento: se mercadoria confere, confirma e encerra; se há divergência, registra e aciona tratativa com o CD.
+
+Camila Teixeira: Camila Teixeira. Uma dúvida: quem define o estoque mínimo por produto e por loja?
+
+Ricardo Fontes: Ricardo Fontes. Essa parametrização inicial ficará com Operações. Cada categoria de produto tem um padrão diferente.
+
+Adriana Lemos: Então temos uma primeira decisão formal. Ficamos decididos: a parametrização dos estoques mínimos por produto e por loja é responsabilidade da área de Operações, liderada por Ricardo Fontes, antes da entrada em produção do sistema. Ricardo confirma?
+
+Ricardo Fontes: Confirmo.
+
+Adriana Lemos: Registrado. Próximo ponto: prazos de implementação. Qual é a expectativa de Operações para o go-live?
+
+Ricardo Fontes: Ricardo Fontes. Do ponto de vista operacional, precisamos estar prontos antes do período de alta de vendas, que começa em outubro. Portanto, proponho go-live até 30 de setembro.
+
+Camila Teixeira: Camila Teixeira. Para as lojas, setembro está bom. Precisamos de pelo menos duas semanas de treinamento antes do go-live.
+
+Adriana Lemos: Do lado de TI, o prazo de 30 de setembro é viável se iniciarmos o levantamento técnico esta semana. Vou colocar a decisão em votação formal. Ficamos decididos: a data de go-live do módulo de gestão de estoque integrado ao PDV é 30 de setembro de 2025. Treinamento das lojas ocorrerá entre 15 e 27 de setembro. Todos confirmam?
+
+Ricardo Fontes: Confirmo.
+
+Camila Teixeira: Confirmo.
+
+Adriana Lemos: Decisão registrada. Passamos para os encaminhamentos. Vou nomear responsável, tarefa e prazo para cada item.
+
+Encaminhamento 1: Adriana Lemos, TI, ficará responsável por elaborar o documento de especificação técnica da API de integração entre o PDV e o módulo de estoque. Prazo: 11 de julho de 2025.
+
+Encaminhamento 2: Camila Teixeira, Loja Centro, ficará responsável por levantar e documentar as exceções operacionais do processo atual de recebimento — incluindo os tipos de divergência mais comuns. Prazo: 11 de julho de 2025.
+
+Encaminhamento 3: Ricardo Fontes, Operações, ficará responsável por definir e documentar a tabela de estoques mínimos para as 10 categorias de produtos prioritárias. Prazo: 18 de julho de 2025.
+
+Encaminhamento 4: Adriana Lemos convocará a próxima reunião de alinhamento para 21 de julho de 2025, com pauta: revisão das especificações técnicas e validação dos estoques mínimos.
+
+Adriana Lemos: Faço o resumo final desta reunião. Decidimos: o processo de gestão de estoque será integrado ao PDV com atualização automática de saldo e reposição automática baseada em estoque mínimo parametrizável; a responsabilidade pela parametrização é de Operações; o go-live está fixado para 30 de setembro; o treinamento ocorrerá de 15 a 27 de setembro. Os encaminhamentos foram atribuídos conforme listado. Alguma correção ou omissão?
+
+Ricardo Fontes: Está correto.
+
+Camila Teixeira: Correto. Só reforço que vou precisar de acesso ao sistema de teste para validar o fluxo de recebimento antes do treinamento.
+
+Adriana Lemos: Anotado como requisito de TI. Acesso ao ambiente de teste para a equipe de lojas até 01 de setembro. Encerro a reunião. Obrigada a todos.
+
+[Gravação encerrada.]
