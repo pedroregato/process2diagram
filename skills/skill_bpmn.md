@@ -39,12 +39,27 @@ Antes de qualquer outra análise, responda mentalmente:
 
 ### Passo 1 — Identificar Participantes
 
+> **REGRA CRÍTICA — Lanes vs Pools:**
+> Use **pools apenas quando houver organizações juridicamente distintas** (ex: empresa cliente ↔ fornecedor, empresa ↔ banco, empresa ↔ órgão regulador).
+> **Departamentos, equipes, cargos e papéis dentro da mesma empresa são SEMPRE lanes — NUNCA pools.**
+> Se todos os participantes da reunião trabalham para a mesma organização → **formato flat obrigatório**.
+
 | Situação | Formato de saída |
 |---|---|
-| Único participante (ou sistema sem autonomia) | Formato **flat** (`steps`, `edges`, `lanes`) |
-| Dois ou mais participantes organizacionais independentes | Formato **pools** com `message_flows` |
+| Todos os participantes pertencem à mesma empresa/organização | Formato **flat** (`steps`, `edges`, `lanes`) — **OBRIGATÓRIO** |
+| Participantes de organizações juridicamente distintas que trocam mensagens | Formato **pools** com `message_flows` |
 
-- Entidades independentes (ex: "Cliente", "Fornecedor", "SAP autônomo") → Pools separados
+Exemplos de **lanes** (mesma organização):
+- ✓ TI, Operações, Supervisora de Loja → 3 lanes num único pool da empresa
+- ✓ Financeiro, Jurídico, Diretoria → lanes, mesmo que sejam departamentos com autonomia
+- ✓ Gerente, Analista, Aprovador → lanes
+
+Exemplos de **pools** (organizações distintas):
+- ✓ Empresa contratante ↔ Fornecedor externo → 2 pools com message_flows
+- ✓ Loja ↔ Banco (aprovação de crédito) → 2 pools
+- ✓ Empresa ↔ Receita Federal → 2 pools
+
+- Entidades externas autônomas (ex: "Cliente externo", "Fornecedor", "SAP de terceiro") → Pools separados
 - Papéis internos do mesmo participante → Lanes
 - **Nunca** nomeie Lane como: `usuário`, `user`, `sistema`, `system`, `ator`, `actor`,
   `validador`, `pessoa`, `participante` ou equivalente genérico.

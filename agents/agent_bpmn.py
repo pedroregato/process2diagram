@@ -195,7 +195,39 @@ class AgentBPMN(BaseAgent):
 
     def run(self, hub: KnowledgeHub, output_language: str = "Auto-detect") -> KnowledgeHub:
         system, user = self.build_prompt(hub, output_language)
-        data = self._call_with_retry(system, user, hub)
+        # On BPMN, add a flat-format fallback hint to the retry mechanism:
+        # if JSON fails (often caused by oversized multi-pool output being truncated),
+        # the retry user prompt will explicitly request flat format.
+        _flat_hint = (
+            "\n\nIMPORTANT CORRECTION: Your previous response was truncated or malformed. "
+            "Use FLAT format ONLY: {\"name\": ..., \"steps\": [...], \"edges\": [...], \"lanes\": [...]}. "
+            "DO NOT use \"pools\" format. All participants from the same company use lanes, not pools."
+        )
+        _original_ensure_utf8 = self._ensure_utf8
+
+        def _bpmn_call_with_retry(system, user, hub):
+            parse = self._parse_json
+            last_error = None
+            for attempt in range(1 + self.max_retries):
+                try:
+                    raw = self._call_llm(system, user, hub)
+                    return parse(raw)
+                except (ValueError, KeyError) as exc:
+                    last_error = exc
+                    if attempt < self.max_retries:
+                        hint = repr(str(exc))[:300]
+                        user = _original_ensure_utf8(
+                            f"{user}\n\n"
+                            f"IMPORTANT: Your previous response caused a parse error:\n{hint}\n"
+                            f"Return ONLY valid JSON. No markdown. No explanation."
+                            f"{_flat_hint}"
+                        )
+            raise RuntimeError(
+                f"[{self.name}] Failed after {1 + self.max_retries} attempts. "
+                f"Last error: {repr(last_error)}"
+            )
+
+        data = _bpmn_call_with_retry(system, user, hub)
 
         hub.bpmn = self._build_model(data)
         self._enforce_rules(hub.bpmn, getattr(hub.nlp, "actors", None))
