@@ -23,7 +23,7 @@ from core.pipeline import run_pipeline
 from core.rerun_handlers import handle_rerun
 from core.project_store import (
     create_meeting, save_transcript, save_meeting_artifacts,
-    save_sbvr_from_hub, save_bpmn_from_hub,
+    save_sbvr_from_hub, save_bpmn_from_hub, save_requirements_from_hub,
     list_contexts as list_projects, list_meetings, load_meeting_as_hub,
 )
 from agents.agent_req_reconciler import AgentReqReconciler
@@ -245,6 +245,9 @@ if pipeline_mode == _MODE_NEW:
                         except Exception:
                             pass
 
+                    if hub.requirements.ready:
+                        save_requirements_from_hub(meeting_id, st.session_state.project_id, hub)
+
                     if hub.sbvr.ready:
                         save_sbvr_from_hub(meeting_id, st.session_state.project_id, hub)
 
@@ -374,6 +377,8 @@ else:
                                 project_id=_pid,
                                 hub=_lhub,
                             )
+                        if _lhub.requirements.ready:
+                            save_requirements_from_hub(_mid, _pid, _lhub)
                         if _lhub.sbvr.ready:
                             save_sbvr_from_hub(_mid, _pid, _lhub)
                         st.toast("💾 Alterações salvas.", icon="✅")

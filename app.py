@@ -83,7 +83,8 @@ if _admin:
     pages["Manutenção"] = [
         st.Page("pages/BatchRunner.py",        title="Batch Runner",        icon="🔄"),
         st.Page("pages/BpmnBackfill.py",       title="BPMN Backfill",       icon="🔧"),
-        st.Page("pages/MinutesBackfill.py",    title="Minutes Backfill",    icon="📝"),
+        st.Page("pages/MinutesBackfill.py",         title="Minutes Backfill",       icon="📝"),
+        st.Page("pages/RequirementsBackfill.py",    title="Requirements Backfill",  icon="📋"),
         st.Page("pages/TranscriptBackfill.py", title="Transcript Backfill", icon="📑"),
         st.Page("pages/PaymentAdmin.py",       title="Billing Admin",       icon="💳"),
     ]
