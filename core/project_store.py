@@ -545,6 +545,18 @@ def save_meeting_artifacts(meeting_id: str, hub) -> bool:
                 payload1["bmm_json"] = json.dumps(dataclasses.asdict(hub.bmm))
             except Exception:
                 pass
+        if hasattr(hub, "dmn") and hub.dmn.ready:
+            import json as _json_dmn, dataclasses as _dc_dmn
+            try:
+                payload1["dmn_json"] = _json_dmn.dumps(_dc_dmn.asdict(hub.dmn))
+            except Exception:
+                pass
+        if hasattr(hub, "argumentation") and hub.argumentation.ready:
+            import json as _json_arg, dataclasses as _dc_arg
+            try:
+                payload1["argumentation_json"] = _json_arg.dumps(_dc_arg.asdict(hub.argumentation))
+            except Exception:
+                pass
         if hasattr(hub, "meeting_time") and hub.meeting_time.ready:
             import json as _json2
             _mt = hub.meeting_time
