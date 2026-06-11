@@ -80,13 +80,13 @@ _PT_STOPWORDS = {
     "tanto", "tão", "tal", "tais", "há", "havia", "haja", "haverá",
 }
 
-# Pattern to identify significant technical terms: uppercase acronyms,
-# camelCase identifiers, or capitalized words (likely proper nouns / products)
+# Pattern to identify significant technical terms: uppercase acronyms and
+# camelCase identifiers. Proper names (capitalized words) intentionally
+# excluded to avoid participant names appearing as recurring topics.
 _TECH_TERM_RE = re.compile(
     r'\b(?:'
     r'[A-ZÁÉÍÓÚÂÊÔÃ]{2,}'          # ACRONYMS: SLA, BPMN, SE-SUITE
-    r'|[A-Z][a-z]+(?:[A-Z][a-z]+)+'  # CamelCase: SeeSuite
-    r'|[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,}){1,2}'  # Proper names: Maria José
+    r'|[A-Z][a-z]+(?:[A-Z][a-z]+)+'  # CamelCase: SeeSuite, RetailPro
     r')\b'
 )
 
@@ -96,12 +96,19 @@ _HYPHEN_TERM_RE = re.compile(
 )
 
 
+# Common interjections / noise words that match the ACRONYM pattern but carry
+# no topical meaning — excluded from keyword results.
+_NOISE_WORDS = {"OK", "OB", "VC", "VCS", "TA", "NAO", "SIM", "NE", "AI",
+                "LA", "SO", "JA", "ATÉ", "ATE", "AQUI", "ALI"}
+
+
 def _extract_keywords(text: str) -> list[str]:
     """Extract significant terms from a block of text for keyword matching."""
     terms: set[str] = set()
     for m in _TECH_TERM_RE.finditer(text):
         t = m.group().strip()
-        if len(t) >= 2 and t.lower() not in _PT_STOPWORDS:
+        # Require at least 3 chars for pure acronyms to filter single-letter noise
+        if len(t) >= 3 and t.lower() not in _PT_STOPWORDS and t.upper() not in _NOISE_WORDS:
             terms.add(t.upper() if len(t) <= 5 else t)
     for m in _HYPHEN_TERM_RE.finditer(text):
         t = m.group().strip()
