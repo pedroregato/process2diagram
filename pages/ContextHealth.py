@@ -1157,7 +1157,9 @@ with tab_alerts:
         from modules.cross_meeting_analyzer import find_recurring_topics
         with st.spinner("Analisando tópicos..."):
             topics, _rt_method = find_recurring_topics(project_id, max_results=8)
-        if _rt_method == "keyword":
+        if _rt_method and _rt_method.startswith("semantic_error:"):
+            st.warning(f"⚠️ Modo semântico falhou: `{_rt_method[15:]}` — exibindo resultado keyword.")
+        elif _rt_method == "keyword":
             st.caption(
                 "⚠️ Modo keyword ativo — embeddings não encontrados para este contexto. "
                 "Para tópicos com significado semântico real, gere os embeddings das transcrições."

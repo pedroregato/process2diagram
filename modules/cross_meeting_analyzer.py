@@ -175,15 +175,15 @@ def _semantic(
     threshold: float,
     max_pairs: int,
     meeting_map: dict[str, dict],
-) -> list[RecurringTopic]:
+) -> tuple[list[RecurringTopic], str | None]:
     """
     Call find_recurring_topics() SQL function.
-    Returns [] if the function doesn't exist or transcript_chunks is empty.
+    Returns (topics, error_msg) — error_msg is None on success.
     """
     from modules.supabase_client import get_supabase_client
     db = get_supabase_client()
     if not db:
-        return []
+        return [], "Supabase não configurado"
 
     try:
         rows = db.rpc(
@@ -194,11 +194,11 @@ def _semantic(
                 "p_max_results":  max_pairs,
             },
         ).execute().data or []
-    except Exception:
-        return []
+    except Exception as e:
+        return [], str(e)
 
     if not rows:
-        return []
+        return [], None
 
     topics: list[RecurringTopic] = []
     seen: set[frozenset] = set()    # deduplicate meeting pairs
@@ -234,6 +234,8 @@ def _semantic(
             similarity = sim,
             detection  = "semantic",
         ))
+
+    return topics, None
 
     return topics
 
@@ -324,17 +326,19 @@ def _keyword_fallback(
 
 def find_recurring_topics(
     project_id: str,
-    threshold: float = 0.87,
+    threshold: float = 0.80,
     max_results: int = 25,
 ) -> tuple[list[RecurringTopic], str]:
     """
     Detect recurring topics across meetings in the project.
 
-    Returns (topics, method) where method is "semantic" or "keyword".
+    Returns (topics, method) where method is "semantic", "keyword", or
+    "semantic_error:<msg>" when the SQL function fails unexpectedly.
 
     Strategy:
     1. Try semantic via find_recurring_topics() SQL function + embeddings.
-    2. Fall back to keyword overlap if embeddings unavailable.
+       Threshold 0.80 captures same-topic chunks across meetings in PT-BR.
+    2. Fall back to keyword overlap if embeddings unavailable or SQL fails.
     """
     from modules.supabase_client import get_supabase_client
     db = get_supabase_client()
@@ -356,11 +360,14 @@ def find_recurring_topics(
     meeting_map: dict[str, dict] = {m["id"]: m for m in rows if m.get("id")}
 
     # ── Try semantic ───────────────────────────────────────────────────────────
-    topics = _semantic(project_id, threshold, max_results, meeting_map)
+    topics, sem_error = _semantic(project_id, threshold, max_results, meeting_map)
     if topics:
         return topics, "semantic"
+    if sem_error:
+        # Surface the actual error so ContextHealth can show a diagnostic
+        return _keyword_fallback(project_id, max_results, meeting_map), f"semantic_error:{sem_error}"
 
-    # ── Fallback: keyword ──────────────────────────────────────────────────────
+    # ── Fallback: keyword (no embeddings found) ────────────────────────────────
     topics = _keyword_fallback(project_id, max_results, meeting_map)
     return topics, "keyword"
 
