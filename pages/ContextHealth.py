@@ -1113,7 +1113,7 @@ with tab_alerts:
             )
         if len(req_contra) > 10:
             st.caption(f"+ {len(req_contra)-10} adicionais — ver Req. Tracker.")
-        st.page_link("pages/ReqTracker.py", label="Abrir Req. Tracker")
+        st.page_link("pages/ValidationHub.py", label="Abrir Validação")
     else:
         st.success("Nenhuma contradição em versões de requisitos.")
 
