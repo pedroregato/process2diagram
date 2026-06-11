@@ -95,6 +95,19 @@ _HYPHEN_TERM_RE = re.compile(
     r'\b[A-Za-z]{2,}(?:-[A-Za-z]{2,})+\b'  # SE-SUITE, E-MAIL, sub-módulo
 )
 
+# PT-BR business noun phrases — far more meaningful than bare acronyms.
+# Captures: "gestão de documentos", "instrução de trabalho", "processo de homologação"
+_NOUN_PHRASE_RE = re.compile(
+    r'\b(?:processo|fluxo|módulo|sistema|catálogo|controle|gestão|validação|'
+    r'aprovação|auditoria|treinamento|capacitação|publicação|homologação|'
+    r'distribuição|instrução|cadastro|revisão|emissão|numeração|sequencial|'
+    r'documento|relatório|formulário|workflow|manual|norma|política|'
+    r'mapeamento|levantamento|elaboração|atualização|implantação|análise)'
+    r'\s+de\s+[a-záéíóúâêôãç]{3,25}'
+    r'(?:\s+de\s+[a-záéíóúâêôãç]{3,20})?',
+    re.IGNORECASE,
+)
+
 
 # Common interjections / noise words that match the ACRONYM pattern but carry
 # no topical meaning — excluded from keyword results.
@@ -112,18 +125,32 @@ _HYPHEN_NOISE = {
 
 
 def _extract_keywords(text: str) -> list[str]:
-    """Extract significant terms from a block of text for keyword matching."""
-    terms: set[str] = set()
+    """Extract significant terms from a block of text for keyword matching.
+
+    Returns noun phrases first (most descriptive), then CamelCase identifiers,
+    then uppercase acronyms — so callers can prioritise meaningful terms.
+    """
+    noun_phrases: set[str] = set()
+    for m in _NOUN_PHRASE_RE.finditer(text):
+        np = m.group().strip().lower()
+        # Normalise to title-ish form and deduplicate near-duplicates
+        if len(np) >= 10:
+            noun_phrases.add(np)
+
+    tech_terms: set[str] = set()
     for m in _TECH_TERM_RE.finditer(text):
         t = m.group().strip()
-        # Require at least 3 chars for pure acronyms to filter single-letter noise
         if len(t) >= 3 and t.lower() not in _PT_STOPWORDS and t.upper() not in _NOISE_WORDS:
-            terms.add(t.upper() if len(t) <= 5 else t)
+            tech_terms.add(t.upper() if len(t) <= 5 else t)
+
+    hyphen_terms: set[str] = set()
     for m in _HYPHEN_TERM_RE.finditer(text):
         t = m.group().strip()
         if len(t) >= 4 and t.lower() not in _HYPHEN_NOISE:
-            terms.add(t)
-    return sorted(terms)
+            hyphen_terms.add(t)
+
+    # Noun phrases first (most descriptive), then tech/hyphen terms
+    return sorted(noun_phrases) + sorted(tech_terms | hyphen_terms)
 
 
 def _context_around(text: str, term: str, chars: int = 200) -> str:
@@ -241,10 +268,16 @@ def _keyword_fallback(
             if num not in term_to_meetings[term]:
                 term_to_meetings[term].append(num)
 
-    # Keep terms appearing in 2+ meetings, sorted by frequency
+    # Keep terms appearing in 2+ meetings.
+    # Prefer noun phrases (longer, more descriptive) over bare acronyms in ranking.
+    def _term_rank(item: tuple) -> tuple:
+        term, nums = item
+        is_noun_phrase = " " in term   # noun phrases contain spaces
+        return (-len(nums), 0 if is_noun_phrase else 1, term)
+
     recurring = sorted(
         [(term, sorted(nums)) for term, nums in term_to_meetings.items() if len(nums) >= 2],
-        key=lambda x: (-len(x[1]), x[0]),
+        key=_term_rank,
     )[:max_topics]
 
     if not recurring:
@@ -266,7 +299,9 @@ def _keyword_fallback(
         m_b = meetings_by_num.get(n_b, {})
         t_a = m_a.get("transcript_clean") or m_a.get("transcript_raw") or ""
         t_b = m_b.get("transcript_clean") or m_b.get("transcript_raw") or ""
-        best_term = terms[0]
+        # Prefer the most descriptive term (noun phrase > CamelCase > acronym)
+        sorted_terms = sorted(terms, key=lambda t: (0 if " " in t else 1, -len(t)))
+        best_term = sorted_terms[0]
 
         topics.append(RecurringTopic(
             topic_id       = i + 1,
@@ -275,7 +310,7 @@ def _keyword_fallback(
                 n: meetings_by_num.get(n, {}).get("title") or f"Reunião {n}"
                 for n in nums
             },
-            keywords  = terms[:6],
+            keywords  = sorted_terms[:6],
             excerpt_a = _context_around(t_a, best_term) if t_a else "(sem transcrição)",
             excerpt_b = _context_around(t_b, best_term) if t_b else "(sem transcrição)",
             similarity = 0.0,

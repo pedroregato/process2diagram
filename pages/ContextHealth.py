@@ -1152,20 +1152,34 @@ with tab_alerts:
     # ── Tópicos Recorrentes ───────────────────────────────────────────────────
     st.markdown("")
     st.markdown("#### 🔄 Tópicos Recorrentes")
-    st.caption("Temas que aparecem em múltiplas reuniões (requer embeddings nas transcrições).")
+    st.caption("Temas que aparecem em múltiplas reuniões.")
     try:
         from modules.cross_meeting_analyzer import find_recurring_topics
         with st.spinner("Analisando tópicos..."):
-            topics, _method = find_recurring_topics(project_id, max_results=6)
+            topics, _rt_method = find_recurring_topics(project_id, max_results=8)
+        if _rt_method == "keyword":
+            st.caption(
+                "⚠️ Modo keyword ativo — embeddings não encontrados para este contexto. "
+                "Para tópicos com significado semântico real, gere os embeddings das transcrições."
+            )
+            st.page_link("pages/TranscriptBackfill.py", label="Gerar embeddings → Transcript Backfill", icon="📑")
         if topics:
             for t in topics:
+                # Use the most descriptive keyword as the header label
+                header_label = t.keywords[0] if t.keywords else "—"
                 with st.expander(
-                    f"{t.intensity_label} — Reuniões {t.meetings_str} — {', '.join(t.keywords[:3])}",
+                    f"{t.intensity_label} — {header_label} — Reuniões {t.meetings_str}",
                     expanded=False,
                 ):
+                    if len(t.keywords) > 1:
+                        st.caption("**Termos relacionados:** " + " · ".join(t.keywords[1:5]))
                     c1, c2 = st.columns(2)
-                    c1.caption(t.excerpt_a[:220])
-                    c2.caption(t.excerpt_b[:220])
+                    n_a = t.meetings[0]
+                    n_b = t.meetings[1] if len(t.meetings) > 1 else t.meetings[0]
+                    c1.markdown(f"**R{n_a} — {t.meeting_titles.get(n_a, '')}**")
+                    c1.caption(t.excerpt_a[:280])
+                    c2.markdown(f"**R{n_b} — {t.meeting_titles.get(n_b, '')}**")
+                    c2.caption(t.excerpt_b[:280])
         else:
             st.info("Nenhum tópico recorrente detectado.")
     except Exception as _e:
