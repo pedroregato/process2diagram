@@ -120,10 +120,12 @@ def _load_files_from_folder(folder_path: str) -> list[tuple[str, str]]:
 st.markdown("## 1️⃣ Projeto")
 
 projects = list_projects()
-proj_names = [p["name"] for p in projects] + ["➕ Criar novo projeto"]
-proj_map   = {p["name"]: p for p in projects}
+proj_names   = [p["name"] for p in projects] + ["➕ Criar novo projeto"]
+proj_map     = {p["name"]: p for p in projects}
+_active_pid  = st.session_state.get("active_project_id")
+_default_idx = next((i for i, p in enumerate(projects) if p["id"] == _active_pid), 0)
 
-sel_proj = st.selectbox("Selecione o projeto destino", proj_names, key="br_proj_sel")
+sel_proj = st.selectbox("Selecione o projeto destino", proj_names, index=_default_idx, key="br_proj_sel")
 
 project_id: str | None = None
 

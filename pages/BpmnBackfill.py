@@ -83,8 +83,10 @@ if not bpmn_tables_exist():
 # ── 1. Projeto ────────────────────────────────────────────────────────────────
 st.markdown("## 1️⃣ Contexto")
 projects = list_projects()
-proj_map = {p["name"]: p for p in projects}
-sel_proj = st.selectbox("Contexto", list(proj_map.keys()), key="bf_proj")
+proj_map     = {p["name"]: p for p in projects}
+_active_pid  = st.session_state.get("active_project_id")
+_default_idx = next((i for i, p in enumerate(projects) if p["id"] == _active_pid), 0)
+sel_proj     = st.selectbox("Contexto", list(proj_map.keys()), index=_default_idx, key="bf_proj")
 
 if not sel_proj:
     st.stop()

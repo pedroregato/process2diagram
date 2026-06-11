@@ -48,9 +48,11 @@ if not projects:
     st.warning("Nenhum projeto disponível.")
     st.stop()
 
-proj_map = {p["name"]: p for p in projects}
-sel_proj = st.selectbox("Contexto", list(proj_map.keys()), key="tb_proj")
-project_id = proj_map[sel_proj]["id"]
+proj_map     = {p["name"]: p for p in projects}
+_active_pid  = st.session_state.get("active_project_id")
+_default_idx = next((i for i, p in enumerate(projects) if p["id"] == _active_pid), 0)
+sel_proj     = st.selectbox("Contexto", list(proj_map.keys()), index=_default_idx, key="tb_proj")
+project_id   = proj_map[sel_proj]["id"]
 
 # ── 2. Reuniões sem transcrição ───────────────────────────────────────────────
 st.markdown("## 2️⃣ Reuniões sem transcrição")

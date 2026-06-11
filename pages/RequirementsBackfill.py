@@ -73,8 +73,10 @@ if not projects:
     st.warning("Nenhum projeto encontrado no banco de dados.")
     st.stop()
 
-proj_map = {p["name"]: p for p in projects}
-sel_proj = st.selectbox("Contexto", list(proj_map.keys()), key="rb_proj")
+proj_map     = {p["name"]: p for p in projects}
+_active_pid  = st.session_state.get("active_project_id")
+_default_idx = next((i for i, p in enumerate(projects) if p["id"] == _active_pid), 0)
+sel_proj     = st.selectbox("Contexto", list(proj_map.keys()), index=_default_idx, key="rb_proj")
 if not sel_proj:
     st.stop()
 
