@@ -1156,7 +1156,7 @@ with tab_alerts:
     try:
         from modules.cross_meeting_analyzer import find_recurring_topics
         with st.spinner("Analisando tópicos..."):
-            topics = find_recurring_topics(project_id, min_meetings=2, max_results=6)
+            topics = find_recurring_topics(project_id, max_results=6)
         if topics:
             for t in topics:
                 with st.expander(
