@@ -101,6 +101,15 @@ _HYPHEN_TERM_RE = re.compile(
 _NOISE_WORDS = {"OK", "OB", "VC", "VCS", "TA", "NAO", "SIM", "NE", "AI",
                 "LA", "SO", "JA", "ATÉ", "ATE", "AQUI", "ALI"}
 
+# Hyphenated words that are common Portuguese vocabulary (not technical terms)
+# — excluded from _HYPHEN_TERM_RE matches.
+_HYPHEN_NOISE = {
+    "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
+    "sexta-feira", "sábado", "domingo",
+    "guarda-chuva", "bem-vindo", "bem-vinda", "check-in", "check-out",
+    "follow-up", "follow-ups",
+}
+
 
 def _extract_keywords(text: str) -> list[str]:
     """Extract significant terms from a block of text for keyword matching."""
@@ -112,7 +121,7 @@ def _extract_keywords(text: str) -> list[str]:
             terms.add(t.upper() if len(t) <= 5 else t)
     for m in _HYPHEN_TERM_RE.finditer(text):
         t = m.group().strip()
-        if len(t) >= 4:
+        if len(t) >= 4 and t.lower() not in _HYPHEN_NOISE:
             terms.add(t)
     return sorted(terms)
 
