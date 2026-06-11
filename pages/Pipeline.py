@@ -41,6 +41,7 @@ except ImportError:
         import streamlit as st
         st.info("Análise de ruídos indisponível nesta versão.")
 from modules.session_security import get_session_llm_client
+from modules.i18n import t
 
 apply_auth_gate()
 
@@ -50,8 +51,8 @@ render_sidebar()
 # ── Cabeçalho ─────────────────────────────────────────────────────────────────
 from ui.components.page_header import render_page_header
 render_page_header(
-    "🚀", "Processar Transcrição",
-    "Cole ou faça upload de uma transcrição e execute o pipeline de agentes LLM.",
+    "🚀", t("pipeline_title"),
+    t("pipeline_caption"),
 )
 
 # ── Badge de cenário ativo ────────────────────────────────────────────────────
@@ -72,12 +73,12 @@ if _active_assignments:
 # ─────────────────────────────────────────────────────────────────────────────
 _db_available = supabase_configured()
 
-_MODE_NEW = "🆕 Nova transcrição"
-_MODE_LOAD = "📂 Reunião existente"
+_MODE_NEW = t("mode_new")
+_MODE_LOAD = t("mode_load")
 
 if _db_available:
     pipeline_mode = st.radio(
-        "Modo de operação",
+        t("operation_mode"),
         [_MODE_NEW, _MODE_LOAD],
         horizontal=True,
         key="pipeline_mode_radio",
@@ -107,7 +108,7 @@ if pipeline_mode == _MODE_NEW:
 
     # Verificação de API key
     if not get_session_llm_client(st.session_state.selected_provider):
-        st.warning("👈 Insira sua API key na sidebar para continuar.")
+        st.warning(t("insert_api_key"))
         st.stop()
 
     # ── Pipeline principal ────────────────────────────────────────────────────
@@ -115,12 +116,12 @@ if pipeline_mode == _MODE_NEW:
         if not any([st.session_state.run_quality, st.session_state.run_bpmn,
                     st.session_state.run_minutes, st.session_state.run_requirements,
                     st.session_state.run_synthesizer]):
-            st.warning("Selecione ao menos um agente na sidebar.")
+            st.warning(t("select_one_agent"))
             st.stop()
 
         client_info = get_session_llm_client(st.session_state.selected_provider)
         if not client_info:
-            st.error("API key ausente.")
+            st.error(t("api_key_missing"))
             st.stop()
 
         from core.knowledge_hub import KnowledgeHub
@@ -175,7 +176,7 @@ if pipeline_mode == _MODE_NEW:
             "run_query_summarizer":      st.session_state.get("run_query_summarizer", False),
         }
 
-        with st.status("⏳ Executando pipeline de agentes...", expanded=True) as _pipeline_status:
+        with st.status(t("pipeline_running"), expanded=True) as _pipeline_status:
             def update_progress(step, status):
                 if "done" in status:
                     icon = "✅"
@@ -196,15 +197,15 @@ if pipeline_mode == _MODE_NEW:
                 )
                 _pipeline_status.update(
                     label=(
-                        f"✅ Pipeline concluído · {hub.meta.total_tokens_used:,} tokens usados"
-                        f"{_cache_label}"
+                        t("pipeline_done", tokens=hub.meta.total_tokens_used)
+                        + _cache_label
                     ),
                     state="complete",
                     expanded=False,
                 )
             except Exception as e:
-                _pipeline_status.update(label="❌ Erro no pipeline", state="error", expanded=True)
-                st.error(f"Erro no pipeline: {e}")
+                _pipeline_status.update(label=t("pipeline_error"), state="error", expanded=True)
+                st.error(f"{t('pipeline_error')}: {e}")
                 st.stop()
 
         # ── Persistência no Supabase + reconciliação de requisitos ───────────
@@ -288,11 +289,11 @@ if pipeline_mode == _MODE_NEW:
 # MODO B — REUNIÃO EXISTENTE
 # ─────────────────────────────────────────────────────────────────────────────
 else:
-    st.markdown("### Carregar reunião processada")
+    st.markdown(t("load_meeting"))
 
     projects = list_projects()
     if not projects:
-        st.info("Nenhum contexto encontrado no banco de dados.")
+        st.info(t("no_context_db"))
         st.stop()
 
     proj_options = {p["name"]: p["id"] for p in projects}
@@ -313,7 +314,7 @@ else:
 
     meetings = list_meetings(selected_proj_id)
     if not meetings:
-        st.info("Nenhuma reunião encontrada para este contexto.")
+        st.info(t("no_meetings_ctx"))
         st.stop()
 
     def _fmt_meeting(m: dict) -> str:
@@ -325,14 +326,14 @@ else:
     meet_ids    = [m["id"] for m in meetings]
 
     selected_meet_label = st.selectbox(
-        "Reunião",
+        t("meeting_selector"),
         meet_labels,
         key="load_meet_select",
     )
     selected_meet_id = meet_ids[meet_labels.index(selected_meet_label)]
 
     col_load, col_gap = st.columns([1, 4])
-    load_clicked = col_load.button("📂 Carregar", type="primary", key="btn_load_meeting")
+    load_clicked = col_load.button(t("load"), type="primary", key="btn_load_meeting")
 
     if load_clicked:
         with st.spinner("Carregando artefatos da reunião..."):
@@ -363,7 +364,7 @@ else:
         _pid  = st.session_state.get("_loaded_project_id")
         if _mid and _pid:
             st.markdown("---")
-            if st.button("💾 Salvar alterações no banco", key="btn_save_back"):
+            if st.button(t("save_back"), key="btn_save_back"):
                 with st.spinner("Salvando..."):
                     try:
                         save_meeting_artifacts(_mid, _lhub)
@@ -415,10 +416,7 @@ if "hub" in st.session_state:
     if _hits > 0:
         _usd = _saved / 1_000_000 * 0.27
         _col_msg, _col_help = st.columns([10, 1])
-        _col_msg.success(
-            f"⚡ **{_hits} agente(s) responderam via cache** — "
-            f"{_saved:,} tokens economizados (~${_usd:.4f} USD)"
-        )
+        _col_msg.success(t("cache_hits", hits=_hits, tokens=_saved, usd=_usd))
         _col_help.metric(
             label=" ",
             value="ⓘ",
@@ -435,11 +433,7 @@ if "hub" in st.session_state:
     # ── Long context indicator ────────────────────────────────────────────────
     _lc_calls = getattr(getattr(hub, "meta", None), "long_context_calls", 0)
     if _lc_calls > 0:
-        st.info(
-            f"📄 **Contexto longo ativado em {_lc_calls} agente(s)** — "
-            "limite de tokens de saída aumentado para evitar truncamento em transcrições longas.",
-            icon="📄",
-        )
+        st.info(t("long_ctx_info", calls=_lc_calls), icon="📄")
     # ─────────────────────────────────────────────────────────────────────────
 
     # ── Sugestão de título ────────────────────────────────────────────────────
@@ -452,9 +446,9 @@ if "hub" in st.session_state:
         with st.container(border=True):
             _tc, _tb = st.columns([5, 1])
             _tc.markdown(
-                f"**💡 Título sugerido pelo agente de ata:**  \n> {_suggested_title}"
+                f"{t('suggested_title')}  \n> {_suggested_title}"
             )
-            if _tb.button("Usar este título", key="btn_use_suggested_title", use_container_width=True):
+            if _tb.button(t("use_this_title"), key="btn_use_suggested_title", use_container_width=True):
                 st.session_state.meeting_title = _suggested_title
                 _mid_for_title = st.session_state.get("current_meeting_id")
                 if _mid_for_title:
@@ -491,21 +485,21 @@ if "hub" in st.session_state:
     # ─────────────────────────────────────────────────────────────────────────
 
     tab_labels = {
-        "minutes":          "📋 Ata de Reunião",
-        "requirements":     "📝 Requisitos",
-        "bpmn":             "📐 BPMN 2.0",
-        "mermaid":          "📊 Mermaid",
-        "synthesizer":      "📄 Relatório Executivo",
-        "query_summary":    "🔎 Sumário por Perspectiva",
-        "export":           "📦 Exportar",
-        "quality":          "🔬 Qualidade",
-        "sbvr":             "📖 SBVR",
-        "bmm":              "🎯 BMM",
-        "validation":       "🏆 Validação BPMN",
-        "dmn":              "⚖️ DMN",
-        "argumentation":    "🗺️ IBIS",
-        "communication_noise": "🔊 Ruídos",
-        "devtools":         "🔍 Dev Tools",
+        "minutes":             t("tab_minutes"),
+        "requirements":        t("tab_requirements"),
+        "bpmn":                t("tab_bpmn"),
+        "mermaid":             t("tab_mermaid"),
+        "synthesizer":         t("tab_synthesizer"),
+        "query_summary":       t("tab_query_summary"),
+        "export":              t("tab_export"),
+        "quality":             t("tab_quality"),
+        "sbvr":                t("tab_sbvr"),
+        "bmm":                 t("tab_bmm"),
+        "validation":          t("tab_validation"),
+        "dmn":                 t("tab_dmn"),
+        "argumentation":       t("tab_argumentation"),
+        "communication_noise": t("tab_comm_noise"),
+        "devtools":            t("tab_devtools"),
     }
 
     # ── Monta lista única de abas na ordem desejada ───────────────────────────

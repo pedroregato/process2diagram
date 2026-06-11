@@ -11,6 +11,8 @@ def init_session_state():
         st.session_state.selected_provider = "DeepSeek"
     if "provider_cfg" not in st.session_state:
         st.session_state.provider_cfg = AVAILABLE_PROVIDERS.get(st.session_state.selected_provider, {})
+    if "ui_language" not in st.session_state:
+        st.session_state.ui_language = "pt-BR"
     if "output_language" not in st.session_state:
         st.session_state.output_language = "Auto-detect"
     if "prefix" not in st.session_state:

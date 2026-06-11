@@ -24,6 +24,7 @@ import streamlit as st
 
 from ui.auth_gate import apply_auth_gate
 from modules.auth import is_admin
+from modules.i18n import t
 from core.project_store import get_global_stats, list_recent_meetings, list_contexts
 
 apply_auth_gate()
@@ -211,7 +212,7 @@ st.markdown(f"""
 <div class="home-header">
   <div>
     <div class="greeting">
-      Bem-vindo(a), {user_name}
+      {t("welcome", name=user_name)}
       <span class="role-badge"
             style="background:{role_color}22;color:{role_color};border:1px solid {role_color}55">
         {role_label}
@@ -221,7 +222,7 @@ st.markdown(f"""
   </div>
   <div class="brand-badge">
     <span>⚙</span>
-    Process2Diagram<br>Central de Operações
+    Process2Diagram<br>{t("ops_center")}
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -248,22 +249,22 @@ if _all_projects and not _ap_id and len(_all_projects) == 1:
 if _ap_id:
     _col_badge, _col_change = st.columns([5, 1])
     with _col_badge:
-        st.success(f"📁 **Contexto de trabalho:** {_ap_name}")
+        st.success(f"📁 **{t('working_context')}:** {_ap_name}")
     with _col_change:
-        if st.button("Trocar", key="home_change_proj", use_container_width=True):
+        if st.button(t("change"), key="home_change_proj", use_container_width=True):
             st.session_state["active_project_id"]   = None
             st.session_state["active_project_name"] = ""
             st.rerun()
 elif _all_projects:
     with st.container(border=True):
-        st.markdown("#### 📁 Selecione o Contexto de Trabalho")
-        st.caption("O contexto ativo é usado em todas as páginas: Assistente, Artefatos, Editor BPMN, ROI-TR e ValidationHub.")
+        st.markdown(f"#### {t('select_context')}")
+        st.caption(t("select_context_caption"))
         _proj_map = {p["name"]: p for p in _all_projects}
         _proj_sel = st.selectbox(
-            "Contexto", list(_proj_map.keys()),
+            t("context_label"), list(_proj_map.keys()),
             key="home_proj_sel", label_visibility="collapsed",
         )
-        if st.button("✅ Ativar Contexto", key="home_activate_proj",
+        if st.button(t("activate"), key="home_activate_proj",
                      type="primary", use_container_width=True):
             _p = _proj_map[_proj_sel]
             st.session_state["active_project_id"]   = _p["id"]
@@ -273,10 +274,7 @@ elif _all_projects:
             _load_projects.clear()
             st.rerun()
 else:
-    st.info(
-        "ℹ️ Nenhum contexto encontrado. "
-        "Configure o Supabase em **Sistema → Configurações** e crie um contexto."
-    )
+    st.info(t("no_context_found"))
 
 # ── 2. KPIs ───────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=60, show_spinner=False)
@@ -296,11 +294,11 @@ def _fmt(n: int, available: bool) -> str:
 _KPI_ACCENTS = ["#C97B1A", "#3b82f6", "#10b981", "#8b5cf6", "#ec4899"]
 _KPI_ICONS   = ["📁", "🗓️", "📝", "📐", "📄"]
 _KPI_DATA    = [
-    ("n_projects",   "Contextos"),
-    ("n_meetings",   "Reuniões"),
-    ("n_reqs",       "Requisitos"),
-    ("n_bpmn_procs", "Processos BPMN"),
-    ("n_documents",  "Documentos"),
+    ("n_projects",   t("kpi_contexts")),
+    ("n_meetings",   t("kpi_meetings")),
+    ("n_reqs",       t("kpi_requirements")),
+    ("n_bpmn_procs", t("kpi_bpmn")),
+    ("n_documents",  t("kpi_documents")),
 ]
 
 cols = st.columns(5)
@@ -317,20 +315,16 @@ for col, (key, label), accent, icon in zip(cols, _KPI_DATA, _KPI_ACCENTS, _KPI_I
         )
 
 if not stats["available"]:
-    st.caption("⚠️ Banco de dados não configurado — KPIs indisponíveis. Configure em **Sistema → Configurações**.")
+    st.caption(t("kpi_unavailable"))
 
 # ── 3. Fluxo de trabalho ──────────────────────────────────────────────────────
-st.markdown('<div class="section-hdr">Fluxo de trabalho</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="section-hdr">{t("workflow_title")}</div>', unsafe_allow_html=True)
 
 _STEPS = [
-    ("#C97B1A", "1", "📥", "Processar",
-     "Cole ou faça upload de uma transcrição e execute o pipeline de agentes"),
-    ("#3b82f6", "2", "✅", "Validar",
-     "Revise e aprove requisitos, termos SBVR, regras e diagramas BPMN"),
-    ("#10b981", "3", "🔍", "Analisar",
-     "Converse com o Assistente, acompanhe requisitos e indicadores de ROI"),
-    ("#8b5cf6", "4", "📤", "Exportar",
-     "Edite diagramas BPMN, visualize fluxos e exporte atas, relatórios e XML"),
+    ("#C97B1A", "1", "📥", t("step1_title"), t("step1_desc")),
+    ("#3b82f6", "2", "✅", t("step2_title"), t("step2_desc")),
+    ("#10b981", "3", "🔍", t("step3_title"), t("step3_desc")),
+    ("#8b5cf6", "4", "📤", t("step4_title"), t("step4_desc")),
 ]
 
 f1, arr1, f2, arr2, f3, arr3, f4 = st.columns([4, 1, 4, 1, 4, 1, 4])
@@ -358,7 +352,7 @@ for col, arrow_col, (color, num, icon, title, desc) in zip(
         )
 
 # ── 4. Acesso rápido + Reuniões recentes ──────────────────────────────────────
-st.markdown('<div class="section-hdr">Acesso rápido</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="section-hdr">{t("quick_access")}</div>', unsafe_allow_html=True)
 
 col_nav, col_recent = st.columns([3, 2], gap="large")
 
@@ -366,65 +360,65 @@ col_nav, col_recent = st.columns([3, 2], gap="large")
 with col_nav:
 
     # Pipeline
-    st.markdown('<div class="area-card"><div class="area-title">⚡ Pipeline</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="area-card"><div class="area-title">{t("area_pipeline")}</div>', unsafe_allow_html=True)
     b1, b2, b3 = st.columns(3)
     with b1:
-        st.page_link("pages/Pipeline.py",   label="🚀 Nova Transcrição",    use_container_width=True)
+        st.page_link("pages/Pipeline.py",   label=t("btn_new_transcript"), use_container_width=True)
     with b2:
-        st.page_link("pages/Diagramas.py",  label="📐 Diagramas",          use_container_width=True)
+        st.page_link("pages/Diagramas.py",  label=t("btn_diagrams"),       use_container_width=True)
     with b3:
-        st.page_link("pages/BpmnEditor.py", label="✏️ Editor BPMN",        use_container_width=True)
+        st.page_link("pages/BpmnEditor.py", label=t("btn_bpmn_editor"),    use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
     # Análise
-    st.markdown('<div class="area-card"><div class="area-title">🔍 Análise</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="area-card"><div class="area-title">{t("area_analysis")}</div>', unsafe_allow_html=True)
     b4, b5, b6, b7 = st.columns(4)
     with b4:
-        st.page_link("pages/Assistente.py",     label="💬 Assistente",    use_container_width=True)
+        st.page_link("pages/Assistente.py",    label=t("btn_assistant"),  use_container_width=True)
     with b5:
-        st.page_link("pages/ValidationHub.py",  label="✅ Validação",     use_container_width=True)
+        st.page_link("pages/ValidationHub.py", label=t("btn_validation"), use_container_width=True)
     with b6:
-        st.page_link("pages/Artefatos.py",       label="🗂️ Artefatos",     use_container_width=True)
+        st.page_link("pages/Artefatos.py",     label=t("btn_artifacts"),  use_container_width=True)
     with b7:
-        st.page_link("pages/MeetingROI.py",     label="📊 ROI-TR",        use_container_width=True)
+        st.page_link("pages/MeetingROI.py",    label=t("btn_roi"),        use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
     # Sistema
-    st.markdown('<div class="area-card"><div class="area-title">⚙️ Sistema</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="area-card"><div class="area-title">{t("area_system")}</div>', unsafe_allow_html=True)
     if is_admin():
         s1, s2, s3, s4 = st.columns(4)
         with s1:
-            st.page_link("pages/Settings.py",         label="⚙️ Configurações",  use_container_width=True)
+            st.page_link("pages/Settings.py",         label=t("btn_settings"),      use_container_width=True)
         with s2:
-            st.page_link("pages/DatabaseOverview.py", label="🗄️ Banco de Dados", use_container_width=True)
+            st.page_link("pages/DatabaseOverview.py", label=t("btn_database"),      use_container_width=True)
         with s3:
-            st.page_link("pages/MasterAdmin.py",      label="🛡️ Master Admin",   use_container_width=True)
+            st.page_link("pages/MasterAdmin.py",      label=t("btn_master_admin"),  use_container_width=True)
         with s4:
-            st.page_link("pages/CostEstimator.py",    label="💰 Custos",         use_container_width=True)
+            st.page_link("pages/CostEstimator.py",    label=t("btn_costs"),         use_container_width=True)
     else:
         s1, s2 = st.columns(2)
         with s1:
-            st.page_link("pages/Settings.py",      label="⚙️ Configurações",       use_container_width=True)
+            st.page_link("pages/Settings.py",      label=t("btn_settings"),      use_container_width=True)
         with s2:
-            st.page_link("pages/CostEstimator.py", label="💰 Estimativa de Custo", use_container_width=True)
+            st.page_link("pages/CostEstimator.py", label=t("btn_cost_estimate"), use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Orientações
-    st.markdown('<div class="area-card"><div class="area-title">📖 Orientações</div>', unsafe_allow_html=True)
+    # Orientações / Guides
+    st.markdown(f'<div class="area-card"><div class="area-title">{t("area_guides")}</div>', unsafe_allow_html=True)
     g1, g2 = st.columns(2)
     with g1:
-        st.page_link("pages/Orientacoes_ComoIniciar.py",  label="📖 Como Iniciar",  use_container_width=True)
+        st.page_link("pages/Orientacoes_ComoIniciar.py",  label=t("btn_how_to_start"),  use_container_width=True)
     with g2:
-        st.page_link("pages/Orientacoes_Arquiteturas.py", label="🏗️ Arquiteturas", use_container_width=True)
+        st.page_link("pages/Orientacoes_Arquiteturas.py", label=t("btn_architectures"), use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ── Reuniões recentes ─────────────────────────────────────────────────────────
 with col_recent:
-    st.markdown('<div class="section-hdr" style="margin-top:0">Reuniões recentes</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-hdr" style="margin-top:0">{t("recent_meetings")}</div>', unsafe_allow_html=True)
 
     if not recent:
-        st.caption("Nenhuma reunião encontrada. Processe a primeira transcrição para começar.")
-        st.page_link("pages/Pipeline.py", label="🚀 Processar primeira transcrição")
+        st.caption(t("no_meetings"))
+        st.page_link("pages/Pipeline.py", label=t("btn_process_first"))
     else:
         for mtg in recent:
             num   = mtg.get("meeting_number", "?")
@@ -433,10 +427,11 @@ with col_recent:
             proj  = _ap_name or "—"
 
             label_short = title if len(title) <= 38 else title[:35] + "…"
+            _mtg_label = t("meeting_label", num=num)
 
             st.markdown(f"""
 <div class="mtg-card">
-  <div class="mtg-num">REUNIÃO #{num}</div>
+  <div class="mtg-num">{_mtg_label}</div>
   <div class="mtg-title">{label_short}</div>
   <div class="mtg-meta">📁 {proj} &nbsp;·&nbsp; 📅 {date}</div>
 </div>""", unsafe_allow_html=True)
@@ -445,22 +440,22 @@ with col_recent:
             with lc1:
                 st.page_link(
                     "pages/Assistente.py",
-                    label="💬 Assistente",
-                    help="Consultar dados desta reunião no Assistente",
+                    label=t("mtg_link_assistant"),
+                    help=t("mtg_help_assistant"),
                     use_container_width=True,
                 )
             with lc2:
                 st.page_link(
                     "pages/ValidationHub.py",
-                    label="✅ Validação",
-                    help="Revisar requisitos e artefatos desta reunião",
+                    label=t("mtg_link_validation"),
+                    help=t("mtg_help_validation"),
                     use_container_width=True,
                 )
             with lc3:
                 st.page_link(
                     "pages/BpmnEditor.py",
-                    label="✏️ Editor",
-                    help="Editar diagrama BPMN desta reunião",
+                    label=t("mtg_link_editor"),
+                    help=t("mtg_help_editor"),
                     use_container_width=True,
                 )
 
@@ -468,7 +463,7 @@ with col_recent:
             "<div style='text-align:right;margin-top:.4rem'>",
             unsafe_allow_html=True,
         )
-        st.page_link("pages/Assistente.py", label="Ver todas as reuniões →")
+        st.page_link("pages/Assistente.py", label=t("mtg_link_all"))
         st.markdown("</div>", unsafe_allow_html=True)
 
 # ── 5. Agenda do Contexto ────────────────────────────────────────────────────
