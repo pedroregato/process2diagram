@@ -227,20 +227,31 @@ if st.button(
 
             hub = run_pipeline(hub, pipeline_config, lambda *_: None)
 
-            if hub.requirements.ready and hub.requirements.requirements:
+            _ready   = hub.requirements.ready
+            _n_req   = len(hub.requirements.requirements)
+            _t_len   = len(transcript)
+            _ran     = "requirements" in getattr(hub.meta, "agents_run", [])
+
+            if _ready and _n_req:
                 n_saved = save_requirements_from_hub(meeting_id, project_id, hub)
                 results.append({
                     "Nº":          meeting.get("meeting_number") or "—",
                     "Título":      title,
                     "Status":      "✅ Requisitos salvos",
                     "Requisitos":  str(n_saved),
+                    "Diagnóstico": f"agente rodou, {_n_req} req extraídos",
                 })
             else:
+                _diag = (
+                    f"agente_ran={_ran} ready={_ready} n_req={_n_req} "
+                    f"transcript_len={_t_len}"
+                )
                 results.append({
                     "Nº":          meeting.get("meeting_number") or "—",
                     "Título":      title,
                     "Status":      "⚠️ Nenhum requisito extraído",
                     "Requisitos":  "0",
+                    "Diagnóstico": _diag,
                 })
         except Exception as exc:
             results.append({
@@ -248,6 +259,7 @@ if st.button(
                 "Título":      title,
                 "Status":      f"❌ Erro: {exc}",
                 "Requisitos":  "—",
+                "Diagnóstico": type(exc).__name__,
             })
 
         progress_bar.progress((i + 1) / total)
