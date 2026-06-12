@@ -1084,6 +1084,11 @@ with tab_dmn:
         st.rerun()  # re-renderiza para atualizar contador no cabeçalho e métricas
     dmn_decisions = st.session_state[_DMN_SS]  # agora é lista (pode ser [])
 
+    if st.button("🔄 Atualizar DMN", key="art_dmn_refresh"):
+        st.session_state.pop(_DMN_SS, None)
+        _load_dmn.clear()
+        st.rerun()
+
     if not dmn_decisions:
         st.info("Nenhuma tabela de decisão DMN registrada. Execute o pipeline com o agente DMN habilitado.")
     else:
@@ -1174,6 +1179,11 @@ with tab_ibis:
             st.session_state[_IBIS_SS] = _load_argumentation(project_id)
         st.rerun()  # re-renderiza para atualizar contador no cabeçalho e métricas
     ibis_questions = st.session_state[_IBIS_SS]  # agora é lista (pode ser [])
+
+    if st.button("🔄 Atualizar IBIS", key="art_ibis_refresh"):
+        st.session_state.pop(_IBIS_SS, None)
+        _load_argumentation.clear()
+        st.rerun()
 
     if not ibis_questions:
         st.info("Nenhum mapa argumentativo IBIS registrado. Execute o pipeline com o agente Argumentação habilitado.")
