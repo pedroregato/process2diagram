@@ -255,14 +255,18 @@ class Orchestrator:
             except Exception as _ata_err:
                 hub.minutes.ata_html_error = str(_ata_err)
 
-            if run_requirements:
-                self._progress("Agente Requisitos", "running")
-                try:
-                    hub = self._agent_requirements.run(hub, output_language)
-                    self._progress("Agente Requisitos", "done")
-                except Exception as exc:
-                    self._progress("Agente Requisitos", f"error: {exc}")
-                    raise RuntimeError(f"Requirements Agent failed: {exc}") from exc
+        # ── Step 4: Requirements Agent ────────────────────────────────────────
+        # Runs independently of run_minutes — Requirements Backfill uses
+        # run_minutes=False + run_requirements=True.
+        # The parallel path (both_enabled) already handled the combined case above.
+        if run_requirements and not both_enabled:
+            self._progress("Agente Requisitos", "running")
+            try:
+                hub = self._agent_requirements.run(hub, output_language)
+                self._progress("Agente Requisitos", "done")
+            except Exception as exc:
+                self._progress("Agente Requisitos", f"error: {exc}")
+                raise RuntimeError(f"Requirements Agent failed: {exc}") from exc
 
         # ── Step 5: SBVR Agent (legacy position — only if not already run above) ─
         # This block is now a no-op (run_sbvr is handled at step 2.5), kept for
