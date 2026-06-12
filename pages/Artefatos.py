@@ -1091,6 +1091,23 @@ with tab_dmn:
 
     if not dmn_decisions:
         st.info("Nenhuma tabela de decisão DMN registrada. Execute o pipeline com o agente DMN habilitado.")
+        # ── Diagnóstico temporário ────────────────────────────────────────────
+        with st.expander("🔍 Diagnóstico DMN (temporário)", expanded=False):
+            try:
+                from modules.supabase_client import get_supabase_client as _sc
+                _db_diag = _sc()
+                if _db_diag:
+                    _rows = _db_diag.table("meetings").select(
+                        "id, meeting_number, dmn_json"
+                    ).eq("project_id", project_id).execute().data or []
+                    st.write(f"**Rows retornadas:** {len(_rows)}")
+                    for _r in _rows[:3]:
+                        _raw = _r.get("dmn_json") or ""
+                        st.write(f"Reunião #{_r.get('meeting_number')} — `dmn_json` len={len(_raw)} — preview: `{_raw[:120]}`")
+                else:
+                    st.warning("Supabase não conectado.")
+            except Exception as _exc:
+                st.error(f"Erro no diagnóstico: {_exc}")
     else:
         st.caption(
             f"**{len(dmn_decisions)} decisão(ões)** extraídas de {len({d['_meeting_id'] for d in dmn_decisions})} reunião(ões). "
