@@ -359,7 +359,11 @@ def list_meetings(project_id: str) -> list[dict]:
     try:
         return _ok(
             db.table("meetings")
-            .select("id, title, meeting_date, meeting_number, created_at, llm_provider, total_tokens, minutes_md")
+            .select(
+                "id, title, meeting_date, meeting_number, created_at, "
+                "llm_provider, total_tokens, minutes_md, "
+                "transcript_raw, transcript_clean"
+            )
             .eq("project_id", project_id)
             .order("meeting_number")
             .execute()
