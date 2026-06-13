@@ -109,6 +109,38 @@ def render(hub, prefix, suffix):
         import json as _json2, dataclasses
         st.markdown("**Argumentation Map (IBIS)**")
         ibis_data = {"questions": [dataclasses.asdict(q) for q in hub.argumentation.questions]}
+        # Build Markdown report
+        _res_lbl_ex = {"decided": "✅ Decidida", "deferred": "⏳ Adiada", "unresolved": "❓ Em aberto"}
+        _md_lines = [f"# Mapa Argumentativo IBIS\n\n**Total:** {len(hub.argumentation.questions)} questão(ões)\n"]
+        for _q in hub.argumentation.questions:
+            _qd  = dataclasses.asdict(_q)
+            _rq  = _qd.get("resolution") or {}
+            _rtq = _rq.get("type", "unresolved")
+            _md_lines.append(f"\n## {_qd.get('id','?')} — {_qd.get('statement','')}")
+            if _qd.get("raised_by"):
+                _md_lines.append(f"\n*Levantada por: {_qd['raised_by']}*  ")
+            _md_lines.append(f"**Status:** {_res_lbl_ex.get(_rtq, _rtq)}\n")
+            for _alt in _qd.get("alternatives", []):
+                _ch = " ✅ *(escolhida)*" if _alt.get("was_chosen") else ""
+                _md_lines.append(f"\n### {_alt.get('id','?')}{_ch} — {_alt.get('description','')}")
+                if _alt.get("pros"):
+                    _md_lines.append("\n**A favor:**")
+                    _md_lines.extend(f"- {p}" for p in _alt["pros"])
+                if _alt.get("cons"):
+                    _md_lines.append("\n**Contra:**")
+                    _md_lines.extend(f"- {c}" for c in _alt["cons"])
+            if _rq.get("rationale"):
+                _md_lines.append(f"\n**Resolução:** {_rq['rationale']}")
+            if _rq.get("with_caveats"):
+                _md_lines.append("\n**Ressalvas:**")
+                _md_lines.extend(f"- {c}" for c in _rq["with_caveats"])
+            _md_lines.append("\n---")
+        st.download_button(
+            "⬇️ IBIS Markdown (.md)",
+            data="\n".join(_md_lines),
+            file_name=make_filename("argumentation", "md", prefix, suffix),
+            key="export_tab_ibis_md",
+        )
         st.download_button(
             "⬇️ IBIS JSON",
             data=_json2.dumps(ibis_data, ensure_ascii=False, indent=2),

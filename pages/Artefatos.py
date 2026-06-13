@@ -1654,6 +1654,110 @@ with tab_ibis:
         if sel_res != "Todas":
             filtered_ibis = [q for q in filtered_ibis if q.get("resolution", {}).get("type") == sel_res]
 
+        # ── Fase 5: Filtros avançados — busca por texto + ator ───────────────
+        _f5c1, _f5c2 = st.columns([3, 2])
+        _ibis_search = _f5c1.text_input(
+            "Buscar nas questões",
+            key="ibis_text_search",
+            placeholder="🔍 palavra-chave…",
+            label_visibility="collapsed",
+        )
+        _all_ibis_actors = sorted({
+            _name
+            for _q2 in ibis_questions
+            for _name in (
+                [_q2.get("raised_by") or ""]
+                + [_a2.get("proposed_by") or "" for _a2 in _q2.get("alternatives", [])]
+                + [_s for _a2 in _q2.get("alternatives", []) for _s in (_a2.get("supported_by") or [])]
+                + [_o for _a2 in _q2.get("alternatives", []) for _o in (_a2.get("opposed_by") or [])]
+            )
+            if _name
+        })
+        _sel_actor = _f5c2.selectbox(
+            "Filtrar por ator",
+            ["Todos os atores"] + _all_ibis_actors,
+            key="ibis_actor_filter",
+            label_visibility="collapsed",
+        )
+
+        if _ibis_search:
+            _kw = _ibis_search.lower()
+            filtered_ibis = [
+                q for q in filtered_ibis
+                if _kw in q.get("statement", "").lower()
+                or any(_kw in (_a.get("description") or "").lower() for _a in q.get("alternatives", []))
+                or any(_kw in _p.lower() for _a in q.get("alternatives", []) for _p in (_a.get("pros") or []))
+                or any(_kw in _c.lower() for _a in q.get("alternatives", []) for _c in (_a.get("cons") or []))
+            ]
+
+        if _sel_actor != "Todos os atores":
+            def _q_has_actor(_q3, _actor):
+                if (_q3.get("raised_by") or "") == _actor:
+                    return True
+                for _a3 in _q3.get("alternatives", []):
+                    if (_a3.get("proposed_by") or "") == _actor:
+                        return True
+                    if _actor in (_a3.get("supported_by") or []):
+                        return True
+                    if _actor in (_a3.get("opposed_by") or []):
+                        return True
+                return False
+            filtered_ibis = [q for q in filtered_ibis if _q_has_actor(q, _sel_actor)]
+
+        # ── Fase 4: Exportar Relatório IBIS (.md) ────────────────────────────
+        def _ibis_to_markdown(questions: list) -> str:
+            _res_lbl = {
+                "decided":    "✅ Decidida",
+                "deferred":   "⏳ Adiada",
+                "unresolved": "❓ Em aberto",
+            }
+            _lines = ["# Mapa Argumentativo IBIS\n"]
+            _lines.append(f"**Total de questões:** {len(questions)}\n")
+            for _q4 in questions:
+                _res4  = _q4.get("resolution") or {}
+                _rt4   = _res4.get("type", "unresolved")
+                _mnum4 = _q4.get("_meeting_number", "?")
+                _lines.append(f"\n## {_q4.get('id', '?')} — {_q4.get('statement', '')}")
+                _lines.append(f"\n**Reunião:** {_mnum4}  ")
+                if _q4.get("raised_by"):
+                    _lines.append(f"**Levantada por:** {_q4['raised_by']}  ")
+                _lines.append(f"**Status:** {_res_lbl.get(_rt4, _rt4)}\n")
+                for _alt4 in _q4.get("alternatives", []):
+                    _chosen4 = " ✅ *(escolhida)*" if _alt4.get("was_chosen") else ""
+                    _lines.append(
+                        f"\n### {_alt4.get('id', '?')}{_chosen4} — {_alt4.get('description', '')}"
+                    )
+                    if _alt4.get("proposed_by"):
+                        _lines.append(f"\n*Proposta por: {_alt4['proposed_by']}*\n")
+                    if _alt4.get("pros"):
+                        _lines.append("\n**A favor:**")
+                        _lines.extend(f"- {_p}" for _p in _alt4["pros"])
+                    if _alt4.get("cons"):
+                        _lines.append("\n**Contra:**")
+                        _lines.extend(f"- {_c}" for _c in _alt4["cons"])
+                    _sup4 = ", ".join(_alt4.get("supported_by") or [])
+                    _opp4 = ", ".join(_alt4.get("opposed_by") or [])
+                    if _sup4:
+                        _lines.append(f"\n*A favor: {_sup4}*")
+                    if _opp4:
+                        _lines.append(f"\n*Contra: {_opp4}*")
+                if _res4.get("rationale"):
+                    _lines.append(f"\n**Resolução:** {_res4['rationale']}")
+                if _res4.get("with_caveats"):
+                    _lines.append("\n**Ressalvas:**")
+                    _lines.extend(f"- {_cav}" for _cav in _res4["with_caveats"])
+                _lines.append("\n---")
+            return "\n".join(_lines)
+
+        st.download_button(
+            "📥 Exportar Relatório IBIS (.md)",
+            data=_ibis_to_markdown(filtered_ibis),
+            file_name="ibis_debate_map.md",
+            mime="text/markdown",
+            key="ibis_export_md",
+            help="Baixa o mapa argumentativo filtrado como Markdown estruturado",
+        )
+
         # ── Toggle de visualização ────────────────────────────────────────────
         ibis_view = st.radio(
             "Visualização",
