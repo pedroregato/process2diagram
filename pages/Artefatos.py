@@ -1267,6 +1267,100 @@ with tab_ibis:
         ki3.metric("⏳ Adiadas", n_deferred)
         ki4.metric("❓ Em aberto", n_unresolved)
 
+        # ── Fase 1b: Métricas detalhadas do debate ────────────────────────────
+        n_total_alts = sum(len(q.get("alternatives", [])) for q in ibis_questions)
+        n_total_args = sum(
+            len(a.get("pros", [])) + len(a.get("cons", []))
+            for q in ibis_questions
+            for a in q.get("alternatives", [])
+        )
+        taxa_res = round(n_decided / len(ibis_questions) * 100) if ibis_questions else 0
+        q_mais_debatida = max(
+            ibis_questions,
+            key=lambda q: len(q.get("alternatives", [])),
+            default=None,
+        )
+
+        with st.expander("📊 Análise do Debate", expanded=True):
+            ma1, ma2, ma3 = st.columns(3)
+            ma1.metric("Alternativas avaliadas", n_total_alts)
+            ma2.metric("Argumentos registrados", n_total_args)
+            ma3.metric("Taxa de resolução", f"{taxa_res}%")
+
+            if q_mais_debatida:
+                n_alt_max = len(q_mais_debatida.get("alternatives", []))
+                stmt_preview = q_mais_debatida.get("statement", "")[:110]
+                if len(q_mais_debatida.get("statement", "")) > 110:
+                    stmt_preview += "…"
+                st.caption(
+                    f"🔥 **Questão mais debatida:** {stmt_preview} "
+                    f"({n_alt_max} alternativas · Reunião {q_mais_debatida.get('_meeting_number', '?')})"
+                )
+
+            # ── Fase 1c: Participação por ator ────────────────────────────────
+            _actor: dict[str, dict] = {}
+
+            def _ensure(name: str) -> None:
+                if name and name not in _actor:
+                    _actor[name] = {
+                        "Questões levantadas": 0,
+                        "Alternativas propostas": 0,
+                        "Posições vencedoras": 0,
+                        "A favor (votos)": 0,
+                        "Contra (votos)": 0,
+                    }
+
+            for _q in ibis_questions:
+                _rb = (_q.get("raised_by") or "").strip()
+                if _rb:
+                    _ensure(_rb)
+                    _actor[_rb]["Questões levantadas"] += 1
+                for _alt in _q.get("alternatives", []):
+                    _pb = (_alt.get("proposed_by") or "").strip()
+                    if _pb:
+                        _ensure(_pb)
+                        _actor[_pb]["Alternativas propostas"] += 1
+                        if _alt.get("was_chosen"):
+                            _actor[_pb]["Posições vencedoras"] += 1
+                    for _s in (_alt.get("supported_by") or []):
+                        _s = (_s or "").strip()
+                        if _s:
+                            _ensure(_s)
+                            _actor[_s]["A favor (votos)"] += 1
+                    for _o in (_alt.get("opposed_by") or []):
+                        _o = (_o or "").strip()
+                        if _o:
+                            _ensure(_o)
+                            _actor[_o]["Contra (votos)"] += 1
+
+            if _actor:
+                import pandas as _pd_ibis
+                st.markdown("---")
+                st.markdown("**👥 Participação por Ator**")
+                _df_actor = (
+                    _pd_ibis.DataFrame.from_dict(_actor, orient="index")
+                    .fillna(0)
+                    .astype(int)
+                )
+                _df_actor.index.name = "Participante"
+                _df_actor = _df_actor.sort_values(
+                    ["Questões levantadas", "Alternativas propostas"], ascending=False
+                )
+                # Adiciona coluna de influência total
+                _df_actor["Influência total"] = (
+                    _df_actor["Questões levantadas"] * 2
+                    + _df_actor["Alternativas propostas"]
+                    + _df_actor["Posições vencedoras"] * 3
+                    + _df_actor["A favor (votos)"]
+                    + _df_actor["Contra (votos)"]
+                )
+                _df_actor = _df_actor.sort_values("Influência total", ascending=False)
+                st.dataframe(_df_actor, use_container_width=True)
+                st.caption(
+                    "Influência total = 2 × questões levantadas + alternativas propostas "
+                    "+ 3 × posições vencedoras + votos a favor + votos contra."
+                )
+
         st.markdown("---")
 
         # Filtro por reunião
