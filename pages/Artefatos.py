@@ -1855,6 +1855,19 @@ with tab_ibis:
                     "Mostrar argumentos (prós/contras) no grafo",
                     value=True, key="ibis_show_args",
                 )
+                _g_col3, _g_col4 = st.columns(2)
+                _ibis_physics = _g_col3.toggle(
+                    "Simulação física (Barnes-Hut)",
+                    value=True,
+                    key="ibis_physics",
+                    help="Organiza os nós automaticamente. Desative para fixar o layout após arrastar.",
+                )
+                _ibis_height = _g_col4.select_slider(
+                    "Altura do grafo",
+                    options=[480, 600, 680, 860, 1000],
+                    value=680,
+                    key="ibis_graph_height",
+                )
 
             if len(filtered_ibis) > 60:
                 st.warning(
@@ -2068,7 +2081,8 @@ with tab_ibis:
                 # ── Opções de física ─────────────────────────────────────────
                 _net.set_options(_json_ibis.dumps({
                     "physics": {
-                        "enabled": True,
+                        "enabled": _ibis_physics,
+                        "solver": "barnesHut",
                         "barnesHut": {
                             "gravitationalConstant": -9000,
                             "centralGravity":        0.25,
@@ -2077,44 +2091,270 @@ with tab_ibis:
                             "damping":               0.12,
                             "avoidOverlap":          0.4,
                         },
-                        "stabilization": {"iterations": 250, "fit": True},
+                        "maxVelocity": 50,
+                        "minVelocity": 0.75,
+                        "stabilization": {
+                            "enabled":        True,
+                            "iterations":     250,
+                            "updateInterval": 25,
+                            "fit":            True,
+                        },
                     },
                     "interaction": {
-                        "hover":         True,
-                        "tooltipDelay":  150,
+                        "hover":             True,
+                        "tooltipDelay":      80,
                         "navigationButtons": False,
-                        "keyboard":      True,
-                        "zoomView":      True,
+                        "keyboard":          False,
+                        "zoomView":          True,
+                        "dragView":          True,
+                        "dragNodes":         True,
+                        "multiselect":       False,
                     },
-                    "edges": {"smooth": {"type": "dynamic"}},
-                    "nodes": {"scaling": {"min": 8, "max": 28}},
+                    "edges": {
+                        "smooth":         {"type": "dynamic"},
+                        "arrows":         {"to": {"enabled": False}},
+                        "hoverWidth":     2,
+                        "selectionWidth": 2,
+                    },
+                    "nodes": {
+                        "borderWidth":         2,
+                        "borderWidthSelected": 3,
+                        "scaling":             {"min": 8, "max": 28},
+                    },
                 }))
 
                 _html_ibis = _net.generate_html(local=False)
 
-                # Legenda injetada no HTML
-                _has_cross = bool(_cross_found)
-                _legend_html = (
-                    "<div style='position:absolute;top:10px;left:10px;background:#1e293b;"
-                    "border:1px solid #334155;border-radius:8px;padding:10px 14px;"
-                    "font-size:11px;color:#cbd5e1;z-index:999;line-height:1.8'>"
-                    "<b style='color:#f1f5f9'>Legenda</b><br>"
-                    "<span style='color:#f97316'>&#9650;</span> Issue/Questão &nbsp;"
-                    "<span style='color:#3b82f6'>&#9670;</span> Alternativa &nbsp;"
-                    "<span style='color:#22c55e'>&#9679;</span> A favor &nbsp;"
-                    "<span style='color:#ef4444'>&#9679;</span> Contra<br>"
-                    "<span style='color:#22c55e'>&#9646;</span> Decidida &nbsp;"
-                    "<span style='color:#fbbf24'>&#9646;</span> Adiada &nbsp;"
-                    "<span style='color:#f87171'>&#9646;</span> Em aberto"
-                    + (
-                        "<br><span style='color:#a855f7'>&#9473;&#9473;</span> Debate recorrente (cross-link)"
-                        if _has_cross else ""
-                    )
-                    + "</div>"
+                # ── Tooltip CSS + toolbar CSS ─────────────────────────────────
+                _html_ibis = _html_ibis.replace(
+                    "</style>",
+                    ".vis-tooltip{white-space:pre-line!important;"
+                    "font-family:'Segoe UI',system-ui,sans-serif!important;"
+                    "font-size:13px!important;line-height:1.6!important;"
+                    "max-width:420px!important;max-height:none!important;"
+                    "overflow:visible!important;word-break:break-word!important;"
+                    "box-shadow:0 4px 16px rgba(0,0,0,.6)!important;"
+                    "border-radius:8px!important;padding:10px 14px!important;}"
+                    "#ibis-toolbar{display:flex;gap:5px;padding:8px 10px;"
+                    "background:#1e293b;border-bottom:1px solid #334155;"
+                    "flex-wrap:wrap;align-items:center;"
+                    "font-family:'Segoe UI',system-ui,sans-serif;}"
+                    ".itb-btn{background:#334155;color:#f1f5f9;border:1px solid #475569;"
+                    "border-radius:6px;padding:5px 11px;font-size:12px;cursor:pointer;"
+                    "white-space:nowrap;transition:background .15s;}"
+                    ".itb-btn:hover{background:#475569;}"
+                    "#ibis-btnClearFocus{display:none;background:#1d4ed8;border-color:#1e40af;}"
+                    "#ibis-btnClearFocus:hover{background:#2563eb;}"
+                    ".itb-sep{width:1px;background:#475569;height:22px;margin:0 3px;flex-shrink:0;}"
+                    "#ibis-status{font-size:11px;color:#94a3b8;margin-left:6px;flex:1;}"
+                    "#ibis-hint{font-size:10px;color:#64748b;margin-left:auto;}"
+                    "</style>",
+                    1,
                 )
-                _html_ibis = _html_ibis.replace("<body>", "<body style='margin:0'>" + _legend_html)
 
-                _comp_ibis.html(_html_ibis, height=_GRAPH_H + 40, scrolling=False)
+                # ── Toolbar HTML ──────────────────────────────────────────────
+                _phys_init_js = "true" if _ibis_physics else "false"
+                _itoolbar = (
+                    '<div id="ibis-toolbar">'
+                    '<button id="ibis-btnPhysics" class="itb-btn" onclick="ibisTogglePhysics()">⏸ Pausar</button>'
+                    '<div class="itb-sep"></div>'
+                    '<button class="itb-btn" onclick="ibisZoomIn()" title="Zoom in">＋</button>'
+                    '<button class="itb-btn" onclick="ibisZoomOut()" title="Zoom out">－</button>'
+                    '<button class="itb-btn" onclick="ibisFit()" title="Ajustar ao ecrã">⊡ Fit</button>'
+                    '<div class="itb-sep"></div>'
+                    '<button class="itb-btn" onclick="ibisSaveImg()" title="Salvar como PNG">💾 Imagem</button>'
+                    '<button class="itb-btn" onclick="ibisNewTab()" title="Abrir em nova aba">⛶ Nova aba</button>'
+                    '<div class="itb-sep"></div>'
+                    '<button id="ibis-btnClearFocus" class="itb-btn" onclick="ibisClearFocus()">✕ Limpar foco</button>'
+                    '<span id="ibis-status"></span>'
+                    '<span id="ibis-hint">Clique em um nó para focar</span>'
+                    '</div>'
+                )
+                _html_ibis = _html_ibis.replace('<div id="mynetwork"', _itoolbar + '<div id="mynetwork"', 1)
+
+                # ── Focus mode + toolbar JS ───────────────────────────────────
+                _itoolbar_js = f"""
+<script>
+var _ibisPhysicsOn   = {_phys_init_js};
+var _ibisFocusMode   = false;
+var _ibisFocusedNode = null;
+var _ibisSnNodes     = {{}};
+var _ibisSnEdges     = {{}};
+
+var _IDIM_NODE = {{
+    background:'#0d1520',border:'#1a2535',
+    highlight:{{background:'#0d1520',border:'#1e2d42'}},
+    hover:{{background:'#0d1520',border:'#1e2d42'}}
+}};
+var _IDIM_FONT = {{color:'#1e293b'}};
+var _IDIM_EDGE = {{color:'rgba(15,23,42,0.10)',highlight:'rgba(15,23,42,0.10)',hover:'rgba(15,23,42,0.10)'}};
+
+function _ibisSnap() {{
+    if (Object.keys(_ibisSnNodes).length > 0) return;
+    network.body.data.nodes.get().forEach(function(n) {{
+        _ibisSnNodes[n.id] = {{
+            color: JSON.parse(JSON.stringify(n.color || {{}})),
+            font:  JSON.parse(JSON.stringify(n.font  || {{}}))
+        }};
+    }});
+    network.body.data.edges.get().forEach(function(e) {{
+        _ibisSnEdges[e.id] = {{color: JSON.parse(JSON.stringify(e.color || {{}}))}};
+    }});
+}}
+
+function ibisFocusNode(nid) {{
+    _ibisSnap();
+    _ibisFocusMode   = true;
+    _ibisFocusedNode = nid;
+    var conn  = new Set(network.getConnectedNodes(nid));
+    conn.add(nid);
+    var connE = new Set(network.getConnectedEdges(nid));
+
+    var dimUpd = [], focIds = [];
+    network.body.data.nodes.get().forEach(function(n) {{
+        if (conn.has(n.id)) focIds.push(n.id);
+        else dimUpd.push({{id:n.id,color:_IDIM_NODE,font:_IDIM_FONT,zIndex:-1}});
+    }});
+    if (dimUpd.length) network.body.data.nodes.update(dimUpd);
+
+    var focPos  = network.getPositions(focIds);
+    var focData = focIds.map(function(fid) {{
+        var s = _ibisSnNodes[fid] || {{}};
+        var n = network.body.data.nodes.get(fid);
+        return Object.assign({{}}, n, {{color:s.color,font:s.font,zIndex:10}});
+    }});
+    network.body.data.nodes.remove(focIds);
+    network.body.data.nodes.add(focData);
+    focIds.forEach(function(fid) {{
+        var p = focPos[fid]; if (p) network.moveNode(fid, p.x, p.y);
+    }});
+
+    network.body.data.edges.update(
+        network.body.data.edges.get().map(function(e) {{
+            if (connE.has(e.id)) {{
+                var s = _ibisSnEdges[e.id] || {{}};
+                return {{id:e.id,color:s.color}};
+            }}
+            return {{id:e.id,color:_IDIM_EDGE}};
+        }})
+    );
+
+    var lbl   = (network.body.data.nodes.get(nid)||{{}}).label || nid;
+    var nConn = conn.size - 1;
+    document.getElementById('ibis-status').textContent =
+        '🔍 ' + lbl + ' — ' + nConn + ' conex' + (nConn===1?'ão':'ões');
+    document.getElementById('ibis-hint').style.display = 'none';
+    document.getElementById('ibis-btnClearFocus').style.display = '';
+}}
+
+function ibisClearFocus() {{
+    if (!_ibisFocusMode) return;
+    _ibisFocusMode = false; _ibisFocusedNode = null;
+    network.body.data.nodes.update(
+        network.body.data.nodes.get().map(function(n) {{
+            var s = _ibisSnNodes[n.id] || {{}};
+            return {{id:n.id,color:s.color,font:s.font,zIndex:0}};
+        }})
+    );
+    network.body.data.edges.update(
+        network.body.data.edges.get().map(function(e) {{
+            var s = _ibisSnEdges[e.id] || {{}};
+            return {{id:e.id,color:s.color}};
+        }})
+    );
+    document.getElementById('ibis-status').textContent = '';
+    document.getElementById('ibis-hint').style.display = '';
+    document.getElementById('ibis-btnClearFocus').style.display = 'none';
+}}
+
+network.on('click', function(p) {{
+    if (p.nodes.length > 0) {{
+        var nid = p.nodes[0];
+        if (_ibisFocusMode && _ibisFocusedNode === nid) ibisClearFocus();
+        else ibisFocusNode(nid);
+    }} else if (p.edges.length === 0) {{
+        ibisClearFocus();
+    }}
+}});
+
+function _ibisSetPhysBtn() {{
+    var btn = document.getElementById('ibis-btnPhysics');
+    if (_ibisPhysicsOn) {{
+        btn.innerHTML='⏸ Pausar'; btn.style.background=''; btn.style.borderColor='';
+    }} else {{
+        btn.innerHTML='▶ Retomar'; btn.style.background='#16a34a'; btn.style.borderColor='#15803d';
+    }}
+}}
+
+function ibisTogglePhysics() {{
+    _ibisPhysicsOn = !_ibisPhysicsOn;
+    network.setOptions({{physics:{{enabled:_ibisPhysicsOn}}}});
+    if (!_ibisPhysicsOn) network.stopSimulation();
+    _ibisSetPhysBtn();
+}}
+
+function ibisZoomIn()  {{ network.moveTo({{scale:network.getScale()*1.3,animation:{{duration:200,easingFunction:'easeInOutQuad'}}}}); }}
+function ibisZoomOut() {{ network.moveTo({{scale:network.getScale()/1.3,animation:{{duration:200,easingFunction:'easeInOutQuad'}}}}); }}
+function ibisFit()     {{ network.fit({{animation:{{duration:500,easingFunction:'easeInOutQuad'}}}}); }}
+
+function ibisSaveImg() {{
+    try {{
+        var src = network.getCanvas();
+        var dst = document.createElement('canvas');
+        dst.width=src.width; dst.height=src.height;
+        var ctx=dst.getContext('2d');
+        ctx.fillStyle='#0d1b2a'; ctx.fillRect(0,0,dst.width,dst.height);
+        ctx.drawImage(src,0,0);
+        var a=document.createElement('a');
+        a.href=dst.toDataURL('image/png'); a.download='ibis_debate_map.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }} catch(e) {{ alert('Erro ao salvar: '+e.message); }}
+}}
+
+function ibisNewTab() {{
+    try {{
+        var blob=new Blob(['<!DOCTYPE html>'+document.documentElement.outerHTML],
+            {{type:'text/html;charset=utf-8'}});
+        window.open(URL.createObjectURL(blob),'_blank');
+    }} catch(e) {{ alert('Permita pop-ups para esta página.'); }}
+}}
+
+network.on('stabilizationIterationsDone', function() {{
+    _ibisSnap();
+    if (_ibisPhysicsOn) {{
+        _ibisPhysicsOn = false;
+        network.stopSimulation();
+        _ibisSetPhysBtn();
+        var s = document.getElementById('ibis-status');
+        s.textContent = '✓ Estabilizado';
+        setTimeout(function(){{ if (!_ibisFocusMode) s.textContent=''; }}, 2500);
+    }}
+}});
+</script>
+"""
+                _html_ibis = _html_ibis.replace("</body>", _itoolbar_js + "</body>", 1)
+
+                # ── Legenda como badges acima do grafo ───────────────────────
+                _has_cross = bool(_cross_found)
+                _ibis_badges = [
+                    '<span style="background:#f97316;color:#fff;padding:3px 10px;border-radius:12px;margin:2px 3px;font-size:12px;font-family:Segoe UI,system-ui,sans-serif;display:inline-block">⬬ Questão</span>',
+                    '<span style="background:#2563eb;color:#dbeafe;padding:3px 10px;border-radius:12px;margin:2px 3px;font-size:12px;font-family:Segoe UI,system-ui,sans-serif;display:inline-block">◆ Alternativa</span>',
+                    '<span style="background:#16a34a;color:#dcfce7;padding:3px 10px;border-radius:12px;margin:2px 3px;font-size:12px;font-family:Segoe UI,system-ui,sans-serif;display:inline-block">● A favor</span>',
+                    '<span style="background:#b91c1c;color:#fee2e2;padding:3px 10px;border-radius:12px;margin:2px 3px;font-size:12px;font-family:Segoe UI,system-ui,sans-serif;display:inline-block">● Contra</span>',
+                    '<span style="background:#14532d;color:#4ade80;padding:3px 10px;border-radius:12px;margin:2px 3px;font-size:12px;font-family:Segoe UI,system-ui,sans-serif;display:inline-block">▏ Decidida</span>',
+                    '<span style="background:#451a03;color:#fbbf24;padding:3px 10px;border-radius:12px;margin:2px 3px;font-size:12px;font-family:Segoe UI,system-ui,sans-serif;display:inline-block">▏ Adiada</span>',
+                    '<span style="background:#450a0a;color:#f87171;padding:3px 10px;border-radius:12px;margin:2px 3px;font-size:12px;font-family:Segoe UI,system-ui,sans-serif;display:inline-block">▏ Em aberto</span>',
+                ]
+                if _has_cross:
+                    _ibis_badges.append(
+                        '<span style="background:#581c87;color:#d8b4fe;padding:3px 10px;border-radius:12px;margin:2px 3px;font-size:12px;font-family:Segoe UI,system-ui,sans-serif;display:inline-block">╌ Debate recorrente</span>'
+                    )
+                st.markdown(
+                    '<div style="margin-bottom:6px">' + "".join(_ibis_badges) + "</div>",
+                    unsafe_allow_html=True,
+                )
+
+                _comp_ibis.html(_html_ibis, height=_ibis_height + 80, scrolling=False)
 
                 # ── Tabela de cross-links detectados ─────────────────────────
                 if _cross_found:
