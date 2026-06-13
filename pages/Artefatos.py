@@ -1518,6 +1518,118 @@ with tab_ibis:
 
                     st.markdown("---")
 
+        # ── Fase 3c: Força dos Argumentos ────────────────────────────────────
+        with st.expander("⚖️ Força dos Argumentos", expanded=False):
+            st.caption(
+                "Quantifica o **balanço argumentativo** de cada alternativa (prós − contras) "
+                "e identifica **decisões vulneráveis** — escolhas cuja alternativa eleita "
+                "tinha mais contras do que prós registrados na reunião, sinalizando "
+                "possíveis riscos não endereçados."
+            )
+
+            _force_rows = []
+            for _fq in ibis_questions:
+                _fres      = _fq.get("resolution") or {}
+                _chosen_id = _fres.get("chosen_alternative_id", "")
+                _mid       = _fq.get("_meeting_id", "")
+                _stmt      = _fq.get("statement", "")
+                _mnum      = meet_label(_mid) if _mid else "?"
+                for _falt in _fq.get("alternatives", []):
+                    _aid  = _falt.get("id", "")
+                    _pros = len(_falt.get("pros") or [])
+                    _cons = len(_falt.get("cons") or [])
+                    _force_rows.append({
+                        "reunião":     _mnum,
+                        "questão":     _stmt[:70] + ("…" if len(_stmt) > 70 else ""),
+                        "alternativa": (_falt.get("description") or "")[:55],
+                        "prós":        _pros,
+                        "contras":     _cons,
+                        "balanço":     _pros - _cons,
+                        "eleita":      _aid == _chosen_id,
+                    })
+
+            if not _force_rows:
+                st.info("Sem alternativas com prós/contras para analisar.")
+            else:
+                import pandas as _pd_force
+                import plotly.graph_objects as _go_force
+
+                _df_force  = _pd_force.DataFrame(_force_rows)
+                _chosen_df = _df_force[_df_force["eleita"]]
+                _vuln_df   = _chosen_df[_chosen_df["balanço"] <= 0]
+
+                _kf1, _kf2, _kf3 = st.columns(3)
+                _kf1.metric("Alternativas analisadas", len(_df_force))
+                _kf2.metric(
+                    "Decisões vulneráveis", len(_vuln_df),
+                    help="Alternativas eleitas com balanço prós−contras ≤ 0",
+                )
+                _total_ch = max(len(_chosen_df), 1)
+                _kf3.metric(
+                    "Decisões bem fundamentadas",
+                    f"{round((_total_ch - len(_vuln_df)) / _total_ch * 100)}%",
+                )
+
+                if not _vuln_df.empty:
+                    st.markdown("---")
+                    st.markdown("**⚠️ Decisões vulneráveis**")
+                    for _, _vr in _vuln_df.iterrows():
+                        _sign = "0" if _vr["balanço"] == 0 else str(int(_vr["balanço"]))
+                        st.warning(
+                            f"**{_vr['reunião']}** · _{_vr['questão']}_  \n"
+                            f"Alternativa eleita: *{_vr['alternativa']}* — "
+                            f"{int(_vr['prós'])} prós / {int(_vr['contras'])} contras "
+                            f"(balanço {_sign})"
+                        )
+
+                st.markdown("---")
+                st.markdown("**📊 Balanço Argumentativo por Alternativa**")
+                st.caption(
+                    "🟢 Verde = mais prós · 🔴 Vermelho = mais contras · "
+                    "⚪ Cinza = empatado · ✅ = alternativa eleita"
+                )
+
+                _df_plot = _df_force.sort_values(
+                    ["reunião", "questão", "balanço"],
+                    ascending=[True, True, False],
+                ).reset_index(drop=True)
+
+                _flabels = [
+                    f"{r['reunião']} | {r['alternativa']}" + (" ✅" if r["eleita"] else "")
+                    for _, r in _df_plot.iterrows()
+                ]
+                _fscores = _df_plot["balanço"].tolist()
+                _fcolors = [
+                    "#22c55e" if s > 0 else ("#f87171" if s < 0 else "#94a3b8")
+                    for s in _fscores
+                ]
+
+                _fig_f = _go_force.Figure(_go_force.Bar(
+                    x=_fscores,
+                    y=_flabels,
+                    orientation="h",
+                    marker_color=_fcolors,
+                    text=[f"+{s}" if s > 0 else str(s) for s in _fscores],
+                    textposition="outside",
+                    hovertemplate="%{y}<br>Balanço: %{x}<extra></extra>",
+                ))
+                _fig_f.update_layout(
+                    paper_bgcolor="#0d1b2a",
+                    plot_bgcolor="#0d1b2a",
+                    font_color="#e2e8f0",
+                    xaxis=dict(
+                        title="Balanço (prós − contras)",
+                        zeroline=True,
+                        zerolinecolor="#475569",
+                        gridcolor="#1e3a5f",
+                    ),
+                    yaxis=dict(autorange="reversed"),
+                    height=max(300, len(_flabels) * 34),
+                    margin=dict(l=10, r=80, t=10, b=40),
+                    showlegend=False,
+                )
+                st.plotly_chart(_fig_f, use_container_width=True)
+
         st.markdown("---")
 
         # Filtro por reunião
