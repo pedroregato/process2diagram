@@ -1469,6 +1469,20 @@ with tab_ibis:
             }
             _GRAPH_H = 680
 
+            # Opções do grafo
+            with st.expander("⚙️ Opções do grafo", expanded=False):
+                _g_col1, _g_col2 = st.columns(2)
+                _cross_thresh = _g_col1.slider(
+                    "Limiar de similaridade (cross-links entre reuniões)",
+                    min_value=0.10, max_value=0.55, value=0.22, step=0.03,
+                    key="ibis_cross_thresh",
+                    help="Jaccard sobre tokens PT-BR. Menor valor = mais conexões; maior valor = só os debates mais parecidos.",
+                )
+                _show_args = _g_col2.checkbox(
+                    "Mostrar argumentos (prós/contras) no grafo",
+                    value=True, key="ibis_show_args",
+                )
+
             if len(filtered_ibis) > 60:
                 st.warning(
                     f"O filtro retornou {len(filtered_ibis)} questões. "
@@ -1554,59 +1568,131 @@ with tab_ibis:
                             title="Alternativa proposta",
                         )
 
-                        for _i, _pro in enumerate(_alt.get("pros") or []):
-                            _nid_p = f"P_{_mnum}_{_qid}_{_aid}_{_i}"
-                            _p_label = str(_pro)[:26] + ("…" if len(str(_pro)) > 26 else "")
-                            _net.add_node(
-                                _nid_p,
-                                label=_p_label,
-                                title=f"<b>A favor:</b> {_pro}",
-                                shape="dot",
-                                size=9,
-                                color={
-                                    "background": "#16a34a",
-                                    "border":     "#4ade80",
-                                    "highlight":  {"background": "#22c55e", "border": "#fff"},
-                                },
-                                font={"size": 9, "color": "#dcfce7"},
-                                borderWidth=1,
-                            )
-                            _net.add_edge(
-                                _nid_a, _nid_p,
-                                color={"color": "#4ade80", "highlight": "#fff"},
-                                width=1,
-                                arrows="to",
-                                dashes=True,
-                                title="Argumento a favor",
-                            )
+                        if _show_args:
+                            for _i, _pro in enumerate(_alt.get("pros") or []):
+                                _nid_p = f"P_{_mnum}_{_qid}_{_aid}_{_i}"
+                                _p_label = str(_pro)[:26] + ("…" if len(str(_pro)) > 26 else "")
+                                _net.add_node(
+                                    _nid_p,
+                                    label=_p_label,
+                                    title=f"<b>A favor:</b> {_pro}",
+                                    shape="dot",
+                                    size=9,
+                                    color={
+                                        "background": "#16a34a",
+                                        "border":     "#4ade80",
+                                        "highlight":  {"background": "#22c55e", "border": "#fff"},
+                                    },
+                                    font={"size": 9, "color": "#dcfce7"},
+                                    borderWidth=1,
+                                )
+                                _net.add_edge(
+                                    _nid_a, _nid_p,
+                                    color={"color": "#4ade80", "highlight": "#fff"},
+                                    width=1,
+                                    arrows="to",
+                                    dashes=True,
+                                    title="Argumento a favor",
+                                )
 
-                        for _j, _con in enumerate(_alt.get("cons") or []):
-                            _nid_c = f"C_{_mnum}_{_qid}_{_aid}_{_j}"
-                            _c_label = str(_con)[:26] + ("…" if len(str(_con)) > 26 else "")
-                            _net.add_node(
-                                _nid_c,
-                                label=_c_label,
-                                title=f"<b>Contra:</b> {_con}",
-                                shape="dot",
-                                size=9,
-                                color={
-                                    "background": "#b91c1c",
-                                    "border":     "#f87171",
-                                    "highlight":  {"background": "#ef4444", "border": "#fff"},
-                                },
-                                font={"size": 9, "color": "#fee2e2"},
-                                borderWidth=1,
-                            )
-                            _net.add_edge(
-                                _nid_a, _nid_c,
-                                color={"color": "#f87171", "highlight": "#fff"},
-                                width=1,
-                                arrows="to",
-                                dashes=True,
-                                title="Argumento contra",
-                            )
+                            for _j, _con in enumerate(_alt.get("cons") or []):
+                                _nid_c = f"C_{_mnum}_{_qid}_{_aid}_{_j}"
+                                _c_label = str(_con)[:26] + ("…" if len(str(_con)) > 26 else "")
+                                _net.add_node(
+                                    _nid_c,
+                                    label=_c_label,
+                                    title=f"<b>Contra:</b> {_con}",
+                                    shape="dot",
+                                    size=9,
+                                    color={
+                                        "background": "#b91c1c",
+                                        "border":     "#f87171",
+                                        "highlight":  {"background": "#ef4444", "border": "#fff"},
+                                    },
+                                    font={"size": 9, "color": "#fee2e2"},
+                                    borderWidth=1,
+                                )
+                                _net.add_edge(
+                                    _nid_a, _nid_c,
+                                    color={"color": "#f87171", "highlight": "#fff"},
+                                    width=1,
+                                    arrows="to",
+                                    dashes=True,
+                                    title="Argumento contra",
+                                )
 
+                # ── Fase 2b: Cross-links entre reuniões ──────────────────────
+                import re as _re_ibis
                 import json as _json_ibis
+
+                _IBIS_STOP = {
+                    "a","o","as","os","de","do","da","dos","das","em","no","na",
+                    "nos","nas","para","que","um","uma","uns","umas","e","ou","se",
+                    "com","por","mas","é","ser","ter","ao","à","aos","às","não",
+                    "como","mais","deve","há","esta","este","seu","sua","seus",
+                    "suas","foi","ser","sido","sendo","está","estão","são","faz",
+                    "fazer","pode","deve","devem","podem","será","vai","vão","use",
+                    "the","of","to","in","is","it","be","as","at","or","an","and",
+                }
+
+                def _ibis_tokens(text: str) -> set:
+                    words = _re_ibis.sub(r"[^\w\sáéíóúâêôãç]", " ", text.lower()).split()
+                    return {w for w in words if w not in _IBIS_STOP and len(w) > 2}
+
+                def _ibis_jaccard(a: str, b: str) -> float:
+                    wa, wb = _ibis_tokens(a), _ibis_tokens(b)
+                    if not wa or not wb:
+                        return 0.0
+                    return len(wa & wb) / len(wa | wb)
+
+                # Índice de nós-questão para cross-link
+                _q_idx: list[tuple] = []   # (nid, statement, meeting_id, meeting_num, q_id)
+                for _q2 in filtered_ibis:
+                    _qid2   = _q2.get("id", "Q?")
+                    _mnum2  = _q2.get("_meeting_number", "?")
+                    _mid2   = _q2.get("_meeting_id", "")
+                    _stmt2  = _q2.get("statement", "")
+                    _mtitle2 = _q2.get("_meeting_title", f"Reunião {_mnum2}")
+                    _q_idx.append((f"Q_{_mnum2}_{_qid2}", _stmt2, _mid2, _mnum2, _mtitle2))
+
+                _cross_found: list[dict] = []
+                _seen_pairs: set = set()
+                for _ia in range(len(_q_idx)):
+                    for _ib in range(_ia + 1, len(_q_idx)):
+                        _na, _sa, _mida, _mnuma, _mtitlea = _q_idx[_ia]
+                        _nb, _sb, _midb, _mnumb, _mtitleb = _q_idx[_ib]
+                        if _mida == _midb:
+                            continue   # mesma reunião
+                        _pair_key = tuple(sorted([_na, _nb]))
+                        if _pair_key in _seen_pairs:
+                            continue
+                        _seen_pairs.add(_pair_key)
+                        _sim = _ibis_jaccard(_sa, _sb)
+                        if _sim >= _cross_thresh:
+                            _cross_found.append({
+                                "nid_a": _na, "nid_b": _nb,
+                                "sim": _sim,
+                                "stmt_a": _sa, "stmt_b": _sb,
+                                "mnum_a": _mnuma, "mnum_b": _mnumb,
+                                "mtitle_a": _mtitlea, "mtitle_b": _mtitleb,
+                            })
+
+                for _cl in _cross_found:
+                    _w = max(1.5, _cl["sim"] * 6)
+                    _net.add_edge(
+                        _cl["nid_a"], _cl["nid_b"],
+                        color={"color": "#a855f7", "highlight": "#d8b4fe"},
+                        width=_w,
+                        arrows="",
+                        dashes=[6, 4],
+                        title=(
+                            f"<b>Debate recorrente</b> ({_cl['sim']:.0%} similaridade)<br>"
+                            f"Reunião {_cl['mnum_a']}: {_cl['stmt_a'][:80]}<br>"
+                            f"Reunião {_cl['mnum_b']}: {_cl['stmt_b'][:80]}"
+                        ),
+                    )
+
+                # ── Opções de física ─────────────────────────────────────────
                 _net.set_options(_json_ibis.dumps({
                     "physics": {
                         "enabled": True,
@@ -1634,6 +1720,7 @@ with tab_ibis:
                 _html_ibis = _net.generate_html(local=False)
 
                 # Legenda injetada no HTML
+                _has_cross = bool(_cross_found)
                 _legend_html = (
                     "<div style='position:absolute;top:10px;left:10px;background:#1e293b;"
                     "border:1px solid #334155;border-radius:8px;padding:10px 14px;"
@@ -1646,11 +1733,47 @@ with tab_ibis:
                     "<span style='color:#22c55e'>&#9646;</span> Decidida &nbsp;"
                     "<span style='color:#fbbf24'>&#9646;</span> Adiada &nbsp;"
                     "<span style='color:#f87171'>&#9646;</span> Em aberto"
-                    "</div>"
+                    + (
+                        "<br><span style='color:#a855f7'>&#9473;&#9473;</span> Debate recorrente (cross-link)"
+                        if _has_cross else ""
+                    )
+                    + "</div>"
                 )
                 _html_ibis = _html_ibis.replace("<body>", "<body style='margin:0'>" + _legend_html)
 
                 _comp_ibis.html(_html_ibis, height=_GRAPH_H + 40, scrolling=False)
+
+                # ── Tabela de cross-links detectados ─────────────────────────
+                if _cross_found:
+                    _cross_sorted = sorted(_cross_found, key=lambda x: x["sim"], reverse=True)
+                    with st.expander(
+                        f"🔗 {len(_cross_found)} debate(s) recorrente(s) detectado(s) entre reuniões",
+                        expanded=True,
+                    ):
+                        st.caption(
+                            "Questões com alto grau de similaridade textual em reuniões diferentes — "
+                            "indício de um tema não resolvido que reaparece ao longo do projeto."
+                        )
+                        import pandas as _pd_cl
+                        _cl_rows = []
+                        for _cl in _cross_sorted:
+                            _cl_rows.append({
+                                "Reunião A": f"Reunião {_cl['mnum_a']}",
+                                "Questão A": _cl["stmt_a"][:90] + ("…" if len(_cl["stmt_a"]) > 90 else ""),
+                                "Reunião B": f"Reunião {_cl['mnum_b']}",
+                                "Questão B": _cl["stmt_b"][:90] + ("…" if len(_cl["stmt_b"]) > 90 else ""),
+                                "Similaridade": f"{_cl['sim']:.0%}",
+                            })
+                        st.dataframe(
+                            _pd_cl.DataFrame(_cl_rows),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+                elif _cross_thresh <= 0.30:
+                    st.caption(
+                        f"Nenhum debate recorrente detectado com limiar {_cross_thresh:.0%}. "
+                        "Tente reduzir o limiar nas opções do grafo."
+                    )
 
             except ImportError:
                 st.error(
