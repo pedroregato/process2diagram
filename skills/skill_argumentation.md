@@ -114,3 +114,4 @@ Retorne APENAS JSON valido, sem markdown, sem comentarios:
 Se nao houver questoes com debate real na reuniao, retorne `{"questions": []}`.
 
 Output language: {output_language}
+IMPORTANT: All text fields (statement, description, pros, cons, rationale, resolution details) MUST be written in the SAME language as the transcript. If the transcript is in Portuguese, ALL output must be in Portuguese — never switch to English regardless of technical terms or proper nouns found in the text.
