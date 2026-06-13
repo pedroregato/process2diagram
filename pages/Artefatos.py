@@ -1385,67 +1385,278 @@ with tab_ibis:
         if sel_res != "Todas":
             filtered_ibis = [q for q in filtered_ibis if q.get("resolution", {}).get("type") == sel_res]
 
+        # ── Toggle de visualização ────────────────────────────────────────────
+        ibis_view = st.radio(
+            "Visualização",
+            ["📋 Lista", "🕸️ Mapa Visual"],
+            horizontal=True,
+            key="ibis_view_toggle",
+            label_visibility="collapsed",
+        )
+
         st.caption(f"Exibindo {len(filtered_ibis)} questão(ões)")
-        st.markdown("")
 
-        for q in filtered_ibis:
-            q_id        = q.get("id", "—")
-            statement   = q.get("statement", "—")
-            raised_by   = q.get("raised_by", "")
-            alternatives = q.get("alternatives", [])
-            resolution  = q.get("resolution", {})
-            res_type    = resolution.get("type", "unresolved")
-            badge_cls, badge_txt = _RESOLUTION_BADGE.get(res_type, ("ibis-badge-unresolved", "❓"))
-            m_num = q.get("_meeting_number")
-            origin = f"🗓️ Reunião {m_num}" if m_num else "—"
+        # ════════════════════════════════════════════════════════════════════
+        # MODO LISTA (existente)
+        # ════════════════════════════════════════════════════════════════════
+        if ibis_view == "📋 Lista":
+            st.markdown("")
+            for q in filtered_ibis:
+                q_id        = q.get("id", "—")
+                statement   = q.get("statement", "—")
+                raised_by   = q.get("raised_by", "")
+                alternatives = q.get("alternatives", [])
+                resolution  = q.get("resolution", {})
+                res_type    = resolution.get("type", "unresolved")
+                badge_cls, badge_txt = _RESOLUTION_BADGE.get(res_type, ("ibis-badge-unresolved", "❓"))
+                m_num = q.get("_meeting_number")
+                origin = f"🗓️ Reunião {m_num}" if m_num else "—"
 
-            with st.expander(
-                f"**{q_id}** — {statement[:80]}{'…' if len(statement) > 80 else ''}  ·  {origin}",
-                expanded=(res_type == "unresolved"),
-            ):
-                col_s, col_b = st.columns([4, 1])
-                with col_s:
-                    st.markdown(f"**{statement}**")
-                    if raised_by:
-                        st.caption(f"👤 Levantada por: **{raised_by}**")
-                with col_b:
-                    st.markdown(
-                        f'<span class="badge {badge_cls}">{badge_txt}</span>',
-                        unsafe_allow_html=True,
+                with st.expander(
+                    f"**{q_id}** — {statement[:80]}{'…' if len(statement) > 80 else ''}  ·  {origin}",
+                    expanded=(res_type == "unresolved"),
+                ):
+                    col_s, col_b = st.columns([4, 1])
+                    with col_s:
+                        st.markdown(f"**{statement}**")
+                        if raised_by:
+                            st.caption(f"👤 Levantada por: **{raised_by}**")
+                    with col_b:
+                        st.markdown(
+                            f'<span class="badge {badge_cls}">{badge_txt}</span>',
+                            unsafe_allow_html=True,
+                        )
+
+                    if alternatives:
+                        st.markdown("**Alternativas avaliadas:**")
+                        for alt in alternatives:
+                            chosen_mark = " ✅ **(escolhida)**" if alt.get("was_chosen") else ""
+                            st.markdown(f"**{alt.get('id', '—')}** — {alt.get('description', '—')}{chosen_mark}")
+                            if alt.get("proposed_by"):
+                                st.caption(f"Proposta por: {alt['proposed_by']}")
+                            cols_arg = st.columns(2)
+                            if alt.get("pros"):
+                                cols_arg[0].success("**A favor:**\n" + "\n".join(f"- {p}" for p in alt["pros"]))
+                            if alt.get("cons"):
+                                cols_arg[1].error("**Contra:**\n" + "\n".join(f"- {c}" for c in alt["cons"]))
+                            supporters = ", ".join(alt.get("supported_by", []))
+                            opposers   = ", ".join(alt.get("opposed_by", []))
+                            parts = []
+                            if supporters:
+                                parts.append(f"A favor: {supporters}")
+                            if opposers:
+                                parts.append(f"Contra: {opposers}")
+                            if parts:
+                                st.caption(" | ".join(parts))
+                            st.markdown("---")
+
+                    if res_type != "unresolved":
+                        if resolution.get("rationale"):
+                            st.info(f"**Resolução:** {resolution['rationale']}")
+                        if resolution.get("with_caveats"):
+                            st.warning("**Ressalvas:**\n" + "\n".join(f"- {c}" for c in resolution["with_caveats"]))
+                    else:
+                        st.error("Questão sem resolução ao final da reunião.")
+
+        # ════════════════════════════════════════════════════════════════════
+        # MODO MAPA VISUAL (pyvis)
+        # ════════════════════════════════════════════════════════════════════
+        else:
+            _RES_BORDER = {
+                "decided":    "#22c55e",   # verde
+                "deferred":   "#fbbf24",   # âmbar
+                "unresolved": "#f87171",   # vermelho
+            }
+            _GRAPH_H = 680
+
+            if len(filtered_ibis) > 60:
+                st.warning(
+                    f"O filtro retornou {len(filtered_ibis)} questões. "
+                    "Considere filtrar por reunião para um grafo mais legível."
+                )
+
+            try:
+                import streamlit.components.v1 as _comp_ibis
+                from pyvis.network import Network as _IbisNet
+
+                _net = _IbisNet(
+                    height=f"{_GRAPH_H}px",
+                    width="100%",
+                    bgcolor="#0d1b2a",
+                    font_color="#f1f5f9",
+                )
+
+                for _q in filtered_ibis:
+                    _qid     = _q.get("id", "Q?")
+                    _stmt    = _q.get("statement", "")
+                    _rb      = _q.get("raised_by", "")
+                    _mnum    = _q.get("_meeting_number", "?")
+                    _rt      = (_q.get("resolution") or {}).get("type", "unresolved")
+                    _rationale = (_q.get("resolution") or {}).get("rationale", "")
+                    _nid_q   = f"Q_{_mnum}_{_qid}"
+
+                    _q_label = _stmt[:32] + ("…" if len(_stmt) > 32 else "")
+                    _q_tip   = (
+                        f"<b>{_qid}</b> · Reunião {_mnum}<br>"
+                        f"{_stmt}<br><br>"
+                        + (f"Levantada por: {_rb}<br>" if _rb else "")
+                        + f"Status: {_rt}"
+                        + (f"<br><i>{_rationale[:120]}</i>" if _rationale else "")
+                    )
+                    _net.add_node(
+                        _nid_q,
+                        label=_q_label,
+                        title=_q_tip,
+                        shape="ellipse",
+                        size=22,
+                        color={
+                            "background": "#f97316",
+                            "border":     _RES_BORDER.get(_rt, "#f87171"),
+                            "highlight":  {"background": "#fb923c", "border": "#fff"},
+                        },
+                        font={"size": 11, "color": "#fff", "bold": True},
+                        borderWidth=3,
                     )
 
-                # Alternativas
-                if alternatives:
-                    st.markdown("**Alternativas avaliadas:**")
-                    for alt in alternatives:
-                        chosen_mark = " ✅ **(escolhida)**" if alt.get("was_chosen") else ""
-                        st.markdown(f"**{alt.get('id', '—')}** — {alt.get('description', '—')}{chosen_mark}")
-                        if alt.get("proposed_by"):
-                            st.caption(f"Proposta por: {alt['proposed_by']}")
-                        cols_arg = st.columns(2)
-                        if alt.get("pros"):
-                            cols_arg[0].success("**A favor:**\n" + "\n".join(f"- {p}" for p in alt["pros"]))
-                        if alt.get("cons"):
-                            cols_arg[1].error("**Contra:**\n" + "\n".join(f"- {c}" for c in alt["cons"]))
-                        supporters = ", ".join(alt.get("supported_by", []))
-                        opposers   = ", ".join(alt.get("opposed_by", []))
-                        parts = []
-                        if supporters:
-                            parts.append(f"A favor: {supporters}")
-                        if opposers:
-                            parts.append(f"Contra: {opposers}")
-                        if parts:
-                            st.caption(" | ".join(parts))
-                        st.markdown("---")
+                    for _alt in (_q.get("alternatives") or []):
+                        _aid    = _alt.get("id", "A?")
+                        _adesc  = _alt.get("description", "")
+                        _pb     = _alt.get("proposed_by", "")
+                        _chosen = _alt.get("was_chosen", False)
+                        _nid_a  = f"A_{_mnum}_{_qid}_{_aid}"
 
-                # Resolução
-                if res_type != "unresolved":
-                    if resolution.get("rationale"):
-                        st.info(f"**Resolução:** {resolution['rationale']}")
-                    if resolution.get("with_caveats"):
-                        st.warning("**Ressalvas:**\n" + "\n".join(f"- {c}" for c in resolution["with_caveats"]))
-                else:
-                    st.error("Questão sem resolução ao final da reunião.")
+                        _a_label = _adesc[:28] + ("…" if len(_adesc) > 28 else "")
+                        _a_tip   = (
+                            f"<b>{_aid}</b>"
+                            + (" ✅ escolhida" if _chosen else "")
+                            + f"<br>{_adesc}"
+                            + (f"<br>Proposta por: {_pb}" if _pb else "")
+                        )
+                        _net.add_node(
+                            _nid_a,
+                            label=_a_label,
+                            title=_a_tip,
+                            shape="diamond",
+                            size=16,
+                            color={
+                                "background": "#2563eb" if not _chosen else "#1d4ed8",
+                                "border":     "#fbbf24" if _chosen else "#60a5fa",
+                                "highlight":  {"background": "#3b82f6", "border": "#fff"},
+                            },
+                            font={"size": 10, "color": "#dbeafe"},
+                            borderWidth=2 if not _chosen else 3,
+                        )
+                        _net.add_edge(
+                            _nid_q, _nid_a,
+                            color={"color": "#94a3b8", "highlight": "#fff"},
+                            width=1.5,
+                            arrows="to",
+                            title="Alternativa proposta",
+                        )
+
+                        for _i, _pro in enumerate(_alt.get("pros") or []):
+                            _nid_p = f"P_{_mnum}_{_qid}_{_aid}_{_i}"
+                            _p_label = str(_pro)[:26] + ("…" if len(str(_pro)) > 26 else "")
+                            _net.add_node(
+                                _nid_p,
+                                label=_p_label,
+                                title=f"<b>A favor:</b> {_pro}",
+                                shape="dot",
+                                size=9,
+                                color={
+                                    "background": "#16a34a",
+                                    "border":     "#4ade80",
+                                    "highlight":  {"background": "#22c55e", "border": "#fff"},
+                                },
+                                font={"size": 9, "color": "#dcfce7"},
+                                borderWidth=1,
+                            )
+                            _net.add_edge(
+                                _nid_a, _nid_p,
+                                color={"color": "#4ade80", "highlight": "#fff"},
+                                width=1,
+                                arrows="to",
+                                dashes=True,
+                                title="Argumento a favor",
+                            )
+
+                        for _j, _con in enumerate(_alt.get("cons") or []):
+                            _nid_c = f"C_{_mnum}_{_qid}_{_aid}_{_j}"
+                            _c_label = str(_con)[:26] + ("…" if len(str(_con)) > 26 else "")
+                            _net.add_node(
+                                _nid_c,
+                                label=_c_label,
+                                title=f"<b>Contra:</b> {_con}",
+                                shape="dot",
+                                size=9,
+                                color={
+                                    "background": "#b91c1c",
+                                    "border":     "#f87171",
+                                    "highlight":  {"background": "#ef4444", "border": "#fff"},
+                                },
+                                font={"size": 9, "color": "#fee2e2"},
+                                borderWidth=1,
+                            )
+                            _net.add_edge(
+                                _nid_a, _nid_c,
+                                color={"color": "#f87171", "highlight": "#fff"},
+                                width=1,
+                                arrows="to",
+                                dashes=True,
+                                title="Argumento contra",
+                            )
+
+                import json as _json_ibis
+                _net.set_options(_json_ibis.dumps({
+                    "physics": {
+                        "enabled": True,
+                        "barnesHut": {
+                            "gravitationalConstant": -9000,
+                            "centralGravity":        0.25,
+                            "springLength":          130,
+                            "springConstant":        0.035,
+                            "damping":               0.12,
+                            "avoidOverlap":          0.4,
+                        },
+                        "stabilization": {"iterations": 250, "fit": True},
+                    },
+                    "interaction": {
+                        "hover":         True,
+                        "tooltipDelay":  150,
+                        "navigationButtons": False,
+                        "keyboard":      True,
+                        "zoomView":      True,
+                    },
+                    "edges": {"smooth": {"type": "dynamic"}},
+                    "nodes": {"scaling": {"min": 8, "max": 28}},
+                }))
+
+                _html_ibis = _net.generate_html(local=False)
+
+                # Legenda injetada no HTML
+                _legend_html = (
+                    "<div style='position:absolute;top:10px;left:10px;background:#1e293b;"
+                    "border:1px solid #334155;border-radius:8px;padding:10px 14px;"
+                    "font-size:11px;color:#cbd5e1;z-index:999;line-height:1.8'>"
+                    "<b style='color:#f1f5f9'>Legenda</b><br>"
+                    "<span style='color:#f97316'>&#9650;</span> Issue/Questão &nbsp;"
+                    "<span style='color:#3b82f6'>&#9670;</span> Alternativa &nbsp;"
+                    "<span style='color:#22c55e'>&#9679;</span> A favor &nbsp;"
+                    "<span style='color:#ef4444'>&#9679;</span> Contra<br>"
+                    "<span style='color:#22c55e'>&#9646;</span> Decidida &nbsp;"
+                    "<span style='color:#fbbf24'>&#9646;</span> Adiada &nbsp;"
+                    "<span style='color:#f87171'>&#9646;</span> Em aberto"
+                    "</div>"
+                )
+                _html_ibis = _html_ibis.replace("<body>", "<body style='margin:0'>" + _legend_html)
+
+                _comp_ibis.html(_html_ibis, height=_GRAPH_H + 40, scrolling=False)
+
+            except ImportError:
+                st.error(
+                    "A biblioteca **pyvis** não está instalada. "
+                    "Adicione `pyvis` ao `requirements.txt` e faça redeploy."
+                )
 
 
 # ════════════════════════════════════════════════════════════════════════════
