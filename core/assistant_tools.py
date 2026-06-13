@@ -6768,12 +6768,23 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     for alt in alts:
                         chosen = " ✅ **(eleita)**" if alt.get("was_chosen") else ""
                         lines.append(f"  - **{alt.get('id','?')}**{chosen}: {alt.get('description','')}")
+                        if alt.get("proposed_by"):
+                            lines.append(f"    - Proposta por: {alt['proposed_by']}")
                         pros = alt.get("pros") or []
                         cons = alt.get("cons") or []
                         if pros:
                             lines.append("    - A favor: " + "; ".join(pros))
                         if cons:
                             lines.append("    - Contra: " + "; ".join(cons))
+                        sup = alt.get("supported_by") or []
+                        opp = alt.get("opposed_by") or []
+                        if sup or opp:
+                            parts = []
+                            if sup:
+                                parts.append("A favor: " + ", ".join(sup))
+                            if opp:
+                                parts.append("Contra: " + ", ".join(opp))
+                            lines.append("    - " + " | ".join(parts))
 
                 if res.get("rationale"):
                     lines.append(f"  → **Resolução:** {res['rationale']}")
