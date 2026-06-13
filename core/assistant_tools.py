@@ -2082,6 +2082,90 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        # ── IBIS / Argumentação ───────────────────────────────────────────────
+        {
+            "type": "function",
+            "function": {
+                "name": "search_ibis_debates",
+                "description": (
+                    "Busca questões IBIS (debates argumentativos) das reuniões do projeto "
+                    "por tema ou palavra-chave. Retorna questões com alternativas, prós/contras, "
+                    "resolução e reunião de origem. "
+                    "Use para: 'O que foi debatido sobre X?', 'Quais decisões sobre Y?', "
+                    "'Quais alternativas foram consideradas para Z?', "
+                    "'Liste os debates relacionados ao tema T por reunião.'"
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": (
+                                "Tema ou palavra-chave a buscar nas questões IBIS "
+                                "(ex: 'Catálogo Mestre', 'integração', 'prazo', 'aprovação')"
+                            ),
+                        },
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Filtrar por reunião específica (opcional)",
+                        },
+                        "resolution_filter": {
+                            "type": "string",
+                            "enum": ["all", "decided", "deferred", "unresolved"],
+                            "description": "Filtrar pelo status de resolução (padrão: all)",
+                        },
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_ibis_timeline",
+                "description": (
+                    "Retorna a evolução cronológica dos debates IBIS agrupados por reunião, "
+                    "com contagens de questões decididas, adiadas e em aberto. "
+                    "Gera um gráfico de barras empilhado por status de resolução. "
+                    "Use para: 'Como o debate sobre X evoluiu ao longo das reuniões?', "
+                    "'Qual reunião teve mais debates não resolvidos?'"
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "topic": {
+                            "type": "string",
+                            "description": "Tema a filtrar (opcional — omita para ver todos os debates do projeto)",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "generate_ibis_map",
+                "description": (
+                    "Gera um Mapa Visual IBIS interativo (grafo Plotly) mostrando questões e alternativas "
+                    "agrupados cronologicamente por reunião. "
+                    "Nós laranjas = Issues/Questões; azuis = Alternativas; verde = Alternativa eleita. "
+                    "Borda: verde=Decidida, âmbar=Adiada, vermelho=Em aberto. "
+                    "SEMPRE use quando o usuário pedir 'mapa visual', 'mapa IBIS', 'grafo dos debates' "
+                    "ou 'mostre visualmente' as questões debatidas."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "topic": {
+                            "type": "string",
+                            "description": "Tema ou palavra-chave para filtrar questões (opcional)",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
     ]
 
 
@@ -2184,6 +2268,10 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "get_p2d_help":                    "consulta",
     # Glossário
     "search_glossary":                 "consulta",
+    # IBIS / Argumentação
+    "search_ibis_debates":             "consulta",
+    "get_ibis_timeline":               "grafico",
+    "generate_ibis_map":               "grafico",
 }
 
 # Ferramentas que exigem perfil administrador
@@ -6554,6 +6642,377 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
 
         return "\n".join(parts)
 
+    # ── IBIS / Argumentação ───────────────────────────────────────────────────
+
+    def _load_ibis_questions(self, topic_filter: str | None = None,
+                             meeting_number: int | None = None) -> list[dict]:
+        """Load and optionally filter IBIS questions from all meetings in the project."""
+        import json
+        import re
+
+        from modules.supabase_client import get_supabase_client
+        client = get_supabase_client()
+        if not client:
+            return []
+        try:
+            q = (
+                client.table("meetings")
+                .select("id, meeting_number, title, meeting_date, argumentation_json")
+                .eq("project_id", self.project_id)
+                .not_.is_("argumentation_json", "null")
+                .order("meeting_number")
+            )
+            if meeting_number:
+                q = q.eq("meeting_number", meeting_number)
+            rows = q.execute().data or []
+        except Exception:
+            return []
+
+        _STOP = {
+            "a","o","as","os","de","do","da","dos","das","em","no","na","nos","nas",
+            "para","que","um","uma","uns","umas","e","ou","se","com","por","mas","é",
+            "ser","ter","ao","à","aos","às","não","como","mais","deve","há","esta",
+            "este","seu","sua","seus","suas","foi","sido","sendo","está","são",
+        }
+
+        def _tok(text: str) -> set:
+            return {
+                w for w in re.sub(r"[^\w\sáéíóúâêôãç]", " ", text.lower()).split()
+                if w not in _STOP and len(w) > 2
+            }
+
+        kw_toks = _tok(topic_filter) if topic_filter else set()
+
+        all_qs: list[dict] = []
+        for row in rows:
+            raw = row.get("argumentation_json") or ""
+            if not raw:
+                continue
+            try:
+                data = json.loads(raw) if isinstance(raw, str) else raw
+                qs = data.get("questions", [])
+            except Exception:
+                continue
+            for q2 in qs:
+                q2["_mid"]    = row["id"]
+                q2["_mnum"]   = row.get("meeting_number")
+                q2["_mtitle"] = row.get("title") or f"Reunião {row.get('meeting_number')}"
+                q2["_mdate"]  = str(row.get("meeting_date") or "")
+                all_qs.append(q2)
+
+        if not kw_toks:
+            return all_qs
+
+        def _matches(q3: dict) -> bool:
+            text = " ".join([
+                q3.get("statement", ""),
+                " ".join(a.get("description", "") for a in q3.get("alternatives", [])),
+                " ".join(p for a in q3.get("alternatives", []) for p in (a.get("pros") or [])),
+                " ".join(c for a in q3.get("alternatives", []) for c in (a.get("cons") or [])),
+            ])
+            ttoks = _tok(text)
+            return bool(kw_toks & ttoks)
+
+        return [q for q in all_qs if _matches(q)]
+
+    def search_ibis_debates(
+        self,
+        query: str,
+        meeting_number: int | None = None,
+        resolution_filter: str = "all",
+    ) -> str:
+        """Keyword search over IBIS questions and return structured text."""
+        qs = self._load_ibis_questions(topic_filter=query, meeting_number=meeting_number)
+        if not qs:
+            return f"Nenhuma questão IBIS encontrada para o tema '{query}'."
+
+        if resolution_filter != "all":
+            qs = [q for q in qs if (q.get("resolution") or {}).get("type") == resolution_filter]
+        if not qs:
+            return f"Nenhuma questão IBIS com status '{resolution_filter}' encontrada para '{query}'."
+
+        _res_lbl = {
+            "decided":    "✅ Decidida",
+            "deferred":   "⏳ Adiada",
+            "unresolved": "❓ Em aberto",
+        }
+
+        lines = [
+            f"## Debates IBIS sobre '{query}' — {len(qs)} questão(ões) encontrada(s)\n"
+        ]
+
+        # Group by meeting
+        from collections import defaultdict
+        by_mtg: dict = defaultdict(list)
+        for q in qs:
+            by_mtg[q["_mnum"]].append(q)
+
+        for mnum in sorted(by_mtg.keys()):
+            mtg_qs = by_mtg[mnum]
+            mtitle = mtg_qs[0]["_mtitle"]
+            mdate  = mtg_qs[0]["_mdate"]
+            lines.append(f"\n### Reunião {mnum} — {mtitle}" + (f" ({mdate})" if mdate else ""))
+
+            for q in mtg_qs:
+                res     = q.get("resolution") or {}
+                rt      = res.get("type", "unresolved")
+                rb      = q.get("raised_by", "")
+                status  = _res_lbl.get(rt, rt)
+                lines.append(f"\n**{q.get('id','?')}** {status} — {q.get('statement','')}")
+                if rb:
+                    lines.append(f"  *Levantada por: {rb}*")
+
+                alts = q.get("alternatives", [])
+                if alts:
+                    lines.append("  **Alternativas:**")
+                    for alt in alts:
+                        chosen = " ✅ **(eleita)**" if alt.get("was_chosen") else ""
+                        lines.append(f"  - **{alt.get('id','?')}**{chosen}: {alt.get('description','')}")
+                        pros = alt.get("pros") or []
+                        cons = alt.get("cons") or []
+                        if pros:
+                            lines.append("    - A favor: " + "; ".join(pros))
+                        if cons:
+                            lines.append("    - Contra: " + "; ".join(cons))
+
+                if res.get("rationale"):
+                    lines.append(f"  → **Resolução:** {res['rationale']}")
+                if res.get("with_caveats"):
+                    lines.append("  → **Ressalvas:** " + "; ".join(res["with_caveats"]))
+
+        return "\n".join(lines)
+
+    def get_ibis_timeline(self, topic: str | None = None) -> str:
+        """Stacked bar chart of IBIS resolution status per meeting, with text summary."""
+        import plotly.graph_objects as go
+        from collections import defaultdict, Counter
+
+        qs = self._load_ibis_questions(topic_filter=topic)
+        if not qs:
+            msg = f"Nenhum debate IBIS encontrado" + (f" sobre '{topic}'" if topic else "") + "."
+            return msg
+
+        by_mtg: dict = defaultdict(list)
+        for q in qs:
+            by_mtg[q["_mnum"]].append(q)
+
+        sorted_mnums = sorted(by_mtg.keys())
+        labels = [f"R.{m}" for m in sorted_mnums]
+
+        decided_cnts    = [sum(1 for q in by_mtg[m] if (q.get("resolution") or {}).get("type") == "decided")    for m in sorted_mnums]
+        deferred_cnts   = [sum(1 for q in by_mtg[m] if (q.get("resolution") or {}).get("type") == "deferred")   for m in sorted_mnums]
+        unresolved_cnts = [sum(1 for q in by_mtg[m] if (q.get("resolution") or {}).get("type") == "unresolved") for m in sorted_mnums]
+
+        fig = go.Figure(data=[
+            go.Bar(name="✅ Decididas",  x=labels, y=decided_cnts,    marker_color="#22c55e"),
+            go.Bar(name="⏳ Adiadas",    x=labels, y=deferred_cnts,   marker_color="#fbbf24"),
+            go.Bar(name="❓ Em aberto",  x=labels, y=unresolved_cnts, marker_color="#f87171"),
+        ])
+        fig.update_layout(barmode="stack")
+        title = f"Evolução dos Debates IBIS por Reunião"
+        if topic:
+            title += f" — '{topic}'"
+        self._dark_layout(fig, title)
+        fig.update_layout(
+            xaxis_title="Reunião",
+            yaxis_title="Nº de questões",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        )
+        self._pending_charts.append(fig.to_dict())
+
+        # Text summary
+        total     = len(qs)
+        n_decided = sum(decided_cnts)
+        n_def     = sum(deferred_cnts)
+        n_unres   = sum(unresolved_cnts)
+        pct       = round(n_decided / total * 100) if total else 0
+        summary   = (
+            f"📊 Gráfico gerado: {total} debate(s) em {len(sorted_mnums)} reunião(ões)"
+            + (f" sobre '{topic}'" if topic else "")
+            + f" — {n_decided} decidido(s) ({pct}%), {n_def} adiado(s), {n_unres} em aberto."
+        )
+        return summary
+
+    def generate_ibis_map(self, topic: str | None = None) -> str:
+        """Plotly network graph of IBIS questions and alternatives, grouped by meeting."""
+        import plotly.graph_objects as go
+
+        qs = self._load_ibis_questions(topic_filter=topic)
+        if not qs:
+            return f"Nenhum debate IBIS encontrado" + (f" sobre '{topic}'" if topic else "") + "."
+
+        _RES_BORDER = {
+            "decided":    "#22c55e",
+            "deferred":   "#fbbf24",
+            "unresolved": "#f87171",
+        }
+
+        # Group by meeting
+        from collections import defaultdict
+        by_mtg: dict = defaultdict(list)
+        for q in qs:
+            by_mtg[q["_mnum"]].append(q)
+        sorted_mnums = sorted(by_mtg.keys())
+
+        # Layout constants
+        X_GAP  = 6.0   # horizontal gap between meetings
+        Y_GAP  = 3.5   # vertical gap between questions within a meeting
+        A_Y    = 2.2   # depth of alternatives below question
+        A_XGAP = 1.4   # horizontal spread of alternatives
+
+        node_x, node_y, node_color, node_size, node_symbol = [], [], [], [], []
+        node_hover, node_label = [], []
+        edge_x, edge_y = [], []
+
+        # Annotation positions for meeting headers
+        mtg_annotations = []
+
+        for mx, mnum in enumerate(sorted_mnums):
+            mtg_qs  = by_mtg[mnum]
+            mtitle  = mtg_qs[0]["_mtitle"]
+            x_base  = mx * X_GAP
+            mtg_annotations.append(dict(
+                x=x_base, y=1.5,
+                text=f"<b>R.{mnum}</b><br><span style='font-size:10px'>{mtitle[:28]}</span>",
+                showarrow=False,
+                font=dict(size=11, color="#94a3b8"),
+                xanchor="center",
+            ))
+
+            for qi, q in enumerate(mtg_qs):
+                q_x   = x_base
+                q_y   = -(qi * Y_GAP)
+                qnid  = f"Q_{mnum}_{q.get('id','')}"
+                rt    = (q.get("resolution") or {}).get("type", "unresolved")
+                rat   = (q.get("resolution") or {}).get("rationale", "")
+                rb    = q.get("raised_by", "")
+                stmt  = q.get("statement", "")
+                alts  = q.get("alternatives", [])
+                n_a   = len(alts)
+
+                # Question node
+                node_x.append(q_x);  node_y.append(q_y)
+                node_color.append(_RES_BORDER.get(rt, "#f87171"))
+                node_size.append(18)
+                node_symbol.append("circle")
+                node_label.append(q.get("id", "Q?"))
+                tip = (
+                    f"<b>{q.get('id','?')}</b> — Reunião {mnum}<br>"
+                    f"{stmt}<br><br>"
+                    + (f"Levantada por: {rb}<br>" if rb else "")
+                    + f"Status: {rt}"
+                    + (f"<br><i>Resolução: {rat[:100]}</i>" if rat else "")
+                    + f"<br>{n_a} alternativa(s)"
+                )
+                node_hover.append(tip)
+
+                # Alternative nodes
+                for ai, alt in enumerate(alts):
+                    a_x = q_x + (ai - (n_a - 1) / 2) * A_XGAP
+                    a_y = q_y - A_Y
+
+                    # Edge Q → A
+                    edge_x.extend([q_x, a_x, None])
+                    edge_y.extend([q_y, a_y, None])
+
+                    chosen  = alt.get("was_chosen", False)
+                    a_color = "#16a34a" if chosen else "#2563eb"
+                    pros    = alt.get("pros") or []
+                    cons    = alt.get("cons") or []
+                    pb      = alt.get("proposed_by", "")
+                    a_tip   = (
+                        f"<b>{alt.get('id','?')}</b>"
+                        + (" ✅ eleita" if chosen else "")
+                        + f"<br>{alt.get('description','')}"
+                        + (f"<br>Proposta por: {pb}" if pb else "")
+                        + f"<br>+{len(pros)} prós / -{len(cons)} contras"
+                    )
+                    if pros:
+                        a_tip += "<br>Prós: " + "; ".join(pros[:2]) + ("…" if len(pros) > 2 else "")
+                    if cons:
+                        a_tip += "<br>Contras: " + "; ".join(cons[:2]) + ("…" if len(cons) > 2 else "")
+
+                    node_x.append(a_x);  node_y.append(a_y)
+                    node_color.append(a_color)
+                    node_size.append(12)
+                    node_symbol.append("diamond")
+                    node_label.append(alt.get("id", "A?"))
+                    node_hover.append(a_tip)
+
+        edge_trace = go.Scatter(
+            x=edge_x, y=edge_y,
+            mode="lines",
+            line=dict(width=1.2, color="#334155"),
+            hoverinfo="none",
+            showlegend=False,
+        )
+
+        node_trace = go.Scatter(
+            x=node_x, y=node_y,
+            mode="markers+text",
+            marker=dict(
+                size=node_size,
+                color=node_color,
+                symbol=node_symbol,
+                line=dict(width=1.5, color="#0d1b2a"),
+            ),
+            text=node_label,
+            textposition="top center",
+            textfont=dict(size=9, color="#f1f5f9"),
+            hovertext=node_hover,
+            hoverinfo="text",
+            showlegend=False,
+        )
+
+        fig = go.Figure(data=[edge_trace, node_trace])
+
+        # Legend as extra traces
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers",
+            marker=dict(size=10, color="#f97316", symbol="circle"),
+            name="Questão (Issue)", showlegend=True))
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers",
+            marker=dict(size=9, color="#2563eb", symbol="diamond"),
+            name="Alternativa", showlegend=True))
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers",
+            marker=dict(size=9, color="#16a34a", symbol="diamond"),
+            name="Alternativa eleita", showlegend=True))
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers",
+            marker=dict(size=10, color="#22c55e", symbol="circle"),
+            name="Decidida", showlegend=True))
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers",
+            marker=dict(size=10, color="#fbbf24", symbol="circle"),
+            name="Adiada", showlegend=True))
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers",
+            marker=dict(size=10, color="#f87171", symbol="circle"),
+            name="Em aberto", showlegend=True))
+
+        title_txt = "Mapa Visual IBIS" + (f" — '{topic}'" if topic else f" — {len(qs)} questão(ões)")
+        max_y = max((len(v) * Y_GAP for v in by_mtg.values()), default=1)
+        fig.update_layout(
+            paper_bgcolor="#0d1b2a",
+            plot_bgcolor="#0d1b2a",
+            font_color="#f1f5f9",
+            title=dict(text=title_txt, font=dict(size=14, color="#f1f5f9")),
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            margin=dict(l=20, r=20, t=80, b=20),
+            annotations=mtg_annotations,
+            legend=dict(
+                bgcolor="#1e293b", bordercolor="#334155", borderwidth=1,
+                font=dict(size=11, color="#f1f5f9"),
+                orientation="h", yanchor="bottom", y=1.04, xanchor="left", x=0,
+            ),
+            height=max(420, int(max_y * 60) + 180),
+        )
+
+        self._pending_charts.append(fig.to_dict())
+        n_alts = sum(len(q.get("alternatives", [])) for q in qs)
+        return (
+            f"🗺️ Mapa IBIS gerado: {len(qs)} questão(ões) e {n_alts} alternativa(s)"
+            + (f" sobre '{topic}'" if topic else "")
+            + f" em {len(sorted_mnums)} reunião(ões)."
+        )
+
     # ── Glossário ─────────────────────────────────────────────────────────────
 
     def search_glossary(self, query: str, tag: str | None = None) -> str:
@@ -6866,6 +7325,18 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 "search_glossary":        lambda: self.search_glossary(
                     query=tool_input["query"],
                     tag=tool_input.get("tag"),
+                ),
+                # IBIS
+                "search_ibis_debates":    lambda: self.search_ibis_debates(
+                    query=tool_input["query"],
+                    meeting_number=tool_input.get("meeting_number"),
+                    resolution_filter=tool_input.get("resolution_filter", "all"),
+                ),
+                "get_ibis_timeline":      lambda: self.get_ibis_timeline(
+                    topic=tool_input.get("topic"),
+                ),
+                "generate_ibis_map":      lambda: self.generate_ibis_map(
+                    topic=tool_input.get("topic"),
                 ),
             }
             if tool_name not in dispatch:
