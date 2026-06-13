@@ -309,6 +309,11 @@ _DOT_COLOR = {
 _REQ_PAGE_SIZE = 25
 
 with tab_req:
+    st.caption(
+        "**Requisitos** são condições ou capacidades que o sistema ou processo deve satisfazer, "
+        "extraídos das transcrições pela IA seguindo o padrão IEEE 830. "
+        "Cada requisito tem tipo (funcional, não-funcional, regra de negócio…), prioridade e rastreabilidade até a reunião de origem."
+    )
     if not requirements:
         st.info("Nenhum requisito registrado para este projeto.")
     else:
@@ -506,6 +511,11 @@ with tab_req:
 # TAB 2 — MIND MAP
 # ════════════════════════════════════════════════════════════════════════════
 with tab_mindmap:
+    st.caption(
+        "**Mind Map de Requisitos** — visualização hierárquica interativa que agrupa os requisitos "
+        "por tipo (funcional, não-funcional, regra de negócio…). "
+        "Permite navegar, colapsar ramos e exportar como imagem para apresentações."
+    )
     if not requirements:
         st.info("Nenhum requisito registrado para este projeto.")
     else:
@@ -551,6 +561,12 @@ with tab_mindmap:
 # TAB 3 — CONTRADIÇÕES
 # ════════════════════════════════════════════════════════════════════════════
 with tab_contra:
+    st.caption(
+        "**Contradições** são conflitos detectados entre requisitos de reuniões diferentes — "
+        "situações em que duas afirmações se opõem ou se excluem mutuamente. "
+        "A detecção usa similaridade semântica (embeddings) e análise de antônimos; "
+        "cada conflito traz os trechos originais e uma explicação gerada pela IA."
+    )
     if not contradictions:
         st.success("✅ Nenhuma contradição detectada neste projeto.")
     else:
@@ -579,6 +595,11 @@ with tab_contra:
 # TAB 4 — HISTÓRICO POR REQUISITO
 # ════════════════════════════════════════════════════════════════════════════
 with tab_hist:
+    st.caption(
+        "**Histórico de Requisitos** — linha do tempo de como cada requisito evoluiu entre reuniões. "
+        "Cada versão registra a descrição, prioridade e status vigentes naquele momento, "
+        "permitindo auditar mudanças de escopo ao longo do projeto."
+    )
     if not requirements:
         st.info("Nenhum requisito registrado.")
     else:
@@ -643,6 +664,12 @@ with tab_hist:
 # TAB 5 — REUNIÕES
 # ════════════════════════════════════════════════════════════════════════════
 with tab_meet:
+    st.caption(
+        "**Reuniões** — índice de todas as reuniões do projeto com seus artefatos consolidados: "
+        "participantes, decisões, itens de ação e resumo executivo. "
+        "Use esta aba como ponto de entrada para revisar o conteúdo de uma reunião específica "
+        "sem precisar reabrir o pipeline."
+    )
     if not meetings:
         st.info("Nenhuma reunião registrada para este projeto.")
     else:
@@ -727,6 +754,12 @@ _RULE_BADGE = {
 }
 
 with tab_sbvr:
+    st.caption(
+        "**SBVR (Semantics of Business Vocabulary and Rules)** é um padrão OMG para formalizar "
+        "o vocabulário e as regras de negócio de um domínio em linguagem não-ambígua. "
+        "Os **termos** definem os conceitos do negócio; as **regras** expressam obrigações, "
+        "proibições e permissões que governam o processo — cada uma rastreável à reunião e ao falante de origem."
+    )
     if not sbvr_terms and not sbvr_rules:
         st.info("Nenhum dado SBVR registrado. Execute o pipeline com o agente SBVR habilitado.")
     else:
@@ -890,6 +923,12 @@ _STATUS_PROC_BADGE = {
 }
 
 with tab_bpmn:
+    st.caption(
+        "**BPMN 2.0 (Business Process Model and Notation)** é o padrão ISO/OMG para modelagem "
+        "de processos de negócio. Os diagramas gerados mostram o fluxo de tarefas, decisões "
+        "(gateways), raias por responsável (lanes) e eventos de início/fim — "
+        "exportáveis como XML para ferramentas como Camunda, Bizagi ou Signavio."
+    )
     if not bpmn_procs:
         if not bpmn_tables_exist():
             st.warning(
@@ -1077,6 +1116,12 @@ _HIT_POLICY_LABEL = {
 }
 
 with tab_dmn:
+    st.caption(
+        "**DMN (Decision Model and Notation)** é o padrão OMG para formalizar decisões de negócio "
+        "como tabelas de regras (decision tables). Cada tabela define as entradas (condições), "
+        "as saídas (ações/resultados) e a política de acerto (UNIQUE, ANY, FIRST…), "
+        "tornando as regras auditáveis, testáveis e integráveis a motores de regras como Drools."
+    )
     # Carregamento sob demanda: só busca do Supabase se ainda não foi feito nesta sessão
     if _DMN_SS not in st.session_state:
         with st.spinner("Buscando decisões DMN..."):
@@ -1190,6 +1235,13 @@ _RESOLUTION_BADGE = {
 }
 
 with tab_ibis:
+    st.caption(
+        "**IBIS (Issue-Based Information System)** é uma metodologia de argumentação estruturada "
+        "que organiza as discussões de uma reunião em **questões** (Issues), "
+        "**alternativas** (Positions) com prós e contras, e **resoluções**. "
+        "Permite entender não apenas o que foi decidido, mas por que — "
+        "registrando o raciocínio coletivo da equipe."
+    )
     # Carregamento sob demanda: só busca do Supabase se ainda não foi feito nesta sessão
     if _IBIS_SS not in st.session_state:
         with st.spinner("Buscando questões IBIS..."):
