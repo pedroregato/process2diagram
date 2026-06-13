@@ -1361,6 +1361,163 @@ with tab_ibis:
                     "+ 3 × posições vencedoras + votos a favor + votos contra."
                 )
 
+        # ── Fase 3b: Evolução Temporal de Debates ────────────────────────────
+        with st.expander("📅 Evolução Temporal de Debates", expanded=False):
+            st.caption(
+                "Agrupa questões similares de reuniões diferentes em **threads de debate** "
+                "e exibe a linha do tempo de cada tema — mostrando como foi tratado ao longo do projeto "
+                "(adiado repetidamente, reaberto após decisão, etc.)."
+            )
+
+            _evo_thresh = st.slider(
+                "Limiar de similaridade",
+                min_value=0.10, max_value=0.50, value=0.22, step=0.03,
+                key="ibis_evo_thresh",
+                help="Jaccard sobre tokens PT-BR. Menor = mais threads detectadas.",
+            )
+
+            # ── Stop words e similaridade ──────────────────────────────────
+            import re as _re_evo
+            _EVO_STOP = {
+                "a","o","as","os","de","do","da","dos","das","em","no","na",
+                "nos","nas","para","que","um","uma","uns","umas","e","ou","se",
+                "com","por","mas","é","ser","ter","ao","à","aos","às","não",
+                "como","mais","deve","há","esta","este","seu","sua","seus",
+                "suas","foi","sido","sendo","está","estão","são","faz","fazer",
+                "pode","deve","devem","podem","será","vai","vão",
+                "the","of","to","in","is","it","be","as","at","or","an","and",
+            }
+
+            def _evo_tok(text: str) -> set:
+                words = _re_evo.sub(r"[^\w\sáéíóúâêôãç]", " ", text.lower()).split()
+                return {w for w in words if w not in _EVO_STOP and len(w) > 2}
+
+            def _evo_jac(a: str, b: str) -> float:
+                wa, wb = _evo_tok(a), _evo_tok(b)
+                if not wa or not wb:
+                    return 0.0
+                return len(wa & wb) / len(wa | wb)
+
+            # ── Union-Find sobre TODAS as questões do projeto ──────────────
+            _n = len(ibis_questions)
+            _uf = list(range(_n))
+
+            def _uf_find(p: list, x: int) -> int:
+                while p[x] != x:
+                    p[x] = p[p[x]]
+                    x = p[x]
+                return x
+
+            def _uf_union(p: list, x: int, y: int) -> None:
+                rx, ry = _uf_find(p, x), _uf_find(p, y)
+                if rx != ry:
+                    p[ry] = rx
+
+            for _ea in range(_n):
+                for _eb in range(_ea + 1, _n):
+                    _qa = ibis_questions[_ea]
+                    _qb = ibis_questions[_eb]
+                    if _qa.get("_meeting_id") == _qb.get("_meeting_id"):
+                        continue
+                    if _evo_jac(_qa.get("statement", ""), _qb.get("statement", "")) >= _evo_thresh:
+                        _uf_union(_uf, _ea, _eb)
+
+            # ── Agrupar em componentes ─────────────────────────────────────
+            from collections import defaultdict as _dd_evo
+            _comp: dict = _dd_evo(list)
+            for _ei, _eq in enumerate(ibis_questions):
+                _comp[_uf_find(_uf, _ei)].append(_eq)
+
+            # Manter só componentes com 2+ reuniões distintas
+            _threads: list[list] = []
+            for _root, _qs in _comp.items():
+                _mids_in = {q.get("_meeting_id") for q in _qs}
+                if len(_mids_in) >= 2:
+                    _threads.append(
+                        sorted(_qs, key=lambda q: (q.get("_meeting_number") or 0))
+                    )
+            _threads.sort(key=lambda t: t[0].get("_meeting_number") or 0)
+
+            if not _threads:
+                st.info(
+                    "Nenhum debate recorrente detectado com este limiar. "
+                    "Tente reduzir o valor do slider."
+                )
+            else:
+                _res_cfg = {
+                    "decided":    ("✅", "Decidida",  "#14532d", "#4ade80"),
+                    "deferred":   ("⏳", "Adiada",    "#451a03", "#fbbf24"),
+                    "unresolved": ("❓", "Em aberto", "#450a0a", "#f87171"),
+                }
+                st.success(f"**{len(_threads)} debate(s) recorrente(s)** identificado(s) no projeto.")
+                st.markdown("")
+
+                for _ti, _thread in enumerate(_threads, 1):
+                    _rep = _thread[0].get("statement", "")
+                    _preview = _rep[:90] + ("…" if len(_rep) > 90 else "")
+                    st.markdown(f"**Debate #{_ti}** — {_preview}")
+
+                    # Cabeçalho de reuniões com seta entre elas
+                    _ncols = min(len(_thread), 6)
+                    _thread_show = _thread[:6]
+                    if len(_thread) > 6:
+                        st.caption(f"(Exibindo primeiras 6 de {len(_thread)} ocorrências)")
+
+                    _tcols = st.columns(_ncols)
+                    for _tci, (_col, _tq) in enumerate(zip(_tcols, _thread_show)):
+                        _t_mnum  = _tq.get("_meeting_number", "?")
+                        _t_mdate = str(_tq.get("_meeting_date") or "")[:10]
+                        _t_stmt  = _tq.get("statement", "")
+                        _t_res   = (_tq.get("resolution") or {}).get("type", "unresolved")
+                        _t_rat   = (_tq.get("resolution") or {}).get("rationale", "")
+                        _t_cav   = (_tq.get("resolution") or {}).get("with_caveats") or []
+                        _emoji, _label, _bg, _border = _res_cfg.get(_t_res, _res_cfg["unresolved"])
+
+                        with _col:
+                            st.markdown(
+                                f"<div style='background:{_bg};border:1px solid {_border};"
+                                "border-radius:8px;padding:8px 10px;font-size:12px;"
+                                "color:#f1f5f9;min-height:110px'>"
+                                f"<b>Reunião {_t_mnum}</b>"
+                                + (f"<br><span style='color:#94a3b8;font-size:10px'>{_t_mdate}</span>" if _t_mdate else "")
+                                + f"<br><br>{_emoji} <b>{_label}</b>"
+                                + (f"<br><span style='font-size:10px;color:#cbd5e1'>{_t_stmt[:60]}…</span>" if len(_t_stmt) > 60 else f"<br><span style='font-size:10px;color:#cbd5e1'>{_t_stmt}</span>")
+                                + "</div>",
+                                unsafe_allow_html=True,
+                            )
+                            if _t_rat or _t_cav:
+                                with st.popover("ℹ️"):
+                                    st.markdown(f"**Questão:** {_t_stmt}")
+                                    if _t_rat:
+                                        st.info(f"**Resolução:** {_t_rat}")
+                                    for _cav in _t_cav:
+                                        st.warning(f"Ressalva: {_cav}")
+
+                    # Linha de progresso visual
+                    _statuses = [
+                        (_tq.get("resolution") or {}).get("type", "unresolved")
+                        for _tq in _thread_show
+                    ]
+                    _decided_at = next(
+                        (i + 1 for i, s in enumerate(_statuses) if s == "decided"), None
+                    )
+                    if _decided_at:
+                        _pct = int(_decided_at / len(_statuses) * 100)
+                        _note = (
+                            f"Decidido na {_decided_at}ª ocorrência"
+                            if _decided_at > 1
+                            else "Decidido na primeira ocorrência"
+                        )
+                        if _decided_at < len(_statuses):
+                            _note += " — reaberto depois"
+                        st.caption(f"🔁 {_note}")
+                    elif all(s == "deferred" for s in _statuses):
+                        st.caption("⏳ Adiado em todas as ocorrências — ainda sem decisão")
+                    elif all(s == "unresolved" for s in _statuses):
+                        st.caption("❓ Permanece sem resolução ao longo do projeto")
+
+                    st.markdown("---")
+
         st.markdown("---")
 
         # Filtro por reunião
