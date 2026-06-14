@@ -95,7 +95,7 @@ def render_context_selector() -> None:
     with st.expander("📁 Contexto / Reunião — obrigatório para salvar resultados",
                      expanded=True):
 
-        projects = list_contexts()
+        projects = list_contexts(tenant_id=st.session_state.get("_tenant_id"))
         project_names = [p["name"] for p in projects]
         options = project_names + [_NEW]
 
@@ -164,7 +164,7 @@ def _handle_confirm(projects, sel, new_name, new_sigla, new_desc, title, meeting
         if not new_sigla.strip():
             st.error("Informe a sigla do contexto.")
             return
-        project = create_context(new_name.strip(), new_desc.strip(), new_sigla.strip(), context_type=new_ctx_type)
+        project = create_context(new_name.strip(), new_desc.strip(), new_sigla.strip(), context_type=new_ctx_type, tenant_id=st.session_state.get("_tenant_id"))
         if not project:
             st.error("Erro ao criar contexto no Supabase.")
             return

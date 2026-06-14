@@ -32,19 +32,22 @@ def _ok(response) -> list[dict]:
 
 # ── Projetos ──────────────────────────────────────────────────────────────────
 
-def list_contexts() -> list[dict]:
-    """Retorna contextos do tenant ativo, ordenados por nome.
+def list_contexts(tenant_id: str | None = None) -> list[dict]:
+    """Retorna contextos ordenados por nome, opcionalmente filtrados por tenant.
 
-    Se o usuário estiver logado via domínio (tenant_id em session_state),
-    filtra apenas os contextos daquele tenant. Caso contrário (login local
-    / sem tenant), retorna todos — comportamento de fallback para dev/admin.
+    Args:
+        tenant_id: UUID do tenant ativo. Quando fornecido, filtra apenas os
+                   contextos daquele tenant. Quando None, retorna todos
+                   (fallback para login local / dev / admin sem tenant).
+
+    O chamador deve obter tenant_id via st.session_state.get("_tenant_id")
+    e passá-lo explicitamente — evita acesso a session_state dentro do módulo
+    e garante que @st.cache_data possa criar chaves de cache por tenant.
     """
-    import streamlit as st
     db = _db()
     if not db:
         return []
     try:
-        tenant_id = st.session_state.get("_tenant_id")
         q = db.table("contexts").select("*").order("name")
         if tenant_id:
             q = q.eq("tenant_id", tenant_id)
@@ -66,7 +69,7 @@ def get_context(context_id: str) -> dict | None:
 
 
 def create_context(name: str, description: str = "", sigla: str = "",
-                   context_type: str = "project") -> dict | None:
+                   context_type: str = "project", tenant_id: str | None = None) -> dict | None:
     """Cria e retorna um novo contexto."""
     db = _db()
     if not db:
@@ -78,13 +81,8 @@ def create_context(name: str, description: str = "", sigla: str = "",
     }
     if sigla:
         payload["sigla"] = sigla.strip().upper()
-    try:
-        import streamlit as st
-        tenant_id = st.session_state.get("_tenant_id")
-        if tenant_id:
-            payload["tenant_id"] = tenant_id
-    except Exception:
-        pass
+    if tenant_id:
+        payload["tenant_id"] = tenant_id
     try:
         rows = _ok(db.table("contexts").insert(payload).execute())
         return rows[0] if rows else None

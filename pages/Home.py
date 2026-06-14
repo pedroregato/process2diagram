@@ -33,6 +33,7 @@ apply_auth_gate()
 user_name   = st.session_state.get("_usuario_nome")  or st.session_state.get("_usuario_login", "Usuário")
 user_role   = st.session_state.get("_role", "user")
 tenant_name = st.session_state.get("_tenant_name", "")
+domain_slug = st.session_state.get("_domain", "")
 today_str   = datetime.today().strftime("%d/%m/%Y")
 
 _ROLE_LABEL = {"master": "Master", "admin": "Admin", "user": "Usuário"}
@@ -207,7 +208,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── 1. Header ─────────────────────────────────────────────────────────────────
-tenant_str = f" · {tenant_name}" if tenant_name else ""
+tenant_str   = f" · {tenant_name}" if tenant_name else ""
+domain_badge = (
+    f'''<span style="display:inline-block;margin-left:.8rem;padding:3px 10px;
+    border-radius:20px;font-size:.68rem;font-weight:700;letter-spacing:.1em;
+    background:#C97B1A22;color:#C97B1A;border:1px solid #C97B1A55;
+    text-transform:uppercase;vertical-align:middle;">{domain_slug}</span>'''
+    if domain_slug else ""
+)
 st.markdown(f"""
 <div class="home-header">
   <div>
@@ -217,6 +225,7 @@ st.markdown(f"""
             style="background:{role_color}22;color:{role_color};border:1px solid {role_color}55">
         {role_label}
       </span>
+      {domain_badge}
     </div>
     <div class="sub">Process2Diagram{tenant_str} &nbsp;·&nbsp; {today_str}</div>
   </div>
@@ -229,10 +238,10 @@ st.markdown(f"""
 
 # ── Contexto de Trabalho ─────────────────────────────────────────────────────
 @st.cache_data(ttl=120, show_spinner=False)
-def _load_projects():
-    return list_contexts()
+def _load_projects(tenant_id: str | None = None):
+    return list_contexts(tenant_id=tenant_id)
 
-_all_projects = _load_projects()
+_all_projects = _load_projects(tenant_id=st.session_state.get("_tenant_id"))
 _ap_id   = st.session_state.get("active_project_id")
 _ap_name = st.session_state.get("active_project_name", "")
 
@@ -271,7 +280,7 @@ elif _all_projects:
             st.session_state["active_project_name"] = _p["name"]
             if _p.get("sigla"):
                 st.session_state["prefix"] = _p["sigla"].strip() + "_"
-            _load_projects.clear()
+            _load_projects.clear()  # invalida cache do tenant atual
             st.rerun()
 else:
     st.info(t("no_context_found"))
