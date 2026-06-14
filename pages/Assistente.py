@@ -1070,6 +1070,209 @@ def _export_chat_to_markdown(
     return "\n".join(lines)
 
 
+def _export_chat_to_html(
+    messages: list[dict],
+    project_name: str,
+    provider: str,
+) -> str:
+    """Build a self-contained HTML export of the conversation, including Plotly charts."""
+    import json
+    from datetime import datetime as _dt
+
+    ts = _dt.now().strftime("%Y-%m-%d %H:%M")
+
+    # ── Collect all chart dicts to decide whether to include Plotly CDN ──────
+    has_charts = any(msg.get("charts") for msg in messages)
+    plotly_cdn = (
+        '<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>\n'
+        if has_charts else ""
+    )
+
+    # ── Build message blocks ──────────────────────────────────────────────────
+    blocks: list[str] = []
+    turn = 0
+    for msg in messages:
+        role = msg["role"]
+        content = msg.get("content", "")
+        charts = msg.get("charts") or []
+        tools = msg.get("tools_used") or []
+
+        if role == "user":
+            turn += 1
+            blocks.append(f"""
+<div class="msg msg-user">
+  <div class="msg-label">Você</div>
+  <div class="msg-body md-content" data-md="{_html_escape_attr(content)}">{_html_escape(content)}</div>
+</div>""")
+        elif role == "assistant":
+            tool_badge = ""
+            if tools:
+                tool_badge = "".join(
+                    f'<span class="tool-badge">{_html_escape(t)}</span>' for t in tools
+                )
+            chart_html = ""
+            for ci, chart_dict in enumerate(charts):
+                div_id = f"chart_{turn}_{ci}"
+                chart_json = json.dumps(chart_dict)
+                chart_html += f"""
+<div class="chart-wrap">
+  <div id="{div_id}" class="plotly-chart"></div>
+  <script>
+    (function() {{
+      var spec = {chart_json};
+      var fig = spec;
+      Plotly.newPlot('{div_id}',
+        fig.data || [],
+        Object.assign({{paper_bgcolor:'#0B1E3D',plot_bgcolor:'#0B1E3D',
+          font:{{color:'#FAFAF8'}},margin:{{t:40,b:40,l:40,r:20}}}}, fig.layout || {{}}),
+        {{responsive:true, displayModeBar:true}}
+      );
+    }})();
+  </script>
+</div>"""
+            blocks.append(f"""
+<div class="msg msg-assistant">
+  <div class="msg-label">Assistente <span class="provider-label">{_html_escape(provider)}</span>{tool_badge}</div>
+  <div class="msg-body md-content" data-md="{_html_escape_attr(content)}">{_html_escape(content)}</div>
+  {chart_html}
+</div>""")
+
+    body = "\n".join(blocks)
+
+    return f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conversa — {_html_escape(project_name)}</title>
+{plotly_cdn}<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{
+    background: #071428;
+    color: #FAFAF8;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 0;
+  }}
+  .page-header {{
+    background: linear-gradient(135deg, #071428 0%, #0B1E3D 55%, #122848 100%);
+    border-bottom: 3px solid #C97B1A;
+    padding: 1.2rem 2rem;
+  }}
+  .page-header h1 {{ font-size: 1.2rem; color: #FAFAF8; font-weight: 700; }}
+  .page-header .meta {{ font-size: .75rem; color: #7A8EA8; margin-top: .3rem; }}
+  .chat-container {{ max-width: 860px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }}
+  .msg {{ border-radius: 10px; margin-bottom: 1rem; padding: 1rem 1.2rem; }}
+  .msg-user {{
+    background: #0d2a4a;
+    border-left: 4px solid #2563EB;
+  }}
+  .msg-assistant {{
+    background: #0f2235;
+    border-left: 4px solid #C97B1A;
+  }}
+  .msg-label {{
+    font-size: .68rem; font-weight: 800; letter-spacing: .09em;
+    text-transform: uppercase; color: #7A8EA8; margin-bottom: .5rem;
+    display: flex; align-items: center; gap: .4rem; flex-wrap: wrap;
+  }}
+  .provider-label {{
+    font-weight: 400; text-transform: none; letter-spacing: 0;
+    color: #C97B1A; font-size: .68rem;
+  }}
+  .tool-badge {{
+    background: #1A2E48; color: #60A5FA;
+    border: 1px solid #1D4A80;
+    border-radius: 4px; padding: .1rem .4rem;
+    font-size: .60rem; font-weight: 700; letter-spacing: .05em;
+    text-transform: none;
+  }}
+  .msg-body {{ color: #D4E1F5; }}
+  .msg-body h1,.msg-body h2,.msg-body h3 {{
+    color: #FAFAF8; margin: .8rem 0 .4rem; font-size: 1rem;
+  }}
+  .msg-body h1 {{ font-size: 1.15rem; }}
+  .msg-body p {{ margin: .5rem 0; }}
+  .msg-body ul,.msg-body ol {{ margin: .5rem 0 .5rem 1.4rem; }}
+  .msg-body li {{ margin: .2rem 0; }}
+  .msg-body code {{
+    background: #0A1628; color: #93C5FD;
+    padding: .1rem .35rem; border-radius: 4px;
+    font-family: 'Courier New', monospace; font-size: .85em;
+  }}
+  .msg-body pre {{
+    background: #050D1A; border: 1px solid #1A2E48;
+    border-radius: 8px; padding: .8rem 1rem;
+    overflow-x: auto; margin: .6rem 0;
+  }}
+  .msg-body pre code {{ background: none; padding: 0; color: #93C5FD; }}
+  .msg-body table {{
+    width: 100%; border-collapse: collapse; margin: .6rem 0; font-size: .82rem;
+  }}
+  .msg-body th {{
+    background: #0B1E3D; color: #FAFAF8;
+    padding: .4rem .7rem; text-align: left; border: 1px solid #1A3050;
+  }}
+  .msg-body td {{ padding: .35rem .7rem; border: 1px solid #1A2E48; color: #B0C4DE; }}
+  .msg-body tr:nth-child(even) td {{ background: #071428; }}
+  .msg-body blockquote {{
+    border-left: 3px solid #C97B1A; margin: .5rem 0;
+    padding: .3rem .8rem; color: #9AAABB; background: #0A1628;
+    border-radius: 0 6px 6px 0;
+  }}
+  .msg-body a {{ color: #60A5FA; }}
+  .msg-body strong {{ color: #FAFAF8; }}
+  .msg-body em {{ color: #A3B8CC; }}
+  .msg-body hr {{ border: none; border-top: 1px solid #1A2E48; margin: .8rem 0; }}
+  .chart-wrap {{ margin-top: .8rem; }}
+  .plotly-chart {{ width: 100%; min-height: 380px; }}
+  .page-footer {{
+    text-align: center; font-size: .70rem; color: #4A6A8A;
+    padding: 1.5rem; border-top: 1px solid #1A2E48; margin-top: 2rem;
+  }}
+</style>
+</head>
+<body>
+<div class="page-header">
+  <h1>💬 Conversa — {_html_escape(project_name)}</h1>
+  <div class="meta">Exportado em {ts} · Provedor: {_html_escape(provider)}</div>
+</div>
+<div class="chat-container">
+{body}
+</div>
+<div class="page-footer">
+  Gerado por Process2Diagram · {ts}
+</div>
+<script>
+  // Render Markdown in all .md-content elements
+  document.querySelectorAll('.md-content').forEach(function(el) {{
+    var md = el.getAttribute('data-md') || '';
+    if (md) el.innerHTML = marked.parse(md);
+  }});
+</script>
+</body>
+</html>"""
+
+
+def _html_escape(text: str) -> str:
+    return (text
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;"))
+
+
+def _html_escape_attr(text: str) -> str:
+    return (text
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("\n", "&#10;")
+            .replace("\r", ""))
+
+
 # ── Session history ───────────────────────────────────────────────────────────
 if "assistant_history" not in st.session_state:
     st.session_state["assistant_history"] = []
@@ -1094,17 +1297,28 @@ if st.session_state.get("_confirm_clear"):
     st.markdown("---")
 
 if history:
-    _tb_export, _tb_clear, _tb_info = st.columns([1.2, 1, 5])
-    with _tb_export:
-        from datetime import datetime as _dt2
+    _tb_md, _tb_html, _tb_clear, _tb_info = st.columns([1.1, 1.1, 1, 5])
+    from datetime import datetime as _dt2
+    _ts_str = _dt2.now().strftime("%Y%m%d_%H%M")
+    with _tb_md:
         _export_md = _export_chat_to_markdown(history, project_name, selected_provider)
         st.download_button(
-            "⬇️ Exportar",
+            "⬇️ Markdown",
             data=_export_md,
-            file_name=f"conversa_{_dt2.now().strftime('%Y%m%d_%H%M')}.md",
+            file_name=f"conversa_{_ts_str}.md",
             mime="text/markdown",
-            key="btn_export_chat",
+            key="btn_export_chat_md",
             help="Baixar conversa como Markdown",
+        )
+    with _tb_html:
+        _export_html = _export_chat_to_html(history, project_name, selected_provider)
+        st.download_button(
+            "⬇️ HTML",
+            data=_export_html.encode("utf-8"),
+            file_name=f"conversa_{_ts_str}.html",
+            mime="text/html",
+            key="btn_export_chat_html",
+            help="Baixar conversa como HTML com gráficos interativos",
         )
     with _tb_clear:
         if st.button("🗑️ Limpar", key="btn_clear_chat", help="Limpar historico"):
