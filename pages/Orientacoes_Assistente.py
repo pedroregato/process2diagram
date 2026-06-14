@@ -411,6 +411,22 @@ with tab_analise:
         ]
     ), unsafe_allow_html=True)
 
+    st.markdown('<div class="g-section-hdr">Debates argumentativos — IBIS</div>', unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "search_ibis_debates", "consulta",
+        "Busca questões argumentativas (IBIS) por palavra-chave. Retorna, para cada "
+        "questão encontrada: enunciado, quem levantou, alternativas avaliadas com "
+        "<em>proposta por</em>, prós, contras, apoiadores e opositores, resolução e "
+        "ressalvas. Filtrável por status: <code>all | decided | deferred | unresolved</code>.",
+        [
+            "Pesquise nos debates IBIS tudo que foi discutido sobre 'Catálogo Mestre' com detalhes completos",
+            "Liste as questões IBIS decididas sobre autenticação",
+            "O que foi debatido sobre prazo de entrega? Mostre alternativas e prós/contras",
+            "Quais questões sobre o módulo de relatórios ainda estão em aberto?",
+        ]
+    ), unsafe_allow_html=True)
+
 
 # ── Tab 3: Gráficos ───────────────────────────────────────────────────────────
 with tab_graficos:
@@ -476,6 +492,34 @@ with tab_graficos:
             "Crie um gráfico de pizza com a distribuição de tipos de reunião",
             "Plote um gráfico de linha com o número de requisitos por reunião",
             "Gere um gráfico de dispersão de ROI vs. duração das reuniões",
+        ]
+    ), unsafe_allow_html=True)
+
+    st.markdown('<div class="g-section-hdr">Debates argumentativos — IBIS</div>', unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "get_ibis_timeline", "grafico",
+        "Gera gráfico de barras empilhadas com a evolução temporal dos debates IBIS "
+        "por reunião — separados por status (✅ Decidida, ⏳ Adiada, ❓ Em aberto). "
+        "Aceita filtro por tema para focar em um conjunto de questões.",
+        [
+            "Mostre a evolução dos debates IBIS por reunião",
+            "Gere um gráfico temporal dos debates sobre 'Catálogo Mestre'",
+            "Como os debates sobre integração evoluíram ao longo das reuniões?",
+        ]
+    ), unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "generate_ibis_map", "grafico",
+        "Gera mapa argumentativo hierárquico em Plotly: questões (Q) como nós "
+        "circulares coloridos por status e alternativas (A) como diamantes — "
+        "verde se eleita, azul se descartada. Colunas por reunião, arestas Q→A. "
+        "Aceita filtro por tema.",
+        [
+            "Mostre o mapa argumentativo IBIS de todo o projeto",
+            "Gere um mapa visual das questões sobre 'Catálogo Mestre' com alternativas",
+            "Visualize os debates IBIS sobre autenticação em formato de mapa",
+            "Liste tudo que foi debatido sobre 'Catálogo Mestre', decisões e ideias, relate temporalmente por reunião mostrando um Mapa Visual",
         ]
     ), unsafe_allow_html=True)
 
