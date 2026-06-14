@@ -351,8 +351,22 @@ class BaseAgent(ABC):
                 f"[{self.name}] No JSON object found in LLM response.\n"
                 f"Response preview: {raw[:400]}"
             )
+        # Fast path
         try:
             return json.loads(clean[start:end])
+        except json.JSONDecodeError:
+            pass
+        # Fallback: json_repair handles truncated/malformed LLM output
+        try:
+            from json_repair import repair_json
+            repaired = repair_json(clean[start:end], return_objects=True)
+            if isinstance(repaired, dict) and repaired:
+                return repaired
+        except Exception:
+            pass
+        # All attempts failed — raise with diagnostic info
+        try:
+            json.loads(clean[start:end])
         except json.JSONDecodeError as exc:
             raise ValueError(
                 f"[{self.name}] JSON decode error: {exc}\n"

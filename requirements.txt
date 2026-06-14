@@ -39,6 +39,7 @@ streamlit-javascript==0.1.5     # executa JS no browser e retorna valor ao Pytho
 
 # ── Orquestração com grafo (LangGraph) ───────────────────────────────────────
 langgraph==1.2.0                # adaptive BPMN retry loop (core/lg_pipeline.py); pinado pois langchain==1.3.0 exige <1.3.0
+json-repair==0.60.1             # fallback robusto em _parse_json quando o LLM gera JSON malformado ou truncado
 
 # (AgentAnalyst usa loop manual de tool-calling — sem dependência extra de LangChain)
 
