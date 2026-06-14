@@ -36,7 +36,7 @@ from modules.tenant_config import (
     load_all_config, save_config, delete_config,
     mask_key, PROVIDER_KEY_MAP, PREFS_MAP, PREFS_LABELS,
 )
-from core.project_store import list_projects, create_project
+from core.project_store import list_projects, list_contexts, create_project
 
 # ── Header ─────────────────────────────────────────────────────────────────────
 st.markdown("# 🛡️ Master Administration")
@@ -58,13 +58,14 @@ st.markdown("---")
 # ══════════════════════════════════════════════════════════════════════════════
 tenants = list_all_tenants()
 
-# Métricas rápidas
-total_users = sum(len(list_users_by_tenant(t["id"])[0]) for t in tenants)
-all_projects = list_projects() or []
+# Métricas rápidas — globais (todos os tenants)
+from core.project_store import list_contexts as _list_ctx_all
+total_users    = sum(len(list_users_by_tenant(t["id"])[0]) for t in tenants)
+total_projects = len(_list_ctx_all()) or 0  # sem filtro de tenant — total global
 c1, c2, c3 = st.columns(3)
 c1.metric("Domínios",  len(tenants))
 c2.metric("Usuários",  total_users)
-c3.metric("Projetos",  len(all_projects))
+c3.metric("Projetos",  total_projects)
 
 st.markdown("---")
 
@@ -91,6 +92,9 @@ sel_tid      = sel_tenant["id"]
 sel_slug     = sel_tenant["domain_slug"]
 sel_name     = sel_tenant["display_name"]
 is_active    = sel_tenant["active"]
+
+# Contextos do domínio selecionado (filtrado por sel_tid)
+all_projects = list_contexts(tenant_id=sel_tid) if sel_tid else []
 
 col_name, col_status, col_toggle = st.columns([4, 1, 1])
 col_name.markdown(f"### {sel_name}")
@@ -218,10 +222,7 @@ st.markdown("---")
 # SEÇÃO 3 — Contextos
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown(f"### 📁 Contextos ({len(all_projects)})")
-st.caption(
-    "Contextos são globais (ainda sem isolamento por domínio). "
-    "O isolamento por tenant será implementado na Fase D."
-)
+st.caption(f"Contextos do domínio **{sel_slug}**. Troque o domínio no seletor acima para gerenciar outros domínios.")
 
 with st.expander("➕ Novo Contexto", expanded=False):
     pa, pb, pc = st.columns([3, 2, 1])
@@ -232,7 +233,7 @@ with st.expander("➕ Novo Contexto", expanded=False):
     proj_desc  = st.text_area("Descrição (opcional)", key="m_proj_desc", height=68)
     if st.button("Criar contexto", key="m_create_proj", type="primary"):
         if proj_name.strip():
-            result = create_project(proj_name.strip(), proj_desc.strip(), proj_sigla.strip())
+            result = create_project(proj_name.strip(), proj_desc.strip(), proj_sigla.strip(), tenant_id=sel_tid)
             if result:
                 st.session_state["_master_ok"] = f"Contexto '{proj_name.strip()}' criado."
             else:
