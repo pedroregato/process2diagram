@@ -192,6 +192,16 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **`ensino/PLANO_DO_CURSO.md`** — Módulo 7 adicionado à tabela de estrutura; total 14h→15h; seção completa com descrição dos dois cenários e exercício central
 - [x] **`pages/Capacitacao.py`** — Módulo 7 adicionado a `_MODULES` (2 cenários: 7A e 7B); isolamento de contexto por usuário: botão "▶ Carregar" agora chama `_get_or_create_course_project()` que cria/resolve o projeto "Curso P2D - {usuario}" no Supabase antes de redirecionar ao Pipeline — evita mistura com projetos reais da empresa; fail-open quando Supabase não configurado
 
+### PC42 — Concluído (sem PC / 2026-06-14)
+- [x] **`pages/Assistente.py`** (`b452f22`) — exportação da conversa como HTML auto-contido:
+  - `_export_chat_to_html(messages, project_name, provider) → str` — percorre `assistant_history`, renderiza mensagens user/assistant com dark-navy CSS, embute gráficos Plotly via `Plotly.js` CDN (incluído somente quando há charts), renderiza Markdown client-side via `marked.js` CDN, badges de ferramentas por mensagem, tabelas/código/blockquotes estilizados
+  - `_html_escape(text)` + `_html_escape_attr(text)` — helpers de sanitização HTML segura
+  - Toolbar atualizada: `⬇️ Markdown` (texto simples) + `⬇️ HTML` (auto-contido com gráficos) lado a lado
+
+### PC41 — Concluído (sem PC / 2026-06-14)
+- [x] **`ui/assistant_diagram.py`** — novo subgrupo `TD` "🗺️ Debates IBIS" com `search_ibis_debates`, `get_ibis_timeline`, `generate_ibis_map`; contador 35 → 38 ferramentas
+- [x] **`ui/comms_diagram.py`** — novo `TG4` "🗺️ Debates IBIS" (3 tools); aresta `TG4 → MSBC` adicionada; contador 35 → 38 ferramentas
+
 ### PC40 — Concluído (sem PC / 2026-06-14)
 - [x] **`pages/Orientacoes_Assistente.py`** — Guia do Assistente atualizado com 3 cards IBIS: `search_ibis_debates` (aba Análise, seção "Debates argumentativos — IBIS") + `get_ibis_timeline` e `generate_ibis_map` (aba Gráficos, seção "Debates argumentativos — IBIS"); inclui prompt canônico, campos `proposed_by/supported_by/opposed_by` e filtro de resolução documentados
 - [x] **`CLAUDE.md`** — `search_ibis_debates`, `get_ibis_timeline`, `generate_ibis_map` adicionadas à lista Non-admin; nova seção "IBIS tools (3)" com campos, filtros, helper interno e prompt exemplo
