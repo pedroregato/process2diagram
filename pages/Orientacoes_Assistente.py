@@ -174,6 +174,24 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+st.markdown('<div class="g-section-hdr">Exportação da conversa</div>', unsafe_allow_html=True)
+
+st.markdown("""
+<div class="tip-box">
+  <strong>⬇️ Markdown</strong> &nbsp;·&nbsp; <strong>⬇️ HTML</strong> &nbsp;—
+  botões disponíveis na barra acima do chat quando há mensagens.<br><br>
+  <strong>Markdown</strong>: texto simples com todas as perguntas e respostas —
+  útil para arquivamento, edição ou compartilhamento por e-mail.<br><br>
+  <strong>HTML</strong>: arquivo auto-contido com estilo visual completo e
+  <strong>gráficos Plotly interativos</strong> (zoom, pan, hover, download PNG)
+  incorporados diretamente no arquivo.
+  Abre em qualquer navegador sem dependência de servidor.
+  Ideal para apresentações, auditorias e registros formais.<br><br>
+  <em>Requer conexão para renderizar Markdown e gráficos na primeira abertura
+  (marked.js + Plotly.js via CDN).</em>
+</div>
+""", unsafe_allow_html=True)
+
 
 # ── Utilitário de card ─────────────────────────────────────────────────────────
 
