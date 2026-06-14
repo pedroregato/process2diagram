@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  id="Definitions_CenarioA"
+  targetNamespace="http://process2diagram.io/schema/bpmn"
+  exporter="Process2Diagram"
+  exporterVersion="4.27">
+
+  <bpmn:process id="Process_AprovacaoContratos" name="Aprovação de Contratos" isExecutable="false">
+
+    <bpmn:laneSet id="LaneSet_1">
+      <bpmn:lane id="Lane_Compras" name="Compras">
+        <bpmn:flowNodeRef>SE_SolicitacaoRecebida</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_EncaminharJuridico</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>GW_Join</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_AssinarContrato</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EE_ContratoAssinado</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Juridico" name="Jurídico">
+        <bpmn:flowNodeRef>T_RevisarClausulas</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>GW_AvaliarValor</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_AprovarContrato</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Comite" name="Comitê Executivo">
+        <bpmn:flowNodeRef>T_AprovarNoComite</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <!-- ═══ START EVENT ═══ -->
+    <bpmn:startEvent id="SE_SolicitacaoRecebida" name="Solicitação de Contrato&#10;Recebida">
+      <bpmn:outgoing>SF_01</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <!-- ═══ COMPRAS ═══ -->
+    <bpmn:userTask id="T_EncaminharJuridico" name="Encaminhar Contrato&#10;ao Jurídico">
+      <bpmn:incoming>SF_01</bpmn:incoming>
+      <bpmn:outgoing>SF_02</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- ═══ JURÍDICO ═══ -->
+    <bpmn:userTask id="T_RevisarClausulas" name="Revisar Cláusulas&#10;Contratuais">
+      <bpmn:incoming>SF_02</bpmn:incoming>
+      <bpmn:outgoing>SF_03</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:exclusiveGateway id="GW_AvaliarValor" name="Avaliar Valor&#10;do Contrato">
+      <bpmn:incoming>SF_03</bpmn:incoming>
+      <bpmn:outgoing>SF_04</bpmn:outgoing>
+      <bpmn:outgoing>SF_05</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="T_AprovarContrato" name="Aprovar Contrato">
+      <bpmn:incoming>SF_04</bpmn:incoming>
+      <bpmn:outgoing>SF_06</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- ═══ COMITÊ EXECUTIVO ═══ -->
+    <bpmn:userTask id="T_AprovarNoComite" name="Aprovar no Comitê&#10;Executivo">
+      <bpmn:incoming>SF_05</bpmn:incoming>
+      <bpmn:outgoing>SF_07</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- ═══ COMPRAS (retorno pós-aprovação) ═══ -->
+    <bpmn:exclusiveGateway id="GW_Join" name="Aprovação&#10;Concluída">
+      <bpmn:incoming>SF_06</bpmn:incoming>
+      <bpmn:incoming>SF_07</bpmn:incoming>
+      <bpmn:outgoing>SF_08</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="T_AssinarContrato" name="Assinar Contrato">
+      <bpmn:incoming>SF_08</bpmn:incoming>
+      <bpmn:outgoing>SF_09</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="EE_ContratoAssinado" name="Contrato Assinado&#10;e Arquivado">
+      <bpmn:incoming>SF_09</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- ═══ SEQUENCE FLOWS ═══ -->
+    <bpmn:sequenceFlow id="SF_01" sourceRef="SE_SolicitacaoRecebida" targetRef="T_EncaminharJuridico"/>
+    <bpmn:sequenceFlow id="SF_02" sourceRef="T_EncaminharJuridico" targetRef="T_RevisarClausulas"/>
+    <bpmn:sequenceFlow id="SF_03" sourceRef="T_RevisarClausulas" targetRef="GW_AvaliarValor"/>
+    <bpmn:sequenceFlow id="SF_04" name="Valor &lt; R$ 500 mil" sourceRef="GW_AvaliarValor" targetRef="T_AprovarContrato"/>
+    <bpmn:sequenceFlow id="SF_05" name="Valor ≥ R$ 500 mil" sourceRef="GW_AvaliarValor" targetRef="T_AprovarNoComite"/>
+    <bpmn:sequenceFlow id="SF_06" sourceRef="T_AprovarContrato" targetRef="GW_Join"/>
+    <bpmn:sequenceFlow id="SF_07" sourceRef="T_AprovarNoComite" targetRef="GW_Join"/>
+    <bpmn:sequenceFlow id="SF_08" sourceRef="GW_Join" targetRef="T_AssinarContrato"/>
+    <bpmn:sequenceFlow id="SF_09" sourceRef="T_AssinarContrato" targetRef="EE_ContratoAssinado"/>
+
+  </bpmn:process>
+
+  <!-- ═══════════════════════════════════════════════
+       DIAGRAM LAYOUT
+       Pool : x=150  y=80   w=1180  h=450
+       Compras       : y=80   h=150  (center y=155)
+       Jurídico      : y=230  h=150  (center y=305)
+       Comitê Exec.  : y=380  h=150  (center y=455)
+  ═══════════════════════════════════════════════ -->
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_AprovacaoContratos">
+
+      <!-- Pool shape (process participant boundary) -->
+      <bpmndi:BPMNShape id="Shape_Pool" bpmnElement="Process_AprovacaoContratos" isHorizontal="true">
+        <dc:Bounds x="150" y="80" width="1180" height="450"/>
+      </bpmndi:BPMNShape>
+
+      <!-- Lane shapes -->
+      <bpmndi:BPMNShape id="Shape_Lane_Compras" bpmnElement="Lane_Compras" isHorizontal="true">
+        <dc:Bounds x="180" y="80" width="1150" height="150"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_Juridico" bpmnElement="Lane_Juridico" isHorizontal="true">
+        <dc:Bounds x="180" y="230" width="1150" height="150"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_Comite" bpmnElement="Lane_Comite" isHorizontal="true">
+        <dc:Bounds x="180" y="380" width="1150" height="150"/>
+      </bpmndi:BPMNShape>
+
+      <!-- ── Start Event (Compras, center y=155) ── -->
+      <bpmndi:BPMNShape id="Shape_SE" bpmnElement="SE_SolicitacaoRecebida">
+        <dc:Bounds x="242" y="137" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="218" y="180" width="84" height="27"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- ── Encaminhar ao Jurídico (Compras) ── -->
+      <bpmndi:BPMNShape id="Shape_T_Encaminhar" bpmnElement="T_EncaminharJuridico">
+        <dc:Bounds x="320" y="115" width="120" height="60"/>
+      </bpmndi:BPMNShape>
+
+      <!-- ── Revisar Cláusulas (Jurídico, center y=305) ── -->
+      <bpmndi:BPMNShape id="Shape_T_RevisarClausulas" bpmnElement="T_RevisarClausulas">
+        <dc:Bounds x="490" y="275" width="120" height="60"/>
+      </bpmndi:BPMNShape>
+
+      <!-- ── Gateway: Avaliar Valor (Jurídico) ── -->
+      <bpmndi:BPMNShape id="Shape_GW_AvaliarValor" bpmnElement="GW_AvaliarValor" isMarkerVisible="true">
+        <dc:Bounds x="665" y="280" width="50" height="50"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="648" y="337" width="85" height="27"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- ── Aprovar Contrato (Jurídico — caminho < 500k) ── -->
+      <bpmndi:BPMNShape id="Shape_T_AprovarContrato" bpmnElement="T_AprovarContrato">
+        <dc:Bounds x="770" y="275" width="120" height="60"/>
+      </bpmndi:BPMNShape>
+
+      <!-- ── Aprovar no Comitê (Comitê Executivo — caminho >= 500k, center y=455) ── -->
+      <bpmndi:BPMNShape id="Shape_T_AprovarNoComite" bpmnElement="T_AprovarNoComite">
+        <dc:Bounds x="650" y="425" width="120" height="60"/>
+      </bpmndi:BPMNShape>
+
+      <!-- ── Gateway Join (Compras, center y=155) ── -->
+      <bpmndi:BPMNShape id="Shape_GW_Join" bpmnElement="GW_Join" isMarkerVisible="true">
+        <dc:Bounds x="955" y="130" width="50" height="50"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="942" y="187" width="76" height="27"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- ── Assinar Contrato (Compras) ── -->
+      <bpmndi:BPMNShape id="Shape_T_AssinarContrato" bpmnElement="T_AssinarContrato">
+        <dc:Bounds x="1060" y="115" width="120" height="60"/>
+      </bpmndi:BPMNShape>
+
+      <!-- ── End Event (Compras) ── -->
+      <bpmndi:BPMNShape id="Shape_EE" bpmnElement="EE_ContratoAssinado">
+        <dc:Bounds x="1242" y="137" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1218" y="180" width="84" height="27"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- ═══ EDGES ═══ -->
+
+      <!-- SE → T_Encaminhar -->
+      <bpmndi:BPMNEdge id="Edge_SF01" bpmnElement="SF_01">
+        <di:waypoint x="278" y="155"/>
+        <di:waypoint x="320" y="145"/>
+      </bpmndi:BPMNEdge>
+
+      <!-- T_Encaminhar → T_RevisarClausulas (cross-lane: Compras → Jurídico) -->
+      <bpmndi:BPMNEdge id="Edge_SF02" bpmnElement="SF_02">
+        <di:waypoint x="380" y="175"/>
+        <di:waypoint x="380" y="305"/>
+        <di:waypoint x="490" y="305"/>
+      </bpmndi:BPMNEdge>
+
+      <!-- T_RevisarClausulas → GW_AvaliarValor -->
+      <bpmndi:BPMNEdge id="Edge_SF03" bpmnElement="SF_03">
+        <di:waypoint x="610" y="305"/>
+        <di:waypoint x="665" y="305"/>
+      </bpmndi:BPMNEdge>
+
+      <!-- GW_AvaliarValor → T_AprovarContrato (< 500k, mesmo nível) -->
+      <bpmndi:BPMNEdge id="Edge_SF04" bpmnElement="SF_04">
+        <di:waypoint x="715" y="305"/>
+        <di:waypoint x="770" y="305"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="718" y="282" width="90" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <!-- GW_AvaliarValor → T_AprovarNoComite (>= 500k, cross-lane: Jurídico → Comitê) -->
+      <bpmndi:BPMNEdge id="Edge_SF05" bpmnElement="SF_05">
+        <di:waypoint x="690" y="330"/>
+        <di:waypoint x="690" y="425"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="696" y="370" width="90" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <!-- T_AprovarContrato → GW_Join (Jurídico → Compras) -->
+      <bpmndi:BPMNEdge id="Edge_SF06" bpmnElement="SF_06">
+        <di:waypoint x="890" y="305"/>
+        <di:waypoint x="980" y="305"/>
+        <di:waypoint x="980" y="180"/>
+      </bpmndi:BPMNEdge>
+
+      <!-- T_AprovarNoComite → GW_Join (Comitê → Compras) -->
+      <bpmndi:BPMNEdge id="Edge_SF07" bpmnElement="SF_07">
+        <di:waypoint x="770" y="455"/>
+        <di:waypoint x="980" y="455"/>
+        <di:waypoint x="980" y="180"/>
+      </bpmndi:BPMNEdge>
+
+      <!-- GW_Join → T_AssinarContrato -->
+      <bpmndi:BPMNEdge id="Edge_SF08" bpmnElement="SF_08">
+        <di:waypoint x="1005" y="155"/>
+        <di:waypoint x="1060" y="145"/>
+      </bpmndi:BPMNEdge>
+
+      <!-- T_AssinarContrato → EE -->
+      <bpmndi:BPMNEdge id="Edge_SF09" bpmnElement="SF_09">
+        <di:waypoint x="1180" y="145"/>
+        <di:waypoint x="1242" y="155"/>
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+
+</bpmn:definitions>

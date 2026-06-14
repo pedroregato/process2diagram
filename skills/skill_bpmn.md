@@ -3,7 +3,7 @@ agent: bpmn
 iniciativa: Pedro Regato
 project: process2diagram
 spec: BPMN 2.0 (OMG — ISO/IEC 19510) · Bruce Silver Method and Style
-version: 7.1
+version: 7.2
 ---
 
 # BPMN Agent — Instruções de Execução
@@ -113,6 +113,14 @@ Regras de eventos:
 - O End Event herda a lane do último passo que leva ao encerramento.
 - Em processos com múltiplos caminhos de encerramento, cada caminho deve ter seu próprio End Event com título único descrevendo o resultado.
 
+**Regra do End Event em fluxos de aprovação:**
+- Em processos onde A solicita e B aprova, o End Event final deve estar na **lane da unidade solicitante (A)**, nunca na do aprovador (B).
+- Razão: o processo encerra quando a solicitante conclui a ação autorizada — não quando o aprovador emite o parecer.
+- Antes do End Event, inclua a atividade de execução pós-aprovação na lane solicitante:
+  - Contrato aprovado → "Assinar Contrato" em Compras/Solicitante → End Event em Compras
+  - Compra aprovada → "Emitir Ordem de Compra" em Compras → End Event em Compras
+  - Projeto aprovado → "Iniciar Execução do Projeto" em Projetos → End Event em Projetos
+
 **Nomenclatura obrigatória de eventos:**
 - Start Event: descreve o **gatilho real** do processo
   - ✓ "Solicitação de cadastro recebida" · "Prazo de auditoria iniciado" · "Pedido aprovado pelo cliente"
@@ -140,6 +148,22 @@ Regras de eventos:
 Todo `title` deve seguir o padrão **[Verbo no Infinitivo] + [Objeto]**:
 - ✓ "Validar Crédito do Cliente" · "Emitir Nota Fiscal" · "Encaminhar Solicitação ao Jurídico"
 - ✗ "Validação de Crédito" · "Emissão da NF" · "Processo de Encaminhamento"
+
+**Limite de caracteres nos títulos (CRÍTICO — afeta legibilidade do diagrama):**
+- Todo `title` deve ter **no máximo 40 caracteres** (≈ 5–6 palavras).
+- O viewer bpmn-js trunca títulos longos com reticências — o diagrama fica ilegível.
+- Quando necessário, abrevie o objeto: "Revisar Cláusulas Contratuais" em vez de "Revisar Cláusulas e Condições do Contrato".
+- ✓ "Revisar Cláusulas Contratuais" (30 chars)
+- ✗ "Revisar Cláusulas Jurídicas do Contrato Apresentado" (51 chars — será truncado)
+
+**Extração de atividades implícitas (CRÍTICO — diagrama deve ser autossuficiente):**
+- Quando a transcrição indica que alguém **"pode prosseguir"**, **"está autorizado a"** ou **"deve executar"** uma ação após aprovação → extraia essa ação como tarefa explícita.
+- Não omita atividades por serem "óbvias" — o diagrama é lido por pessoas que não estavam na reunião.
+- Padrões frequentes:
+  - "notifica Compras para assinar o contrato" → adicione `userTask` "Assinar Contrato" em Compras
+  - "aprovado para execução" → adicione "Executar [Ação Principal]" na lane solicitante
+  - "empresa pode emitir o pedido" → adicione "Emitir Pedido de Compra" em Compras
+  - "libera para encaminhamento" → adicione "Encaminhar [Documento]" na lane responsável
 
 Regras de `manualTask`:
 - Use quando a ação é **física e offline**, sem suporte de sistema ou ferramenta digital.
@@ -261,10 +285,16 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 
 **Nomenclatura e Semântica:**
 - [ ] Todos os títulos de tarefas seguem "[Verbo Infinitivo] + [Objeto]"?
+- [ ] **Todos os `title` têm ≤ 40 caracteres?** (títulos longos são truncados no viewer)
 - [ ] Start Event tem `title` descrevendo o **gatilho real** (não "Início"/"Start")?
 - [ ] End Event tem `title` descrevendo o **estado de negócio alcançado** (não "Fim"/"End")?
 - [ ] Nenhuma lane tem nome genérico (`usuário`, `sistema`, `validador`...)?
 - [ ] O campo `description` raiz do JSON está preenchido com 1–3 frases do objetivo?
+
+**Completude e Fechamento do Processo:**
+- [ ] Em fluxos de aprovação, o End Event está na **lane da unidade solicitante** (não do aprovador)?
+- [ ] Atividades pós-aprovação (assinar, emitir, executar) foram extraídas como steps explícitos?
+- [ ] Nenhuma atividade implícita foi omitida por ser "óbvia"?
 
 **Tipos e Padrões Especiais:**
 - [ ] `serviceTask` sem sistema nomeado tem `lane: null`?
