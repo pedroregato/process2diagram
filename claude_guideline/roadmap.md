@@ -192,6 +192,28 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **`ensino/PLANO_DO_CURSO.md`** — Módulo 7 adicionado à tabela de estrutura; total 14h→15h; seção completa com descrição dos dois cenários e exercício central
 - [x] **`pages/Capacitacao.py`** — Módulo 7 adicionado a `_MODULES` (2 cenários: 7A e 7B); isolamento de contexto por usuário: botão "▶ Carregar" agora chama `_get_or_create_course_project()` que cria/resolve o projeto "Curso P2D - {usuario}" no Supabase antes de redirecionar ao Pipeline — evita mistura com projetos reais da empresa; fail-open quando Supabase não configurado
 
+### PC40 — Concluído (sem PC / 2026-06-14)
+- [x] **`pages/Orientacoes_Assistente.py`** — Guia do Assistente atualizado com 3 cards IBIS: `search_ibis_debates` (aba Análise, seção "Debates argumentativos — IBIS") + `get_ibis_timeline` e `generate_ibis_map` (aba Gráficos, seção "Debates argumentativos — IBIS"); inclui prompt canônico, campos `proposed_by/supported_by/opposed_by` e filtro de resolução documentados
+- [x] **`CLAUDE.md`** — `search_ibis_debates`, `get_ibis_timeline`, `generate_ibis_map` adicionadas à lista Non-admin; nova seção "IBIS tools (3)" com campos, filtros, helper interno e prompt exemplo
+
+### PC39 — Concluído (sem PC / 2026-06-14)
+- [x] **`core/assistant_tools.py`** — `search_ibis_debates` agora inclui `proposed_by`, `supported_by` e `opposed_by` por alternativa — alinhado com o nível de detalhe da aba IBIS da Central de Artefatos
+
+### PC38 — Concluído (sem PC / 2026-06-13)
+- [x] **`core/assistant_tools.py`** — 3 novas ferramentas IBIS no `AssistantToolExecutor`:
+  - `_load_ibis_questions(topic_filter, meeting_number)` — helper privado; query `meetings.argumentation_json` por projeto; parseia JSON; injeta `_mid/_mnum/_mtitle/_mdate`; filtra por Jaccard PT-BR (stop-word filtered tokens)
+  - `search_ibis_debates(query, meeting_number?, resolution_filter?)` — busca keyword; grupos por reunião; formata Markdown estruturado com enunciado, raised_by, alternativas completas, resolução e ressalvas; filtro `all|decided|deferred|unresolved`
+  - `get_ibis_timeline(topic?)` — Plotly stacked bar (decidido/adiado/em aberto por reunião número); `self._pending_charts`
+  - `generate_ibis_map(topic?)` — Plotly hierárquico: Q-nodes círculo (cor por status: verde/âmbar/vermelho), A-nodes diamante (verde=eleita, azul=alternativa); colunas por reunião; arestas Q→A; legenda via traces invisíveis; appended como `fig.to_dict()` em `_pending_charts`
+  - Schemas OpenAI + Anthropic, `_TOOL_CATEGORIES` (consulta/grafico), dispatch em `execute_tool()` todos conectados
+
+### PC37 — Concluído (sem PC / 2026-06-13)
+- [x] **`pages/DmnBackfill.py`** (novo) — página Manutenção dedicada ao DMN; `_missing(m) = not m.get("dmn_json")`; SELECT inclui apenas `dmn_json`; executa somente `AgentDMN`; tabela de resultados com "Decisões DMN"; session keys `dmn_bf_*`
+- [x] **`pages/IbisBackfill.py`** (novo) — página Manutenção dedicada ao IBIS; `_missing(m) = not m.get("argumentation_json")`; SELECT inclui apenas `argumentation_json`; executa somente `AgentArgumentation`; tabela de resultados com "Questões IBIS"; session keys `ibis_bf_*`
+- [x] **`pages/DmnIbisBackfill.py`** — removido via `git rm` (substituído pelas duas páginas acima)
+- [x] **`app.py`** — Manutenção: entrada única `DmnIbisBackfill` substituída por `DmnBackfill.py` (icon ⚖️) + `IbisBackfill.py` (icon 🗺️)
+- [x] **`pages/Artefatos.py`** — Mapa Visual IBIS com paridade do KnowledgeGraph: toolbar (⏸/▶ física, ＋/－ zoom, ⊡ Fit, 💾 Imagem, ⛶ Nova aba), focus mode (click node → dim não-vizinhos + bring-to-front via remove+re-add), `_ibis_physics` toggle + `_ibis_height` select_slider no expander de opções, tooltip CSS `white-space:pre-line`, legenda como badges Markdown `st.markdown` acima de `components.html()`
+
 ### PC36 — Concluído (v4.28 / 2026-06-06)
 - [x] **`ensino/modulo_07_reunioes_eficazes/guia.md`** — enriquecimento baseado em análise dos capítulos 8 e 9 de "Business Modeling: A Practical Guide" (Bridgeland & Zahavi): tabela de 7 perfis de participantes desafiadores (Mouse→Otter) com comportamento + efeito na transcrição + resposta do facilitador; tabela de 7 antipadrões de reunião processável (Participante Ausente, Multitarefa, Patrocinador Ausente, Compromisso Condicional, Proxy Sem Autonomia, Facilitador Viesado, Modelo Rejeitado) com manifestação + impacto + prevenção; 6º comportamento "Verbalization Echoing" (facilitador resume + aguarda confirmação verbal, criando o rastro de confirmação mais rastreável da transcrição); "Declarar o escopo na abertura" como 2º comportamento; exercício expandido em 3 passos (comparação de pipeline, identificação de antipadrões na 7A, sessão de verificação dos artefatos da 7B); checklist do facilitador atualizado com 11 itens; atualização da tabela do Quality Inspector para mostrar as 7 dimensões (6 ASR + 1 Condução)
 - [x] **`skills/skill_transcript_quality.md`** — 7º critério "Condução da Reunião" (Weight: 15%): avalia 5 práticas (A: identificação de speakers, B: verbalização de decisões, C: action items nome+tarefa+prazo, D: estrutura de processo gatilho→sequência→condições, E: verbalization echoing com confirmação); guia de pontuação 0/5→5/5 práticas; pesos redistribuídos (Coerência 20→15%, Vocabulário 15→10%, Pontuação 10→5%, Condução 0→15%); output JSON atualizado com 7 entradas; regra "exactly 7 entries" atualizada
