@@ -4,6 +4,32 @@
 
 ---
 
+## Origem e Evolução
+
+O Process2Diagram nasceu de uma ideia simples e direta: usar inteligência artificial para converter transcrições de reuniões em diagramas úteis — BPMN, fluxogramas Mermaid, atas estruturadas. A premissa era prática: automatizar o trabalho manual de um analista que ouve uma reunião e depois passa horas desenhando um processo.
+
+Essa perspectiva foi completamente superada.
+
+Com o uso, uma compreensão mais profunda emergiu. Os diagramas não eram o produto — eram consequência. O produto real é o reconhecimento de que **reuniões são os ativos intangíveis que mais produzem impactos tangíveis nas corporações**.
+
+Essa frase mudou tudo.
+
+Quando se compreende que uma reunião de duas horas pode gerar valor equivalente ao de uma consultoria de R$ 80.000 — e que esse valor desaparece sem rastro na maioria das organizações — o escopo do problema muda de categoria. Não se trata mais de "gerar diagramas mais rápido". Trata-se de construir a infraestrutura que transforma o principal mecanismo de criação de conhecimento organizacional em patrimônio institucional permanente.
+
+A evolução do produto reflete exatamente essa trajetória:
+
+| Fase | Perspectiva | O que entregava |
+|---|---|---|
+| **Origem** | Converter transcrições em diagramas | BPMN, Mermaid, atas |
+| **Expansão** | Extrair artefatos formais de reuniões | Requisitos IEEE 830, SBVR, BMM, DMN |
+| **Inteligência** | Construir memória organizacional consultável | Assistente RAG com 38 ferramentas, Grafo de Conhecimento, debates IBIS |
+| **Governança** | Medir e gerir o ativo | ROI-TR por tipo de reunião, rastreabilidade cruzada, análise de contradições |
+| **Hoje** | Reconhecer reuniões como ativo estratégico | Plataforma completa de gestão do conhecimento gerado em conversas |
+
+Hoje, o Process2Diagram não é uma ferramenta de transcrição, nem um gerador de diagramas. É a infraestrutura que sustenta a transformação de conversas corporativas em conhecimento rastreável, auditável e mensurável — tratando cada reunião pelo que ela realmente é: **o ativo intangível de maior impacto tangível da organização**.
+
+---
+
 ## Tese Central
 
 Reuniões corporativas são sistematicamente tratadas como eventos de agenda — custos a minimizar, interrupções ao trabalho "real". Essa percepção é um erro estratégico de primeira ordem.
@@ -288,5 +314,5 @@ O Process2Diagram / RawToInsights AI não é uma ferramenta de transcrição. É
 
 ---
 
-*Process2Diagram / RawToInsights AI — v4.27*
+*Process2Diagram / RawToInsights AI — v4.44*
 *Documento interno — base para materiais de posicionamento, pitch e curso corporativo*
