@@ -192,6 +192,13 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **`ensino/PLANO_DO_CURSO.md`** — Módulo 7 adicionado à tabela de estrutura; total 14h→15h; seção completa com descrição dos dois cenários e exercício central
 - [x] **`pages/Capacitacao.py`** — Módulo 7 adicionado a `_MODULES` (2 cenários: 7A e 7B); isolamento de contexto por usuário: botão "▶ Carregar" agora chama `_get_or_create_course_project()` que cria/resolve o projeto "Curso P2D - {usuario}" no Supabase antes de redirecionar ao Pipeline — evita mistura com projetos reais da empresa; fail-open quando Supabase não configurado
 
+### PC44 — Concluído (sem PC / 2026-06-14)
+- [x] **`core/assistant_tools.py`** (`5b02b1c`) — `generate_ibis_map` corrigido:
+  - Labels Q-nodes globalmente únicos: `"Q1<br>R9"` em vez de `"Q1"` local por reunião — elimina ambiguidade de leitura horizontal
+  - Tooltip de A-nodes inclui `"— R{mnum}"` para rastreabilidade
+  - Anotações de cabeçalho de reunião migradas para `yref="paper"` — sempre visíveis no topo independente do range de dados Y; badge navy com borda azul (`bgcolor="#1e3a5f"`, `bordercolor="#2563eb"`)
+  - Margem superior 80 → 100px para acomodar os badges de reunião
+
 ### PC43 — Concluído (sem PC / 2026-06-14)
 - [x] **`pages/Orientacoes_Assistente.py`** (`6f267ab`) — nova seção "Exportação da conversa" com tip-box documentando `⬇️ Markdown` e `⬇️ HTML`, gráficos Plotly interativos e nota sobre CDN
 
