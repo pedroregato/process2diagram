@@ -33,12 +33,22 @@ def _ok(response) -> list[dict]:
 # ── Projetos ──────────────────────────────────────────────────────────────────
 
 def list_contexts() -> list[dict]:
-    """Retorna todos os contextos ordenados por nome."""
+    """Retorna contextos do tenant ativo, ordenados por nome.
+
+    Se o usuário estiver logado via domínio (tenant_id em session_state),
+    filtra apenas os contextos daquele tenant. Caso contrário (login local
+    / sem tenant), retorna todos — comportamento de fallback para dev/admin.
+    """
+    import streamlit as st
     db = _db()
     if not db:
         return []
     try:
-        return _ok(db.table("contexts").select("*").order("name").execute())
+        tenant_id = st.session_state.get("_tenant_id")
+        q = db.table("contexts").select("*").order("name")
+        if tenant_id:
+            q = q.eq("tenant_id", tenant_id)
+        return _ok(q.execute())
     except Exception:
         return []
 
@@ -69,6 +79,13 @@ def create_context(name: str, description: str = "", sigla: str = "",
     if sigla:
         payload["sigla"] = sigla.strip().upper()
     try:
+        import streamlit as st
+        tenant_id = st.session_state.get("_tenant_id")
+        if tenant_id:
+            payload["tenant_id"] = tenant_id
+    except Exception:
+        pass
+    try:
         rows = _ok(db.table("contexts").insert(payload).execute())
         return rows[0] if rows else None
     except Exception:
@@ -76,6 +93,7 @@ def create_context(name: str, description: str = "", sigla: str = "",
         try:
             payload.pop("sigla", None)
             payload.pop("context_type", None)
+            payload.pop("tenant_id", None)
             rows = _ok(db.table("contexts").insert(payload).execute())
             return rows[0] if rows else None
         except Exception:
