@@ -49,11 +49,12 @@ flowchart TD
             ROLE --> GATE
         end
 
-        subgraph ATOOLS["🛠️ AssistantToolExecutor — 35 ferramentas"]
+        subgraph ATOOLS["🛠️ AssistantToolExecutor — 38 ferramentas"]
             direction LR
             TG1["📊 Dados das Reuniões\\n12 tools — meeting_list · participants\\ndecisions · action_items · summary\\nsearch_transcript · requirements\\nlist_bpmn_processes · list_bpmn_versions\\nsbvr_terms · sbvr_rules\\nget_system_capabilities"]:::tCls
             TG2["📅 Google Calendar\\n8 tools\\nlist_events · get_event · suggest_time\\n★ create_event · ★ schedule_action_items\\n★ share_with_user · ★ revoke_access\\n★ calendar_diagnose"]:::tCls
             TG3["🔒 Admin\\n5 tools\\n★ get_database_integrity\\n★ fix_missing_llm_provider\\n★ generate_meeting_embeddings\\n★ reprocess_meeting_full\\n★ delete_bpmn_version"]:::tCls
+            TG4["🗺️ Debates IBIS\\n3 tools\\nsearch_ibis_debates · get_ibis_timeline\\ngenerate_ibis_map"]:::tCls
         end
 
         GATE -.->|"admin check"| TG2 & TG3
@@ -84,7 +85,7 @@ flowchart TD
     end
 
     PA & PB --> MLLM
-    TG1 & TG3 --> MSBC
+    TG1 & TG3 & TG4 --> MSBC
     TG2 --> MCAL
     PB & PC --> MEMB
     PC --> MSBC
