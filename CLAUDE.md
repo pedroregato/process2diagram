@@ -404,6 +404,12 @@ Within Assistente mode, sidebar toggle `asst_use_tools`:
 
 Tool schemas: `get_tool_schemas_openai()` / `get_tool_schemas_anthropic()`.
 
+### Exportação da conversa
+
+Chat toolbar (visível quando há mensagens) oferece dois botões:
+- **⬇️ Markdown** — `_export_chat_to_markdown()` — texto simples com todas as perguntas e respostas
+- **⬇️ HTML** — `_export_chat_to_html()` — arquivo auto-contido com estilo dark-navy, Markdown renderizado via `marked.js` CDN e gráficos Plotly **totalmente interativos** embutidos via `Plotly.js` CDN (incluído somente quando há charts). Abre em qualquer navegador sem servidor. Helpers: `_html_escape()` + `_html_escape_attr()` para sanitização segura.
+
 ### Embedding pipeline
 
 - `chunk_text(transcript, chunk_size=500, overlap=80)` → chunks stored in `transcript_chunks` table (`vector(1536)`)
