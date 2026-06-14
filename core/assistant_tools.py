@@ -6883,17 +6883,23 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             mtitle  = mtg_qs[0]["_mtitle"]
             x_base  = mx * X_GAP
             mtg_annotations.append(dict(
-                x=x_base, y=1.5,
-                text=f"<b>R.{mnum}</b><br><span style='font-size:10px'>{mtitle[:28]}</span>",
+                x=x_base, xref="x",
+                y=1.0, yref="paper",
+                text=f"<b>R{mnum}</b>",
                 showarrow=False,
-                font=dict(size=11, color="#94a3b8"),
+                font=dict(size=11, color="#e2e8f0", family="monospace"),
                 xanchor="center",
+                yanchor="bottom",
+                bgcolor="#1e3a5f",
+                bordercolor="#2563eb",
+                borderwidth=1,
+                borderpad=3,
             ))
 
             for qi, q in enumerate(mtg_qs):
                 q_x   = x_base
                 q_y   = -(qi * Y_GAP)
-                qnid  = f"Q_{mnum}_{q.get('id','')}"
+                qid   = q.get("id", "Q?")
                 rt    = (q.get("resolution") or {}).get("type", "unresolved")
                 rat   = (q.get("resolution") or {}).get("rationale", "")
                 rb    = q.get("raised_by", "")
@@ -6901,14 +6907,14 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 alts  = q.get("alternatives", [])
                 n_a   = len(alts)
 
-                # Question node
+                # Question node — globally unique label: "Q1<br>R9"
                 node_x.append(q_x);  node_y.append(q_y)
                 node_color.append(_RES_BORDER.get(rt, "#f87171"))
                 node_size.append(18)
                 node_symbol.append("circle")
-                node_label.append(q.get("id", "Q?"))
+                node_label.append(f"{qid}<br>R{mnum}")
                 tip = (
-                    f"<b>{q.get('id','?')}</b> — Reunião {mnum}<br>"
+                    f"<b>{qid}</b> — Reunião {mnum}<br>"
                     f"{stmt}<br><br>"
                     + (f"Levantada por: {rb}<br>" if rb else "")
                     + f"Status: {rt}"
@@ -6932,7 +6938,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     cons    = alt.get("cons") or []
                     pb      = alt.get("proposed_by", "")
                     a_tip   = (
-                        f"<b>{alt.get('id','?')}</b>"
+                        f"<b>{alt.get('id','?')}</b> — R{mnum}"
                         + (" ✅ eleita" if chosen else "")
                         + f"<br>{alt.get('description','')}"
                         + (f"<br>Proposta por: {pb}" if pb else "")
@@ -7006,7 +7012,7 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             title=dict(text=title_txt, font=dict(size=14, color="#f1f5f9")),
             xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
             yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-            margin=dict(l=20, r=20, t=80, b=20),
+            margin=dict(l=20, r=20, t=100, b=20),
             annotations=mtg_annotations,
             legend=dict(
                 bgcolor="#1e293b", bordercolor="#334155", borderwidth=1,
