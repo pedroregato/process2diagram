@@ -1,0 +1,63 @@
+Reunião de Alinhamento: Processo de Aprovação de Contratos
+
+Participantes: Marina (Jurídico) · Rafael (Compras) · Cláudio (CFO) · Fernanda (TI)
+Data: [fictícia] · Duração: ~45 minutos
+
+---
+
+Rafael: Bom, vamos começar. O objetivo dessa reunião é a gente fechar como vai funcionar o novo fluxo de aprovação de contratos. Temos situações hoje em que contratos grandes estão sendo aprovados só pelo jurídico, sem passar pelo Cláudio, e isso está gerando problema lá na frente na auditoria.
+
+Cláudio: Exato. Semana passada a auditoria interna me questionou sobre um contrato de serviços que fechamos em março — R$ 780 mil — e eu nem sabia da existência dele. Isso não pode acontecer.
+
+Marina: Juridicamente o processo está correto, Cláudio. O contrato foi revisado, tem todas as cláusulas necessárias. O problema é que não existe uma política formal que defina quando o CFO precisa ser acionado. Hoje cada área decide isso por conta própria.
+
+Cláudio: Então vamos definir agora. Minha proposta é que qualquer contrato acima de R$ 500 mil passe pelo comitê executivo antes de ser assinado. Abaixo disso, o jurídico pode aprovar sozinho.
+
+Rafael: Faz sentido. Mas R$ 500 mil pode ser muito alto para algumas categorias. Tínhamos pensado em R$ 300 mil como threshold.
+
+Cláudio: Não. R$ 300 mil vai me travar com volume. A maioria dos contratos de serviços fica nessa faixa. R$ 500 mil está correto — acima disso o risco é diferente.
+
+Marina: Concordo com R$ 500 mil. E tem outra coisa que precisamos formalizar: fornecedores de tecnologia, especialmente cloud, precisam ter cláusulas LGPD obrigatórias no contrato. Não é opcional. Tivemos um caso em que um fornecedor de armazenamento foi contratado sem essas cláusulas e ficamos expostos.
+
+Cláudio: Isso é pré-requisito. Sem as cláusulas LGPD, o contrato não avança — independente do valor.
+
+Fernanda: Posso falar sobre o sistema? Hoje o nosso sistema de contratos não tem trilha de auditoria. A gente não sabe quem aprovou, em que data, de qual IP. A auditoria já pediu isso formalmente. Eu precisaria implementar esse log completo.
+
+Cláudio: Isso é crítico. Fernanda, coloca como prioridade. Quero saber quem tocou em qual contrato e quando.
+
+Fernanda: Entendido. Vou precisar de uns 15 dias úteis para isso. E o sistema também deveria notificar automaticamente o CFO quando um contrato de alto valor entra em fila de aprovação — hoje isso é feito por e-mail manual.
+
+Cláudio: Sim, quero notificação automática. E-mail já basta por enquanto.
+
+Rafael: Para o fluxo então: a solicitação de contrato começa em Compras. A gente preenche o formulário com valor, fornecedor e objeto. Aí vai para o jurídico revisar.
+
+Marina: Isso. No jurídico a gente verifica as cláusulas — LGPD se for fornecedor de tecnologia, responsabilidade civil, prazo de vigência. Temos que ter no máximo cinco dias úteis para a análise. Se travar mais que isso, o processo inteiro para.
+
+Rafael: Cinco dias úteis está ótimo. Hoje às vezes demora dez.
+
+Marina: Depois da análise jurídica, o sistema verifica o valor. Se for abaixo de R$ 500 mil, eu mesma assino a aprovação. Se for acima, vai para o comitê.
+
+Cláudio: No comitê somos eu, o CEO e o diretor da área solicitante. Precisamos de dois dos três para aprovar. Não precisa ser unânime.
+
+Rafael: Isso eu não sabia. Dois dos três — vou anotar.
+
+Fernanda: E depois da aprovação final, o sistema registra tudo — data, aprovadores, versão do documento — e notifica Compras para seguir com a assinatura.
+
+Marina: Ah, e eu preciso elaborar um template padrão das cláusulas LGPD para fornecedores cloud. Hoje cada contrato usa uma redação diferente e isso é um risco. Vou preparar o template e subir no sistema até o final do mês.
+
+Cláudio: Ótimo. Rafael, tem mais alguma coisa de Compras?
+
+Rafael: Só uma coisa: os contratos que já estão ativos acima de R$ 500 mil precisam ser revisados retroativamente? Alguns foram aprovados sem passar pelo comitê.
+
+Cláudio: Sim. Levanta a lista e me manda até sexta. Vamos fazer uma revisão pontual dos que estiverem vigentes.
+
+Marina: Sem problemas. Posso ajudar Rafael com o mapeamento.
+
+Cláudio: Fechado então. Resumindo: threshold de R$ 500 mil para comitê, LGPD obrigatório para cloud, trilha de auditoria em 15 dias com Fernanda, template LGPD com Marina até o final do mês, e Rafael levanta os contratos ativos acima de R$ 500 mil até sexta.
+
+Rafael: Perfeito. Eu monto uma ata e mando para todos confirmar.
+
+Cláudio: Pode ser. Obrigado, pessoal.
+
+---
+[fim da transcrição]

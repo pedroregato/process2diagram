@@ -184,6 +184,8 @@ def render_sidebar():
                     st.session_state.rerun_agent = "quality"
                 if st.button(t("btn_bpmn"),         key="rr_b",   use_container_width=True):
                     st.session_state.rerun_agent = "bpmn"
+                if st.button(t("btn_mermaid"),      key="rr_mmd", use_container_width=True):
+                    st.session_state.rerun_agent = "mermaid"
                 if st.button(t("btn_minutes"),      key="rr_m",   use_container_width=True):
                     st.session_state.rerun_agent = "minutes"
                 if st.button(t("btn_sbvr"),         key="rr_sv",  use_container_width=True):

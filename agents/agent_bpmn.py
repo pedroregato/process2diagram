@@ -237,7 +237,10 @@ class AgentBPMN(BaseAgent):
             hub.bpmn.repair_log = report.repairs
         except Exception:
             hub.bpmn.repair_log = []
-        hub.bpmn.mermaid  = self._generate_mermaid(hub.bpmn)
+        try:
+            hub.bpmn.mermaid = self._generate_mermaid(hub.bpmn)
+        except Exception:
+            hub.bpmn.mermaid = ""
         hub.bpmn.bpmn_xml = self._generate_bpmn_xml(hub.bpmn)
         hub.bpmn.ready = True
         hub.mark_agent_run(self.name)

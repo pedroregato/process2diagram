@@ -72,6 +72,12 @@ def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
     elif agent_name == "communication_noise":
         agent = AgentCommunicationNoise(client_info, provider_cfg)
         hub = agent.run(hub, output_language)
+    elif agent_name == "mermaid":
+        from agents.agent_mermaid import MermaidGenerator
+        if hub.bpmn.steps:
+            hub.bpmn.mermaid = MermaidGenerator.generate(hub.bpmn)
+        else:
+            st.warning("⚠️ Dados do BPMN não disponíveis nesta sessão. Execute o agente BPMN primeiro.")
     else:
         raise ValueError(f"Unknown agent: {agent_name}")
     return hub

@@ -809,6 +809,32 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "reprocess_communication_noise",
+                "description": (
+                    "Re-executa o AgentCommunicationNoise sobre a transcrição armazenada de uma reunião "
+                    "e salva os resultados (ambiguidades, lacunas, índice de ruído de comunicação). "
+                    "Use meeting_number=0 para reprocessar todas as reuniões do projeto. "
+                    "🔒 Requer perfil administrador."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Número da reunião. Use 0 para reprocessar todas as reuniões do projeto.",
+                        },
+                        "output_language": {
+                            "type": "string",
+                            "description": "Idioma de saída: 'Português', 'English' ou 'Auto-detect'.",
+                        },
+                    },
+                    "required": ["meeting_number"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "regenerate_executive_report",
                 "description": (
                     "Regenera apenas o Relatório Executivo HTML de uma reunião usando os "
@@ -2238,9 +2264,11 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "embed_meeting":                "admin",
     "get_database_integrity":       "admin",
     # Geração (LLM-powered) — admin
-    "generate_missing_minutes":       "admin",
-    "reprocess_meeting_requirements": "admin",
+    "generate_missing_minutes":           "admin",
+    "reprocess_meeting_requirements":     "admin",
+    "reprocess_communication_noise":      "admin",
     "reprocess_meeting_full":         "admin",
+    "reprocess_communication_noise":  "admin",
     "regenerate_executive_report":    "admin",
     "batch_reprocess_requirements":   "admin",
     # Gráficos
@@ -2285,6 +2313,7 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "apply_text_correction",
     "reprocess_meeting_requirements",
     "reprocess_meeting_full",
+    "reprocess_communication_noise",
     "regenerate_executive_report",
     "batch_reprocess_requirements",
     "generate_missing_minutes",
@@ -5363,6 +5392,64 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         except Exception as exc:
             return f"❌ Erro ao reprocessar Reunião {meeting_number}: {exc}"
 
+    def reprocess_communication_noise(
+        self,
+        meeting_number: int,
+        output_language: str = "Auto-detect",
+    ) -> str:
+        """Re-run AgentCommunicationNoise on stored transcript(s) and persist results."""
+        if not self.llm_config:
+            return "❌ Configuração LLM não disponível. Configure a chave de API no Assistente."
+
+        if meeting_number == 0:
+            meetings = self._get_meetings()
+            if not meetings:
+                return "Nenhuma reunião encontrada no projeto."
+            results = [self._reprocess_noise_one(m, output_language) for m in meetings]
+            return "\n".join(results)
+
+        m = self._find_meeting(meeting_number)
+        if not m:
+            return f"Reunião {meeting_number} não encontrada."
+        return self._reprocess_noise_one(m, output_language)
+
+    def _reprocess_noise_one(self, m: dict, output_language: str) -> str:
+        """Run AgentCommunicationNoise on one meeting and save to DB."""
+        from core.project_store import load_meeting_as_hub, save_meeting_artifacts
+        from agents.agent_communication_noise import AgentCommunicationNoise
+
+        num       = m.get("meeting_number", "?")
+        title     = m.get("title") or f"Reunião {num}"
+        mid       = m.get("id", "")
+        transcript = (m.get("transcript_clean") or m.get("transcript_raw") or "").strip()
+
+        if not transcript:
+            return f"  ⚠️ Reunião {num} — sem transcrição. Use Manutenção → Transcript Backfill."
+
+        try:
+            provider_cfg = self.llm_config.get("provider_cfg", {})
+            client_info  = {"api_key": self.llm_config.get("api_key", "")}
+
+            hub = load_meeting_as_hub(mid, self.project_id)
+            if hub is None:
+                from core.knowledge_hub import KnowledgeHub
+                hub = KnowledgeHub.new()
+                hub.transcript_clean = transcript
+                hub.transcript_raw   = transcript
+
+            agent = AgentCommunicationNoise(client_info, provider_cfg)
+            hub   = agent.run(hub, output_language)
+            save_meeting_artifacts(mid, hub)
+
+            cn = hub.communication_noise
+            return (
+                f"  ✅ Reunião {num} — '{title}': "
+                f"{len(cn.ambiguities)} ambiguidades, {len(cn.gaps)} lacunas, "
+                f"índice de ruído {cn.noise_score:.1f}/10."
+            )
+        except Exception as exc:
+            return f"  ❌ Reunião {num} — '{title}': {exc}"
+
     def regenerate_executive_report(
         self,
         meeting_number: int,
@@ -7260,6 +7347,10 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                     tool_input["meeting_number"],
                     bool(tool_input.get("run_bpmn", False)),
                     bool(tool_input.get("run_quality", False)),
+                    tool_input.get("output_language", "Auto-detect"),
+                ),
+                "reprocess_communication_noise":  lambda: self.reprocess_communication_noise(
+                    tool_input["meeting_number"],
                     tool_input.get("output_language", "Auto-detect"),
                 ),
                 "regenerate_executive_report":    lambda: self.regenerate_executive_report(

@@ -577,6 +577,12 @@ def save_meeting_artifacts(meeting_id: str, hub) -> bool:
                 payload1["argumentation_json"] = _json_arg.dumps(_dc_arg.asdict(hub.argumentation))
             except Exception:
                 pass
+        if hasattr(hub, "communication_noise") and hub.communication_noise.ready:
+            import json as _json_cn, dataclasses as _dc_cn
+            try:
+                payload1["communication_noise_json"] = _json_cn.dumps(_dc_cn.asdict(hub.communication_noise))
+            except Exception:
+                pass
         if hasattr(hub, "meeting_time") and hub.meeting_time.ready:
             import json as _json2
             _mt = hub.meeting_time
@@ -629,7 +635,7 @@ def load_meeting_as_hub(meeting_id: str, project_id: str):
             "id, title, meeting_date, meeting_number, "
             "transcript_clean, transcript_raw, minutes_md, "
             "bpmn_xml, mermaid_code, report_html, bmm_json, "
-            "dmn_json, argumentation_json, "          # NEW
+            "dmn_json, argumentation_json, communication_noise_json, "
             "total_tokens, llm_provider"
         )
         .eq("id", meeting_id)
@@ -853,6 +859,23 @@ def load_meeting_as_hub(meeting_id: str, project_id: str):
     if report_html:
         hub.synthesizer.html  = report_html
         hub.synthesizer.ready = True
+
+    # ── Communication Noise ───────────────────────────────────────────────────
+    cn_raw = (m.get("communication_noise_json") or "").strip()
+    if cn_raw:
+        try:
+            import json as _json_cn
+            from core.knowledge_hub import CommunicationNoiseModel, AmbiguityItem, CommunicationGap
+            cn_data = _json_cn.loads(cn_raw)
+            hub.communication_noise = CommunicationNoiseModel(
+                ambiguities=[AmbiguityItem(**a) for a in cn_data.get("ambiguities", [])],
+                gaps=[CommunicationGap(**g) for g in cn_data.get("gaps", [])],
+                noise_score=cn_data.get("noise_score", 0.0),
+                summary=cn_data.get("summary", ""),
+                ready=True,
+            )
+        except Exception:
+            pass
 
     hub.bump()
     return hub
