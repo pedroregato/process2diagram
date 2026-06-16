@@ -296,10 +296,8 @@ class AgentValidator:
                 ns = {"bpmndi": "http://www.omg.org/spec/BPMN/20100524/DI"}
                 has_diagram = root.find(".//bpmndi:BPMNDiagram", ns) is not None
                 xml_str = bpmn.bpmn_xml
-                start_count = xml_str.count("startEvent")
-                end_count   = xml_str.count("endEvent") - start_count  # endEvent includes startEvent string
-                has_start = start_count >= 1
-                has_end   = xml_str.count("endEvent") > start_count
+                has_start = xml_str.count("startEvent") >= 1
+                has_end   = xml_str.count("endEvent")   >= 1
             except _ET.ParseError as exc:
                 warnings.append(f"XML parse error: {exc}")
 
@@ -311,7 +309,7 @@ class AgentValidator:
         return self._make_score("bpmn", checks, warnings)
 
     def _validate_mermaid(self, hub: KnowledgeHub) -> AgentOutcomeScore:
-        code = hub.bpmn.mermaid_code or ""
+        code = hub.bpmn.mermaid or ""
         checks: dict = {}
         warnings: list = []
 

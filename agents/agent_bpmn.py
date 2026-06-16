@@ -284,12 +284,16 @@ class AgentBPMN(BaseAgent):
             )
             for e in data.get("edges", [])
         ]
+        lanes = data.get("lanes") or []
+        if not lanes:
+            # Derive from per-step lane assignments when the LLM omits the top-level list
+            lanes = sorted({s.lane for s in steps if s.lane})
         return BPMNModel(
             name=data.get("name", "Process"),
             description=data.get("description", ""),
             steps=steps,
             edges=edges,
-            lanes=data.get("lanes", []),
+            lanes=lanes,
         )
 
     @staticmethod
