@@ -394,3 +394,189 @@ else:
         mime="text/csv",
         key="m_log_csv",
     )
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SEÇÃO 6 — Agent Cards
+# ══════════════════════════════════════════════════════════════════════════════
+st.markdown("---")
+st.markdown("### 🤖 Agent Cards")
+st.caption("Catálogo de agentes do pipeline — capacidades, artefatos e dependências de cada especialista.")
+
+import streamlit.components.v1 as _stc_mac
+from core.agent_registry import get_agent_cards
+
+_all_cards = get_agent_cards()
+
+# ── KPIs ───────────────────────────────────────────────────────────────────────
+_k1, _k2, _k3, _k4 = st.columns(4)
+_k1.metric("Total de agentes",       len(_all_cards))
+_k2.metric("Pipeline automático",    sum(1 for c in _all_cards if c.get("pipeline_phase") != "on_demand"))
+_k3.metric("Sob demanda",            sum(1 for c in _all_cards if c.get("pipeline_phase") == "on_demand"))
+_k4.metric("Python puro (sem LLM)",  sum(1 for c in _all_cards if c.get("mode") == "pure_python"))
+
+# ── Filtros ────────────────────────────────────────────────────────────────────
+_PHASE_LABELS = {
+    "pre": "Pré-pipeline", "core": "Core", "enrichment": "Enriquecimento",
+    "output": "Saída", "post": "Pós-pipeline", "on_demand": "Sob demanda",
+}
+_unique_phases = sorted({c.get("pipeline_phase", "") for c in _all_cards}, key=lambda p: list(_PHASE_LABELS).index(p) if p in _PHASE_LABELS else 9)
+_fa, _fb, _fc = st.columns([2, 2, 4])
+_phase_filter = _fa.selectbox("Fase",     ["Todas"] + _unique_phases,            key="mac_phase", format_func=lambda v: "Todas" if v == "Todas" else _PHASE_LABELS.get(v, v))
+_mode_filter  = _fb.selectbox("Modo",     ["Todos", "llm", "pure_python"],        key="mac_mode",  format_func=lambda v: {"Todos": "Todos", "llm": "LLM", "pure_python": "Python puro"}.get(v, v))
+
+_filtered = [
+    c for c in _all_cards
+    if (_phase_filter == "Todas" or c.get("pipeline_phase") == _phase_filter)
+    and (_mode_filter == "Todos" or c.get("mode") == _mode_filter)
+]
+
+# ── Grid HTML ──────────────────────────────────────────────────────────────────
+_PHASE_STYLE = {
+    "pre":        ("rgba(88,28,135,.30)",  "#C4B5FD"),
+    "core":       ("rgba(30,58,138,.30)",  "#93C5FD"),
+    "enrichment": ("rgba(6,78,59,.30)",    "#6EE7B7"),
+    "output":     ("rgba(120,53,15,.30)",  "#FCD34D"),
+    "post":       ("rgba(20,83,45,.30)",   "#86EFAC"),
+    "on_demand":  ("rgba(55,65,81,.30)",   "#D1D5DB"),
+}
+_MODE_STYLE = {
+    "llm":         ("rgba(30,64,175,.30)",  "#93C5FD"),
+    "pure_python": ("rgba(5,150,105,.30)",  "#6EE7B7"),
+}
+
+def _build_cards_html(cards: list[dict]) -> str:
+    rows_html = ""
+    for card in cards:
+        dname  = card.get("display_name", card.get("name", ""))
+        desc   = card.get("description", "")
+        phase  = card.get("pipeline_phase", "core")
+        mode   = card.get("mode", "llm")
+        fatal  = card.get("fatal", True)
+        arts   = card.get("artifacts") or []
+        deps   = card.get("dependencies") or []
+        reads  = card.get("reads") or []
+
+        ph_bg, ph_fg = _PHASE_STYLE.get(phase, ("rgba(55,65,81,.30)", "#D1D5DB"))
+        mo_bg, mo_fg = _MODE_STYLE.get(mode, ("rgba(55,65,81,.30)", "#D1D5DB"))
+        ph_label = _PHASE_LABELS.get(phase, phase)
+        mo_label = "LLM" if mode == "llm" else "Python puro"
+
+        fatal_badge = "" if fatal else '<span class="badge" style="background:rgba(180,83,9,.30);color:#FCD34D">não-fatal</span>'
+
+        arts_html = "".join(
+            f'<span class="tag">{a}</span>' for a in arts[:3]
+        )
+        if len(arts) > 3:
+            arts_html += f'<span class="tag more">+{len(arts)-3}</span>'
+
+        deps_html = (
+            f'<div class="deps">⛓ Requer: {", ".join(deps)}</div>'
+            if deps else ""
+        )
+        reads_html = ""
+        if reads:
+            reads_short = reads[:2]
+            reads_html = '<div class="deps">📥 ' + " · ".join(reads_short)
+            if len(reads) > 2:
+                reads_html += f" +{len(reads)-2}"
+            reads_html += "</div>"
+
+        rows_html += f"""
+        <div class="card">
+          <div class="badges">
+            <span class="badge" style="background:{ph_bg};color:{ph_fg}">{ph_label}</span>
+            <span class="badge" style="background:{mo_bg};color:{mo_fg}">{mo_label}</span>
+            {fatal_badge}
+          </div>
+          <div class="name">{dname}</div>
+          <div class="desc">{desc}</div>
+          {'<div class="arts">' + arts_html + '</div>' if arts_html else ''}
+          {reads_html}
+          {deps_html}
+        </div>"""
+
+    n_cols = min(3, max(1, len(cards)))
+    return f"""<!DOCTYPE html><html><head><style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{background:transparent;font-family:'Segoe UI',system-ui,sans-serif;padding:2px}}
+.grid{{display:grid;grid-template-columns:repeat({n_cols},1fr);gap:10px}}
+.card{{
+  background:#0D1B2A;border:1px solid #1C3150;border-radius:10px;
+  padding:13px 15px;display:flex;flex-direction:column;gap:7px;
+  transition:border-color .18s,transform .18s
+}}
+.card:hover{{border-color:#3E6A99;transform:translateY(-1px)}}
+.badges{{display:flex;flex-wrap:wrap;gap:5px}}
+.badge{{font-size:.62rem;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:20px}}
+.name{{font-size:.88rem;font-weight:700;color:#E2EAF6;line-height:1.25}}
+.desc{{font-size:.76rem;color:#7A9AB8;line-height:1.45}}
+.arts{{display:flex;flex-wrap:wrap;gap:4px;margin-top:1px}}
+.tag{{font-size:.65rem;color:#4EA8A8;background:rgba(78,168,168,.12);padding:2px 7px;border-radius:4px}}
+.tag.more{{color:#6B7280;background:rgba(107,114,128,.10)}}
+.deps{{font-size:.67rem;color:#4E6070;margin-top:1px}}
+</style></head><body>
+<div class="grid">{rows_html}</div>
+</body></html>"""
+
+if _filtered:
+    _card_height = 160 * (len(_filtered) // 3 + (1 if len(_filtered) % 3 else 0)) + 30
+    _stc_mac.html(_build_cards_html(_filtered), height=min(_card_height, 800), scrolling=True)
+else:
+    st.info("Nenhum agente encontrado com os filtros selecionados.")
+
+# ── Painel de inspeção detalhada ───────────────────────────────────────────────
+st.markdown("#### 🔍 Inspecionar agente")
+_agent_opts = {f"{c.get('display_name', c.get('name',''))} ({c.get('name','')})": c for c in _filtered}
+_sel_label  = st.selectbox("Selecione um agente para ver detalhes completos",
+                            ["— selecione —"] + list(_agent_opts.keys()), key="mac_sel")
+
+if _sel_label != "— selecione —":
+    _sc = _agent_opts[_sel_label]
+    _phase  = _sc.get("pipeline_phase", "")
+    _mode   = _sc.get("mode", "llm")
+    _fatal  = _sc.get("fatal", True)
+
+    _dc1, _dc2, _dc3 = st.columns(3)
+    _dc1.markdown(f"**Fase**  \n`{_PHASE_LABELS.get(_phase, _phase)}`")
+    _dc2.markdown(f"**Modo**  \n`{'LLM' if _mode == 'llm' else 'Python puro'}`")
+    _dc3.markdown(f"**Não-fatal**  \n`{'sim' if not _fatal else 'não'}`")
+
+    _dca, _dcb = st.columns(2)
+    with _dca:
+        st.markdown("**Módulo**")
+        st.code(_sc.get("module", "—"), language=None)
+        if _sc.get("skill_file"):
+            st.markdown("**Skill file**")
+            st.code(_sc.get("skill_file"), language=None)
+        if _sc.get("standard"):
+            st.markdown(f"**Padrão:** `{_sc['standard']}`")
+
+    with _dcb:
+        if _sc.get("reads"):
+            st.markdown("**Lê de (hub)**")
+            for r in _sc["reads"]:
+                st.markdown(f"- `{r}`")
+        if _sc.get("writes"):
+            st.markdown("**Escreve em**")
+            for w in _sc["writes"]:
+                st.markdown(f"- `{w}`")
+
+    if _sc.get("artifacts"):
+        st.markdown("**Artefatos gerados**")
+        for a in _sc["artifacts"]:
+            st.markdown(f"- {a}")
+
+    if _sc.get("dependencies"):
+        st.markdown(f"**Dependências:** `{', '.join(_sc['dependencies'])}`")
+
+    # Campos extras específicos do card
+    _extra_skip = {"name","class","module","display_name","description","pipeline_phase",
+                   "mode","fatal","reads","writes","artifacts","dependencies","skill_file","standard"}
+    _extras = {k: v for k, v in _sc.items() if k not in _extra_skip and v}
+    if _extras:
+        with st.expander("📋 Metadados adicionais", expanded=False):
+            for k, v in _extras.items():
+                if isinstance(v, list):
+                    st.markdown(f"**{k}:** " + " · ".join(str(i) for i in v))
+                else:
+                    st.markdown(f"**{k}:** `{v}`")
