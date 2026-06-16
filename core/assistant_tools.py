@@ -2193,6 +2193,87 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        # ── A2UI — renderização inline no chat ────────────────────────────────────
+        {
+            "type": "function",
+            "function": {
+                "name": "show_bpmn_diagram",
+                "description": (
+                    "Exibe um diagrama BPMN interativo diretamente no chat, com pan/zoom. "
+                    "USE quando o usuário pedir para VER, MOSTRAR ou VISUALIZAR um fluxo ou processo BPMN. "
+                    "Use list_bpmn_processes primeiro para descobrir os nomes disponíveis."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "process_name": {
+                            "type": "string",
+                            "description": "Nome ou parte do nome do processo BPMN a exibir.",
+                        },
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Número da reunião para filtrar a versão do diagrama (opcional).",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "show_mermaid_diagram",
+                "description": (
+                    "Exibe o fluxograma Mermaid de uma reunião diretamente no chat. "
+                    "USE quando o usuário pedir para ver o fluxograma, diagrama de fluxo ou Mermaid. "
+                    "O diagrama é renderizado inline com pan/zoom e alternância TD/LR."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Número da reunião cujo fluxograma deve ser exibido.",
+                        },
+                    },
+                    "required": ["meeting_number"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "show_metrics",
+                "description": (
+                    "Exibe um painel visual de métricas/KPIs destacados no chat. "
+                    "USE para apresentar números importantes de forma visual (totais, médias, contagens). "
+                    "Máximo 4 métricas por chamada para boa legibilidade."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "title": {
+                            "type": "string",
+                            "description": "Título opcional do painel.",
+                        },
+                        "items": {
+                            "type": "array",
+                            "description": "Lista de métricas (máx 4).",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "label": {"type": "string", "description": "Nome da métrica."},
+                                    "value": {"type": "string", "description": "Valor principal (ex: '144', '87%')."},
+                                    "delta": {"type": "string", "description": "Variação opcional (ex: '+12 este mês'). Omita se não aplicável."},
+                                },
+                                "required": ["label", "value"],
+                            },
+                        },
+                    },
+                    "required": ["items"],
+                },
+            },
+        },
         {
             "type": "function",
             "function": {
@@ -2326,6 +2407,10 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "search_ibis_debates":             "consulta",
     "get_ibis_timeline":               "grafico",
     "generate_ibis_map":               "grafico",
+    # A2UI
+    "show_bpmn_diagram":               "consulta",
+    "show_mermaid_diagram":            "consulta",
+    "show_metrics":                    "consulta",
 }
 
 # Ferramentas que exigem perfil administrador
@@ -7252,6 +7337,147 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             + f" em {len(sorted_mnums)} reunião(ões)."
         )
 
+    # ── A2UI — renderização inline no chat ────────────────────────────────────
+
+    def show_bpmn_diagram(
+        self,
+        process_name: str | None = None,
+        meeting_number: int | None = None,
+    ) -> str:
+        """Fetch current BPMN XML and queue for inline rendering in the chat."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+        pid = self.project_id
+        try:
+            q = db.table("bpmn_processes").select("id, name").eq("project_id", pid)
+            procs = (
+                (q.ilike("name", f"%{process_name}%").execute().data or [])
+                if process_name
+                else (q.execute().data or [])
+            )
+            if not procs:
+                hint = f" para '{process_name}'" if process_name else ""
+                return (
+                    f"Nenhum processo BPMN encontrado{hint}. "
+                    "Use list_bpmn_processes para ver os disponíveis."
+                )
+            proc      = procs[0]
+            proc_id   = proc["id"]
+            proc_name = proc["name"]
+
+            ver_q = (
+                db.table("bpmn_versions")
+                .select("bpmn_xml, version")
+                .eq("process_id", proc_id)
+            )
+            if meeting_number is not None:
+                m = self._find_meeting(meeting_number)
+                if m:
+                    ver_q = ver_q.eq("meeting_id", m["id"])
+
+            versions = (ver_q.eq("is_current", True).limit(1).execute().data or [])
+            if not versions:
+                versions = (ver_q.order("version", desc=True).limit(1).execute().data or [])
+            if not versions or not versions[0].get("bpmn_xml"):
+                return f"Nenhum XML BPMN encontrado para '{proc_name}'."
+
+            xml = versions[0]["bpmn_xml"]
+            ver = versions[0].get("version", "?")
+
+            import streamlit as st
+            st.session_state.setdefault("_pending_widgets", []).append({
+                "type":  "bpmn",
+                "xml":   xml,
+                "title": f"📐 {proc_name} (v{ver})",
+            })
+            return f"📐 Diagrama BPMN '{proc_name}' (versão {ver}) renderizado no chat."
+        except Exception as exc:
+            return f"❌ Erro ao buscar diagrama BPMN: {exc}"
+
+    def show_mermaid_diagram(self, meeting_number: int) -> str:
+        """Fetch Mermaid flowchart for a meeting and queue for inline rendering."""
+        m = self._find_meeting(meeting_number)
+        if not m:
+            return f"Reunião {meeting_number} não encontrada."
+        mid   = m["id"]
+        title = m.get("title") or f"Reunião {meeting_number}"
+
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        mermaid_code = ""
+        try:
+            rows = (
+                db.table("bpmn_versions")
+                .select("mermaid_code")
+                .eq("meeting_id", mid)
+                .eq("is_current", True)
+                .limit(1)
+                .execute()
+                .data or []
+            )
+            if not rows:
+                rows = (
+                    db.table("bpmn_versions")
+                    .select("mermaid_code")
+                    .eq("meeting_id", mid)
+                    .order("version", desc=True)
+                    .limit(1)
+                    .execute()
+                    .data or []
+                )
+            if rows:
+                mermaid_code = (rows[0].get("mermaid_code") or "").strip()
+        except Exception:
+            pass
+
+        if not mermaid_code:
+            try:
+                row = (
+                    db.table("meetings")
+                    .select("mermaid_code")
+                    .eq("id", mid)
+                    .single()
+                    .execute()
+                    .data or {}
+                )
+                mermaid_code = (row.get("mermaid_code") or "").strip()
+            except Exception:
+                pass
+
+        if not mermaid_code:
+            return (
+                f"Nenhum fluxograma Mermaid encontrado para Reunião {meeting_number} — '{title}'. "
+                "Execute o pipeline com o agente BPMN para gerar o fluxograma."
+            )
+
+        import streamlit as st
+        st.session_state.setdefault("_pending_widgets", []).append({
+            "type":  "mermaid",
+            "code":  mermaid_code,
+            "title": f"🔀 Fluxograma — {title}",
+        })
+        return f"🔀 Fluxograma Mermaid da Reunião {meeting_number} — '{title}' renderizado no chat."
+
+    def show_metrics(self, items: list[dict], title: str = "") -> str:
+        """Display a grid of KPI metrics inline in the chat."""
+        if not items:
+            return "Nenhum item fornecido para exibir."
+        import streamlit as st
+        st.session_state.setdefault("_pending_widgets", []).append({
+            "type":  "metrics",
+            "title": title,
+            "items": items[:4],
+        })
+        labels = ", ".join(
+            f"{it.get('label','?')}: {it.get('value','?')}" for it in items[:4]
+        )
+        return f"📊 Métricas exibidas — {labels}"
+
     # ── Glossário ─────────────────────────────────────────────────────────────
 
     def search_glossary(self, query: str, tag: str | None = None) -> str:
@@ -7583,6 +7809,18 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 ),
                 "generate_ibis_map":      lambda: self.generate_ibis_map(
                     topic=tool_input.get("topic"),
+                ),
+                # ── A2UI
+                "show_bpmn_diagram":      lambda: self.show_bpmn_diagram(
+                    process_name=tool_input.get("process_name"),
+                    meeting_number=tool_input.get("meeting_number"),
+                ),
+                "show_mermaid_diagram":   lambda: self.show_mermaid_diagram(
+                    meeting_number=tool_input["meeting_number"],
+                ),
+                "show_metrics":           lambda: self.show_metrics(
+                    items=tool_input["items"],
+                    title=tool_input.get("title", ""),
                 ),
             }
             if tool_name not in dispatch:

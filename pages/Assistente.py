@@ -1040,6 +1040,49 @@ def _render_message_tables(tables: list[dict], msg_idx: int, project_name: str, 
         )
 
 
+def _render_message_widgets(widgets: list[dict], msg_idx: int) -> None:
+    """Render A2UI widgets (BPMN, Mermaid, metrics) stored in a message dict."""
+    import streamlit.components.v1 as _stc
+    for wi, widget in enumerate(widgets):
+        w_type = widget.get("type")
+        title  = widget.get("title", "")
+        if title:
+            st.markdown(f"**{title}**")
+        if w_type == "bpmn":
+            xml = widget.get("xml", "")
+            if xml:
+                try:
+                    from modules.bpmn_viewer import preview_from_xml
+                    _stc.html(preview_from_xml(xml), height=500, scrolling=False)
+                except Exception as _e:
+                    st.warning(f"Não foi possível renderizar o BPMN: {_e}")
+        elif w_type == "mermaid":
+            code = widget.get("code", "")
+            if code:
+                try:
+                    from modules.mermaid_renderer import render_mermaid_block
+                    render_mermaid_block(
+                        code,
+                        show_code=False,
+                        key_suffix=f"asst_{msg_idx}_{wi}",
+                        height=400,
+                    )
+                except Exception as _e:
+                    st.warning(f"Não foi possível renderizar o Mermaid: {_e}")
+        elif w_type == "metrics":
+            items = widget.get("items") or []
+            if items:
+                n_cols = min(len(items), 4)
+                cols = st.columns(n_cols)
+                for ci, item in enumerate(items):
+                    with cols[ci % n_cols]:
+                        st.metric(
+                            label=item.get("label", ""),
+                            value=str(item.get("value", "")),
+                            delta=item.get("delta") or None,
+                        )
+
+
 def _export_chat_to_markdown(
     messages: list[dict],
     project_name: str,
@@ -1351,6 +1394,9 @@ for i, msg in enumerate(history):
                     project_name=st.session_state.get("active_project_name", ""),
                     question=msg.get("question", ""),
                 )
+            # Render A2UI widgets (BPMN, Mermaid, metrics)
+            if msg.get("widgets"):
+                _render_message_widgets(msg["widgets"], i)
             # ── Relatório executivo disponível para download ───────────────────
             if rd := msg.get("report_download"):
                 _rk  = rd.get("cache_key", "")
@@ -1442,14 +1488,16 @@ if _asst_running:
             response_text = f"❌ Erro: {error}"
 
         response_text = _clean_response(response_text) or response_text
-        pending_tables = st.session_state.pop("_pending_tables", [])
+        pending_tables  = st.session_state.pop("_pending_tables",  [])
+        pending_widgets = st.session_state.pop("_pending_widgets", [])
         history = st.session_state["assistant_history"]
         last_question = history[-1]["content"] if history and history[-1]["role"] == "user" else ""
         history.append({
-            "role": "assistant",
+            "role":    "assistant",
             "content": response_text,
-            "charts": charts,
-            "tables": pending_tables,
+            "charts":  charts,
+            "tables":  pending_tables,
+            "widgets": pending_widgets,
             "question": last_question,
         })
 
