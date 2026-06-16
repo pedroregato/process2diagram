@@ -709,6 +709,31 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "delete_project_artifacts",
+                "description": (
+                    "Exclui TODOS os artefatos do projeto atual: reuniões, requisitos, BPMN, "
+                    "Knowledge Graph, SBVR e documentos. O projeto (contexto) em si é mantido. "
+                    "ATENÇÃO: operação IRREVERSÍVEL. "
+                    "NUNCA chame sem confirmação explícita do usuário ('sim, limpe o projeto', etc.)."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "confirmed": {
+                            "type": "boolean",
+                            "description": (
+                                "Deve ser true SOMENTE após o usuário confirmar explicitamente. "
+                                "Padrão: false."
+                            ),
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "rename_meeting",
                 "description": (
                     "Altera o título de uma reunião existente no banco de dados. "
@@ -2259,6 +2284,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "apply_text_correction":        "admin",
     "rename_meeting":               "admin",
     "delete_meeting":               "admin",
+    "delete_project_artifacts":     "admin",
     "fix_missing_llm_provider":     "admin",
     "generate_meeting_embeddings":  "admin",
     "embed_meeting":                "admin",
@@ -2309,6 +2335,7 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "generate_meeting_embeddings",
     "embed_meeting",
     "delete_meeting",
+    "delete_project_artifacts",
     "rename_meeting",
     "apply_text_correction",
     "reprocess_meeting_requirements",
@@ -3770,25 +3797,34 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             ("transcript_chunks",    "meeting_id"),
             ("sbvr_terms",           "meeting_id"),
             ("sbvr_rules",           "meeting_id"),
-            ("bpmn_processes",       "meeting_id"),
+            ("bpmn_versions",        "meeting_id"),
         ]:
             try:
                 rows = db.table(table).select("id").eq(col, mid).execute().data or []
                 if rows:
                     cascade.append(f"  • {len(rows)} registro(s) em `{table}`")
-                    if table == "bpmn_processes":
-                        # bpmn_versions são filhos de bpmn_processes
-                        total_ver = 0
-                        for proc in rows:
-                            try:
-                                ver = db.table("bpmn_versions").select("id").eq("process_id", proc["id"]).execute().data or []
-                                total_ver += len(ver)
-                            except Exception:
-                                pass
-                        if total_ver:
-                            cascade.append(f"    ↳ {total_ver} versão(ões) em `bpmn_versions`")
             except Exception:
                 cascade.append(f"  • `{table}`: não foi possível verificar")
+        # bpmn_processes orphaned after version deletion
+        try:
+            all_procs = (
+                db.table("bpmn_processes").select("id, name").eq("project_id", self.project_id).execute().data or []
+            )
+            bpmn_ver_rows = db.table("bpmn_versions").select("id, process_id").eq("meeting_id", mid).execute().data or []
+            affected_proc_ids = {v["process_id"] for v in bpmn_ver_rows}
+            orphaned = []
+            for proc in all_procs:
+                if proc["id"] not in affected_proc_ids:
+                    continue
+                remaining = db.table("bpmn_versions").select("id").eq("process_id", proc["id"]).execute().data or []
+                # Would have len(remaining) - (versions from this meeting) == 0 → orphaned
+                versions_this_meeting = sum(1 for v in bpmn_ver_rows if v["process_id"] == proc["id"])
+                if len(remaining) == versions_this_meeting:
+                    orphaned.append(proc.get("name", proc["id"]))
+            if orphaned:
+                cascade.append(f"  • {len(orphaned)} processo(s) BPMN sem versões restantes: {', '.join(orphaned)}")
+        except Exception:
+            pass
 
         has_transcript = bool(m.get("transcript_clean") or m.get("transcript_raw"))
         has_minutes    = bool(m.get("minutes_md"))
@@ -3834,40 +3870,64 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
         title = m.get("title") or f"Reunião {meeting_number}"
 
         try:
-            # ── Step 1: Delete requirement_versions for this meeting ─────────────
-            # Must come before nulling requirements FK (FK: requirement_versions.meeting_id)
+            # ── Step 1: Collect requirement IDs that originated from this meeting ─
+            try:
+                orig_req_ids = [
+                    r["id"] for r in
+                    (db.table("requirements").select("id").eq("first_meeting_id", mid).execute().data or [])
+                ]
+            except Exception:
+                orig_req_ids = []
+
+            # ── Step 2: Delete requirement_versions for this meeting ──────────────
+            # Must come before deleting requirements (FK: requirement_versions.requirement_id)
             try:
                 db.table("requirement_versions").delete().eq("meeting_id", mid).execute()
             except Exception:
                 pass
 
-            # ── Step 2: Null-out non-cascade FK references in requirements ───────
+            # ── Step 3: Delete requirements that originated from this meeting ──────
+            for rid in orig_req_ids:
+                try:
+                    db.table("requirements").delete().eq("id", rid).execute()
+                except Exception:
+                    pass
+
+            # ── Step 4: Null-out remaining FK references in requirements ──────────
             for fk_col in ("last_meeting_id", "first_meeting_id"):
                 try:
                     db.table("requirements").update({fk_col: None}).eq(fk_col, mid).execute()
                 except Exception:
-                    pass  # column may not exist — safe to ignore
+                    pass
 
-            # ── Step 3: Delete child rows in tables that may lack CASCADE DELETE ─
+            # ── Step 5: Delete tables with meeting_id FK (may lack CASCADE) ───────
             for table in ("transcript_chunks", "sbvr_terms", "sbvr_rules"):
                 try:
                     db.table(table).delete().eq("meeting_id", mid).execute()
                 except Exception:
-                    pass  # table/column may not exist — safe to ignore
+                    pass
 
-            # bpmn_versions must be deleted before bpmn_processes (FK constraint)
+            # ── Step 6: Delete bpmn_versions for this meeting ─────────────────────
             try:
-                procs = db.table("bpmn_processes").select("id").eq("meeting_id", mid).execute().data or []
-                for proc in procs:
-                    try:
-                        db.table("bpmn_versions").delete().eq("process_id", proc["id"]).execute()
-                    except Exception:
-                        pass
-                db.table("bpmn_processes").delete().eq("meeting_id", mid).execute()
+                db.table("bpmn_versions").delete().eq("meeting_id", mid).execute()
             except Exception:
                 pass
 
-            # ── Step 3: Delete the meeting row itself ────────────────────────────
+            # ── Step 7: Delete bpmn_processes that have no remaining versions ──────
+            try:
+                all_procs = (
+                    db.table("bpmn_processes").select("id").eq("project_id", self.project_id).execute().data or []
+                )
+                for proc in all_procs:
+                    rem = (
+                        db.table("bpmn_versions").select("id").eq("process_id", proc["id"]).execute().data or []
+                    )
+                    if not rem:
+                        db.table("bpmn_processes").delete().eq("id", proc["id"]).execute()
+            except Exception:
+                pass
+
+            # ── Step 8: Delete the meeting row itself ──────────────────────────────
             db.table("meetings").delete().eq("id", mid).execute()
             self._meeting_cache = None  # invalidate cache
             return (
@@ -3877,6 +3937,81 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
             )
         except Exception as exc:
             return f"❌ Erro ao excluir Reunião {meeting_number}: {exc}"
+
+    def delete_project_artifacts(self, confirmed: bool = False) -> str:
+        """Delete ALL artifacts from the current project, keeping the project (context) itself."""
+        if not confirmed:
+            return (
+                "❌ Operação não confirmada. Esta ação exclui TODOS os artefatos do projeto "
+                "(reuniões, requisitos, BPMN, Knowledge Graph, SBVR, documentos). "
+                "O projeto em si é mantido. "
+                "Para confirmar, diga: 'sim, limpe o projeto' ou 'confirme a limpeza'."
+            )
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        pid = self.project_id
+        deleted: list[str] = []
+        errors:  list[str] = []
+
+        def _del(table: str, col: str = "project_id") -> None:
+            try:
+                result = db.table(table).delete().eq(col, pid).execute()
+                n = len(result.data or [])
+                deleted.append(f"  • {n} registro(s) em `{table}`")
+            except Exception as exc:
+                errors.append(f"  • `{table}`: {exc}")
+
+        # ── requirement_versions (FK para requirements AND meetings) ──────────
+        try:
+            req_ids = [
+                r["id"] for r in
+                (db.table("requirements").select("id").eq("project_id", pid).execute().data or [])
+            ]
+            if req_ids:
+                for i in range(0, len(req_ids), 200):
+                    db.table("requirement_versions").delete().in_("requirement_id", req_ids[i:i+200]).execute()
+                deleted.append(f"  • versões de {len(req_ids)} requisito(s) em `requirement_versions`")
+        except Exception as exc:
+            errors.append(f"  • `requirement_versions`: {exc}")
+
+        # ── bpmn_versions (FK para bpmn_processes — deve vir antes) ──────────
+        _del("bpmn_versions")
+
+        # ── bpmn_processes ────────────────────────────────────────────────────
+        _del("bpmn_processes")
+
+        # ── requirements ──────────────────────────────────────────────────────
+        _del("requirements")
+
+        # ── sbvr_rules, sbvr_terms ────────────────────────────────────────────
+        _del("sbvr_rules")
+        _del("sbvr_terms")
+
+        # ── Knowledge Graph ───────────────────────────────────────────────────
+        _del("kh_facts")
+        _del("kh_entities")
+
+        # ── Documents (project_id é TEXT nesta tabela) ────────────────────────
+        try:
+            result = db.table("meeting_documents").delete().eq("project_id", pid).execute()
+            n = len(result.data or [])
+            deleted.append(f"  • {n} registro(s) em `meeting_documents`")
+        except Exception as exc:
+            errors.append(f"  • `meeting_documents`: {exc}")
+
+        # ── Meetings (CASCADE deletes: transcript_chunks, dmn_models, etc.) ───
+        _del("meetings")
+
+        self._meeting_cache = None
+
+        lines = ["✅ Limpeza do projeto concluída. O projeto em si foi mantido.\n", "Artefatos excluídos:"]
+        lines += deleted if deleted else ["  (nenhum artefato encontrado)"]
+        if errors:
+            lines += ["", "⚠️  Erros parciais (verifique):"] + errors
+        return "\n".join(lines)
 
     def rename_meeting(self, meeting_number: int, new_title: str) -> str:
         """Rename a meeting — updates title in the meetings table."""
@@ -7263,6 +7398,9 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
                 ),
                 "delete_meeting":                 lambda: self.delete_meeting(
                     tool_input["meeting_number"],
+                    bool(tool_input.get("confirmed", False)),
+                ),
+                "delete_project_artifacts":       lambda: self.delete_project_artifacts(
                     bool(tool_input.get("confirmed", False)),
                 ),
                 "rename_meeting":                 lambda: self.rename_meeting(
