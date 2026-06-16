@@ -1,0 +1,16 @@
+name: "mermaid"
+class: "AgentMermaid (MermaidGenerator)"
+module: "agents/agent_mermaid.py"
+display_name: "Gerador Mermaid"
+description: "Converte BPMNModel em fluxograma Mermaid sem chamada LLM — transformação Python pura"
+pipeline_phase: "core"
+mode: "pure_python"
+fatal: false
+reads:
+  - "hub.bpmn"
+writes:
+  - "hub.bpmn.mermaid"
+artifacts:
+  - "Diagrama Mermaid (flowchart LR)"
+dependencies: ["bpmn"]
+skill_file: null

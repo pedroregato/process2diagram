@@ -1,0 +1,22 @@
+name: "synthesizer"
+class: "AgentSynthesizer"
+module: "agents/agent_synthesizer.py"
+display_name: "Relatório Executivo"
+description: "Lê todos os artefatos do hub e sintetiza um relatório executivo narrativo em HTML auto-contido"
+pipeline_phase: "output"
+mode: "llm"
+fatal: false
+reads:
+  - "hub.bpmn"
+  - "hub.minutes"
+  - "hub.requirements"
+  - "hub.sbvr"
+  - "hub.bmm"
+  - "hub.dmn"
+  - "hub.argumentation"
+writes:
+  - "hub.synthesizer"
+artifacts:
+  - "Relatório executivo HTML auto-contido"
+dependencies: ["bpmn", "minutes", "requirements"]
+skill_file: "skills/SKILL_SYNTHESIZER.md"

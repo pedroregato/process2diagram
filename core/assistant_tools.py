@@ -2750,27 +2750,57 @@ class AssistantToolExecutor:
             return f"❌ Erro ao invalidar cache: {exc}"
 
     def get_system_capabilities(self) -> str:
-        """Return a static description of all P2D capabilities and integrations."""
+        """Return a description of all P2D capabilities, built dynamically from Agent Cards."""
         from modules.calendar_client import calendar_configured
+        from core.agent_registry import get_agent_cards
         cal_status = "✅ configurado" if calendar_configured() else "⚙️ não configurado neste ambiente"
 
-        return """\
+        # Build agent section from Agent Cards
+        cards = get_agent_cards()
+        _phase_labels = {
+            "pre": "Pré-pipeline",
+            "core": "Core (pipeline principal)",
+            "enrichment": "Enriquecimento",
+            "output": "Saída",
+            "post": "Pós-pipeline",
+            "on_demand": "Sob demanda",
+        }
+        agents_by_phase: dict[str, list[dict]] = {}
+        for card in cards:
+            phase = card.get("pipeline_phase", "core")
+            agents_by_phase.setdefault(phase, []).append(card)
+
+        agent_lines = ["## Agentes especializados (Agent Cards)\n"]
+        for phase_key, label in _phase_labels.items():
+            phase_cards = agents_by_phase.get(phase_key, [])
+            if not phase_cards:
+                continue
+            agent_lines.append(f"### {label}")
+            for card in phase_cards:
+                name = card.get("display_name", card.get("name", ""))
+                desc = card.get("description", "")
+                mode = card.get("mode", "llm")
+                fatal = card.get("fatal", True)
+                fatal_tag = "" if fatal else " · não-fatal"
+                arts = card.get("artifacts") or []
+                art_str = "; ".join(arts[:2])
+                if len(arts) > 2:
+                    art_str += f" (+{len(arts)-2})"
+                agent_lines.append(f"  • **{name}** [{mode}{fatal_tag}] — {desc}")
+                if art_str:
+                    agent_lines.append(f"    Artefatos: {art_str}")
+            agent_lines.append("")
+
+        agents_section = "\n".join(agent_lines)
+
+        return f"""\
 === Funcionalidades do Process2Diagram (P2D) ===
 
-## Pipeline principal
-Converte transcrições de reuniões em artefatos profissionais usando múltiplos LLMs:
-  • Diagrama BPMN 2.0 (XML + visualização interativa bpmn-js)
-  • Fluxograma Mermaid (flowchart LR com pan/zoom)
-  • Ata de Reunião (Markdown, Word .docx, PDF)
-  • Requisitos IEEE 830 (tabela com REQ-XXX, tipos, prioridades)
-  • Vocabulário SBVR (termos de domínio + regras de negócio OMG)
-  • BMM — Modelo de Motivação do Negócio (visão, missão, objetivos, estratégias)
-  • Relatório Executivo HTML (interativo, auto-contido)
-  • Mapa Mental de Requisitos (interativo, colapsável)
-
+{agents_section}
 ## Persistência (Supabase)
   • Projetos, reuniões, requisitos, BPMN, SBVR, embeddings vetoriais
   • Busca semântica nas transcrições via pgvector (1536 dims)
+  • Grafo de Conhecimento (kh_entities, kh_facts, kh_contradictions)
 
 ## Ferramentas do Assistente (este chat)
   Consulta (todos os perfis):
@@ -2778,17 +2808,20 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
     get_meeting_action_items, get_meeting_summary, search_transcript,
     get_requirements, list_bpmn_processes, list_bpmn_versions, get_sbvr_terms, get_sbvr_rules,
     list_context_files, calculate_meeting_roi, get_recurring_topics, get_meeting_metadata,
-    preview_meeting_deletion, preview_text_correction, get_speaker_contributions
+    preview_meeting_deletion, preview_text_correction, get_speaker_contributions,
+    search_ibis_debates, get_ibis_timeline, generate_ibis_map, search_glossary,
+    show_bpmn_diagram, show_mermaid_diagram, show_metrics
 
   Escrita (todos os perfis):
     add_sbvr_term, update_sbvr_term, add_sbvr_rule
 
   Admin (perfil admin/master):
-    apply_text_correction, rename_meeting, delete_meeting, reprocess_meeting_requirements,
-    reprocess_meeting_full, batch_reprocess_requirements, generate_missing_minutes,
-    get_database_integrity, fix_missing_llm_provider,
+    apply_text_correction, rename_meeting, delete_meeting, delete_project_artifacts,
+    reprocess_meeting_requirements, reprocess_meeting_full, batch_reprocess_requirements,
+    generate_missing_minutes, get_database_integrity, fix_missing_llm_provider,
     embed_meeting (reunião única), generate_meeting_embeddings (em lote),
-    delete_bpmn_version (exclui versão específica de diagrama BPMN)
+    delete_bpmn_version (exclui versão específica de diagrama BPMN),
+    reprocess_communication_noise
 
 ## Integração Google Calendar ({cal_status})
   Consulta (todos os perfis):
@@ -2801,19 +2834,20 @@ Converte transcrições de reuniões em artefatos profissionais usando múltiplo
     calendar_schedule_action_items — cria eventos para cada item de ação de uma reunião
 
   Configuração: credenciais via st.secrets[google_calendar][credentials_json] + [calendar_id].
-  Em dev local: mcp/google_console/*.json e .google-calendar (ignorados pelo git).
 
 ## Outras páginas
   • BpmnEditor       — editor visual BPMN com histórico de versões
-  • Artefatos        — central de artefatos: requisitos, SBVR, BMM, DMN, IBIS com rastreabilidade de origem
+  • Artefatos        — central de artefatos: requisitos, SBVR, BMM, DMN, IBIS, Ruídos, rastreabilidade
+  • KnowledgeGraph   — grafo de conhecimento interativo (entidades, fatos, contradições)
   • MeetingROI       — dashboard ROI-TR por tipo de reunião
+  • DocumentManager  — gestão de documentos com extração de artefatos e análise cruzada
   • DatabaseOverview — saúde do banco + gestão de embeddings
   • BatchRunner      — processamento em lote de múltiplas transcrições
-  • BpmnBackfill     — gera BPMN para reuniões já salvas sem diagrama
 
 ## Provedores LLM suportados
-  DeepSeek (padrão), Claude (Anthropic), OpenAI, Groq (Llama), Google Gemini
-""".format(cal_status=cal_status)
+  DeepSeek V4 Flash (padrão), DeepSeek V4 Pro, Claude (Anthropic), OpenAI,
+  Groq (Llama), Google Gemini, Grok (xAI)
+"""
 
     def get_meeting_list(self) -> str:
         meetings = self._get_meetings()

@@ -1,0 +1,20 @@
+name: "minutes"
+class: "AgentMinutes"
+module: "agents/agent_minutes.py"
+display_name: "Ata de Reunião"
+description: "Produz ata estruturada com participantes, pauta, decisões e encaminhamentos"
+pipeline_phase: "core"
+mode: "llm"
+fatal: false
+parallel_with: ["requirements"]
+reads:
+  - "hub.transcript_clean"
+  - "hub.nlp.actors"
+writes:
+  - "hub.minutes"
+artifacts:
+  - "Ata em Markdown"
+  - "Ata em Word (.docx)"
+  - "Ata em PDF"
+dependencies: ["nlp"]
+skill_file: "skills/skill_minutes.md"

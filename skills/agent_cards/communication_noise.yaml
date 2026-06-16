@@ -1,0 +1,21 @@
+name: "communication_noise"
+class: "AgentCommunicationNoise"
+module: "agents/agent_communication_noise.py"
+display_name: "Ruídos de Comunicação"
+description: "Detecta ambiguidades e lacunas de comunicação na transcrição — palavras vagas, assuntos em aberto, conflitos de expectativas"
+pipeline_phase: "enrichment"
+mode: "llm"
+fatal: false
+reads:
+  - "hub.transcript_clean"
+  - "hub.nlp.actors"
+  - "hub.minutes"
+writes:
+  - "hub.communication_noise"
+  - "meetings.communication_noise_json (Supabase)"
+artifacts:
+  - "Lista de ambiguidades com severidade e sugestões"
+  - "Lista de lacunas de comunicação"
+  - "Índice de clareza (0–100)"
+dependencies: ["nlp", "minutes"]
+skill_file: "skills/skill_communication_noise.md"

@@ -1,0 +1,21 @@
+name: "query_summarizer"
+class: "AgentQuerySummarizer"
+module: "agents/agent_query_summarizer.py"
+display_name: "Resumo Multiperspectiva"
+description: "Gera resumo automático pós-pipeline com 4 perspectivas: executiva, técnica, jurídica/compliance e próximos passos"
+pipeline_phase: "output"
+mode: "llm"
+fatal: false
+reads:
+  - "hub.minutes"
+  - "hub.requirements"
+  - "hub.bpmn"
+  - "hub.sbvr"
+  - "hub.bmm"
+  - "hub.dmn"
+writes:
+  - "hub.query_summary"
+artifacts:
+  - "Resumo em 4 perspectivas (Markdown)"
+dependencies: ["minutes", "requirements", "bpmn"]
+skill_file: "skills/skill_query_summarizer.md"

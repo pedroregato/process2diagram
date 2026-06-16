@@ -1,0 +1,17 @@
+name: "bmm"
+class: "AgentBMM"
+module: "agents/agent_bmm.py"
+display_name: "Motivação de Negócio"
+description: "Extrai visão, missão, metas, estratégias e políticas da organização (OMG BMM)"
+pipeline_phase: "enrichment"
+mode: "llm"
+fatal: false
+reads:
+  - "hub.transcript_clean"
+writes:
+  - "hub.bmm"
+artifacts:
+  - "Modelo de Motivação de Negócio (visão, missão, metas, estratégias, políticas)"
+dependencies: []
+skill_file: "skills/skill_bmm.md"
+standard: "OMG BMM 1.3"

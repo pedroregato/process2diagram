@@ -1,0 +1,24 @@
+name: "document_extractor"
+class: "DocumentExtractorAgent"
+module: "agents/agent_document_extractor.py"
+display_name: "Extrator de Documentos"
+description: "Extrai artefatos estruturados de documentos externos: requisitos, SBVR, BMM, DMN"
+pipeline_phase: "on_demand"
+mode: "llm"
+fatal: false
+reads:
+  - "document_content (texto do documento)"
+writes:
+  - "requirements (origin=documento)"
+  - "sbvr_terms / sbvr_rules (origin=documento)"
+  - "bmm_goals / bmm_strategies / bmm_policies (origin=documento)"
+  - "dmn_decisions (origin=documento)"
+artifacts:
+  - "Requisitos extraídos do documento"
+  - "Vocabulário e regras SBVR"
+  - "Metas e estratégias BMM"
+  - "Tabelas de decisão DMN"
+dependencies: []
+skill_file: "skills/skill_document_extractor.md"
+invoked_by:
+  - "pages/DocumentManager.py — aba Extrair Artefatos"

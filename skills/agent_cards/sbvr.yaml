@@ -1,0 +1,19 @@
+name: "sbvr"
+class: "AgentSBVR"
+module: "agents/agent_sbvr.py"
+display_name: "Vocabulário SBVR"
+description: "Extrai vocabulário de negócio (termos, conceitos, fatos) e regras de negócio formais (OMG SBVR)"
+pipeline_phase: "enrichment"
+mode: "llm"
+fatal: false
+reads:
+  - "hub.transcript_clean"
+writes:
+  - "hub.sbvr"
+artifacts:
+  - "Termos de negócio com definições e esfera"
+  - "Regras de negócio formalizadas"
+  - "Exportação JSON (SBVR)"
+dependencies: []
+skill_file: "skills/skill_sbvr.md"
+standard: "OMG SBVR 1.5"

@@ -1,0 +1,18 @@
+name: "dmn"
+class: "AgentDMN"
+module: "agents/agent_dmn.py"
+display_name: "Tabelas de Decisão DMN"
+description: "Formaliza decisões discutidas na reunião como tabelas de decisão DMN com inputs, outputs e regras"
+pipeline_phase: "enrichment"
+mode: "llm"
+fatal: false
+reads:
+  - "hub.transcript_clean"
+  - "hub.minutes.decisions"
+writes:
+  - "hub.dmn"
+artifacts:
+  - "Tabelas de decisão DMN (OMG DMN 1.4)"
+dependencies: ["minutes"]
+skill_file: "skills/skill_dmn.md"
+standard: "OMG DMN 1.4"

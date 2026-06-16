@@ -1,0 +1,19 @@
+name: "argumentation"
+class: "AgentArgumentation"
+module: "agents/agent_argumentation.py"
+display_name: "Mapa Argumentativo IBIS"
+description: "Extrai debates e argumentação da reunião como mapa IBIS — questões, alternativas, prós/contras e resoluções"
+pipeline_phase: "enrichment"
+mode: "llm"
+fatal: false
+reads:
+  - "hub.transcript_clean"
+writes:
+  - "hub.argumentation"
+artifacts:
+  - "Mapa IBIS (questões, alternativas, prós/contras, resoluções)"
+  - "Linha do tempo de debates"
+  - "Mapa hierárquico Plotly"
+dependencies: []
+skill_file: "skills/skill_argumentation.md"
+standard: "IBIS (Issue-Based Information System)"

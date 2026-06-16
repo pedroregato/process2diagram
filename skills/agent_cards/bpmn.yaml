@@ -1,0 +1,26 @@
+name: "bpmn"
+class: "AgentBPMN"
+module: "agents/agent_bpmn.py"
+display_name: "Modelador BPMN"
+description: "Extrai processos de negócio e gera diagramas BPMN 2.0 com raias, gateways e eventos"
+pipeline_phase: "core"
+mode: "llm"
+fatal: true
+reads:
+  - "hub.transcript_clean"
+  - "hub.nlp.actors"
+  - "hub.nlp.segments"
+writes:
+  - "hub.bpmn"
+artifacts:
+  - "BPMN 2.0 XML (ISO-IEC 19510)"
+  - "Fluxograma Mermaid"
+dependencies: ["nlp"]
+skill_file: "skills/skill_bpmn.md"
+standard: "BPMN 2.0 / OMG formal/2013-12-09"
+supports_multi_run: true
+supports_langgraph: true
+post_processors:
+  - "_enforce_rules() — remove LLM-declared start/end events, infere raias reais"
+  - "repair_bpmn() — 4 passes de reparo determinístico"
+  - "AgentValidator — torneio entre N execuções"

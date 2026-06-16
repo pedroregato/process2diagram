@@ -1,0 +1,27 @@
+name: "requirements"
+class: "AgentRequirements"
+module: "agents/agent_requirements.py"
+display_name: "Engenheiro de Requisitos"
+description: "Extrai requisitos funcionais, regras de negócio, campos de tela, validações e restrições de qualidade (IEEE 830)"
+pipeline_phase: "core"
+mode: "llm"
+fatal: false
+parallel_with: ["minutes"]
+reads:
+  - "hub.transcript_clean"
+  - "hub.nlp.actors"
+writes:
+  - "hub.requirements"
+artifacts:
+  - "Lista de requisitos (JSON)"
+  - "Relatório de requisitos em Markdown"
+  - "Mind map de requisitos (Mermaid)"
+dependencies: ["nlp"]
+skill_file: "skills/SKILL_REQUIREMENTS.md"
+standard: "IEEE 830"
+requirement_types:
+  - "functional"
+  - "non_functional"
+  - "business_rule"
+  - "ui_field"
+  - "validation"

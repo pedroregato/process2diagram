@@ -1,0 +1,23 @@
+name: "ckf_updater"
+class: "AgentCKFUpdater"
+module: "agents/agent_ckf_updater.py"
+display_name: "Atualizador CKF"
+description: "Mantém o Context Knowledge File (CKF) do contexto atualizado com insights de cada reunião — Markdown puro, sem JSON"
+pipeline_phase: "post"
+mode: "llm"
+fatal: false
+reads:
+  - "hub.minutes"
+  - "hub.requirements"
+  - "hub.sbvr"
+  - "hub.bmm"
+  - "hub.bpmn"
+  - "hub.context_skill"
+  - "hub.context_id"
+writes:
+  - "hub.context_skill (CKF atualizado)"
+  - "contexts.skill_md (Supabase)"
+artifacts:
+  - "CKF atualizado em Markdown"
+dependencies: ["minutes", "requirements"]
+skill_file: "skills/skill_ckf_updater.md"

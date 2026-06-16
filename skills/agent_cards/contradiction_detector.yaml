@@ -1,0 +1,19 @@
+name: "contradiction_detector"
+class: "AgentContradictionDetector"
+module: "agents/agent_contradiction_detector.py"
+display_name: "Detector de Contradições"
+description: "Detecta contradições entre fatos de reuniões diferentes comparando kh_facts do projeto — análise cross-meeting"
+pipeline_phase: "post"
+mode: "llm"
+fatal: false
+reads:
+  - "kh_facts (Supabase) — reunião atual vs. histórico do projeto"
+writes:
+  - "kh_contradictions (Supabase)"
+artifacts:
+  - "Contradições identificadas entre reuniões"
+dependencies: ["knowledge_extractor"]
+skill_file: "skills/skill_contradiction_detector.md"
+operating_modes:
+  - "pipeline — análise da reunião atual vs. histórico"
+  - "full_scan — varredura completa do projeto (on-demand via Assistente)"

@@ -1,0 +1,20 @@
+name: "validator"
+class: "AgentValidator"
+module: "agents/agent_validator.py"
+display_name: "Validador BPMN"
+description: "Avalia candidatos BPMN sem LLM — pontuação por granularidade, tipos de tarefa e gateways. Usado no torneio multi-run."
+pipeline_phase: "core"
+mode: "pure_python"
+fatal: false
+reads:
+  - "hub.bpmn (candidato)"
+writes:
+  - "hub.validation"
+artifacts:
+  - "Relatório de validação BPMN (pontuação 0–10 por critério)"
+dependencies: ["bpmn"]
+skill_file: null
+scoring_criteria:
+  - "granularidade (peso 0.4)"
+  - "task_type (peso 0.3)"
+  - "gateways (peso 0.3)"

@@ -1,0 +1,23 @@
+name: "transcript_quality"
+class: "AgentTranscriptQuality"
+module: "agents/agent_transcript_quality.py"
+display_name: "Avaliador de Qualidade"
+description: "Avalia a qualidade da transcrição ASR com 6 critérios ponderados e atribui grau A–E"
+pipeline_phase: "pre"
+mode: "llm"
+fatal: false
+reads:
+  - "hub.transcript_raw"
+writes:
+  - "hub.transcript_quality"
+artifacts:
+  - "Relatório de qualidade (grau A–E, pontuação, inconsistências)"
+dependencies: []
+skill_file: "skills/skill_transcript_quality.md"
+criteria:
+  - "Inteligibilidade Léxica (20%)"
+  - "Atribuição de Falantes (20%)"
+  - "Coerência Semântica (20%)"
+  - "Completude do Conteúdo (15%)"
+  - "Vocabulário de Domínio (15%)"
+  - "Qualidade da Pontuação (10%)"

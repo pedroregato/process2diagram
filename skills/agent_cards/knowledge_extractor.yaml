@@ -1,0 +1,20 @@
+name: "knowledge_extractor"
+class: "AgentKnowledgeExtractor"
+module: "agents/agent_knowledge_extractor.py"
+display_name: "Extrator de Conhecimento"
+description: "Extrai entidades, processos e fatos estruturados da transcrição e persiste no Grafo de Conhecimento (Supabase kh_* tables)"
+pipeline_phase: "post"
+mode: "llm"
+fatal: false
+reads:
+  - "hub.transcript_clean"
+writes:
+  - "kh_entities (Supabase)"
+  - "kh_processes (Supabase)"
+  - "kh_facts (Supabase)"
+artifacts:
+  - "Entidades do Grafo de Conhecimento"
+  - "Processos identificados"
+  - "Fatos extraídos"
+dependencies: []
+skill_file: "skills/skill_knowledge_extractor.md"

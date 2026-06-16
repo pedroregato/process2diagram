@@ -1,0 +1,20 @@
+name: "document_analyzer"
+class: "DocumentAnalyzerAgent"
+module: "agents/agent_document_analyzer.py"
+display_name: "Analisador de Documentos"
+description: "Analisa cruzamento entre um documento e os artefatos de reuniões — gera relatório de alinhamento com pontuação 0–100"
+pipeline_phase: "on_demand"
+mode: "llm"
+fatal: false
+reads:
+  - "document_content (texto do documento)"
+  - "hub (artefatos das reuniões)"
+writes:
+  - "relatório de análise cruzada (dict)"
+artifacts:
+  - "Relatório de alinhamento documento × reunião (JSON/Markdown)"
+  - "Pontuação de alinhamento 0–100"
+dependencies: []
+skill_file: "skills/skill_document_analyzer.md"
+invoked_by:
+  - "pages/DocumentManager.py — aba Análise Cruzada"
