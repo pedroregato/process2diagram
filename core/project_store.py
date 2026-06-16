@@ -3780,3 +3780,45 @@ def list_argumentation_by_project(project_id: str) -> list[dict]:
             continue
     return result
 
+
+def list_communication_noise_by_project(project_id: str) -> list[dict]:
+    """Retorna análise de ruídos de todas as reuniões do projeto.
+
+    Lê communication_noise_json de cada reunião e retorna uma lista de dicts,
+    cada um enriquecido com _meeting_number e _meeting_title.
+
+    Retorna [] se nenhuma reunião tiver communication_noise_json ou Supabase
+    não configurado.
+    """
+    db = _db()
+    if not db:
+        return []
+    try:
+        rows = _ok(
+            db.table("meetings")
+            .select("id, meeting_number, title, meeting_date, communication_noise_json")
+            .eq("project_id", project_id)
+            .not_.is_("communication_noise_json", "null")
+            .order("meeting_number")
+            .execute()
+        )
+    except Exception:
+        return []
+
+    import json as _json
+    result = []
+    for m in rows:
+        raw = (m.get("communication_noise_json") or "").strip()
+        if not raw:
+            continue
+        try:
+            data = _json.loads(raw)
+            data["_meeting_id"]     = m["id"]
+            data["_meeting_number"] = m.get("meeting_number")
+            data["_meeting_title"]  = m.get("title", "")
+            data["_meeting_date"]   = str(m.get("meeting_date") or "")
+            result.append(data)
+        except Exception:
+            continue
+    return result
+

@@ -28,6 +28,7 @@ from core.project_store import (
     list_sbvr_terms, list_sbvr_rules,
     list_bpmn_processes, list_bpmn_versions, bpmn_tables_exist,
     list_dmn_by_project, list_argumentation_by_project,
+    list_communication_noise_by_project,
     load_meeting_as_hub, save_bpmn_from_hub,
 )
 from ui.project_selector import require_active_project
@@ -152,6 +153,9 @@ def _load_argumentation(pid):      return list_argumentation_by_project(pid)
 @st.cache_data(ttl=300, show_spinner=False)
 def _load_documents(pid):          return list_documents(pid)
 
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_noise(pid):              return list_communication_noise_by_project(pid)
+
 # ── Carregamento inicial: dados leves apenas ──────────────────────────────────
 # DMN e IBIS buscam dmn_json/argumentation_json de TODAS as reuniões (JSONs pesados).
 # São carregados sob demanda na primeira visita à respectiva aba, via session_state.
@@ -167,10 +171,12 @@ documents        = _load_documents(project_id)
 
 # DMN e IBIS: lê do session_state se já carregados nesta sessão.
 # None = ainda não carregado (primeira visita). [] = carregado, sem dados.
-_DMN_SS  = f"_art_dmn_{project_id}"
-_IBIS_SS = f"_art_ibis_{project_id}"
-dmn_decisions  = st.session_state.get(_DMN_SS,  None)
-ibis_questions = st.session_state.get(_IBIS_SS, None)
+_DMN_SS   = f"_art_dmn_{project_id}"
+_IBIS_SS  = f"_art_ibis_{project_id}"
+_NOISE_SS = f"_art_noise_{project_id}"
+dmn_decisions  = st.session_state.get(_DMN_SS,   None)
+ibis_questions = st.session_state.get(_IBIS_SS,  None)
+noise_items    = st.session_state.get(_NOISE_SS, None)
 
 meet_map = {m["id"]: m for m in meetings}
 doc_map  = {d["id"]: d for d in documents}
@@ -273,7 +279,7 @@ with st.expander("📦 Exportar Relatório", expanded=False):
 st.markdown("---")
 
 # ── Abas principais ───────────────────────────────────────────────────────────
-tab_req, tab_mindmap, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn, tab_dmn, tab_ibis, tab_trace = st.tabs([
+tab_req, tab_mindmap, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn, tab_dmn, tab_ibis, tab_trace, tab_noise = st.tabs([
     "📝 Requisitos",
     "🗺️ Mind Map",
     f"⚠️ Contradições ({len(contradictions)})",
@@ -284,6 +290,7 @@ tab_req, tab_mindmap, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn, tab_dm
     f"⚖️ DMN ({len(dmn_decisions) if dmn_decisions is not None else '…'})",
     f"🗺️ IBIS ({len(ibis_questions) if ibis_questions is not None else '…'})",
     "🔗 Rastreabilidade",
+    f"🔊 Ruídos ({len(noise_items) if noise_items is not None else '…'})",
 ])
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -2538,3 +2545,154 @@ with tab_trace:
             mime="text/csv",
             key="trace_csv",
         )
+
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 11 — RUÍDOS DE COMUNICAÇÃO
+# ════════════════════════════════════════════════════════════════════════════
+
+_NOISE_AMB_LABELS = {
+    "lexical":          ("🔤 Lexical",          "#6f42c1"),
+    "referential":      ("👤 Referencial",       "#0d6efd"),
+    "vague_commitment": ("⏳ Compromisso vago",  "#fd7e14"),
+    "syntactic":        ("🔀 Sintático",         "#20c997"),
+}
+_NOISE_GAP_LABELS = {
+    "unanswered_question":   ("❓ Pergunta sem resposta",    "#dc3545"),
+    "abandoned_topic":       ("🚪 Tópico abandonado",       "#fd7e14"),
+    "implicit_disagreement": ("⚡ Divergência implícita",   "#ffc107"),
+    "missing_info":          ("📭 Informação ausente",       "#6c757d"),
+}
+
+
+def _noise_score_label(score: float) -> tuple[str, str]:
+    for lo, hi, color, label in [
+        (0, 2,  "#28a745", "Excelente"),
+        (2, 4,  "#5cb85c", "Boa"),
+        (4, 6,  "#ffc107", "Moderada"),
+        (6, 8,  "#fd7e14", "Alta"),
+        (8, 10, "#dc3545", "Crítica"),
+    ]:
+        if lo <= score < hi:
+            return color, label
+    return "#dc3545", "Crítica"
+
+
+with tab_noise:
+    st.caption(
+        "**Ruídos de Comunicação** identificam **ambiguidades** (termos com múltiplas interpretações, "
+        "compromissos vagos) e **lacunas** (perguntas sem resposta, tópicos abandonados, divergências implícitas) "
+        "que podem gerar mal-entendidos ou retrabalho."
+    )
+
+    if _NOISE_SS not in st.session_state:
+        with st.spinner("Buscando análise de ruídos..."):
+            st.session_state[_NOISE_SS] = _load_noise(project_id)
+        st.rerun()
+    noise_items = st.session_state[_NOISE_SS]
+
+    if st.button("🔄 Atualizar Ruídos", key="art_noise_refresh"):
+        st.session_state.pop(_NOISE_SS, None)
+        _load_noise.clear()
+        st.rerun()
+
+    if not noise_items:
+        st.info("Nenhuma análise de ruídos registrada. Execute o pipeline com o agente Ruídos habilitado.")
+    else:
+        total_amb  = sum(len(n.get("ambiguities", [])) for n in noise_items)
+        total_gap  = sum(len(n.get("gaps", [])) for n in noise_items)
+        scores     = [n.get("noise_score", 0.0) for n in noise_items]
+        avg_score  = sum(scores) / len(scores) if scores else 0.0
+        _, avg_label = _noise_score_label(avg_score)
+
+        kn1, kn2, kn3, kn4 = st.columns(4)
+        kn1.metric("Reuniões analisadas", len(noise_items))
+        kn2.metric("Índice médio de ruído", f"{avg_score:.1f} / 10")
+        kn3.metric("Total de ambiguidades", total_amb)
+        kn4.metric("Total de lacunas", total_gap)
+
+        st.markdown("---")
+
+        for _n in noise_items:
+            _m_num   = _n.get("_meeting_number", "?")
+            _m_title = _n.get("_meeting_title", "—")
+            _score   = _n.get("noise_score", 0.0)
+            _sc_color, _sc_label = _noise_score_label(_score)
+            _ambs = _n.get("ambiguities", [])
+            _gaps = _n.get("gaps", [])
+
+            with st.expander(
+                f"Reunião {_m_num} — {_m_title}  |  Ruído: {_score:.1f}/10 ({_sc_label})",
+                expanded=False,
+            ):
+                if _n.get("summary"):
+                    st.markdown(
+                        f'<div style="background:#1e2939;border-left:3px solid {_sc_color};'
+                        f'padding:10px 14px;border-radius:4px;margin:8px 0 12px 0;">'
+                        f'{_n["summary"]}</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                _ca, _cg = st.columns(2)
+                _ca.metric("Ambiguidades", len(_ambs))
+                _cg.metric("Lacunas", len(_gaps))
+
+                if _ambs:
+                    st.markdown("**🔍 Ambiguidades**")
+                    for _i, _amb in enumerate(_ambs, 1):
+                        _badge, _bcol = _NOISE_AMB_LABELS.get(
+                            _amb.get("ambiguity_type", ""), ("❔ Outro", "#888")
+                        )
+                        _txt = _amb.get("text", "")
+                        _preview = _txt[:80] + ("…" if len(_txt) > 80 else "")
+                        st.markdown(
+                            f'<div style="border-left:3px solid {_bcol};padding:6px 10px;'
+                            f'margin:4px 0;border-radius:0 4px 4px 0;">'
+                            f'<span style="background:{_bcol}22;color:{_bcol};padding:1px 6px;'
+                            f'border-radius:3px;font-size:0.8em;">{_badge}</span>'
+                            f'&nbsp; <em>"{_preview}"</em>',
+                            unsafe_allow_html=True,
+                        )
+                        if _amb.get("speaker"):
+                            st.caption(f"Falante: **{_amb['speaker']}**")
+                        _interps = _amb.get("possible_interpretations", [])
+                        if _interps:
+                            st.markdown("Interpretações possíveis:")
+                            for _idx, _interp in enumerate(_interps, 1):
+                                st.markdown(f"&nbsp;&nbsp;{_idx}. {_interp}")
+                        if _amb.get("suggestion"):
+                            st.info(f"Sugestão: {_amb['suggestion']}")
+
+                if _gaps:
+                    st.markdown("**🕳️ Lacunas**")
+                    for _i, _gap in enumerate(_gaps, 1):
+                        _badge, _bcol = _NOISE_GAP_LABELS.get(
+                            _gap.get("gap_type", ""), ("❔ Outro", "#888")
+                        )
+                        _desc = _gap.get("description", "")
+                        _preview = _desc[:80] + ("…" if len(_desc) > 80 else "")
+                        st.markdown(
+                            f'<div style="border-left:3px solid {_bcol};padding:6px 10px;'
+                            f'margin:4px 0;border-radius:0 4px 4px 0;">'
+                            f'<span style="background:{_bcol}22;color:{_bcol};padding:1px 6px;'
+                            f'border-radius:3px;font-size:0.8em;">{_badge}</span>'
+                            f'&nbsp; {_preview}',
+                            unsafe_allow_html=True,
+                        )
+                        _meta = []
+                        if _gap.get("raised_by") and _gap["raised_by"] != "–":
+                            _meta.append(f"Levantado por: **{_gap['raised_by']}**")
+                        if _gap.get("topic"):
+                            _meta.append(f"Tema: **{_gap['topic']}**")
+                        if _meta:
+                            st.caption("  |  ".join(_meta))
+                        if _gap.get("evidence_quote"):
+                            st.markdown(
+                                f'<blockquote style="border-left:3px solid #555;padding:6px 12px;'
+                                f'color:#aaa;font-style:italic;">"{_gap["evidence_quote"]}"</blockquote>',
+                                unsafe_allow_html=True,
+                            )
+                        _gi1, _gi2 = st.columns(2)
+                        if _gap.get("impact"):
+                            _gi1.warning(f"Impacto: {_gap['impact']}")
+                        if _gap.get("recommendation"):
+                            _gi2.success(f"Recomendação: {_gap['recommendation']}")
