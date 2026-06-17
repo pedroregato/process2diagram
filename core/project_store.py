@@ -388,6 +388,46 @@ def list_meetings(project_id: str) -> list[dict]:
         return []
 
 
+def list_meetings_quality(project_id: str) -> list[dict]:
+    """Retorna reuniões com flags de cobertura de artefatos para o dashboard de saúde.
+
+    Cada dict contém: id, title, meeting_date, meeting_number, llm_provider,
+    total_tokens + booleans has_bpmn, has_minutes, has_dmn, has_ibis, has_synthesizer.
+    """
+    db = _db()
+    if not db:
+        return []
+    try:
+        rows = _ok(
+            db.table("meetings")
+            .select(
+                "id, title, meeting_date, meeting_number, llm_provider, total_tokens, "
+                "bpmn_xml, minutes_md, dmn_json, argumentation_json, report_html"
+            )
+            .eq("project_id", project_id)
+            .order("meeting_number")
+            .execute()
+        )
+        result = []
+        for r in rows:
+            result.append({
+                "id":             r["id"],
+                "title":          r.get("title", ""),
+                "meeting_date":   (r.get("meeting_date") or "")[:10],
+                "meeting_number": r.get("meeting_number"),
+                "llm_provider":   r.get("llm_provider", "—"),
+                "total_tokens":   r.get("total_tokens") or 0,
+                "has_bpmn":       bool(r.get("bpmn_xml")),
+                "has_minutes":    bool(r.get("minutes_md")),
+                "has_dmn":        bool(r.get("dmn_json")),
+                "has_ibis":       bool(r.get("argumentation_json")),
+                "has_synthesizer":bool(r.get("report_html")),
+            })
+        return result
+    except Exception:
+        return []
+
+
 def _next_meeting_number(project_id: str) -> int:
     db = _db()
     if not db:

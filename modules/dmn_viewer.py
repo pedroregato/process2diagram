@@ -295,6 +295,166 @@ def _decision_block(d: dict, i: int, show_origin: bool = False) -> str:
     return f'<div class="dec-block">{header}{ctx}{tbl}{foot}</div>'
 
 
+# ── DRD — Decision Requirements Diagram ──────────────────────────────────────
+
+def _detect_drd_edges(decisions: list[dict]) -> list[tuple[int, int]]:
+    """Return list of (from_idx, to_idx) dependency edges between decisions.
+
+    Heuristic: if an output label/value of decision A appears (case-insensitive
+    substring) in an input label/expression of decision B, A feeds into B.
+    Only considers decisions within the same list (same filter scope).
+    """
+    edges = []
+    for i, src in enumerate(decisions):
+        src_outputs = src.get("outputs") or []
+        src_tokens = set()
+        for o in src_outputs:
+            for tok in (o.get("label", ""), o.get("value", "")):
+                t = tok.strip().lower()
+                if t and len(t) > 3:
+                    src_tokens.add(t)
+        if not src_tokens:
+            continue
+        for j, tgt in enumerate(decisions):
+            if i == j:
+                continue
+            tgt_inputs = tgt.get("inputs") or []
+            for inp in tgt_inputs:
+                for tok in (inp.get("label", ""), inp.get("expression", "")):
+                    t = tok.strip().lower()
+                    if t and any(s in t or t in s for s in src_tokens):
+                        edges.append((i, j))
+                        break
+    return edges
+
+
+def render_drd(decisions: list[dict]) -> str:
+    """Return self-contained HTML with an SVG DRD (Decision Requirements Diagram).
+
+    Nodes = decision boxes; directed arrows = information requirements.
+    Falls back to a simple list when no dependencies are detected.
+    Intended for ``streamlit.components.v1.html()``.
+    """
+    if not decisions:
+        return "<div style='color:#475569;padding:20px;font-style:italic;'>Nenhuma decisão disponível.</div>"
+
+    edges = _detect_drd_edges(decisions)
+
+    # ── Layout: simple left-to-right columns based on topological depth ───────
+    n = len(decisions)
+    depth = [0] * n
+    for _ in range(n):  # relax depths
+        for src, tgt in edges:
+            if depth[tgt] <= depth[src]:
+                depth[tgt] = depth[src] + 1
+
+    max_depth = max(depth) if depth else 0
+    cols: dict[int, list[int]] = {}
+    for idx, d in enumerate(depth):
+        cols.setdefault(d, []).append(idx)
+
+    NODE_W, NODE_H, H_GAP, V_GAP, PAD = 160, 54, 80, 18, 20
+    total_cols = max_depth + 1
+    canvas_w = PAD * 2 + total_cols * NODE_W + (total_cols - 1) * H_GAP
+    max_in_col = max(len(v) for v in cols.values()) if cols else 1
+    canvas_h = PAD * 2 + max_in_col * NODE_H + (max_in_col - 1) * V_GAP
+
+    # Compute node positions
+    pos: dict[int, tuple[float, float]] = {}  # idx → (cx, cy)
+    for col_idx in range(total_cols):
+        nodes_in_col = cols.get(col_idx, [])
+        col_height = len(nodes_in_col) * NODE_H + (len(nodes_in_col) - 1) * V_GAP
+        start_y = (canvas_h - col_height) / 2
+        cx = PAD + col_idx * (NODE_W + H_GAP) + NODE_W / 2
+        for row_idx, node_idx in enumerate(nodes_in_col):
+            cy = start_y + row_idx * (NODE_H + V_GAP) + NODE_H / 2
+            pos[node_idx] = (cx, cy)
+
+    # ── SVG elements ──────────────────────────────────────────────────────────
+    defs = (
+        '<defs>'
+        '<marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">'
+        '<path d="M0,0 L0,6 L8,3 z" fill="#2563eb"/>'
+        '</marker>'
+        '</defs>'
+    )
+
+    arrows = []
+    for src_i, tgt_i in edges:
+        sx, sy = pos[src_i]
+        tx, ty = pos[tgt_i]
+        # start at right edge of source, end at left edge of target
+        x1 = sx + NODE_W / 2
+        x2 = tx - NODE_W / 2
+        arrows.append(
+            f'<line x1="{x1:.0f}" y1="{sy:.0f}" x2="{x2:.0f}" y2="{ty:.0f}" '
+            f'stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5,3" '
+            f'marker-end="url(#arr)"/>'
+        )
+
+    nodes_svg = []
+    hp_colors_map = {k: v[0] for k, v in _HIT_POLICY.items()}
+    for idx, d in enumerate(decisions):
+        cx, cy = pos[idx]
+        x = cx - NODE_W / 2
+        y = cy - NODE_H / 2
+        hp = (d.get("hit_policy") or "U").upper()
+        hp_c = hp_colors_map.get(hp, "#374151")
+        name = d.get("name", f"D{idx+1}")
+        dec_id = d.get("id", f"D{idx+1}")
+        # truncate name for box
+        label = name if len(name) <= 22 else name[:20] + "…"
+        nodes_svg.append(
+            f'<rect x="{x:.0f}" y="{y:.0f}" width="{NODE_W}" height="{NODE_H}" '
+            f'rx="6" fill="#0f2235" stroke="{hp_c}" stroke-width="2"/>'
+            f'<rect x="{x:.0f}" y="{y:.0f}" width="{NODE_W}" height="16" '
+            f'rx="6" fill="{hp_c}" opacity="0.85"/>'
+            f'<rect x="{x:.0f}" y="{y+10:.0f}" width="{NODE_W}" height="6" fill="{hp_c}" opacity="0.85"/>'
+            f'<text x="{cx:.0f}" y="{y+11:.0f}" text-anchor="middle" '
+            f'fill="#fff" font-size="8" font-weight="700" letter-spacing="1">{_e(dec_id)} · {_e(hp)}</text>'
+            f'<text x="{cx:.0f}" y="{y+32:.0f}" text-anchor="middle" '
+            f'fill="#e2e8f0" font-size="10.5" font-weight="600">{_e(label)}</text>'
+        )
+
+    no_dep_note = ""
+    if not edges:
+        no_dep_note = (
+            f'<text x="{canvas_w//2}" y="{canvas_h - 8}" text-anchor="middle" '
+            f'fill="#475569" font-size="10" font-style="italic">'
+            f'Nenhuma dependência detectada entre as decisões.</text>'
+        )
+
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{canvas_w}" height="{canvas_h}" style="display:block;max-width:100%;">'
+        f'{defs}'
+        + "".join(arrows)
+        + "".join(nodes_svg)
+        + no_dep_note
+        + f'</svg>'
+    )
+
+    css = (
+        "<style>"
+        "body{background:#0d1b2a;margin:0;padding:10px;}"
+        ".drd-title{font-family:system-ui,sans-serif;font-size:.82rem;color:#64748b;"
+        "margin-bottom:8px;}"
+        "</style>"
+    )
+    legend = (
+        "<div class='drd-title'>DRD — Diagrama de Requisitos de Decisão "
+        "<span style='color:#2563eb'>──▶</span> indica que o resultado de uma decisão "
+        "alimenta a entrada de outra.</div>"
+    )
+    return f"{css}{legend}{svg}"
+
+
+def estimate_drd_height(decisions: list[dict]) -> int:
+    """Estimate iframe height for the DRD."""
+    n = max(len(decisions), 1)
+    return min(100 + n * 40, 500)
+
+
 # ── Public: dict-based (Artefatos.py) ────────────────────────────────────────
 
 def render_dmn_page(decisions: list[dict], show_origin: bool = True) -> str:

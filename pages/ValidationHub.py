@@ -18,7 +18,10 @@ from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured
 from core.project_store import (
     list_meetings,
+    list_meetings_quality,
+    list_requirements_light,
     list_requirements, list_sbvr_terms, list_sbvr_rules, list_bpmn_processes,
+    list_dmn_by_project,
     validate_artifact, update_artifact_content,
 )
 from ui.project_selector import require_active_project
@@ -295,12 +298,119 @@ def _render_group(items: list[dict], pending: bool, render_fn) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 # TABS PRINCIPAIS
 # ═══════════════════════════════════════════════════════════════════════════════
-tab_req, tab_terms, tab_rules, tab_bpmn = st.tabs([
+tab_health, tab_req, tab_terms, tab_rules, tab_bpmn = st.tabs([
+    "📊 Saúde do Pipeline",
     f"📝 Requisitos ({len(reqs)})",
     f"📖 Termos SBVR ({len(terms)})",
     f"📋 Regras SBVR ({len(rules)})",
     f"📐 BPMN ({len(bpmn)})",
 ])
+
+# ── TAB: Saúde do Pipeline ────────────────────────────────────────────────────
+with tab_health:
+    st.caption(
+        "Cobertura de artefatos por reunião — quais agentes do pipeline produziram "
+        "saída válida para cada reunião do projeto."
+    )
+
+    @st.cache_data(ttl=120, show_spinner=False)
+    def _load_health(pid):
+        mq  = list_meetings_quality(pid)
+        rqs = list_requirements_light(pid)
+        trms = list_sbvr_terms(pid)
+        dmns = list_dmn_by_project(pid)
+        return mq, rqs, trms, dmns
+
+    _mq, _rqs, _trms, _dmns = _load_health(proj_id)
+
+    if not _mq:
+        st.info("Nenhuma reunião encontrada para este projeto.")
+    else:
+        # Aggregate counts per meeting
+        _req_count  = {}
+        for r in _rqs:
+            _mid = r.get("first_meeting_id")
+            if _mid:
+                _req_count[_mid] = _req_count.get(_mid, 0) + 1
+        _term_count = {}
+        for t in _trms:
+            _mid = t.get("meeting_id")
+            if _mid:
+                _term_count[_mid] = _term_count.get(_mid, 0) + 1
+        _dmn_count  = {}
+        for d in _dmns:
+            _mid = d.get("_meeting_id")
+            if _mid:
+                _dmn_count[_mid] = _dmn_count.get(_mid, 0) + 1
+
+        # ── Coverage KPIs ─────────────────────────────────────────────────────
+        _n = len(_mq)
+        _kc1, _kc2, _kc3, _kc4, _kc5, _kc6 = st.columns(6)
+        _kc1.metric("Reuniões",    _n)
+        _kc2.metric("🗺️ BPMN",     sum(1 for m in _mq if m["has_bpmn"]),      delta=f"/{_n}")
+        _kc3.metric("📋 Ata",      sum(1 for m in _mq if m["has_minutes"]),    delta=f"/{_n}")
+        _kc4.metric("⚖️ DMN",      sum(1 for m in _mq if m["has_dmn"]),        delta=f"/{_n}")
+        _kc5.metric("🗣️ IBIS",     sum(1 for m in _mq if m["has_ibis"]),       delta=f"/{_n}")
+        _kc6.metric("📄 Relatório",sum(1 for m in _mq if m["has_synthesizer"]),delta=f"/{_n}")
+
+        st.markdown("")
+
+        # ── Coverage table ────────────────────────────────────────────────────
+        _CHECK, _CROSS = "✅", "❌"
+        _rows = []
+        for m in _mq:
+            _mid = m["id"]
+            _rows.append({
+                "Reunião":    f"#{m['meeting_number']} — {m['title']}",
+                "Data":       m["meeting_date"],
+                "BPMN":       _CHECK if m["has_bpmn"] else _CROSS,
+                "Ata":        _CHECK if m["has_minutes"] else _CROSS,
+                "Requisitos": _req_count.get(_mid, 0),
+                "Termos SBVR":_term_count.get(_mid, 0),
+                "DMN":        _CHECK if m["has_dmn"] else _CROSS,
+                "Decisões DMN":_dmn_count.get(_mid, 0),
+                "IBIS":       _CHECK if m["has_ibis"] else _CROSS,
+                "Relatório":  _CHECK if m["has_synthesizer"] else _CROSS,
+                "Tokens":     m["total_tokens"],
+                "Provider":   m["llm_provider"],
+            })
+        st.dataframe(_rows, use_container_width=True, hide_index=True)
+
+        # ── Coverage bar chart (Plotly) ───────────────────────────────────────
+        try:
+            import plotly.graph_objects as go
+            _agents  = ["BPMN", "Ata", "DMN", "IBIS", "Relatório"]
+            _fields  = ["has_bpmn", "has_minutes", "has_dmn", "has_ibis", "has_synthesizer"]
+            _labels  = [f"#{m['meeting_number']}" for m in _mq]
+            _fig = go.Figure()
+            _colors = ["#2563eb", "#16a34a", "#b45309", "#7c3aed", "#0369a1"]
+            for _ag, _fld, _col in zip(_agents, _fields, _colors):
+                _fig.add_trace(go.Bar(
+                    name=_ag,
+                    x=_labels,
+                    y=[1 if m[_fld] else 0 for m in _mq],
+                    marker_color=_col,
+                ))
+            _fig.update_layout(
+                barmode="group",
+                title="Cobertura de Artefatos por Reunião",
+                plot_bgcolor="#0d1b2a",
+                paper_bgcolor="#0d1b2a",
+                font={"color": "#e2e8f0"},
+                legend={"font": {"color": "#e2e8f0"}},
+                xaxis={"gridcolor": "#1e3a55"},
+                yaxis={"gridcolor": "#1e3a55", "tickvals": [0, 1],
+                       "ticktext": ["❌ Ausente", "✅ Presente"]},
+                height=340,
+                margin={"t": 40, "b": 20, "l": 20, "r": 20},
+            )
+            st.plotly_chart(_fig, use_container_width=True)
+        except ImportError:
+            pass
+
+        if st.button("🔄 Atualizar dados de saúde", key="health_refresh"):
+            _load_health.clear()
+            st.rerun()
 
 # ── TAB: Requisitos ───────────────────────────────────────────────────────────
 _TYPE_COLORS = {
@@ -437,4 +547,4 @@ with tab_bpmn:
 
 # ── Rodapé ────────────────────────────────────────────────────────────────────
 st.markdown("---")
-st.caption("Process2Diagram v4.13 — Validação de Artefatos")
+st.caption("Process2Diagram v4.30 — Validação de Artefatos")

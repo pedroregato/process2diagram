@@ -2193,6 +2193,38 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        # ── Cross-meeting clustering ──────────────────────────────────────────────
+        {
+            "type": "function",
+            "function": {
+                "name": "cluster_topic_decisions",
+                "description": (
+                    "Agrupa decisões, regras DMN e debates IBIS sobre um tema específico "
+                    "em TODAS as reuniões do projeto. Use quando o usuário quiser ver "
+                    "como um tópico evoluiu ao longo das reuniões — ex: 'mostre tudo que "
+                    "foi decidido sobre autenticação', 'como o tema X foi tratado nas reuniões'."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "topic": {
+                            "type": "string",
+                            "description": "Palavra-chave ou tema a pesquisar (ex: 'autenticação', 'catálogo')",
+                        },
+                        "artifact_type": {
+                            "type": "string",
+                            "enum": ["all", "dmn", "ibis", "minutes"],
+                            "description": (
+                                "Tipo de artefato a incluir: 'all' (padrão) busca em DMN + "
+                                "IBIS + atas; 'dmn' apenas decisões DMN; 'ibis' apenas "
+                                "debates IBIS; 'minutes' apenas decisões de atas."
+                            ),
+                        },
+                    },
+                    "required": ["topic"],
+                },
+            },
+        },
         # ── A2UI — renderização inline no chat ────────────────────────────────────
         {
             "type": "function",
@@ -2407,6 +2439,8 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "search_ibis_debates":             "consulta",
     "get_ibis_timeline":               "grafico",
     "generate_ibis_map":               "grafico",
+    # Cross-meeting
+    "cluster_topic_decisions":         "consulta",
     # A2UI
     "show_bpmn_diagram":               "consulta",
     "show_mermaid_diagram":            "consulta",
@@ -2810,6 +2844,7 @@ class AssistantToolExecutor:
     list_context_files, calculate_meeting_roi, get_recurring_topics, get_meeting_metadata,
     preview_meeting_deletion, preview_text_correction, get_speaker_contributions,
     search_ibis_debates, get_ibis_timeline, generate_ibis_map, search_glossary,
+    cluster_topic_decisions,
     show_bpmn_diagram, show_mermaid_diagram, show_metrics
 
   Escrita (todos os perfis):
@@ -7371,6 +7406,106 @@ class AssistantToolExecutor:
             + f" em {len(sorted_mnums)} reunião(ões)."
         )
 
+    # ── Cross-meeting clustering ──────────────────────────────────────────────
+
+    def cluster_topic_decisions(
+        self,
+        topic: str,
+        artifact_type: str = "all",
+    ) -> str:
+        """Groups DMN decisions, IBIS debates, and minutes decisions about a topic across all meetings."""
+        from core.project_store import list_dmn_by_project, list_argumentation_by_project
+        from collections import defaultdict
+
+        kw = topic.lower()
+
+        def _match(text: str) -> bool:
+            return kw in (text or "").lower()
+
+        results: dict[int, dict] = defaultdict(lambda: {"title": "", "date": "", "dmn": [], "ibis": [], "minutes": []})
+
+        # ── DMN decisions ──
+        if artifact_type in ("all", "dmn"):
+            for d in list_dmn_by_project(self.project_id):
+                label = d.get("label", "") or d.get("name", "")
+                desc  = d.get("description", "")
+                if _match(label) or _match(desc):
+                    mnum = d.get("_meeting_number") or 0
+                    results[mnum]["title"] = d.get("_meeting_title", "")
+                    results[mnum]["date"]  = d.get("_meeting_date", "")
+                    hp = d.get("hit_policy", "U")
+                    inputs  = [i.get("label", "") for i in (d.get("inputs") or [])]
+                    outputs = [o.get("label", "") for o in (d.get("outputs") or [])]
+                    n_rules = len(d.get("rules") or [])
+                    results[mnum]["dmn"].append(
+                        f"**{label}** (hit_policy={hp}, {n_rules} regra(s))"
+                        + (f" | inputs: {', '.join(inputs)}" if inputs else "")
+                        + (f" | outputs: {', '.join(outputs)}" if outputs else "")
+                        + (f"\n    _{desc}_" if desc else "")
+                    )
+
+        # ── IBIS questions ──
+        if artifact_type in ("all", "ibis"):
+            for q in list_argumentation_by_project(self.project_id):
+                stmt = q.get("statement", "")
+                if _match(stmt) or any(_match(a.get("description", "")) for a in (q.get("alternatives") or [])):
+                    mnum = q.get("_meeting_number") or 0
+                    results[mnum]["title"] = results[mnum]["title"] or q.get("_meeting_title", "")
+                    results[mnum]["date"]  = results[mnum]["date"] or q.get("_meeting_date", "")
+                    res   = q.get("resolution") or {}
+                    rtype = res.get("type", "unresolved")
+                    rlbl  = {"decided": "✅ Decidida", "deferred": "⏳ Adiada"}.get(rtype, "❓ Em aberto")
+                    entry = f"**{q.get('id','?')}** {rlbl}: {stmt}"
+                    if res.get("rationale"):
+                        entry += f"\n    → {res['rationale']}"
+                    results[mnum]["ibis"].append(entry)
+
+        # ── Minutes decisions ──
+        if artifact_type in ("all", "minutes"):
+            for m in self._get_meetings():
+                minutes_md = m.get("minutes_md") or ""
+                section    = self._section(minutes_md, "Decisões", "Decisions")
+                if not section:
+                    continue
+                matched = [
+                    line.strip() for line in section.splitlines()
+                    if _match(line)
+                ]
+                if matched:
+                    mnum = m.get("meeting_number") or 0
+                    results[mnum]["title"] = results[mnum]["title"] or m.get("title", "")
+                    results[mnum]["date"]  = results[mnum]["date"] or str(m.get("meeting_date") or "")
+                    results[mnum]["minutes"].extend(matched)
+
+        if not results:
+            return f"Nenhum artefato encontrado com o tema '{topic}'."
+
+        lines = [f"## Decisões sobre '{topic}' em {len(results)} reunião(ões)\n"]
+        for mnum in sorted(results.keys()):
+            r    = results[mnum]
+            mtit = r["title"] or f"Reunião {mnum}"
+            mdt  = r["date"]
+            lines.append(f"\n### Reunião {mnum} — {mtit}" + (f" ({mdt})" if mdt else ""))
+
+            if r["dmn"]:
+                lines.append(f"\n**Decisões DMN ({len(r['dmn'])}):**")
+                for item in r["dmn"]:
+                    lines.append(f"- {item}")
+
+            if r["ibis"]:
+                lines.append(f"\n**Debates IBIS ({len(r['ibis'])}):**")
+                for item in r["ibis"]:
+                    lines.append(f"- {item}")
+
+            if r["minutes"]:
+                lines.append(f"\n**Ata — Decisões ({len(r['minutes'])}):**")
+                for item in r["minutes"]:
+                    lines.append(f"- {item}")
+
+        total = sum(len(r["dmn"]) + len(r["ibis"]) + len(r["minutes"]) for r in results.values())
+        lines.append(f"\n---\n*Total: {total} referência(s) ao tema '{topic}' em {len(results)} reunião(ões).*")
+        return "\n".join(lines)
+
     # ── A2UI — renderização inline no chat ────────────────────────────────────
 
     def show_bpmn_diagram(
@@ -7843,6 +7978,11 @@ class AssistantToolExecutor:
                 ),
                 "generate_ibis_map":      lambda: self.generate_ibis_map(
                     topic=tool_input.get("topic"),
+                ),
+                # ── Cross-meeting clustering
+                "cluster_topic_decisions": lambda: self.cluster_topic_decisions(
+                    topic=tool_input["topic"],
+                    artifact_type=tool_input.get("artifact_type", "all"),
                 ),
                 # ── A2UI
                 "show_bpmn_diagram":      lambda: self.show_bpmn_diagram(

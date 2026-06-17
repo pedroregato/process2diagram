@@ -196,12 +196,27 @@ def _load_graph_data(project_id: str) -> dict:
     except Exception:
         pass
 
+    # Meeting number map — used by Timeline tab
+    meeting_map: dict[str, int] = {}
+    try:
+        _meets = (
+            db.table("meetings")
+            .select("id, meeting_number")
+            .eq("project_id", project_id)
+            .execute().data or []
+        )
+        for _m in _meets:
+            meeting_map[_m["id"]] = _m.get("meeting_number") or 0
+    except Exception:
+        pass
+
     return {
         "entities": entities,
         "processes": processes,
         "facts": facts,
         "contradictions": contradictions,
         "participant_names": participant_names,
+        "meeting_map": meeting_map,
     }
 
 
@@ -950,8 +965,8 @@ with st.sidebar:
         st.rerun()
 
 # ── Main graph ────────────────────────────────────────────────────────────────
-tab_graph, tab_table, tab_facts, tab_export = st.tabs(
-    ["🕸️ Grafo", "📋 Entidades", "🔗 Fatos", "⬇️ Exportar"]
+tab_graph, tab_table, tab_facts, tab_timeline, tab_export = st.tabs(
+    ["🕸️ Grafo", "📋 Entidades", "🔗 Fatos", "📅 Timeline", "⬇️ Exportar"]
 )
 
 with tab_graph:
@@ -1037,6 +1052,62 @@ with tab_facts:
             "Os fatos sao extraidos pelo **Knowledge Extractor** durante o pipeline "
             "(ative o checkbox 'Grafo de Conhecimento (KH)' na barra lateral)."
         )
+
+with tab_timeline:
+    st.markdown("#### Timeline de Aparições por Reunião")
+    st.caption(
+        "Heatmap mostrando em quais reuniões cada entidade apareceu. "
+        "Linha = entidade, coluna = número da reunião. "
+        "Apenas as top 40 entidades por ocorrência são exibidas."
+    )
+    meeting_map = data.get("meeting_map") or {}
+    _timeline_entities = [e for e in entities if e.get("meeting_ids") or
+                          e.get("first_seen_meeting_id")]
+    _timeline_entities = sorted(
+        _timeline_entities, key=lambda e: e.get("occurrence_count") or 1, reverse=True
+    )[:40]
+
+    if not _timeline_entities or not meeting_map:
+        st.info("Dados de aparição por reunião não disponíveis. "
+                "Verifique se o Knowledge Extractor foi executado.")
+    else:
+        try:
+            import plotly.graph_objects as _go
+
+            # Build set of meeting numbers for each entity
+            all_meet_nums = sorted(set(meeting_map.values()) - {0})
+            _z, _y_labels = [], []
+            for _ent in _timeline_entities:
+                _mids: set[str] = set(_ent.get("meeting_ids") or [])
+                for _col in ("first_seen_meeting_id", "last_seen_meeting_id"):
+                    _v = _ent.get(_col)
+                    if _v:
+                        _mids.add(_v)
+                _nums = {meeting_map[mid] for mid in _mids if mid in meeting_map}
+                _z.append([1 if n in _nums else 0 for n in all_meet_nums])
+                _y_labels.append((_ent.get("canonical_name") or "?")[:30])
+
+            _fig_tl = _go.Figure(data=_go.Heatmap(
+                z=_z,
+                x=[f"R{n}" for n in all_meet_nums],
+                y=_y_labels,
+                colorscale=[[0, "#0d1b2a"], [1, "#2563eb"]],
+                showscale=False,
+                hovertemplate="<b>%{y}</b><br>Reunião %{x}<br>%{z}<extra></extra>",
+            ))
+            _fig_tl.update_layout(
+                plot_bgcolor="#0d1b2a",
+                paper_bgcolor="#0d1b2a",
+                font={"color": "#e2e8f0", "size": 11},
+                xaxis={"side": "top", "gridcolor": "#1e3a55", "tickfont": {"size": 10}},
+                yaxis={"gridcolor": "#1e3a55", "autorange": "reversed",
+                       "tickfont": {"size": 10}},
+                height=max(300, len(_timeline_entities) * 22 + 80),
+                margin={"t": 50, "b": 10, "l": 180, "r": 10},
+            )
+            st.plotly_chart(_fig_tl, use_container_width=True)
+        except ImportError:
+            st.warning("Plotly não disponível para renderizar o heatmap.")
 
 with tab_export:
     st.markdown("#### Exportar dados do Grafo de Conhecimento")
@@ -1128,7 +1199,42 @@ with tab_export:
 
     export_json = json.dumps(export_payload, ensure_ascii=False, indent=2)
 
-    col_dl, col_info = st.columns([1, 3])
+    # JSON-LD export
+    _schema_type = {
+        "PERSON": "Person", "ACTOR": "Person", "ROLE": "Role",
+        "SYSTEM": "SoftwareApplication", "DOCUMENT": "CreativeWork",
+        "CONCEPT": "DefinedTerm", "RULE": "Rule",
+        "DEPARTMENT": "Organization", "LOCATION": "Place", "PROCESS": "Action",
+    }
+    _jsonld = {
+        "@context": {
+            "@vocab": "http://schema.org/",
+            "kh": "http://process2diagram.ai/kg/",
+            "occurrences": "kh:occurrences",
+            "meetingIds": "kh:meetingIds",
+        },
+        "@graph": [
+            {
+                "@id": f"urn:p2d:entity:{e['id']}",
+                "@type": _schema_type.get(e.get("entity_type", ""), "Thing"),
+                "name": e.get("canonical_name", ""),
+                "alternateName": e.get("aliases") or [],
+                "occurrences": e.get("occurrence_count", 1),
+            }
+            for e in entities
+        ] + [
+            {
+                "@id": f"urn:p2d:process:{p['id']}",
+                "@type": "Action",
+                "name": p.get("process_name", ""),
+                "description": p.get("description", ""),
+            }
+            for p in processes
+        ],
+    }
+    _jsonld_str = json.dumps(_jsonld, ensure_ascii=False, indent=2)
+
+    col_dl, col_dl2, col_info = st.columns([1, 1, 2])
     with col_dl:
         st.download_button(
             label="⬇️ Baixar JSON",
@@ -1136,6 +1242,15 @@ with tab_export:
             file_name=f"knowledge_graph_{project_name.replace(' ', '_')}.json",
             mime="application/json",
             use_container_width=True,
+        )
+    with col_dl2:
+        st.download_button(
+            label="⬇️ Baixar JSON-LD",
+            data=_jsonld_str,
+            file_name=f"knowledge_graph_{project_name.replace(' ', '_')}.jsonld",
+            mime="application/ld+json",
+            use_container_width=True,
+            help="Formato JSON-LD (schema.org) — compatível com ferramentas de linked data.",
         )
     with col_info:
         st.info(

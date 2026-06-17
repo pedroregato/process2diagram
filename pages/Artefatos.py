@@ -1161,10 +1161,73 @@ with tab_dmn:
             d for d in dmn_decisions if d["_meeting_id"] == meet_labels_dmn[sel_meet_dmn]
         ]
 
-        from modules.dmn_viewer import render_dmn_page, estimate_height
-        page_html = render_dmn_page(filtered_dmn, show_origin=True)
-        h = estimate_height(filtered_dmn)
-        components.html(page_html, height=h, scrolling=True)
+        _dmn_sub_tables, _dmn_sub_drd = st.tabs(["📋 Tabelas de Decisão", "🔗 DRD"])
+
+        with _dmn_sub_tables:
+            from modules.dmn_viewer import render_dmn_page, estimate_height
+            page_html = render_dmn_page(filtered_dmn, show_origin=True)
+            h = estimate_height(filtered_dmn)
+            components.html(page_html, height=h, scrolling=True)
+
+        with _dmn_sub_drd:
+            st.caption(
+                "**DRD — Diagrama de Requisitos de Decisão**: mostra como o resultado "
+                "de uma decisão alimenta a entrada de outra. "
+                "Dependências detectadas automaticamente por correspondência de labels."
+            )
+            from modules.dmn_viewer import render_drd, estimate_drd_height
+            drd_html = render_drd(filtered_dmn)
+            components.html(drd_html, height=estimate_drd_height(filtered_dmn), scrolling=False)
+
+        # ── Export buttons ────────────────────────────────────────────────────
+        import json as _json_dmn
+        _ecol1, _ecol2 = st.columns(2)
+
+        # JSON export
+        _dmn_export_data = {"decisions": [
+            {k: v for k, v in d.items() if not k.startswith("_")}
+            for d in filtered_dmn
+        ]}
+        _ecol1.download_button(
+            "⬇️ Exportar JSON",
+            data=_json_dmn.dumps(_dmn_export_data, ensure_ascii=False, indent=2),
+            file_name=f"dmn_{sel_meet_dmn.replace(' ', '_') if meet_labels_dmn[sel_meet_dmn] else 'projeto'}.json",
+            mime="application/json",
+            key="art_dmn_json",
+        )
+
+        # XML export (converts dicts → DMNModel → XML)
+        try:
+            from modules.dmn_viewer import dmn_to_xml
+            from core.knowledge_hub import DMNModel, DMNDecision, DMNInput, DMNOutput, DMNRule
+            _decisions_dc = []
+            for _d in filtered_dmn:
+                _decisions_dc.append(DMNDecision(
+                    id=_d.get("id", "D?"),
+                    name=_d.get("name", ""),
+                    question=_d.get("question", ""),
+                    rationale=_d.get("rationale", ""),
+                    decided_by=_d.get("decided_by") or [],
+                    hit_policy=_d.get("hit_policy", "U"),
+                    confidence=float(_d.get("confidence") or 1.0),
+                    inputs=[DMNInput(label=i.get("label",""), expression=i.get("expression",""))
+                            for i in (_d.get("inputs") or [])],
+                    outputs=[DMNOutput(label=o.get("label",""), value=o.get("value",""))
+                             for o in (_d.get("outputs") or [])],
+                    rules=[DMNRule(inputs=r.get("inputs") or [], output=r.get("output",""),
+                                  annotation=r.get("annotation",""))
+                           for r in (_d.get("rules") or [])],
+                ))
+            _dmn_model_export = DMNModel(decisions=_decisions_dc, ready=True)
+            _ecol2.download_button(
+                "⬇️ Exportar XML (DMN 1.4)",
+                data=dmn_to_xml(_dmn_model_export).encode("utf-8"),
+                file_name=f"dmn_{sel_meet_dmn.replace(' ', '_') if meet_labels_dmn[sel_meet_dmn] else 'projeto'}.dmn",
+                mime="application/xml",
+                key="art_dmn_xml",
+            )
+        except Exception:
+            pass
 
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 9 — IBIS / ARGUMENTAÇÃO
