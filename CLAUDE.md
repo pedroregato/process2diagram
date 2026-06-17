@@ -12,7 +12,7 @@
 - **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown / Word / PDF), requirements analysis (JSON/Markdown), executive HTML report, interactive requirements mind map
 - **Deploy:** Streamlit Cloud — auto-deploy on push to `main` branch (`github.com/pedroregato/process2diagram`)
 - **Dev environment:** PyCharm on Windows; Python 3.13
-- **Current version:** v4.27
+- **Current version:** v4.31
 
 Supported LLM providers: DeepSeek V4 Flash (default), DeepSeek V4 Pro, DeepSeek V4 Flash (Thinking), Claude (Anthropic), OpenAI, Groq, Google Gemini, Grok (xAI).
 
@@ -38,13 +38,13 @@ process2diagram/
 ├── app.py                        # Streamlit entry point — st.navigation() with 5 groups
 │
 ├── pages/
-│   ├── Home.py                   # Landing page — project selector, KPIs, recent meetings
+│   ├── Home.py                   # Landing page — project selector, KPIs, recent meetings, radar de qualidade, export ZIP
 │   ├── Pipeline.py               # Main pipeline — dual-mode (Nova transcrição / Reunião existente)
 │   ├── Diagramas.py              # Full-screen diagram viewer (BPMN, Mermaid, Mind Map)
 │   ├── BpmnEditor.py             # BPMN editor — bpmn-js Modeler, version history, Supabase save
 │   ├── Assistente.py             # RAG assistant — conversational Q&A over transcripts
-│   ├── Artefatos.py              # Central de Artefatos — 10 abas: req, mind map, contradições, histórico, reuniões, SBVR, BPMN, DMN, IBIS, rastreabilidade
-│   ├── KnowledgeGraph.py         # Knowledge graph — pyvis physics (Obsidian-like), entity/contradiction viz
+│   ├── Artefatos.py              # Central de Artefatos — 12 abas: req, mind map, contradições, histórico, reuniões, SBVR, BPMN, DMN, IBIS, rastreabilidade, ruídos, comparar
+│   ├── KnowledgeGraph.py         # Knowledge graph — pyvis physics (Obsidian-like), entity/contradiction viz, timeline heatmap, JSON-LD export
 │   ├── MeetingROI.py             # ROI-TR dashboard — type-aware quality indicators
 │   ├── DocumentManager.py        # Document management — 5 tabs: upload, library, extract artifacts, cross-ref, taxonomy
 │   ├── CostBenefitScenarios.py   # Cenários de Custo-Benefício — compara até 5 combinações agente→modelo, presets, gráficos Plotly, apply ao pipeline
@@ -53,7 +53,7 @@ process2diagram/
 │   ├── CostEstimator.py          # LLM cost estimator
 │   ├── LLMBenchmark.py           # LLM Benchmark & Telemetria — on-demand benchmark + passive telemetry analysis
 │   ├── Orientacoes_ComoIniciar.py   # Guia de início rápido
-│   ├── Orientacoes_Assistente.py    # Guia de ferramentas do Assistente (33 tools + exemplos)
+│   ├── Orientacoes_Assistente.py    # Guia de ferramentas do Assistente (40+ tools + exemplos)
 │   ├── Orientacoes_Glossario.py     # Glossário interativo (components.v1.html — busca + filtros + índice alfabético)
 │   ├── Orientacoes_Arquiteturas.py  # Arquiteturas do sistema
 │   ├── Orientacoes_CKF.py           # Guia CKF
@@ -260,9 +260,7 @@ class MyAgent(BaseAgent):
         return hub
 ```
 
-`BaseAgent` provides: `_call_llm()`, `_parse_json()`, `_load_skill()` (absolute path, CWD-independent), up to 3 JSON retries, token tracking in `hub.meta.total_tokens_used`. `_call_llm()` flow: (1) PII sanitize, (2) long context detection via `services/context_analyzer` (injects instruction into system, increases max_tokens to 8192 and timeout to 180s for LONG_CONTEXT_AGENTS={bpmn,sbvr,bmm} when transcript >50k tokens), (3) cache hash of modified system, (4) check `services/semantic_cache.SemanticCache` (stores raw pre-desanitize; on hit applies current `token_map` — PII-safe), (5) API call, (6) record telemetry via `services/llm_telemetry._telemetry` (async, fail-open — latency_ms, tokens_in/out, provider, model, long_context, benchmark_run=False), (7) cache store, (8) desanitize. `hub.meta.cache_hits` + `tokens_saved` + `long_context_calls` tracked per session. `skip_cache=True` to bypass cache. `_call_openai`/`_call_anthropic` return `(raw, tokens_in, tokens_out)`.
-
-Provider routing in `_call_llm()`: `"openai_compatible"` → OpenAI SDK with custom `base_url`; `"anthropic"` → native Anthropic SDK.
+`BaseAgent` provides: `_call_llm()`, `_parse_json()`, `_load_skill()` (absolute path, CWD-independent), 3 JSON retries, token tracking. `_call_llm()` flow: PII sanitize → long context detection (LONG_CONTEXT_AGENTS={bpmn,sbvr,bmm}, >50k tokens → max_tokens=8192, timeout=180s) → cache hash → `SemanticCache` check (PII-safe) → API call → telemetry (async) → cache store → desanitize. `hub.meta.cache_hits/tokens_saved/long_context_calls` tracked. Provider routing: `"openai_compatible"` → OpenAI SDK + custom `base_url`; `"anthropic"` → native SDK.
 
 ### Orchestrator + AgentValidator
 
@@ -289,27 +287,13 @@ Configured in `modules/config.py → AVAILABLE_PROVIDERS`:
 | Google Gemini | `gemini-2.0-flash` | `openai_compatible` | Free tier |
 | Grok (xAI) | `grok-4-1-fast-reasoning` | `openai_compatible` | 2M context |
 
-To add a new provider: edit `AVAILABLE_PROVIDERS`. If `client_type` is new, add routing in `BaseAgent._call_llm()`. To enable thinking mode: add `reasoning_effort: "high"` to the provider entry — `_call_openai` handles the rest (passes `extra_body={"thinking": {"type": "enabled"}}`, drops `temperature`). To share an API key with another provider (e.g. model variants): add `api_key_alias: "<provider_name>"` — `session_security` resolves the key from the aliased provider automatically; no re-entry needed.
+To add a provider: edit `AVAILABLE_PROVIDERS`; new `client_type` → add routing in `_call_llm()`. Thinking mode: `reasoning_effort: "high"` → `_call_openai` passes `extra_body={"thinking":{"type":"enabled"}}`, drops `temperature`. Shared API key: `api_key_alias: "<provider_name>"` — `session_security` resolves automatically.
 
 ---
 
 ## LLM Telemetry (`services/llm_telemetry.py`)
 
-Passive telemetry is recorded automatically by `BaseAgent._call_llm()` on every real API call (not cache hits). Records are written asynchronously via a daemon thread — never blocks the pipeline. Stored in Supabase `llm_telemetry` table (90-day auto-cleanup).
-
-**`TelemetryRecord` fields:** `agent_name`, `provider`, `model`, `latency_ms`, `input_tokens`, `output_tokens`, `total_tokens`, `from_cache`, `long_context`, `is_error`, `benchmark_run`.
-
-**`run_benchmark_call(provider_name, provider_cfg, api_key, system, user)`** — standalone timed call (no hub/cache/PII). Used by `pages/LLMBenchmark.py` for on-demand benchmarks.
-
-**`BENCHMARK_TASKS`** — 5 representative tasks: `bpmn`, `minutes`, `requirements`, `sbvr`, `bmm`. Each has a concise `system` + `user` prompt with `{transcript}` placeholder.
-
-**`TRANSCRIPTS`** — 2 synthetic transcripts: `"Curta (~150 palavras)"` / `"Media (~350 palavras)"`.
-
-**`pages/LLMBenchmark.py`** (Sistema group) — two tabs:
-- **🧪 Benchmark On-Demand:** multi-select configured providers + agents, N runs slider, transcript selector, progress bar, results table, latency bar chart, throughput bar chart.
-- **📊 Telemetria Real:** filters (provider/agent/days/include_cache/include_benchmark), 4 KPIs, 4 sub-tabs: Latência (box plot p5/p25/median/p75/p95), Throughput (tokens/s grouped bar), Histórico (line chart by day), Heatmap (agent × provider median latency).
-
-**Migration:** `setup/supabase_migration_llm_telemetry.sql` — ✅ EXECUTADO (2026-05-23).
+Telemetria passiva em todo `_call_llm()` real (não cache); daemon thread assíncrono; tabela `llm_telemetry` (90d cleanup). `TelemetryRecord`: agent_name, provider, model, latency_ms, tokens_in/out, from_cache, long_context, is_error, benchmark_run. `run_benchmark_call()` para benchmarks on-demand. `BENCHMARK_TASKS` (5 agentes) + `TRANSCRIPTS` (curta/média). `pages/LLMBenchmark.py`: 🧪 Benchmark On-Demand + 📊 Telemetria Real (box plot latência, throughput, histórico, heatmap). Migration: `setup/supabase_migration_llm_telemetry.sql` ✅.
 
 ---
 
@@ -384,7 +368,7 @@ Within Assistente mode, sidebar toggle `asst_use_tools`:
 
 ### Tool list (`core/assistant_tools.py`)
 
-**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `list_bpmn_processes`, `list_bpmn_versions`, `get_sbvr_terms`, `get_sbvr_rules`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`, `get_cache_stats`, `list_meeting_documents`, `get_document_content`, `search_documents`, `get_document_types`, `search_glossary`, `search_ibis_debates`, `get_ibis_timeline`, `generate_ibis_map`.
+**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `list_bpmn_processes`, `list_bpmn_versions`, `get_sbvr_terms`, `get_sbvr_rules`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`, `get_cache_stats`, `list_meeting_documents`, `get_document_content`, `search_documents`, `get_document_types`, `search_glossary`, `search_ibis_debates`, `get_ibis_timeline`, `generate_ibis_map`, `cluster_topic_decisions`, `generate_next_agenda`.
 
 **Admin only (`is_admin()`):** `get_database_integrity`, `fix_missing_llm_provider`, `generate_meeting_embeddings`, `reprocess_meeting_full`, `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`, `delete_entity`, `resolve_entity_ambiguity`, `clear_llm_cache`, `delete_bpmn_version`, write/generate tools.
 
@@ -392,13 +376,15 @@ Within Assistente mode, sidebar toggle `asst_use_tools`:
 
 **Cache tools (2):** `get_cache_stats(agent_name?)` — estatísticas do cache LLM (entradas, hits, tokens economizados, USD por agente); `clear_llm_cache(agent_name?)` — invalida entradas (admin). Cache em `services/semantic_cache.py`; tabela `llm_cache` no Supabase (`setup/supabase_migration_llm_cache.sql`).
 
-**BPMN version tools (2):** `list_bpmn_versions(process_name)` — lista versões de um processo por nome (ID, status atual, reunião, notas); `delete_bpmn_version(version_id, reason?)` — exclui versão pelo UUID (admin); recusa única versão; promove anterior se is_current; atualiza version_count. Fluxo: chamar `list_bpmn_versions` primeiro para obter o version_id.
+**BPMN version tools (2):** `list_bpmn_versions(process_name)` — versões por nome (ID, status, reunião, notas); `delete_bpmn_version(version_id, reason?)` — admin; recusa única versão; promove anterior se is_current. Usar `list_bpmn_versions` primeiro para obter version_id.
 
-**Document tools (4):** `list_meeting_documents(meeting_number?, doc_type?)` — lista documentos do projeto com filtro opcional; `get_document_content(doc_id)` — conteúdo completo (cap 8k chars); `search_documents(query, mode)` — busca semantic|keyword nos documentos; `get_document_types()` — taxonomia completa (53 tipos / 9 categorias). Tabelas: `meeting_documents`, `document_chunks vector(1536)`; migration: `setup/supabase_migration_documents.sql`.
+**Document tools (4):** `list_meeting_documents(meeting_number?, doc_type?)`, `get_document_content(doc_id)` (cap 8k), `search_documents(query, mode=semantic|keyword)`, `get_document_types()` (53 tipos / 9 categorias). Tabelas: `meeting_documents`, `document_chunks vector(1536)`.
 
-**Glossário tool (1):** `search_glossary(query, tag?)` — busca os 80 verbetes do glossário técnico por termo, definição, exemplo ou termos relacionados. `tag` filtra por categoria: `bpmn` | `req` | `ai` | `dev` | `neg`. Dados em `modules/glossary_data.py` (sem Supabase — busca local em memória). Use quando o usuário perguntar o significado de siglas ou conceitos (BPMN, SBVR, RAG, NER, ROI-TR, CKF etc.).
+**Glossário tool (1):** `search_glossary(query, tag?)` — 80 verbetes técnicos; `tag`: `bpmn|req|ai|dev|neg`. Dados em `modules/glossary_data.py` (local, sem Supabase).
 
-**IBIS tools (3):** `search_ibis_debates(query, meeting_number?, resolution_filter?)` — busca questões argumentativas por palavra-chave; retorna statement, raised_by, alternativas com proposed_by/pros/cons/supported_by/opposed_by, resolução e ressalvas; `resolution_filter`: `all|decided|deferred|unresolved`. `get_ibis_timeline(topic?)` — gráfico Plotly stacked bar (decidido/adiado/em aberto por reunião). `generate_ibis_map(topic?)` — mapa hierárquico Plotly com Q-nodes (círculo, cor por status) e A-nodes (diamante, verde=eleita, azul=alternativa). Helper interno: `_load_ibis_questions(topic_filter, meeting_number)` — parseia `argumentation_json` de todas as reuniões + injeta metadados `_mnum/_mtitle/_mdate/_mid`. Prompt exemplo: *"Pesquise nos debates IBIS tudo que foi discutido sobre 'Catálogo Mestre' com detalhes completos"*.
+**IBIS tools (3):** `search_ibis_debates(query, meeting_number?, resolution_filter?)` — busca questões argumentativas + alternativas (proposed_by/pros/cons/supported_by/opposed_by) + resolução; `resolution_filter`: `all|decided|deferred|unresolved`. `get_ibis_timeline(topic?)` — stacked bar Plotly por reunião. `generate_ibis_map(topic?)` — mapa hierárquico Q-nodes/A-nodes Plotly. Helper `_load_ibis_questions()` parseia `argumentation_json` + injeta `_mnum/_mtitle/_mdate/_mid`.
+
+**Cross-meeting tools (2):** `cluster_topic_decisions(topic, artifact_type?)` — agrupa decisões DMN, debates IBIS e decisões de atas sobre um tema em todas as reuniões; `artifact_type`: `all|dmn|ibis|minutes`. `generate_next_agenda(topic?)` — sugere pauta para a próxima reunião com base em debates IBIS adiados + encaminhamentos pendentes das atas; gera 5 seções com estimativa de duração; filtro temático opcional.
 
 **Chart tools (5):** `generate_requirements_chart`, `generate_meetings_timeline`, `generate_action_items_chart`, `generate_roi_chart`, `generate_custom_chart` — Plotly figs returned as 4th element of `chat_with_tools()`, rendered via `st.plotly_chart()`. Palettes defined in `core/chart_config.py`.
 
@@ -406,18 +392,37 @@ Tool schemas: `get_tool_schemas_openai()` / `get_tool_schemas_anthropic()`.
 
 ### Exportação da conversa
 
-Chat toolbar (visível quando há mensagens) oferece dois botões:
-- **⬇️ Markdown** — `_export_chat_to_markdown()` — texto simples com todas as perguntas e respostas
-- **⬇️ HTML** — `_export_chat_to_html()` — arquivo auto-contido com estilo dark-navy, Markdown renderizado via `marked.js` CDN e gráficos Plotly **totalmente interativos** embutidos via `Plotly.js` CDN (incluído somente quando há charts). Abre em qualquer navegador sem servidor. Helpers: `_html_escape()` + `_html_escape_attr()` para sanitização segura.
+Chat toolbar: **⬇️ Markdown** (texto simples) e **⬇️ HTML** (auto-contido dark-navy, marked.js + Plotly.js CDN, gráficos interativos embutidos). Helpers `_html_escape()` + `_html_escape_attr()` para sanitização.
 
 ### Embedding pipeline
 
-- `chunk_text(transcript, chunk_size=500, overlap=80)` → chunks stored in `transcript_chunks` table (`vector(1536)`)
-- Provider padrão: OpenAI `text-embedding-3-small` (default em `asst_embed_provider`); alternativas: Google Gemini `gemini-embedding-001` (`output_dimensionality=1536`, fallback `gemini-embedding-2-preview` on 404), Grok `grok-embedding-small`
-- Rate limit: 1.2s delay between calls, 5 retries on 429
-- Search via `match_transcript_chunks()` SQL (pgvector cosine)
+`chunk_text(transcript, 500, 80)` → `transcript_chunks vector(1536)`. Default: OpenAI `text-embedding-3-small`; alternativas: Gemini `gemini-embedding-001` (`output_dimensionality=1536`), Grok `grok-embedding-small`. Rate limit: 1.2s + 5 retries. Search: `match_transcript_chunks()` pgvector cosine.
 
-> Full architecture diagrams (Mode A/B flow, re-edit feature, embedding UI): `claude_guideline/architecture_details.md`
+> Full details: `claude_guideline/architecture_details.md`
+
+---
+
+## DMN Viewer (`modules/dmn_viewer.py`)
+
+Dark-theme renderer for OMG DMN 1.4. Key functions:
+- `render_dmn_page(decisions: list[dict], show_origin=True) → str` — dark HTML page for `components.html()`; hit-policy badge, row pinning JS. Used in Artefatos DMN tab.
+- `render_drd(decisions: list[dict]) → str` — SVG DRD with topological depth layout; heuristic dependency detection (output label ⊆ input label); colored boxes per hit policy.
+- `estimate_height(decisions) → int` / `estimate_drd_height(decisions) → int` — auto height calculation.
+- `_model_to_dicts(model: DMNModel)` — bridge dataclass→dict. `render_dmn_model(model)` delegates to dark renderer. `dmn_to_xml(model)` — unchanged XML export.
+
+Artefatos DMN tab: sub-tabs **📋 Tabelas** + **🔗 DRD** + download buttons (JSON + XML).
+
+---
+
+## ValidationHub, KnowledgeGraph, Home (v4.30–v4.31)
+
+**ValidationHub** — first tab **"📊 Saúde do Pipeline"**: `_load_health(pid)` `ttl=120` via `list_meetings_quality`; 6 KPIs; coverage dataframe ✅/❌; Plotly grouped bar chart; refresh button.
+
+**KnowledgeGraph** — added **🕐 Timeline** tab: Plotly heatmap entity×meeting (top 40, `#2563eb` = present); `meeting_map` added to `_load_graph_data()`. Exportar tab: JSON-LD download (schema.org, `urn:p2d:entity:{id}` URNs, `@type` per entity type).
+
+**Home** (v4.31) — shown when active project set:
+- **Radar de Qualidade**: Plotly Scatterpolar 5 dims (BPMN/Ata/DMN/IBIS/Relatório) em % cobertura; usa `list_meetings_quality`.
+- **Export ZIP**: `io.BytesIO` + `zipfile.ZipFile` — BPMNs (.xml), atas (.md via `list_meetings`), requisitos (.json via `list_requirements_light`), README. Importante: usar `list_meetings` (não `list_meetings_quality`) para obter `minutes_md`.
 
 ---
 
@@ -447,7 +452,7 @@ Type-aware quality system — 11 meeting types, each with a weight matrix across
 - `pipeline.run_pipeline(hub, config, callback)` — 3 paths: multi-run tournament / LangGraph / standard. Raises on error (caller catches).
 - `rerun_handlers.handle_rerun(agent_name, ...)` — re-runs one agent: `"quality"`, `"bpmn"`, `"minutes"`, `"requirements"`, `"sbvr"`, `"bmm"`, `"synthesizer"`. BPMN re-run invalidates `hub.synthesizer`.
 - `cost_model.py` — modelo de dados para Cenários de Custo-Benefício (sem Streamlit, sem rede). Exporta: `ModelPricing`, `AgentTokenProfile`, `ScenarioConfig`, `ScenarioResult`, `PRICING_CATALOG` (17 modelos / 6 provedores), `DEFAULT_TOKEN_PROFILES` (9 agentes com perfis heurísticos), `project_cost(scenario, word_count, catalog) → ScenarioResult`. Catálogo editável via `st.session_state["cost_catalog_overrides"]`; cenário ativo em `st.session_state["scenario_assignments"]` (dict agent_name→model_id) — lido por `BaseAgent._call_llm()` para sobrescrever `model` por agente (fail-open se ausente).
-- `project_store` — Supabase CRUD; fail-open (returns `[]`/`None` when unconfigured). Key functions: `load_meeting_as_hub(meeting_id, project_id)` → reconstructs KnowledgeHub from DB (transcript, BPMN, minutes, requirements, SBVR, BMM, DMN, IBIS); `list_dmn_by_project(project_id)` → flat list of DMN decisions; `list_argumentation_by_project(project_id)` → flat list of IBIS questions; `save_artifacts_from_document(project_id, doc_id, extracted)` → persists all artifact types extracted from a document. Full function list in `claude_guideline/architecture_details.md`.
+- `project_store` — Supabase CRUD; fail-open (returns `[]`/`None` when unconfigured). Key functions: `load_meeting_as_hub(meeting_id, project_id)` → reconstructs KnowledgeHub from DB (transcript, BPMN, minutes, requirements, SBVR, BMM, DMN, IBIS); `list_dmn_by_project(project_id)` → flat list of DMN decisions; `list_argumentation_by_project(project_id)` → flat list of IBIS questions; `save_artifacts_from_document(project_id, doc_id, extracted)` → persists all artifact types extracted from a document; `list_meetings_quality(project_id)` → per-meeting artifact coverage flags (has_bpmn/minutes/dmn/ibis/synthesizer) — usado em ValidationHub health tab e Home radar. Full function list in `claude_guideline/architecture_details.md`.
 
 ---
 
