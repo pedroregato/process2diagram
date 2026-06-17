@@ -124,6 +124,7 @@ class Orchestrator:
         run_synthesizer: bool = False,
         run_query_summarizer: bool = False,
         run_communication_noise: bool = False,
+        run_prereqs: bool = True,
     ) -> KnowledgeHub:
         """
         Execute the pipeline.
@@ -145,40 +146,46 @@ class Orchestrator:
                 hub.bump()
 
         # ── Step 0.5: Transcript Preprocessor (no LLM) ───────────────────────
-        already_curated = (
-            hub.transcript_clean
-            and hub.transcript_clean.strip() != hub.transcript_raw.strip()
-        )
-        if already_curated:
-            self._progress("Pré-processamento", "skipped (texto curado pelo usuário)")
+        if run_prereqs:
+            already_curated = (
+                hub.transcript_clean
+                and hub.transcript_clean.strip() != hub.transcript_raw.strip()
+            )
+            if already_curated:
+                self._progress("Pré-processamento", "skipped (texto curado pelo usuário)")
+            else:
+                self._progress("Pré-processamento", "running")
+            try:
+                if not already_curated:
+                    result = preprocess(hub.transcript_raw)
+                    hub.transcript_clean = result.clean_text
+                    hub.preprocessing = PreprocessingModel(
+                        fillers_removed=result.fillers_removed,
+                        artifact_turns=result.artifact_turns,
+                        repetitions_collapsed=result.repetitions_collapsed,
+                        metadata_issues=result.metadata_issues,
+                        ready=True,
+                    )
+                hub.bump()
+                self._progress("Pré-processamento", "done")
+            except Exception as exc:
+                self._progress("Pré-processamento", f"error: {exc}")
+                hub.bump()
         else:
-            self._progress("Pré-processamento", "running")
-        try:
-            if not already_curated:
-                result = preprocess(hub.transcript_raw)
-                hub.transcript_clean = result.clean_text
-                hub.preprocessing = PreprocessingModel(
-                    fillers_removed=result.fillers_removed,
-                    artifact_turns=result.artifact_turns,
-                    repetitions_collapsed=result.repetitions_collapsed,
-                    metadata_issues=result.metadata_issues,
-                    ready=True,
-                )
-            hub.bump()
-            self._progress("Pré-processamento", "done")
-        except Exception as exc:
-            self._progress("Pré-processamento", f"error: {exc}")
-            hub.bump()
+            self._progress("Pré-processamento", "skipped")
 
         # ── Step 1: NLP Chunker (no LLM) ─────────────────────────────────────
-        self._progress("NLP / Chunker", "running")
-        try:
-            hub = self._chunker.run(hub)
-            self._progress("NLP / Chunker", "done")
-        except Exception as exc:
-            self._progress("NLP / Chunker", f"error: {exc}")
-            hub.transcript_clean = hub.transcript_raw
-            hub.bump()
+        if run_prereqs:
+            self._progress("NLP / Chunker", "running")
+            try:
+                hub = self._chunker.run(hub)
+                self._progress("NLP / Chunker", "done")
+            except Exception as exc:
+                self._progress("NLP / Chunker", f"error: {exc}")
+                hub.transcript_clean = hub.transcript_raw
+                hub.bump()
+        else:
+            self._progress("NLP / Chunker", "skipped")
 
         # ── Step 1.5: Transcript Time Parser (no LLM) ────────────────────────
         try:

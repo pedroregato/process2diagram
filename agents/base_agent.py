@@ -170,7 +170,9 @@ class BaseAgent(ABC):
         # ─────────────────────────────────────────────────────────────────
 
         # ── Semantic cache lookup ─────────────────────────────────────────
-        if not skip_cache:
+        # _lg_skip_cache is set by LangGraph runners on retry attempts (attempt > 1)
+        # to guarantee a fresh LLM call and avoid identical results every retry.
+        if not (skip_cache or getattr(self, "_lg_skip_cache", False)):
             try:
                 from services.semantic_cache import _cache
                 provider_label = self.provider_cfg.get("api_key_label", client_type)

@@ -96,8 +96,10 @@ def run_pipeline(hub, config, progress_callback):
         )
 
         # Step 3: downstream agents (SBVR, BMM, DMN, Argumentation, Synthesizer)
+        # run_prereqs=False skips Preprocessing and NLP (already done in Step 1)
         hub = orchestrator.run(hub, output_lang,
                                run_quality=False,
+                               run_prereqs=False,
                                run_bpmn=False,
                                run_minutes=False,       # already done by LG runner
                                run_requirements=False,  # already done by LG runner

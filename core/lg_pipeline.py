@@ -107,14 +107,17 @@ class LGBPMNRunner:
 
     def _bpmn_node(self, state: BPMNLoopState) -> dict:
         """Run one AgentBPMN pass.  Each attempt resets hub.bpmn."""
-        hub = state["hub"]
+        hub      = state["hub"]
         attempts = state["bpmn_attempts"] + 1
         max_r    = state["max_bpmn_retries"]
-        self._progress("Agente BPMN (LG)", f"attempt {attempts}/{max_r}…")
+        self._progress("Agente BPMN (LG)", f"running (tentativa {attempts}/{max_r})")
 
-        hub_copy       = copy.copy(hub)
-        hub_copy.bpmn  = BPMNModel()
-        hub_copy       = self.agent_bpmn.run(hub_copy, state["output_language"])
+        hub_copy      = copy.copy(hub)
+        hub_copy.bpmn = BPMNModel()
+        # Skip cache on retries so each attempt produces a fresh LLM response
+        self.agent_bpmn._lg_skip_cache = (attempts > 1)
+        hub_copy = self.agent_bpmn.run(hub_copy, state["output_language"])
+        self.agent_bpmn._lg_skip_cache = False
         self._progress("Agente BPMN (LG)", "done")
 
         return {"hub": hub_copy, "bpmn_attempts": attempts}
@@ -125,7 +128,7 @@ class LGBPMNRunner:
         weights = state["bpmn_weights"]
 
         score = self.validator.score(hub.bpmn, hub.transcript_clean, weights)
-        self._progress("Validação BPMN (LG)", f"score = {score.weighted:.1f}")
+        self._progress("Validação BPMN (LG)", f"done (score {score.weighted:.1f})")
 
         best_hub   = state.get("best_hub")
         best_score = state.get("best_score", -1.0)
@@ -316,12 +319,15 @@ class LGFullPipelineRunner:
         hub      = state["hub"]
         attempts = state["bpmn_attempts"] + 1
         max_r    = state["max_bpmn_retries"]
-        self._progress("Agente BPMN (LG)", f"tentativa {attempts}/{max_r}…")
+        self._progress("Agente BPMN (LG)", f"running (tentativa {attempts}/{max_r})")
 
         hub_copy      = copy.copy(hub)
         hub_copy.bpmn = BPMNModel()
-        hub_copy      = self.agent_bpmn.run(hub_copy, state["output_language"])
-        self._progress("Agente BPMN (LG)", "concluído")
+        # Skip cache on retries — guarantees a fresh LLM call each attempt
+        self.agent_bpmn._lg_skip_cache = (attempts > 1)
+        hub_copy = self.agent_bpmn.run(hub_copy, state["output_language"])
+        self.agent_bpmn._lg_skip_cache = False
+        self._progress("Agente BPMN (LG)", "done")
 
         return {"hub": hub_copy, "bpmn_attempts": attempts}
 
@@ -337,7 +343,7 @@ class LGFullPipelineRunner:
             best_hub   = hub
             best_score = score.weighted
 
-        self._progress("Validação BPMN (LG)", f"score = {score.weighted:.1f}")
+        self._progress("Validação BPMN (LG)", f"done (score {score.weighted:.1f})")
         return {"bpmn_best_hub": best_hub, "bpmn_best_score": best_score}
 
     def _should_retry_bpmn(self, state: LGFullPipelineState) -> str:
@@ -354,7 +360,6 @@ class LGFullPipelineRunner:
         best_score = state.get("bpmn_best_score", 0.0)
         threshold  = state["validation_threshold"]
 
-        # Merge best BPMN into the canonical hub (keep minutes/req work already done)
         hub = state["hub"]
         hub.bpmn = best_hub.bpmn
         if hasattr(hub.bpmn, "lg_attempts"):
@@ -364,10 +369,8 @@ class LGFullPipelineRunner:
         hub.bump()
 
         met = best_score >= threshold
-        self._progress(
-            "Agente BPMN (LG)",
-            f"{'✅' if met else '⚠️'} score {best_score:.1f} em {attempts} tentativa(s)"
-        )
+        verdict = "threshold atingido" if met else "melhor candidato selecionado"
+        self._progress("Agente BPMN (LG)", f"done ({verdict}: score {best_score:.1f})")
         return {"hub": hub}
 
     # ── Minutes nodes ──────────────────────────────────────────────────────────
@@ -377,9 +380,12 @@ class LGFullPipelineRunner:
             return {}
         hub      = state["hub"]
         attempts = state["minutes_attempts"] + 1
-        self._progress("Agente Ata (LG)", f"tentativa {attempts}…")
-        hub = self._get_minutes_agent().run(hub, state["output_language"])
-        self._progress("Agente Ata (LG)", "concluído")
+        self._progress("Agente Ata (LG)", f"running (tentativa {attempts})")
+        agent = self._get_minutes_agent()
+        agent._lg_skip_cache = (attempts > 1)
+        hub = agent.run(hub, state["output_language"])
+        agent._lg_skip_cache = False
+        self._progress("Agente Ata (LG)", "done")
         return {"hub": hub, "minutes_attempts": attempts}
 
     def _validate_minutes_node(self, state: LGFullPipelineState) -> dict:
@@ -389,9 +395,10 @@ class LGFullPipelineRunner:
         n_p  = len(hub.minutes.participants or [])
         n_da = len(hub.minutes.decisions or []) + len(hub.minutes.action_items or [])
         ok   = n_p >= self._MIN_PARTICIPANTS and n_da >= self._MIN_DECISIONS_AI
+        verdict = "ok" if ok else "reprocessar"
         self._progress(
             "Validação Ata (LG)",
-            f"participantes={n_p} decisões+ações={n_da} → {'ok' if ok else 'reprocessar'}",
+            f"done (participantes={n_p} decisões+ações={n_da} → {verdict})",
         )
         return {}
 
@@ -413,9 +420,12 @@ class LGFullPipelineRunner:
             return {}
         hub      = state["hub"]
         attempts = state["req_attempts"] + 1
-        self._progress("Agente Requisitos (LG)", f"tentativa {attempts}…")
-        hub = self._get_req_agent().run(hub, state["output_language"])
-        self._progress("Agente Requisitos (LG)", "concluído")
+        self._progress("Agente Requisitos (LG)", f"running (tentativa {attempts})")
+        agent = self._get_req_agent()
+        agent._lg_skip_cache = (attempts > 1)
+        hub = agent.run(hub, state["output_language"])
+        agent._lg_skip_cache = False
+        self._progress("Agente Requisitos (LG)", "done")
         return {"hub": hub, "req_attempts": attempts}
 
     def _validate_req_node(self, state: LGFullPipelineState) -> dict:
@@ -423,7 +433,7 @@ class LGFullPipelineRunner:
             return {}
         hub   = state["hub"]
         n_req = len(hub.requirements.requirements or [])
-        self._progress("Validação Requisitos (LG)", f"requisitos extraídos = {n_req}")
+        self._progress("Validação Requisitos (LG)", f"done ({n_req} requisito(s))")
         return {}
 
     def _should_retry_req(self, state: LGFullPipelineState) -> str:
@@ -517,9 +527,7 @@ class LGFullPipelineRunner:
         hub.validation.lg_req_retries        = state["req_attempts"]
         hub.bump()
 
-        if notes:
-            self._progress("Coordenador LG", f"{len(notes)} nota(s) gerada(s)")
-
+        self._progress("Coordenador LG", f"done ({len(notes)} nota(s))")
         return {"hub": hub}
 
     # ── Graph construction ─────────────────────────────────────────────────────
