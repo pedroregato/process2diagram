@@ -18,7 +18,7 @@ def render(hub, prefix, suffix):
     )
 
     from modules.dmn_viewer import render_dmn_model
-    render_dmn_model(dmn, height=max(400, len(dmn.decisions) * 250))
+    render_dmn_model(dmn)
 
     st.markdown("---")
     st.markdown("#### Export DMN")

@@ -16,6 +16,7 @@ if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
 import streamlit as st
+import streamlit.components.v1 as components
 from datetime import date
 
 from ui.auth_gate import apply_auth_gate
@@ -76,15 +77,6 @@ st.markdown("""
     display: inline-block; width: 10px; height: 10px;
     border-radius: 50%; margin-right: 6px;
 }
-.dmn-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
-.dmn-table th {
-    background: #1e3a55; color: #93c5fd; padding: 6px 10px;
-    text-align: left; border-bottom: 2px solid #2d5a8e;
-}
-.dmn-table td {
-    padding: 5px 10px; border-bottom: 1px solid #1e293b; color: #e2e8f0;
-}
-.dmn-table tr:hover td { background: rgba(30,58,85,.4); }
 .ibis-badge-decided    { background:#0d4f2e; color:#4ade80; }
 .ibis-badge-deferred   { background:#4a3000; color:#fbbf24; }
 .ibis-badge-unresolved { background:#4a0d0d; color:#f87171; }
@@ -1115,13 +1107,6 @@ with tab_bpmn:
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 8 — DMN
 # ════════════════════════════════════════════════════════════════════════════
-_HIT_POLICY_LABEL = {
-    "U": "Unique — apenas uma regra pode ser satisfeita",
-    "A": "Any — qualquer regra satisfeita produz o mesmo resultado",
-    "F": "First — primeira regra satisfeita vence",
-    "C": "Collect — todas as regras satisfeitas são coletadas",
-}
-
 with tab_dmn:
     st.caption(
         "**DMN (Decision Model and Notation)** é o padrão OMG para formalizar decisões de negócio "
@@ -1176,61 +1161,10 @@ with tab_dmn:
             d for d in dmn_decisions if d["_meeting_id"] == meet_labels_dmn[sel_meet_dmn]
         ]
 
-        st.markdown("")
-        for d in filtered_dmn:
-            dec_id   = d.get("id", "—")
-            dec_name = d.get("name", "—")
-            hp       = d.get("hit_policy", "U")
-            inputs   = d.get("inputs", [])
-            outputs  = d.get("outputs", [])
-            rules    = d.get("rules", [])
-            m_num    = d.get("_meeting_number")
-            origin   = f"🗓️ Reunião {m_num}" if m_num else "—"
-
-            with st.expander(f"**{dec_id}** — {dec_name}  ·  {origin}", expanded=False):
-                # Cabeçalho da decisão
-                col_q, col_hp = st.columns([3, 1])
-                with col_q:
-                    if d.get("question"):
-                        st.markdown(f"**Questão:** {d['question']}")
-                    if d.get("rationale"):
-                        st.caption(f"📝 {d['rationale']}")
-                    if d.get("decided_by"):
-                        st.caption(f"👥 Decidido por: {', '.join(d['decided_by'])}")
-                with col_hp:
-                    st.markdown(
-                        f'<span class="badge badge-new">Hit Policy: {hp}</span>',
-                        unsafe_allow_html=True,
-                    )
-                    st.caption(_HIT_POLICY_LABEL.get(hp, hp))
-
-                if not inputs or not outputs or not rules:
-                    st.info("Tabela de decisão sem regras registradas.")
-                    continue
-
-                # Monta a tabela HTML
-                input_labels  = [i.get("label", f"Input {j+1}") for j, i in enumerate(inputs)]
-                output_labels = [o.get("label", f"Output {k+1}") for k, o in enumerate(outputs)]
-
-                header_cells = "".join(f"<th>{h}</th>" for h in input_labels + output_labels + ["Anotação"])
-                rows_html = ""
-                for idx, rule in enumerate(rules, 1):
-                    rule_inputs  = rule.get("inputs", [])
-                    rule_output  = rule.get("output", "")
-                    annotation   = rule.get("annotation", "")
-                    input_cells  = "".join(
-                        f"<td>{rule_inputs[j] if j < len(rule_inputs) else '—'}</td>"
-                        for j in range(len(input_labels))
-                    )
-                    output_cell  = f"<td><strong>{rule_output}</strong></td>"
-                    annot_cell   = f"<td><em>{annotation}</em></td>" if annotation else "<td>—</td>"
-                    rows_html   += f"<tr>{input_cells}{output_cell}{annot_cell}</tr>"
-
-                st.markdown(
-                    f'<table class="dmn-table"><thead><tr>{header_cells}</tr></thead>'
-                    f'<tbody>{rows_html}</tbody></table>',
-                    unsafe_allow_html=True,
-                )
+        from modules.dmn_viewer import render_dmn_page, estimate_height
+        page_html = render_dmn_page(filtered_dmn, show_origin=True)
+        h = estimate_height(filtered_dmn)
+        components.html(page_html, height=h, scrolling=True)
 
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 9 — IBIS / ARGUMENTAÇÃO
