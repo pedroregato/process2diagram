@@ -25,7 +25,7 @@ import streamlit as st
 from ui.auth_gate import apply_auth_gate
 from modules.auth import is_admin
 from modules.i18n import t
-from core.project_store import get_global_stats, list_recent_meetings, list_contexts
+from core.project_store import get_global_stats, list_recent_meetings, list_contexts, list_meetings_quality
 
 apply_auth_gate()
 
@@ -475,7 +475,142 @@ with col_recent:
         st.page_link("pages/Assistente.py", label=t("mtg_link_all"))
         st.markdown("</div>", unsafe_allow_html=True)
 
-# ── 5. Agenda do Contexto ────────────────────────────────────────────────────
+# ── 5. Radar de Qualidade + Export ZIP ───────────────────────────────────────
+if _ap_id:
+    @st.cache_data(ttl=120, show_spinner=False)
+    def _load_quality(project_id: str):
+        return list_meetings_quality(project_id)
+
+    _quality_data = _load_quality(_ap_id)
+
+    if _quality_data:
+        _col_radar, _col_export = st.columns([3, 2], gap="large")
+
+        with _col_radar:
+            st.markdown(f'<div class="section-hdr">📡 Radar de Qualidade do Projeto</div>', unsafe_allow_html=True)
+            try:
+                import plotly.graph_objects as _go
+                _n   = len(_quality_data)
+                _pct = lambda key: round(100 * sum(1 for m in _quality_data if m.get(key)) / max(1, _n))
+
+                _dims  = ["BPMN", "Ata", "DMN", "IBIS", "Relatório"]
+                _vals  = [_pct("has_bpmn"), _pct("has_minutes"), _pct("has_dmn"),
+                          _pct("has_ibis"), _pct("has_synthesizer")]
+                _avg   = round(sum(_vals) / len(_vals))
+
+                _fig = _go.Figure()
+                _fig.add_trace(_go.Scatterpolar(
+                    r=_vals + [_vals[0]], theta=_dims + [_dims[0]],
+                    fill="toself", name=f"Cobertura (n={_n})",
+                    line=dict(color="#C97B1A", width=2.5),
+                    fillcolor="rgba(201,123,26,0.13)",
+                ))
+                _fig.update_layout(
+                    polar=dict(
+                        bgcolor="#0A1A32",
+                        angularaxis=dict(color="#94a3b8", linecolor="#1e3a55",
+                                         tickfont=dict(size=11, color="#94a3b8")),
+                        radialaxis=dict(visible=True, range=[0, 100], color="#475569",
+                                        gridcolor="#1e3a55", ticksuffix="%",
+                                        tickfont=dict(size=9, color="#475569")),
+                    ),
+                    paper_bgcolor="#0d1b2a", plot_bgcolor="#0d1b2a",
+                    font=dict(color="#94a3b8", size=11),
+                    legend=dict(bgcolor="#0A1A32", bordercolor="#1e3a55"),
+                    margin=dict(t=20, b=10, l=30, r=30),
+                    height=300,
+                )
+                st.plotly_chart(_fig, use_container_width=True, key="home_radar")
+                st.caption(f"Cobertura média de artefatos: **{_avg}%** em {_n} reunião(ões).")
+            except Exception:
+                # Fallback: simple metrics
+                _cols_r = st.columns(5)
+                for _ci, (_lbl, _key) in enumerate(zip(
+                    ["BPMN", "Ata", "DMN", "IBIS", "Relatório"],
+                    ["has_bpmn", "has_minutes", "has_dmn", "has_ibis", "has_synthesizer"],
+                )):
+                    _n = len(_quality_data)
+                    _v = sum(1 for m in _quality_data if m.get(_key))
+                    _cols_r[_ci].metric(_lbl, f"{_v}/{_n}")
+
+        with _col_export:
+            st.markdown(f'<div class="section-hdr">📦 Exportar Projeto</div>', unsafe_allow_html=True)
+            st.caption("Gera um arquivo ZIP com todos os artefatos do projeto ativo.")
+
+            if st.button("⬇️ Gerar ZIP do Projeto", key="home_gen_zip", use_container_width=True):
+                import io as _io
+                import zipfile as _zf
+                from core.project_store import (
+                    list_bpmn_processes, list_bpmn_versions,
+                    list_requirements_light, list_meetings as _list_mtgs_full,
+                )
+
+                with st.spinner("Compilando artefatos…"):
+                    try:
+                        _buf = _io.BytesIO()
+                        _fname_proj = (_ap_name or "projeto").replace(" ", "_")
+                        _procs         = list_bpmn_processes(_ap_id)
+                        _reqs          = list_requirements_light(_ap_id)
+                        _meetings_full = _list_mtgs_full(_ap_id)
+
+                        with _zf.ZipFile(_buf, "w", _zf.ZIP_DEFLATED) as _zzip:
+                            # ── BPMN XMLs ──
+                            for _proc in _procs:
+                                _proc_name  = (_proc.get("name") or "processo").replace(" ", "_")
+                                _proc_vers  = list_bpmn_versions(_ap_id)
+                                _proc_v     = [v for v in _proc_vers if v.get("process_id") == _proc.get("id") and v.get("is_current")]
+                                if _proc_v and _proc_v[0].get("bpmn_xml"):
+                                    _zzip.writestr(
+                                        f"bpmn/{_proc_name}.xml",
+                                        _proc_v[0]["bpmn_xml"],
+                                    )
+
+                            # ── Atas (minutes_md) ──
+                            for _m in _meetings_full:
+                                _mnum  = _m.get("meeting_number", "?")
+                                _mtit  = (_m.get("title") or f"reuniao_{_mnum}").replace(" ", "_")
+                                _mmins = _m.get("minutes_md") or ""
+                                if _mmins:
+                                    _zzip.writestr(f"atas/reuniao_{_mnum}_{_mtit[:30]}.md", _mmins)
+
+                            # ── Requisitos JSON ──
+                            import json as _json_zip
+                            if _reqs:
+                                _zzip.writestr(
+                                    "requisitos/requisitos.json",
+                                    _json_zip.dumps(_reqs, ensure_ascii=False, indent=2),
+                                )
+
+                            # ── README ──
+                            _zzip.writestr(
+                                "README.md",
+                                f"# {_ap_name} — Exportação Process2Diagram\n\n"
+                                f"Projeto: {_ap_name}\n"
+                                f"Reuniões: {len(_meetings_full)}\n"
+                                f"Requisitos: {len(_reqs)}\n"
+                                f"Processos BPMN: {len(_procs)}\n",
+                            )
+
+                        _buf.seek(0)
+                        st.session_state["home_zip_bytes"] = _buf.read()
+                        st.session_state["home_zip_fname"] = f"{_fname_proj}_export.zip"
+                    except Exception as _ze:
+                        st.error(f"Erro ao gerar ZIP: {_ze}")
+
+            if st.session_state.get("home_zip_bytes"):
+                st.download_button(
+                    label="📥 Download ZIP",
+                    data=st.session_state["home_zip_bytes"],
+                    file_name=st.session_state.get("home_zip_fname", "export.zip"),
+                    mime="application/zip",
+                    key="home_dl_zip",
+                    use_container_width=True,
+                )
+                st.caption(
+                    "Contém: BPMNs (.xml), atas (.md), requisitos (.json) e README."
+                )
+
+# ── 7. Agenda do Contexto ────────────────────────────────────────────────────
 st.markdown('<div class="section-hdr">📅 Agenda do Contexto</div>', unsafe_allow_html=True)
 
 try:
@@ -501,7 +636,7 @@ except Exception as _cal_exc:
     st.caption(f"📅 Agenda indisponível: {_cal_exc}")
 
 # ── Rodapé ────────────────────────────────────────────────────────────────────
-_APP_VERSION = "v4.16"
+_APP_VERSION = "v4.31"
 st.markdown(
     f'<div class="home-footer">'
     f'Process2Diagram {_APP_VERSION} &nbsp;·&nbsp; Multi-agent process intelligence platform'

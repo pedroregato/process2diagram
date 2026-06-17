@@ -271,7 +271,7 @@ with st.expander("📦 Exportar Relatório", expanded=False):
 st.markdown("---")
 
 # ── Abas principais ───────────────────────────────────────────────────────────
-tab_req, tab_mindmap, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn, tab_dmn, tab_ibis, tab_trace, tab_noise = st.tabs([
+tab_req, tab_mindmap, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn, tab_dmn, tab_ibis, tab_trace, tab_noise, tab_comp = st.tabs([
     "📝 Requisitos",
     "🗺️ Mind Map",
     f"⚠️ Contradições ({len(contradictions)})",
@@ -283,6 +283,7 @@ tab_req, tab_mindmap, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn, tab_dm
     f"🗺️ IBIS ({len(ibis_questions) if ibis_questions is not None else '…'})",
     "🔗 Rastreabilidade",
     f"🔊 Ruídos ({len(noise_items) if noise_items is not None else '…'})",
+    "🔄 Comparar",
 ])
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -2693,3 +2694,152 @@ with tab_noise:
                             _gi1.warning(f"Impacto: {_gap['impact']}")
                         if _gap.get("recommendation"):
                             _gi2.success(f"Recomendação: {_gap['recommendation']}")
+
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 12 — COMPARAÇÃO DE REUNIÕES
+# ════════════════════════════════════════════════════════════════════════════
+with tab_comp:
+    st.caption(
+        "Compare dois momentos do projeto lado a lado: requisitos, SBVR, BPMN, "
+        "decisões DMN e debates IBIS. Os deltas indicam crescimento ou redução entre "
+        "a reunião A e a reunião B."
+    )
+
+    if len(meetings) < 2:
+        st.info("São necessárias ao menos 2 reuniões no projeto para usar a comparação.")
+    else:
+        _meet_opts = {
+            f"Reunião {m.get('meeting_number', '?')} — {m.get('title', '(sem título)')[:50]}": m
+            for m in meetings
+        }
+        _meet_labels = list(_meet_opts.keys())
+
+        _cc1, _cc2 = st.columns(2)
+        with _cc1:
+            _sel_a = st.selectbox("Reunião A (base)", _meet_labels,
+                                  index=0, key="comp_meet_a")
+        with _cc2:
+            _sel_b = st.selectbox("Reunião B (comparação)", _meet_labels,
+                                  index=min(1, len(_meet_labels) - 1), key="comp_meet_b")
+
+        _meet_a = _meet_opts[_sel_a]
+        _meet_b = _meet_opts[_sel_b]
+
+        # ── Build per-meeting aggregates from already-loaded data ────────────
+        def _comp_stats(m: dict) -> dict:
+            mid = m.get("id", "")
+            mnum = m.get("meeting_number", 0)
+            _reqs  = [r for r in requirements if r.get("meeting_id") == mid]
+            _terms = [t for t in sbvr_terms if t.get("meeting_id") == mid]
+            _rules = [r for r in sbvr_rules if r.get("meeting_id") == mid]
+            _procs = [p for p in bpmn_procs
+                      if p.get("first_meeting_id") == mid or str(mnum) in str(p.get("meeting_numbers", ""))]
+            # DMN and IBIS counts (only if loaded)
+            _dmn_n = sum(1 for d in (dmn_decisions or []) if d.get("_meeting_id") == mid)
+            _ibis_n = sum(1 for q in (ibis_questions or []) if q.get("_meeting_id") == mid)
+            # Minutes sections
+            mins_md = m.get("minutes_md") or ""
+            import re as _re
+            _decisions = [ln.strip() for ln in _re.sub(r'##\s*\w[^\n]*\n', '\n', mins_md).splitlines()
+                          if ln.strip().startswith(("-", "*", "•"))] if mins_md else []
+            _decisions_sec = _re.search(r'##\s*Decis[oõ]es[^\n]*\n([\s\S]*?)(?=\n##|\Z)', mins_md, _re.I)
+            n_dec = len(_decisions_sec.group(1).strip().splitlines()) if _decisions_sec else 0
+            _actions_sec = _re.search(r'##\s*(Itens de A[çc][aã]o|Action Items|A[çc][oõ]es)[^\n]*\n([\s\S]*?)(?=\n##|\Z)', mins_md, _re.I)
+            n_act = len([ln for ln in (_actions_sec.group(2).splitlines() if _actions_sec else []) if ln.strip()]) if _actions_sec else 0
+            return {
+                "reqs": len(_reqs), "terms": len(_terms), "rules": len(_rules),
+                "procs": len(_procs), "dmn": _dmn_n, "ibis": _ibis_n,
+                "decisions": n_dec, "actions": n_act,
+            }
+
+        _sa = _comp_stats(_meet_a)
+        _sb = _comp_stats(_meet_b)
+
+        def _delta_icon(va: int, vb: int) -> str:
+            if vb > va:   return f"<span style='color:#34d399'>▲ +{vb-va}</span>"
+            if vb < va:   return f"<span style='color:#f87171'>▼ -{va-vb}</span>"
+            return "<span style='color:#64748b'>= 0</span>"
+
+        _METRICS = [
+            ("📝 Requisitos",      "reqs"),
+            ("📖 Termos SBVR",     "terms"),
+            ("📏 Regras SBVR",     "rules"),
+            ("📐 Processos BPMN",  "procs"),
+            ("⚖️ Decisões DMN",    "dmn"),
+            ("🗺️ Debates IBIS",    "ibis"),
+            ("✅ Decisões (ata)",  "decisions"),
+            ("📋 Encaminhamentos", "actions"),
+        ]
+
+        _rows_html = ""
+        for _lbl, _key in _METRICS:
+            _va, _vb = _sa[_key], _sb[_key]
+            _rows_html += (
+                f"<tr>"
+                f"<td style='padding:6px 12px;color:#94a3b8;font-size:.82rem'>{_lbl}</td>"
+                f"<td style='padding:6px 12px;text-align:center;font-weight:700;color:#f1f5f9'>{_va}</td>"
+                f"<td style='padding:6px 12px;text-align:center;font-weight:700;color:#f1f5f9'>{_vb}</td>"
+                f"<td style='padding:6px 12px;text-align:center'>{_delta_icon(_va, _vb)}</td>"
+                f"</tr>"
+            )
+
+        _tit_a = _meet_a.get("title", "")[:32] or _sel_a.split("—")[0].strip()
+        _tit_b = _meet_b.get("title", "")[:32] or _sel_b.split("—")[0].strip()
+        _date_a = _meet_a.get("meeting_date", "—")
+        _date_b = _meet_b.get("meeting_date", "—")
+
+        st.markdown(f"""
+<table style="width:100%;border-collapse:collapse;background:#0A1A32;border-radius:10px;overflow:hidden">
+  <thead>
+    <tr style="background:#0d2244;border-bottom:2px solid #1e3a55">
+      <th style="padding:10px 12px;text-align:left;color:#C97B1A;font-size:.78rem;letter-spacing:.08em">MÉTRICA</th>
+      <th style="padding:10px 12px;text-align:center;color:#60a5fa;font-size:.78rem">
+        🅰 {_tit_a}<br><span style="font-weight:400;color:#475569;font-size:.72rem">{_date_a}</span>
+      </th>
+      <th style="padding:10px 12px;text-align:center;color:#a78bfa;font-size:.78rem">
+        🅱 {_tit_b}<br><span style="font-weight:400;color:#475569;font-size:.72rem">{_date_b}</span>
+      </th>
+      <th style="padding:10px 12px;text-align:center;color:#94a3b8;font-size:.78rem">DELTA B-A</th>
+    </tr>
+  </thead>
+  <tbody>{_rows_html}</tbody>
+</table>
+""", unsafe_allow_html=True)
+
+        # ── Plotly radar ──────────────────────────────────────────────────────
+        try:
+            import plotly.graph_objects as go
+            _radar_keys   = ["reqs", "terms", "rules", "procs", "dmn", "ibis"]
+            _radar_labels = ["Requisitos", "Termos SBVR", "Regras SBVR", "BPMN", "DMN", "IBIS"]
+            _max_vals = [max(1, max(_sa[k], _sb[k])) for k in _radar_keys]
+            _norm_a = [_sa[k] / _max_vals[i] * 10 for i, k in enumerate(_radar_keys)]
+            _norm_b = [_sb[k] / _max_vals[i] * 10 for i, k in enumerate(_radar_keys)]
+
+            _fig_radar = go.Figure()
+            _fig_radar.add_trace(go.Scatterpolar(
+                r=_norm_a + [_norm_a[0]], theta=_radar_labels + [_radar_labels[0]],
+                fill="toself", name=f"A: {_tit_a}",
+                line=dict(color="#60a5fa", width=2), fillcolor="rgba(96,165,250,0.12)",
+            ))
+            _fig_radar.add_trace(go.Scatterpolar(
+                r=_norm_b + [_norm_b[0]], theta=_radar_labels + [_radar_labels[0]],
+                fill="toself", name=f"B: {_tit_b}",
+                line=dict(color="#a78bfa", width=2), fillcolor="rgba(167,139,250,0.12)",
+            ))
+            _fig_radar.update_layout(
+                polar=dict(
+                    bgcolor="#0A1A32",
+                    angularaxis=dict(color="#64748b", linecolor="#1e3a55"),
+                    radialaxis=dict(visible=True, range=[0, 10], color="#64748b",
+                                   gridcolor="#1e3a55", showticklabels=False),
+                ),
+                paper_bgcolor="#0d1b2a", plot_bgcolor="#0d1b2a",
+                font=dict(color="#94a3b8", size=11),
+                legend=dict(bgcolor="#0A1A32", bordercolor="#1e3a55",
+                            font=dict(color="#94a3b8")),
+                margin=dict(t=30, b=20, l=30, r=30),
+                height=340,
+            )
+            st.plotly_chart(_fig_radar, use_container_width=True, key="comp_radar")
+        except Exception:
+            pass  # plotly não disponível — tabela já exibe os dados

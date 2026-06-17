@@ -445,6 +445,35 @@ with tab_analise:
         ]
     ), unsafe_allow_html=True)
 
+    st.markdown('<div class="g-section-hdr">Busca transversal entre reuniões</div>', unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "cluster_topic_decisions", "consulta",
+        "Agrupa <strong>todos</strong> os artefatos sobre um tema em todas as reuniões do projeto: "
+        "decisões DMN, debates IBIS e decisões das atas. Ideal para rastrear como um tópico "
+        "evoluiu ao longo do tempo. Aceita filtro por tipo de artefato: "
+        "<code>all | dmn | ibis | minutes</code>.",
+        [
+            "Mostre tudo que foi decidido sobre autenticação em todas as reuniões",
+            "Como o tema 'catálogo mestre' foi tratado ao longo do projeto?",
+            "Agrupe todas as decisões IBIS sobre integração por reunião",
+            "O que foi discutido e decidido sobre LGPD em todo o projeto?",
+        ]
+    ), unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "generate_next_agenda", "consulta",
+        "Gera uma <strong>sugestão de pauta</strong> para a próxima reunião com base nos itens "
+        "pendentes do projeto: debates IBIS adiados, encaminhamentos não concluídos das atas "
+        "e pontos abertos. Aceita filtro temático opcional para focar a pauta em um tema específico.",
+        [
+            "Monte a pauta para a próxima reunião",
+            "Quais assuntos ainda estão pendentes e devem entrar na próxima pauta?",
+            "Prepare uma pauta focada em 'integração de sistemas'",
+            "O que ficou adiado nas últimas reuniões? Gere uma pauta de retomada",
+        ]
+    ), unsafe_allow_html=True)
+
 
 # ── Tab 3: Gráficos ───────────────────────────────────────────────────────────
 with tab_graficos:

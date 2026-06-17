@@ -2193,7 +2193,34 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
-        # ── Cross-meeting clustering ──────────────────────────────────────────────
+        # ── Cross-meeting / agenda ────────────────────────────────────────────────
+        {
+            "type": "function",
+            "function": {
+                "name": "generate_next_agenda",
+                "description": (
+                    "Gera uma sugestão de pauta para a próxima reunião com base nos "
+                    "itens pendentes do projeto: decisões IBIS adiadas, encaminhamentos "
+                    "não concluídos das atas e tópicos sem resolução. "
+                    "Use quando o usuário pedir para preparar a próxima reunião, "
+                    "montar pauta ou revisar pendências."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "topic": {
+                            "type": "string",
+                            "description": (
+                                "Filtro temático opcional — limita a pauta a um tema "
+                                "específico (ex: 'autenticação', 'catálogo'). "
+                                "Omita para incluir todos os itens pendentes do projeto."
+                            ),
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
         {
             "type": "function",
             "function": {
@@ -2439,7 +2466,8 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "search_ibis_debates":             "consulta",
     "get_ibis_timeline":               "grafico",
     "generate_ibis_map":               "grafico",
-    # Cross-meeting
+    # Cross-meeting / agenda
+    "generate_next_agenda":            "consulta",
     "cluster_topic_decisions":         "consulta",
     # A2UI
     "show_bpmn_diagram":               "consulta",
@@ -2844,7 +2872,7 @@ class AssistantToolExecutor:
     list_context_files, calculate_meeting_roi, get_recurring_topics, get_meeting_metadata,
     preview_meeting_deletion, preview_text_correction, get_speaker_contributions,
     search_ibis_debates, get_ibis_timeline, generate_ibis_map, search_glossary,
-    cluster_topic_decisions,
+    generate_next_agenda, cluster_topic_decisions,
     show_bpmn_diagram, show_mermaid_diagram, show_metrics
 
   Escrita (todos os perfis):
@@ -7406,6 +7434,98 @@ class AssistantToolExecutor:
             + f" em {len(sorted_mnums)} reunião(ões)."
         )
 
+    # ── Cross-meeting / agenda ────────────────────────────────────────────────
+
+    def generate_next_agenda(self, topic: str | None = None) -> str:
+        """Suggest an agenda for the next meeting based on deferred IBIS items and pending action items."""
+        from core.project_store import list_argumentation_by_project
+
+        kw = topic.lower() if topic else None
+
+        # ── 1. Deferred IBIS questions ────────────────────────────────────────
+        all_ibis = list_argumentation_by_project(self.project_id)
+        deferred = [
+            q for q in all_ibis
+            if (q.get("resolution") or {}).get("type") == "deferred"
+            and (kw is None or kw in q.get("statement", "").lower())
+        ]
+
+        # ── 2. Action items from minutes_md ───────────────────────────────────
+        pending_actions: list[tuple[int, str]] = []
+        for m in self._get_meetings():
+            section = self._section(
+                m.get("minutes_md") or "",
+                "Itens de Ação", "Action Items", "Ações",
+            )
+            if not section:
+                continue
+            mnum = m.get("meeting_number") or 0
+            for line in section.splitlines():
+                line = line.strip()
+                if line and (kw is None or kw in line.lower()):
+                    pending_actions.append((mnum, line))
+
+        # ── 3. Build agenda ───────────────────────────────────────────────────
+        topic_str = f" sobre '{topic}'" if topic else ""
+        lines: list[str] = [
+            f"## Sugestão de Pauta — Próxima Reunião{topic_str}\n",
+            "_Gerado automaticamente com base em pendências do projeto_\n",
+        ]
+
+        # Opening
+        lines.append("\n### 1. Abertura e Alinhamento (5 min)")
+        lines.append("- Confirmação de quórum e registro de participantes")
+        lines.append("- Aprovação da pauta")
+
+        # Pending action items
+        lines.append(f"\n### 2. Acompanhamento de Encaminhamentos ({min(15, len(pending_actions) * 2 + 5)} min)")
+        if pending_actions:
+            shown = pending_actions[:6]
+            for mnum, item in shown:
+                lines.append(f"- **R{mnum}:** {item[:110]}")
+            if len(pending_actions) > 6:
+                lines.append(f"- _(+{len(pending_actions) - 6} encaminhamento(s) — verificar atas anteriores)_")
+        else:
+            lines.append("- Nenhum encaminhamento pendente identificado nas atas.")
+
+        # Deferred IBIS decisions
+        lines.append(f"\n### 3. Retomada de Decisões Adiadas ({10 + min(30, len(deferred) * 5)} min)")
+        if deferred:
+            for q in deferred[:6]:
+                mnum = q.get("_meeting_number", "?")
+                stmt  = q.get("statement", "")
+                res   = q.get("resolution") or {}
+                n_alt = len(q.get("alternatives") or [])
+                lines.append(f"- **{q.get('id','?')}** [R{mnum}]: {stmt}")
+                if n_alt:
+                    lines.append(f"  _{n_alt} alternativa(s) já mapeada(s) para análise_")
+                if res.get("rationale"):
+                    lines.append(f"  _Motivo do adiamento: {res['rationale'][:90]}_")
+            if len(deferred) > 6:
+                lines.append(f"- _(+{len(deferred) - 6} outros debates adiados)_")
+        else:
+            lines.append("- Nenhuma decisão IBIS adiada identificada.")
+
+        # New topics
+        lines.append("\n### 4. Novos Tópicos e Deliberações (20 min)")
+        lines.append("- [Inserir conforme agenda do projeto]")
+
+        # Closure
+        lines.append("\n### 5. Encaminhamentos e Encerramento (10 min)")
+        lines.append("- Registro das decisões tomadas e responsáveis")
+        lines.append("- Definição de prazos e próxima reunião")
+
+        total_items = len(deferred) + len(pending_actions)
+        lines.append(
+            f"\n---\n*Fontes: {len(deferred)} debate(s) IBIS adiado(s) e "
+            f"{len(pending_actions)} encaminhamento(s) nas atas.*"
+            + (f" Filtro: '{topic}'." if topic else "")
+        )
+        if total_items == 0:
+            lines.append("\n> Nenhum item pendente encontrado. O projeto pode estar em dia!")
+
+        return "\n".join(lines)
+
     # ── Cross-meeting clustering ──────────────────────────────────────────────
 
     def cluster_topic_decisions(
@@ -7979,7 +8099,10 @@ class AssistantToolExecutor:
                 "generate_ibis_map":      lambda: self.generate_ibis_map(
                     topic=tool_input.get("topic"),
                 ),
-                # ── Cross-meeting clustering
+                # ── Cross-meeting / agenda
+                "generate_next_agenda":   lambda: self.generate_next_agenda(
+                    topic=tool_input.get("topic"),
+                ),
                 "cluster_topic_decisions": lambda: self.cluster_topic_decisions(
                     topic=tool_input["topic"],
                     artifact_type=tool_input.get("artifact_type", "all"),
