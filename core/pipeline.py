@@ -74,8 +74,8 @@ def run_pipeline(hub, config, progress_callback):
                                run_communication_noise=run_communication_noise)
 
     elif run_bpmn and config.get("use_langgraph", False):
-        # ── LangGraph adaptive retry: run until score ≥ threshold or max retries ─
-        from core.lg_pipeline import LGBPMNRunner
+        # ── LangGraph expandido: BPMN + Minutes + Requirements retry loops ─────
+        from core.lg_pipeline import LGFullPipelineRunner
 
         # Step 1: prerequisites (Quality + Preprocessing + NLP only)
         hub = orchestrator.run(hub, output_lang,
@@ -87,16 +87,20 @@ def run_pipeline(hub, config, progress_callback):
                                run_bmm=False,
                                run_synthesizer=False)
 
-        # Step 2: BPMN adaptive retry via LangGraph
-        lg_runner = LGBPMNRunner(client_info, provider_cfg, config, progress_callback)
-        hub = lg_runner.run(hub, output_lang)
+        # Step 2: BPMN → Minutes → Requirements adaptive retry via LangGraph
+        lg_runner = LGFullPipelineRunner(client_info, provider_cfg, config, progress_callback)
+        hub = lg_runner.run(
+            hub, output_lang,
+            run_minutes=run_minutes,
+            run_requirements=run_requirements,
+        )
 
-        # Step 3: downstream agents
+        # Step 3: downstream agents (SBVR, BMM, DMN, Argumentation, Synthesizer)
         hub = orchestrator.run(hub, output_lang,
                                run_quality=False,
                                run_bpmn=False,
-                               run_minutes=run_minutes,
-                               run_requirements=run_requirements,
+                               run_minutes=False,       # already done by LG runner
+                               run_requirements=False,  # already done by LG runner
                                run_sbvr=run_sbvr,
                                run_bmm=run_bmm,
                                run_dmn=run_dmn,

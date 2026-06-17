@@ -290,6 +290,10 @@ class ValidationReport:
     ready: bool = False
     # v4.26: per-agent outcome scores (populated by AgentValidator.validate_all)
     agent_scores: dict = field(default_factory=dict)  # agent_name → AgentOutcomeScore
+    # v4.28: LangGraph full-pipeline retry tracking
+    lg_minutes_retries: int = 0       # number of minutes retries performed
+    lg_req_retries: int = 0           # number of requirements retries performed
+    lg_coordination_notes: list[str] = field(default_factory=list)  # cross-agent insights
 
     @property
     def errors(self):
@@ -856,6 +860,14 @@ class KnowledgeHub:
         # ── v4.26: CommunicationNoiseModel ────────────────────────────────────
         if not hasattr(hub, 'communication_noise'):
             hub.communication_noise = CommunicationNoiseModel()
+
+        # ── v4.28: LangGraph full-pipeline retry fields ───────────────────────
+        if not hasattr(hub.validation, 'lg_minutes_retries'):
+            hub.validation.lg_minutes_retries = 0
+        if not hasattr(hub.validation, 'lg_req_retries'):
+            hub.validation.lg_req_retries = 0
+        if not hasattr(hub.validation, 'lg_coordination_notes'):
+            hub.validation.lg_coordination_notes = []
 
         return hub
 

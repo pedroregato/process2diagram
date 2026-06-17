@@ -63,6 +63,10 @@ def init_session_state():
         st.session_state.validation_threshold = 6.0
     if "max_bpmn_retries" not in st.session_state:
         st.session_state.max_bpmn_retries = 3
+    if "max_minutes_retries" not in st.session_state:
+        st.session_state.max_minutes_retries = 2
+    if "max_req_retries" not in st.session_state:
+        st.session_state.max_req_retries = 2
     # ── Assistente & Embeddings (lidos por pages/Settings.py e pages/Assistente.py) ──
     if "asst_provider" not in st.session_state:
         st.session_state["asst_provider"] = "DeepSeek"

@@ -52,10 +52,20 @@ def render_bpmn(hub, prefix, suffix):
         lg_attempts = getattr(hub.bpmn, 'lg_attempts', 0)
         if lg_attempts > 0:
             lg_score = getattr(hub.bpmn, 'lg_final_score', 0.0)
-            st.info(
-                f"🔄 **LangGraph adaptive retry** — "
-                f"{lg_attempts} attempt(s), best quality score: **{lg_score:.1f}/10**"
-            )
+            lg_min_r  = getattr(hub.validation, 'lg_minutes_retries', 0)
+            lg_req_r  = getattr(hub.validation, 'lg_req_retries', 0)
+            parts = [f"BPMN: {lg_attempts} tentativa(s), score {lg_score:.1f}/10"]
+            if lg_min_r > 0:
+                parts.append(f"Ata: {lg_min_r} tentativa(s)")
+            if lg_req_r > 0:
+                parts.append(f"Requisitos: {lg_req_r} tentativa(s)")
+            st.info(f"🔄 **LangGraph expandido** — " + " · ".join(parts))
+
+            coord_notes = getattr(hub.validation, 'lg_coordination_notes', [])
+            if coord_notes:
+                with st.expander(f"🔗 {len(coord_notes)} nota(s) do coordenador", expanded=False):
+                    for note in coord_notes:
+                        st.caption(note)
     else:
         st.warning("BPMN XML not available")
 

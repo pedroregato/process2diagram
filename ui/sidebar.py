@@ -125,6 +125,17 @@ def render_sidebar():
                             index=[1, 2, 3, 5].index(st.session_state.max_bpmn_retries)
                             if st.session_state.max_bpmn_retries in [1, 2, 3, 5] else 2,
                         )
+                        _lg_r_col1, _lg_r_col2 = st.columns(2)
+                        st.session_state.max_minutes_retries = _lg_r_col1.selectbox(
+                            "Retentativas Ata", [1, 2, 3],
+                            index=[1, 2, 3].index(st.session_state.get("max_minutes_retries", 2)),
+                            help="Máx. retentativas LangGraph para Ata de Reunião",
+                        )
+                        st.session_state.max_req_retries = _lg_r_col2.selectbox(
+                            "Retentativas Req.", [1, 2, 3],
+                            index=[1, 2, 3].index(st.session_state.get("max_req_retries", 2)),
+                            help="Máx. retentativas LangGraph para Requisitos",
+                        )
 
                 st.session_state.enable_long_context = st.checkbox(
                     t("long_context"),
