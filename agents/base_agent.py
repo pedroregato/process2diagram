@@ -422,15 +422,18 @@ class BaseAgent(ABC):
     # ── Skill loading ─────────────────────────────────────────────────────────
 
     def _load_skill(self) -> str:
-        """Load SKILL.md content. Resolves path relative to project root."""
+        """Load SKILL.md content, stripping YAML frontmatter before returning."""
         if not self.skill_path:
             return ""
         # Use absolute path so this works regardless of CWD (local or Streamlit Cloud)
         project_root = Path(__file__).parent.parent
         path = project_root / self.skill_path
-        if path.exists():
-            return path.read_text(encoding="utf-8")
-        return ""
+        if not path.exists():
+            return ""
+        content = path.read_text(encoding="utf-8")
+        # Strip YAML frontmatter (--- ... ---) — metadata noise, not LLM instructions
+        content = re.sub(r'^---\s*\n.*?\n---\s*\n', '', content, flags=re.DOTALL)
+        return content.lstrip('\n')
 
     # ── Language helper ───────────────────────────────────────────────────────
 

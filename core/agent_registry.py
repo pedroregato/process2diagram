@@ -83,3 +83,129 @@ def format_card_summary(card: dict) -> str:
         f"[{mode} · {phase}{fatal_tag}] — {card.get('description', '')}. "
         f"Artefatos: {art_str}."
     )
+
+
+# ── Governance registry (Read / Draft / Act ladder) ───────────────────────────
+#
+# authority_level:
+#   read   — generates reports only; no persistent side effects
+#   draft  — persists artefacts to Supabase; reviewed by humans before
+#             any external action
+#   act    — performs external actions (calendar, email, webhooks);
+#             admin-gated, requires Red-Teaming before production use
+#
+AGENT_REGISTRY: dict[str, dict] = {
+    # ── Read-only ─────────────────────────────────────────────────────────
+    "transcript_quality": {
+        "authority_level": "read",
+        "skill_path": "skills/skill_transcript_quality.md",
+        "pipeline_step": 1,
+        "default_enabled": True,
+        "tags": ["quality", "gate"],
+    },
+    "communication_noise": {
+        "authority_level": "read",
+        "skill_path": "skills/skill_communication_noise.md",
+        "pipeline_step": 2,
+        "default_enabled": True,
+        "tags": ["quality"],
+    },
+    "synthesizer": {
+        "authority_level": "read",
+        "skill_path": "skills/SKILL_SYNTHESIZER.md",
+        "pipeline_step": 8,
+        "default_enabled": True,
+        "tags": ["report", "html"],
+    },
+    "query_summarizer": {
+        "authority_level": "read",
+        "skill_path": "skills/skill_query_summarizer.md",
+        "pipeline_step": None,
+        "default_enabled": True,
+        "tags": ["assistant", "rag"],
+    },
+    "contradiction_detector": {
+        "authority_level": "read",
+        "skill_path": "skills/skill_contradiction_detector.md",
+        "pipeline_step": None,
+        "default_enabled": False,
+        "tags": ["analysis", "on-demand"],
+    },
+    # ── Draft — persists artefacts to Supabase ────────────────────────────
+    "bpmn": {
+        "authority_level": "draft",
+        "skill_path": "skills/skill_bpmn.md",
+        "pipeline_step": 3,
+        "default_enabled": True,
+        "tags": ["diagram", "bpmn"],
+    },
+    "minutes": {
+        "authority_level": "draft",
+        "skill_path": "skills/skill_minutes.md",
+        "pipeline_step": 4,
+        "default_enabled": True,
+        "tags": ["minutes"],
+    },
+    "requirements": {
+        "authority_level": "draft",
+        "skill_path": "skills/SKILL_REQUIREMENTS.md",
+        "pipeline_step": 4,
+        "default_enabled": True,
+        "tags": ["requirements", "ieee830"],
+    },
+    "sbvr": {
+        "authority_level": "draft",
+        "skill_path": "skills/skill_sbvr.md",
+        "pipeline_step": 5,
+        "default_enabled": True,
+        "tags": ["sbvr", "omg"],
+    },
+    "bmm": {
+        "authority_level": "draft",
+        "skill_path": "skills/skill_bmm.md",
+        "pipeline_step": 6,
+        "default_enabled": True,
+        "tags": ["bmm", "omg"],
+    },
+    "dmn": {
+        "authority_level": "draft",
+        "skill_path": "skills/skill_dmn.md",
+        "pipeline_step": 7,
+        "default_enabled": True,
+        "tags": ["dmn", "diagram"],
+    },
+    "argumentation": {
+        "authority_level": "draft",
+        "skill_path": "skills/skill_argumentation.md",
+        "pipeline_step": 7,
+        "default_enabled": True,
+        "tags": ["ibis", "argumentation"],
+    },
+    "ckf_updater": {
+        "authority_level": "draft",
+        "skill_path": "skills/skill_ckf_updater.md",
+        "pipeline_step": 9,
+        "default_enabled": True,
+        "tags": ["ckf"],
+    },
+    "knowledge_extractor": {
+        "authority_level": "draft",
+        "skill_path": "skills/skill_knowledge_extractor.md",
+        "pipeline_step": None,
+        "default_enabled": False,
+        "tags": ["knowledge-graph", "on-demand"],
+    },
+    # ── Act — external side effects (admin-gated) ─────────────────────────
+    # Calendar scheduling is currently performed via assistant tools (admin-only),
+    # not a dedicated pipeline agent.
+}
+
+READ_AGENTS: set[str] = {
+    k for k, v in AGENT_REGISTRY.items() if v["authority_level"] == "read"
+}
+DRAFT_AGENTS: set[str] = {
+    k for k, v in AGENT_REGISTRY.items() if v["authority_level"] == "draft"
+}
+ACTION_AGENTS: set[str] = {
+    k for k, v in AGENT_REGISTRY.items() if v["authority_level"] == "act"
+}
