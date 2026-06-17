@@ -171,20 +171,21 @@ class AgentValidator:
 
             out_edges = [e for e in edges if e.source == s.id]
 
-            # ── Single-exit gateway: structural defect (heavy penalty) ────
-            # A gateway with < 2 outgoing edges means a branch was omitted.
-            # eventBasedGateway with 1 exit is still a defect but rarer.
-            if len(out_edges) < 2:
+            # ── Single-exit SPLIT gateway: structural defect (heavy penalty) ─
+            # A JOIN gateway legitimately has 1 outgoing edge (merges N→1).
+            # A SPLIT gateway with < 2 exits means a branch was omitted.
+            is_join = incoming.get(s.id, 0) > 1
+            if len(out_edges) < 2 and not is_join:
                 scores.append(0.0)
                 continue
 
             # ── XOR: all outgoing edges should be labeled ─────────────────
-            if s.task_type == "exclusiveGateway":
+            if s.task_type == "exclusiveGateway" and len(out_edges) > 1:
                 labeled = sum(1 for e in out_edges if (e.label or "").strip())
                 scores.append(labeled / len(out_edges) * 10.0)
 
             # ── AND / OR: must have a corresponding join ──────────────────
-            if s.task_type in ("parallelGateway", "inclusiveGateway"):
+            if s.task_type in ("parallelGateway", "inclusiveGateway") and len(out_edges) > 1:
                 join_exists = any(
                     s2.task_type == s.task_type
                     and s2.id != s.id

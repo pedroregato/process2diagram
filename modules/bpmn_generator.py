@@ -376,10 +376,14 @@ def _ev_def(etype):
     }.get(etype)
 
 
-_TASK_NAME_MAX = 65   # chars before truncation — ~4 lines in a 150×80 task box
+_TASK_NAME_MAX = 40   # chars before truncation — matches skill rule (≤40 chars)
 
 def _task_name(name: str) -> str:
-    """Truncate task names that would overflow even a larger box."""
+    """
+    Truncate element labels that would overflow their bpmn-js shape.
+    Applied to ALL element types (tasks, events, gateways) as a safety net
+    against LLM titles that exceed the 40-char skill rule.
+    """
     if not name:
         return ""
     name = name.strip()
@@ -474,14 +478,14 @@ def _assign_lanes(bpmn):
 def _build_el(parent, el):
     t = el.type
     if t in ("startEvent", "endEvent", "intermediateThrowEvent", "intermediateCatchEvent"):
-        node = _sub(parent, B + t, {"id": el.id, "name": el.name})
+        node = _sub(parent, B + t, {"id": el.id, "name": _task_name(el.name)})
         d = _ev_def(el.event_type)
         if d:
             _sub(node, B + d, {"id": el.id + "_def"})
 
     elif t == "boundaryEvent":
         attrs = {
-            "id": el.id, "name": el.name,
+            "id": el.id, "name": _task_name(el.name),
             "attachedToRef": el.attached_to or "",
             "cancelActivity": str(el.is_interrupting).lower(),
         }
@@ -491,7 +495,7 @@ def _build_el(parent, el):
             _sub(node, B + d, {"id": el.id + "_def"})
 
     elif "Gateway" in t:
-        _sub(parent, B + t, {"id": el.id, "name": el.name})
+        _sub(parent, B + t, {"id": el.id, "name": _task_name(el.name)})
 
     elif t == "subProcess":
         node = _sub(parent, B + "subProcess",
@@ -1030,19 +1034,19 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         lbl = _sub(shape, DI + "BPMNLabel")
         lb  = _sub(lbl, DC + "Bounds")
         # Label placement strategy:
-        # • Events (small circles): label above, extra width so text doesn't clip
-        # • Gateways (diamonds): label below, wider area for longer names
+        # • Events (small circles): label BELOW circle — wider+taller to fit 2 lines
+        # • Gateways (diamonds): label below diamond — wider+taller for longer names
         # • Tasks / sub-processes: bounds match shape — bpmn-js word-wraps inside
         _event_types   = ("startEvent", "endEvent",
                           "intermediateThrowEvent", "intermediateCatchEvent")
         _gateway_types = ("exclusiveGateway", "parallelGateway", "inclusiveGateway",
                           "eventBasedGateway", "complexGateway")
         if el.type in _event_types:
-            lb.set("x", str(int(x - 15))); lb.set("y", str(int(y - 30)))
-            lb.set("width",  str(int(w + 30))); lb.set("height", "28")
+            lb.set("x", str(int(x - 25))); lb.set("y", str(int(y + h + 4)))
+            lb.set("width",  str(int(w + 50))); lb.set("height", "44")
         elif el.type in _gateway_types:
-            lb.set("x", str(int(x - 10))); lb.set("y", str(int(y + h + 2)))
-            lb.set("width",  str(int(w + 20))); lb.set("height", "30")
+            lb.set("x", str(int(x - 25))); lb.set("y", str(int(y + h + 2)))
+            lb.set("width",  str(int(w + 50))); lb.set("height", "44")
         else:
             lb.set("x", str(int(x))); lb.set("y", str(int(y)))
             lb.set("width",  str(int(w))); lb.set("height", str(int(h)))
@@ -1076,7 +1080,7 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
             lbl = _sub(edge, DI + "BPMNLabel")
             _sub(lbl, DC + "Bounds", {
                 "x": str(lx), "y": str(ly),
-                "width": "60", "height": "20",
+                "width": "80", "height": "28",
             })
 
 
@@ -1511,11 +1515,11 @@ def _generate_bpmn_xml_multi(bpmn: BpmnProcess) -> str:
         lbl = _sub(shape, DI + "BPMNLabel")
         lb  = _sub(lbl, DC + "Bounds")
         if el.type in _event_types:
-            lb.set("x", str(int(x - 15))); lb.set("y", str(int(y - 30)))
-            lb.set("width",  str(int(w + 30))); lb.set("height", "28")
+            lb.set("x", str(int(x - 25))); lb.set("y", str(int(y + h + 4)))
+            lb.set("width",  str(int(w + 50))); lb.set("height", "44")
         elif "Gateway" in el.type:
-            lb.set("x", str(int(x - 10))); lb.set("y", str(int(y + h + 2)))
-            lb.set("width",  str(int(w + 20))); lb.set("height", "30")
+            lb.set("x", str(int(x - 25))); lb.set("y", str(int(y + h + 2)))
+            lb.set("width",  str(int(w + 50))); lb.set("height", "44")
         else:
             lb.set("x", str(int(x))); lb.set("y", str(int(y)))
             lb.set("width",  str(int(w))); lb.set("height", str(int(h)))
@@ -1555,7 +1559,7 @@ def _generate_bpmn_xml_multi(bpmn: BpmnProcess) -> str:
             lbl = _sub(edge, DI + "BPMNLabel")
             _sub(lbl, DC + "Bounds", {
                 "x": str(lx), "y": str(ly),
-                "width": "60", "height": "20",
+                "width": "80", "height": "28",
             })
 
     # Message flow edges — vertical routing between pools
