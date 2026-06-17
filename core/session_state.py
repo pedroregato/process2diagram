@@ -67,6 +67,8 @@ def init_session_state():
         st.session_state.max_minutes_retries = 2
     if "max_req_retries" not in st.session_state:
         st.session_state.max_req_retries = 2
+    if "max_delegation_rounds" not in st.session_state:
+        st.session_state.max_delegation_rounds = 1
     # ── Assistente & Embeddings (lidos por pages/Settings.py e pages/Assistente.py) ──
     if "asst_provider" not in st.session_state:
         st.session_state["asst_provider"] = "DeepSeek"

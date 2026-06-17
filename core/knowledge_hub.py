@@ -294,6 +294,8 @@ class ValidationReport:
     lg_minutes_retries: int = 0       # number of minutes retries performed
     lg_req_retries: int = 0           # number of requirements retries performed
     lg_coordination_notes: list[str] = field(default_factory=list)  # cross-agent insights
+    # v4.29: A2A delegation log — [{agent, summary}] for each delegation round
+    lg_delegation_log: list = field(default_factory=list)
 
     @property
     def errors(self):
@@ -868,6 +870,10 @@ class KnowledgeHub:
             hub.validation.lg_req_retries = 0
         if not hasattr(hub.validation, 'lg_coordination_notes'):
             hub.validation.lg_coordination_notes = []
+
+        # ── v4.29: A2A delegation log ─────────────────────────────────────────
+        if not hasattr(hub.validation, 'lg_delegation_log'):
+            hub.validation.lg_delegation_log = []
 
         return hub
 

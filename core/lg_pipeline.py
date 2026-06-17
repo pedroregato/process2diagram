@@ -10,7 +10,7 @@
 # Handles only the BPMN extraction + validation cycle.
 # Prerequisites and downstream agents handled by Orchestrator.
 #
-# ── LGFullPipelineRunner (v4.28) ──────────────────────────────────────────
+# ── LGFullPipelineRunner (v4.29) ──────────────────────────────────────────
 # Topology:
 #   [bpmn] → [validate_bpmn] ──retry──→ [bpmn]
 #                              └─proceed──→ [commit_bpmn]
@@ -19,11 +19,23 @@
 #                                                                           └─proceed──→ [requirements]
 #                                                        [requirements] → [validate_req] ──retry──→ [requirements]
 #                                                                                        └─proceed──→ [coordinator]
-#                                                                                             │
-#                                                                                            END
+#                                                                                                         │
+#                                                           ┌──────────────────────────────────────────── coordinator
+#                                                           │  (A2A delegation — round 0 only)
+#                                                    [delegate_bpmn]  ─┐
+#                                                    [delegate_minutes] ┼──→ coordinator (round 1) → END
+#                                                    [delegate_req]    ─┘
 #
-# Handles BPMN + Minutes + Requirements retry loops plus a cross-agent
-# coordinator that detects lane/participant mismatches and coverage gaps.
+# A2A Delegation (v4.29): after coordinator analysis, if cross-agent issues are
+# detected, the coordinator delegates to the affected agent with a context hint
+# injected into the system prompt via BaseAgent._lg_delegation_hint.
+# Only 1 delegation round per session (max_delegation_rounds=1 default).
+#
+# Delegation triggers (priority order):
+#   1. bpmn      — ≥2 BPMN lanes have no matching minutes participant
+#   2. requirements — BPMN gateways > n_req / 2 (insufficient business rules)
+#   3. minutes   — BPMN gateways > minutes.decisions count
+#
 # Downstream agents (SBVR, BMM, DMN, Argumentation, Synthesizer) are still
 # run by Orchestrator after this runner completes.
 #
@@ -251,6 +263,11 @@ class LGFullPipelineState(TypedDict):
     # Feature flags
     run_minutes: bool
     run_requirements: bool
+    # A2A delegation (v4.29)
+    delegation_hints: dict        # {agent_name: hint_text} set by coordinator
+    delegation_rounds: int        # incremented after each delegation node runs
+    max_delegation_rounds: int    # cap (default 1 — single delegation pass)
+    delegation_log: list          # [{agent, summary}] for UI display
 
 
 class LGFullPipelineRunner:
@@ -451,64 +468,91 @@ class LGFullPipelineRunner:
 
     # ── Coordinator node ───────────────────────────────────────────────────────
 
+    @staticmethod
+    def _bpmn_gateways(hub: KnowledgeHub) -> list:
+        """Return all gateway steps from the BPMN model (flat or collaboration)."""
+        _GW = {"exclusiveGateway", "parallelGateway", "inclusiveGateway",
+               "eventBasedGateway", "complexGateway", "gateway"}
+        if hub.bpmn.is_collaboration and hub.bpmn.pool_models:
+            steps = [s for pool in hub.bpmn.pool_models for s in pool.steps]
+        else:
+            steps = list(hub.bpmn.steps or [])
+        return [s for s in steps if s.task_type in _GW]
+
     def _coordinator_node(self, state: LGFullPipelineState) -> dict:
         """
-        Cross-agent consistency check.  Detects:
-        1. BPMN lanes not represented in minutes participants (and vice-versa)
-        2. Requirements count vs transcript size adequacy
-        3. Minutes participants count vs transcript speaker density
+        Cross-agent consistency check + A2A delegation decision.
 
-        Writes notes to hub.validation.lg_coordination_notes.
+        Analysis:
+        1. BPMN lanes ↔ minutes participants mismatch
+        2. Requirements adequacy vs transcript length
+        3. Gateway count vs requirements / decisions (triggers delegation)
+
+        Delegation (round 0 only — capped by max_delegation_rounds):
+        - Priority 1 bpmn:          ≥2 lanes without a matching participant
+        - Priority 2 requirements:  gateways × 2 > n_req (missing business rules)
+        - Priority 3 minutes:       gateways > n_decisions (missing decisions)
+
         Non-fatal — any exception is swallowed.
         """
-        hub   = state["hub"]
-        notes = []
+        hub              = state["hub"]
+        notes: list[str] = []
+        delegation_hints: dict = {}
+        rounds   = state.get("delegation_rounds", 0)
+        max_del  = state.get("max_delegation_rounds", 1)
+
+        # Word normaliser for fuzzy lane ↔ participant matching
+        def _words(s: str) -> set:
+            return set(re.sub(r"[^a-záàâãéèêíïóôõúüç\s]", "", s.lower()).split())
+
+        unmatched_lanes: list[str] = []
+        unmatched_parts: list[str] = []
+        lanes_set: set  = set()
+        parts_set: set  = set()
 
         try:
             # ── 1. BPMN lanes ↔ minutes participants ──────────────────────────
             if hub.bpmn.ready and hub.minutes.ready:
-                lanes        = {(l.get("name") or "").strip().lower() for l in (hub.bpmn.lanes or [])}
-                participants = {(p.get("name") or "").strip().lower() for p in (hub.minutes.participants or [])}
+                lanes_set = {
+                    (l.get("name") or "").strip().lower()
+                    for l in (hub.bpmn.lanes or [])
+                }
+                parts_set = {
+                    (p.get("name") or "").strip().lower()
+                    for p in (hub.minutes.participants or [])
+                }
 
-                if lanes and participants:
-                    # Build normalized word sets for fuzzy matching
-                    def _words(s: str) -> set:
-                        return set(re.sub(r"[^a-záàâãéèêíïóôõúüç\s]", "", s).split())
-
-                    for lane in lanes:
-                        lane_words = _words(lane)
-                        matched = any(
-                            lane_words & _words(p) for p in participants
-                        )
+                if lanes_set and parts_set:
+                    for lane in lanes_set:
+                        matched = any(_words(lane) & _words(p) for p in parts_set)
                         if not matched:
+                            unmatched_lanes.append(lane)
                             notes.append(
                                 f"⚠️ Raia BPMN '{lane.title()}' não encontrada nos participantes da ata."
                             )
-
-                    for participant in participants:
-                        part_words = _words(participant)
-                        matched = any(
-                            part_words & _words(l) for l in lanes
-                        )
+                    for part in parts_set:
+                        matched = any(_words(part) & _words(l) for l in lanes_set)
                         if not matched:
+                            unmatched_parts.append(part)
                             notes.append(
-                                f"ℹ️ Participante '{participant.title()}' não aparece como raia BPMN."
+                                f"ℹ️ Participante '{part.title()}' não aparece como raia BPMN."
                             )
 
             # ── 2. Requirements adequacy ──────────────────────────────────────
+            n_req = 0
             if state["run_requirements"]:
                 n_req  = len(hub.requirements.requirements or [])
                 words  = len(hub.transcript_clean.split())
                 expected = max(self._MIN_REQUIREMENTS, (words // 500) * self._REQ_PER_500_WORDS)
                 if n_req < expected:
                     notes.append(
-                        f"ℹ️ Apenas {n_req} requisito(s) extraído(s); "
-                        f"esperado ≥{expected} para transcrição de {words} palavras."
+                        f"ℹ️ Apenas {n_req} requisito(s); esperado ≥{expected} "
+                        f"para transcrição de {words} palavras."
                     )
                 else:
-                    notes.append(f"✅ {n_req} requisito(s) extraído(s) — cobertura adequada.")
+                    notes.append(f"✅ {n_req} requisito(s) — cobertura adequada.")
 
-            # ── 3. Minutes retries summary ────────────────────────────────────
+            # ── 3. Retry summary ──────────────────────────────────────────────
             if state["run_minutes"] and state["minutes_attempts"] > 1:
                 notes.append(
                     f"ℹ️ Ata reprocessada {state['minutes_attempts']} vez(es) pelo LangGraph."
@@ -518,23 +562,193 @@ class LGFullPipelineRunner:
                     f"ℹ️ Requisitos reprocessados {state['req_attempts']} vez(es) pelo LangGraph."
                 )
 
+            # ── 4. A2A Delegation decision ────────────────────────────────────
+            if rounds < max_del and hub.bpmn.ready:
+                gateways = self._bpmn_gateways(hub)
+
+                # Priority 1 — BPMN ← Coordinator: lanes without participants
+                if len(unmatched_lanes) >= 2:
+                    parts_str = ", ".join(p.title() for p in sorted(parts_set)[:8])
+                    missing_str = ", ".join(l.title() for l in unmatched_lanes[:5])
+                    delegation_hints["bpmn"] = (
+                        "[DELEGAÇÃO: Coordenador→AgentBPMN]\n"
+                        "A Ata de Reunião identificou participantes não representados como lanes.\n\n"
+                        f"Participantes na ata: {parts_str or 'N/D'}\n"
+                        f"Lanes sem correspondência: {missing_str}\n\n"
+                        "Revise a transcrição e certifique-se de que TODOS os participantes da ata "
+                        "sejam representados como lanes. Preserve o fluxo já identificado; apenas "
+                        "adicione lanes ausentes e reposicione atividades conforme necessário."
+                    )
+                    notes.append(
+                        f"→ Delegando ao AgentBPMN: {len(unmatched_lanes)} raia(s) sem "
+                        "participante correspondente na ata."
+                    )
+
+                # Priority 2 — Requirements ← Coordinator: gateways suggest more business rules
+                elif gateways and state["run_requirements"] and n_req < len(gateways) * 2:
+                    gw_list = "\n".join(
+                        f"  • {s.title} ({s.task_type})" for s in gateways[:8]
+                    )
+                    expected_from_gw = len(gateways) * 2
+                    delegation_hints["requirements"] = (
+                        "[DELEGAÇÃO: Coordenador→AgentRequirements]\n"
+                        f"O BPMN contém {len(gateways)} gateway(s) de decisão, mas apenas "
+                        f"{n_req} requisito(s) foram extraídos (esperado ≥{expected_from_gw}).\n\n"
+                        "Gateways representam critérios de decisão que devem originar requisitos "
+                        "do tipo business_rule ou constraint.\n\n"
+                        f"Pontos de decisão identificados:\n{gw_list}\n\n"
+                        "Para cada gateway, extraia: o critério que governa a decisão, "
+                        "as condições de cada caminho (ex: 'Valor < R$500k', 'Aprovado') "
+                        "e quaisquer restrições implícitas na transcrição."
+                    )
+                    notes.append(
+                        f"→ Delegando ao AgentRequirements: {len(gateways)} gateway(s) "
+                        f"sugere(m) ≥{expected_from_gw} requisitos, encontrados {n_req}."
+                    )
+
+                # Priority 3 — Minutes ← Coordinator: gateways suggest missing decisions
+                elif gateways and state["run_minutes"] and hub.minutes.ready:
+                    n_dec = len(hub.minutes.decisions or [])
+                    if n_dec < len(gateways):
+                        gw_list = "\n".join(f"  • {s.title}" for s in gateways[:8])
+                        delegation_hints["minutes"] = (
+                            "[DELEGAÇÃO: Coordenador→AgentMinutes]\n"
+                            f"O BPMN contém {len(gateways)} ponto(s) de decisão (gateway), "
+                            f"mas a ata registrou apenas {n_dec} decisão(ões) formal(is).\n\n"
+                            f"Pontos de decisão no BPMN:\n{gw_list}\n\n"
+                            "Revise a transcrição focando nesses pontos e extraia as decisões "
+                            "e encaminhamentos associados a cada gateway."
+                        )
+                        notes.append(
+                            f"→ Delegando ao AgentMinutes: {len(gateways)} gateway(s) "
+                            f"mas apenas {n_dec} decisão(ões) na ata."
+                        )
+
         except Exception:
             notes.append("⚠️ Coordenação entre agentes falhou silenciosamente.")
 
-        # Write to hub
         hub.validation.lg_coordination_notes = notes
         hub.validation.lg_minutes_retries    = state["minutes_attempts"]
         hub.validation.lg_req_retries        = state["req_attempts"]
         hub.bump()
 
-        self._progress("Coordenador LG", f"done ({len(notes)} nota(s))")
-        return {"hub": hub}
+        n_del = len(delegation_hints)
+        suffix = f", {n_del} delegação(ões)" if n_del else ""
+        self._progress("Coordenador LG", f"done ({len(notes)} nota(s){suffix})")
+        return {"hub": hub, "delegation_hints": delegation_hints}
+
+    # ── A2A delegation nodes ────────────────────────────────────────────────────
+
+    def _node_delegate_bpmn(self, state: LGFullPipelineState) -> dict:
+        """Re-run AgentBPMN with coordinator context injected into system prompt."""
+        hub   = state["hub"]
+        hint  = state.get("delegation_hints", {}).get("bpmn", "")
+        rounds = state.get("delegation_rounds", 0)
+
+        self._progress("Agente BPMN (Delegação A2A)", "running")
+        hub_copy      = copy.copy(hub)
+        hub_copy.bpmn = BPMNModel()
+        self.agent_bpmn._lg_delegation_hint = hint
+        self.agent_bpmn._lg_skip_cache      = True
+        try:
+            hub_copy = self.agent_bpmn.run(hub_copy, state["output_language"])
+        finally:
+            self.agent_bpmn._lg_delegation_hint = ""
+            self.agent_bpmn._lg_skip_cache      = False
+
+        hub.bpmn = hub_copy.bpmn
+        hub.meta.total_tokens_used = hub_copy.meta.total_tokens_used
+        hub.bump()
+        self._progress("Agente BPMN (Delegação A2A)", "done")
+
+        log = list(state.get("delegation_log", []))
+        log.append({"agent": "bpmn", "summary": "lanes ↔ participantes da ata"})
+        hub.validation.lg_delegation_log = log
+        return {
+            "hub": hub,
+            "delegation_rounds": rounds + 1,
+            "delegation_hints":  {},
+            "delegation_log":    log,
+        }
+
+    def _node_delegate_minutes(self, state: LGFullPipelineState) -> dict:
+        """Re-run AgentMinutes with coordinator context injected into system prompt."""
+        hub   = state["hub"]
+        hint  = state.get("delegation_hints", {}).get("minutes", "")
+        rounds = state.get("delegation_rounds", 0)
+
+        self._progress("Agente Ata (Delegação A2A)", "running")
+        agent = self._get_minutes_agent()
+        agent._lg_delegation_hint = hint
+        agent._lg_skip_cache      = True
+        try:
+            hub = agent.run(hub, state["output_language"])
+        finally:
+            agent._lg_delegation_hint = ""
+            agent._lg_skip_cache      = False
+
+        self._progress("Agente Ata (Delegação A2A)", "done")
+
+        log = list(state.get("delegation_log", []))
+        log.append({"agent": "minutes", "summary": "gateways BPMN ↔ decisões da ata"})
+        hub.validation.lg_delegation_log = log
+        return {
+            "hub": hub,
+            "delegation_rounds": rounds + 1,
+            "delegation_hints":  {},
+            "delegation_log":    log,
+        }
+
+    def _node_delegate_req(self, state: LGFullPipelineState) -> dict:
+        """Re-run AgentRequirements with coordinator context injected into system prompt."""
+        hub   = state["hub"]
+        hint  = state.get("delegation_hints", {}).get("requirements", "")
+        rounds = state.get("delegation_rounds", 0)
+
+        self._progress("Agente Requisitos (Delegação A2A)", "running")
+        agent = self._get_req_agent()
+        agent._lg_delegation_hint = hint
+        agent._lg_skip_cache      = True
+        try:
+            hub = agent.run(hub, state["output_language"])
+        finally:
+            agent._lg_delegation_hint = ""
+            agent._lg_skip_cache      = False
+
+        self._progress("Agente Requisitos (Delegação A2A)", "done")
+
+        log = list(state.get("delegation_log", []))
+        log.append({"agent": "requirements", "summary": "gateways BPMN → regras de negócio"})
+        hub.validation.lg_delegation_log = log
+        return {
+            "hub": hub,
+            "delegation_rounds": rounds + 1,
+            "delegation_hints":  {},
+            "delegation_log":    log,
+        }
+
+    def _route_coordinator(self, state: LGFullPipelineState) -> str:
+        """Route coordinator output: to a delegation node or END."""
+        hints  = state.get("delegation_hints", {})
+        rounds = state.get("delegation_rounds", 0)
+        max_d  = state.get("max_delegation_rounds", 1)
+
+        if rounds >= max_d or not hints:
+            return "end"
+        if "bpmn" in hints:
+            return "delegate_bpmn"
+        if "requirements" in hints:
+            return "delegate_req"
+        if "minutes" in hints:
+            return "delegate_minutes"
+        return "end"
 
     # ── Graph construction ─────────────────────────────────────────────────────
 
     def _build_graph(self):
         graph = StateGraph(LGFullPipelineState)
 
+        # ── Core pipeline nodes ───────────────────────────────────────────────
         graph.add_node("bpmn",             self._bpmn_node)
         graph.add_node("validate_bpmn",    self._validate_bpmn_node)
         graph.add_node("commit_bpmn",      self._commit_bpmn_node)
@@ -544,6 +758,12 @@ class LGFullPipelineRunner:
         graph.add_node("validate_req",     self._validate_req_node)
         graph.add_node("coordinator",      self._coordinator_node)
 
+        # ── A2A delegation nodes ──────────────────────────────────────────────
+        graph.add_node("delegate_bpmn",    self._node_delegate_bpmn)
+        graph.add_node("delegate_minutes", self._node_delegate_minutes)
+        graph.add_node("delegate_req",     self._node_delegate_req)
+
+        # ── Pipeline edges ────────────────────────────────────────────────────
         graph.set_entry_point("bpmn")
         graph.add_edge("bpmn", "validate_bpmn")
         graph.add_conditional_edges(
@@ -564,7 +784,23 @@ class LGFullPipelineRunner:
             self._should_retry_req,
             {"retry": "requirements", "proceed": "coordinator"},
         )
-        graph.add_edge("coordinator", END)
+
+        # ── Coordinator → delegation or END ───────────────────────────────────
+        graph.add_conditional_edges(
+            "coordinator",
+            self._route_coordinator,
+            {
+                "delegate_bpmn":    "delegate_bpmn",
+                "delegate_minutes": "delegate_minutes",
+                "delegate_req":     "delegate_req",
+                "end":              END,
+            },
+        )
+
+        # ── Delegation → coordinator (round+1 will route to END) ──────────────
+        graph.add_edge("delegate_bpmn",    "coordinator")
+        graph.add_edge("delegate_minutes", "coordinator")
+        graph.add_edge("delegate_req",     "coordinator")
 
         return graph.compile()
 
@@ -594,6 +830,8 @@ class LGFullPipelineRunner:
 
         compiled = self._build_graph()
 
+        max_delegation = self.config.get("max_delegation_rounds", 1)
+
         initial_state: LGFullPipelineState = {
             "hub":                hub,
             "bpmn_attempts":      0,
@@ -609,6 +847,11 @@ class LGFullPipelineRunner:
             "output_language":    output_language,
             "run_minutes":        run_minutes,
             "run_requirements":   run_requirements,
+            # A2A delegation
+            "delegation_hints":        {},
+            "delegation_rounds":       0,
+            "max_delegation_rounds":   max_delegation,
+            "delegation_log":          [],
         }
 
         final_state = compiled.invoke(initial_state)

@@ -51,14 +51,21 @@ def render_bpmn(hub, prefix, suffix):
 
         lg_attempts = getattr(hub.bpmn, 'lg_attempts', 0)
         if lg_attempts > 0:
-            lg_score = getattr(hub.bpmn, 'lg_final_score', 0.0)
-            lg_min_r  = getattr(hub.validation, 'lg_minutes_retries', 0)
-            lg_req_r  = getattr(hub.validation, 'lg_req_retries', 0)
+            lg_score   = getattr(hub.bpmn, 'lg_final_score', 0.0)
+            lg_min_r   = getattr(hub.validation, 'lg_minutes_retries', 0)
+            lg_req_r   = getattr(hub.validation, 'lg_req_retries', 0)
+            lg_del_log = getattr(hub.validation, 'lg_delegation_log', [])
+
             parts = [f"BPMN: {lg_attempts} tentativa(s), score {lg_score:.1f}/10"]
             if lg_min_r > 0:
                 parts.append(f"Ata: {lg_min_r} tentativa(s)")
             if lg_req_r > 0:
                 parts.append(f"Requisitos: {lg_req_r} tentativa(s)")
+            if lg_del_log:
+                _agent_labels = {"bpmn": "BPMN", "minutes": "Ata", "requirements": "Requisitos"}
+                del_names = [_agent_labels.get(d.get("agent", ""), d.get("agent", "")) for d in lg_del_log]
+                parts.append(f"🤝 Delegações A2A: {', '.join(del_names)}")
+
             st.info(f"🔄 **LangGraph expandido** — " + " · ".join(parts))
 
             coord_notes = getattr(hub.validation, 'lg_coordination_notes', [])
@@ -66,6 +73,11 @@ def render_bpmn(hub, prefix, suffix):
                 with st.expander(f"🔗 {len(coord_notes)} nota(s) do coordenador", expanded=False):
                     for note in coord_notes:
                         st.caption(note)
+            if lg_del_log:
+                with st.expander(f"🤝 {len(lg_del_log)} delegação(ões) A2A realizadas", expanded=False):
+                    for d in lg_del_log:
+                        agent_label = {"bpmn": "AgentBPMN", "minutes": "AgentMinutes", "requirements": "AgentRequirements"}.get(d.get("agent", ""), d.get("agent", ""))
+                        st.caption(f"→ **{agent_label}**: {d.get('summary', '')}")
     else:
         st.warning("BPMN XML not available")
 

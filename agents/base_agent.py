@@ -144,6 +144,15 @@ class BaseAgent(ABC):
             pass
         # ─────────────────────────────────────────────────────────────────────
 
+        # ── A2A delegation hint (LangGraph cross-agent coordination) ─────────
+        # Injected by LGFullPipelineRunner delegation nodes via _lg_delegation_hint.
+        # Appended to system prompt so it influences the LLM without altering the
+        # user prompt or the PII sanitization pipeline.
+        _delegation_hint = getattr(self, "_lg_delegation_hint", "")
+        if _delegation_hint:
+            system = system + "\n\n## CONTEXTO DE COORDENAÇÃO\n" + _delegation_hint
+        # ─────────────────────────────────────────────────────────────────
+
         # ── PII sanitization ──────────────────────────────────────────────
         sanitized = sanitize(user)
         safe_user = sanitized.text
