@@ -192,6 +192,29 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **`ensino/PLANO_DO_CURSO.md`** — Módulo 7 adicionado à tabela de estrutura; total 14h→15h; seção completa com descrição dos dois cenários e exercício central
 - [x] **`pages/Capacitacao.py`** — Módulo 7 adicionado a `_MODULES` (2 cenários: 7A e 7B); isolamento de contexto por usuário: botão "▶ Carregar" agora chama `_get_or_create_course_project()` que cria/resolve o projeto "Curso P2D - {usuario}" no Supabase antes de redirecionar ao Pipeline — evita mistura com projetos reais da empresa; fail-open quando Supabase não configurado
 
+### PC47 — Concluído (sem PC / 2026-06-16)
+- [x] **BPMN quality — regra de gateway com saída única** (`skill_bpmn.md` v7.3 + `agents/agent_validator.py`)
+  - `skill_bpmn.md` v7.3: nova **REGRA CRÍTICA** em Passo 4 — todo gateway exige ≥ 2 sequence flows de saída; gateway com 1 saída indica ramificação omitida; exemplo explícito (Valor Abaixo do Limite? — 2 caminhos obrigatórios); checklist item adicionado em Passo 6
+  - `agents/agent_validator.py` — `_score_gateways()`: new single-exit guard antes dos checks de XOR/AND; qualquer gateway com `len(out_edges) < 2` recebe `scores.append(0.0)` e `continue`; condição de XOR/AND corrigida para `if len > 1` implícito via continue
+
+### PC46 — Concluído (sem PC / 2026-06-16)
+- [x] **LangGraph expandido — Minutes + Requirements com adaptive retry** (`core/lg_pipeline.py`, `core/pipeline.py`, `core/knowledge_hub.py`, `agents/orchestrator.py`, `ui/sidebar.py`, `ui/tabs/bpmn_tabs.py`, `core/session_state.py`, `pages/Pipeline.py`)
+  - `LGFullPipelineRunner` com 8 nós: bpmn → validate_bpmn → commit_bpmn → minutes → validate_minutes → requirements → validate_req → coordinator → END
+  - Coordinator node: fuzzy word-overlap lanes ↔ participants + coverage check; notas em `hub.validation.lg_coordination_notes`
+  - `ValidationReport` estendido: `lg_minutes_retries`, `lg_req_retries`, `lg_coordination_notes`
+  - Bug fix (❌ icons): progress messages padronizadas para "running (...)" / "done (...)"
+  - Bug fix (double preprocessing): `run_prereqs=True` param em `Orchestrator.run()`; Step 3 passa `run_prereqs=False`
+  - Bug fix (identical scores): `_lg_skip_cache` instance attr em `BaseAgent._call_llm()`; setado True em retentativas > 1
+  - Sidebar: 2 novos selectboxes `max_minutes_retries` + `max_req_retries` quando LG ativo
+  - BPMN tab: banner expandido mostra retentativas Minutes/Req + expander coordination notes
+
+### PC45 — Concluído (sem PC / 2026-06-16)
+- [x] **Agent Cards — metadados semânticos por agente** (`skills/agent_cards/*.yaml`, `core/agent_registry.py`, `core/assistant_tools.py`, `pages/MasterAdmin.py`)
+  - 18 YAML cards cobrindo todos os agentes: transcript_quality, bpmn, mermaid, minutes, requirements, sbvr, bmm, dmn, argumentation, synthesizer, query_summarizer, knowledge_extractor, contradiction_detector, communication_noise, ckf_updater, validator, document_analyzer, document_extractor
+  - `core/agent_registry.py`: `get_agent_cards()` (lru_cache), `get_agent_card(name)`, `get_pipeline_agents()`, `get_on_demand_agents()`, `format_card_summary()`; ordenado por pipeline_phase
+  - `get_system_capabilities()` atualizado para usar registry; agrupa por fase
+  - `pages/MasterAdmin.py` Seção 6 — visualizador elegante: 4 KPIs, filtros phase/mode, grid CSS 3 colunas com hover, badges coloridos por fase, painel de inspeção de detalhe
+
 ### PC44 — Concluído (sem PC / 2026-06-14)
 - [x] **`core/assistant_tools.py`** (`5b02b1c`) — `generate_ibis_map` corrigido:
   - Labels Q-nodes globalmente únicos: `"Q1<br>R9"` em vez de `"Q1"` local por reunião — elimina ambiguidade de leitura horizontal

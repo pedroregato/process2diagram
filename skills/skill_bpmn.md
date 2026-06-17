@@ -3,7 +3,7 @@ agent: bpmn
 iniciativa: Pedro Regato
 project: process2diagram
 spec: BPMN 2.0 (OMG — ISO/IEC 19510) · Bruce Silver Method and Style
-version: 7.2
+version: 7.3
 ---
 
 # BPMN Agent — Instruções de Execução
@@ -216,6 +216,22 @@ Modelagem de Boundary Events:
 | Baseado em evento — aguarda o primeiro evento | `eventBasedGateway` | `false` | "Aguarda resposta ou tempo esgota" |
 | Condição complexa — combinação AND/OR/XOR | `complexGateway` | `false` | Lógica híbrida explícita na transcrição |
 
+**REGRA CRÍTICA — Todo gateway exige ≥ 2 saídas:**
+
+Um `exclusiveGateway`, `parallelGateway` ou `inclusiveGateway` com apenas **1 saída** é um **erro estrutural grave** — indica que uma ramificação foi omitida na análise da transcrição.
+
+Antes de declarar qualquer gateway:
+1. Confirme que **todos** os caminhos da decisão estão presentes na transcrição.
+2. Liste explicitamente **cada ramificação** com seu `label` de condição.
+3. Se a transcrição menciona um limiar (ex: "Valor ≥ R$500k" ou "se aprovado"), os dois lados DEVEM ser modelados — inclusive o caminho que parece "óbvio".
+
+```
+✗ Errado: gateway "Valor Abaixo do Limite?" com 1 saída → EndEvent
+✓ Correto: 2 saídas: "Sim (< R$500k)" → Assinar Contrato  |  "Não (≥ R$500k)" → Encaminhar Comitê
+```
+
+Se você só consegue identificar **uma** saída → **não use gateway**: use tarefa com `description` documentando a condição. Um gateway com 1 saída não tem significado semântico.
+
 **Regra de Sincronização (Split ↔ Join):**
 
 ```
@@ -268,6 +284,7 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 **Estrutura e Completude:**
 - [ ] Todo nó tem ao menos uma entrada e uma saída (exceto start/end)
 - [ ] Todo caminho termina em um end event
+- [ ] **Todo gateway tem ≥ 2 sequence flows de saída?** (gateway com 1 saída = ramificação omitida — erro crítico)
 - [ ] Todo AND/OR/XOR/complexGateway split tem join correspondente do mesmo tipo do outro lado das atividades — nunca múltiplos fluxos convergindo diretamente em uma tarefa
 - [ ] Toda saída de gateway `is_decision: true` tem `label` preenchido
 - [ ] IDs de steps são sequenciais S01, S02, S03... sem lacunas
