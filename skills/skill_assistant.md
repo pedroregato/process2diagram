@@ -484,3 +484,77 @@ O retorno indica: `página X/Y · N de TOTAL no total`.
 - Se houver mais páginas, chame automaticamente `get_requirements(page=2)`, `get_requirements(page=3)`, etc., até obter todos os registros que o usuário pediu.
 - Para perguntas sobre um requisito específico, use `keyword="REQ-229"` — retorna só aquele item.
 - Para listar TODOS os requisitos de uma vez: chame com `page_size=100` e itere pelas páginas até `page == total_pages`.
+
+---
+
+## Análise Transversal entre Reuniões — cluster_topic_decisions
+
+Use `cluster_topic_decisions(topic, artifact_type?)` quando o usuário quiser rastrear como um tema evoluiu **em todas as reuniões do projeto**.
+
+Gatilhos obrigatórios:
+- "Como o tema X foi tratado ao longo do projeto?"
+- "Mostre tudo que foi decidido sobre Y em todas as reuniões"
+- "Rastreie o tema X no projeto inteiro"
+- "Como evoluiu a discussão sobre Z?"
+- "O que foi decidido, debatido e documentado sobre X?"
+
+Parâmetro `artifact_type`:
+- `"all"` (padrão) — cruza DMN + debates IBIS + decisões de atas
+- `"dmn"` — só tabelas de decisão
+- `"ibis"` — só questões argumentativas
+- `"minutes"` — só decisões das atas
+
+Exemplos de chamada:
+```
+cluster_topic_decisions(topic="autenticação")
+cluster_topic_decisions(topic="integração SAP", artifact_type="ibis")
+cluster_topic_decisions(topic="LGPD", artifact_type="dmn")
+```
+
+---
+
+## Sugestão de Pauta — generate_next_agenda
+
+Use `generate_next_agenda(topic?)` quando o usuário quiser preparar a próxima reunião com base nos pendentes do projeto.
+
+Gatilhos obrigatórios:
+- "Monte a pauta para a próxima reunião"
+- "Quais assuntos ficaram pendentes?"
+- "Prepare uma pauta de retomada"
+- "O que precisa ser discutido na próxima reunião?"
+- "Gere uma sugestão de agenda"
+
+O parâmetro `topic` é opcional — filtra a pauta por tema específico (ex: `"integração"`, `"aprovação"`).
+
+A ferramenta lê automaticamente debates IBIS adiados e encaminhamentos não concluídos das atas para compor 5 seções com estimativas de duração.
+
+---
+
+## Instruções Internas dos Agentes — read_skill_reference
+
+Use `read_skill_reference(agent, section?)` quando o usuário perguntar sobre como um agente do sistema funciona internamente: quais regras ele segue, qual é seu método, como estrutura os artefatos.
+
+Gatilhos obrigatórios:
+- "Como o agente BPMN funciona?" / "Quais regras o AgentBPMN segue?"
+- "Como o agente de requisitos classifica prioridade?"
+- "Como é gerada a ata de reunião?"
+- "O que o agente SBVR extrai?"
+- "Como funciona o AgentDMN / AgentBMM / AgentSynthesizer?"
+- "Mostre o checklist de qualidade do BPMN"
+- "Quais critérios definem o tipo de gateway?"
+
+Agentes disponíveis: `bpmn`, `minutes`, `requirements`, `sbvr`, `bmm`, `dmn`,
+`argumentation`, `synthesizer`, `transcript_quality`, `communication_noise`,
+`ckf_updater`, `knowledge_extractor`, `query_summarizer`.
+
+Use o parâmetro `section` quando a pergunta for específica — extrai apenas aquela seção,
+economizando contexto:
+
+```
+read_skill_reference(agent="bpmn", section="Passo 1 — Identificar Participantes")
+read_skill_reference(agent="bpmn", section="Checklist de Qualidade")
+read_skill_reference(agent="requirements")          # carrega tudo (arquivo curto)
+read_skill_reference(agent="minutes", section="Formato de Saída")
+```
+
+Se não souber o nome exato da seção, chame sem `section` — o retorno lista as seções disponíveis quando o arquivo é truncado.

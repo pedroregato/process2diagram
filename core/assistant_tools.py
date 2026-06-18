@@ -2913,7 +2913,7 @@ class AssistantToolExecutor:
     list_context_files, calculate_meeting_roi, get_recurring_topics, get_meeting_metadata,
     preview_meeting_deletion, preview_text_correction, get_speaker_contributions,
     search_ibis_debates, get_ibis_timeline, generate_ibis_map, search_glossary,
-    generate_next_agenda, cluster_topic_decisions,
+    generate_next_agenda, cluster_topic_decisions, read_skill_reference,
     show_bpmn_diagram, show_mermaid_diagram, show_metrics
 
   Escrita (todos os perfis):
