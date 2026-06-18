@@ -1,0 +1,4710 @@
+{
+  "project_id": "ad8fea02-2a66-4bae-80ef-9fb70e59d8c5",
+  "project_name": "SDEA - Sistema de Documentação Eletrônica da Auditoria",
+  "summary": {
+    "entities": 52,
+    "processes": 30,
+    "facts": 235,
+    "contradictions": 28,
+    "edges": 166
+  },
+  "entities": [
+    {
+      "id": "1cc7248f-e5e5-4430-a16d-fced48942aea",
+      "canonical_name": "Maria de Fátima Duarte Moura",
+      "entity_type": "person",
+      "occurrence_count": 59,
+      "aliases": [
+        "Fátima Sá",
+        "Fátima Duarte Moura",
+        "Fátima",
+        "Maria de Fátima"
+      ],
+      "first_seen_meeting_id": "5b27f5f5-ccf4-4cd5-81db-793330bab7d5",
+      "last_seen_meeting_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "965db520-4eba-4b4b-83f7-622776740246",
+      "canonical_name": "Natasha Cristine Costa",
+      "entity_type": "person",
+      "occurrence_count": 48,
+      "aliases": [
+        "Natasha",
+        "Natasha Cristine",
+        "Nati"
+      ],
+      "first_seen_meeting_id": "5b27f5f5-ccf4-4cd5-81db-793330bab7d5",
+      "last_seen_meeting_id": "6569e6ea-7d91-4dd5-89cf-d07f5ae1ac2e"
+    },
+    {
+      "id": "9331ad42-0c7d-41e0-ae9a-454fddcffdee",
+      "canonical_name": "Pedro Gentil Regato de Oliveira Soares",
+      "entity_type": "person",
+      "occurrence_count": 43,
+      "aliases": [
+        "Oliveira",
+        "Pedrinho",
+        "Pedro Gentil",
+        "Pedro"
+      ],
+      "first_seen_meeting_id": "5b27f5f5-ccf4-4cd5-81db-793330bab7d5",
+      "last_seen_meeting_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "74221593-48b5-4e1a-9161-d5fa3843b475",
+      "canonical_name": "João Luís Ferreira Chaves",
+      "entity_type": "person",
+      "occurrence_count": 40,
+      "aliases": [
+        "João Luís",
+        "João"
+      ],
+      "first_seen_meeting_id": "870eb15c-a472-4561-b3fa-f299f43d5c93",
+      "last_seen_meeting_id": "6569e6ea-7d91-4dd5-89cf-d07f5ae1ac2e"
+    },
+    {
+      "id": "f094adf6-1c6f-42b8-9c9c-1fbbd98b9b3c",
+      "canonical_name": "Equipe de Auditoria",
+      "entity_type": "team",
+      "occurrence_count": 15,
+      "aliases": [
+        "Equipe de Almeida",
+        "auditoria",
+        "Equipe",
+        "Equipe da Costa do Sistemas"
+      ],
+      "first_seen_meeting_id": "2e57dcef-ef81-4c2e-9d22-b60891e62f86",
+      "last_seen_meeting_id": "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+    },
+    {
+      "id": "80928c6d-b9a7-42af-85d9-facc51e18d9c",
+      "canonical_name": "Eduardo",
+      "entity_type": "person",
+      "occurrence_count": 10,
+      "aliases": [
+        "Eduardo"
+      ],
+      "first_seen_meeting_id": "61f96185-20f6-418e-90c2-c4e1ae2deeb5",
+      "last_seen_meeting_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "fdba971b-d060-48d5-8271-fd4e84622ee3",
+      "canonical_name": "SDEA",
+      "entity_type": "system",
+      "occurrence_count": 10,
+      "aliases": [
+        "Soares",
+        "SE",
+        "sistema SDEA",
+        "Center",
+        "SDEA",
+        "E-Suite",
+        "Sistemas de Castro",
+        "SDA",
+        "Santos",
+        "Sistemas Suite",
+        "Portal SDEA"
+      ],
+      "first_seen_meeting_id": "2e57dcef-ef81-4c2e-9d22-b60891e62f86",
+      "last_seen_meeting_id": "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+    },
+    {
+      "id": "d77c7a95-ed6e-4146-a8d4-27680e671817",
+      "canonical_name": "DTI",
+      "entity_type": "department",
+      "occurrence_count": 8,
+      "aliases": [
+        "DTI"
+      ],
+      "first_seen_meeting_id": "5b27f5f5-ccf4-4cd5-81db-793330bab7d5",
+      "last_seen_meeting_id": "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+    },
+    {
+      "id": "d54d0068-5d4e-49ec-a25a-2b8562fb3262",
+      "canonical_name": "Organograma",
+      "entity_type": "system",
+      "occurrence_count": 7,
+      "aliases": [
+        "Jorganograma",
+        "organograma"
+      ],
+      "first_seen_meeting_id": "aeca71e8-0915-4ec0-943a-f3b1c8a738e1",
+      "last_seen_meeting_id": "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+    },
+    {
+      "id": "9f4a15e3-3d5b-4346-826d-7a13b764d3fd",
+      "canonical_name": "Sistema de Documentação Eletrônica",
+      "entity_type": "system",
+      "occurrence_count": 7,
+      "aliases": [
+        "sistema de documentação eletrônica"
+      ],
+      "first_seen_meeting_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124",
+      "last_seen_meeting_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "656f5704-c42a-4175-b738-b8c0996a1c9a",
+      "canonical_name": "SharePoint",
+      "entity_type": "system",
+      "occurrence_count": 7,
+      "aliases": [
+        "SharePoint",
+        "share ponte",
+        "sharepoint"
+      ],
+      "first_seen_meeting_id": "2e57dcef-ef81-4c2e-9d22-b60891e62f86",
+      "last_seen_meeting_id": "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+    },
+    {
+      "id": "8455dfa5-ea09-4cd3-b692-6d1126c76c06",
+      "canonical_name": "Organograma",
+      "entity_type": "process",
+      "occurrence_count": 7,
+      "aliases": [
+        "organograma"
+      ],
+      "first_seen_meeting_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124",
+      "last_seen_meeting_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "d7565fda-3758-4133-81f5-b74f64d66a2e",
+      "canonical_name": "EricaM",
+      "entity_type": "system",
+      "occurrence_count": 7,
+      "aliases": [
+        "EricaM"
+      ],
+      "first_seen_meeting_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124",
+      "last_seen_meeting_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "d2171ff3-4fc8-40b7-a02d-5f738e3b17af",
+      "canonical_name": "Catálogo de Processo",
+      "entity_type": "process",
+      "occurrence_count": 6,
+      "aliases": [
+        "catálogo de processo",
+        "catálogo de processos"
+      ],
+      "first_seen_meeting_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124",
+      "last_seen_meeting_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "af21d005-7f2f-4915-a5de-18c5e0b2da30",
+      "canonical_name": "Sistema SDEA",
+      "entity_type": "system",
+      "occurrence_count": 6,
+      "aliases": [
+        "Erica",
+        "e-suite",
+        "sistema"
+      ],
+      "first_seen_meeting_id": "250c537f-2fbf-4c8d-a57f-ade92b15ea3a",
+      "last_seen_meeting_id": "a723648f-16b1-475e-aff2-1ecb803abb1b"
+    },
+    {
+      "id": "2e6f827b-5d10-4056-91e4-d833b3057195",
+      "canonical_name": "Catálogo Mestre",
+      "entity_type": "process",
+      "occurrence_count": 6,
+      "aliases": [
+        "catálogo mestre",
+        "catálogo médico"
+      ],
+      "first_seen_meeting_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124",
+      "last_seen_meeting_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "95572e44-1fd1-40f0-bdcf-7e03124bfbd9",
+      "canonical_name": "Catálogo de Processos",
+      "entity_type": "system",
+      "occurrence_count": 5,
+      "aliases": [
+        "catálogo",
+        "cadastro de processos",
+        "sistema"
+      ],
+      "first_seen_meeting_id": "13c5efd4-0af3-4cf5-ab5a-b3f20394764f",
+      "last_seen_meeting_id": "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+    },
+    {
+      "id": "d4e8f926-8c82-4a96-a6d0-37236a14ef52",
+      "canonical_name": "Catálogo Médico",
+      "entity_type": "system",
+      "occurrence_count": 4,
+      "aliases": [
+        "catálogo médico"
+      ],
+      "first_seen_meeting_id": "aeca71e8-0915-4ec0-943a-f3b1c8a738e1",
+      "last_seen_meeting_id": "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+    },
+    {
+      "id": "4f5cfb02-e362-47dc-9a40-0f13da1924e0",
+      "canonical_name": "Pedro Gentil",
+      "entity_type": "person",
+      "occurrence_count": 4,
+      "aliases": [
+        "Pedro"
+      ],
+      "first_seen_meeting_id": "9a5a1cb3-8a2e-4382-b119-6295026a90e3",
+      "last_seen_meeting_id": "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+    },
+    {
+      "id": "28225e0e-6266-4469-8a30-9d3fd73b8d4b",
+      "canonical_name": "Catálogo Mestre",
+      "entity_type": "system",
+      "occurrence_count": 4,
+      "aliases": [
+        "catálogo mestre"
+      ],
+      "first_seen_meeting_id": "aeca71e8-0915-4ec0-943a-f3b1c8a738e1",
+      "last_seen_meeting_id": "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+    },
+    {
+      "id": "2682c6e9-ebdf-4a4d-8002-a5e785d3194e",
+      "canonical_name": "Catálogo de Processo",
+      "entity_type": "system",
+      "occurrence_count": 4,
+      "aliases": [
+        "catálogo de processo"
+      ],
+      "first_seen_meeting_id": "aeca71e8-0915-4ec0-943a-f3b1c8a738e1",
+      "last_seen_meeting_id": "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+    },
+    {
+      "id": "6c5d721a-8d28-462e-be9f-4e686b383bb0",
+      "canonical_name": "D4",
+      "entity_type": "system",
+      "occurrence_count": 4,
+      "aliases": [
+        "D4"
+      ],
+      "first_seen_meeting_id": "2e57dcef-ef81-4c2e-9d22-b60891e62f86",
+      "last_seen_meeting_id": "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+    },
+    {
+      "id": "9ed8c9c3-3e9a-4e56-a609-fe470d646860",
+      "canonical_name": "Deise Rigão",
+      "entity_type": "person",
+      "occurrence_count": 4,
+      "aliases": [
+        "Deise"
+      ],
+      "first_seen_meeting_id": "5b27f5f5-ccf4-4cd5-81db-793330bab7d5",
+      "last_seen_meeting_id": "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+    },
+    {
+      "id": "1885827b-c690-4d27-9ad1-2ca19652a33a",
+      "canonical_name": "Sidney",
+      "entity_type": "person",
+      "occurrence_count": 4,
+      "aliases": [
+        "Sidney"
+      ],
+      "first_seen_meeting_id": "5b27f5f5-ccf4-4cd5-81db-793330bab7d5",
+      "last_seen_meeting_id": "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+    },
+    {
+      "id": "b9df1554-ca80-439f-80ec-9b0ce88ecdcd",
+      "canonical_name": "Auditoria",
+      "entity_type": "department",
+      "occurrence_count": 4,
+      "aliases": [
+        "auditoria"
+      ],
+      "first_seen_meeting_id": "5b27f5f5-ccf4-4cd5-81db-793330bab7d5",
+      "last_seen_meeting_id": "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+    },
+    {
+      "id": "9e2230a9-f149-409d-9d27-af1317d1b12e",
+      "canonical_name": "Fábio Bastos",
+      "entity_type": "person",
+      "occurrence_count": 4,
+      "aliases": [
+        "Fábio"
+      ],
+      "first_seen_meeting_id": "042eb333-4c43-4d1b-b02c-9321cd76898b",
+      "last_seen_meeting_id": "042eb333-4c43-4d1b-b02c-9321cd76898b"
+    },
+    {
+      "id": "762a366c-1829-4d07-8341-5e2425926e9a",
+      "canonical_name": "DTIE",
+      "entity_type": "team",
+      "occurrence_count": 4,
+      "aliases": [
+        "DTIE",
+        "DTI"
+      ],
+      "first_seen_meeting_id": "042eb333-4c43-4d1b-b02c-9321cd76898b",
+      "last_seen_meeting_id": "042eb333-4c43-4d1b-b02c-9321cd76898b"
+    },
+    {
+      "id": "3fa7d881-0c1f-4628-86af-4f0167aca278",
+      "canonical_name": "RSM",
+      "entity_type": "department",
+      "occurrence_count": 4,
+      "aliases": [
+        "RSM"
+      ],
+      "first_seen_meeting_id": "042eb333-4c43-4d1b-b02c-9321cd76898b",
+      "last_seen_meeting_id": "042eb333-4c43-4d1b-b02c-9321cd76898b"
+    },
+    {
+      "id": "bbbd6b86-cbfc-469f-86e7-23f566d28ef1",
+      "canonical_name": "Portal FGV",
+      "entity_type": "system",
+      "occurrence_count": 4,
+      "aliases": [
+        "sharepoint do portal FGV",
+        "SharePoint",
+        "portal FGV",
+        "SharePoint do portal FGV"
+      ],
+      "first_seen_meeting_id": "042eb333-4c43-4d1b-b02c-9321cd76898b",
+      "last_seen_meeting_id": "042eb333-4c43-4d1b-b02c-9321cd76898b"
+    },
+    {
+      "id": "95f57149-d3fb-486c-9e10-0e0780b0fdeb",
+      "canonical_name": "Escola de Direito de São Paulo",
+      "entity_type": "department",
+      "occurrence_count": 4,
+      "aliases": [
+        "escola",
+        "FGV direito de Sá Paulo",
+        "escola de direito de São Paulo",
+        "escola de Sá Paulo"
+      ],
+      "first_seen_meeting_id": "042eb333-4c43-4d1b-b02c-9321cd76898b",
+      "last_seen_meeting_id": "042eb333-4c43-4d1b-b02c-9321cd76898b"
+    },
+    {
+      "id": "300d60c4-ff69-4821-8921-490f0dc13df0",
+      "canonical_name": "Direito Rio",
+      "entity_type": "department",
+      "occurrence_count": 4,
+      "aliases": [
+        "Direito Rita"
+      ],
+      "first_seen_meeting_id": "13c5efd4-0af3-4cf5-ab5a-b3f20394764f",
+      "last_seen_meeting_id": "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+    },
+    {
+      "id": "31588796-a893-42aa-87ea-f2655899aea9",
+      "canonical_name": "SE Suíte",
+      "entity_type": "system",
+      "occurrence_count": 4,
+      "aliases": [
+        "SE suíte",
+        "s a suíte"
+      ],
+      "first_seen_meeting_id": "61f96185-20f6-418e-90c2-c4e1ae2deeb5",
+      "last_seen_meeting_id": "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+    },
+    {
+      "id": "3738e22e-1394-4958-ae44-2aefd2033fcc",
+      "canonical_name": "Camposte",
+      "entity_type": "system",
+      "occurrence_count": 4,
+      "aliases": [
+        "Camposte"
+      ],
+      "first_seen_meeting_id": "61f96185-20f6-418e-90c2-c4e1ae2deeb5",
+      "last_seen_meeting_id": "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+    },
+    {
+      "id": "8b2ad250-e3a0-4a5b-871d-ebbcb07f6ae3",
+      "canonical_name": "Gerência de Controladoria de São Paulo",
+      "entity_type": "department",
+      "occurrence_count": 3,
+      "aliases": [
+        "gerência de Controladoria de São Paulo",
+        "ger Controladoria",
+        "gerência na Controladoria de São Paulo"
+      ],
+      "first_seen_meeting_id": "042eb333-4c43-4d1b-b02c-9321cd76898b",
+      "last_seen_meeting_id": "042eb333-4c43-4d1b-b02c-9321cd76898b"
+    },
+    {
+      "id": "8510f44f-e72c-45fa-99b0-06565fc0f851",
+      "canonical_name": "Baptista",
+      "entity_type": "person",
+      "occurrence_count": 3,
+      "aliases": [
+        "Baptista"
+      ],
+      "first_seen_meeting_id": "61f96185-20f6-418e-90c2-c4e1ae2deeb5",
+      "last_seen_meeting_id": "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+    },
+    {
+      "id": "5e966b0e-10ac-425e-ae10-191bc92a1937",
+      "canonical_name": "Santos",
+      "entity_type": "person",
+      "occurrence_count": 3,
+      "aliases": [
+        "Santos"
+      ],
+      "first_seen_meeting_id": "61f96185-20f6-418e-90c2-c4e1ae2deeb5",
+      "last_seen_meeting_id": "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+    },
+    {
+      "id": "aaaa8cd2-67b8-4d2e-add4-e52d72d632af",
+      "canonical_name": "Débora Fonseca",
+      "entity_type": "person",
+      "occurrence_count": 3,
+      "aliases": [
+        "Débora"
+      ],
+      "first_seen_meeting_id": "61f96185-20f6-418e-90c2-c4e1ae2deeb5",
+      "last_seen_meeting_id": "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+    },
+    {
+      "id": "5e01319e-0c6a-462f-ba7d-460f7c87b75c",
+      "canonical_name": "João Ferreira",
+      "entity_type": "person",
+      "occurrence_count": 3,
+      "aliases": [
+        "João"
+      ],
+      "first_seen_meeting_id": "61f96185-20f6-418e-90c2-c4e1ae2deeb5",
+      "last_seen_meeting_id": "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+    },
+    {
+      "id": "37168650-5418-48f2-82da-a7aac0bae1e5",
+      "canonical_name": "RCM",
+      "entity_type": "team",
+      "occurrence_count": 3,
+      "aliases": [
+        "RCM"
+      ],
+      "first_seen_meeting_id": "13c5efd4-0af3-4cf5-ab5a-b3f20394764f",
+      "last_seen_meeting_id": "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+    },
+    {
+      "id": "c407dd62-b525-4ad5-831a-b2128c92ef65",
+      "canonical_name": "Catálogo de Processos",
+      "entity_type": "process",
+      "occurrence_count": 2,
+      "aliases": [
+        "catálogo de processo",
+        "catálogo"
+      ],
+      "first_seen_meeting_id": "042eb333-4c43-4d1b-b02c-9321cd76898b",
+      "last_seen_meeting_id": "6569e6ea-7d91-4dd5-89cf-d07f5ae1ac2e"
+    },
+    {
+      "id": "f63df33c-925a-4ca4-a450-df8bc971a7f6",
+      "canonical_name": "Legado",
+      "entity_type": "system",
+      "occurrence_count": 2,
+      "aliases": [
+        "legado"
+      ],
+      "first_seen_meeting_id": "13c5efd4-0af3-4cf5-ab5a-b3f20394764f",
+      "last_seen_meeting_id": "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+    },
+    {
+      "id": "37e9ade1-137a-4015-8707-993eac4b31da",
+      "canonical_name": "Escola da Fátima",
+      "entity_type": "department",
+      "occurrence_count": 2,
+      "aliases": [
+        "escola da Fátima"
+      ],
+      "first_seen_meeting_id": "250c537f-2fbf-4c8d-a57f-ade92b15ea3a",
+      "last_seen_meeting_id": "250c537f-2fbf-4c8d-a57f-ade92b15ea3a"
+    },
+    {
+      "id": "9e3c08c4-08a9-457e-ae2a-7cda1c226160",
+      "canonical_name": "Sistema de Organograma",
+      "entity_type": "system",
+      "occurrence_count": 2,
+      "aliases": [
+        "Sistemas",
+        "sistema"
+      ],
+      "first_seen_meeting_id": "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21",
+      "last_seen_meeting_id": "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+    },
+    {
+      "id": "a3875951-7fca-4295-ab25-bca8e3eba85f",
+      "canonical_name": "Sistemas",
+      "entity_type": "system",
+      "occurrence_count": 2,
+      "aliases": [
+        "sistema"
+      ],
+      "first_seen_meeting_id": "aeca71e8-0915-4ec0-943a-f3b1c8a738e1",
+      "last_seen_meeting_id": "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+    },
+    {
+      "id": "dd1199ae-772e-418d-8243-5d347ed37174",
+      "canonical_name": "Catálogo de Processos e Subprocessos",
+      "entity_type": "process",
+      "occurrence_count": 2,
+      "aliases": [
+        "catálogo de processo",
+        "catálogo",
+        "CP"
+      ],
+      "first_seen_meeting_id": "a723648f-16b1-475e-aff2-1ecb803abb1b",
+      "last_seen_meeting_id": "a723648f-16b1-475e-aff2-1ecb803abb1b"
+    },
+    {
+      "id": "e63cdc80-b04c-40cb-96f7-db0656dc07d1",
+      "canonical_name": "Projeto Auditoria",
+      "entity_type": "process",
+      "occurrence_count": 1,
+      "aliases": [
+        "Projeto Auditoria"
+      ],
+      "first_seen_meeting_id": "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14",
+      "last_seen_meeting_id": "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+    },
+    {
+      "id": "46931b0b-6a06-4845-b094-9f75bf7be205",
+      "canonical_name": "Equipe de Processos",
+      "entity_type": "team",
+      "occurrence_count": 1,
+      "aliases": [
+        "equipe de processo"
+      ],
+      "first_seen_meeting_id": "13c5efd4-0af3-4cf5-ab5a-b3f20394764f",
+      "last_seen_meeting_id": "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+    },
+    {
+      "id": "91d2c867-fcec-4944-b218-5f9ca7e0cf2b",
+      "canonical_name": "João Ferreira",
+      "entity_type": "system",
+      "occurrence_count": 1,
+      "aliases": [
+        "João Ferreira"
+      ],
+      "first_seen_meeting_id": "61f96185-20f6-418e-90c2-c4e1ae2deeb5",
+      "last_seen_meeting_id": "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+    },
+    {
+      "id": "ca3fe5bf-c731-4d03-8db0-bb87fe857717",
+      "canonical_name": "Catálogo",
+      "entity_type": "process",
+      "occurrence_count": 1,
+      "aliases": [
+        "catálogo"
+      ],
+      "first_seen_meeting_id": "9a5a1cb3-8a2e-4382-b119-6295026a90e3",
+      "last_seen_meeting_id": "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+    },
+    {
+      "id": "c9b4400e-8653-4759-bef3-aaf673ffca47",
+      "canonical_name": "Fábio",
+      "entity_type": "person",
+      "occurrence_count": 1,
+      "aliases": [
+        "Fábio"
+      ],
+      "first_seen_meeting_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124",
+      "last_seen_meeting_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "d5f0dd7b-fc93-4be7-a35c-9c5d98ea2b5d",
+      "canonical_name": "Sistema de Gestão de Organograma",
+      "entity_type": "system",
+      "occurrence_count": 1,
+      "aliases": [
+        "sistema",
+        "Sistemas"
+      ],
+      "first_seen_meeting_id": "aeca71e8-0915-4ec0-943a-f3b1c8a738e1",
+      "last_seen_meeting_id": "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+    },
+    {
+      "id": "e64dcf32-4727-4e71-87b0-d68a702bdf5c",
+      "canonical_name": "Gestão Financeira",
+      "entity_type": "process",
+      "occurrence_count": 1,
+      "aliases": [
+        "gestão financeira"
+      ],
+      "first_seen_meeting_id": "042eb333-4c43-4d1b-b02c-9321cd76898b",
+      "last_seen_meeting_id": "042eb333-4c43-4d1b-b02c-9321cd76898b"
+    }
+  ],
+  "processes": [
+    {
+      "id": "e27b5510-756b-466a-ad20-1ae13de0fa08",
+      "process_name": "Cadastro de Estrutura e Organograma de Unidade",
+      "description": "Processo para cadastrar a estrutura organizacional de uma unidade (não escola) no sistema, podendo ou não ter organograma.",
+      "version_count": 8,
+      "status": "active",
+      "meeting_ids": [
+        "870eb15c-a472-4561-b3fa-f299f43d5c93",
+        "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21"
+      ]
+    },
+    {
+      "id": "3d700c6f-a0a5-41ae-b4f1-ec96c8d77e67",
+      "process_name": "Cadastro de Estrutura e Organograma de Escola",
+      "description": "Processo para cadastrar a estrutura organizacional de uma escola no sistema, incluindo a definição do organograma.",
+      "version_count": 8,
+      "status": "active",
+      "meeting_ids": [
+        "870eb15c-a472-4561-b3fa-f299f43d5c93",
+        "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21"
+      ]
+    },
+    {
+      "id": "22c499ae-d4dd-48a8-b0ba-e507af65cd80",
+      "process_name": "Cadastro de Catálogo de Processos e Subprocessos",
+      "description": "Processo de criação e manutenção do catálogo de processos e subprocessos no sistema SDEA, incluindo definição de nome, objetivo, cliente e subprocessos.",
+      "version_count": 6,
+      "status": "active",
+      "meeting_ids": [
+        "250c537f-2fbf-4c8d-a57f-ade92b15ea3a",
+        "a723648f-16b1-475e-aff2-1ecb803abb1b"
+      ]
+    },
+    {
+      "id": "f7553191-bb21-482d-a85c-2a61def9a7e5",
+      "process_name": "Exclusão de Unidade no Organograma",
+      "description": "Processo de inativar uma unidade organizacional no sistema, tornando seus documentos obsoletos e registrando a exclusão nos catálogos, com envio de notificação.",
+      "version_count": 4,
+      "status": "active",
+      "meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "46bdf7aa-0dd4-4c23-8c79-427016eba944",
+      "process_name": "Substituição de Unidade no Organograma",
+      "description": "Processo de alterar o título ou responsável de uma unidade organizacional, gerando nova versão e atualizando os catálogos vinculados.",
+      "version_count": 4,
+      "status": "active",
+      "meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "03c54364-efb3-45d7-a464-48eff5c666b8",
+      "process_name": "Iniciar Catálogo",
+      "description": "Processo de criação de um novo catálogo de processos, iniciado a partir do organograma.",
+      "version_count": 4,
+      "status": "active",
+      "meeting_ids": [
+        "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+      ]
+    },
+    {
+      "id": "d7778961-e38a-466b-bdad-1742d1fbfb97",
+      "process_name": "Cadastro de Processos e Subprocessos",
+      "description": "Processo de cadastro de processos e subprocessos no sistema, com numeração hierárquica (ex: 23.1.7.1) e identificador único interno.",
+      "version_count": 4,
+      "status": "active",
+      "meeting_ids": [
+        "6569e6ea-7d91-4dd5-89cf-d07f5ae1ac2e"
+      ]
+    },
+    {
+      "id": "db6ef7e8-e32e-4c30-90c1-58427699b2c2",
+      "process_name": "Revisar Catálogo",
+      "description": "Processo de revisão de um catálogo existente, com fluxo diferente do iniciar.",
+      "version_count": 4,
+      "status": "active",
+      "meeting_ids": [
+        "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+      ]
+    },
+    {
+      "id": "53a11794-e5cf-403a-9572-b0bb13348805",
+      "process_name": "Mapeamento de Processos",
+      "description": "Processo de documentação e organização dos processos da escola, incluindo a estrutura de catálogo e instruções de trabalho no SharePoint.",
+      "version_count": 4,
+      "status": "active",
+      "meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "648ca579-3377-4428-a3d0-5e13376d61fc",
+      "process_name": "Elaboração de Catálogo Mestre",
+      "description": "Processo de criação do catálogo mestre a partir dos catálogos de processo, podendo ser iniciado manualmente ou automaticamente após conclusão dos catálogos de processo.",
+      "version_count": 4,
+      "status": "active",
+      "meeting_ids": [
+        "d61bb9c7-877e-4633-aa44-20406dd59d8e",
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "bb8e5a31-37f7-4eb3-a22c-e54801d92eda",
+      "process_name": "Gestão Financeira",
+      "description": "Processo de gestão financeira da Gerência de Controladoria da Escola de Direito de São Paulo, numerado como 7 no catálogo.",
+      "version_count": 4,
+      "status": "active",
+      "meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "d17e3063-6cfd-4fbd-a200-c4e16e608722",
+      "process_name": "Revisão de Catálogo Mestre",
+      "description": "Processo de alteração do catálogo mestre já existente, gerado automaticamente a partir de mudanças nos catálogos de processo ou organograma.",
+      "version_count": 4,
+      "status": "active",
+      "meeting_ids": [
+        "d61bb9c7-877e-4633-aa44-20406dd59d8e",
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "fd9ee81f-5480-41d3-9a12-e2f6f1436f55",
+      "process_name": "Catálogo Mestre",
+      "description": "Processo de criação e revisão do catálogo mestre, que pode ser iniciado manualmente (versão zero) ou automaticamente a partir de alterações no catálogo de processos ou organograma.",
+      "version_count": 3,
+      "status": "active",
+      "meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "1d221a04-7bfd-4c15-b8c2-07bf01e9e3ea",
+      "process_name": "Migração de Estrutura de Pastas",
+      "description": "Processo de criação e organização de pastas (catálogo, fluxo, etc.) conforme organograma, com verificação e ajuste da estrutura para posterior inclusão de documentos.",
+      "version_count": 3,
+      "status": "active",
+      "meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "c568ee8a-d5dd-443a-9084-6b437f7c8ded",
+      "process_name": "Elaboração de Catálogo de Processo",
+      "description": "Processo de criação de catálogos de processo para cada unidade, que geram pendências para o catálogo mestre.",
+      "version_count": 3,
+      "status": "active",
+      "meeting_ids": [
+        "d61bb9c7-877e-4633-aa44-20406dd59d8e",
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "8d89a30f-375a-48ae-b2d2-ecf65a90df40",
+      "process_name": "Cadastro de Organograma",
+      "description": "Processo de registro de organogramas no sistema, incluindo campos como data, versão, imagem e unidades.",
+      "version_count": 3,
+      "status": "active",
+      "meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    },
+    {
+      "id": "3a9b1219-ec89-4529-ab65-abefe2b406a8",
+      "process_name": "Catálogo de Processo",
+      "description": "Processo de elaboração de catálogos de processo por unidade, que geram pendências para o catálogo mestre.",
+      "version_count": 3,
+      "status": "active",
+      "meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "d40b21b1-c5e7-4886-b088-bd9c466e17c4",
+      "process_name": "Configuração de Segurança no SE Suíte",
+      "description": "Processo de definição de permissões e grupos de acesso a categorias de documento no sistema SE Suíte, incluindo criação de equipes e atribuição de direitos como visualizar, imprimir e salvar.",
+      "version_count": 3,
+      "status": "active",
+      "meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "a6c97dde-2085-4b25-a654-51cc4590dd36",
+      "process_name": "Cadastro de Unidade",
+      "description": "Processo separado do cadastro de escola para cadastro de unidades.",
+      "version_count": 3,
+      "status": "active",
+      "meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "fe0b3c96-ad11-4500-a88e-823c646b76be",
+      "process_name": "Catálogo de Processos e Subprocessos",
+      "description": "Processo de cadastro e gestão de catálogos de processos e subprocessos no sistema SDEA, incluindo definição de nome, objetivo, subprocessos e atividades.",
+      "version_count": 2,
+      "status": "active",
+      "meeting_ids": [
+        "250c537f-2fbf-4c8d-a57f-ade92b15ea3a",
+        "a723648f-16b1-475e-aff2-1ecb803abb1b"
+      ]
+    },
+    {
+      "id": "24c9796b-fb56-4f72-a2bb-bbd526bc7f00",
+      "process_name": "Cadastro de Escola",
+      "description": "Processo de cadastro de escolas no sistema SDEA, incluindo código, nome, diretor e arquivos.",
+      "version_count": 2,
+      "status": "active",
+      "meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "f88fe4c8-8f43-4bd3-a64b-3b0ba1a256ce",
+      "process_name": "Elaboração e Aprovação de Documentos no SDEA",
+      "description": "Processo de criação, validação e aprovação de documentos normativos, com transição do legado (SharePoint/D4) para o novo sistema SDEA.",
+      "version_count": 2,
+      "status": "active",
+      "meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "6791d066-20c9-4128-8cb6-1e8de478e00d",
+      "process_name": "Validação de fluxos",
+      "description": "Processo de validação dos fluxos de trabalho com a equipe, incluindo teste de mesa e homologação com usuários reais.",
+      "version_count": 2,
+      "status": "active",
+      "meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "cbd57be6-a7f8-4ab6-b362-75ab20101777",
+      "process_name": "Cadastro de Escola no Organograma",
+      "description": "Processo de cadastro de escolas no módulo de organograma do SDEA, incluindo código, nome, diretor e arquivos.",
+      "version_count": 2,
+      "status": "active",
+      "meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "f8623ca4-0ddc-496e-b8e8-8a743e987f91",
+      "process_name": "Validação de Fluxos",
+      "description": "Processo de validação dos fluxos de trabalho com a Fátima, que será seguido de homologação com usuários reais.",
+      "version_count": 2,
+      "status": "active",
+      "meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "cbd2d6e0-0c86-4d27-b0a0-52f7e5fcadb0",
+      "process_name": "Elaboração e Aprovação de Documentos",
+      "description": "Processo de criação, validação e aprovação de documentos normativos, com transição do sistema legado (SharePoint/D4) para o novo sistema SDEA.",
+      "version_count": 2,
+      "status": "active",
+      "meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "f4fc0c4b-fb04-423b-a623-56063282af8d",
+      "process_name": "Relacionamento de Documentos",
+      "description": "Processo que define como alterações em um documento (ex: organograma, catálogo de processos) geram automaticamente atividades de atualização em documentos relacionados.",
+      "version_count": 2,
+      "status": "active",
+      "meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "2e12d50d-5ddf-4d27-9699-07c0191aeae5",
+      "process_name": "Catálogo",
+      "description": "Processo de catálogo previsto de unidades, com estimativas que podem ser alteradas durante validação.",
+      "version_count": 1,
+      "status": "active",
+      "meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    },
+    {
+      "id": "427b2c95-1021-40bc-a2ae-84b4072021f0",
+      "process_name": "Migração de pastas e documentos para SE Suíte",
+      "description": "Processo de migração de pastas e documentos de sistemas legados (Camposte, João Ferreira) para o SE Suíte, incluindo a criação de estrutura de pastas conforme organograma e a definição de permissões de acesso.",
+      "version_count": 1,
+      "status": "active",
+      "meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "3a8d5b82-cea8-46ac-b84b-48f49652a6a0",
+      "process_name": "Organograma",
+      "description": "Processo de cadastro e gestão de organogramas, incluindo versão, data e alterações de unidades.",
+      "version_count": 1,
+      "status": "active",
+      "meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    }
+  ],
+  "facts": [
+    {
+      "id": "23ed5a7e-478e-4cc2-9cb3-9599cb2d8f17",
+      "fact_type": "decision",
+      "content": "A data final do cronograma do projeto é 2 de abril.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "67ca5e7a-2136-4fab-9a0b-897cd5dd8a80",
+      "fact_type": "decision",
+      "content": "As reuniões de validação dos fluxos serão nos dias 16 e 19, das 14h às 17h.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "01289164-af60-40b8-826d-23634cb73845",
+      "fact_type": "decision",
+      "content": "O e-mail institucional a ser usado no sistema foi definido e retificado por Deise Rigão.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "6123baac-dd31-425f-b9ba-83ed7fc81e18",
+      "fact_type": "constraint",
+      "content": "Professores não possuem dois monitores, portanto o sistema deve ser operável com uma única tela.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "637f5a36-1482-416e-b79e-3a05b40b4554",
+      "fact_type": "insight",
+      "content": "Maria de Fátima sugere usar prefixos como 'Aprovação' ou 'Validação' no assunto dos e-mails para organizar os fluxos automaticamente em pastas.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "f30798d1-cba7-4073-8b14-8967dc5034aa",
+      "fact_type": "rule",
+      "content": "A estrutura de pastas no SharePoint do Portal FGV para cada coordenação da escola contém um catálogo e instruções de trabalho, com uma pasta 'obsoleto' para versões anteriores que foram substituídas.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "901c3f6d-5ea6-423a-8002-a1401c05a28f",
+      "fact_type": "rule",
+      "content": "A numeração dos processos segue o organograma: os dois primeiros números representam a escola, os seguintes representam a área, e o último número é o número do processo.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "c87ba502-4811-4c9e-892b-af463025be1d",
+      "fact_type": "decision",
+      "content": "Decidiu-se que os documentos obsoletos não ficarão como vigentes, mas serão arquivados como versões anteriores.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "850743b4-59fe-415d-b9dd-c082cd69f6e5",
+      "fact_type": "insight",
+      "content": "O número da escola (23) é o mesmo número da diretoria, e a estrutura hierárquica inclui vice-diretoria (23.1) e gerências (23.1.2).",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "a54514e6-ee4c-4fec-8599-9295f03a46d8",
+      "fact_type": "decision",
+      "content": "Decidiu-se que a configuração de segurança no SE Suíte será feita conforme as determinações de Maria de Fátima, permitindo controle granular sobre permissões de acesso a categorias de documento.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "e855cd40-d0fc-4659-8baf-c08f97085a32",
+      "fact_type": "decision",
+      "content": "Pedro criará um programa automático para criar as pastas (catálogo, fluxo, etc.) após a estrutura ser definida, para evitar trabalho manual.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "4f37d47a-3b65-438a-b836-a3863d02f59c",
+      "fact_type": "decision",
+      "content": "Maria de Fátima reduzirá suas férias de 15 para 10 dias para garantir que o sistema não atrase devido à sua ausência.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "f1e7fb6d-15d5-4079-adf6-3d45b494157c",
+      "fact_type": "constraint",
+      "content": "No sistema Camposte, é possível dar acesso imediato às pessoas, mas no SE Suíte o acesso é controlado por grupos e permissões específicas.",
+      "confidence": 0.7,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "39ab9cf5-0d6f-41b5-9986-815060750934",
+      "fact_type": "decision",
+      "content": "Foi decidido que o botão de cadastro de organograma de escola será renomeado para '01' e o de unidade para '02', seguindo a ordem sequencial das atividades.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "870eb15c-a472-4561-b3fa-f299f43d5c93"
+      ]
+    },
+    {
+      "id": "706ca134-71ae-4221-a20a-3a1097e65a17",
+      "fact_type": "constraint",
+      "content": "Maria de Fátima não consegue enxergar a tela devido ao tamanho pequeno da fonte, necessitando de ajuste de visualização.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "870eb15c-a472-4561-b3fa-f299f43d5c93"
+      ]
+    },
+    {
+      "id": "9031fb45-f2a6-415e-9268-b8992bbf9a9a",
+      "fact_type": "insight",
+      "content": "Maria de Fátima esperava que houvesse uma tela inicial para escolher entre cadastrar escola ou unidade, mas o sistema atual apresenta botões separados para cada tipo.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "870eb15c-a472-4561-b3fa-f299f43d5c93"
+      ]
+    },
+    {
+      "id": "9325787a-cc41-4671-9f38-76541da21e0e",
+      "fact_type": "decision",
+      "content": "Foi decidido que o cadastro de organograma de escola deve ser a primeira atividade (01) na ordem sequencial, e o cadastro de unidade deve ser 02.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21"
+      ]
+    },
+    {
+      "id": "394f5f9f-7ef0-4608-8826-d41edcd5f483",
+      "fact_type": "constraint",
+      "content": "O organograma não pode existir sem um arquivo eletrônico (modelo) associado, conforme mencionado por Maria de Fátima.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21"
+      ]
+    },
+    {
+      "id": "bef578d1-8dd6-4815-a15a-0d4ac6b9eeec",
+      "fact_type": "nomenclature",
+      "content": "O termo 'modelo' refere-se ao arquivo eletrônico que gera documentos, não ao cadastro de organograma.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21"
+      ]
+    },
+    {
+      "id": "033b03e4-3b92-4298-b36e-cadb8a9cd172",
+      "fact_type": "decision",
+      "content": "A ata da reunião deve refletir apenas o que foi discutido na reunião, não servindo como documento de requisitos do projeto.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    },
+    {
+      "id": "06ffabad-8fc7-4e7a-b542-af2e1fe7b127",
+      "fact_type": "decision",
+      "content": "Os requisitos complementares listados por Pedro (itens 1 a 10) serão implementados e validados por Fátima na próxima versão do sistema.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    },
+    {
+      "id": "c97f467b-a1db-427d-9ee0-1b7c2d491d10",
+      "fact_type": "constraint",
+      "content": "O sistema de organograma deve permitir o registro de data e versão para cada organograma cadastrado.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    },
+    {
+      "id": "eb7a78f3-1528-44cc-9026-ca9540b2cac2",
+      "fact_type": "insight",
+      "content": "Fátima expressou preocupação com a falta de clareza sobre como alterar campos como nome de coordenação e número estimado durante a validação do organograma.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    },
+    {
+      "id": "e7b1e8ee-9d06-4fc7-bc95-937d089ee881",
+      "fact_type": "decision",
+      "content": "Decidiu-se que o sistema deve perguntar ao usuário, ao alterar o organograma, se a unidade já existe e se possui catálogos associados, para direcionar as ações de exclusão ou substituição.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "f9fa8a3a-f0cb-4c81-88da-083598701f5b",
+      "fact_type": "constraint",
+      "content": "Ao excluir uma unidade no organograma, as unidades filhas não são automaticamente excluídas; cada unidade tem vida própria e deve ser tratada individualmente.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "e98f2608-a004-4744-8c48-33b9b0252af7",
+      "fact_type": "rule",
+      "content": "Quando uma unidade é excluída, o sistema deve registrar a exclusão no Catálogo Mestre e notificar as partes interessadas (ex: diretor da escola).",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "8beefec2-f173-473c-b9bf-cf40b21afe0a",
+      "fact_type": "insight",
+      "content": "O sistema não deve excluir fisicamente os dados, mas sim alterar o status para obsoleto, removendo-os das visões ativas.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "657dd1aa-6b2c-49ef-a468-1f3a1801bc67",
+      "fact_type": "decision",
+      "content": "Documentos em elaboração no momento da transição para o SDEA poderão ser concluídos no modelo atual (SharePoint) e, após aprovação, registrados no SDEA.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "a690c235-387d-41d7-9d14-baa96953e889",
+      "fact_type": "decision",
+      "content": "Novos documentos a partir da entrada em operação do SDEA devem ser elaborados e cadastrados diretamente no sistema.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "ea82d1b4-bda2-4745-af2c-548ab577706d",
+      "fact_type": "decision",
+      "content": "Decidiu-se que o catálogo de processos será criado por unidade (e não por escola como um todo), selecionando a unidade específica dentro da escola.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a723648f-16b1-475e-aff2-1ecb803abb1b"
+      ]
+    },
+    {
+      "id": "c1692ccc-aa07-494e-a556-b370f107cb0b",
+      "fact_type": "rule",
+      "content": "O campo 'código da escola' deve ser obrigatório no cadastro de escola, com validação de unicidade e mensagem 'código da escola já existente'.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "809b2331-c632-4a76-9769-15275bf1fb4c",
+      "fact_type": "decision",
+      "content": "Decidiu-se remover o campo 'interesse para o negócio' (classificação estratégica/tática/operacional) do cadastro de escola, pois essa classificação pertence aos processos dentro da EPT (Estrutura de Processos de Trabalho).",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "15f9abda-d68d-4c97-af37-3fb733a25020",
+      "fact_type": "nomenclature",
+      "content": "A mensagem de erro para código de escola duplicado deve ser padronizada como 'código da escola já existente', seguindo o padrão do sistema para outros cadastros.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "1fe219f7-1053-49ff-b8d7-3abde1980103",
+      "fact_type": "constraint",
+      "content": "A homologação do sistema de catálogo de processos requer que Maria de Fátima possa testar e visualizar o fluxo completo antes da liberação.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+      ]
+    },
+    {
+      "id": "16f9edde-61e7-40d6-b402-8c4b7be7b60a",
+      "fact_type": "insight",
+      "content": "O organograma da Direito Rio está correto, mas algumas coordenações ainda não possuem catálogo associado, ficando 'em branco' para criação.",
+      "confidence": 0.75,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+      ]
+    },
+    {
+      "id": "9d83104b-4e01-4b09-9a69-7e51e49d72c8",
+      "fact_type": "decision",
+      "content": "Foi decidido que o código do subprocesso será composto pelo código do processo (ex: 23.1.7) seguido de um traço e um número sequencial (ex: 23.1.7-2). O usuário digitará apenas o número sequencial (ex: 1.1, 1.2) e o sistema montará o código completo automaticamente.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "6569e6ea-7d91-4dd5-89cf-d07f5ae1ac2e"
+      ]
+    },
+    {
+      "id": "70bd432e-6bc7-4741-a3c5-13e8e6ddb12e",
+      "fact_type": "nomenclature",
+      "content": "O separador no código do processo é um traço (hífen), não uma barra. Exemplo: 23.1.7-2.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "6569e6ea-7d91-4dd5-89cf-d07f5ae1ac2e"
+      ]
+    },
+    {
+      "id": "e033d7bd-a870-4c0c-a008-6afc3bcf9d43",
+      "fact_type": "rule",
+      "content": "Alterações no organograma não geram automaticamente alterações no catálogo mestre; apenas alterações nos catálogos de processo ou solicitação manual geram revisões.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "b42aae1f-fefc-41d6-9d32-a962b27b2a2f",
+      "fact_type": "rule",
+      "content": "A versão zero do catálogo mestre é solicitada manualmente por Maria de Fátima; a partir da versão zero, as revisões são automatizadas pelo sistema.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "d61bb9c7-877e-4633-aa44-20406dd59d8e"
+      ]
+    },
+    {
+      "id": "22503c56-016d-451e-9eb1-7ae030376a2b",
+      "fact_type": "rule",
+      "content": "Alterações no organograma ou no catálogo de processo geram pendências que podem levar a revisões automáticas do catálogo mestre.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "d61bb9c7-877e-4633-aa44-20406dd59d8e"
+      ]
+    },
+    {
+      "id": "cf831204-5729-4829-9914-65a2614f3a52",
+      "fact_type": "decision",
+      "content": "Documentos legados já aprovados serão mantidos como referência e migrados para o SDEA, mantendo a referência oficial de atualização.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "dfd20c3a-bbff-4674-943e-7cbdf374695e",
+      "fact_type": "rule",
+      "content": "Quando ocorrer alteração em um documento (organograma, catálogo de processos, catálogo mestre, instrução de trabalho ou fluxo de processo), o sistema SDEA deve identificar automaticamente os documentos relacionados e abrir uma atividade de atualização para cada documento impactado, registrando o documento origem da alteração.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "176dc5d2-70e6-4aa2-98e1-80cdb304624a",
+      "fact_type": "nomenclature",
+      "content": "Foi padronizado que o nome do catálogo de processos deve seguir o formato 'CP' seguido do código da unidade e nome da unidade (ex: CP 90.1 unidade teste).",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "250c537f-2fbf-4c8d-a57f-ade92b15ea3a"
+      ]
+    },
+    {
+      "id": "e76f75c2-df43-4ae7-9ef4-a7dc9148334d",
+      "fact_type": "constraint",
+      "content": "O sistema SDEA não permite ter dois documentos de catálogo de processos com o mesmo nome para a mesma unidade.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "250c537f-2fbf-4c8d-a57f-ade92b15ea3a"
+      ]
+    },
+    {
+      "id": "d5d64aa0-b441-4163-a26a-bf7f7bfa115f",
+      "fact_type": "insight",
+      "content": "O catálogo de processos é vinculado a uma unidade específica dentro do organograma, não à organização como um todo.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "250c537f-2fbf-4c8d-a57f-ade92b15ea3a"
+      ]
+    },
+    {
+      "id": "634a7232-584a-460f-89c1-56596004f2c2",
+      "fact_type": "nomenclature",
+      "content": "Foi padronizado que o catálogo de processos deve ser nomeado com o prefixo 'CP' seguido do código da unidade e do nome da unidade (exemplo: 'CP 90.1 unidade teste').",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a723648f-16b1-475e-aff2-1ecb803abb1b"
+      ]
+    },
+    {
+      "id": "36a50c5a-4d62-4634-9548-758f96963069",
+      "fact_type": "constraint",
+      "content": "O sistema SDEA não permite criar dois documentos de catálogo com o mesmo nome para a mesma unidade; é necessário excluir o existente antes de criar um novo.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a723648f-16b1-475e-aff2-1ecb803abb1b"
+      ]
+    },
+    {
+      "id": "9d4e5f64-832a-4de9-a74f-7ce38f4ee9e3",
+      "fact_type": "rule",
+      "content": "O campo 'nome da escola' também deve ser obrigatório no cadastro de escola.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "83f733a8-5ce5-493b-9da9-026639296b27",
+      "fact_type": "insight",
+      "content": "O código da escola segue uma hierarquia: se a escola é 28, os subcódigos são 28.1, 28.2, etc.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "ac71cf93-8866-4959-ad66-eae0f95c0ca0",
+      "fact_type": "decision",
+      "content": "Foi decidido que a planilha enviada por Natasha para Pedro já contém as informações de processos da RCM e da auditoria, e que esses dados já foram carregados na base de dados do sistema.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+      ]
+    },
+    {
+      "id": "4ca568cf-57a5-4999-917a-daeeec954e89",
+      "fact_type": "decision",
+      "content": "Foi decidido que os catálogos de processos terão dois fluxos distintos: 'iniciar catálogo' e 'revisar catálogo', com processos diferentes.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+      ]
+    },
+    {
+      "id": "ec1244ec-4ead-4a78-83ef-c8a71dad1e2f",
+      "fact_type": "constraint",
+      "content": "O sistema não permite exibir os códigos dos subprocessos na mesma tela do cadastro de processos; apenas o somatório de subprocessos é exibido.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "6569e6ea-7d91-4dd5-89cf-d07f5ae1ac2e"
+      ]
+    },
+    {
+      "id": "a8aa3f2b-bb95-4e87-b563-8512752d5118",
+      "fact_type": "rule",
+      "content": "A versão zero do catálogo mestre é solicitada manualmente por Maria de Fátima; a partir da versão zero, as revisões são automatizadas pelo sistema.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "c3f7d910-e5b8-46d2-a6e8-48c90b1b863c",
+      "fact_type": "rule",
+      "content": "O catálogo mestre é gerado automaticamente quando todos os catálogos de processo previstos para uma unidade são concluídos, ou pode ser gerado antes com justificativa para os catálogos pendentes.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "6b172508-fc62-4915-b4cb-6d6b7f20230a",
+      "fact_type": "decision",
+      "content": "Foi decidido que a geração do catálogo mestre será feita a partir da tela de inclusão de catálogos de processo, com um campo 'Gerar catálogo mestre?' que permite ao usuário optar por gerar ou não.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "ace5d5e4-cfa5-4dfa-a894-5d317ca05306",
+      "fact_type": "rule",
+      "content": "A elaboração do catálogo mestre é automática quando todos os catálogos de processo de uma unidade são concluídos; caso contrário, é necessário justificar os catálogos pendentes para gerar o catálogo mestre.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "d61bb9c7-877e-4633-aa44-20406dd59d8e"
+      ]
+    },
+    {
+      "id": "c744c57b-e743-42ad-9a38-7acf18265427",
+      "fact_type": "decision",
+      "content": "Ficou decidido que a geração do catálogo mestre será feita a partir da tela de catálogo de processo, com um campo 'Gerar catálogo mestre?' que permite ao usuário optar por gerar ou não.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "d61bb9c7-877e-4633-aa44-20406dd59d8e"
+      ]
+    },
+    {
+      "id": "52b0c645-f725-46a6-8f14-53f2ad80f4b3",
+      "fact_type": "decision",
+      "content": "A data final do cronograma do projeto é 2 de abril.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "10b3e6a5-c8a8-4a14-8831-3d3f9871d850",
+      "fact_type": "decision",
+      "content": "As reuniões de validação dos fluxos serão nos dias 16 e 19, das 14h às 17h.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "597b9b22-fc08-4281-88b6-e32cbd73e76b",
+      "fact_type": "decision",
+      "content": "O e-mail institucional a ser usado no sistema foi definido e retificado por Deise Rigão.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "1cd6735c-ac33-46e3-8ee9-5574684e2e79",
+      "fact_type": "constraint",
+      "content": "Professores não possuem dois monitores, portanto o sistema deve ser operável com uma única tela.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "e6713547-52ff-42b6-a8c7-5bb85211cce6",
+      "fact_type": "insight",
+      "content": "Fátima sugere usar prefixos no assunto do e-mail (como 'Aprovação' ou 'Validação') para organizar automaticamente as mensagens em pastas.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "1e1df3dc-844a-45fe-b004-881017f7c81e",
+      "fact_type": "rule",
+      "content": "A estrutura de pastas no SharePoint do Portal FGV para cada coordenação da escola contém um catálogo e instruções de trabalho, e uma pasta 'obsoleto' que armazena versões anteriores substituídas por novas versões vigentes.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "9c52717a-cd6c-4762-884b-825a59ad404c",
+      "fact_type": "rule",
+      "content": "A numeração dos processos segue o organograma: os dois primeiros números representam a escola, os seguintes representam a área (ex: 23.1.2 para Gerência de Controladoria de São Paulo), e o último número é o número do processo (ex: 7 para Gestão Financeira).",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "9799d489-3f8d-4cd5-b274-1eef51cd6484",
+      "fact_type": "decision",
+      "content": "Decidiu-se que os documentos obsoletos não ficarão como vigentes, mas serão arquivados como versões anteriores.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "04b262a8-bfd1-4def-9f26-952091ebb18e",
+      "fact_type": "insight",
+      "content": "O número da escola (ex: 23) é o mesmo número da diretoria da escola, e a estrutura hierárquica inclui vice-diretoria (ex: 23.1) e áreas subsequentes.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "d8fa5e85-e8ae-444e-8702-4a0ff8ffc691",
+      "fact_type": "decision",
+      "content": "A segurança no SE Suíte será configurada por equipes, com permissões específicas (visualizar, imprimir, salvar localmente) definidas por categoria de documento.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "d5d2bb0a-d6ec-417e-b0b2-2ea2a270ae60",
+      "fact_type": "decision",
+      "content": "Maria de Fátima irá reduzir suas férias de 15 para 10 dias para evitar atrasos no sistema.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "899e66c4-2574-47ff-8ae2-e04cf140d079",
+      "fact_type": "decision",
+      "content": "Pedro criará um programa automático para criar pastas (catálogo, fluxo) após a estrutura ser definida, e também para conferir se as pastas estão de acordo com o combinado.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "7fd9de79-c4ef-470e-887a-ecd068b9f576",
+      "fact_type": "constraint",
+      "content": "No sistema Camposte, é possível dar acesso imediato às pessoas, mas no SE Suíte o acesso é controlado por grupos e permissões.",
+      "confidence": 0.7,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "e4a002d4-ffb3-438c-b16c-e7e369fb7498",
+      "fact_type": "constraint",
+      "content": "O organograma não pode existir sem um arquivo eletrônico (modelo) associado, conforme Fátima.",
+      "confidence": 0.7,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "870eb15c-a472-4561-b3fa-f299f43d5c93"
+      ]
+    },
+    {
+      "id": "fbee7ef3-867d-41bf-9e55-b782f8f36e27",
+      "fact_type": "insight",
+      "content": "Houve confusão sobre a nomenclatura dos botões de cadastro: 'Cadastro de Estrutura e Organograma de Escola' e 'Cadastro de Estrutura e Organograma de Unidade' foram considerados ambíguos por Fátima.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "870eb15c-a472-4561-b3fa-f299f43d5c93"
+      ]
+    },
+    {
+      "id": "ed0f04b6-4799-49bf-8d05-2af1d4792ea7",
+      "fact_type": "constraint",
+      "content": "O cadastro de organograma deve incluir campos para data e versão, conforme solicitado por Fátima.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    },
+    {
+      "id": "4dc33393-33a2-428c-b887-da83837d2375",
+      "fact_type": "rule",
+      "content": "Ao excluir uma unidade no organograma, o sistema deve tornar obsoletos os documentos da unidade e de suas subunidades, mas as subunidades não são excluídas automaticamente, pois cada unidade tem vida própria.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "6442edfc-af43-4c8d-a59d-783b00d52265",
+      "fact_type": "decision",
+      "content": "Decidiu-se que o sistema deve usar checkboxes para que o usuário indique quais ações devem ser disparadas ao alterar o organograma, em vez de tentar adivinhar todas as situações.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "2b3e0f04-c2dc-498c-9cb2-5910090e6126",
+      "fact_type": "constraint",
+      "content": "O sistema não exclui fisicamente unidades; apenas altera o status para obsoleto, removendo-as das visões ativas.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "76377f74-b349-4149-aa17-1c046f85313a",
+      "fact_type": "insight",
+      "content": "Cada unidade no organograma tem vida própria e catálogos independentes; a exclusão de uma unidade não implica exclusão automática de suas subunidades.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "31341124-08ba-4523-82d7-0ca6b04a723f",
+      "fact_type": "nomenclature",
+      "content": "Foi padronizado que o nome do catálogo de processos deve seguir o formato 'CP' seguido do código da unidade e nome da unidade (ex: CP 90.1 unidade teste).",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "250c537f-2fbf-4c8d-a57f-ade92b15ea3a"
+      ]
+    },
+    {
+      "id": "2d380c95-4283-43aa-b7ba-ae8ee207b44d",
+      "fact_type": "decision",
+      "content": "Decidiu-se que o catálogo de processos é por unidade, não por escola como um todo, e deve-se selecionar a unidade específica dentro da escola.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "250c537f-2fbf-4c8d-a57f-ade92b15ea3a"
+      ]
+    },
+    {
+      "id": "d082fe97-d9eb-4139-ba79-17fc109983b2",
+      "fact_type": "constraint",
+      "content": "O sistema SDEA não permite ter dois documentos de catálogo iguais para a mesma unidade; é necessário excluir o existente antes de incluir um novo.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "250c537f-2fbf-4c8d-a57f-ade92b15ea3a"
+      ]
+    },
+    {
+      "id": "a87d2fcd-9a85-46ea-8d76-9dde51b2f877",
+      "fact_type": "nomenclature",
+      "content": "Foi padronizado que o nome do catálogo de processos deve seguir o formato 'CP' seguido do código da unidade e nome da unidade (ex: CP 90.1 unidade teste).",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a723648f-16b1-475e-aff2-1ecb803abb1b"
+      ]
+    },
+    {
+      "id": "aedd245e-3be0-4809-b422-3c28a7b33356",
+      "fact_type": "decision",
+      "content": "Decidiu-se que o catálogo de processos é vinculado a uma unidade específica, não à escola como um todo, e deve ser selecionada a unidade filha dentro da escola.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a723648f-16b1-475e-aff2-1ecb803abb1b"
+      ]
+    },
+    {
+      "id": "169b23bc-52a0-44e2-8266-ded95b632ce2",
+      "fact_type": "constraint",
+      "content": "O sistema não permite criar dois documentos de catálogo com o mesmo nome para a mesma unidade; é necessário excluir o existente antes de criar um novo.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a723648f-16b1-475e-aff2-1ecb803abb1b"
+      ]
+    },
+    {
+      "id": "afecbe37-5a33-490c-8547-a0e64f74e5a8",
+      "fact_type": "rule",
+      "content": "O campo 'código da escola' deve ser obrigatório no cadastro de escola, com validação de unicidade e mensagem 'código da escola já existente'.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "023f25fb-d4bb-4c37-94a6-0022f179067e",
+      "fact_type": "rule",
+      "content": "O campo 'nome da escola' também deve ser obrigatório no cadastro de escola.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "f6588f9c-668a-41c5-8b2e-6d2c8a8506aa",
+      "fact_type": "insight",
+      "content": "A planilha enviada por Natasha já foi processada e os processos com RN (RCM) foram incluídos na base de dados do sistema.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+      ]
+    },
+    {
+      "id": "1647a41b-cb51-40c7-b740-1b0ab78238db",
+      "fact_type": "constraint",
+      "content": "A homologação do sistema requer que Fátima veja e teste todas as funcionalidades antes da liberação.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+      ]
+    },
+    {
+      "id": "fcf5f6b7-e881-407c-abea-8621bf84011b",
+      "fact_type": "decision",
+      "content": "Foi decidido que o código do subprocesso será composto pelo código do processo (ex: 23.1.7) seguido de um traço e um número sequencial (ex: 23.1.7-2), e o usuário digitará apenas a parte sequencial (ex: 1.1, 1.2) enquanto o sistema monta o código completo.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "6569e6ea-7d91-4dd5-89cf-d07f5ae1ac2e"
+      ]
+    },
+    {
+      "id": "95a6d2e6-a64b-46a4-a68d-49c7b32c1ce1",
+      "fact_type": "constraint",
+      "content": "O sistema Catálogo de Processos não exibe automaticamente os códigos dos subprocessos na tela principal de listagem de processos; apenas o somatório de subprocessos é mostrado.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "6569e6ea-7d91-4dd5-89cf-d07f5ae1ac2e"
+      ]
+    },
+    {
+      "id": "04e4fc5e-2655-4e11-99e3-c8b1557f07e9",
+      "fact_type": "nomenclature",
+      "content": "O separador no código do processo é um traço (hífen), não uma barra. Exemplo: 23.1.7-2.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "6569e6ea-7d91-4dd5-89cf-d07f5ae1ac2e"
+      ]
+    },
+    {
+      "id": "3918a7bc-ebe8-4c18-8fcf-b9d61ecf1450",
+      "fact_type": "rule",
+      "content": "A versão zero do catálogo mestre é solicitada manualmente por Maria de Fátima; a partir da versão zero, as revisões são automatizadas pelo sistema em função de alterações na estrutura.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "007fffdb-28c0-477f-bbdb-c742ded75919",
+      "fact_type": "rule",
+      "content": "A criação do catálogo mestre é automática quando todos os catálogos de processo previstos para uma unidade são concluídos; caso contrário, é necessário justificar os catálogos pendentes para gerar a versão zero.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "ce589af4-cc7b-4b77-98ed-8d5e6f1b4b22",
+      "fact_type": "decision",
+      "content": "Foi decidido que o cadastro de organograma de escola deve ser a primeira atividade (01) na ordem sequencial, e o cadastro de unidade deve ser 02.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "870eb15c-a472-4561-b3fa-f299f43d5c93"
+      ]
+    },
+    {
+      "id": "8ebb13ce-4682-4488-afdf-f027ddf69a8f",
+      "fact_type": "decision",
+      "content": "Foi decidido que o cadastro de organograma de escola deve ser a primeira atividade (01) na ordem sequencial, e o cadastro de unidade deve ser 02.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21"
+      ]
+    },
+    {
+      "id": "ea82d183-c480-4453-b95f-a2b491e19db5",
+      "fact_type": "constraint",
+      "content": "O organograma não pode ser cadastrado sem um arquivo eletrônico (modelo) associado, conforme Fátima.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21"
+      ]
+    },
+    {
+      "id": "ecd15b99-a920-406e-b663-302dfd0350a7",
+      "fact_type": "nomenclature",
+      "content": "Os processos de auditoria seguem uma nomenclatura com numeração hierárquica (ex: 00102).",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21"
+      ]
+    },
+    {
+      "id": "9256e44c-9c19-4e70-8ce1-ccf07d86f55e",
+      "fact_type": "decision",
+      "content": "A ata de reunião deve refletir apenas o que foi discutido na reunião, não servindo como documento de requisitos do projeto.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    },
+    {
+      "id": "2a4b5fbb-18bc-4b44-b355-b8fcf165fd0b",
+      "fact_type": "decision",
+      "content": "Os requisitos complementares listados por Pedro (de 1 a 10) serão implementados e validados posteriormente por Fátima.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    },
+    {
+      "id": "f56d73b0-0143-473f-9c61-6c59a2e16caa",
+      "fact_type": "insight",
+      "content": "Fátima expressou preocupação com a falta de clareza sobre como realizar alterações em organogramas já cadastrados, especialmente em relação a versões e datas.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    },
+    {
+      "id": "586b284b-dd99-46b9-819d-20b772e81aa6",
+      "fact_type": "rule",
+      "content": "Ao alterar o organograma, o sistema deve perguntar se a unidade já existe e se há catálogos associados (médico, processo, etc.), para então questionar se deseja alterar todos os catálogos relacionados.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "790f425d-6f12-45bc-85e4-63d0a0042215",
+      "fact_type": "decision",
+      "content": "Documentos em elaboração no momento da transição para o SDEA poderão ser concluídos no modelo atual (SharePoint) e, após finalização e aprovação, deverão ser registrados no SDEA.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "0c1eb6e6-4120-4686-8ba4-3517931754f0",
+      "fact_type": "decision",
+      "content": "Novos documentos a partir da entrada em operação do SDEA devem ser elaborados e cadastrados diretamente no sistema SDEA.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "e12c7b36-57e4-4806-ac11-d4e378465f35",
+      "fact_type": "rule",
+      "content": "Quando ocorrer alteração em um documento (organograma, catálogo de processos, catálogo mestre, instrução de trabalho, fluxo de processo), o sistema SDEA deve identificar automaticamente os documentos relacionados e abrir pendências de atualização para cada documento impactado, registrando a origem da alteração.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "002db578-5655-4fb0-956e-91ed2c497b09",
+      "fact_type": "insight",
+      "content": "Documentos legados aprovados e vigentes serão considerados base e deverão ser migrados para o SDEA, mantendo referência oficial de atualização.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "395570c2-d850-4aff-b334-e73815661bf6",
+      "fact_type": "decision",
+      "content": "Decidiu-se remover o campo 'interesse para o negócio' (estratégico, tático, operacional) do cadastro de escola, pois essa classificação deve ser feita apenas no nível de processo (EPT).",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "ceea9367-59da-4ab2-bc37-1ed0241fc5f9",
+      "fact_type": "nomenclature",
+      "content": "A mensagem de erro para código de escola duplicado deve ser padronizada como 'código da escola já existente'.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "33654d37-2ddc-4b54-a02f-4f1d72f6220d",
+      "fact_type": "insight",
+      "content": "O código da escola segue uma hierarquia: se a escola é 28, os subcódigos são 28.1, 28.2, etc.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "a0023f97-bf00-4381-833d-3658dac20fe1",
+      "fact_type": "decision",
+      "content": "Foi decidido que os catálogos de processos terão dois fluxos distintos: 'iniciar catálogo' e 'revisar catálogo'.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+      ]
+    },
+    {
+      "id": "e58a15a1-fc05-4237-8859-66137302be4c",
+      "fact_type": "nomenclature",
+      "content": "O termo 'catálogo mestre' é o nome oficial para o processo de catálogo mestre, e 'catálogo de processo' para o catálogo de processo.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "cb4c2656-f596-4633-9089-9f38e06412fa",
+      "fact_type": "rule",
+      "content": "Alterações no organograma ou nos catálogos de processo geram pendências que podem levar a revisões automáticas do catálogo mestre.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "d61bb9c7-877e-4633-aa44-20406dd59d8e"
+      ]
+    },
+    {
+      "id": "a9799165-afe2-4166-b28c-639d16e03d30",
+      "fact_type": "nomenclature",
+      "content": "O termo 'catálogo mestre' é o nome oficial para o catálogo que agrega os catálogos de processo de uma unidade.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "d61bb9c7-877e-4633-aa44-20406dd59d8e"
+      ]
+    },
+    {
+      "id": "fca6e43b-060e-45fa-a6c3-e5927e338e7c",
+      "fact_type": "rule",
+      "content": "Alterações no catálogo de processo geram pendências tanto no catálogo de processo quanto no catálogo mestre.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "3da03d41-8e13-4149-9be2-37b34592b985",
+      "fact_type": "decision",
+      "content": "Foi decidido que o catálogo mestre será gerado automaticamente a partir do momento em que Maria de Fátima der o comando 'gerar catálogo mestre' na tela de catálogo de processo, após verificar se a quantidade de catálogos de processo foi concluída.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "8aeb6f6d-fb6c-4f84-8c7c-15ece8af7a74",
+      "fact_type": "rule",
+      "content": "A versão zero do catálogo mestre é solicitada manualmente por Maria de Fátima; a partir da versão zero, as revisões são automatizadas pelo sistema.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "d61bb9c7-877e-4633-aa44-20406dd59d8e"
+      ]
+    },
+    {
+      "id": "32bbcd06-cf91-4723-bee9-577aa778c113",
+      "fact_type": "rule",
+      "content": "O catálogo mestre é gerado automaticamente quando todos os catálogos de processo previstos para uma unidade são concluídos; caso contrário, é necessário justificar os catálogos não elaborados.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "d61bb9c7-877e-4633-aa44-20406dd59d8e"
+      ]
+    },
+    {
+      "id": "ebdd9d02-2d11-4883-ae5f-0dc16ad8ef9c",
+      "fact_type": "decision",
+      "content": "Ficou decidido que a tela de inclusão de catálogo de processo deve perguntar se o catálogo mestre deve ser gerado, com opção sim/não, e ao responder sim, o sistema gera o catálogo mestre.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "d61bb9c7-877e-4633-aa44-20406dd59d8e"
+      ]
+    },
+    {
+      "id": "64361312-cdba-4b94-88eb-3088ef6ef199",
+      "fact_type": "decision",
+      "content": "As reuniões de validação de fluxos serão realizadas nos dias 16 e 19, das 14h às 17h, com a equipe interna (Fátima, Pedro e Natasha), sem chamar outras pessoas.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "cb2f17b3-ab84-43c4-ba4e-f3d77d963b5d",
+      "fact_type": "decision",
+      "content": "A data final do cronograma do projeto é 2 de abril.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "3c6fe11f-7203-4db0-9d48-64dd7dc1c3bd",
+      "fact_type": "decision",
+      "content": "Pedro Gentil enviará o cronograma com ajustes de datas e atividades para a equipe.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "f764ccf4-4025-41b9-86ee-e01d1eed6ab7",
+      "fact_type": "constraint",
+      "content": "Professores não possuem dois monitores, portanto o sistema deve ser projetado para uso com uma única tela.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "4f75fdef-6c08-49ce-9dca-9b40d8b507fd",
+      "fact_type": "insight",
+      "content": "Fátima sugere usar prefixos no assunto do e-mail (ex: 'Aprovação', 'Validação') para organizar automaticamente os e-mails em pastas.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "184f527d-80c8-4b79-b942-348fbcc3a2f6",
+      "fact_type": "rule",
+      "content": "No SharePoint do Portal FGV, cada coordenação possui uma estrutura com catálogo e instruções de trabalho, e a pasta 'obsoleto' contém versões anteriores que foram substituídas por novas versões vigentes.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "620d7e15-0ca7-4184-8715-2b7594998c83",
+      "fact_type": "rule",
+      "content": "A numeração dos processos segue o organograma: os dois primeiros dígitos representam a escola, seguidos pelo número da gerência e, por fim, o número do processo (ex: 23.1.2.7 para Gestão Financeira na Controladoria de São Paulo).",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "820cff90-8204-45d2-a0c9-416eae2db84a",
+      "fact_type": "insight",
+      "content": "O número da escola (23) é o mesmo número da diretoria, e a estrutura hierárquica inclui vice-diretoria (23.1) e gerências (23.1.2).",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "b4affa17-9c52-47e4-9b54-017221b57a0c",
+      "fact_type": "decision",
+      "content": "Decidiu-se que os documentos obsoletos não ficarão como vigentes, mas serão arquivados como versões anteriores.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "d037c33d-151f-4d0e-8850-337b1268f99c",
+      "fact_type": "decision",
+      "content": "Decidiu-se que a segurança no SE Suíte será configurada por categoria de documento, com criação de equipes específicas e definição de permissões conforme necessidade de cada escola e coordenação.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "10d3d5a6-f964-4db8-8f79-3843bad6c8b6",
+      "fact_type": "decision",
+      "content": "Maria de Fátima irá reduzir suas férias de 15 para 10 dias para evitar atrasos no sistema, conforme combinado com Eduardo.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "25f4be77-c4ba-4ca8-83bc-72e31bbbbe54",
+      "fact_type": "decision",
+      "content": "Pedro criará um programa automático para gerar as pastas (catálogo, fluxo, etc.) após a estrutura ser definida, dispensando a criação manual.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "899ddb2f-53be-4bba-ba29-979c2d053eba",
+      "fact_type": "constraint",
+      "content": "No SE Suíte, é possível configurar permissões para que usuários vejam uma categoria mas não possam acessá-la, ou nem vejam a categoria se não estiverem em grupos autorizados.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "765782a7-c9b1-4042-a07b-32e5d25133a7",
+      "fact_type": "decision",
+      "content": "Foi decidido que o botão de cadastro de organograma de escola deve ser renomeado para '01' e o de unidade para '02', para refletir a ordem sequencial das atividades, sendo o organograma de escola a primeira atividade.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "870eb15c-a472-4561-b3fa-f299f43d5c93"
+      ]
+    },
+    {
+      "id": "afea4e3f-933c-4d3c-9cce-c8691345c893",
+      "fact_type": "constraint",
+      "content": "Maria de Fátima Duarte Moura não consegue visualizar adequadamente a tela compartilhada devido ao tamanho pequeno da fonte, necessitando de ajustes na apresentação.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "870eb15c-a472-4561-b3fa-f299f43d5c93"
+      ]
+    },
+    {
+      "id": "dad52b69-b33a-4e44-b461-3f4c34d0e7f1",
+      "fact_type": "insight",
+      "content": "Maria de Fátima Duarte Moura esperava que houvesse uma tela inicial para escolher entre cadastrar escola ou unidade, mas a equipe modificou a interface para ter botões separados diretamente, o que gerou confusão.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "870eb15c-a472-4561-b3fa-f299f43d5c93"
+      ]
+    },
+    {
+      "id": "7200a775-2d1f-4152-8d28-fa906fada0c7",
+      "fact_type": "decision",
+      "content": "Foi decidido que o cadastro de organograma de escola deve ser a primeira atividade (01) na ordem sequencial, e o cadastro de unidade deve ser 02.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21"
+      ]
+    },
+    {
+      "id": "09cb820b-6ada-4594-a096-973f3f3d31e1",
+      "fact_type": "constraint",
+      "content": "O organograma não pode ser cadastrado sem um arquivo eletrônico (modelo) associado, conforme Fátima.",
+      "confidence": 0.7,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21"
+      ]
+    },
+    {
+      "id": "8be369a0-1758-4ba7-87e8-b438c5436aaf",
+      "fact_type": "nomenclature",
+      "content": "Os processos de auditoria seguem uma nomenclatura com numeração hierárquica (ex: 00102).",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21"
+      ]
+    },
+    {
+      "id": "945922db-6a9f-4dde-a3e8-39a3c4e9427f",
+      "fact_type": "decision",
+      "content": "A ata de reunião deve refletir apenas o que foi discutido na reunião, não servindo como documento de requisitos completo.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    },
+    {
+      "id": "32bc9b22-13a9-477d-a6bf-4113c8036e7f",
+      "fact_type": "decision",
+      "content": "Os requisitos complementares listados por Pedro (de 1 a 10) serão implementados e validados por Fátima em uma próxima versão do sistema.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    },
+    {
+      "id": "ab41af2b-82ed-47b2-b034-c6ce4275a866",
+      "fact_type": "constraint",
+      "content": "O sistema de organograma deve incluir campos de data e versão para cada registro.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    },
+    {
+      "id": "d3e57f74-2be4-4d1a-b7ea-ef5ff564a50b",
+      "fact_type": "nomenclature",
+      "content": "Foi padronizado que o catálogo de processos deve ser nomeado com o prefixo 'CP' seguido do código da unidade e do nome da unidade (exemplo: 'CP 90.1 unidade teste').",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "250c537f-2fbf-4c8d-a57f-ade92b15ea3a"
+      ]
+    },
+    {
+      "id": "bc1dc2c3-c578-4357-b1f9-c7f9418a2811",
+      "fact_type": "decision",
+      "content": "Decidiu-se que o catálogo de processos será cadastrado por unidade (e não por escola como um todo), selecionando a unidade filha dentro da escola.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "250c537f-2fbf-4c8d-a57f-ade92b15ea3a"
+      ]
+    },
+    {
+      "id": "ddff9c21-19d2-4512-8e37-3a8eeedb0bab",
+      "fact_type": "decision",
+      "content": "Decidiu-se que a mensagem de erro para código de escola já existente deve ser padronizada como 'código da escola já existente', alinhada com outras críticas do sistema.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "978fe95f-566b-4a89-9009-9d4592129bc7",
+      "fact_type": "constraint",
+      "content": "O sistema não pode exibir os códigos dos subprocessos na mesma tela do cadastro de processos; apenas o somatório de subprocessos é exibido.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "6569e6ea-7d91-4dd5-89cf-d07f5ae1ac2e"
+      ]
+    },
+    {
+      "id": "271b4db8-d83f-4a81-9a43-16302c2184f2",
+      "fact_type": "nomenclature",
+      "content": "O separador no código do processo é um traço (hífen), não uma barra.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "6569e6ea-7d91-4dd5-89cf-d07f5ae1ac2e"
+      ]
+    },
+    {
+      "id": "0d9fa043-3dca-48b2-87e5-84df1d51f946",
+      "fact_type": "rule",
+      "content": "O catálogo mestre é gerado automaticamente quando todos os catálogos de processo previstos para uma unidade são concluídos; caso contrário, é necessário justificar os catálogos pendentes para gerar a versão zero.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "0e0fc73f-15f1-4293-a752-d5ede5c3eb1f",
+      "fact_type": "rule",
+      "content": "Alterações no catálogo de processo geram pendências tanto no catálogo de processo quanto no catálogo mestre.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "abd0798c-64ce-424c-809c-6179bedea6f7",
+      "fact_type": "rule",
+      "content": "A versão zero do catálogo mestre é solicitada manualmente por Maria de Fátima; a partir da versão zero, as revisões são automatizadas pelo sistema.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "d61bb9c7-877e-4633-aa44-20406dd59d8e"
+      ]
+    },
+    {
+      "id": "7f384280-7d54-45d0-ab54-f7610d8487d5",
+      "fact_type": "insight",
+      "content": "Fátima expressou preocupação com a falta de clareza sobre como alterar organogramas após o cadastro inicial, especialmente em relação a mudanças de coordenações.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    },
+    {
+      "id": "6a5c45f6-4729-446b-bcc7-fd44c3119b75",
+      "fact_type": "rule",
+      "content": "Ao excluir uma unidade no organograma, o sistema deve tornar obsoletos os documentos da unidade e de suas subunidades, mas as subunidades não são automaticamente excluídas; cada unidade tem vida própria.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "94b45638-a898-4a59-92b8-4d58db4be5f1",
+      "fact_type": "decision",
+      "content": "Decidiu-se que o sistema deve perguntar ao usuário, via checkboxes, quais ações devem ser tomadas ao alterar o organograma (exclusão, substituição, inclusão), disparando atividades correspondentes.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "f077fe79-dadd-4025-a703-ed46b74b48ae",
+      "fact_type": "constraint",
+      "content": "O sistema não pode excluir logicamente unidades filhas quando a unidade pai é excluída; cada unidade tem seu próprio catálogo e vida independente.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "d10eb5a4-6c7a-4dcd-9c12-99f37e97c83c",
+      "fact_type": "insight",
+      "content": "Alterações no organograma podem envolver exclusão, substituição de nome ou responsável, ou inclusão de novas unidades, cada uma com impactos diferentes nos catálogos.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "99645fd0-3f7b-474d-a7f2-cc0ee507f9b4",
+      "fact_type": "decision",
+      "content": "Documentos em elaboração no momento da transição para o SDEA poderão ser concluídos no modelo atual (SharePoint) e, após finalização e aprovação, deverão ser registrados no SDEA.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "2afefdc6-9ff1-4403-9901-fb7432f28720",
+      "fact_type": "decision",
+      "content": "Novos documentos, a partir da entrada em operação do SDEA, devem ser elaborados e cadastrados diretamente no sistema.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "eeaa9c69-d6d1-42b8-ac30-ff1ad4a811ab",
+      "fact_type": "rule",
+      "content": "Quando houver alteração em um documento (organograma, catálogo de processos, catálogo mestre, instrução de trabalho, fluxo de processo), o sistema SDEA deve identificar automaticamente os documentos relacionados e abrir pendências de atualização para cada documento impactado, registrando o documento origem da alteração.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "ff69ea13-1e8d-45ce-badd-153d114e0fec",
+      "fact_type": "insight",
+      "content": "Documentos legados aprovados e vigentes serão considerados base de conhecimento e migrados para o SDEA, mantendo referência oficial de atualização.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "e0e0276e-7052-43c7-93d4-b2056f25d7bc",
+      "fact_type": "constraint",
+      "content": "O sistema SDEA não permite ter dois documentos com o mesmo nome para a mesma unidade; é necessário excluir o documento existente antes de criar um novo.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "250c537f-2fbf-4c8d-a57f-ade92b15ea3a"
+      ]
+    },
+    {
+      "id": "6847687e-0456-46a8-9016-e8537c4227a0",
+      "fact_type": "nomenclature",
+      "content": "Foi padronizado que o catálogo de processos deve ser nomeado com o prefixo 'CP' seguido do código da unidade e do nome da unidade (ex: 'CP 90.1 unidade teste').",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a723648f-16b1-475e-aff2-1ecb803abb1b"
+      ]
+    },
+    {
+      "id": "4dd32864-a62a-4e3d-9d1c-5cb767308ea6",
+      "fact_type": "decision",
+      "content": "Decidiu-se que o catálogo de processos será criado por unidade (e não por escola como um todo), selecionando a unidade filha dentro da escola.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a723648f-16b1-475e-aff2-1ecb803abb1b"
+      ]
+    },
+    {
+      "id": "affdc5ac-341a-4ff9-b72a-5b46414116fd",
+      "fact_type": "constraint",
+      "content": "O sistema SDEA não permite ter dois documentos de catálogo com o mesmo nome para a mesma unidade; é necessário excluir o existente antes de criar um novo.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a723648f-16b1-475e-aff2-1ecb803abb1b"
+      ]
+    },
+    {
+      "id": "0dbe20a4-fb7e-4c98-b35c-47a12a0f045e",
+      "fact_type": "decision",
+      "content": "Decidiu-se que o campo 'código da escola' deve ser obrigatório no cadastro de escola do organograma, com validação imediata (não permitir prosseguir sem preenchimento).",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "2bdcc96a-6843-468c-b582-f86361a796e7",
+      "fact_type": "decision",
+      "content": "Decidiu-se remover o campo 'interesse para o negócio' (estratégico, tático, operacional) do cadastro de escola, pois essa classificação deve ser feita no nível de processo (EPT), não da escola.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "bc2b7273-1099-44ae-b036-b1cb18424ee1",
+      "fact_type": "rule",
+      "content": "O código da escola segue uma hierarquia: se a escola é 28, os subcódigos são 28.1, 28.2, etc., e essa sequência deve ser mantida.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "a1cafcab-13f6-488a-9714-7199a20dae81",
+      "fact_type": "insight",
+      "content": "O sistema SDEA permite arrastar arquivos do computador para a tela de cadastro, além de usar o botão 'selecionar'.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "dfaad419-c43e-49f5-b911-938890ca2c18",
+      "fact_type": "decision",
+      "content": "Foi decidido que os catálogos de processos terão dois fluxos distintos: 'iniciar catálogo' e 'revisar catálogo'.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+      ]
+    },
+    {
+      "id": "602b8657-de6c-42e2-9ce4-269cd83eb0a8",
+      "fact_type": "insight",
+      "content": "A planilha enviada por Natasha já foi processada por Pedro, e os processos com RN (RCM) já estão na base de dados.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+      ]
+    },
+    {
+      "id": "7e71a65b-7a14-4a1c-b8eb-04a9d5534a59",
+      "fact_type": "constraint",
+      "content": "A homologação do sistema de catálogo de processos requer que Fátima veja e teste todas as funcionalidades antes da liberação.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+      ]
+    },
+    {
+      "id": "82ffaeff-9225-4711-bc09-80450f6233dc",
+      "fact_type": "decision",
+      "content": "Foi decidido que o código do subprocesso será composto pelo código do processo (ex: 23.1.7) seguido de um traço e um número sequencial (ex: 23.1.7-2). O usuário digitará apenas a parte sequencial (ex: 1.1, 1.2) e o sistema montará o código completo.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "6569e6ea-7d91-4dd5-89cf-d07f5ae1ac2e"
+      ]
+    },
+    {
+      "id": "420e9701-6a6d-4ef5-9ff2-1615a7094fc0",
+      "fact_type": "rule",
+      "content": "A versão zero do catálogo mestre é solicitada manualmente por Maria de Fátima; a partir da versão zero, as revisões são automatizadas pelo sistema em função de alterações na estrutura.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "8377519e-849f-431e-ad30-b52ae6a16ee4",
+      "fact_type": "decision",
+      "content": "Ficou decidido que a tela de inclusão de catálogo de processo deve conter um campo para indicar se o catálogo mestre deve ser gerado (sim/não), e ao responder 'sim', o sistema gera o catálogo mestre automaticamente.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "33963ea8-352a-476f-b363-2876b4113c74",
+      "fact_type": "nomenclature",
+      "content": "O termo 'catálogo mestre' é usado para o catálogo principal; 'catálogo de processo' refere-se aos catálogos por unidade.",
+      "confidence": 0.95,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "c55b8730-e049-46a0-bab8-8f7812ac259f",
+      "fact_type": "insight",
+      "content": "Maria de Fátima prefere que a tela inicial pergunte se o usuário quer cadastrar escola ou unidade, antes de mostrar os botões específicos.",
+      "confidence": 0.7,
+      "dialogue_act": "open_question",
+      "source_meeting_ids": [
+        "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21"
+      ]
+    },
+    {
+      "id": "6ec28d7d-9a64-49e1-a7a4-be3b070957bd",
+      "fact_type": "rule",
+      "content": "A elaboração do catálogo mestre é automática quando todos os catálogos de processo previstos para uma unidade são concluídos; caso contrário, é necessário justificar os catálogos pendentes para gerar o catálogo mestre.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "d61bb9c7-877e-4633-aa44-20406dd59d8e"
+      ]
+    },
+    {
+      "id": "045c5735-e4ee-4fe0-b697-b7c00c1f42d1",
+      "fact_type": "rule",
+      "content": "Alterações no organograma ou no catálogo de processo geram pendências que podem levar a revisões automáticas do catálogo mestre.",
+      "confidence": 0.85,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "d61bb9c7-877e-4633-aa44-20406dd59d8e"
+      ]
+    },
+    {
+      "id": "cb9b530a-c077-461c-b1d2-0632fecaa202",
+      "fact_type": "decision",
+      "content": "Ficou decidido que o catálogo mestre será gerado automaticamente a partir do momento em que Maria de Fátima der o input, após a conclusão dos catálogos de processo.",
+      "confidence": 0.9,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "d61bb9c7-877e-4633-aa44-20406dd59d8e"
+      ]
+    },
+    {
+      "id": "bbb42583-8219-49e4-afc3-699c38a46219",
+      "fact_type": "nomenclature",
+      "content": "O termo 'catálogo mestre' é o nome oficial; 'catálogo médico' foi usado como variação, mas o nome correto é 'catálogo mestre'.",
+      "confidence": 0.8,
+      "dialogue_act": null,
+      "source_meeting_ids": [
+        "d61bb9c7-877e-4633-aa44-20406dd59d8e"
+      ]
+    },
+    {
+      "id": "39339282-f8cb-4b2a-8375-54b495b74e0a",
+      "fact_type": "decision",
+      "content": "O cronograma do projeto será ajustado com data final em 2 de abril, e Pedro enviará o cronograma atualizado com 4 atividades.",
+      "confidence": 0.95,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "0c40b934-5dd7-4148-a9b8-7d7fb69ef5ea",
+      "fact_type": "decision",
+      "content": "As reuniões de validação dos fluxos serão realizadas nos dias 16 e 19, das 15h às 17h, apenas entre Fátima, Pedro e Natasha.",
+      "confidence": 0.95,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "c29d2187-3fbf-40ce-8c55-f62e62f8e7b2",
+      "fact_type": "decision",
+      "content": "O e-mail a ser usado no sistema foi definido e retificado por Deise, e deve ser comunicado à DTI para configuração de segurança.",
+      "confidence": 0.9,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "5b27f5f5-ccf4-4cd5-81db-793330bab7d5"
+      ]
+    },
+    {
+      "id": "482762ee-e879-4dd3-ba99-d73fc6ec0f45",
+      "fact_type": "rule",
+      "content": "A estrutura do SharePoint do portal FGV para mapeamento de processos é composta por coordenações, cada uma com catálogo e instruções de trabalho, e uma pasta 'obsoleto' que contém versões anteriores substituídas.",
+      "confidence": 0.95,
+      "dialogue_act": "agreement",
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "4e018997-2e69-491f-a6ea-d54fef005a19",
+      "fact_type": "rule",
+      "content": "Documentos na pasta 'obsoleto' não devem ser considerados vigentes; devem ser arquivados como versões anteriores.",
+      "confidence": 0.95,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "8e27f355-cbaa-45df-a416-607e057c9265",
+      "fact_type": "rule",
+      "content": "Cada processo possui uma numeração que corresponde ao organograma: os dois primeiros números representam a escola, seguidos pelo número da gerência e, por fim, o número do processo.",
+      "confidence": 0.9,
+      "dialogue_act": "agreement",
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "c0621786-661f-4d68-abcb-aa552fc783ec",
+      "fact_type": "rule",
+      "content": "O número da escola de Direito de São Paulo é 23, e a Gerência de Controladoria de São Paulo tem o número 23.1.2.",
+      "confidence": 0.85,
+      "dialogue_act": "agreement",
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "b071ee6c-85db-4d1d-bae6-c71438381253",
+      "fact_type": "rule",
+      "content": "O processo 'Gestão Financeira' tem o número 7 dentro da Gerência de Controladoria de São Paulo.",
+      "confidence": 0.85,
+      "dialogue_act": "agreement",
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "d95e85d7-1925-4752-8fc0-d606db57cf95",
+      "fact_type": "decision",
+      "content": "A equipe DTIE (Natasha e Pedro) é responsável pelo desenvolvimento eletrônico do mapeamento de processos, com base no que Maria de Fátima faz atualmente.",
+      "confidence": 0.9,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "9398f150-5b5e-4bfe-920d-3fa12c2f8d8f",
+      "fact_type": "insight",
+      "content": "O número da escola (23) é o mesmo número da diretoria, pois a diretoria está abaixo da escola na estrutura organizacional.",
+      "confidence": 0.8,
+      "dialogue_act": "agreement",
+      "source_meeting_ids": [
+        "042eb333-4c43-4d1b-b02c-9321cd76898b"
+      ]
+    },
+    {
+      "id": "d1f71379-3ccc-48f4-bd51-4c957906790e",
+      "fact_type": "decision",
+      "content": "A segurança no SE Suíte será configurada por equipes, com permissões específicas para cada categoria de documento, conforme definido por Maria de Fátima.",
+      "confidence": 0.9,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "83ac9f55-676b-479e-bbce-12233a5d9af3",
+      "fact_type": "decision",
+      "content": "A estrutura de pastas (catálogo, fluxo, etc.) será criada automaticamente por um programa após a definição da estrutura pelo organograma, sem necessidade de criar pastas manualmente.",
+      "confidence": 0.85,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "8236f5e1-7180-4f9e-81f0-07f93f8b03c2",
+      "fact_type": "constraint",
+      "content": "No SE Suíte, é possível configurar permissões para que usuários vejam uma categoria de documento mas não possam acessá-la, ou nem mesmo vejam sua existência.",
+      "confidence": 0.95,
+      "dialogue_act": "agreement",
+      "source_meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "671b208a-f672-49f4-9be9-552f32a9dac9",
+      "fact_type": "insight",
+      "content": "Maria de Fátima prefere conferir manualmente a estrutura de pastas, mesmo com a existência de um programa automático de verificação.",
+      "confidence": 0.7,
+      "dialogue_act": "objection",
+      "source_meeting_ids": [
+        "61f96185-20f6-418e-90c2-c4e1ae2deeb5"
+      ]
+    },
+    {
+      "id": "7142c7b2-e696-49ca-b042-debe44dca817",
+      "fact_type": "decision",
+      "content": "Foi decidido que o botão de cadastro de estrutura de organograma de escola será renomeado para '01' e o de unidade para '02', seguindo a ordem sequencial das atividades.",
+      "confidence": 0.8,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "870eb15c-a472-4561-b3fa-f299f43d5c93"
+      ]
+    },
+    {
+      "id": "aedacef3-e271-43c3-adb0-519dcaf16c51",
+      "fact_type": "constraint",
+      "content": "O cadastro de organograma de escola deve ser a primeira atividade, antes do cadastro de unidade, pois o organograma é essencial para a escola.",
+      "confidence": 0.9,
+      "dialogue_act": "objection",
+      "source_meeting_ids": [
+        "870eb15c-a472-4561-b3fa-f299f43d5c93"
+      ]
+    },
+    {
+      "id": "f8c1bebc-3d6a-4217-a8e6-226a7388a6fc",
+      "fact_type": "insight",
+      "content": "Maria de Fátima prefere que a tela inicial pergunte se o usuário quer cadastrar escola ou unidade, em vez de ter dois botões separados no mesmo local.",
+      "confidence": 0.7,
+      "dialogue_act": "objection",
+      "source_meeting_ids": [
+        "870eb15c-a472-4561-b3fa-f299f43d5c93"
+      ]
+    },
+    {
+      "id": "19902d3a-6bf5-4d42-a47c-b6de5f76fc27",
+      "fact_type": "nomenclature",
+      "content": "O termo 'modelo' refere-se ao arquivo eletrônico que gera documentos, não ao cadastro de organograma.",
+      "confidence": 0.9,
+      "dialogue_act": "revision",
+      "source_meeting_ids": [
+        "870eb15c-a472-4561-b3fa-f299f43d5c93"
+      ]
+    },
+    {
+      "id": "32ad5982-47de-47bd-9beb-9f55406a9881",
+      "fact_type": "decision",
+      "content": "Foi decidido que o botão de cadastro de estrutura de organograma de escola será o primeiro (01) na ordem sequencial das atividades, e o de unidade será o segundo (02).",
+      "confidence": 0.85,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21"
+      ]
+    },
+    {
+      "id": "afa510a6-ce71-4305-a2fd-5170d7032e61",
+      "fact_type": "constraint",
+      "content": "O organograma de escola é obrigatório e deve ser cadastrado antes de qualquer outra atividade relacionada à escola.",
+      "confidence": 0.8,
+      "dialogue_act": "objection",
+      "source_meeting_ids": [
+        "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21"
+      ]
+    },
+    {
+      "id": "103c26b7-5ed6-45dd-bdf1-c8292c3c5df3",
+      "fact_type": "nomenclature",
+      "content": "O termo 'modelo' refere-se ao arquivo eletrônico que gera documentos, não ao cadastro de organograma.",
+      "confidence": 0.9,
+      "dialogue_act": "revision",
+      "source_meeting_ids": [
+        "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21"
+      ]
+    },
+    {
+      "id": "b24fdc88-d507-4572-b368-c024d6fea47c",
+      "fact_type": "decision",
+      "content": "Os processos de iniciar catálogo e revisar catálogo são fluxos diferentes e devem ser tratados separadamente.",
+      "confidence": 0.95,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+      ]
+    },
+    {
+      "id": "a8504013-2d55-4fd3-b644-ea85b6d1a8b5",
+      "fact_type": "decision",
+      "content": "A ata da reunião deve conter apenas o que foi falado na reunião, não devendo incluir requisitos ou discussões de reuniões anteriores.",
+      "confidence": 0.95,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    },
+    {
+      "id": "85c25c85-7ab1-4a7c-9ca4-e9ab8c3100d8",
+      "fact_type": "constraint",
+      "content": "Todo documento inserido no sistema de organograma deve ter data e versão registradas.",
+      "confidence": 0.9,
+      "dialogue_act": "agreement",
+      "source_meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    },
+    {
+      "id": "f244d463-a905-4a7a-acb8-55ad05c9b86a",
+      "fact_type": "insight",
+      "content": "Fátima precisa de um checklist claro e registro das alterações para não esquecer os ajustes necessários no sistema.",
+      "confidence": 0.85,
+      "dialogue_act": "open_question",
+      "source_meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    },
+    {
+      "id": "3c10bcf1-66c7-466a-9228-03558d5fc77d",
+      "fact_type": "decision",
+      "content": "As observações de Fátima sobre organograma (data, versão, alteração de estimativas) serão registradas na ata desta reunião, pois foram mencionadas agora.",
+      "confidence": 0.9,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "9a5a1cb3-8a2e-4382-b119-6295026a90e3"
+      ]
+    },
+    {
+      "id": "fce69344-167b-4f93-839e-9002480593cf",
+      "fact_type": "rule",
+      "content": "Ao excluir uma unidade no organograma, o sistema deve inativar a unidade e tornar obsoletos todos os documentos associados, mas não excluir automaticamente as unidades filhas, pois cada unidade tem vida própria.",
+      "confidence": 0.9,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "4895d2e0-9e08-4928-a8c3-c6b380a80bad",
+      "fact_type": "rule",
+      "content": "Ao alterar o organograma, o sistema deve perguntar ao usuário qual o tipo de alteração (exclusão, substituição de nome, substituição de responsável, inclusão) e verificar se a unidade já existe, se possui catálogos vinculados, e questionar se deseja alterar tudo.",
+      "confidence": 0.85,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "b933eb94-035b-4f9d-83ce-7a8842bbf88e",
+      "fact_type": "rule",
+      "content": "Quando uma unidade é excluída, deve ser enviado um e-mail de notificação e registrada a exclusão nos catálogos (mestre, médico, processo), com histórico descritivo.",
+      "confidence": 0.8,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "19840c49-c7ab-4d14-a681-28446df98ee9",
+      "fact_type": "rule",
+      "content": "Na substituição de unidade, o sistema deve verificar se a unidade existe, gerar nova versão e perguntar se deseja substituir também os catálogos vinculados.",
+      "confidence": 0.85,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "9204409d-24f2-4362-b8cb-15c9753b25ec",
+      "fact_type": "insight",
+      "content": "As unidades organizacionais têm vida própria e não devem ser excluídas em cascata automaticamente; cada unidade filha deve ser tratada individualmente.",
+      "confidence": 0.9,
+      "dialogue_act": "objection",
+      "source_meeting_ids": [
+        "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+      ]
+    },
+    {
+      "id": "f4445638-c9dd-4eea-ab0f-ff44a15a09bb",
+      "fact_type": "decision",
+      "content": "Documentos em andamento no momento da transição para o SDEA poderão ser concluídos no modelo atual (SharePoint) e, após finalização e aprovação, deverão ser registrados no SDEA.",
+      "confidence": 0.95,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "46a86ef2-c6af-418a-893c-da9f901f599b",
+      "fact_type": "decision",
+      "content": "Novos documentos a partir da entrada em operação do SDEA devem ser elaborados e cadastrados diretamente no sistema SDEA.",
+      "confidence": 0.95,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "63020441-1d6f-4644-b1fa-e6fcb92364b2",
+      "fact_type": "rule",
+      "content": "Quando um documento (ex: instrução de trabalho) é alterado, o sistema deve identificar automaticamente os documentos relacionados (ex: fluxo de processo) e abrir atividades de atualização para cada um, registrando o documento origem da alteração.",
+      "confidence": 0.9,
+      "dialogue_act": "agreement",
+      "source_meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "b76616f4-f591-40ec-831e-cb6bfdef7049",
+      "fact_type": "rule",
+      "content": "Alteração em organograma deve gerar automaticamente pendência de atualização nos fluxos de processo vinculados, catálogo de processos e catálogo mestre, se existirem documentos relacionados.",
+      "confidence": 0.85,
+      "dialogue_act": "agreement",
+      "source_meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "49bb78a0-d40b-4246-8bb1-5fd8a8214bf3",
+      "fact_type": "insight",
+      "content": "Documentos elaborados no sistema legado (SharePoint) podem ser aprovados no SDEA, desde que sejam inseridos no processo do SDEA e preenchidos os campos adicionais antes da aprovação.",
+      "confidence": 0.8,
+      "dialogue_act": "agreement",
+      "source_meeting_ids": [
+        "2e57dcef-ef81-4c2e-9d22-b60891e62f86"
+      ]
+    },
+    {
+      "id": "aea10389-0920-4f29-b65a-55b545b9e375",
+      "fact_type": "nomenclature",
+      "content": "O padrão para nomear o catálogo de processos é 'CP' seguido do código da unidade e do nome da unidade (ex: CP 90.1 unidade teste).",
+      "confidence": 0.95,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "250c537f-2fbf-4c8d-a57f-ade92b15ea3a"
+      ]
+    },
+    {
+      "id": "11ed8601-fe00-4d18-8325-1860907ce691",
+      "fact_type": "constraint",
+      "content": "O sistema SDEA não permite criar dois documentos com o mesmo nome para a mesma unidade.",
+      "confidence": 0.9,
+      "dialogue_act": "exception",
+      "source_meeting_ids": [
+        "250c537f-2fbf-4c8d-a57f-ade92b15ea3a"
+      ]
+    },
+    {
+      "id": "7a08c99f-8215-4277-a159-57e2357889d3",
+      "fact_type": "decision",
+      "content": "O catálogo de processos é vinculado a uma unidade específica, não à escola como um todo; é necessário selecionar a unidade filha dentro da escola.",
+      "confidence": 0.85,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "250c537f-2fbf-4c8d-a57f-ade92b15ea3a"
+      ]
+    },
+    {
+      "id": "c3e38237-784d-4f36-abf8-a8e1e91667b9",
+      "fact_type": "insight",
+      "content": "Maria de Fátima esperava que o catálogo de processos fosse construído a partir do organograma, mas o sistema SDEA utiliza uma tela separada para catálogo de processos e subprocessos.",
+      "confidence": 0.8,
+      "dialogue_act": "open_question",
+      "source_meeting_ids": [
+        "250c537f-2fbf-4c8d-a57f-ade92b15ea3a"
+      ]
+    },
+    {
+      "id": "3a3706d2-e967-4be3-81c0-20edd528f89b",
+      "fact_type": "nomenclature",
+      "content": "O nome padrão para o catálogo de processos é 'CP' seguido do código da unidade e do nome da unidade (ex: CP 90.1 unidade teste).",
+      "confidence": 0.95,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "a723648f-16b1-475e-aff2-1ecb803abb1b"
+      ]
+    },
+    {
+      "id": "56d4d00a-0214-4cab-a5a5-cd7730508076",
+      "fact_type": "constraint",
+      "content": "O sistema SDEA não permite ter dois documentos de catálogo iguais para a mesma unidade; é necessário excluir um antes de incluir outro.",
+      "confidence": 0.9,
+      "dialogue_act": "agreement",
+      "source_meeting_ids": [
+        "a723648f-16b1-475e-aff2-1ecb803abb1b"
+      ]
+    },
+    {
+      "id": "00d015d7-e711-415c-9d64-86b1b8c5cedc",
+      "fact_type": "decision",
+      "content": "O catálogo de processos é vinculado a uma unidade específica, não à escola como um todo; é necessário selecionar a unidade filha dentro da escola.",
+      "confidence": 0.85,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "a723648f-16b1-475e-aff2-1ecb803abb1b"
+      ]
+    },
+    {
+      "id": "a9671ff8-c56b-4a5e-8b2c-5941b7dc1711",
+      "fact_type": "decision",
+      "content": "A mensagem de erro para código de escola já existente será padronizada para 'já existente', conforme já utilizado em outras partes do sistema.",
+      "confidence": 0.95,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "b67a8bf3-757c-4ed8-aaae-52d6bbd77515",
+      "fact_type": "decision",
+      "content": "Os campos 'código da escola' e 'nome da escola' devem ser obrigatórios no cadastro de escola, com validação imediata (não permitir prosseguir sem preenchimento).",
+      "confidence": 0.95,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "b1d872ad-414a-42d0-9bf6-14f708649ae6",
+      "fact_type": "decision",
+      "content": "O campo 'interesse para o negócio' (estratégico, tático, operacional) deve ser removido do cadastro de escola e mantido apenas no catálogo de processos (EPT).",
+      "confidence": 0.9,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "ba656e43-1bdc-4679-bd1a-e58da1d7f8fc",
+      "fact_type": "rule",
+      "content": "O código da escola segue uma hierarquia: se a escola é 28, os subcódigos são 28.1, 28.2, etc., e essa sequência não pode ser alterada.",
+      "confidence": 0.9,
+      "dialogue_act": "agreement",
+      "source_meeting_ids": [
+        "47f00aa3-fc80-4c6c-9ee2-a98cd181cb14"
+      ]
+    },
+    {
+      "id": "8415d862-2dc2-42ce-82fb-160b3647dcc3",
+      "fact_type": "decision",
+      "content": "Os atributos a serem exibidos nos gráficos de pizza (esferinhas) foram definidos e enviados por Maria de Fátima na ata anterior.",
+      "confidence": 0.8,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+      ]
+    },
+    {
+      "id": "844f2410-c78d-4a02-94c3-df2feca365e7",
+      "fact_type": "decision",
+      "content": "A informação sobre o que foi feito pela auditoria e pela RCM já está disponível no legado e foi passada para Pedro.",
+      "confidence": 0.9,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+      ]
+    },
+    {
+      "id": "28dc726d-3a33-41ce-83ad-38550b823d01",
+      "fact_type": "decision",
+      "content": "A planilha enviada por Natasha já foi lida e os processos com RN foram inseridos na base de dados do sistema.",
+      "confidence": 0.9,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+      ]
+    },
+    {
+      "id": "4494c1b0-7ba4-4366-bd2c-e3d480ec365e",
+      "fact_type": "constraint",
+      "content": "A homologação do sistema só deve ocorrer após Maria de Fátima visualizar e testar todas as funcionalidades.",
+      "confidence": 0.85,
+      "dialogue_act": "objection",
+      "source_meeting_ids": [
+        "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+      ]
+    },
+    {
+      "id": "79737c70-73b0-4f47-8c34-52c812591075",
+      "fact_type": "decision",
+      "content": "A numeração de subprocessos será composta pelo código do processo seguido de um traço e um número sequencial (ex: 23.1.7-2). O usuário digitará apenas o sequencial (ex: 1.1, 1.2) e o sistema montará o código completo internamente.",
+      "confidence": 0.95,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "6569e6ea-7d91-4dd5-89cf-d07f5ae1ac2e"
+      ]
+    },
+    {
+      "id": "9ada79f2-771c-40e3-9eaf-dc8b48a6eee5",
+      "fact_type": "constraint",
+      "content": "O sistema não permite que o código do subprocesso seja exibido na mesma tela do cadastro de processos; apenas o somatório de subprocessos pode ser mostrado.",
+      "confidence": 0.8,
+      "dialogue_act": "exception",
+      "source_meeting_ids": [
+        "6569e6ea-7d91-4dd5-89cf-d07f5ae1ac2e"
+      ]
+    },
+    {
+      "id": "03c1e841-7a2e-4127-af5c-1b12e5cc03dd",
+      "fact_type": "insight",
+      "content": "A numeração de subprocessos no legado não incluía o código completo; a nova abordagem adiciona um identificador único para a base de dados.",
+      "confidence": 0.9,
+      "dialogue_act": "revision",
+      "source_meeting_ids": [
+        "6569e6ea-7d91-4dd5-89cf-d07f5ae1ac2e"
+      ]
+    },
+    {
+      "id": "216cb7b0-3fcb-40a2-b357-cc097d85727c",
+      "fact_type": "rule",
+      "content": "A geração do catálogo mestre versão zero ocorre quando todos os catálogos de processo previstos para uma unidade são concluídos; caso contrário, é necessário justificar os catálogos não elaborados.",
+      "confidence": 0.9,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "3ae5ae54-5d84-41b2-9e07-bbfa8ab73f50",
+      "fact_type": "rule",
+      "content": "Alterações no catálogo de processo ou no organograma geram pendências automáticas para revisão do catálogo mestre.",
+      "confidence": 0.95,
+      "dialogue_act": "agreement",
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "9a5a9e3f-67f4-4f46-8539-022659cf84a8",
+      "fact_type": "nomenclature",
+      "content": "O termo 'catálogo mestre' é o nome oficial; também referido como 'catálogo médico' em algumas falas.",
+      "confidence": 0.8,
+      "dialogue_act": "agreement",
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "a354913c-18c6-453a-be69-1130e22b2d19",
+      "fact_type": "insight",
+      "content": "Maria de Fátima está insatisfeita com o andamento do projeto, mencionando que está há 9 meses no projeto e ainda não viu o desenvolvimento completo.",
+      "confidence": 0.9,
+      "dialogue_act": "open_question",
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    },
+    {
+      "id": "0a22594c-b717-4e61-a0fb-9495179845f6",
+      "fact_type": "insight",
+      "content": "O catálogo mestre possui unidades que precisarão ser excluídas.",
+      "confidence": 0.7,
+      "dialogue_act": "open_question",
+      "source_meeting_ids": [
+        "13c5efd4-0af3-4cf5-ab5a-b3f20394764f"
+      ]
+    },
+    {
+      "id": "8df2f699-902b-4069-8fe0-3323aeaac9ba",
+      "fact_type": "rule",
+      "content": "A versão zero do catálogo mestre é solicitada manualmente por Maria de Fátima; após a versão zero, as revisões são automatizadas pelo sistema em função de alterações na estrutura (organograma ou catálogo de processos).",
+      "confidence": 0.95,
+      "dialogue_act": "decision",
+      "source_meeting_ids": [
+        "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+      ]
+    }
+  ],
+  "contradictions": [
+    {
+      "id": "0cecf7ad-0f3d-4c7c-ae3e-1f1410ef9da2",
+      "description": "O fato 6123baac afirma que o sistema deve ser operável com uma única tela, enquanto o fato 706ca134 relata que Maria de Fátima não consegue enxergar a tela devido ao tamanho pequeno da fonte, necessitando de ajuste de visualização. Se o ajuste de visualização exigir múltiplas telas ou redimensionamento que comprometa a operabilidade com uma única tela, pode haver conflito.",
+      "severity": "low",
+      "relation_type": "contradiction_conditional",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "870eb15c-a472-4561-b3fa-f299f43d5c93"
+    },
+    {
+      "id": "8b90420c-f4f4-408d-b439-23d85db8d10e",
+      "description": "O fato 6123baac afirma que o sistema deve ser operável com uma única tela, enquanto o fato 706ca134 relata que Maria de Fátima não consegue enxergar a tela devido ao tamanho pequeno da fonte, necessitando de ajuste de visualização. Se o ajuste de visualização exigir múltiplas telas ou redimensionamento que comprometa a operabilidade com uma única tela, pode haver conflito.",
+      "severity": "low",
+      "relation_type": "contradiction_conditional",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "870eb15c-a472-4561-b3fa-f299f43d5c93"
+    },
+    {
+      "id": "a495e435-0dfb-4318-8432-f0fcff73f17e",
+      "description": "Fato A afirma que 'Professores não possuem dois monitores, portanto o sistema deve ser operável com uma única tela.' Fato B afirma que 'Maria de Fátima não consegue enxergar a tela devido ao tamanho pequeno da fonte, necessitando de ajuste de visualização.' Embora não haja contradição direta, a necessidade de ajuste de visualização pode indicar que a interface em uma única tela não é suficiente para atender a usuários com dificuldades de visão, sugerindo um conflito condicional se o ajuste não for possível.",
+      "severity": "low",
+      "relation_type": "contradiction_conditional",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "870eb15c-a472-4561-b3fa-f299f43d5c93"
+    },
+    {
+      "id": "3c7cb902-9350-42f3-884c-9ea694fddccf",
+      "description": "O fato 6b172508 afirma que a geração do catálogo mestre é feita a partir da tela de inclusão de catálogos de processo, com um campo 'Gerar catálogo mestre?' que permite ao usuário optar por gerar ou não. Já o fato 3da03d41 afirma que o catálogo mestre será gerado automaticamente a partir do momento em que Maria de Fátima der o comando 'gerar catálogo mestre' na tela de catálogo de processo, após verificar se a quantidade de catálogos de processo foi concluída. As duas afirmações divergem sobre quem pode iniciar a geração (qualquer usuário vs. apenas Maria de Fátima) e se a geração é automática ou manual.",
+      "severity": "high",
+      "relation_type": "contradiction_direct",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "16063247-e033-475c-8f3d-28ef7b022ad3",
+      "description": "O fato c744c57b afirma que a geração do catálogo mestre será feita a partir da tela de catálogo de processo, com um campo 'Gerar catálogo mestre?' que permite ao usuário optar por gerar ou não. O fato 3da03d41 afirma que o catálogo mestre será gerado automaticamente a partir do momento em que Maria de Fátima der o comando 'gerar catálogo mestre' na tela de catálogo de processo, após verificar se a quantidade de catálogos de processo foi concluída. As duas afirmações divergem sobre quem pode iniciar a geração (qualquer usuário vs. apenas Maria de Fátima) e se a geração é automática ou manual.",
+      "severity": "high",
+      "relation_type": "contradiction_direct",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "9f3d4a17-6ea9-4609-9d70-195925d319ca",
+      "description": "O fato ebdd9d02 afirma que a tela de inclusão de catálogo de processo deve perguntar se o catálogo mestre deve ser gerado, com opção sim/não, e ao responder sim, o sistema gera o catálogo mestre. O fato 3da03d41 afirma que o catálogo mestre será gerado automaticamente a partir do momento em que Maria de Fátima der o comando 'gerar catálogo mestre' na tela de catálogo de processo, após verificar se a quantidade de catálogos de processo foi concluída. As duas afirmações divergem sobre quem pode iniciar a geração (qualquer usuário vs. apenas Maria de Fátima) e se a geração é automática ou manual.",
+      "severity": "high",
+      "relation_type": "contradiction_direct",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "ff35e6ef-33b7-4f60-8146-8be6f7e0c5c9",
+      "description": "Afirmação A: 'Alterações no organograma ou no catálogo de processo geram pendências que podem levar a revisões automáticas do catálogo mestre.' Afirmação B: 'Alterações no organograma não geram automaticamente alterações no catálogo mestre; apenas alterações nos catálogos de processo ou solicitação manual geram revisões.' A primeira afirmação inclui alterações no organograma como gatilho para revisões automáticas do catálogo mestre, enquanto a segunda afirma explicitamente que alterações no organograma não geram automaticamente alterações no catálogo mestre.",
+      "severity": "high",
+      "relation_type": "contradiction_direct",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "8f077ef3-bba1-4797-b194-dae90ac8b87e",
+      "description": "O fato 6b172508 afirma que a geração do catálogo mestre é feita a partir da tela de inclusão de catálogos de processo, com um campo 'Gerar catálogo mestre?' que permite ao usuário optar por gerar ou não. Já o fato 3da03d41 afirma que o catálogo mestre será gerado automaticamente a partir do momento em que Maria de Fátima der o comando 'gerar catálogo mestre' na tela de catálogo de processo, após verificar se a quantidade de catálogos de processo foi concluída. As duas descrições são incompatíveis: uma permite que qualquer usuário opte por gerar, a outra restringe a ação a Maria de Fátima e adiciona uma verificação prévia.",
+      "severity": "high",
+      "relation_type": "contradiction_direct",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "80855ef5-b648-4c55-82c7-b92604e2bbd1",
+      "description": "Afirmação A: 'Alterações no organograma ou no catálogo de processo geram pendências que podem levar a revisões automáticas do catálogo mestre.' Afirmação B: 'Alterações no organograma não geram automaticamente alterações no catálogo mestre; apenas alterações nos catálogos de processo ou solicitação manual geram revisões.' A primeira afirmação inclui alterações no organograma como gatilho para revisões automáticas do catálogo mestre, enquanto a segunda afirma explicitamente que alterações no organograma não geram automaticamente alterações no catálogo mestre.",
+      "severity": "high",
+      "relation_type": "contradiction_direct",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "2e5cae60-c7f5-4aff-8ab9-78b3bf86e11c",
+      "description": "A afirmação A diz que a geração do catálogo mestre será feita a partir da tela de catálogo de processo, com um campo 'Gerar catálogo mestre?' que permite ao usuário optar por gerar ou não. A afirmação B diz que o catálogo mestre será gerado automaticamente a partir do momento em que Maria de Fátima der o comando 'gerar catálogo mestre' na tela de catálogo de processo, após verificar se a quantidade de catálogos de processo foi concluída. A diferença é que em A o usuário opta, em B é automático após comando de Fátima.",
+      "severity": "high",
+      "relation_type": "contradiction_direct",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "fbe1d54d-e022-477c-92a4-37be721b65e7",
+      "description": "A afirmação A diz que a geração do catálogo mestre será feita a partir da tela de catálogo de processo. A afirmação B diz que será a partir da tela de inclusão de catálogos de processo. As telas são diferentes.",
+      "severity": "high",
+      "relation_type": "contradiction_direct",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "ba3f9f87-a3da-43e4-817d-4c5b59a5609e",
+      "description": "A afirmação A diz que a geração é automática após comando de Fátima. A afirmação B diz que a geração é a partir da tela de inclusão com campo optativo. As abordagens são conflitantes.",
+      "severity": "high",
+      "relation_type": "contradiction_direct",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "bc4eaa7d-e129-435e-b8a8-75be9fece6da",
+      "description": "Afirmação A: 'Alterações no organograma não geram automaticamente alterações no catálogo mestre; apenas alterações nos catálogos de processo ou solicitação manual geram revisões.' Afirmação B: 'Alterações no organograma ou no catálogo de processo geram pendências que podem levar a revisões automáticas do catálogo mestre.' A afirmação A nega que alterações no organograma gerem revisões automáticas, enquanto a afirmação B afirma que sim.",
+      "severity": "high",
+      "relation_type": "contradiction_direct",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": null
+    },
+    {
+      "id": "783b7b82-4b2e-4a91-aa16-f0fa02ab1e8e",
+      "description": "Afirmação A: 'A numeração dos processos segue o organograma: os dois primeiros números representam a escola, os seguintes representam a área, e o último número é o número do processo.' Afirmação B: 'A numeração dos processos segue o organograma: os dois primeiros dígitos representam a escola, seguidos pelo número da gerência e, por fim, o número do processo (ex: 23.1.2.7 para Gestão Financeira na Controladoria de São Paulo).' A afirmação A menciona 'área' enquanto B menciona 'gerência', e o exemplo de B inclui um nível adicional (23.1.2.7) que não está claro em A.",
+      "severity": "medium",
+      "relation_type": "contradiction_direct",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "042eb333-4c43-4d1b-b02c-9321cd76898b"
+    },
+    {
+      "id": "8e4f7e96-288f-43ba-ae7b-4b319faaf10d",
+      "description": "Afirmação A: 'A numeração dos processos segue o organograma: os dois primeiros números representam a escola, os seguintes representam a área, e o último número é o número do processo.' Afirmação C: 'A numeração dos processos segue o organograma: os dois primeiros números representam a escola, os seguintes representam a área (ex: 23.1.2 para Gerência de Controladoria de São Paulo), e o último número é o número do processo (ex: 7 para Gestão Financeira).' A afirmação C introduz um nível de gerência (23.1.2) que não está presente em A, que apenas menciona 'área'.",
+      "severity": "medium",
+      "relation_type": "contradiction_direct",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "042eb333-4c43-4d1b-b02c-9321cd76898b"
+    },
+    {
+      "id": "984f2f7f-10d2-489c-a542-8526709fadad",
+      "description": "O fato c744c57b afirma que a geração do catálogo mestre será feita a partir da tela de catálogo de processo, com um campo 'Gerar catálogo mestre?' que permite ao usuário optar por gerar ou não. O fato ebdd9d02 afirma que a tela de inclusão de catálogo de processo deve perguntar se o catálogo mestre deve ser gerado, com opção sim/não, e ao responder sim, o sistema gera o catálogo mestre. As duas afirmações são equivalentes em conteúdo, mas diferem na tela de origem: uma diz 'tela de catálogo de processo', a outra 'tela de inclusão de catálogo de processo'. Isso pode ser uma contradição se forem telas diferentes.",
+      "severity": "medium",
+      "relation_type": "contradiction_direct",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": null
+    },
+    {
+      "id": "19cb69fc-4c13-485c-8c24-8f86a85d23ee",
+      "description": "Fato A afirma que a geração do catálogo mestre será feita a partir da tela de catálogo de processo; Fato B afirma que será a partir da tela de inclusão de catálogos de processo. As telas são diferentes.",
+      "severity": "medium",
+      "relation_type": "contradiction_direct",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "0dc79c11-34cb-4c8f-9d60-d36e1b533c29",
+      "description": "Fato A afirma que a geração do catálogo mestre é opcional (campo 'Gerar catálogo mestre?'); Fato B afirma que será gerado automaticamente a partir do comando de Maria de Fátima. Os mecanismos são conflitantes.",
+      "severity": "high",
+      "relation_type": "contradiction_direct",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "22cca75d-cb87-4a04-81a5-73860f440683",
+      "description": "Fato A afirma que a geração do catálogo mestre é opcional (campo 'Gerar catálogo mestre?'); Fato B afirma que será gerado automaticamente a partir do comando de Maria de Fátima. Os mecanismos são conflitantes.",
+      "severity": "high",
+      "relation_type": "contradiction_direct",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "a1b8a9a1-60cf-4c40-bf3b-ed9d0859a124"
+    },
+    {
+      "id": "c8aebf89-577f-4ffa-9bb1-8baaa2b24afd",
+      "description": "O fato 36a50c5a afirma que é necessário excluir o documento de catálogo existente antes de criar um novo com o mesmo nome para a mesma unidade. O fato 2b3e0f04 afirma que o sistema não exclui fisicamente unidades, apenas altera o status para obsoleto. Embora tratem de entidades diferentes (documento vs unidade), a exclusão de documentos pode seguir lógica similar, gerando ambiguidade.",
+      "severity": "low",
+      "relation_type": "exception",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+    },
+    {
+      "id": "039413f5-dd7c-4561-ba7d-4cc4ef7d38d1",
+      "description": "O fato 36a50c5a afirma que é necessário excluir o documento de catálogo existente antes de criar um novo com o mesmo nome para a mesma unidade. O fato 2b3e0f04 afirma que o sistema não exclui fisicamente unidades, apenas altera o status para obsoleto. Embora tratem de entidades diferentes (documento vs unidade), a exclusão de documentos pode seguir lógica similar, gerando ambiguidade.",
+      "severity": "low",
+      "relation_type": "exception",
+      "status": "open",
+      "meeting_a_id": null,
+      "meeting_b_id": "aeca71e8-0915-4ec0-943a-f3b1c8a738e1"
+    },
+    {
+      "id": "ed7217fc-978b-4ac0-a485-ef3e125b2628",
+      "description": "Maria de Fátima menciona que em reuniões anteriores foi acordado que haveria uma tela inicial para escolher entre escola ou unidade, mas a implementação atual mostra botões separados sem essa tela.",
+      "severity": "medium",
+      "relation_type": null,
+      "status": "open",
+      "meeting_a_id": "870eb15c-a472-4561-b3fa-f299f43d5c93",
+      "meeting_b_id": null
+    },
+    {
+      "id": "6cd81721-c720-481f-9d6d-3c04df20ace3",
+      "description": "Maria de Fátima menciona que em reuniões anteriores foi acordado que haveria uma tela inicial para escolher entre escola ou unidade, mas a tela atual apresenta dois botões separados sem essa tela de seleção.",
+      "severity": "medium",
+      "relation_type": null,
+      "status": "open",
+      "meeting_a_id": "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21",
+      "meeting_b_id": null
+    },
+    {
+      "id": "ef1e9147-72f0-4f92-a14e-423273ade94f",
+      "description": "Fátima menciona que em reuniões anteriores foi acordado que haveria uma tela inicial para escolher entre escola ou unidade, mas a versão atual apresenta dois botões separados sem essa tela de seleção.",
+      "severity": "medium",
+      "relation_type": null,
+      "status": "open",
+      "meeting_a_id": "870eb15c-a472-4561-b3fa-f299f43d5c93",
+      "meeting_b_id": null
+    },
+    {
+      "id": "b9322faf-2ac7-4342-a008-208aa396bebb",
+      "description": "Fátima menciona que em reuniões anteriores foi acordado que haveria uma tela inicial para escolher entre escola ou unidade, mas a equipe modificou para botões separados sem essa tela.",
+      "severity": "medium",
+      "relation_type": null,
+      "status": "open",
+      "meeting_a_id": "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21",
+      "meeting_b_id": null
+    },
+    {
+      "id": "1b65db33-e58b-4038-9b76-0efa17aeae69",
+      "description": "Maria de Fátima Duarte Moura menciona que em reuniões anteriores foi acordado que haveria uma tela inicial para escolher entre escola ou unidade, mas a equipe implementou botões separados sem essa tela, contradizendo o entendimento anterior.",
+      "severity": "medium",
+      "relation_type": null,
+      "status": "open",
+      "meeting_a_id": "870eb15c-a472-4561-b3fa-f299f43d5c93",
+      "meeting_b_id": null
+    },
+    {
+      "id": "932d4d5d-8c51-4f26-84cc-9a643c1e7a18",
+      "description": "Fátima menciona que anteriormente havia uma tela com escolha entre escola ou unidade, mas agora o sistema apresenta botões separados para cada um, o que gerou confusão.",
+      "severity": "medium",
+      "relation_type": null,
+      "status": "open",
+      "meeting_a_id": "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21",
+      "meeting_b_id": null
+    },
+    {
+      "id": "9cad666f-0054-4f14-8bc4-e88f705d56fa",
+      "description": "Maria de Fátima menciona que em reuniões anteriores foi acordado que haveria uma tela inicial para escolher entre escola ou unidade, mas a equipe modificou para botões separados sem essa tela.",
+      "severity": "medium",
+      "relation_type": null,
+      "status": "open",
+      "meeting_a_id": "bd2effe1-6cb3-408b-9620-b8bb0e2b3c21",
+      "meeting_b_id": null
+    }
+  ],
+  "edges_entity_process": [
+    {
+      "entity_id": "74221593-48b5-4e1a-9161-d5fa3843b475",
+      "entity_name": "João Luís Ferreira Chaves",
+      "entity_type": "person",
+      "process_id": "e27b5510-756b-466a-ad20-1ae13de0fa08",
+      "process_name": "Cadastro de Estrutura e Organograma de Unidade"
+    },
+    {
+      "entity_id": "9e3c08c4-08a9-457e-ae2a-7cda1c226160",
+      "entity_name": "Sistema de Organograma",
+      "entity_type": "system",
+      "process_id": "e27b5510-756b-466a-ad20-1ae13de0fa08",
+      "process_name": "Cadastro de Estrutura e Organograma de Unidade"
+    },
+    {
+      "entity_id": "74221593-48b5-4e1a-9161-d5fa3843b475",
+      "entity_name": "João Luís Ferreira Chaves",
+      "entity_type": "person",
+      "process_id": "3d700c6f-a0a5-41ae-b4f1-ec96c8d77e67",
+      "process_name": "Cadastro de Estrutura e Organograma de Escola"
+    },
+    {
+      "entity_id": "9e3c08c4-08a9-457e-ae2a-7cda1c226160",
+      "entity_name": "Sistema de Organograma",
+      "entity_type": "system",
+      "process_id": "3d700c6f-a0a5-41ae-b4f1-ec96c8d77e67",
+      "process_name": "Cadastro de Estrutura e Organograma de Escola"
+    },
+    {
+      "entity_id": "af21d005-7f2f-4915-a5de-18c5e0b2da30",
+      "entity_name": "Sistema SDEA",
+      "entity_type": "system",
+      "process_id": "22c499ae-d4dd-48a8-b0ba-e507af65cd80",
+      "process_name": "Cadastro de Catálogo de Processos e Subprocessos"
+    },
+    {
+      "entity_id": "37e9ade1-137a-4015-8707-993eac4b31da",
+      "entity_name": "Escola da Fátima",
+      "entity_type": "department",
+      "process_id": "22c499ae-d4dd-48a8-b0ba-e507af65cd80",
+      "process_name": "Cadastro de Catálogo de Processos e Subprocessos"
+    },
+    {
+      "entity_id": "dd1199ae-772e-418d-8243-5d347ed37174",
+      "entity_name": "Catálogo de Processos e Subprocessos",
+      "entity_type": "process",
+      "process_id": "22c499ae-d4dd-48a8-b0ba-e507af65cd80",
+      "process_name": "Cadastro de Catálogo de Processos e Subprocessos"
+    },
+    {
+      "entity_id": "d77c7a95-ed6e-4146-a8d4-27680e671817",
+      "entity_name": "DTI",
+      "entity_type": "department",
+      "process_id": "f7553191-bb21-482d-a85c-2a61def9a7e5",
+      "process_name": "Exclusão de Unidade no Organograma"
+    },
+    {
+      "entity_id": "d54d0068-5d4e-49ec-a25a-2b8562fb3262",
+      "entity_name": "Organograma",
+      "entity_type": "system",
+      "process_id": "f7553191-bb21-482d-a85c-2a61def9a7e5",
+      "process_name": "Exclusão de Unidade no Organograma"
+    },
+    {
+      "entity_id": "d4e8f926-8c82-4a96-a6d0-37236a14ef52",
+      "entity_name": "Catálogo Médico",
+      "entity_type": "system",
+      "process_id": "f7553191-bb21-482d-a85c-2a61def9a7e5",
+      "process_name": "Exclusão de Unidade no Organograma"
+    },
+    {
+      "entity_id": "28225e0e-6266-4469-8a30-9d3fd73b8d4b",
+      "entity_name": "Catálogo Mestre",
+      "entity_type": "system",
+      "process_id": "f7553191-bb21-482d-a85c-2a61def9a7e5",
+      "process_name": "Exclusão de Unidade no Organograma"
+    },
+    {
+      "entity_id": "2682c6e9-ebdf-4a4d-8002-a5e785d3194e",
+      "entity_name": "Catálogo de Processo",
+      "entity_type": "system",
+      "process_id": "f7553191-bb21-482d-a85c-2a61def9a7e5",
+      "process_name": "Exclusão de Unidade no Organograma"
+    },
+    {
+      "entity_id": "9e3c08c4-08a9-457e-ae2a-7cda1c226160",
+      "entity_name": "Sistema de Organograma",
+      "entity_type": "system",
+      "process_id": "f7553191-bb21-482d-a85c-2a61def9a7e5",
+      "process_name": "Exclusão de Unidade no Organograma"
+    },
+    {
+      "entity_id": "a3875951-7fca-4295-ab25-bca8e3eba85f",
+      "entity_name": "Sistemas",
+      "entity_type": "system",
+      "process_id": "f7553191-bb21-482d-a85c-2a61def9a7e5",
+      "process_name": "Exclusão de Unidade no Organograma"
+    },
+    {
+      "entity_id": "d5f0dd7b-fc93-4be7-a35c-9c5d98ea2b5d",
+      "entity_name": "Sistema de Gestão de Organograma",
+      "entity_type": "system",
+      "process_id": "f7553191-bb21-482d-a85c-2a61def9a7e5",
+      "process_name": "Exclusão de Unidade no Organograma"
+    },
+    {
+      "entity_id": "d77c7a95-ed6e-4146-a8d4-27680e671817",
+      "entity_name": "DTI",
+      "entity_type": "department",
+      "process_id": "46bdf7aa-0dd4-4c23-8c79-427016eba944",
+      "process_name": "Substituição de Unidade no Organograma"
+    },
+    {
+      "entity_id": "d54d0068-5d4e-49ec-a25a-2b8562fb3262",
+      "entity_name": "Organograma",
+      "entity_type": "system",
+      "process_id": "46bdf7aa-0dd4-4c23-8c79-427016eba944",
+      "process_name": "Substituição de Unidade no Organograma"
+    },
+    {
+      "entity_id": "d4e8f926-8c82-4a96-a6d0-37236a14ef52",
+      "entity_name": "Catálogo Médico",
+      "entity_type": "system",
+      "process_id": "46bdf7aa-0dd4-4c23-8c79-427016eba944",
+      "process_name": "Substituição de Unidade no Organograma"
+    },
+    {
+      "entity_id": "28225e0e-6266-4469-8a30-9d3fd73b8d4b",
+      "entity_name": "Catálogo Mestre",
+      "entity_type": "system",
+      "process_id": "46bdf7aa-0dd4-4c23-8c79-427016eba944",
+      "process_name": "Substituição de Unidade no Organograma"
+    },
+    {
+      "entity_id": "2682c6e9-ebdf-4a4d-8002-a5e785d3194e",
+      "entity_name": "Catálogo de Processo",
+      "entity_type": "system",
+      "process_id": "46bdf7aa-0dd4-4c23-8c79-427016eba944",
+      "process_name": "Substituição de Unidade no Organograma"
+    },
+    {
+      "entity_id": "9e3c08c4-08a9-457e-ae2a-7cda1c226160",
+      "entity_name": "Sistema de Organograma",
+      "entity_type": "system",
+      "process_id": "46bdf7aa-0dd4-4c23-8c79-427016eba944",
+      "process_name": "Substituição de Unidade no Organograma"
+    },
+    {
+      "entity_id": "a3875951-7fca-4295-ab25-bca8e3eba85f",
+      "entity_name": "Sistemas",
+      "entity_type": "system",
+      "process_id": "46bdf7aa-0dd4-4c23-8c79-427016eba944",
+      "process_name": "Substituição de Unidade no Organograma"
+    },
+    {
+      "entity_id": "d5f0dd7b-fc93-4be7-a35c-9c5d98ea2b5d",
+      "entity_name": "Sistema de Gestão de Organograma",
+      "entity_type": "system",
+      "process_id": "46bdf7aa-0dd4-4c23-8c79-427016eba944",
+      "process_name": "Substituição de Unidade no Organograma"
+    },
+    {
+      "entity_id": "f094adf6-1c6f-42b8-9c9c-1fbbd98b9b3c",
+      "entity_name": "Equipe de Auditoria",
+      "entity_type": "team",
+      "process_id": "03c54364-efb3-45d7-a464-48eff5c666b8",
+      "process_name": "Iniciar Catálogo"
+    },
+    {
+      "entity_id": "d54d0068-5d4e-49ec-a25a-2b8562fb3262",
+      "entity_name": "Organograma",
+      "entity_type": "system",
+      "process_id": "03c54364-efb3-45d7-a464-48eff5c666b8",
+      "process_name": "Iniciar Catálogo"
+    },
+    {
+      "entity_id": "95572e44-1fd1-40f0-bdcf-7e03124bfbd9",
+      "entity_name": "Catálogo de Processos",
+      "entity_type": "system",
+      "process_id": "03c54364-efb3-45d7-a464-48eff5c666b8",
+      "process_name": "Iniciar Catálogo"
+    },
+    {
+      "entity_id": "300d60c4-ff69-4821-8921-490f0dc13df0",
+      "entity_name": "Direito Rio",
+      "entity_type": "department",
+      "process_id": "03c54364-efb3-45d7-a464-48eff5c666b8",
+      "process_name": "Iniciar Catálogo"
+    },
+    {
+      "entity_id": "37168650-5418-48f2-82da-a7aac0bae1e5",
+      "entity_name": "RCM",
+      "entity_type": "team",
+      "process_id": "03c54364-efb3-45d7-a464-48eff5c666b8",
+      "process_name": "Iniciar Catálogo"
+    },
+    {
+      "entity_id": "f63df33c-925a-4ca4-a450-df8bc971a7f6",
+      "entity_name": "Legado",
+      "entity_type": "system",
+      "process_id": "03c54364-efb3-45d7-a464-48eff5c666b8",
+      "process_name": "Iniciar Catálogo"
+    },
+    {
+      "entity_id": "46931b0b-6a06-4845-b094-9f75bf7be205",
+      "entity_name": "Equipe de Processos",
+      "entity_type": "team",
+      "process_id": "03c54364-efb3-45d7-a464-48eff5c666b8",
+      "process_name": "Iniciar Catálogo"
+    },
+    {
+      "entity_id": "965db520-4eba-4b4b-83f7-622776740246",
+      "entity_name": "Natasha Cristine Costa",
+      "entity_type": "person",
+      "process_id": "d7778961-e38a-466b-bdad-1742d1fbfb97",
+      "process_name": "Cadastro de Processos e Subprocessos"
+    },
+    {
+      "entity_id": "74221593-48b5-4e1a-9161-d5fa3843b475",
+      "entity_name": "João Luís Ferreira Chaves",
+      "entity_type": "person",
+      "process_id": "d7778961-e38a-466b-bdad-1742d1fbfb97",
+      "process_name": "Cadastro de Processos e Subprocessos"
+    },
+    {
+      "entity_id": "c407dd62-b525-4ad5-831a-b2128c92ef65",
+      "entity_name": "Catálogo de Processos",
+      "entity_type": "process",
+      "process_id": "d7778961-e38a-466b-bdad-1742d1fbfb97",
+      "process_name": "Cadastro de Processos e Subprocessos"
+    },
+    {
+      "entity_id": "f094adf6-1c6f-42b8-9c9c-1fbbd98b9b3c",
+      "entity_name": "Equipe de Auditoria",
+      "entity_type": "team",
+      "process_id": "db6ef7e8-e32e-4c30-90c1-58427699b2c2",
+      "process_name": "Revisar Catálogo"
+    },
+    {
+      "entity_id": "d54d0068-5d4e-49ec-a25a-2b8562fb3262",
+      "entity_name": "Organograma",
+      "entity_type": "system",
+      "process_id": "db6ef7e8-e32e-4c30-90c1-58427699b2c2",
+      "process_name": "Revisar Catálogo"
+    },
+    {
+      "entity_id": "95572e44-1fd1-40f0-bdcf-7e03124bfbd9",
+      "entity_name": "Catálogo de Processos",
+      "entity_type": "system",
+      "process_id": "db6ef7e8-e32e-4c30-90c1-58427699b2c2",
+      "process_name": "Revisar Catálogo"
+    },
+    {
+      "entity_id": "300d60c4-ff69-4821-8921-490f0dc13df0",
+      "entity_name": "Direito Rio",
+      "entity_type": "department",
+      "process_id": "db6ef7e8-e32e-4c30-90c1-58427699b2c2",
+      "process_name": "Revisar Catálogo"
+    },
+    {
+      "entity_id": "37168650-5418-48f2-82da-a7aac0bae1e5",
+      "entity_name": "RCM",
+      "entity_type": "team",
+      "process_id": "db6ef7e8-e32e-4c30-90c1-58427699b2c2",
+      "process_name": "Revisar Catálogo"
+    },
+    {
+      "entity_id": "f63df33c-925a-4ca4-a450-df8bc971a7f6",
+      "entity_name": "Legado",
+      "entity_type": "system",
+      "process_id": "db6ef7e8-e32e-4c30-90c1-58427699b2c2",
+      "process_name": "Revisar Catálogo"
+    },
+    {
+      "entity_id": "46931b0b-6a06-4845-b094-9f75bf7be205",
+      "entity_name": "Equipe de Processos",
+      "entity_type": "team",
+      "process_id": "db6ef7e8-e32e-4c30-90c1-58427699b2c2",
+      "process_name": "Revisar Catálogo"
+    },
+    {
+      "entity_id": "9e2230a9-f149-409d-9d27-af1317d1b12e",
+      "entity_name": "Fábio Bastos",
+      "entity_type": "person",
+      "process_id": "53a11794-e5cf-403a-9572-b0bb13348805",
+      "process_name": "Mapeamento de Processos"
+    },
+    {
+      "entity_id": "762a366c-1829-4d07-8341-5e2425926e9a",
+      "entity_name": "DTIE",
+      "entity_type": "team",
+      "process_id": "53a11794-e5cf-403a-9572-b0bb13348805",
+      "process_name": "Mapeamento de Processos"
+    },
+    {
+      "entity_id": "3fa7d881-0c1f-4628-86af-4f0167aca278",
+      "entity_name": "RSM",
+      "entity_type": "department",
+      "process_id": "53a11794-e5cf-403a-9572-b0bb13348805",
+      "process_name": "Mapeamento de Processos"
+    },
+    {
+      "entity_id": "bbbd6b86-cbfc-469f-86e7-23f566d28ef1",
+      "entity_name": "Portal FGV",
+      "entity_type": "system",
+      "process_id": "53a11794-e5cf-403a-9572-b0bb13348805",
+      "process_name": "Mapeamento de Processos"
+    },
+    {
+      "entity_id": "95f57149-d3fb-486c-9e10-0e0780b0fdeb",
+      "entity_name": "Escola de Direito de São Paulo",
+      "entity_type": "department",
+      "process_id": "53a11794-e5cf-403a-9572-b0bb13348805",
+      "process_name": "Mapeamento de Processos"
+    },
+    {
+      "entity_id": "8b2ad250-e3a0-4a5b-871d-ebbcb07f6ae3",
+      "entity_name": "Gerência de Controladoria de São Paulo",
+      "entity_type": "department",
+      "process_id": "53a11794-e5cf-403a-9572-b0bb13348805",
+      "process_name": "Mapeamento de Processos"
+    },
+    {
+      "entity_id": "c407dd62-b525-4ad5-831a-b2128c92ef65",
+      "entity_name": "Catálogo de Processos",
+      "entity_type": "process",
+      "process_id": "53a11794-e5cf-403a-9572-b0bb13348805",
+      "process_name": "Mapeamento de Processos"
+    },
+    {
+      "entity_id": "e64dcf32-4727-4e71-87b0-d68a702bdf5c",
+      "entity_name": "Gestão Financeira",
+      "entity_type": "process",
+      "process_id": "53a11794-e5cf-403a-9572-b0bb13348805",
+      "process_name": "Mapeamento de Processos"
+    },
+    {
+      "entity_id": "1cc7248f-e5e5-4430-a16d-fced48942aea",
+      "entity_name": "Maria de Fátima Duarte Moura",
+      "entity_type": "person",
+      "process_id": "648ca579-3377-4428-a3d0-5e13376d61fc",
+      "process_name": "Elaboração de Catálogo Mestre"
+    },
+    {
+      "entity_id": "9331ad42-0c7d-41e0-ae9a-454fddcffdee",
+      "entity_name": "Pedro Gentil Regato de Oliveira Soares",
+      "entity_type": "person",
+      "process_id": "648ca579-3377-4428-a3d0-5e13376d61fc",
+      "process_name": "Elaboração de Catálogo Mestre"
+    },
+    {
+      "entity_id": "80928c6d-b9a7-42af-85d9-facc51e18d9c",
+      "entity_name": "Eduardo",
+      "entity_type": "person",
+      "process_id": "648ca579-3377-4428-a3d0-5e13376d61fc",
+      "process_name": "Elaboração de Catálogo Mestre"
+    },
+    {
+      "entity_id": "9f4a15e3-3d5b-4346-826d-7a13b764d3fd",
+      "entity_name": "Sistema de Documentação Eletrônica",
+      "entity_type": "system",
+      "process_id": "648ca579-3377-4428-a3d0-5e13376d61fc",
+      "process_name": "Elaboração de Catálogo Mestre"
+    },
+    {
+      "entity_id": "8455dfa5-ea09-4cd3-b692-6d1126c76c06",
+      "entity_name": "Organograma",
+      "entity_type": "process",
+      "process_id": "648ca579-3377-4428-a3d0-5e13376d61fc",
+      "process_name": "Elaboração de Catálogo Mestre"
+    },
+    {
+      "entity_id": "d7565fda-3758-4133-81f5-b74f64d66a2e",
+      "entity_name": "EricaM",
+      "entity_type": "system",
+      "process_id": "648ca579-3377-4428-a3d0-5e13376d61fc",
+      "process_name": "Elaboração de Catálogo Mestre"
+    },
+    {
+      "entity_id": "d2171ff3-4fc8-40b7-a02d-5f738e3b17af",
+      "entity_name": "Catálogo de Processo",
+      "entity_type": "process",
+      "process_id": "648ca579-3377-4428-a3d0-5e13376d61fc",
+      "process_name": "Elaboração de Catálogo Mestre"
+    },
+    {
+      "entity_id": "2e6f827b-5d10-4056-91e4-d833b3057195",
+      "entity_name": "Catálogo Mestre",
+      "entity_type": "process",
+      "process_id": "648ca579-3377-4428-a3d0-5e13376d61fc",
+      "process_name": "Elaboração de Catálogo Mestre"
+    },
+    {
+      "entity_id": "c9b4400e-8653-4759-bef3-aaf673ffca47",
+      "entity_name": "Fábio",
+      "entity_type": "person",
+      "process_id": "648ca579-3377-4428-a3d0-5e13376d61fc",
+      "process_name": "Elaboração de Catálogo Mestre"
+    },
+    {
+      "entity_id": "9e2230a9-f149-409d-9d27-af1317d1b12e",
+      "entity_name": "Fábio Bastos",
+      "entity_type": "person",
+      "process_id": "bb8e5a31-37f7-4eb3-a22c-e54801d92eda",
+      "process_name": "Gestão Financeira"
+    },
+    {
+      "entity_id": "762a366c-1829-4d07-8341-5e2425926e9a",
+      "entity_name": "DTIE",
+      "entity_type": "team",
+      "process_id": "bb8e5a31-37f7-4eb3-a22c-e54801d92eda",
+      "process_name": "Gestão Financeira"
+    },
+    {
+      "entity_id": "3fa7d881-0c1f-4628-86af-4f0167aca278",
+      "entity_name": "RSM",
+      "entity_type": "department",
+      "process_id": "bb8e5a31-37f7-4eb3-a22c-e54801d92eda",
+      "process_name": "Gestão Financeira"
+    },
+    {
+      "entity_id": "bbbd6b86-cbfc-469f-86e7-23f566d28ef1",
+      "entity_name": "Portal FGV",
+      "entity_type": "system",
+      "process_id": "bb8e5a31-37f7-4eb3-a22c-e54801d92eda",
+      "process_name": "Gestão Financeira"
+    },
+    {
+      "entity_id": "95f57149-d3fb-486c-9e10-0e0780b0fdeb",
+      "entity_name": "Escola de Direito de São Paulo",
+      "entity_type": "department",
+      "process_id": "bb8e5a31-37f7-4eb3-a22c-e54801d92eda",
+      "process_name": "Gestão Financeira"
+    },
+    {
+      "entity_id": "8b2ad250-e3a0-4a5b-871d-ebbcb07f6ae3",
+      "entity_name": "Gerência de Controladoria de São Paulo",
+      "entity_type": "department",
+      "process_id": "bb8e5a31-37f7-4eb3-a22c-e54801d92eda",
+      "process_name": "Gestão Financeira"
+    },
+    {
+      "entity_id": "c407dd62-b525-4ad5-831a-b2128c92ef65",
+      "entity_name": "Catálogo de Processos",
+      "entity_type": "process",
+      "process_id": "bb8e5a31-37f7-4eb3-a22c-e54801d92eda",
+      "process_name": "Gestão Financeira"
+    },
+    {
+      "entity_id": "e64dcf32-4727-4e71-87b0-d68a702bdf5c",
+      "entity_name": "Gestão Financeira",
+      "entity_type": "process",
+      "process_id": "bb8e5a31-37f7-4eb3-a22c-e54801d92eda",
+      "process_name": "Gestão Financeira"
+    },
+    {
+      "entity_id": "1cc7248f-e5e5-4430-a16d-fced48942aea",
+      "entity_name": "Maria de Fátima Duarte Moura",
+      "entity_type": "person",
+      "process_id": "d17e3063-6cfd-4fbd-a200-c4e16e608722",
+      "process_name": "Revisão de Catálogo Mestre"
+    },
+    {
+      "entity_id": "9331ad42-0c7d-41e0-ae9a-454fddcffdee",
+      "entity_name": "Pedro Gentil Regato de Oliveira Soares",
+      "entity_type": "person",
+      "process_id": "d17e3063-6cfd-4fbd-a200-c4e16e608722",
+      "process_name": "Revisão de Catálogo Mestre"
+    },
+    {
+      "entity_id": "80928c6d-b9a7-42af-85d9-facc51e18d9c",
+      "entity_name": "Eduardo",
+      "entity_type": "person",
+      "process_id": "d17e3063-6cfd-4fbd-a200-c4e16e608722",
+      "process_name": "Revisão de Catálogo Mestre"
+    },
+    {
+      "entity_id": "9f4a15e3-3d5b-4346-826d-7a13b764d3fd",
+      "entity_name": "Sistema de Documentação Eletrônica",
+      "entity_type": "system",
+      "process_id": "d17e3063-6cfd-4fbd-a200-c4e16e608722",
+      "process_name": "Revisão de Catálogo Mestre"
+    },
+    {
+      "entity_id": "8455dfa5-ea09-4cd3-b692-6d1126c76c06",
+      "entity_name": "Organograma",
+      "entity_type": "process",
+      "process_id": "d17e3063-6cfd-4fbd-a200-c4e16e608722",
+      "process_name": "Revisão de Catálogo Mestre"
+    },
+    {
+      "entity_id": "d7565fda-3758-4133-81f5-b74f64d66a2e",
+      "entity_name": "EricaM",
+      "entity_type": "system",
+      "process_id": "d17e3063-6cfd-4fbd-a200-c4e16e608722",
+      "process_name": "Revisão de Catálogo Mestre"
+    },
+    {
+      "entity_id": "d2171ff3-4fc8-40b7-a02d-5f738e3b17af",
+      "entity_name": "Catálogo de Processo",
+      "entity_type": "process",
+      "process_id": "d17e3063-6cfd-4fbd-a200-c4e16e608722",
+      "process_name": "Revisão de Catálogo Mestre"
+    },
+    {
+      "entity_id": "2e6f827b-5d10-4056-91e4-d833b3057195",
+      "entity_name": "Catálogo Mestre",
+      "entity_type": "process",
+      "process_id": "d17e3063-6cfd-4fbd-a200-c4e16e608722",
+      "process_name": "Revisão de Catálogo Mestre"
+    },
+    {
+      "entity_id": "c9b4400e-8653-4759-bef3-aaf673ffca47",
+      "entity_name": "Fábio",
+      "entity_type": "person",
+      "process_id": "d17e3063-6cfd-4fbd-a200-c4e16e608722",
+      "process_name": "Revisão de Catálogo Mestre"
+    },
+    {
+      "entity_id": "1cc7248f-e5e5-4430-a16d-fced48942aea",
+      "entity_name": "Maria de Fátima Duarte Moura",
+      "entity_type": "person",
+      "process_id": "fd9ee81f-5480-41d3-9a12-e2f6f1436f55",
+      "process_name": "Catálogo Mestre"
+    },
+    {
+      "entity_id": "9331ad42-0c7d-41e0-ae9a-454fddcffdee",
+      "entity_name": "Pedro Gentil Regato de Oliveira Soares",
+      "entity_type": "person",
+      "process_id": "fd9ee81f-5480-41d3-9a12-e2f6f1436f55",
+      "process_name": "Catálogo Mestre"
+    },
+    {
+      "entity_id": "80928c6d-b9a7-42af-85d9-facc51e18d9c",
+      "entity_name": "Eduardo",
+      "entity_type": "person",
+      "process_id": "fd9ee81f-5480-41d3-9a12-e2f6f1436f55",
+      "process_name": "Catálogo Mestre"
+    },
+    {
+      "entity_id": "9f4a15e3-3d5b-4346-826d-7a13b764d3fd",
+      "entity_name": "Sistema de Documentação Eletrônica",
+      "entity_type": "system",
+      "process_id": "fd9ee81f-5480-41d3-9a12-e2f6f1436f55",
+      "process_name": "Catálogo Mestre"
+    },
+    {
+      "entity_id": "8455dfa5-ea09-4cd3-b692-6d1126c76c06",
+      "entity_name": "Organograma",
+      "entity_type": "process",
+      "process_id": "fd9ee81f-5480-41d3-9a12-e2f6f1436f55",
+      "process_name": "Catálogo Mestre"
+    },
+    {
+      "entity_id": "d7565fda-3758-4133-81f5-b74f64d66a2e",
+      "entity_name": "EricaM",
+      "entity_type": "system",
+      "process_id": "fd9ee81f-5480-41d3-9a12-e2f6f1436f55",
+      "process_name": "Catálogo Mestre"
+    },
+    {
+      "entity_id": "d2171ff3-4fc8-40b7-a02d-5f738e3b17af",
+      "entity_name": "Catálogo de Processo",
+      "entity_type": "process",
+      "process_id": "fd9ee81f-5480-41d3-9a12-e2f6f1436f55",
+      "process_name": "Catálogo Mestre"
+    },
+    {
+      "entity_id": "2e6f827b-5d10-4056-91e4-d833b3057195",
+      "entity_name": "Catálogo Mestre",
+      "entity_type": "process",
+      "process_id": "fd9ee81f-5480-41d3-9a12-e2f6f1436f55",
+      "process_name": "Catálogo Mestre"
+    },
+    {
+      "entity_id": "c9b4400e-8653-4759-bef3-aaf673ffca47",
+      "entity_name": "Fábio",
+      "entity_type": "person",
+      "process_id": "fd9ee81f-5480-41d3-9a12-e2f6f1436f55",
+      "process_name": "Catálogo Mestre"
+    },
+    {
+      "entity_id": "80928c6d-b9a7-42af-85d9-facc51e18d9c",
+      "entity_name": "Eduardo",
+      "entity_type": "person",
+      "process_id": "1d221a04-7bfd-4c15-b8c2-07bf01e9e3ea",
+      "process_name": "Migração de Estrutura de Pastas"
+    },
+    {
+      "entity_id": "31588796-a893-42aa-87ea-f2655899aea9",
+      "entity_name": "SE Suíte",
+      "entity_type": "system",
+      "process_id": "1d221a04-7bfd-4c15-b8c2-07bf01e9e3ea",
+      "process_name": "Migração de Estrutura de Pastas"
+    },
+    {
+      "entity_id": "3738e22e-1394-4958-ae44-2aefd2033fcc",
+      "entity_name": "Camposte",
+      "entity_type": "system",
+      "process_id": "1d221a04-7bfd-4c15-b8c2-07bf01e9e3ea",
+      "process_name": "Migração de Estrutura de Pastas"
+    },
+    {
+      "entity_id": "8510f44f-e72c-45fa-99b0-06565fc0f851",
+      "entity_name": "Baptista",
+      "entity_type": "person",
+      "process_id": "1d221a04-7bfd-4c15-b8c2-07bf01e9e3ea",
+      "process_name": "Migração de Estrutura de Pastas"
+    },
+    {
+      "entity_id": "5e966b0e-10ac-425e-ae10-191bc92a1937",
+      "entity_name": "Santos",
+      "entity_type": "person",
+      "process_id": "1d221a04-7bfd-4c15-b8c2-07bf01e9e3ea",
+      "process_name": "Migração de Estrutura de Pastas"
+    },
+    {
+      "entity_id": "aaaa8cd2-67b8-4d2e-add4-e52d72d632af",
+      "entity_name": "Débora Fonseca",
+      "entity_type": "person",
+      "process_id": "1d221a04-7bfd-4c15-b8c2-07bf01e9e3ea",
+      "process_name": "Migração de Estrutura de Pastas"
+    },
+    {
+      "entity_id": "5e01319e-0c6a-462f-ba7d-460f7c87b75c",
+      "entity_name": "João Ferreira",
+      "entity_type": "person",
+      "process_id": "1d221a04-7bfd-4c15-b8c2-07bf01e9e3ea",
+      "process_name": "Migração de Estrutura de Pastas"
+    },
+    {
+      "entity_id": "91d2c867-fcec-4944-b218-5f9ca7e0cf2b",
+      "entity_name": "João Ferreira",
+      "entity_type": "system",
+      "process_id": "1d221a04-7bfd-4c15-b8c2-07bf01e9e3ea",
+      "process_name": "Migração de Estrutura de Pastas"
+    },
+    {
+      "entity_id": "1cc7248f-e5e5-4430-a16d-fced48942aea",
+      "entity_name": "Maria de Fátima Duarte Moura",
+      "entity_type": "person",
+      "process_id": "c568ee8a-d5dd-443a-9084-6b437f7c8ded",
+      "process_name": "Elaboração de Catálogo de Processo"
+    },
+    {
+      "entity_id": "9331ad42-0c7d-41e0-ae9a-454fddcffdee",
+      "entity_name": "Pedro Gentil Regato de Oliveira Soares",
+      "entity_type": "person",
+      "process_id": "c568ee8a-d5dd-443a-9084-6b437f7c8ded",
+      "process_name": "Elaboração de Catálogo de Processo"
+    },
+    {
+      "entity_id": "80928c6d-b9a7-42af-85d9-facc51e18d9c",
+      "entity_name": "Eduardo",
+      "entity_type": "person",
+      "process_id": "c568ee8a-d5dd-443a-9084-6b437f7c8ded",
+      "process_name": "Elaboração de Catálogo de Processo"
+    },
+    {
+      "entity_id": "9f4a15e3-3d5b-4346-826d-7a13b764d3fd",
+      "entity_name": "Sistema de Documentação Eletrônica",
+      "entity_type": "system",
+      "process_id": "c568ee8a-d5dd-443a-9084-6b437f7c8ded",
+      "process_name": "Elaboração de Catálogo de Processo"
+    },
+    {
+      "entity_id": "8455dfa5-ea09-4cd3-b692-6d1126c76c06",
+      "entity_name": "Organograma",
+      "entity_type": "process",
+      "process_id": "c568ee8a-d5dd-443a-9084-6b437f7c8ded",
+      "process_name": "Elaboração de Catálogo de Processo"
+    },
+    {
+      "entity_id": "d7565fda-3758-4133-81f5-b74f64d66a2e",
+      "entity_name": "EricaM",
+      "entity_type": "system",
+      "process_id": "c568ee8a-d5dd-443a-9084-6b437f7c8ded",
+      "process_name": "Elaboração de Catálogo de Processo"
+    },
+    {
+      "entity_id": "d2171ff3-4fc8-40b7-a02d-5f738e3b17af",
+      "entity_name": "Catálogo de Processo",
+      "entity_type": "process",
+      "process_id": "c568ee8a-d5dd-443a-9084-6b437f7c8ded",
+      "process_name": "Elaboração de Catálogo de Processo"
+    },
+    {
+      "entity_id": "2e6f827b-5d10-4056-91e4-d833b3057195",
+      "entity_name": "Catálogo Mestre",
+      "entity_type": "process",
+      "process_id": "c568ee8a-d5dd-443a-9084-6b437f7c8ded",
+      "process_name": "Elaboração de Catálogo de Processo"
+    },
+    {
+      "entity_id": "c9b4400e-8653-4759-bef3-aaf673ffca47",
+      "entity_name": "Fábio",
+      "entity_type": "person",
+      "process_id": "c568ee8a-d5dd-443a-9084-6b437f7c8ded",
+      "process_name": "Elaboração de Catálogo de Processo"
+    },
+    {
+      "entity_id": "4f5cfb02-e362-47dc-9a40-0f13da1924e0",
+      "entity_name": "Pedro Gentil",
+      "entity_type": "person",
+      "process_id": "8d89a30f-375a-48ae-b2d2-ecf65a90df40",
+      "process_name": "Cadastro de Organograma"
+    },
+    {
+      "entity_id": "ca3fe5bf-c731-4d03-8db0-bb87fe857717",
+      "entity_name": "Catálogo",
+      "entity_type": "process",
+      "process_id": "8d89a30f-375a-48ae-b2d2-ecf65a90df40",
+      "process_name": "Cadastro de Organograma"
+    },
+    {
+      "entity_id": "1cc7248f-e5e5-4430-a16d-fced48942aea",
+      "entity_name": "Maria de Fátima Duarte Moura",
+      "entity_type": "person",
+      "process_id": "3a9b1219-ec89-4529-ab65-abefe2b406a8",
+      "process_name": "Catálogo de Processo"
+    },
+    {
+      "entity_id": "9331ad42-0c7d-41e0-ae9a-454fddcffdee",
+      "entity_name": "Pedro Gentil Regato de Oliveira Soares",
+      "entity_type": "person",
+      "process_id": "3a9b1219-ec89-4529-ab65-abefe2b406a8",
+      "process_name": "Catálogo de Processo"
+    },
+    {
+      "entity_id": "80928c6d-b9a7-42af-85d9-facc51e18d9c",
+      "entity_name": "Eduardo",
+      "entity_type": "person",
+      "process_id": "3a9b1219-ec89-4529-ab65-abefe2b406a8",
+      "process_name": "Catálogo de Processo"
+    },
+    {
+      "entity_id": "9f4a15e3-3d5b-4346-826d-7a13b764d3fd",
+      "entity_name": "Sistema de Documentação Eletrônica",
+      "entity_type": "system",
+      "process_id": "3a9b1219-ec89-4529-ab65-abefe2b406a8",
+      "process_name": "Catálogo de Processo"
+    },
+    {
+      "entity_id": "8455dfa5-ea09-4cd3-b692-6d1126c76c06",
+      "entity_name": "Organograma",
+      "entity_type": "process",
+      "process_id": "3a9b1219-ec89-4529-ab65-abefe2b406a8",
+      "process_name": "Catálogo de Processo"
+    },
+    {
+      "entity_id": "d7565fda-3758-4133-81f5-b74f64d66a2e",
+      "entity_name": "EricaM",
+      "entity_type": "system",
+      "process_id": "3a9b1219-ec89-4529-ab65-abefe2b406a8",
+      "process_name": "Catálogo de Processo"
+    },
+    {
+      "entity_id": "d2171ff3-4fc8-40b7-a02d-5f738e3b17af",
+      "entity_name": "Catálogo de Processo",
+      "entity_type": "process",
+      "process_id": "3a9b1219-ec89-4529-ab65-abefe2b406a8",
+      "process_name": "Catálogo de Processo"
+    },
+    {
+      "entity_id": "2e6f827b-5d10-4056-91e4-d833b3057195",
+      "entity_name": "Catálogo Mestre",
+      "entity_type": "process",
+      "process_id": "3a9b1219-ec89-4529-ab65-abefe2b406a8",
+      "process_name": "Catálogo de Processo"
+    },
+    {
+      "entity_id": "c9b4400e-8653-4759-bef3-aaf673ffca47",
+      "entity_name": "Fábio",
+      "entity_type": "person",
+      "process_id": "3a9b1219-ec89-4529-ab65-abefe2b406a8",
+      "process_name": "Catálogo de Processo"
+    },
+    {
+      "entity_id": "80928c6d-b9a7-42af-85d9-facc51e18d9c",
+      "entity_name": "Eduardo",
+      "entity_type": "person",
+      "process_id": "d40b21b1-c5e7-4886-b088-bd9c466e17c4",
+      "process_name": "Configuração de Segurança no SE Suíte"
+    },
+    {
+      "entity_id": "31588796-a893-42aa-87ea-f2655899aea9",
+      "entity_name": "SE Suíte",
+      "entity_type": "system",
+      "process_id": "d40b21b1-c5e7-4886-b088-bd9c466e17c4",
+      "process_name": "Configuração de Segurança no SE Suíte"
+    },
+    {
+      "entity_id": "3738e22e-1394-4958-ae44-2aefd2033fcc",
+      "entity_name": "Camposte",
+      "entity_type": "system",
+      "process_id": "d40b21b1-c5e7-4886-b088-bd9c466e17c4",
+      "process_name": "Configuração de Segurança no SE Suíte"
+    },
+    {
+      "entity_id": "8510f44f-e72c-45fa-99b0-06565fc0f851",
+      "entity_name": "Baptista",
+      "entity_type": "person",
+      "process_id": "d40b21b1-c5e7-4886-b088-bd9c466e17c4",
+      "process_name": "Configuração de Segurança no SE Suíte"
+    },
+    {
+      "entity_id": "5e966b0e-10ac-425e-ae10-191bc92a1937",
+      "entity_name": "Santos",
+      "entity_type": "person",
+      "process_id": "d40b21b1-c5e7-4886-b088-bd9c466e17c4",
+      "process_name": "Configuração de Segurança no SE Suíte"
+    },
+    {
+      "entity_id": "aaaa8cd2-67b8-4d2e-add4-e52d72d632af",
+      "entity_name": "Débora Fonseca",
+      "entity_type": "person",
+      "process_id": "d40b21b1-c5e7-4886-b088-bd9c466e17c4",
+      "process_name": "Configuração de Segurança no SE Suíte"
+    },
+    {
+      "entity_id": "5e01319e-0c6a-462f-ba7d-460f7c87b75c",
+      "entity_name": "João Ferreira",
+      "entity_type": "person",
+      "process_id": "d40b21b1-c5e7-4886-b088-bd9c466e17c4",
+      "process_name": "Configuração de Segurança no SE Suíte"
+    },
+    {
+      "entity_id": "91d2c867-fcec-4944-b218-5f9ca7e0cf2b",
+      "entity_name": "João Ferreira",
+      "entity_type": "system",
+      "process_id": "d40b21b1-c5e7-4886-b088-bd9c466e17c4",
+      "process_name": "Configuração de Segurança no SE Suíte"
+    },
+    {
+      "entity_id": "fdba971b-d060-48d5-8271-fd4e84622ee3",
+      "entity_name": "SDEA",
+      "entity_type": "system",
+      "process_id": "a6c97dde-2085-4b25-a654-51cc4590dd36",
+      "process_name": "Cadastro de Unidade"
+    },
+    {
+      "entity_id": "e63cdc80-b04c-40cb-96f7-db0656dc07d1",
+      "entity_name": "Projeto Auditoria",
+      "entity_type": "process",
+      "process_id": "a6c97dde-2085-4b25-a654-51cc4590dd36",
+      "process_name": "Cadastro de Unidade"
+    },
+    {
+      "entity_id": "af21d005-7f2f-4915-a5de-18c5e0b2da30",
+      "entity_name": "Sistema SDEA",
+      "entity_type": "system",
+      "process_id": "fe0b3c96-ad11-4500-a88e-823c646b76be",
+      "process_name": "Catálogo de Processos e Subprocessos"
+    },
+    {
+      "entity_id": "37e9ade1-137a-4015-8707-993eac4b31da",
+      "entity_name": "Escola da Fátima",
+      "entity_type": "department",
+      "process_id": "fe0b3c96-ad11-4500-a88e-823c646b76be",
+      "process_name": "Catálogo de Processos e Subprocessos"
+    },
+    {
+      "entity_id": "dd1199ae-772e-418d-8243-5d347ed37174",
+      "entity_name": "Catálogo de Processos e Subprocessos",
+      "entity_type": "process",
+      "process_id": "fe0b3c96-ad11-4500-a88e-823c646b76be",
+      "process_name": "Catálogo de Processos e Subprocessos"
+    },
+    {
+      "entity_id": "fdba971b-d060-48d5-8271-fd4e84622ee3",
+      "entity_name": "SDEA",
+      "entity_type": "system",
+      "process_id": "24c9796b-fb56-4f72-a2bb-bbd526bc7f00",
+      "process_name": "Cadastro de Escola"
+    },
+    {
+      "entity_id": "e63cdc80-b04c-40cb-96f7-db0656dc07d1",
+      "entity_name": "Projeto Auditoria",
+      "entity_type": "process",
+      "process_id": "24c9796b-fb56-4f72-a2bb-bbd526bc7f00",
+      "process_name": "Cadastro de Escola"
+    },
+    {
+      "entity_id": "f094adf6-1c6f-42b8-9c9c-1fbbd98b9b3c",
+      "entity_name": "Equipe de Auditoria",
+      "entity_type": "team",
+      "process_id": "f88fe4c8-8f43-4bd3-a64b-3b0ba1a256ce",
+      "process_name": "Elaboração e Aprovação de Documentos no SDEA"
+    },
+    {
+      "entity_id": "fdba971b-d060-48d5-8271-fd4e84622ee3",
+      "entity_name": "SDEA",
+      "entity_type": "system",
+      "process_id": "f88fe4c8-8f43-4bd3-a64b-3b0ba1a256ce",
+      "process_name": "Elaboração e Aprovação de Documentos no SDEA"
+    },
+    {
+      "entity_id": "656f5704-c42a-4175-b738-b8c0996a1c9a",
+      "entity_name": "SharePoint",
+      "entity_type": "system",
+      "process_id": "f88fe4c8-8f43-4bd3-a64b-3b0ba1a256ce",
+      "process_name": "Elaboração e Aprovação de Documentos no SDEA"
+    },
+    {
+      "entity_id": "6c5d721a-8d28-462e-be9f-4e686b383bb0",
+      "entity_name": "D4",
+      "entity_type": "system",
+      "process_id": "f88fe4c8-8f43-4bd3-a64b-3b0ba1a256ce",
+      "process_name": "Elaboração e Aprovação de Documentos no SDEA"
+    },
+    {
+      "entity_id": "1cc7248f-e5e5-4430-a16d-fced48942aea",
+      "entity_name": "Maria de Fátima Duarte Moura",
+      "entity_type": "person",
+      "process_id": "6791d066-20c9-4128-8cb6-1e8de478e00d",
+      "process_name": "Validação de fluxos"
+    },
+    {
+      "entity_id": "965db520-4eba-4b4b-83f7-622776740246",
+      "entity_name": "Natasha Cristine Costa",
+      "entity_type": "person",
+      "process_id": "6791d066-20c9-4128-8cb6-1e8de478e00d",
+      "process_name": "Validação de fluxos"
+    },
+    {
+      "entity_id": "9331ad42-0c7d-41e0-ae9a-454fddcffdee",
+      "entity_name": "Pedro Gentil Regato de Oliveira Soares",
+      "entity_type": "person",
+      "process_id": "6791d066-20c9-4128-8cb6-1e8de478e00d",
+      "process_name": "Validação de fluxos"
+    },
+    {
+      "entity_id": "d77c7a95-ed6e-4146-a8d4-27680e671817",
+      "entity_name": "DTI",
+      "entity_type": "department",
+      "process_id": "6791d066-20c9-4128-8cb6-1e8de478e00d",
+      "process_name": "Validação de fluxos"
+    },
+    {
+      "entity_id": "9ed8c9c3-3e9a-4e56-a609-fe470d646860",
+      "entity_name": "Deise Rigão",
+      "entity_type": "person",
+      "process_id": "6791d066-20c9-4128-8cb6-1e8de478e00d",
+      "process_name": "Validação de fluxos"
+    },
+    {
+      "entity_id": "1885827b-c690-4d27-9ad1-2ca19652a33a",
+      "entity_name": "Sidney",
+      "entity_type": "person",
+      "process_id": "6791d066-20c9-4128-8cb6-1e8de478e00d",
+      "process_name": "Validação de fluxos"
+    },
+    {
+      "entity_id": "b9df1554-ca80-439f-80ec-9b0ce88ecdcd",
+      "entity_name": "Auditoria",
+      "entity_type": "department",
+      "process_id": "6791d066-20c9-4128-8cb6-1e8de478e00d",
+      "process_name": "Validação de fluxos"
+    },
+    {
+      "entity_id": "fdba971b-d060-48d5-8271-fd4e84622ee3",
+      "entity_name": "SDEA",
+      "entity_type": "system",
+      "process_id": "cbd57be6-a7f8-4ab6-b362-75ab20101777",
+      "process_name": "Cadastro de Escola no Organograma"
+    },
+    {
+      "entity_id": "e63cdc80-b04c-40cb-96f7-db0656dc07d1",
+      "entity_name": "Projeto Auditoria",
+      "entity_type": "process",
+      "process_id": "cbd57be6-a7f8-4ab6-b362-75ab20101777",
+      "process_name": "Cadastro de Escola no Organograma"
+    },
+    {
+      "entity_id": "1cc7248f-e5e5-4430-a16d-fced48942aea",
+      "entity_name": "Maria de Fátima Duarte Moura",
+      "entity_type": "person",
+      "process_id": "f8623ca4-0ddc-496e-b8e8-8a743e987f91",
+      "process_name": "Validação de Fluxos"
+    },
+    {
+      "entity_id": "965db520-4eba-4b4b-83f7-622776740246",
+      "entity_name": "Natasha Cristine Costa",
+      "entity_type": "person",
+      "process_id": "f8623ca4-0ddc-496e-b8e8-8a743e987f91",
+      "process_name": "Validação de Fluxos"
+    },
+    {
+      "entity_id": "9331ad42-0c7d-41e0-ae9a-454fddcffdee",
+      "entity_name": "Pedro Gentil Regato de Oliveira Soares",
+      "entity_type": "person",
+      "process_id": "f8623ca4-0ddc-496e-b8e8-8a743e987f91",
+      "process_name": "Validação de Fluxos"
+    },
+    {
+      "entity_id": "d77c7a95-ed6e-4146-a8d4-27680e671817",
+      "entity_name": "DTI",
+      "entity_type": "department",
+      "process_id": "f8623ca4-0ddc-496e-b8e8-8a743e987f91",
+      "process_name": "Validação de Fluxos"
+    },
+    {
+      "entity_id": "9ed8c9c3-3e9a-4e56-a609-fe470d646860",
+      "entity_name": "Deise Rigão",
+      "entity_type": "person",
+      "process_id": "f8623ca4-0ddc-496e-b8e8-8a743e987f91",
+      "process_name": "Validação de Fluxos"
+    },
+    {
+      "entity_id": "1885827b-c690-4d27-9ad1-2ca19652a33a",
+      "entity_name": "Sidney",
+      "entity_type": "person",
+      "process_id": "f8623ca4-0ddc-496e-b8e8-8a743e987f91",
+      "process_name": "Validação de Fluxos"
+    },
+    {
+      "entity_id": "b9df1554-ca80-439f-80ec-9b0ce88ecdcd",
+      "entity_name": "Auditoria",
+      "entity_type": "department",
+      "process_id": "f8623ca4-0ddc-496e-b8e8-8a743e987f91",
+      "process_name": "Validação de Fluxos"
+    },
+    {
+      "entity_id": "f094adf6-1c6f-42b8-9c9c-1fbbd98b9b3c",
+      "entity_name": "Equipe de Auditoria",
+      "entity_type": "team",
+      "process_id": "cbd2d6e0-0c86-4d27-b0a0-52f7e5fcadb0",
+      "process_name": "Elaboração e Aprovação de Documentos"
+    },
+    {
+      "entity_id": "fdba971b-d060-48d5-8271-fd4e84622ee3",
+      "entity_name": "SDEA",
+      "entity_type": "system",
+      "process_id": "cbd2d6e0-0c86-4d27-b0a0-52f7e5fcadb0",
+      "process_name": "Elaboração e Aprovação de Documentos"
+    },
+    {
+      "entity_id": "656f5704-c42a-4175-b738-b8c0996a1c9a",
+      "entity_name": "SharePoint",
+      "entity_type": "system",
+      "process_id": "cbd2d6e0-0c86-4d27-b0a0-52f7e5fcadb0",
+      "process_name": "Elaboração e Aprovação de Documentos"
+    },
+    {
+      "entity_id": "6c5d721a-8d28-462e-be9f-4e686b383bb0",
+      "entity_name": "D4",
+      "entity_type": "system",
+      "process_id": "cbd2d6e0-0c86-4d27-b0a0-52f7e5fcadb0",
+      "process_name": "Elaboração e Aprovação de Documentos"
+    },
+    {
+      "entity_id": "f094adf6-1c6f-42b8-9c9c-1fbbd98b9b3c",
+      "entity_name": "Equipe de Auditoria",
+      "entity_type": "team",
+      "process_id": "f4fc0c4b-fb04-423b-a623-56063282af8d",
+      "process_name": "Relacionamento de Documentos"
+    },
+    {
+      "entity_id": "fdba971b-d060-48d5-8271-fd4e84622ee3",
+      "entity_name": "SDEA",
+      "entity_type": "system",
+      "process_id": "f4fc0c4b-fb04-423b-a623-56063282af8d",
+      "process_name": "Relacionamento de Documentos"
+    },
+    {
+      "entity_id": "656f5704-c42a-4175-b738-b8c0996a1c9a",
+      "entity_name": "SharePoint",
+      "entity_type": "system",
+      "process_id": "f4fc0c4b-fb04-423b-a623-56063282af8d",
+      "process_name": "Relacionamento de Documentos"
+    },
+    {
+      "entity_id": "6c5d721a-8d28-462e-be9f-4e686b383bb0",
+      "entity_name": "D4",
+      "entity_type": "system",
+      "process_id": "f4fc0c4b-fb04-423b-a623-56063282af8d",
+      "process_name": "Relacionamento de Documentos"
+    },
+    {
+      "entity_id": "4f5cfb02-e362-47dc-9a40-0f13da1924e0",
+      "entity_name": "Pedro Gentil",
+      "entity_type": "person",
+      "process_id": "2e12d50d-5ddf-4d27-9699-07c0191aeae5",
+      "process_name": "Catálogo"
+    },
+    {
+      "entity_id": "ca3fe5bf-c731-4d03-8db0-bb87fe857717",
+      "entity_name": "Catálogo",
+      "entity_type": "process",
+      "process_id": "2e12d50d-5ddf-4d27-9699-07c0191aeae5",
+      "process_name": "Catálogo"
+    },
+    {
+      "entity_id": "80928c6d-b9a7-42af-85d9-facc51e18d9c",
+      "entity_name": "Eduardo",
+      "entity_type": "person",
+      "process_id": "427b2c95-1021-40bc-a2ae-84b4072021f0",
+      "process_name": "Migração de pastas e documentos para SE Suíte"
+    },
+    {
+      "entity_id": "31588796-a893-42aa-87ea-f2655899aea9",
+      "entity_name": "SE Suíte",
+      "entity_type": "system",
+      "process_id": "427b2c95-1021-40bc-a2ae-84b4072021f0",
+      "process_name": "Migração de pastas e documentos para SE Suíte"
+    },
+    {
+      "entity_id": "3738e22e-1394-4958-ae44-2aefd2033fcc",
+      "entity_name": "Camposte",
+      "entity_type": "system",
+      "process_id": "427b2c95-1021-40bc-a2ae-84b4072021f0",
+      "process_name": "Migração de pastas e documentos para SE Suíte"
+    },
+    {
+      "entity_id": "8510f44f-e72c-45fa-99b0-06565fc0f851",
+      "entity_name": "Baptista",
+      "entity_type": "person",
+      "process_id": "427b2c95-1021-40bc-a2ae-84b4072021f0",
+      "process_name": "Migração de pastas e documentos para SE Suíte"
+    },
+    {
+      "entity_id": "5e966b0e-10ac-425e-ae10-191bc92a1937",
+      "entity_name": "Santos",
+      "entity_type": "person",
+      "process_id": "427b2c95-1021-40bc-a2ae-84b4072021f0",
+      "process_name": "Migração de pastas e documentos para SE Suíte"
+    },
+    {
+      "entity_id": "aaaa8cd2-67b8-4d2e-add4-e52d72d632af",
+      "entity_name": "Débora Fonseca",
+      "entity_type": "person",
+      "process_id": "427b2c95-1021-40bc-a2ae-84b4072021f0",
+      "process_name": "Migração de pastas e documentos para SE Suíte"
+    },
+    {
+      "entity_id": "5e01319e-0c6a-462f-ba7d-460f7c87b75c",
+      "entity_name": "João Ferreira",
+      "entity_type": "person",
+      "process_id": "427b2c95-1021-40bc-a2ae-84b4072021f0",
+      "process_name": "Migração de pastas e documentos para SE Suíte"
+    },
+    {
+      "entity_id": "91d2c867-fcec-4944-b218-5f9ca7e0cf2b",
+      "entity_name": "João Ferreira",
+      "entity_type": "system",
+      "process_id": "427b2c95-1021-40bc-a2ae-84b4072021f0",
+      "process_name": "Migração de pastas e documentos para SE Suíte"
+    },
+    {
+      "entity_id": "4f5cfb02-e362-47dc-9a40-0f13da1924e0",
+      "entity_name": "Pedro Gentil",
+      "entity_type": "person",
+      "process_id": "3a8d5b82-cea8-46ac-b84b-48f49652a6a0",
+      "process_name": "Organograma"
+    },
+    {
+      "entity_id": "ca3fe5bf-c731-4d03-8db0-bb87fe857717",
+      "entity_name": "Catálogo",
+      "entity_type": "process",
+      "process_id": "3a8d5b82-cea8-46ac-b84b-48f49652a6a0",
+      "process_name": "Organograma"
+    }
+  ]
+}
