@@ -1,0 +1,100 @@
+GRUPO MERIDIONAL S.A.
+PROJETO AURORA — Plataforma Digital de Crédito
+Reunião R1 — Kick-off e Definição de Escopo
+Data: 01 de março de 2026 (domingo)
+Horário: 09:02 — 10:38
+Local: Sala de Reuniões Executivas "Ipê" — Torre Meridional, Av. Paulista 2300, São Paulo
+Transcrição gerada por: Sistema de Gravação Corporativa MeridionalREC v3.1
+
+PARTICIPANTES:
+  ALF — Dra. Ana Luísa Ferreira   | Diretora de Transformação Digital (moderadora)
+  MC  — Marcos Cavalcanti         | CTO
+  BM  — Beatriz Moraes            | Gerente de Requisitos
+  PHS — Dr. Paulo Henrique Saraiva| CFO
+  FK  — Fernanda Kowalski         | Analista Sênior de Processos
+
+─────────────────────────────────────────────────────────────────────────────
+
+[09:02] ALF: Bom dia a todos. Vamos iniciar formalmente o Projeto AURORA. Agradeço a presença de todos, especialmente do Paulo, que ajustou a agenda para estar aqui. A pauta de hoje tem três blocos: contexto estratégico, escopo técnico e governança do projeto. Vou começar com o contexto. A Diretoria Executiva aprovou em fevereiro a digitalização completa da nossa plataforma de crédito. Hoje operamos com o sistema MeridionalCredit versão 2007. São dezenove anos de sistema. O custo de manutenção triplicou em cinco anos e a taxa de rejeição de propostas por erro de processamento chegou a 4,2% no último trimestre. Isso é inaceitável.
+
+[09:05] PHS: Para contextualizar o impacto financeiro: cada ponto percentual de rejeição indevida representa aproximadamente R$ 18 milhões em receita não realizada por trimestre. Estamos falando de um problema de R$ 75 milhões anuais se considerarmos os 4,2%. A missão estratégica do AURORA é eliminar esse desperdício e posicionar o Meridional como referência em crédito digital no segmento B2B.
+
+[09:08] ALF: Exatamente. A visão que aprovamos com o Conselho é que o Grupo Meridional será, até 2028, a plataforma de crédito B2B mais ágil do mercado brasileiro — com aprovação em menos de 4 horas para operações de até R$ 2 milhões. Hoje estamos em 72 horas em média.
+
+[09:10] MC: Posso entrar no contexto técnico? O MeridionalCredit 2007 roda em COBOL sobre mainframe IBM zSeries. Temos três módulos críticos: análise de risco, motor de precificação e integração com bureaus externos — Serasa, Quod e Receita Federal. A grande aposta do AURORA é migrar esses três módulos para uma arquitetura de microsserviços em cloud, mantendo o mainframe apenas como sistema de registro durante a transição.
+
+[09:13] BM: Antes de entrarmos em arquitetura, preciso registrar os objetivos de negócio formalmente, porque eles vão guiar os requisitos. Objetivo 1: reduzir o tempo médio de aprovação de crédito de 72 para menos de 4 horas. Objetivo 2: reduzir a taxa de rejeição por erro técnico de 4,2% para menos de 0,5%. Objetivo 3: aumentar a capacidade de processamento de propostas de 800 para 5.000 por dia sem aumento de equipe. Objetivo 4: garantir conformidade com a Resolução BACEN 4.557 e com a LGPD em todos os fluxos de dados de clientes.
+
+[09:17] FK: Fernanda aqui. Eu mapeei os processos atuais nas últimas duas semanas. Existem sete processos principais no ciclo de crédito: recebimento de proposta, validação cadastral, análise de risco, precificação, aprovação por alçada, formalização contratual e desembolso. Atualmente esses sete processos têm 34 handoffs manuais. Trinta e quatro pontos onde um humano precisa agir para o processo avançar. O AURORA precisa reduzir isso para no máximo 5 handoffs nos casos de menor complexidade.
+
+[09:21] ALF: Ótimo levantamento, Fernanda. Vamos registrar isso como meta: redução de handoffs manuais de 34 para no máximo 5 nos fluxos automatizados. Marcos, sobre o escopo técnico — o que entra na Fase 1?
+
+[09:23] MC: Fase 1 cobre três entregas. Primeira: API Gateway de integração com os bureaus externos — Serasa, Quod e Receita Federal — com circuit breaker e cache de respostas para reduzir latência. Segunda: Motor de Análise de Risco em Python, substituindo o módulo COBOL de análise, com modelo de machine learning para score de crédito. Terceira: Portal do Cliente em React para submissão digital de propostas, eliminando o processo atual em papel e e-mail. A Fase 2, que não é escopo desta reunião, cobre o motor de precificação e a integração com sistemas contábeis.
+
+[09:28] PHS: Paulo aqui. Preciso registrar uma restrição orçamentária importante. O budget aprovado para a Fase 1 é de R$ 4,2 milhões, incluindo infraestrutura cloud, licenças e consultoria. Qualquer escopo adicional precisa de aprovação formal da minha área. Isso precisa ficar documentado.
+
+[09:30] BM: Registrado. Beatriz aqui — vou elencar os requisitos que já identificamos para a Fase 1. Requisito 1: o sistema deve permitir que o cliente submeta uma proposta de crédito inteiramente por meio digital, sem necessidade de visita presencial ou envio de documentos físicos. Requisito 2: a validação cadastral do cliente deve ser executada de forma automática consultando Serasa, Quod e Receita Federal simultaneamente, com tempo de resposta menor que 30 segundos. Requisito 3: o motor de análise de risco deve processar uma proposta e retornar um score de crédito em menos de 60 segundos após conclusão da validação cadastral.
+
+[09:34] FK: Complementando — Requisito 4: o sistema deve suportar upload de documentos nos formatos PDF, JPG e PNG com tamanho máximo de 10 MB por arquivo e limite de 20 arquivos por proposta. Requisito 5: todos os dados pessoais de clientes devem ser criptografados em repouso e em trânsito, com chaves gerenciadas pelo sistema de KMS da infraestrutura cloud, em conformidade com a LGPD.
+
+[09:37] MC: Acrescentando o lado técnico — Requisito 6: a API de integração com bureaus externos deve ter disponibilidade mínima de 99,5% e tempo de resposta máximo de 45 segundos para consultas individuais. Requisito 7: o sistema deve implementar circuit breaker com fallback para cache local quando qualquer bureau externo apresentar indisponibilidade superior a 10 segundos. Requisito 8: a arquitetura deve ser baseada em microsserviços com deploy independente de cada componente, suportando rollback em menos de 5 minutos.
+
+[09:41] ALF: Boa lista. Beatriz, consegue formalizar esses oito requisitos antes da próxima reunião?
+
+[09:41] BM: Sim, faço o documento de requisitos até sexta-feira com a classificação IEEE 830 — funcionais, não funcionais e de interface.
+
+[09:43] PHS: Paulo — quero registrar um requisito de negócio que considero crítico. Requisito 9: o sistema deve gerar automaticamente o contrato de crédito no formato padrão aprovado pela área jurídica, com preenchimento automático dos dados da proposta aprovada, eliminando a etapa manual de elaboração contratual que hoje leva em média 4 horas.
+
+[09:46] FK: Fernanda — e o Requisito 10: o sistema deve enviar notificação automática ao cliente em cada mudança de status da proposta, por e-mail e SMS, com prazo máximo de 2 minutos após a mudança de status.
+
+[09:48] ALF: Perfeito. Vou registrar também dois requisitos de governança. Requisito 11: todas as decisões de crédito, aprovadas ou recusadas, devem ser registradas com log auditável contendo score, parâmetros utilizados e identificação do responsável pela aprovação por alçada, com retenção mínima de 5 anos. Requisito 12: o sistema deve permitir que a área de Compliance consulte qualquer decisão de crédito dos últimos 5 anos com tempo de resposta menor que 10 segundos.
+
+[09:51] MC: Marcos — precisamos também definir a governança técnica do projeto. Proponho um Comitê Técnico semanal toda segunda-feira às 15h, com representantes de TI, Negócios e Compliance. E um Comitê Executivo mensal com o Diretor e o CFO para validação de marcos.
+
+[09:53] PHS: Concordo com a estrutura. Mas preciso que o Comitê Executivo tenha poder de aprovação de mudanças de escopo. Qualquer incremento de custo acima de 5% do budget por marco precisa passar pelo Comitê Executivo antes da implementação.
+
+[09:55] ALF: Acordado. Decisão registrada: estrutura de governança do AURORA tem dois níveis — Comitê Técnico semanal (TI + Negócios + Compliance) e Comitê Executivo mensal (Diretora + CFO) com poder de aprovação de mudanças de escopo e custo acima de 5% por marco.
+
+[09:57] BM: Beatriz — questão sobre o processo de validação de requisitos. Quem tem autoridade para aprovar formalmente cada requisito? Preciso saber o fluxo de aprovação para o documento que vou elaborar.
+
+[09:59] ALF: O fluxo é: Analista (Fernanda) levanta e descreve. Gerente de Requisitos (Beatriz) formaliza e classifica. CTO e Diretora validam viabilidade técnica e estratégica. CFO valida impacto orçamentário para requisitos que afetam custo. Aprovação formal é minha assinatura no documento.
+
+[10:01] MC: Marcos — preciso levantar um ponto sobre integração com o Core Banking. O mainframe vai precisar de uma camada de integração durante a transição. Não dá pra tirar o COBOL de uma hora pra outra — os contratos formalizados hoje ficam lá. Proponho um middleware de integração, que chamo de Meridional Integration Bus, para fazer a ponte entre os novos microsserviços e o mainframe durante toda a Fase 1.
+
+[10:05] FK: Fernanda — concordo que é necessário. Mas isso vai impactar o processo de formalização contratual. O contrato aprovado pelo novo sistema vai precisar ser gravado também no mainframe para manter a consistência dos registros históricos. Isso é um ponto de atenção.
+
+[10:07] PHS: Paulo — do ponto de vista financeiro, qualquer dado de contrato precisa estar no sistema de registro oficial, que ainda é o mainframe. Não posso ter uma aprovação no novo sistema que não está refletida no Core Banking. Isso é requisito de regulamentação bancária, não de preferência.
+
+[10:09] MC: Entendido. Então o Meridional Integration Bus é escopo obrigatório da Fase 1, não opcional. Vou incluir no escopo técnico.
+
+[10:11] ALF: Decisão registrada: Meridional Integration Bus é componente obrigatório da Fase 1 para garantir sincronização bidirecional entre os novos microsserviços e o Core Banking existente (mainframe IBM zSeries).
+
+[10:13] BM: Beatriz — vou registrar isso como Requisito 13: o Meridional Integration Bus deve garantir sincronização bidirecional de dados entre os novos microsserviços AURORA e o Core Banking (mainframe IBM zSeries) com consistência eventual máxima de 30 segundos para operações de crédito formalizadas.
+
+[10:15] FK: Fernanda — e precisamos mapear os processos de exceção. O que acontece quando um cliente tem score na zona de risco médio? Hoje isso vai pra alçada manual do gerente de crédito. Isso vai continuar existindo no AURORA?
+
+[10:17] MC: Sim. O fluxo de exceção precisa existir. Proposta com score entre 500 e 700 vai para revisão manual do Gerente de Crédito. Abaixo de 500, recusa automática. Acima de 700, aprovação automática. Essa é a regra de negócio central — vai gerar uma tabela de decisão DMN.
+
+[10:19] PHS: Paulo — os limites de alçada também precisam ser parametrizáveis. Hoje o Gerente de Crédito aprova até R$ 500 mil. O Diretor de Crédito aprova de R$ 500 mil a R$ 2 milhões. Acima disso vai para o Comitê de Crédito. Isso precisa estar no sistema e ser auditável.
+
+[10:22] BM: Ótimo. Vou registrar como Requisito 14: o sistema deve implementar fluxo de aprovação por alçada com três níveis — Gerente de Crédito (até R$ 500 mil), Diretor de Crédito (R$ 500 mil a R$ 2 milhões) e Comitê de Crédito (acima de R$ 2 milhões) — com parametrização dos limites sem necessidade de deployment de código.
+
+[10:24] ALF: Perfeito. Antes de encerrarmos, vamos registrar os encaminhamentos. Beatriz: documento de requisitos formalizado em IEEE 830 até 07/03/2026. Marcos: documento de arquitetura técnica da Fase 1 incluindo Meridional Integration Bus até 10/03/2026. Fernanda: mapeamento detalhado dos 7 processos em notação BPMN até 07/03/2026. Paulo: confirmação formal do budget de R$ 4,2 milhões com cronograma de liberação por fase até 05/03/2026. E eu envio a ata desta reunião até amanhã.
+
+[10:27] FK: Fernanda — uma última questão. Precisamos definir o ambiente de testes. Vamos precisar de dados anonimizados de clientes reais para testar o motor de score. Quem autoriza isso?
+
+[10:29] PHS: Paulo — isso precisa de autorização do DPO, o nosso Encarregado de Proteção de Dados. Temos que abrir um processo formal de anonimização antes de qualquer uso de dados reais em testes. Sugiro incluir isso nos encaminhamentos.
+
+[10:31] ALF: Incluído. Encaminhamento adicional: abertura de processo formal com o DPO para anonimização de base de dados de clientes para ambiente de testes — responsável Paulo Saraiva, prazo 10/03/2026.
+
+[10:33] MC: Marcos — quero registrar formalmente minha avaliação de prazo. Para a entrega da Fase 1 completa — API Gateway, Motor de Risco e Portal do Cliente — estimo 90 dias a partir do kick-off, ou seja, entrega até 30 de maio de 2026. Isso considerando equipe de 8 desenvolvedores full-time e infraestrutura cloud provisionada na primeira semana.
+
+[10:35] ALF: Registrado. Prazo estimado pelo CTO para entrega da Fase 1: 90 dias a partir de hoje, 01/03/2026, com entrega prevista para 30/05/2026. Sujeito a confirmação no Comitê Executivo de abril.
+
+[10:36] PHS: Paulo — registro que o cronograma financeiro de liberação de budget está atrelado ao cumprimento de marcos. Marco 1 em 30 dias, Marco 2 em 60 dias, entrega em 90 dias. Qualquer deslizamento de marco implica revisão do cronograma de liberação.
+
+[10:38] ALF: Perfeito. Encerramos às 10h38. Obrigada a todos. Próxima reunião em 15 de março para revisão de requisitos técnicos e arquitetura de integração com o Core Banking. Boa semana.
+
+─────────────────────────────────────────────────────────────────────────────
+FIM DA TRANSCRIÇÃO — R1
+Duração: 1h36min | Palavras: ~1.850 | Participantes: 5

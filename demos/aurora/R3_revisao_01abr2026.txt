@@ -1,0 +1,102 @@
+GRUPO MERIDIONAL S.A.
+PROJETO AURORA — Plataforma Digital de Crédito
+Reunião R3 — Revisão de Conflitos, Riscos e Priorizações
+Data: 01 de abril de 2026 (quarta-feira)
+Horário: 10:01 — 11:34
+Local: Sala de Reuniões "Cedro" — Torre Meridional, Av. Paulista 2300, São Paulo
+Transcrição gerada por: Sistema de Gravação Corporativa MeridionalREC v3.1
+
+PARTICIPANTES:
+  ALF — Dra. Ana Luísa Ferreira   | Diretora de Transformação Digital (moderadora)
+  MC  — Marcos Cavalcanti         | CTO
+  BM  — Beatriz Moraes            | Gerente de Requisitos
+  PHS — Dr. Paulo Henrique Saraiva| CFO
+  FK  — Fernanda Kowalski         | Analista Sênior de Processos
+
+─────────────────────────────────────────────────────────────────────────────
+
+[10:01] ALF: Bom dia a todos. Esta é a R3 do Projeto AURORA. A pauta é densa — revisão dos conflitos identificados, análise de riscos do cronograma, priorização de requisitos e validação do escopo ajustado. Marcos, vamos começar com o relatório de impacto do Lex4All que você ficou de entregar.
+
+[10:04] MC: Marcos — entreguei o relatório na segunda-feira. Vou resumir as conclusões. A integração com o Lex4All é mais complexa do que estimei inicialmente. O Lex4All usa uma API REST de 2019 que não tem suporte a webhooks — só polling. Isso significa que o MIB vai precisar implementar um mecanismo de polling a cada 30 segundos para confirmar o registro do contrato. Além disso, o ambiente de homologação do Lex4All só está disponível para testes em horário comercial — das 9h às 18h — o que limita a capacidade de testes automatizados noturnos. A minha estimativa atualizada é que a integração com Lex4All adiciona entre 15 e 20 dias úteis ao cronograma original.
+
+[10:09] PHS: Paulo — isso é um problema sério. Se adicionarmos 20 dias úteis ao prazo de 90 dias corridos, saímos de 30 de maio para aproximadamente 27 de junho. Isso passa do fechamento semestral e atrasa a apresentação ao Conselho.
+
+[10:12] MC: Concordo que é um problema. Tenho duas alternativas para propor. Alternativa A: mantemos o prazo de 90 dias e excluímos a integração Lex4All do escopo da Fase 1 — a equipe jurídica registra os contratos manualmente no Lex4All durante um período de transição de 60 dias enquanto concluímos a integração na Fase 1B. Alternativa B: estendemos o prazo em 20 dias úteis — indo para meados de julho — mas entregamos tudo integrado. Minha recomendação técnica é a Alternativa A.
+
+[10:16] FK: Fernanda — a Alternativa A gera carga operacional para a área jurídica. Quantos contratos por dia estamos falando?
+
+[10:17] MC: Baseado no volume atual, entre 15 e 25 contratos por dia. Para a equipe jurídica seria um processo manual adicional de aproximadamente 2 horas de trabalho por dia coletivamente.
+
+[10:19] PHS: Paulo — do ponto de vista financeiro, 2 horas de trabalho jurídico por dia durante 60 dias é custo operacional administrável. Prefiro a Alternativa A. Mantemos o prazo, entregamos o núcleo funcionando, e a integração Lex4All entra como Fase 1B com prazo de 60 dias adicionais após o go-live da Fase 1.
+
+[10:21] ALF: Acordo geral? Marcos?
+
+[10:22] MC: Concordo. Mas preciso que fique registrado que a Alternativa A — excluir Lex4All da Fase 1 — foi decisão do Comitê, não recomendação técnica minha de eliminar o requisito. O requisito continua existindo e será implementado na Fase 1B.
+
+[10:23] ALF: Registrado com exatidão. Decisão do Comitê: integração com Lex4All passa para Fase 1B, com prazo de 60 dias após o go-live da Fase 1. O prazo de entrega da Fase 1 permanece em 30/05/2026. Durante o período de transição, a equipe jurídica registrará contratos manualmente no Lex4All.
+
+[10:25] BM: Beatriz — preciso registrar formalmente. O Requisito 27 — integração Lex4All — permanece no documento de requisitos mas muda de prioridade para Alta na Fase 1B. O cronograma de implementação é atualizado conforme decisão.
+
+[10:27] FK: Fernanda — quero trazer um segundo conflito que identifiquei ao cruzar os requisitos com o mapeamento de processos. O Requisito 3 estabelece que o motor de análise de risco deve retornar um score em menos de 60 segundos. Mas o Requisito 2 exige que a validação cadastral — que acontece antes — seja feita em menos de 30 segundos consultando três bureaus simultaneamente. Se os três bureaus forem consultados em paralelo em 30 segundos e o score sair em mais 60 segundos, o tempo total da proposta até o score seria de 90 segundos. Isso é compatível com a promessa de aprovação em menos de 4 horas para o cliente, mas quero confirmar se é o entendimento de todos.
+
+[10:31] ALF: Boa pergunta. O prazo de 4 horas é para o ciclo completo — da submissão até a resposta final ao cliente, incluindo eventual análise manual. Para o fluxo automático de aprovação direta — score alto, valor baixo — quanto tempo estamos prevendo?
+
+[10:33] MC: Marcos — para o fluxo totalmente automatizado: 30 segundos de validação cadastral mais 60 segundos de score mais 30 segundos de geração de contrato mais tempo de assinatura digital pelo cliente. O tempo do lado do sistema é menos de 3 minutos. O gargalo no fluxo automático é o tempo que o cliente leva para assinar digitalmente o contrato no DocuSign — isso é fora do controle do sistema.
+
+[10:36] PHS: Paulo — então o SLA de 4 horas para o cliente é confortável para o fluxo automático. O gargalo real é o fluxo de análise manual — quando o score cai na zona cinza entre 500 e 700. Qual o SLA para esse fluxo?
+
+[10:38] FK: Fernanda — mapeei esse fluxo. Quando a proposta entra em análise manual, o Gerente de Crédito recebe uma notificação e tem até 2 horas para dar uma resposta — aprovar, recusar ou solicitar documentação adicional. Esse prazo de 2 horas não está formalizado como requisito ainda.
+
+[10:40] BM: Beatriz — vou registrar como Requisito 32: o sistema deve notificar o Gerente de Crédito responsável imediatamente quando uma proposta entra em análise manual por score na zona de risco médio (entre 500 e 700), e o gestor deve registrar sua decisão em até 2 horas, após as quais o sistema envia alerta de escalada para o superior hierárquico.
+
+[10:43] ALF: Perfeito. Antes de continuarmos, quero endereçar o ponto mais sensível desta reunião: o prazo global do projeto. Paulo, você levantou na R2 a necessidade de entrega parcial até 15 de junho para o fechamento semestral. Marcos confirmou 90 dias para entrega completa — até 30 de maio. Mas na semana passada recebi uma comunicação da área de infraestrutura dizendo que o provisionamento do ambiente cloud está atrasado. Marcos, pode explicar?
+
+[10:47] MC: Sim. O processo de aprovação do contrato com a AWS foi mais demorado do que previsto — a área de contratos exigiu revisão de cláusulas de soberania de dados por conta da LGPD. O contrato foi assinado ontem, 31 de março. Isso significa que o ambiente cloud só começa a ser provisionado esta semana, com uma defasagem de 30 dias em relação ao planejado. Minha equipe perdeu 30 dias sem poder trabalhar na infraestrutura de produção.
+
+[10:51] PHS: Paulo — isso é crítico. Se a equipe de desenvolvimento ficou 30 dias esperando infraestrutura, o prazo de 90 dias a partir do kick-off está comprometido.
+
+[10:53] MC: Marcos — precisamente. Com o atraso de infraestrutura, minha estimativa revisada para entrega completa é de 120 dias a partir do kick-off — ou seja, 29 de junho de 2026. Eu sei que isso é ruim para o fechamento semestral, mas é a estimativa realista levando em conta que minha equipe não ficou parada — trabalhou em módulos que não dependem de infraestrutura — mas perdemos capacidade de integração e testes de ponta a ponta.
+
+[10:57] PHS: Paulo — 29 de junho é um problema. O fechamento semestral é 30 de junho. Mas honestamente, se o sistema entrar em produção no dia 29, não vamos ter dados para apresentar ao Conselho. Precisamos de ao menos 2 semanas de produção para ter métricas. Isso nos leva para meados de julho.
+
+[11:00] ALF: Precisamos tomar uma decisão aqui. Marcos, há alguma forma de recuperar parte do atraso?
+
+[11:01] MC: Posso contratar mais dois desenvolvedores seniores. Com dois desenvolvedores a mais na equipe, estimo recuperar de 15 a 20 dias. Isso nos levaria para uma entrega completa entre 10 e 15 de junho — ainda depois do prazo original de 30 de maio, mas antes do fechamento semestral.
+
+[11:04] PHS: Paulo — qual o custo adicional de dois desenvolvedores seniores por 2 meses?
+
+[11:05] MC: Aproximadamente R$ 120 mil por desenvolvedor para o período, considerando CLT ou contrato PJ. Total de R$ 240 mil adicionais.
+
+[11:07] PHS: Paulo — R$ 240 mil é 5,7% do budget aprovado. Está acima do threshold de 5% que definimos na R1 para aprovação pelo Comitê Executivo. Não tenho autoridade para aprovar aqui. Preciso levar para o Comitê Executivo.
+
+[11:09] ALF: Entendido. Encaminhamento: Paulo leva ao Comitê Executivo a aprovação de R$ 240 mil adicionais para contratação de dois desenvolvedores seniores, com objetivo de recuperar 15 a 20 dias do atraso. Decisão esperada até 08/04/2026. Enquanto isso, Marcos trabalha com a equipe atual e o novo prazo de 120 dias — 29 de junho — é o prazo oficial até aprovação dos recursos adicionais.
+
+[11:12] FK: Fernanda — quero registrar dois riscos adicionais que identifiquei. Risco 1: os dados anonimizados para treinamento do modelo de risco ainda não foram disponibilizados. Paulo, qual o status?
+
+[11:13] PHS: Paulo — o DPO aprovou o processo de anonimização mas o processo técnico de anonimização dos dados ainda está em andamento. Estimativa do time de dados: disponibilidade até 15 de abril.
+
+[11:15] FK: Isso é um problema para o Motor de Risco. Marcos, se os dados ficam disponíveis em 15 de abril, qual o impacto no prazo do modelo?
+
+[11:16] MC: Marcos — o treinamento, validação e ajuste fino do modelo leva 3 semanas após os dados estarem disponíveis. Se os dados chegam em 15 de abril, o modelo fica pronto em 06 de maio. Isso ainda cabe no prazo de 120 dias se aprovado o budget adicional, mas se houver qualquer atraso nos dados, o prazo estoura.
+
+[11:19] ALF: Registrado como risco crítico. Risco: atraso na disponibilização de dados para treinamento do modelo de risco pode atrasar a entrega além de 29 de junho. Plano de contingência: Paulo garante disponibilidade dos dados até 15/04/2026 como prioridade máxima.
+
+[11:21] FK: Risco 2: o Gerente de Crédito e sua equipe ainda não participaram de nenhum processo de validação dos requisitos. São os usuários principais do sistema e corremos o risco de descobrir conflitos de usabilidade tarde demais.
+
+[11:23] ALF: Excelente ponto, Fernanda. Encaminhamento: Beatriz e Fernanda organizam uma sessão de validação de requisitos com a equipe de Gerentes de Crédito até 10/04/2026. Foco nos processos de análise manual e fluxo de alçadas.
+
+[11:25] BM: Beatriz — aproveitando, preciso formalizar uma questão de conflito entre requisitos. O Requisito 16 exige autenticação multifator para propostas acima de R$ 100 mil. Mas o Requisito 15 diz que o Portal deve ser acessível em dispositivos móveis sem aplicativo nativo. Autenticação multifator em mobile sem aplicativo nativo geralmente implica SMS OTP ou e-mail OTP — mas isso pode ser lento e o cliente pode abandonar a proposta. Precisamos decidir qual método de MFA usar.
+
+[11:28] MC: Marcos — recomendo SMS OTP como método primário e e-mail OTP como fallback. É compatível com mobile web e adiciona latência de apenas 30 a 60 segundos no fluxo. Alternativamente, podemos usar TOTP via Google Authenticator, mas aí o cliente precisa configurar antes — aumenta o atrito no onboarding.
+
+[11:30] PHS: Paulo — do ponto de vista de risco, SMS OTP é suficiente para o volume e ticket médio que estamos operando. Aceito SMS OTP. Isso é uma decisão do Comitê.
+
+[11:31] ALF: Decisão registrada: autenticação multifator para propostas acima de R$ 100 mil utilizará SMS OTP como método primário e e-mail OTP como fallback, conforme proposto pelo CTO e aprovado pelo CFO.
+
+[11:33] BM: Beatriz — registro formal: Requisito 16 atualizado — MFA via SMS OTP com fallback para e-mail OTP.
+
+[11:34] ALF: Encerramos. Resumo das decisões: prazo oficial atualizado para 120 dias — entrega em 29/06/2026; aprovação de recursos adicionais vai ao Comitê Executivo; Lex4All passa para Fase 1B; MFA definido como SMS OTP. Próxima reunião: 15 de abril de 2026 para aprovação de orçamento e cronograma final. Obrigada a todos.
+
+─────────────────────────────────────────────────────────────────────────────
+FIM DA TRANSCRIÇÃO — R3
+Duração: 1h33min | Palavras: ~1.800 | Participantes: 5

@@ -1,0 +1,98 @@
+GRUPO MERIDIONAL S.A.
+PROJETO AURORA — Plataforma Digital de Crédito
+Reunião R2 — Requisitos Técnicos e Integração Core Banking
+Data: 15 de março de 2026 (domingo)
+Horário: 14:03 — 15:49
+Local: Sala de Reuniões "Araucária" — Torre Meridional, Av. Paulista 2300, São Paulo
+Transcrição gerada por: Sistema de Gravação Corporativa MeridionalREC v3.1
+
+PARTICIPANTES:
+  ALF — Dra. Ana Luísa Ferreira   | Diretora de Transformação Digital (moderadora)
+  MC  — Marcos Cavalcanti         | CTO
+  BM  — Beatriz Moraes            | Gerente de Requisitos
+  PHS — Dr. Paulo Henrique Saraiva| CFO
+  FK  — Fernanda Kowalski         | Analista Sênior de Processos
+
+─────────────────────────────────────────────────────────────────────────────
+
+[14:03] ALF: Boa tarde a todos. Esta é a R2 do Projeto AURORA — foco em requisitos técnicos e arquitetura de integração com o Core Banking. Beatriz entregou o documento de requisitos na sexta e Marcos entregou a arquitetura técnica. Fernanda também concluiu o mapeamento dos processos. Vamos começar revisando os artefatos e aprofundando os pontos críticos. Beatriz, por favor.
+
+[14:06] BM: Obrigada. O documento de requisitos que enviei formaliza os 14 requisitos levantados na R1 e acrescenta mais 8 identificados durante a análise. Vou passar pelos novos. Requisito 15: o Portal do Cliente deve ser responsivo e acessível em dispositivos móveis iOS e Android sem necessidade de aplicativo nativo, com score de acessibilidade WCAG 2.1 nível AA. Requisito 16: o sistema deve implementar autenticação multifator para todos os usuários internos e para clientes que submetam propostas acima de R$ 100 mil. Requisito 17: o tempo de sessão autenticada do cliente deve expirar automaticamente após 30 minutos de inatividade, com notificação prévia de 5 minutos.
+
+[14:11] MC: Marcos — acrescento do lado técnico. Requisito 18: cada microsserviço deve expor endpoints de health check e métricas no padrão Prometheus, integrados ao sistema de monitoramento centralizado com alertas automáticos quando a disponibilidade cair abaixo de 99% em janela de 5 minutos. Requisito 19: o sistema de logs deve adotar o padrão ELK Stack com retenção de 90 dias para logs operacionais e 5 anos para logs de auditoria de crédito. Requisito 20: o deploy de qualquer componente deve ser feito via pipeline CI/CD automatizado com gates de qualidade — cobertura de testes mínima de 80% e zero vulnerabilidades críticas no scan SAST.
+
+[14:16] FK: Fernanda — durante o mapeamento dos processos identifiquei três requisitos funcionais que não estavam no documento inicial. Requisito 21: o sistema deve permitir que o Gerente de Crédito adicione comentários e justificativas na análise manual de propostas em zona de risco médio, e esses comentários devem ser anexados ao histórico auditável da proposta. Requisito 22: em caso de recusa automática, o sistema deve gerar automaticamente uma carta de recusa no modelo padrão aprovado pela área Jurídica, informando os motivos de forma genérica em conformidade com a regulamentação BACEN. Requisito 23: o cliente deve ter acesso a um painel de acompanhamento onde pode visualizar em tempo real o status da sua proposta e os documentos enviados, sem necessidade de entrar em contato com a equipe comercial.
+
+[14:21] PHS: Paulo — identifiquei dois requisitos de compliance que são inegociáveis do ponto de vista regulatório. Requisito 24: o sistema deve realizar consulta automática às listas de sanções internacionais — OFAC, ONU e Lista de Impedidos do COAF — para todos os clientes antes da aprovação de qualquer proposta de crédito. Requisito 25: o relatório de análise de crédito gerado pelo motor de risco deve incluir todos os elementos exigidos pela Resolução BACEN 4.557, incluindo identificação do modelo utilizado, data de atualização do modelo e indicadores de qualidade preditiva.
+
+[14:26] ALF: Excelente. Ficamos com 25 requisitos formalizados até aqui. Marcos, vamos para a arquitetura de integração com o Core Banking — esse é o tema mais crítico desta reunião.
+
+[14:28] MC: Certo. Apresento a arquitetura proposta para o Meridional Integration Bus. O MIB — como vamos chamar — funciona como um barramento de eventos assíncronos baseado em Apache Kafka. Toda operação nos microsserviços AURORA gera um evento que o MIB consome e replica para o mainframe via API proprietária que o time de infraestrutura desenvolveu. Fiz um levantamento e a janela de integração com o mainframe suporta no máximo 200 transações por minuto sem degradação. Isso impõe um limite de throughput na Fase 1.
+
+[14:33] FK: Fernanda — 200 transações por minuto pode ser um gargalo. No mapeamento de processo identificamos que nos picos de demanda — especialmente entre 10h e 12h — temos até 400 propostas sendo processadas por hora. Isso não é por minuto, mas se houver concentração de aprovações simultâneas, podemos ter problema.
+
+[14:36] MC: Bom ponto. A solução é implementar uma fila de prioridade no MIB. Propostas aprovadas ou recusadas entram na fila de alta prioridade — precisam ir para o mainframe imediatamente. Propostas em análise entram na fila de baixa prioridade — podem esperar. Isso reduz o pico de escrita no mainframe para algo em torno de 50 a 80 transações por minuto nos momentos críticos.
+
+[14:39] BM: Beatriz — isso gera um requisito novo. Requisito 26: o Meridional Integration Bus deve implementar fila de prioridade para sincronização com o Core Banking — alta prioridade para propostas com status final (aprovada, recusada, formalizada) com SLA de sincronização máximo de 30 segundos, e baixa prioridade para atualizações de status intermediário com SLA de 5 minutos.
+
+[14:42] ALF: Registrado. Marcos, qual o prazo para implementar o MIB com essa fila de prioridade?
+
+[14:43] MC: O MIB está no escopo da Fase 1 e entra no prazo de 90 dias que estimei na R1. A fila de prioridade é parte do design do MIB, não incremento de escopo.
+
+[14:45] PHS: Paulo — quero entrar na questão do prazo. Noventa dias a partir do kick-off nos leva ao fim de maio. O nosso exercício fiscal do primeiro semestre fecha em 30 de junho. Seria muito importante termos ao menos o Portal do Cliente e a integração com bureaus funcionando até 15 de junho para que possamos apresentar resultados no fechamento semestral para o Conselho.
+
+[14:48] MC: Marcos — entendo a pressão, Paulo, mas 90 dias para o sistema completo e 75 dias para o Portal do Cliente mais bureaus é factível. O que não posso comprometer é o Motor de Risco em menos de 90 dias — o modelo de machine learning precisa de um ciclo de treinamento com dados reais, validação e ajuste fino que leva no mínimo 3 semanas após os dados estarem disponíveis.
+
+[14:51] PHS: Tudo bem. Então vamos registrar: entrega parcial até 15 de junho — Portal do Cliente e API Gateway com bureaus. Entrega completa — incluindo Motor de Risco e MIB — até 30 de maio, que é o prazo original de 90 dias do CTO. Aceito essa sequência?
+
+[14:53] ALF: Marcos, confirma?
+
+[14:53] MC: Confirmo. Portal + Bureaus entregues para homologação até 15 de junho... Quer dizer, para homologação até 30 de abril, produção até 15 de junho. Motor de Risco e MIB completos até 30 de maio — 90 dias do kick-off.
+
+[14:55] ALF: Registrado. Prazo Fase 1: entrega completa do sistema AURORA em 90 dias a partir de 01/03/2026, com previsão para 30/05/2026. Entrega parcial do Portal do Cliente e API Gateway de bureaus em produção até 15/06/2026 para apresentação ao Conselho no fechamento semestral.
+
+[14:58] FK: Fernanda — preciso trazer um ponto sobre o processo de formalização contratual que identifiquei no mapeamento. Atualmente quando uma proposta é aprovada, o Gerente Comercial recebe uma notificação e precisa gerar o contrato manualmente no sistema jurídico Lex4All. Esse processo leva em média 4 horas. No AURORA o contrato deve ser gerado automaticamente, certo?
+
+[14:59] MC: Sim. O módulo de geração de contratos está no escopo — faz parte do Portal do Cliente. O template do contrato vem da área Jurídica em formato parametrizável e o sistema preenche automaticamente.
+
+[15:01] FK: Ótimo. Mas identifiquei que o Lex4All precisa receber uma cópia registrada do contrato dentro de 2 horas após a assinatura — isso é exigência regulatória. O contrato digital assinado via DocuSign também precisa ir para o Lex4All. Isso é mais uma integração que o MIB precisa suportar.
+
+[15:04] MC: Marcos — isso é novo. Integração com Lex4All não estava no escopo original. Posso incluir no MIB, mas isso adiciona complexidade. Preciso de uma semana para avaliar o impacto.
+
+[15:06] PHS: Paulo — a integração com Lex4All é obrigatória do ponto de vista regulatório e jurídico. Não é opcional. Mas concordo que pode ter impacto no prazo — vamos aguardar a avaliação do Marcos e discutir na R3 se for necessário ajuste.
+
+[15:08] ALF: Acordado. Encaminhamento: Marcos avalia impacto da integração Lex4All no prazo e escopo até 25/03/2026 e apresenta análise na R3.
+
+[15:10] BM: Beatriz — vou registrar formalmente. Requisito 27: o sistema AURORA deve integrar-se ao sistema jurídico Lex4All para registro automático de contratos formalizados digitalmente, com envio do contrato assinado em até 2 horas após a conclusão da assinatura digital pelo cliente.
+
+[15:12] FK: Fernanda — quero trazer o mapeamento de processos agora. Identifiquei 7 processos principais. Processo 1: Submissão de Proposta — do lado do cliente, inicia no Portal e termina com a proposta recebida pelo sistema. Processo 2: Validação Cadastral — automático, consulta os três bureaus simultaneamente e consolida o resultado. Processo 3: Análise de Risco — o motor de ML processa o score. Processo 4: Aprovação por Alçada — fluxo condicional baseado no score e valor. Processo 5: Formalização Contratual — geração do contrato, envio para assinatura digital e registro no Lex4All. Processo 6: Desembolso — integração com o sistema financeiro para liberação dos recursos. Processo 7: Pós-formalização — notificação, registro no mainframe via MIB e geração de evidências de auditoria.
+
+[15:18] MC: Marcos — vou comentar sobre o Processo 6 — Desembolso. Esse processo está fora do escopo da Fase 1. O desembolso continua sendo feito pelo sistema financeiro atual. O AURORA da Fase 1 entrega a aprovação e a formalização — o desembolso efetivo continua no sistema legado e é acionado manualmente pela tesouraria.
+
+[15:20] PHS: Concordo. O desembolso envolve os sistemas do BACEN e da CIP — Câmara Interbancária de Pagamentos — e essa integração vai para a Fase 2. Na Fase 1 o AURORA gera a ordem de desembolso e o tesoureiro executa manualmente no sistema atual. Isso precisa ficar explícito no documento de escopo.
+
+[15:22] ALF: Registrado. Escopo da Fase 1 não inclui integração com sistemas de desembolso bancário. O fluxo para no momento em que o contrato é assinado e registrado. O desembolso efetivo permanece no processo manual atual para a Fase 1.
+
+[15:24] BM: Beatriz — quero registrar mais dois requisitos que surgiram da análise dos processos. Requisito 28: o sistema deve gerar automaticamente um relatório diário consolidado de propostas por status — recebidas, em análise, aprovadas, recusadas e formalizadas — enviado por e-mail às 7h para os gestores da área de crédito. Requisito 29: o sistema deve permitir a configuração de alertas para propostas que estejam em status "em análise manual" por mais de 4 horas sem ação do responsável, com escalada automática para o superior hierárquico.
+
+[15:28] MC: Marcos — acrescento o Requisito 30: o ambiente de produção deve ser provisionado em cloud pública com configuração multi-AZ — múltiplas zonas de disponibilidade — para garantir tolerância a falhas, com RTO — Recovery Time Objective — máximo de 15 minutos e RPO — Recovery Point Objective — máximo de 5 minutos para todos os dados de propostas.
+
+[15:32] ALF: Chegamos a 30 requisitos formalizados. Isso está muito bem estruturado, Beatriz. Antes de encerrar, quero registrar os pontos de atenção que surgiram hoje. Primeiro: a integração com Lex4All pode impactar o prazo — Marcos avalia e reporta na R3. Segundo: o limite de throughput do mainframe — 200 transações por minuto — é uma restrição de arquitetura que a fila de prioridade do MIB mitiga, mas precisa ser monitorada. Terceiro: o desembolso está fora do escopo da Fase 1 e isso precisa ser comunicado claramente às áreas de negócio para gerenciar expectativas.
+
+[15:36] FK: Fernanda — uma dúvida que ficou da análise de processos: no fluxo de Aprovação por Alçada, quando o Gerente de Crédito está analisando uma proposta em zona de risco médio e precisa solicitar documentação adicional ao cliente, qual o prazo máximo que o sistema vai aguardar antes de cancelar automaticamente a proposta?
+
+[15:38] PHS: Paulo — do ponto de vista de risco, não podemos deixar uma proposta em aberto indefinidamente. Sugiro 30 dias corridos. Se o cliente não apresentar a documentação em 30 dias, a proposta é cancelada automaticamente e o cliente recebe uma notificação.
+
+[15:40] MC: Tecnicamente viável. O sistema implementa um job noturno que verifica propostas em status de "aguardando documentação" e cancela as que ultrapassaram o prazo.
+
+[15:41] BM: Beatriz — registrando como Requisito 31: propostas no status "aguardando documentação adicional" devem ser automaticamente canceladas após 30 dias corridos sem envio dos documentos solicitados, com notificação automática ao cliente informando o motivo do cancelamento.
+
+[15:43] ALF: Excelente. Temos 31 requisitos formalizados. Encaminhamentos desta reunião: Beatriz consolida todos os 31 requisitos no documento formal até 20/03/2026. Marcos entrega avaliação de impacto do Lex4All até 25/03/2026. Fernanda refina o mapeamento dos 7 processos em BPMN 2.0 até 22/03/2026, destacando os fluxos de exceção. Paulo confirma a disponibilidade dos dados anonimizados para treinamento do modelo até 22/03/2026. Próxima reunião: 01 de abril de 2026, para revisão de conflitos, priorização e validação do escopo ajustado.
+
+[15:47] MC: Marcos — antes de encerrar, quero registrar formalmente minha estimativa de prazo consolidada: 90 dias para entrega completa da Fase 1, incluindo o MIB com fila de prioridade. Essa estimativa parte do pressuposto de que os dados anonimizados para treinamento do modelo estarão disponíveis até 22/03/2026 e que a integração com Lex4All não adicionar mais de 2 semanas ao cronograma.
+
+[15:49] ALF: Registrado. Encerramos. Obrigada a todos. Boa semana.
+
+─────────────────────────────────────────────────────────────────────────────
+FIM DA TRANSCRIÇÃO — R2
+Duração: 1h46min | Palavras: ~1.950 | Participantes: 5

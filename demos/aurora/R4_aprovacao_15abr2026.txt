@@ -1,0 +1,96 @@
+GRUPO MERIDIONAL S.A.
+PROJETO AURORA — Plataforma Digital de Crédito
+Reunião R4 — Aprovação de Orçamento e Cronograma Final da Fase 1
+Data: 15 de abril de 2026 (quarta-feira)
+Horário: 15:01 — 16:28
+Local: Sala de Reuniões Executivas "Ipê" — Torre Meridional, Av. Paulista 2300, São Paulo
+Transcrição gerada por: Sistema de Gravação Corporativa MeridionalREC v3.1
+
+PARTICIPANTES:
+  ALF — Dra. Ana Luísa Ferreira   | Diretora de Transformação Digital (moderadora)
+  MC  — Marcos Cavalcanti         | CTO
+  BM  — Beatriz Moraes            | Gerente de Requisitos
+  PHS — Dr. Paulo Henrique Saraiva| CFO
+  FK  — Fernanda Kowalski         | Analista Sênior de Processos
+
+─────────────────────────────────────────────────────────────────────────────
+
+[15:01] ALF: Boa tarde a todos. Esta é a R4 do Projeto AURORA e é uma reunião decisiva. A pauta central é a aprovação do orçamento adicional para recuperação de prazo e a validação do cronograma final da Fase 1. Paulo, você veio com a decisão do Comitê Executivo?
+
+[15:03] PHS: Sim. O Comitê Executivo se reuniu na segunda-feira, 13 de abril. A decisão foi aprovada por unanimidade. O Grupo Meridional autoriza o incremento orçamentário de R$ 240 mil para contratação de dois desenvolvedores seniores pelo período de dois meses, com objetivo de recuperar o prazo perdido em função do atraso no provisionamento do ambiente cloud. O budget total do Projeto AURORA Fase 1 passa de R$ 4,2 milhões para R$ 4,44 milhões.
+
+[15:06] ALF: Ótimo. Marcos, com essa aprovação, qual é o cronograma revisado?
+
+[15:08] MC: Marcos — com os dois desenvolvedores adicionais, cuja integração à equipe começa amanhã, 16 de abril, e considerando que os dados para treinamento do modelo de risco ficaram disponíveis ontem, 14 de abril — com dois dias de atraso em relação ao previsto mas dentro da margem aceitável — minha estimativa revisada para entrega completa da Fase 1 é 15 de junho de 2026. Isso é 106 dias a partir do kick-off, ou 30 dias depois do prazo original, mas 14 dias antes da estimativa pessimista de 29 de junho que levamos ao Comitê Executivo.
+
+[15:12] PHS: Paulo — 15 de junho é aceitável. Mesmo não tendo dados de produção para apresentar no fechamento semestral de 30 de junho, podemos apresentar ao Conselho o sistema em operação com as primeiras métricas de teste de aceitação. O relatório de resultados completo vai para o Conselho no fechamento do terceiro trimestre, em setembro.
+
+[15:15] ALF: Decisão registrada: cronograma final da Fase 1 do Projeto AURORA — entrega completa em 15 de junho de 2026, com budget total de R$ 4,44 milhões. Apresentação ao Conselho com métricas iniciais em 30 de junho de 2026.
+
+[15:17] BM: Beatriz — aproveitando a formalização do cronograma, quero reportar os resultados da sessão de validação com os Gerentes de Crédito que fizemos em 10 de abril com a Fernanda. Foram seis Gerentes de Crédito participantes. O feedback geral foi positivo em relação ao fluxo automatizado. Mas identificamos três pontos de conflito com os requisitos atuais.
+
+[15:20] FK: Fernanda — vou detalhar os três conflitos. Conflito 1: o Requisito 32 define que o Gerente tem 2 horas para responder uma proposta em análise manual antes da escalada. Os Gerentes de Crédito sinalizaram que algumas propostas complexas — especialmente de clientes com estrutura societária complexa — podem exigir consulta a laudos externos que levam 24 horas. Eles pedem que o prazo de escalada seja configurável por categoria de proposta, não fixo em 2 horas.
+
+[15:24] MC: Marcos — tecnicamente viável. Posso implementar categorias de prazo configuráveis. Proposta simples: 2 horas. Proposta com estrutura societária complexa: 24 horas. Proposta com garantias imobiliárias: 48 horas. Os prazos seriam parametrizáveis pelo administrador do sistema sem necessidade de código.
+
+[15:26] PHS: Paulo — do ponto de vista de risco de crédito, prazos mais longos são aceitáveis desde que o sistema monitore e escale adequadamente. Aprovo a mudança.
+
+[15:27] ALF: Decisão registrada: Requisito 32 é atualizado para suportar prazos de análise manual configuráveis por categoria de proposta — 2 horas para propostas simples, 24 horas para estrutura societária complexa e 48 horas para propostas com garantias imobiliárias — com parametrização pelo administrador sem deployment de código.
+
+[15:29] FK: Conflito 2: o Requisito 22 prevê que a carta de recusa automática informa os motivos de forma genérica para conformidade com o BACEN. Mas os Gerentes de Crédito apontaram que quando a recusa é decorrente de score baixo por inadimplência em bureau, a regulamentação BACEN — especificamente a Resolução CMN 4.282 — obriga a informar ao cliente qual bureau apresentou a restrição, para que o cliente possa questionar a informação. A carta genérica pode gerar problema regulatório.
+
+[15:33] PHS: Paulo — isso é correto e eu devia ter identificado antes. A Resolução CMN 4.282 é clara. A carta de recusa deve identificar a fonte de informação negativa. Marcos, isso impacta o Requisito 22?
+
+[15:35] MC: Marcos — sim, é uma mudança no template da carta e na lógica de geração. Em vez de uma carta genérica, o sistema precisa gerar uma carta personalizada que menciona o bureau específico. Isso é factível, mas preciso envolver a área jurídica para revisar o template. Estimo 3 dias de trabalho para essa adaptação.
+
+[15:37] BM: Beatriz — atualizo o Requisito 22: a carta de recusa automática deve identificar a fonte de informação negativa — nome do bureau — conforme Resolução CMN 4.282, com o template aprovado pela área Jurídica.
+
+[15:39] ALF: Aprovado. Encaminhamento: Marcos e Beatriz alinham com a área Jurídica o template da carta de recusa até 22/04/2026.
+
+[15:41] FK: Conflito 3: o Requisito 3 define 60 segundos para o score de risco. Mas durante a sessão de validação os Gerentes de Crédito perguntaram se o score poderia incluir análise de comportamento de relacionamento com o banco — histórico de crédito anterior no próprio Meridional, pontualidade de pagamentos anteriores. Esses dados estão no mainframe. Incluir dados do mainframe no score exige consulta ao Core Banking via MIB durante o processamento, o que pode aumentar a latência.
+
+[15:45] MC: Marcos — essa é uma melhoria de modelo relevante. Com dados internos de relacionamento, o modelo tende a ser mais preciso e a taxa de falsos positivos — recusas indevidas — deve cair significativamente. Mas tem impacto: a consulta ao mainframe via MIB adiciona entre 15 e 30 segundos ao tempo de processamento. Passaríamos de 60 para até 90 segundos para o score completo.
+
+[15:48] PHS: Paulo — se a melhoria de precisão do modelo reduz a taxa de recusa indevida, o impacto financeiro é positivo. Lembrem que cada ponto percentual de recusa indevida custa R$ 18 milhões ao ano. Vale 30 segundos a mais.
+
+[15:50] ALF: Concordo. Mas Marcos, você consegue manter a entrega dentro do prazo de 15 de junho com essa mudança?
+
+[15:51] MC: Sim, desde que aprovada agora — posso incorporar no sprint atual. O pipeline de dados do MIB para o modelo é parte do trabalho que já está em desenvolvimento.
+
+[15:52] ALF: Decisão registrada: o Motor de Análise de Risco deve incluir dados de relacionamento do cliente com o banco — histórico de crédito e pontualidade — consultados via Meridional Integration Bus ao Core Banking. O SLA do score é revisado de 60 para 90 segundos.
+
+[15:54] BM: Beatriz — atualizo o Requisito 3: o motor de análise de risco deve processar uma proposta e retornar um score de crédito em menos de 90 segundos, incluindo consulta a dados internos de relacionamento via Meridional Integration Bus.
+
+[15:56] ALF: Beatriz, com todas essas mudanças, quantos requisitos temos formalmente?
+
+[15:57] BM: Chegamos a 32 requisitos formalizados. Distribuo: 18 requisitos funcionais, 9 não funcionais e 5 de interface e integração. Todos classificados conforme IEEE 830 com prioridade, status e responsável.
+
+[16:00] FK: Fernanda — quero trazer dois novos requisitos que identifiquei após a sessão com os Gerentes de Crédito. Requisito 33: o sistema deve disponibilizar um painel de gestão para o Diretor de Crédito com indicadores em tempo real — número de propostas por status, tempo médio de análise, taxa de aprovação e valor total de crédito em processamento. Atualização dos indicadores a cada 5 minutos. Requisito 34: o sistema deve emitir alerta automático para o Diretor de Crédito quando o volume de propostas em análise manual ultrapassar 20 unidades simultaneamente, indicando possível necessidade de acionamento de capacidade adicional.
+
+[16:04] MC: Marcos — o painel de gestão do Requisito 33 eu colocaria como prioridade média para a Fase 1. É um dashboard que pode ser entregue após o go-live como versão simplificada. O alerta do Requisito 34 é mais simples — um job de monitoramento com notificação por e-mail. Posso incluir ambos.
+
+[16:07] PHS: Paulo — quero adicionar um requisito de governança financeira que ficou faltando. Requisito 35: o sistema deve gerar mensalmente um relatório de Credit Quality Review consolidando todos os créditos aprovados no período com score, valor, prazo, taxa de juros aplicada e categoria de risco, para envio à área de Gestão de Riscos conforme exigência da Resolução BACEN 4.557.
+
+[16:10] ALF: Registrado. Requisito 36 — e estou incluindo um que esquecemos: o sistema deve implementar mecanismo de blackout — bloqueio automático de novas propostas de um determinado CNPJ ou CPF — acionável pela área de Compliance em casos de suspeita de fraude, com efeito imediato e registro auditável da justificativa e do responsável pelo acionamento.
+
+[16:13] MC: Posso implementar. Será uma funcionalidade administrativa com acesso restrito ao perfil Compliance.
+
+[16:15] BM: Beatriz — ficamos com 36 requisitos formalizados. Vou finalizar o documento de requisitos esta semana com todas as atualizações desta reunião e envio para aprovação final de Ana Luísa até 18/04/2026.
+
+[16:17] FK: Fernanda — quero registrar formalmente o status dos processos mapeados. Os sete processos principais estão documentados em BPMN 2.0 com todos os fluxos de exceção. Identifiquei que o processo de Aprovação por Alçada é o mais complexo — tem 4 swimlanes: Cliente, Sistema AURORA, Gerente de Crédito e Diretor de Crédito. A decisão sobre prazos configuráveis desta reunião vai requerer atualização do diagrama BPMN do processo 4 para refletir os três caminhos condicionais.
+
+[16:20] ALF: Encaminhamento: Fernanda atualiza o BPMN do Processo 4 — Aprovação por Alçada — até 22/04/2026 para refletir os prazos configuráveis por categoria.
+
+[16:22] PHS: Paulo — preciso registrar formalmente a posição do Grupo Meridional em relação ao prazo e ao orçamento. Com o budget de R$ 4,44 milhões aprovado e o prazo de 15 de junho de 2026, o Comitê Executivo considera o escopo fechado para a Fase 1. Qualquer novo requisito que implique incremento de custo ou prazo a partir de hoje deve passar por aprovação formal do Comitê Executivo com antecedência mínima de 15 dias úteis.
+
+[16:24] MC: Marcos — concordo com o fechamento de escopo. Vou comunicar à equipe de desenvolvimento que o backlog da Fase 1 está congelado e qualquer solicitação de mudança segue o processo formal de Change Request a partir de hoje.
+
+[16:26] ALF: Perfeito. Decisão registrada: escopo da Fase 1 do Projeto AURORA está formalmente fechado a partir de 15/04/2026. 36 requisitos formalizados em conformidade com IEEE 830. Budget aprovado de R$ 4,44 milhões. Prazo de entrega: 15/06/2026. Qualquer mudança de escopo requer Change Request formal com aprovação do Comitê Executivo com 15 dias úteis de antecedência.
+
+[16:27] ALF: Encaminhamentos finais: Beatriz envia documento de requisitos v3.0 final até 18/04/2026. Marcos inicia integração dos dois desenvolvedores amanhã e reporta progresso no Comitê Técnico semanal. Fernanda atualiza BPMN do Processo 4 até 22/04/2026. Paulo inicia processo de comunicação ao Conselho sobre cronograma e primeira apresentação de resultados em 30/06/2026. Próximo Comitê Executivo em 30 de maio de 2026 para validação do status de entrega.
+
+[16:28] ALF: Encerramos às 16h28. Obrigada a todos pelo comprometimento com o Projeto AURORA. Temos um sistema que vai transformar a forma como o Meridional opera crédito. Boa semana.
+
+─────────────────────────────────────────────────────────────────────────────
+FIM DA TRANSCRIÇÃO — R4
+Duração: 1h27min | Palavras: ~1.800 | Participantes: 5
