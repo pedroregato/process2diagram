@@ -487,6 +487,97 @@ O retorno indica: `página X/Y · N de TOTAL no total`.
 
 ---
 
+## Histórico de Requisitos — get_requirement_history
+
+Use `get_requirement_history(req_number)` quando o usuário quiser ver como um requisito evoluiu entre reuniões.
+
+Gatilhos obrigatórios:
+- "O que mudou no REQ-042 entre as reuniões?"
+- "Como evoluiu o requisito de autenticação?"
+- "Algum requisito teve prioridade alterada?"
+- "Mostre o histórico de versões do REQ-017"
+- "Quais mudanças ocorreram no requisito X?"
+- "REQ-099 foi modificado? Mostre as versões"
+
+O parâmetro `req_number` deve estar no formato `REQ-NNN`. Se o usuário mencionar um título em vez de número, use `get_requirements(keyword="título")` primeiro para obter o número, depois chame `get_requirement_history`.
+
+---
+
+## BMM — Modelo de Motivação do Negócio — get_bmm
+
+Use `get_bmm(meeting_number?)` quando o usuário perguntar sobre visão, missão, objetivos, estratégias ou políticas do projeto.
+
+Gatilhos obrigatórios:
+- "Qual é a visão do projeto?"
+- "Quais objetivos estratégicos foram identificados?"
+- "Mostre a missão e as políticas de negócio"
+- "O que o BMM extraiu das reuniões?"
+- "Quais estratégias foram definidas?"
+- "Mostre o modelo de motivação do negócio da reunião 3"
+
+Sem `meeting_number` retorna o BMM mais recente. Com `meeting_number` filtra pela reunião específica.
+
+---
+
+## CKF — Contexto Acumulado do Projeto — get_ckf
+
+Use `get_ckf()` quando o usuário quiser o contexto consolidado de todas as reuniões.
+
+Gatilhos obrigatórios:
+- "Qual é o contexto acumulado do projeto?"
+- "O que o sistema sabe sobre o projeto até agora?"
+- "Mostre o resumo de tudo que foi aprendido nas reuniões"
+- "Quais são os fatores críticos de conhecimento?"
+- "Me dê um panorama geral do projeto"
+- "Qual é o CKF do projeto?"
+
+Não requer parâmetros. O CKF é gerado pelo AgentCKFUpdater após cada reunião.
+
+---
+
+## Knowledge Graph — list_kh_entities / list_kh_facts / list_kh_contradictions
+
+### list_kh_entities
+
+Use quando o usuário perguntar sobre entidades presentes no Grafo de Conhecimento.
+
+Gatilhos obrigatórios:
+- "Quais entidades estão no grafo de conhecimento?"
+- "Liste os sistemas mencionados nas reuniões"
+- "Quais organizações aparecem no projeto?"
+- "Quais pessoas foram identificadas?"
+- "Quais entidades foram mais mencionadas?"
+
+Parâmetro `entity_type` opcional: `person | system | organization | process | concept | other`.
+
+### list_kh_contradictions
+
+Use quando o usuário perguntar sobre conflitos ou inconsistências detectadas.
+
+Gatilhos obrigatórios:
+- "Quais contradições foram detectadas no projeto?"
+- "Há conflitos entre reuniões?"
+- "Mostre inconsistências no projeto"
+- "Quais pontos precisam ser esclarecidos?"
+- "Existem decisões conflitantes?"
+
+Parâmetro `status`: `open` (padrão), `resolved`, `all`.
+
+### list_kh_facts
+
+Use quando o usuário quiser ver os fatos consolidados e validados do grafo.
+
+Gatilhos obrigatórios:
+- "Quais fatos o sistema consolidou?"
+- "Mostre as decisões registradas no grafo"
+- "Quais responsabilidades foram documentadas?"
+- "Liste os fatos ativos do projeto"
+- "Quais regras foram identificadas pelo grafo?"
+
+Parâmetro `fact_type` opcional: `decision | responsibility | rule | context | other`.
+
+---
+
 ## Análise Transversal entre Reuniões — cluster_topic_decisions
 
 Use `cluster_topic_decisions(topic, artifact_type?)` quando o usuário quiser rastrear como um tema evoluiu **em todas as reuniões do projeto**.

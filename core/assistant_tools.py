@@ -245,6 +245,159 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        # ── Histórico de requisitos ───────────────────────────────────────────
+        {
+            "type": "function",
+            "function": {
+                "name": "get_requirement_history",
+                "description": (
+                    "Retorna o histórico completo de versões de um requisito específico, "
+                    "mostrando como ele evoluiu entre reuniões: mudanças de título, descrição, "
+                    "prioridade, tipo, e flags de contradição. "
+                    "Use quando o usuário perguntar: 'O que mudou no REQ-042?', "
+                    "'Como evoluiu o requisito X entre reuniões?', "
+                    "'Algum requisito teve prioridade alterada?', "
+                    "'Mostre o histórico de versões do requisito Y'."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "req_number": {
+                            "type": "string",
+                            "description": (
+                                "Número do requisito no formato REQ-NNN "
+                                "(ex: 'REQ-042', 'REQ-001')"
+                            ),
+                        },
+                    },
+                    "required": ["req_number"],
+                },
+            },
+        },
+        # ── BMM / CKF ─────────────────────────────────────────────────────────
+        {
+            "type": "function",
+            "function": {
+                "name": "get_bmm",
+                "description": (
+                    "Retorna o Modelo de Motivação do Negócio (BMM) extraído das reuniões: "
+                    "visão, missão, objetivos, estratégias e políticas. "
+                    "Use quando o usuário perguntar: 'Qual é a visão do projeto?', "
+                    "'Quais objetivos estratégicos foram identificados?', "
+                    "'Mostre a missão e as políticas de negócio', "
+                    "'O que o BMM extraiu da reunião X?'."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Filtrar por reunião específica (opcional — omitir retorna o BMM mais recente)",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_ckf",
+                "description": (
+                    "Retorna o Context Knowledge File (CKF) do projeto — um documento "
+                    "Markdown que acumula os insights essenciais de todas as reuniões: "
+                    "terminologia do domínio, decisões-chave, participantes, regras de negócio. "
+                    "Use quando o usuário perguntar: 'Quais são os fatores críticos de conhecimento?', "
+                    "'Qual é o contexto acumulado do projeto?', "
+                    "'Mostre o resumo de tudo que já foi aprendido nas reuniões', "
+                    "'O que o sistema sabe sobre o projeto até agora?'."
+                ),
+                "parameters": {"type": "object", "properties": {}, "required": []},
+            },
+        },
+        # ── Knowledge Graph ───────────────────────────────────────────────────
+        {
+            "type": "function",
+            "function": {
+                "name": "list_kh_entities",
+                "description": (
+                    "Lista entidades do Grafo de Conhecimento do projeto: "
+                    "pessoas, sistemas, organizações, processos, conceitos. "
+                    "Use quando o usuário perguntar: 'Quais entidades estão no grafo?', "
+                    "'Liste os sistemas mencionados nas reuniões', "
+                    "'Quais organizações aparecem no projeto?', "
+                    "'Quais entidades foram mencionadas mais vezes?'."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "entity_type": {
+                            "type": "string",
+                            "enum": ["person", "system", "organization", "process", "concept", "other"],
+                            "description": "Filtrar por tipo de entidade (opcional)",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Máximo de entidades a retornar (padrão 50, máximo 100)",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_kh_contradictions",
+                "description": (
+                    "Lista as contradições detectadas pelo Grafo de Conhecimento entre reuniões: "
+                    "fatos conflitantes, responsabilidades disputadas, decisões revertidas. "
+                    "Use quando o usuário perguntar: 'Quais contradições foram detectadas?', "
+                    "'Há conflitos entre reuniões?', "
+                    "'Mostre inconsistências no projeto', "
+                    "'Quais pontos precisam ser esclarecidos?'."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "enum": ["open", "resolved", "all"],
+                            "description": "Filtrar por status (padrão: open)",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_kh_facts",
+                "description": (
+                    "Lista os fatos consolidados do Grafo de Conhecimento: "
+                    "decisões, responsabilidades, regras e contexto extraídos e validados entre reuniões. "
+                    "Use quando o usuário perguntar: 'Quais fatos o sistema consolidou?', "
+                    "'Mostre as decisões registradas no grafo', "
+                    "'Quais responsabilidades foram documentadas?', "
+                    "'Liste os fatos ativos do projeto'."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "fact_type": {
+                            "type": "string",
+                            "description": "Filtrar por tipo: decision | responsibility | rule | context | other (opcional)",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Máximo de fatos a retornar (padrão 50)",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
         {
             "type": "function",
             "function": {
@@ -2500,6 +2653,15 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "suggest_document_title":          "escrita",
     # Ajuda P2D
     "get_p2d_help":                    "consulta",
+    # Histórico de requisitos
+    "get_requirement_history":         "consulta",
+    # BMM / CKF
+    "get_bmm":                         "consulta",
+    "get_ckf":                         "consulta",
+    # Knowledge Graph
+    "list_kh_entities":                "consulta",
+    "list_kh_contradictions":          "consulta",
+    "list_kh_facts":                   "consulta",
     # Glossário / Skills
     "search_glossary":                 "consulta",
     "read_skill_reference":            "consulta",
@@ -2912,6 +3074,8 @@ class AssistantToolExecutor:
     get_requirements, list_bpmn_processes, list_bpmn_versions, get_sbvr_terms, get_sbvr_rules,
     list_context_files, calculate_meeting_roi, get_recurring_topics, get_meeting_metadata,
     preview_meeting_deletion, preview_text_correction, get_speaker_contributions,
+    get_requirement_history, get_bmm, get_ckf,
+    list_kh_entities, list_kh_contradictions, list_kh_facts,
     search_ibis_debates, get_ibis_timeline, generate_ibis_map, search_glossary,
     generate_next_agenda, cluster_topic_decisions, read_skill_reference,
     show_bpmn_diagram, show_mermaid_diagram, show_metrics
@@ -7840,6 +8004,186 @@ class AssistantToolExecutor:
             lines.append("")
         return "\n".join(lines)
 
+    # ── Histórico de requisitos ───────────────────────────────────────────────
+
+    def get_requirement_history(self, req_number: str) -> str:
+        """Retorna histórico de versões de um requisito pelo seu número (REQ-NNN)."""
+        from core.project_store import _db, _ok, list_requirement_versions
+        db = _db()
+        if not db:
+            return "Banco de dados não configurado."
+        try:
+            rows = _ok(
+                db.table("requirements")
+                .select("id, req_number, title")
+                .eq("project_id", self.project_id)
+                .ilike("req_number", req_number.strip())
+                .limit(1)
+                .execute()
+            )
+        except Exception as exc:
+            return f"Erro ao buscar requisito: {exc}"
+        if not rows:
+            return f"Requisito '{req_number}' não encontrado no projeto."
+
+        req = rows[0]
+        versions = list_requirement_versions(req["id"])
+        if not versions:
+            return f"**{req['req_number']} — {req['title']}**\n\nNenhuma versão registrada além da atual."
+
+        lines = [f"**Histórico de versões: {req['req_number']} — {req['title']}**\n"]
+        for v in versions:
+            meeting_ref = f"Reunião {v.get('meeting_number', '?')}" if v.get("meeting_number") else "Documento externo"
+            change = v.get("change_type", "—")
+            summary = v.get("change_summary", "")
+            priority = v.get("priority", "—")
+            req_type = v.get("req_type", "—")
+            contradiction = " ⚠️ Contradição detectada" if v.get("contradiction_flag") else ""
+            lines.append(
+                f"**v{v.get('version', '?')}** ({meeting_ref}) · {change}{contradiction}\n"
+                f"  Tipo: {req_type} · Prioridade: {priority}\n"
+                f"  Título: {v.get('title', '—')}\n"
+                + (f"  Resumo da mudança: {summary}\n" if summary else "")
+                + (f"  Contradição: {v.get('contradiction_detail','')}\n" if v.get("contradiction_flag") else "")
+            )
+        return "\n".join(lines)
+
+    # ── BMM ──────────────────────────────────────────────────────────────────
+
+    def get_bmm(self, meeting_number: int | None = None) -> str:
+        """Retorna o BMM (Business Motivation Model) de uma ou mais reuniões."""
+        import json
+        from core.project_store import _db, _ok
+        db = _db()
+        if not db:
+            return "Banco de dados não configurado."
+        try:
+            q = (
+                db.table("meetings")
+                .select("meeting_number, title, bmm_json")
+                .eq("project_id", self.project_id)
+                .order("meeting_number", desc=True)
+            )
+            if meeting_number:
+                q = q.eq("meeting_number", meeting_number)
+            else:
+                q = q.limit(1)  # most recent with BMM data
+            rows = _ok(q.execute())
+        except Exception as exc:
+            return f"Erro ao buscar BMM: {exc}"
+
+        results = [(r["meeting_number"], r["title"], r.get("bmm_json")) for r in rows if r.get("bmm_json")]
+        if not results:
+            return "Nenhum dado BMM encontrado. Execute o pipeline com AgentBMM habilitado."
+
+        lines = []
+        for mnum, title, bmm_raw in results:
+            try:
+                bmm = json.loads(bmm_raw)
+            except Exception:
+                continue
+            lines.append(f"## BMM — Reunião {mnum}: {title}\n")
+            for field, label in [
+                ("vision", "Visão"), ("mission", "Missão"),
+                ("goals", "Objetivos"), ("strategies", "Estratégias"), ("policies", "Políticas"),
+            ]:
+                val = bmm.get(field)
+                if not val:
+                    continue
+                if isinstance(val, list):
+                    lines.append(f"### {label}")
+                    lines.extend(f"- {item}" for item in val if item)
+                else:
+                    lines.append(f"### {label}\n{val}")
+                lines.append("")
+        return "\n".join(lines) if lines else "Dados BMM encontrados mas vazios."
+
+    # ── CKF ──────────────────────────────────────────────────────────────────
+
+    def get_ckf(self) -> str:
+        """Retorna o Context Knowledge File (CKF) acumulado do projeto."""
+        from core.project_store import get_context_skill
+        ckf = get_context_skill(self.project_id)
+        if not ckf or not ckf.strip():
+            return (
+                "Nenhum CKF encontrado para este projeto. "
+                "O CKF é gerado automaticamente pelo AgentCKFUpdater após cada reunião processada. "
+                "Verifique se o agente CKF está habilitado nas configurações do pipeline."
+            )
+        return f"**Context Knowledge File (CKF) do projeto**\n\n{ckf}"
+
+    # ── Knowledge Graph ───────────────────────────────────────────────────────
+
+    def list_kh_entities(self, entity_type: str | None = None, limit: int = 50) -> str:
+        """Lista entidades do Grafo de Conhecimento."""
+        from core.knowledge_store import get_entities
+        limit = min(max(1, limit), 100)
+        entities = get_entities(self.project_id, entity_type=entity_type, limit=limit)
+        if not entities:
+            hint = f" do tipo '{entity_type}'" if entity_type else ""
+            return (
+                f"Nenhuma entidade{hint} encontrada no Grafo de Conhecimento. "
+                "O grafo é populado pelo AgentKnowledgeExtractor — verifique se foi executado."
+            )
+        type_filter = f" (tipo: {entity_type})" if entity_type else ""
+        lines = [f"**Entidades do Grafo de Conhecimento{type_filter}** — {len(entities)} encontradas\n"]
+        for e in entities:
+            aliases = ", ".join(e.get("aliases") or [])
+            alias_str = f" · aliases: {aliases}" if aliases else ""
+            lines.append(
+                f"**{e['canonical_name']}** `{e['entity_type']}`{alias_str} "
+                f"· mencionada {e.get('occurrence_count', 1)}×"
+            )
+        return "\n".join(lines)
+
+    def list_kh_contradictions(self, status: str = "open") -> str:
+        """Lista contradições detectadas pelo Grafo de Conhecimento."""
+        from core.knowledge_store import get_contradictions
+        actual_status = None if status == "all" else status
+        contradictions = get_contradictions(self.project_id, status=actual_status, limit=50)
+        if not contradictions:
+            label = {"open": "abertas", "resolved": "resolvidas", "all": ""}.get(status, status)
+            return f"Nenhuma contradição{' ' + label if label else ''} encontrada no Grafo de Conhecimento."
+
+        label = {"open": "abertas", "resolved": "resolvidas", "all": "todas"}.get(status, status)
+        lines = [f"**Contradições {label} no Grafo de Conhecimento** — {len(contradictions)} encontradas\n"]
+        for c in contradictions:
+            severity = c.get("severity", "—")
+            sev_icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(severity, "⚪")
+            lines.append(
+                f"{sev_icon} **{c.get('process_name', 'Processo desconhecido')}** "
+                f"[{c.get('relation_type', '—')}] · status: {c.get('status', '—')}\n"
+                f"  {c.get('description', '')}"
+            )
+            if c.get("clarifying_question"):
+                lines.append(f"  ❓ {c['clarifying_question']}")
+            if c.get("resolution_note"):
+                lines.append(f"  ✅ Resolução: {c['resolution_note']}")
+            lines.append("")
+        return "\n".join(lines)
+
+    def list_kh_facts(self, fact_type: str | None = None, limit: int = 50) -> str:
+        """Lista fatos consolidados do Grafo de Conhecimento."""
+        from core.knowledge_store import get_facts
+        limit = min(max(1, limit), 100)
+        facts = get_facts(self.project_id, fact_type=fact_type, active_only=True, limit=limit)
+        if not facts:
+            hint = f" do tipo '{fact_type}'" if fact_type else ""
+            return f"Nenhum fato{hint} encontrado no Grafo de Conhecimento."
+
+        type_filter = f" (tipo: {fact_type})" if fact_type else ""
+        lines = [f"**Fatos consolidados do Grafo de Conhecimento{type_filter}** — {len(facts)} encontrados\n"]
+        for f in facts:
+            conf = f.get("confidence", 1.0)
+            conf_str = f" · confiança: {conf:.0%}" if conf < 1.0 else ""
+            n_meetings = len(f.get("source_meeting_ids") or [])
+            mtg_str = f" · {n_meetings} reunião(ões)" if n_meetings else ""
+            lines.append(
+                f"**[{f.get('fact_type', '—')}]**{conf_str}{mtg_str}\n"
+                f"  {f.get('content', '')}"
+            )
+        return "\n".join(lines)
+
     def read_skill_reference(self, agent: str, section: str | None = None) -> str:
         """Lê o conteúdo da skill file de um agente, com extração opcional de seção."""
         from core.agent_registry import AGENT_REGISTRY
@@ -8174,6 +8518,25 @@ class AssistantToolExecutor:
                 "suggest_document_title": lambda: self.suggest_document_title(
                     doc_id=tool_input["doc_id"],
                     apply=tool_input.get("apply", False),
+                ),
+                # Histórico de requisitos / BMM / CKF / Knowledge Graph
+                "get_requirement_history": lambda: self.get_requirement_history(
+                    req_number=tool_input["req_number"],
+                ),
+                "get_bmm":                lambda: self.get_bmm(
+                    meeting_number=tool_input.get("meeting_number"),
+                ),
+                "get_ckf":                lambda: self.get_ckf(),
+                "list_kh_entities":       lambda: self.list_kh_entities(
+                    entity_type=tool_input.get("entity_type"),
+                    limit=int(tool_input.get("limit", 50)),
+                ),
+                "list_kh_contradictions": lambda: self.list_kh_contradictions(
+                    status=tool_input.get("status", "open"),
+                ),
+                "list_kh_facts":          lambda: self.list_kh_facts(
+                    fact_type=tool_input.get("fact_type"),
+                    limit=int(tool_input.get("limit", 50)),
                 ),
                 # Ajuda P2D
                 "get_p2d_help":           lambda: self.get_p2d_help(tool_input["topic"]),
