@@ -12,7 +12,7 @@
 - **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown / Word / PDF), requirements analysis (JSON/Markdown), executive HTML report, interactive requirements mind map
 - **Deploy:** Streamlit Cloud — auto-deploy on push to `main` branch (`github.com/pedroregato/process2diagram`)
 - **Dev environment:** PyCharm on Windows; Python 3.13
-- **Current version:** v4.31
+- **Current version:** v4.32
 
 Supported LLM providers: DeepSeek V4 Flash (default), DeepSeek V4 Pro, DeepSeek V4 Flash (Thinking), Claude (Anthropic), OpenAI, Groq, Google Gemini, Grok (xAI).
 
@@ -53,7 +53,7 @@ process2diagram/
 │   ├── CostEstimator.py          # LLM cost estimator
 │   ├── LLMBenchmark.py           # LLM Benchmark & Telemetria — on-demand benchmark + passive telemetry analysis
 │   ├── Orientacoes_ComoIniciar.py   # Guia de início rápido
-│   ├── Orientacoes_Assistente.py    # Guia de ferramentas do Assistente (40+ tools + exemplos)
+│   ├── Orientacoes_Assistente.py    # Guia de ferramentas do Assistente (90 tools + exemplos)
 │   ├── Orientacoes_Glossario.py     # Glossário interativo (components.v1.html — busca + filtros + índice alfabético)
 │   ├── Orientacoes_Arquiteturas.py  # Arquiteturas do sistema
 │   ├── Orientacoes_CKF.py           # Guia CKF
@@ -368,25 +368,25 @@ Within Assistente mode, sidebar toggle `asst_use_tools`:
 
 ### Tool list (`core/assistant_tools.py`)
 
-**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `list_bpmn_processes`, `list_bpmn_versions`, `get_sbvr_terms`, `get_sbvr_rules`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`, `get_cache_stats`, `list_meeting_documents`, `get_document_content`, `search_documents`, `get_document_types`, `search_glossary`, `search_ibis_debates`, `get_ibis_timeline`, `generate_ibis_map`, `cluster_topic_decisions`, `generate_next_agenda`.
+**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `get_requirement_history`, `list_bpmn_processes`, `list_bpmn_versions`, `get_sbvr_terms`, `get_sbvr_rules`, `get_bmm`, `get_ckf`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`, `get_cache_stats`, `list_meeting_documents`, `get_document_content`, `search_documents`, `get_document_types`, `search_glossary`, `read_skill_reference`, `search_ibis_debates`, `get_ibis_timeline`, `generate_ibis_map`, `list_kh_entities`, `list_kh_contradictions`, `list_kh_facts`, `cluster_topic_decisions`, `generate_next_agenda`.
 
 **Admin only (`is_admin()`):** `get_database_integrity`, `fix_missing_llm_provider`, `generate_meeting_embeddings`, `reprocess_meeting_full`, `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`, `delete_entity`, `resolve_entity_ambiguity`, `clear_llm_cache`, `delete_bpmn_version`, write/generate tools.
 
-**KnowledgeGraph entity tools (3):** `lookup_entity` — investiga entidade (tipo, aliases, reuniões); `delete_entity` — remove entidade (3-tier match: exact → name-substring → alias-substring, para se houver ambiguidade); `resolve_entity_ambiguity` — funde duplicatas via `merge_entities()`.
+**Requirement tools (2):** `get_requirements(keyword?, req_type?, status?, page?)` — paginado; `get_requirement_history(req_number)` — histórico de versões (tipo/prioridade/contradição) via `requirement_versions`.
 
-**Cache tools (2):** `get_cache_stats(agent_name?)` — estatísticas do cache LLM (entradas, hits, tokens economizados, USD por agente); `clear_llm_cache(agent_name?)` — invalida entradas (admin). Cache em `services/semantic_cache.py`; tabela `llm_cache` no Supabase (`setup/supabase_migration_llm_cache.sql`).
+**BMM / CKF tools (2):** `get_bmm(meeting_number?)` — visão/missão/objetivos/estratégias/políticas de `meetings.bmm_json`; `get_ckf()` — CKF acumulado via `contexts.skill_md`.
 
-**BPMN version tools (2):** `list_bpmn_versions(process_name)` — versões por nome (ID, status, reunião, notas); `delete_bpmn_version(version_id, reason?)` — admin; recusa única versão; promove anterior se is_current. Usar `list_bpmn_versions` primeiro para obter version_id.
+**KnowledgeGraph tools (4):** `lookup_entity` — busca por nome; `list_kh_entities(entity_type?, limit?)` — por frequência; `list_kh_contradictions(status?)` — com severidade/relação/resolução; `list_kh_facts(fact_type?, limit?)` — fatos ativos. Admin: `delete_entity`, `resolve_entity_ambiguity`.
 
-**Document tools (4):** `list_meeting_documents(meeting_number?, doc_type?)`, `get_document_content(doc_id)` (cap 8k), `search_documents(query, mode=semantic|keyword)`, `get_document_types()` (53 tipos / 9 categorias). Tabelas: `meeting_documents`, `document_chunks vector(1536)`.
+**Cache tools (2):** `get_cache_stats(agent_name?)`; `clear_llm_cache(agent_name?)` admin. Tabela `llm_cache`. **BPMN version tools (2):** `list_bpmn_versions(process_name)`; `delete_bpmn_version(version_id, reason?)` admin. **Document tools (4):** `list_meeting_documents`, `get_document_content`, `search_documents`, `get_document_types`. Tabelas: `meeting_documents`, `document_chunks vector(1536)`.
 
-**Glossário tool (1):** `search_glossary(query, tag?)` — 80 verbetes técnicos; `tag`: `bpmn|req|ai|dev|neg`. Dados em `modules/glossary_data.py` (local, sem Supabase).
+**Skill reference tool (1):** `read_skill_reference(agent, section?)` — lê skill file de qualquer agente; `section` extrai seção específica (Divulgação Progressiva no Assistente multi-turno).
 
-**IBIS tools (3):** `search_ibis_debates(query, meeting_number?, resolution_filter?)` — busca questões argumentativas + alternativas (proposed_by/pros/cons/supported_by/opposed_by) + resolução; `resolution_filter`: `all|decided|deferred|unresolved`. `get_ibis_timeline(topic?)` — stacked bar Plotly por reunião. `generate_ibis_map(topic?)` — mapa hierárquico Q-nodes/A-nodes Plotly. Helper `_load_ibis_questions()` parseia `argumentation_json` + injeta `_mnum/_mtitle/_mdate/_mid`.
+**IBIS tools (3):** `search_ibis_debates(query, meeting_number?, resolution_filter?)`, `get_ibis_timeline(topic?)`, `generate_ibis_map(topic?)`.
 
-**Cross-meeting tools (2):** `cluster_topic_decisions(topic, artifact_type?)` — agrupa decisões DMN, debates IBIS e decisões de atas sobre um tema em todas as reuniões; `artifact_type`: `all|dmn|ibis|minutes`. `generate_next_agenda(topic?)` — sugere pauta para a próxima reunião com base em debates IBIS adiados + encaminhamentos pendentes das atas; gera 5 seções com estimativa de duração; filtro temático opcional.
+**Cross-meeting tools (2):** `cluster_topic_decisions(topic, artifact_type?)` — cruza DMN+IBIS+atas; `generate_next_agenda(topic?)` — pauta com pendentes IBIS + encaminhamentos.
 
-**Chart tools (5):** `generate_requirements_chart`, `generate_meetings_timeline`, `generate_action_items_chart`, `generate_roi_chart`, `generate_custom_chart` — Plotly figs returned as 4th element of `chat_with_tools()`, rendered via `st.plotly_chart()`. Palettes defined in `core/chart_config.py`.
+**Chart tools (5):** `generate_requirements_chart`, `generate_meetings_timeline`, `generate_action_items_chart`, `generate_roi_chart`, `generate_custom_chart` — Plotly via `st.plotly_chart()`. Palettes em `core/chart_config.py`.
 
 Tool schemas: `get_tool_schemas_openai()` / `get_tool_schemas_anthropic()`.
 
@@ -411,6 +411,16 @@ Dark-theme renderer for OMG DMN 1.4. Key functions:
 - `_model_to_dicts(model: DMNModel)` — bridge dataclass→dict. `render_dmn_model(model)` delegates to dark renderer. `dmn_to_xml(model)` — unchanged XML export.
 
 Artefatos DMN tab: sub-tabs **📋 Tabelas** + **🔗 DRD** + download buttons (JSON + XML).
+
+---
+
+## Agent Skills (v4.32)
+
+**Frontmatter stripping** — `BaseAgent._load_skill()` strips YAML `---...---` from 15/25 skill files (~80–200 tokens saved per agent call).
+
+**`AGENT_REGISTRY`** (`core/agent_registry.py`) — governance dict (14 agents): `authority_level` (`read|draft|act`), `skill_path`, `pipeline_step`, `default_enabled`, `tags`. Sets: `READ_AGENTS`, `DRAFT_AGENTS`, `ACTION_AGENTS`.
+
+**`tests/test_skill_files.py`** — 24 tests: `skill_path` existence (Linux case-sensitivity), registry integrity, authority disjointness, frontmatter strip.
 
 ---
 
