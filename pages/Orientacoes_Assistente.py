@@ -445,6 +445,23 @@ with tab_analise:
         ]
     ), unsafe_allow_html=True)
 
+    st.markdown('<div class="g-section-hdr">Referência de skills dos agentes</div>', unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "read_skill_reference", "consulta",
+        "Lê as <strong>instruções internas</strong> de um agente do sistema — o mesmo conteúdo "
+        "que o agente recebe como prompt ao executar. Útil para entender quais regras o "
+        "<code>AgentBPMN</code> segue, como o <code>AgentMinutes</code> estrutura a ata, "
+        "ou quais critérios o <code>AgentRequirements</code> usa para classificar requisitos. "
+        "O parâmetro <code>section</code> extrai apenas uma seção específica, evitando texto desnecessário.",
+        [
+            "Como o agente BPMN decide quando usar pools vs. lanes?",
+            "Quais regras o agente de requisitos segue para classificar prioridade?",
+            "Mostre o checklist de qualidade do agente BPMN",
+            "Como o agente de ata estrutura os encaminhamentos?",
+        ]
+    ), unsafe_allow_html=True)
+
     st.markdown('<div class="g-section-hdr">Busca transversal entre reuniões</div>', unsafe_allow_html=True)
 
     st.markdown(_card(

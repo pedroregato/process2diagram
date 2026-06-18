@@ -2133,6 +2133,46 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "read_skill_reference",
+                "description": (
+                    "Lê as instruções internas de um agente do sistema Process2Diagram. "
+                    "Use quando o usuário perguntar COMO um agente funciona, quais regras ele segue, "
+                    "qual é o método de modelagem do AgentBPMN, como o AgentMinutes estrutura a ata, "
+                    "quais critérios o AgentRequirements usa para classificar requisitos etc. "
+                    "Agentes válidos: bpmn, minutes, requirements, sbvr, bmm, dmn, argumentation, "
+                    "synthesizer, transcript_quality, communication_noise, ckf_updater, "
+                    "knowledge_extractor, query_summarizer. "
+                    "Parâmetro section opcional: filtra por cabeçalho específico dentro do arquivo "
+                    "(ex: 'Objetivo', 'Formato de Saída', 'Checklist de Qualidade')."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "agent": {
+                            "type": "string",
+                            "description": (
+                                "Nome do agente (ex: 'bpmn', 'minutes', 'requirements', "
+                                "'sbvr', 'bmm', 'dmn', 'argumentation', 'synthesizer', "
+                                "'transcript_quality', 'communication_noise')"
+                            ),
+                        },
+                        "section": {
+                            "type": "string",
+                            "description": (
+                                "Cabeçalho de seção a extrair (opcional). "
+                                "Se omitido, retorna todo o conteúdo da skill. "
+                                "Exemplos: 'Objetivo', 'Método de Modelagem', "
+                                "'Formato de Saída', 'Checklist de Qualidade'"
+                            ),
+                        },
+                    },
+                    "required": ["agent"],
+                },
+            },
+        },
         # ── IBIS / Argumentação ───────────────────────────────────────────────
         {
             "type": "function",
@@ -2460,8 +2500,9 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "suggest_document_title":          "escrita",
     # Ajuda P2D
     "get_p2d_help":                    "consulta",
-    # Glossário
+    # Glossário / Skills
     "search_glossary":                 "consulta",
+    "read_skill_reference":            "consulta",
     # IBIS / Argumentação
     "search_ibis_debates":             "consulta",
     "get_ibis_timeline":               "grafico",
@@ -7799,6 +7840,60 @@ class AssistantToolExecutor:
             lines.append("")
         return "\n".join(lines)
 
+    def read_skill_reference(self, agent: str, section: str | None = None) -> str:
+        """Lê o conteúdo da skill file de um agente, com extração opcional de seção."""
+        from core.agent_registry import AGENT_REGISTRY
+        from pathlib import Path
+
+        entry = AGENT_REGISTRY.get(agent.lower().strip())
+        if entry is None:
+            valid = ", ".join(sorted(AGENT_REGISTRY.keys()))
+            return (
+                f"Agente '{agent}' não encontrado no registry. "
+                f"Agentes disponíveis: {valid}."
+            )
+
+        skill_path = entry.get("skill_path")
+        if not skill_path:
+            return f"O agente '{agent}' não possui skill file associado."
+
+        project_root = Path(__file__).parent.parent
+        path = project_root / skill_path
+        if not path.exists():
+            return f"Arquivo de skill não encontrado em disco: '{skill_path}'."
+
+        import re
+        content = path.read_text(encoding="utf-8")
+        # Strip YAML frontmatter
+        content = re.sub(r'^---\s*\n.*?\n---\s*\n', '', content, flags=re.DOTALL).lstrip('\n')
+
+        if not section:
+            # Cap at ~6000 chars to avoid flooding the context window
+            cap = 6000
+            if len(content) > cap:
+                content = content[:cap] + (
+                    f"\n\n*[conteúdo truncado — {len(content)} chars no total. "
+                    "Use o parâmetro `section` para ler uma seção específica.]*"
+                )
+            return f"**Skill: {agent}** (`{skill_path}`)\n\n{content}"
+
+        # Split content at heading boundaries, then find the matching section.
+        # Prepend \n so every heading becomes a split point including the first one.
+        parts = re.split(r'\n(?=#{1,4}\s)', '\n' + content)
+        for part in parts:
+            first_line = part.lstrip('\n').split('\n', 1)[0]
+            heading_text = re.sub(r'^#{1,4}\s+', '', first_line).strip()
+            if heading_text.lower() == section.lower():
+                return f"**Skill: {agent}** — seção `{section}`\n\n{part.strip()}"
+
+        # Section not found — list available headings to help the caller
+        headers = re.findall(r'^#{1,4}\s+(.+)', content, flags=re.MULTILINE)
+        available = "\n".join(f"- {h.strip()}" for h in headers[:30])
+        return (
+            f"Seção '{section}' não encontrada na skill '{agent}'.\n\n"
+            f"Seções disponíveis:\n{available}"
+        )
+
     # ── Dispatcher ────────────────────────────────────────────────────────────
 
     def execute(self, tool_name: str, tool_input: dict) -> str:
@@ -8082,10 +8177,14 @@ class AssistantToolExecutor:
                 ),
                 # Ajuda P2D
                 "get_p2d_help":           lambda: self.get_p2d_help(tool_input["topic"]),
-                # Glossário
+                # Glossário / Skills
                 "search_glossary":        lambda: self.search_glossary(
                     query=tool_input["query"],
                     tag=tool_input.get("tag"),
+                ),
+                "read_skill_reference":   lambda: self.read_skill_reference(
+                    agent=tool_input["agent"],
+                    section=tool_input.get("section"),
                 ),
                 # IBIS
                 "search_ibis_debates":    lambda: self.search_ibis_debates(
