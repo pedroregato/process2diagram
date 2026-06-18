@@ -32,15 +32,15 @@ DC  = "{%s}" % _NS["dc"]
 DDI = "{%s}" % _NS["di"]
 
 # ── Layout constants ──────────────────────────────────────────────────────────
-TASK_W,  TASK_H   = 150, 80   # wider+taller so bpmn-js word-wrap fits ~4 lines
+TASK_W,  TASK_H   = 160, 90   # wider+taller: ~18 chars/line × 4 lines fits ≤35-char labels
 GW_W,    GW_H     = 50,  50
 EV_W,    EV_H     = 36,  36
-H_GAP             = 70
-V_PAD             = 70    # increased to prevent row overlap with taller tasks
+H_GAP             = 75    # slightly wider gap to give room around 160 px tasks
+V_PAD             = 80    # taller pad to prevent row overlap with 90 px tasks
 LANE_HEADER_W     = 100
 POOL_HEADER_W     = 100
 FIRST_X           = 80
-MIN_LANE_H        = 210   # increased proportionally with taller tasks
+MIN_LANE_H        = 230   # increased proportionally with taller tasks (90 px + 2×80 pad)
 POOL_GAP          = 50    # vertical gap between pools in a collaboration
 
 
@@ -200,7 +200,7 @@ def _detect_crossings(flows, shapes, lane_assignment=None, pool=None):
     # Threshold: target is ≥ 2 column-widths (≈ 320 px) to the right of the
     # source's RIGHT edge. This means the flow is not a simple adjacent-column
     # hop but a genuine long-range connection.
-    LONG_CROSS_PX = 370   # ≈ 2 × TASK_W + H_GAP
+    LONG_CROSS_PX = 395   # ≈ 2 × TASK_W + H_GAP  (2×160 + 75)
     if lane_assignment and pool:
         for f in candidate_flows:
             if f.id in crossing_ids:
@@ -376,20 +376,29 @@ def _ev_def(etype):
     }.get(etype)
 
 
-_TASK_NAME_MAX = 40   # chars before truncation — matches skill rule (≤40 chars)
+_TASK_NAME_MAX = 35   # absolute char limit — skill rule targets ≤30 chars
 
 def _task_name(name: str) -> str:
     """
-    Truncate element labels that would overflow their bpmn-js shape.
-    Applied to ALL element types (tasks, events, gateways) as a safety net
-    against LLM titles that exceed the 40-char skill rule.
+    Truncate element labels to prevent overflow in the bpmn-js shape box.
+
+    Strategy: cut at the last word boundary at or before _TASK_NAME_MAX chars.
+    A hard mid-word cut is avoided because bpmn-js does not break individual
+    words — a single long word overflows the shape boundary regardless of the
+    overall string length.  Cutting at a word boundary keeps the visible label
+    meaningful and within the rendered width.
     """
     if not name:
         return ""
     name = name.strip()
-    if len(name) > _TASK_NAME_MAX:
-        return name[: _TASK_NAME_MAX - 1].rstrip() + "…"
-    return name
+    if len(name) <= _TASK_NAME_MAX:
+        return name
+    # find last space at or before the limit
+    cut = name[:_TASK_NAME_MAX].rsplit(" ", 1)[0].rstrip()
+    # if no space found (single giant word), fall back to hard cut
+    if not cut:
+        cut = name[:_TASK_NAME_MAX - 1]
+    return cut + "…"
 
 
 def _el_size(el):
@@ -1036,7 +1045,7 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         # Label placement strategy:
         # • Events (small circles): label BELOW circle — wider+taller to fit 2 lines
         # • Gateways (diamonds): label below diamond — wider+taller for longer names
-        # • Tasks / sub-processes: bounds match shape — bpmn-js word-wraps inside
+        # • Tasks / sub-processes: inset 4 px — forces bpmn-js word-wrap before border
         _event_types   = ("startEvent", "endEvent",
                           "intermediateThrowEvent", "intermediateCatchEvent")
         _gateway_types = ("exclusiveGateway", "parallelGateway", "inclusiveGateway",
@@ -1048,8 +1057,13 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
             lb.set("x", str(int(x - 25))); lb.set("y", str(int(y + h + 2)))
             lb.set("width",  str(int(w + 50))); lb.set("height", "44")
         else:
-            lb.set("x", str(int(x))); lb.set("y", str(int(y)))
-            lb.set("width",  str(int(w))); lb.set("height", str(int(h)))
+            # Inset label bounds by 4 px on each side: forces bpmn-js to word-wrap
+            # at (shape_width − 8 px) instead of full shape width, preventing text
+            # from touching the shape border — the primary cause of overflow artefacts.
+            _lp = 4
+            lb.set("x", str(int(x + _lp))); lb.set("y", str(int(y + _lp)))
+            lb.set("width",  str(int(w - 2 * _lp)))
+            lb.set("height", str(int(h - 2 * _lp)))
 
     # ── Lane bounds for smart routing ─────────────────────────────────────────
     _la = _assign_lanes(bpmn)

@@ -150,11 +150,15 @@ Todo `title` deve seguir o padrão **[Verbo no Infinitivo] + [Objeto]**:
 - ✗ "Validação de Crédito" · "Emissão da NF" · "Processo de Encaminhamento"
 
 **Limite de caracteres nos títulos (CRÍTICO — afeta legibilidade do diagrama):**
-- Todo `title` deve ter **no máximo 40 caracteres** (≈ 5–6 palavras).
-- O viewer bpmn-js trunca títulos longos com reticências — o diagrama fica ilegível.
-- Quando necessário, abrevie o objeto: "Revisar Cláusulas Contratuais" em vez de "Revisar Cláusulas e Condições do Contrato".
-- ✓ "Revisar Cláusulas Contratuais" (30 chars)
-- ✗ "Revisar Cláusulas Jurídicas do Contrato Apresentado" (51 chars — será truncado)
+- Todo `title` deve ter **no máximo 30 caracteres** e **no máximo 4 palavras de conteúdo**.
+- O bpmn-js renderiza o texto dentro de uma caixa de largura fixa (~150 px) e **não quebra palavras longas** — palavras com mais de 13 caracteres sozinhas já causam overflow visual.
+- Limite absoluto: **35 caracteres** — o gerador trunca na última fronteira de palavra antes deste limite.
+- Prefira verbos curtos + objeto direto sem artigos: "Validar Cadastro" em vez de "Realizar Validação Cadastral do Cliente".
+- Abrevie termos longos recorrentes: "autenticação" → "auth.", "processamento" → "process.", "formalização" → "formalizar", "notificação" → "notificar".
+- ✓ "Validar Cadastro" (16 chars) · "Emitir Nota Fiscal" (18 chars) · "Aprovar por Alçada" (18 chars)
+- ✓ "Encaminhar ao Jurídico" (22 chars) · "Gerar Contrato Digital" (22 chars)
+- ✗ "Realizar Validação Cadastral Automática" (39 chars — overflow garantido)
+- ✗ "Encaminhar Solicitação para Revisão Jurídica" (44 chars — será truncado e ilegível)
 
 **Extração de atividades implícitas (CRÍTICO — diagrama deve ser autossuficiente):**
 - Quando a transcrição indica que alguém **"pode prosseguir"**, **"está autorizado a"** ou **"deve executar"** uma ação após aprovação → extraia essa ação como tarefa explícita.
