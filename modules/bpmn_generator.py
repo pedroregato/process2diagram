@@ -1525,16 +1525,15 @@ def _generate_bpmn_xml_multi(bpmn: BpmnProcess) -> str:
         b.set("x", str(int(x))); b.set("y", str(int(y)))
         b.set("width", str(int(w))); b.set("height", str(int(h)))
         lbl = _sub(shape, DI + "BPMNLabel")
-        lb  = _sub(lbl, DC + "Bounds")
         if el.type in _event_types:
+            lb = _sub(lbl, DC + "Bounds")
             lb.set("x", str(int(x - 25))); lb.set("y", str(int(y + h + 4)))
             lb.set("width",  str(int(w + 50))); lb.set("height", "44")
         elif "Gateway" in el.type:
+            lb = _sub(lbl, DC + "Bounds")
             lb.set("x", str(int(x - 25))); lb.set("y", str(int(y + h + 2)))
             lb.set("width",  str(int(w + 50))); lb.set("height", "44")
-        else:
-            lb.set("x", str(int(x))); lb.set("y", str(int(y)))
-            lb.set("width",  str(int(w))); lb.set("height", str(int(h)))
+        # else: task/subprocess — BPMNLabel vazio; bpmn-js centraliza automaticamente
 
     # ── Lane bounds for smart routing (multi-pool) ────────────────────────────
     _all_la: dict = {}
