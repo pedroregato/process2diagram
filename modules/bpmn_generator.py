@@ -1041,29 +1041,27 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         b.set("x", str(int(x))); b.set("y", str(int(y)))
         b.set("width", str(int(w))); b.set("height", str(int(h)))
         lbl = _sub(shape, DI + "BPMNLabel")
-        lb  = _sub(lbl, DC + "Bounds")
         # Label placement strategy:
-        # • Events (small circles): label BELOW circle — wider+taller to fit 2 lines
-        # • Gateways (diamonds): label below diamond — wider+taller for longer names
-        # • Tasks / sub-processes: inset 4 px — forces bpmn-js word-wrap before border
+        # • Tasks / sub-processes: NO dc:Bounds child — bpmn-js auto-centers the label
+        #   text inside the shape with text-anchor="middle". Providing explicit bounds
+        #   causes bpmn-js to treat the label as manually repositioned and render it
+        #   left-aligned at the given x, which is why text appeared to start from the
+        #   horizontal middle of the box.
+        # • Events (small circles): explicit bounds BELOW the circle — wider to fit 2 lines.
+        # • Gateways (diamonds): explicit bounds BELOW the diamond — wider for longer names.
         _event_types   = ("startEvent", "endEvent",
                           "intermediateThrowEvent", "intermediateCatchEvent")
         _gateway_types = ("exclusiveGateway", "parallelGateway", "inclusiveGateway",
                           "eventBasedGateway", "complexGateway")
         if el.type in _event_types:
+            lb = _sub(lbl, DC + "Bounds")
             lb.set("x", str(int(x - 25))); lb.set("y", str(int(y + h + 4)))
             lb.set("width",  str(int(w + 50))); lb.set("height", "44")
         elif el.type in _gateway_types:
+            lb = _sub(lbl, DC + "Bounds")
             lb.set("x", str(int(x - 25))); lb.set("y", str(int(y + h + 2)))
             lb.set("width",  str(int(w + 50))); lb.set("height", "44")
-        else:
-            # Inset label bounds by 4 px on each side: forces bpmn-js to word-wrap
-            # at (shape_width − 8 px) instead of full shape width, preventing text
-            # from touching the shape border — the primary cause of overflow artefacts.
-            _lp = 4
-            lb.set("x", str(int(x + _lp))); lb.set("y", str(int(y + _lp)))
-            lb.set("width",  str(int(w - 2 * _lp)))
-            lb.set("height", str(int(h - 2 * _lp)))
+        # else: task/subprocess — leave BPMNLabel empty; bpmn-js centers automatically
 
     # ── Lane bounds for smart routing ─────────────────────────────────────────
     _la = _assign_lanes(bpmn)
