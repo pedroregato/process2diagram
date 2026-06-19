@@ -2610,6 +2610,189 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        # ── Editor Estrutural (Fase 2) ─────────────────────────────────────────
+        {
+            "type": "function",
+            "function": {
+                "name": "reordenar_requisitos",
+                "description": (
+                    "Reordena os requisitos do projeto atualizando o campo sort_order. "
+                    "Pode receber uma nova ordem explícita (lista de IDs como ['REQ-003','REQ-001']) "
+                    "ou um critério de agrupamento ('tipo' ou 'prioridade'). "
+                    "Use quando o usuário pedir para reorganizar, priorizar ou agrupar requisitos."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "nova_ordem": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": (
+                                "Lista explícita de identificadores de requisitos na nova ordem "
+                                "(ex: ['REQ-003','REQ-001','REQ-002']). "
+                                "Mutuamente exclusivo com agrupar_por."
+                            ),
+                        },
+                        "agrupar_por": {
+                            "type": "string",
+                            "enum": ["tipo", "prioridade"],
+                            "description": (
+                                "Reagrupa automaticamente todos os requisitos por tipo (Funcional → "
+                                "Não Funcional → Regra de Negócio) ou por prioridade (Crítico → Alto → "
+                                "Médio → Baixo). Mutuamente exclusivo com nova_ordem."
+                            ),
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "inserir_secao_ata",
+                "description": (
+                    "Insere uma nova seção (## Título) na ata de uma reunião. "
+                    "Posição pode ser 'inicio', 'fim', 'antes_decisoes', 'apos_participantes' "
+                    "ou qualquer nome de seção existente prefixado com 'antes_' ou 'apos_'. "
+                    "Use quando o usuário pedir para adicionar seção, acrescentar riscos, "
+                    "inserir observações ou enriquecer uma ata existente."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Número da reunião cuja ata será editada.",
+                        },
+                        "titulo": {
+                            "type": "string",
+                            "description": "Título da nova seção (sem ##, ex: 'Riscos Identificados').",
+                        },
+                        "conteudo": {
+                            "type": "string",
+                            "description": "Conteúdo Markdown da nova seção.",
+                        },
+                        "posicao": {
+                            "type": "string",
+                            "description": (
+                                "Onde inserir: 'inicio', 'fim' (padrão), 'antes_decisoes', "
+                                "'apos_participantes' ou qualquer 'antes_<nome>' / 'apos_<nome>'."
+                            ),
+                        },
+                    },
+                    "required": ["meeting_number", "titulo", "conteudo"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "vincular_regra_debate",
+                "description": (
+                    "Cria um vínculo entre uma regra SBVR e uma questão IBIS, registrando "
+                    "a relação semântica entre elas (justifica, contradiz ou limita). "
+                    "Use quando o usuário pedir para ligar uma regra a um debate, "
+                    "vincular SBVR a IBIS ou documentar a justificativa de uma regra."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "rule_id": {
+                            "type": "string",
+                            "description": "Identificador da regra SBVR (ex: 'RN-012').",
+                        },
+                        "ibis_question_id": {
+                            "type": "string",
+                            "description": "Identificador da questão IBIS (ex: 'Q-042').",
+                        },
+                        "relacao": {
+                            "type": "string",
+                            "enum": ["justifica", "contradiz", "limita"],
+                            "description": "Tipo de relação: justifica (padrão), contradiz ou limita.",
+                        },
+                    },
+                    "required": ["rule_id", "ibis_question_id"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "mesclar_reunioes",
+                "description": (
+                    "Mescla duas reuniões: transfere todos os artefatos (requisitos, SBVR, BPMN, "
+                    "transcrição, ata) da reunião absorvida para a reunião mantida, concatena as atas "
+                    "e exclui a reunião absorvida. "
+                    "Use preview=true para ver o impacto antes de confirmar. "
+                    "Use quando o usuário pedir para unir, combinar ou mesclar duas reuniões."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "manter_meeting": {
+                            "type": "integer",
+                            "description": "Número da reunião que será mantida (destinatária dos artefatos).",
+                        },
+                        "absorver_meeting": {
+                            "type": "integer",
+                            "description": "Número da reunião que será absorvida e excluída.",
+                        },
+                        "razao": {
+                            "type": "string",
+                            "description": "Motivo da mesclagem (registrado na ata combinada).",
+                        },
+                        "preview": {
+                            "type": "boolean",
+                            "description": "Se true, retorna preview sem executar. Padrão: true (segurança).",
+                        },
+                    },
+                    "required": ["manter_meeting", "absorver_meeting"],
+                },
+            },
+        },
+        # ── Sincronizador Calendário (Fase 2) ─────────────────────────────────
+        {
+            "type": "function",
+            "function": {
+                "name": "sincronizar_calendario",
+                "description": (
+                    "Sincroniza os encaminhamentos (itens de ação) das atas com o Google Calendar. "
+                    "Direção 'to_calendar': cria eventos para cada encaminhamento sem evento. "
+                    "Direção 'from_calendar': atualiza status dos itens já sincronizados. "
+                    "Direção 'bidirectional': ambas. "
+                    "Use quando o usuário pedir para agendar tarefas, sincronizar calendário "
+                    "ou criar eventos a partir dos encaminhamentos das reuniões."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "direction": {
+                            "type": "string",
+                            "enum": ["to_calendar", "from_calendar", "bidirectional"],
+                            "description": "Direção da sincronização. Padrão: 'to_calendar'.",
+                        },
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Reunião específica (opcional — padrão: todas as reuniões).",
+                        },
+                        "default_duration": {
+                            "type": "integer",
+                            "description": "Duração em minutos para cada evento criado. Padrão: 30.",
+                        },
+                        "default_work_start": {
+                            "type": "string",
+                            "description": "Horário de início da janela de trabalho no formato HH:MM. Padrão: '09:00'.",
+                        },
+                        "default_work_end": {
+                            "type": "string",
+                            "description": "Horário de fim da janela de trabalho no formato HH:MM. Padrão: '18:00'.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
     ]
 
 
@@ -2735,6 +2918,13 @@ _TOOL_CATEGORIES: dict[str, str] = {
     # Plantonista / Diagnóstico
     "sugestoes_plantonista":           "consulta",
     "diagnostico_projeto":             "consulta",
+    # Editor Estrutural (Fase 2)
+    "reordenar_requisitos":            "escrita",
+    "inserir_secao_ata":               "admin",
+    "vincular_regra_debate":           "escrita",
+    "mesclar_reunioes":                "admin",
+    # Sincronizador Calendário (Fase 2)
+    "sincronizar_calendario":          "admin",
     # A2UI
     "show_bpmn_diagram":               "consulta",
     "show_mermaid_diagram":            "consulta",
@@ -2769,6 +2959,9 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "delete_entity",
     "delete_bpmn_version",
     "clear_llm_cache",
+    "inserir_secao_ata",
+    "mesclar_reunioes",
+    "sincronizar_calendario",
 })
 
 
@@ -8573,6 +8766,437 @@ class AssistantToolExecutor:
 
         return "\n".join(lines)
 
+    # ── Editor Estrutural (Fase 2) ────────────────────────────────────────────
+
+    def reordenar_requisitos(
+        self,
+        nova_ordem: list | None = None,
+        agrupar_por: str | None = None,
+    ) -> str:
+        """Reorder requirements by updating sort_order."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        try:
+            rows = (
+                db.table("requirements")
+                .select("id, req_number, req_type, priority")
+                .eq("project_id", self.project_id)
+                .execute().data or []
+            )
+        except Exception as exc:
+            return f"Erro ao acessar requisitos: {exc}"
+
+        if not rows:
+            return "Nenhum requisito encontrado no projeto."
+
+        # Build id-keyed index: "REQ-001" -> row
+        req_by_key: dict = {}
+        for r in rows:
+            n = r.get("req_number")
+            if isinstance(n, int):
+                req_by_key[f"REQ-{n:03d}"] = r
+
+        if nova_ordem:
+            order_map: dict = {}
+            for i, raw_id in enumerate(nova_ordem):
+                key = raw_id.strip().upper()
+                if not key.startswith("REQ-"):
+                    key = f"REQ-{key}"
+                if key not in req_by_key:
+                    return (
+                        f"Requisito '{raw_id}' não encontrado. "
+                        "Use identificadores como 'REQ-001'."
+                    )
+                order_map[req_by_key[key]["id"]] = i + 1
+
+            updated, errors = 0, []
+            for rid, order in order_map.items():
+                try:
+                    db.table("requirements").update({"sort_order": order}).eq("id", rid).execute()
+                    updated += 1
+                except Exception as exc:
+                    errors.append(str(exc))
+
+            msg = f"✅ {updated} requisito(s) reordenado(s) com sucesso."
+            if errors:
+                msg += f"\n⚠️ {len(errors)} erro(s): " + "; ".join(errors[:3])
+            return msg
+
+        elif agrupar_por in ("tipo", "prioridade"):
+            priority_rank = {"Crítico": 0, "Alto": 1, "Médio": 2, "Baixo": 3}
+            type_rank     = {"Funcional": 0, "Não Funcional": 1, "Regra de Negócio": 2}
+
+            def _key(r: dict):
+                if agrupar_por == "prioridade":
+                    return (priority_rank.get(r.get("priority") or "", 99), r.get("req_number", 0))
+                return (type_rank.get(r.get("req_type") or "", 99), r.get("req_number", 0))
+
+            sorted_rows = sorted(rows, key=_key)
+            updated, errors = 0, []
+            for i, r in enumerate(sorted_rows):
+                try:
+                    db.table("requirements").update({"sort_order": i + 1}).eq("id", r["id"]).execute()
+                    updated += 1
+                except Exception as exc:
+                    errors.append(str(exc))
+
+            msg = f"✅ {updated} requisito(s) agrupados por **{agrupar_por}** e reordenados."
+            if errors:
+                msg += f"\n⚠️ {len(errors)} erro(s): " + "; ".join(errors[:3])
+            return msg
+
+        else:
+            return (
+                "Informe `nova_ordem` (lista de IDs como ['REQ-003','REQ-001']) "
+                "ou `agrupar_por` ('tipo' ou 'prioridade')."
+            )
+
+    def inserir_secao_ata(
+        self,
+        meeting_number: int,
+        titulo: str,
+        conteudo: str,
+        posicao: str = "fim",
+    ) -> str:
+        """Insert a new ## section into a meeting's minutes_md."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        m = self._find_meeting(meeting_number)
+        if not m:
+            return f"Reunião {meeting_number} não encontrada."
+
+        mid        = m["id"]
+        minutes_md = m.get("minutes_md") or ""
+        new_section = f"\n## {titulo}\n\n{conteudo}\n"
+
+        if not minutes_md:
+            minutes_md = f"# Ata — Reunião {meeting_number}\n{new_section}"
+        elif re.search(rf'##\s*{re.escape(titulo)}', minutes_md, re.IGNORECASE):
+            return (
+                f"⚠️ A seção **{titulo}** já existe na ata da Reunião {meeting_number}. "
+                "Para atualizar o conteúdo existente, use apply_text_correction."
+            )
+        else:
+            pl = posicao.lower().strip()
+            if pl == "inicio":
+                h1 = re.search(r'^#\s+.+\n', minutes_md, re.MULTILINE)
+                pos = h1.end() if h1 else 0
+                minutes_md = minutes_md[:pos] + new_section + minutes_md[pos:]
+            elif pl.startswith("antes_"):
+                ref = pl[len("antes_"):].replace("_", " ")
+                pat = re.search(rf'(##\s*{re.escape(ref)}\b)', minutes_md, re.IGNORECASE)
+                if pat:
+                    minutes_md = minutes_md[:pat.start()] + new_section + "\n" + minutes_md[pat.start():]
+                else:
+                    minutes_md = minutes_md.rstrip() + "\n" + new_section
+            elif pl.startswith("apos_") or pl.startswith("após_"):
+                prefix = "apos_" if pl.startswith("apos_") else "após_"
+                ref = pl[len(prefix):].replace("_", " ")
+                sec = re.search(
+                    rf'(##\s*{re.escape(ref)}[^\n]*\n[\s\S]*?)(?=\n##|\Z)',
+                    minutes_md, re.IGNORECASE,
+                )
+                if sec:
+                    minutes_md = minutes_md[:sec.end()] + "\n" + new_section + minutes_md[sec.end():]
+                else:
+                    minutes_md = minutes_md.rstrip() + "\n" + new_section
+            else:
+                # "fim" or unknown
+                minutes_md = minutes_md.rstrip() + "\n" + new_section
+
+        try:
+            db.table("meetings").update({"minutes_md": minutes_md}).eq("id", mid).execute()
+            self._meeting_cache = None
+            return f"✅ Seção **{titulo}** inserida na ata da Reunião {meeting_number} (posição: {posicao})."
+        except Exception as exc:
+            return f"❌ Erro ao salvar ata: {exc}"
+
+    def vincular_regra_debate(
+        self,
+        rule_id: str,
+        ibis_question_id: str,
+        relacao: str = "justifica",
+    ) -> str:
+        """Create or update a SBVR rule ↔ IBIS debate link."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        valid = {"justifica", "contradiz", "limita"}
+        if relacao not in valid:
+            return f"Relação inválida: '{relacao}'. Use: {', '.join(sorted(valid))}."
+
+        try:
+            existing = (
+                db.table("sbvr_ibis_links")
+                .select("id")
+                .eq("project_id", self.project_id)
+                .eq("rule_id", rule_id)
+                .eq("ibis_question_id", ibis_question_id)
+                .execute().data or []
+            )
+            if existing:
+                db.table("sbvr_ibis_links").update({"relacao": relacao}).eq("id", existing[0]["id"]).execute()
+                return (
+                    f"✅ Vínculo atualizado: **{rule_id}** → **{ibis_question_id}** "
+                    f"(relação: {relacao})."
+                )
+            db.table("sbvr_ibis_links").insert({
+                "project_id":      self.project_id,
+                "rule_id":         rule_id,
+                "ibis_question_id": ibis_question_id,
+                "relacao":         relacao,
+            }).execute()
+            return (
+                f"✅ Vínculo criado: regra **{rule_id}** *{relacao}* questão **{ibis_question_id}**."
+            )
+        except Exception as exc:
+            return (
+                f"❌ Erro ao vincular: {exc}\n"
+                "Certifique-se de que a migration Fase 2 foi executada "
+                "(setup/supabase_migration_fase2.sql)."
+            )
+
+    def mesclar_reunioes(
+        self,
+        manter_meeting: int,
+        absorver_meeting: int,
+        razao: str = "",
+        preview: bool = True,
+    ) -> str:
+        """Merge two meetings: transfer all artifacts and delete the absorbed one."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        m_manter   = self._find_meeting(manter_meeting)
+        m_absorver = self._find_meeting(absorver_meeting)
+        if not m_manter:
+            return f"Reunião {manter_meeting} não encontrada."
+        if not m_absorver:
+            return f"Reunião {absorver_meeting} não encontrada."
+        if manter_meeting == absorver_meeting:
+            return "As duas reuniões não podem ser a mesma."
+
+        mid_manter   = m_manter["id"]
+        mid_absorver = m_absorver["id"]
+
+        # Collect artifacts from absorbed meeting
+        try:
+            reqs = (
+                db.table("requirements").select("req_number, title")
+                .eq("first_meeting_id", mid_absorver)
+                .execute().data or []
+            )
+        except Exception:
+            reqs = []
+
+        has_minutes = bool(m_absorver.get("minutes_md"))
+
+        if preview:
+            lines = [
+                f"**Preview da mesclagem** — Reunião {absorver_meeting} → Reunião {manter_meeting}",
+                f"- Razão: {razao or '(não informada)'}",
+                f"- {len(reqs)} requisito(s) serão reatribuídos para a Reunião {manter_meeting}:",
+            ]
+            for r in reqs[:5]:
+                n = r.get("req_number", "?")
+                lines.append(f"  - REQ-{n:03d}: {r.get('title', '')}" if isinstance(n, int) else f"  - {r.get('title', '')}")
+            if len(reqs) > 5:
+                lines.append(f"  - ... e mais {len(reqs) - 5}")
+            lines.append(
+                f"- Ata da Reunião {absorver_meeting}: "
+                f"{'será concatenada à ata da Reunião ' + str(manter_meeting) if has_minutes else 'vazia — nenhuma alteração'}"
+            )
+            lines.append(f"- Reunião {absorver_meeting} será **excluída** após a mesclagem.")
+            lines.append("\nPara confirmar, chame novamente com `preview=false`.")
+            return "\n".join(lines)
+
+        try:
+            # Reatribuir requirements
+            for col in ("first_meeting_id", "last_meeting_id"):
+                try:
+                    db.table("requirements").update({col: mid_manter}).eq(col, mid_absorver).execute()
+                except Exception:
+                    pass
+
+            # Reatribuir outros artefatos
+            for tbl, col in [
+                ("sbvr_terms",        "meeting_id"),
+                ("sbvr_rules",        "meeting_id"),
+                ("bpmn_versions",     "meeting_id"),
+                ("transcript_chunks", "meeting_id"),
+            ]:
+                try:
+                    db.table(tbl).update({col: mid_manter}).eq(col, mid_absorver).execute()
+                except Exception:
+                    pass
+
+            # Concatenar atas
+            if has_minutes:
+                minutes_manter   = m_manter.get("minutes_md") or ""
+                minutes_absorver = m_absorver.get("minutes_md") or ""
+                razao_note       = f" — {razao}" if razao else ""
+                separator = (
+                    f"\n\n---\n"
+                    f"*Conteúdo mesclado da Reunião {absorver_meeting}{razao_note}*\n\n"
+                )
+                merged = minutes_manter.rstrip() + separator + minutes_absorver
+                try:
+                    db.table("meetings").update({"minutes_md": merged}).eq("id", mid_manter).execute()
+                except Exception:
+                    pass
+
+            # Excluir reunião absorvida
+            db.table("meetings").delete().eq("id", mid_absorver).execute()
+            self._meeting_cache = None
+
+            return (
+                f"✅ Mesclagem concluída.\n"
+                f"- Reunião {absorver_meeting} absorvida pela Reunião {manter_meeting}.\n"
+                f"- {len(reqs)} requisito(s) reatribuídos.\n"
+                f"- Atas {'concatenadas' if has_minutes else 'sem alteração (absorvida era vazia)'}.\n"
+                f"- Reunião {absorver_meeting} excluída."
+                + (f"\n- Razão registrada: {razao}" if razao else "")
+            )
+        except Exception as exc:
+            return f"❌ Erro durante a mesclagem: {exc}"
+
+    # ── Sincronizador Calendário (Fase 2) ─────────────────────────────────────
+
+    def sincronizar_calendario(
+        self,
+        direction: str = "to_calendar",
+        meeting_number: int | None = None,
+        default_duration: int = 30,
+        default_work_start: str = "09:00",
+        default_work_end: str = "18:00",
+    ) -> str:
+        """Sync meeting action items with Google Calendar."""
+        from modules.calendar_client import calendar_configured, create_event
+        if not calendar_configured():
+            return "⚙️ Google Calendar não configurado neste ambiente."
+        from modules.supabase_client import get_supabase_client
+        import datetime as _dt
+        import re as _re
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        meetings = self._load_meetings()
+        if meeting_number is not None:
+            meetings = [m for m in meetings if m.get("meeting_number") == meeting_number]
+            if not meetings:
+                return f"Reunião {meeting_number} não encontrada."
+
+        synced, errors, notes = 0, 0, []
+
+        if direction in ("to_calendar", "bidirectional"):
+            today = _dt.date.today()
+            try:
+                h_start, m_start = map(int, default_work_start.split(":"))
+            except ValueError:
+                h_start, m_start = 9, 0
+            start_base = _dt.datetime(today.year, today.month, today.day, h_start, m_start)
+            end_base   = start_base + _dt.timedelta(minutes=max(default_duration, 15))
+            start_str  = start_base.strftime("%Y-%m-%dT%H:%M:00")
+            end_str    = end_base.strftime("%Y-%m-%dT%H:%M:00")
+
+            for m in meetings:
+                m_num      = m.get("meeting_number", "?")
+                minutes_md = m.get("minutes_md") or ""
+                action_txt = self._section(minutes_md, "Itens de Ação", "Action Items", "Ações")
+                if not action_txt.strip():
+                    continue
+
+                items = [
+                    line.strip().lstrip("-•*1234567890.)").strip()
+                    for line in action_txt.splitlines()
+                    if line.strip() and line.strip()[0] in "-•*0123456789"
+                ]
+
+                for item in items[:10]:
+                    if not item:
+                        continue
+                    # Skip if already synced
+                    try:
+                        already = (
+                            db.table("calendar_sync_items")
+                            .select("id")
+                            .eq("project_id", self.project_id)
+                            .eq("meeting_id", m["id"])
+                            .eq("action_text", item[:500])
+                            .execute().data or []
+                        )
+                        if already:
+                            continue
+                    except Exception:
+                        pass  # table may not exist yet; proceed anyway
+
+                    try:
+                        result_txt = create_event(
+                            summary=f"[P2D] {item[:80]}",
+                            start_datetime=start_str,
+                            end_datetime=end_str,
+                            description=f"Encaminhamento — Reunião {m_num} (Process2Diagram)",
+                            project_id=self.project_id,
+                        )
+                        id_match  = _re.search(r'ID:\s+(\S+)', result_txt or "")
+                        event_id  = id_match.group(1) if id_match else None
+                        try:
+                            db.table("calendar_sync_items").insert({
+                                "project_id":     self.project_id,
+                                "meeting_id":     m["id"],
+                                "action_text":    item[:500],
+                                "google_event_id": event_id,
+                                "sync_direction": "to_calendar",
+                                "status":         "synced",
+                                "last_sync_at":   _dt.datetime.utcnow().isoformat() + "Z",
+                            }).execute()
+                        except Exception:
+                            pass  # log but don't abort
+                        synced += 1
+                    except Exception as exc:
+                        errors += 1
+                        notes.append(f"⚠️ Reunião {m_num}: {str(exc)[:80]}")
+
+        if direction in ("from_calendar", "bidirectional"):
+            try:
+                tracked = (
+                    db.table("calendar_sync_items")
+                    .select("id, google_event_id, action_text")
+                    .eq("project_id", self.project_id)
+                    .eq("status", "synced")
+                    .execute().data or []
+                )
+                notes.append(
+                    f"📅 Sync reverso: {len(tracked)} item(s) rastreados no Google Calendar "
+                    "(atualização de status requer webhook — não disponível nesta versão)."
+                )
+            except Exception as exc:
+                notes.append(f"⚠️ Erro no sync reverso: {exc}")
+
+        lines = [f"**Sincronização de Calendário** — direção: `{direction}`"]
+        if direction in ("to_calendar", "bidirectional"):
+            lines.append(f"✅ {synced} encaminhamento(s) criados no Google Calendar.")
+            if errors:
+                lines.append(f"⚠️ {errors} erro(s).")
+            if synced == 0 and errors == 0:
+                lines.append(
+                    "ℹ️ Todos os encaminhamentos já estavam sincronizados "
+                    "ou nenhuma ata contém itens de ação."
+                )
+        lines.extend(notes[:5])
+        return "\n".join(lines)
+
     # ── Dispatcher ────────────────────────────────────────────────────────────
 
     def execute(self, tool_name: str, tool_input: dict) -> str:
@@ -8924,6 +9548,36 @@ class AssistantToolExecutor:
                     include_roi=bool(tool_input.get("include_roi", True)),
                     include_recurring=bool(tool_input.get("include_recurring", True)),
                     include_pendencies=bool(tool_input.get("include_pendencies", True)),
+                ),
+                # ── Editor Estrutural (Fase 2)
+                "reordenar_requisitos":   lambda: self.reordenar_requisitos(
+                    nova_ordem=tool_input.get("nova_ordem"),
+                    agrupar_por=tool_input.get("agrupar_por"),
+                ),
+                "inserir_secao_ata":      lambda: self.inserir_secao_ata(
+                    meeting_number=int(tool_input["meeting_number"]),
+                    titulo=tool_input["titulo"],
+                    conteudo=tool_input["conteudo"],
+                    posicao=tool_input.get("posicao", "fim"),
+                ),
+                "vincular_regra_debate":  lambda: self.vincular_regra_debate(
+                    rule_id=tool_input["rule_id"],
+                    ibis_question_id=tool_input["ibis_question_id"],
+                    relacao=tool_input.get("relacao", "justifica"),
+                ),
+                "mesclar_reunioes":       lambda: self.mesclar_reunioes(
+                    manter_meeting=int(tool_input["manter_meeting"]),
+                    absorver_meeting=int(tool_input["absorver_meeting"]),
+                    razao=tool_input.get("razao", ""),
+                    preview=bool(tool_input.get("preview", True)),
+                ),
+                # ── Sincronizador Calendário (Fase 2)
+                "sincronizar_calendario": lambda: self.sincronizar_calendario(
+                    direction=tool_input.get("direction", "to_calendar"),
+                    meeting_number=tool_input.get("meeting_number"),
+                    default_duration=int(tool_input.get("default_duration", 30)),
+                    default_work_start=tool_input.get("default_work_start", "09:00"),
+                    default_work_end=tool_input.get("default_work_end", "18:00"),
                 ),
             }
             if tool_name not in dispatch:
