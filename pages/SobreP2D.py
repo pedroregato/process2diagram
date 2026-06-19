@@ -449,10 +449,7 @@ _photo_html = (
 st.markdown(f"""
 <div class="slide-card">
   <div class="label">Criador</div>
-
   <div class="autor-block">
-
-    <!-- Coluna esquerda: autor -->
     <div class="autor-col-left">
       {_photo_html}
       <div class="a-name">Pedro Gentil Regato<br>de Oliveira Soares</div>
@@ -462,8 +459,6 @@ st.markdown(f"""
         soluções que integram<br>modelo, fluxo e sistema.
       </div>
     </div>
-
-    <!-- Coluna direita -->
     <div class="autor-col-right">
 
       <div class="card gold-border" style="margin-bottom:18px;">
