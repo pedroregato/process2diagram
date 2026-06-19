@@ -2751,6 +2751,120 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        # ── Fase 3: Rastreabilidade, What-If, Conformidade ────────────────────
+        {
+            "type": "function",
+            "function": {
+                "name": "mapa_rastreabilidade",
+                "description": (
+                    "Gera um mapa de rastreabilidade para um requisito ou tema, mostrando "
+                    "as conexões com falas na transcrição, passos do BPMN, regras SBVR e "
+                    "debates IBIS. Use quando o usuário pedir 'de onde veio esse requisito', "
+                    "'qual parte da transcrição originou a regra X', 'rastreabilidade de REQ-042' "
+                    "ou 'onde esse tema é discutido'."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "req_number": {
+                            "type": "integer",
+                            "description": "Número do requisito (ex: 42 para REQ-042). Mutuamente exclusivo com topic.",
+                        },
+                        "topic": {
+                            "type": "string",
+                            "description": "Tema para busca por palavra-chave (ex: 'autenticação biométrica'). Mutuamente exclusivo com req_number.",
+                        },
+                        "include_transcript": {
+                            "type": "boolean",
+                            "description": "Incluir falas da transcrição. Padrão: true.",
+                        },
+                        "include_bpmn": {
+                            "type": "boolean",
+                            "description": "Incluir processos BPMN relacionados. Padrão: true.",
+                        },
+                        "include_sbvr": {
+                            "type": "boolean",
+                            "description": "Incluir regras SBVR relacionadas. Padrão: true.",
+                        },
+                        "include_ibis": {
+                            "type": "boolean",
+                            "description": "Incluir debates IBIS relacionados. Padrão: true.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "simular_cenario",
+                "description": (
+                    "Simula o impacto de uma mudança de decisão ou escopo no projeto. "
+                    "Analisa os requisitos afetados, dependências implícitas, regras SBVR a "
+                    "revisar, riscos e retorna uma recomendação. "
+                    "Use quando o usuário perguntar 'e se movermos X para Fase 2?', "
+                    "'o que acontece se removermos REQ-042?', 'impacto de mudar Y', "
+                    "'simule o cenário onde...' ou qualquer análise de mudança hipotética."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "descricao": {
+                            "type": "string",
+                            "description": "Descrição do cenário ou mudança proposta em linguagem natural.",
+                        },
+                        "requisitos_afetados": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Lista de IDs de requisitos afetados (ex: ['REQ-042','REQ-043']). Opcional — se omitido, o sistema infere pelos keywords.",
+                        },
+                        "restricoes": {
+                            "type": "object",
+                            "description": "Restrições do projeto como objeto JSON (ex: {\"prazo\": \"6 meses\", \"equipe\": \"4 devs\"}).",
+                        },
+                    },
+                    "required": ["descricao"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "verificar_conformidade",
+                "description": (
+                    "Verifica se os requisitos do projeto estão cobertos pelos documentos da "
+                    "biblioteca (BRDs, contratos, especificações). Retorna um relatório de "
+                    "cobertura com gaps e ações recomendadas. "
+                    "Use quando o usuário pedir 'nossos requisitos cobrem o BRD?', "
+                    "'há gaps no contrato?', 'conformidade com documento X', "
+                    "'quais cláusulas não estão mapeadas' ou análise de aderência."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "doc_id": {
+                            "type": "string",
+                            "description": "ID de um documento específico para analisar. Se omitido, analisa todos os documentos do projeto.",
+                        },
+                        "req_type_filter": {
+                            "type": "string",
+                            "description": "Filtrar por tipo de requisito: 'Funcional', 'Não Funcional' ou 'Regra de Negócio'.",
+                        },
+                        "threshold": {
+                            "type": "number",
+                            "description": "Limiar de similaridade para considerar coberto (0–1). Padrão: 0.75.",
+                        },
+                        "mode": {
+                            "type": "string",
+                            "enum": ["keyword", "llm"],
+                            "description": "Modo de análise: 'keyword' (rápido, padrão) ou 'llm' (LLM para cobertura semântica profunda).",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
         # ── Sincronizador Calendário (Fase 2) ─────────────────────────────────
         {
             "type": "function",
@@ -2918,6 +3032,10 @@ _TOOL_CATEGORIES: dict[str, str] = {
     # Plantonista / Diagnóstico
     "sugestoes_plantonista":           "consulta",
     "diagnostico_projeto":             "consulta",
+    # Rastreabilidade / Simulação / Conformidade (Fase 3)
+    "mapa_rastreabilidade":            "consulta",
+    "simular_cenario":                 "consulta",
+    "verificar_conformidade":          "consulta",
     # Editor Estrutural (Fase 2)
     "reordenar_requisitos":            "escrita",
     "inserir_secao_ata":               "admin",
@@ -8766,6 +8884,464 @@ class AssistantToolExecutor:
 
         return "\n".join(lines)
 
+    # ── Rastreabilidade / Simulação / Conformidade (Fase 3) ──────────────────
+
+    def mapa_rastreabilidade(
+        self,
+        req_number: int | None = None,
+        topic: str | None = None,
+        include_transcript: bool = True,
+        include_bpmn: bool = True,
+        include_sbvr: bool = True,
+        include_ibis: bool = True,
+    ) -> str:
+        """Build a traceability map for a requirement or topic."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        if not req_number and not topic:
+            return (
+                "Informe `req_number` (número do requisito, ex: 42) "
+                "ou `topic` (tema para busca, ex: 'autenticação biométrica')."
+            )
+
+        try:
+            q = (
+                db.table("requirements")
+                .select("id, req_number, title, description, req_type, status, priority")
+                .eq("project_id", self.project_id)
+            )
+            if req_number:
+                q = q.eq("req_number", req_number)
+            all_rows = q.order("req_number").execute().data or []
+        except Exception as exc:
+            return f"Erro ao buscar requisitos: {exc}"
+
+        if topic and not req_number:
+            kw = topic.lower()
+            all_rows = [
+                r for r in all_rows
+                if kw in (r.get("title") or "").lower()
+                or kw in (r.get("description") or "").lower()
+            ][:5]
+
+        if not all_rows:
+            hint = f"REQ-{req_number:03d}" if isinstance(req_number, int) else f"'{topic}'"
+            return f"Nenhum requisito encontrado para {hint}."
+
+        lines = [
+            "# 🔗 Mapa de Rastreabilidade",
+            f"*{len(all_rows)} requisito(s) analisado(s)*\n",
+        ]
+
+        for r in all_rows[:5]:
+            n      = r.get("req_number", "?")
+            title  = r.get("title", "")
+            desc   = r.get("description", "")
+            rtype  = r.get("req_type", "—")
+            prio   = r.get("priority", "—")
+            req_id = f"REQ-{n:03d}" if isinstance(n, int) else f"REQ-{n}"
+
+            lines += [
+                f"---\n## 🔷 {req_id} — {title}",
+                f"**Tipo:** {rtype} | **Prioridade:** {prio}",
+            ]
+            if desc:
+                lines.append(f"**Descrição:** {desc[:200]}{'…' if len(desc) > 200 else ''}")
+            lines.append("")
+
+            # ── Transcript
+            if include_transcript:
+                try:
+                    tr = self.search_transcript(query=title)
+                    if not any(x in tr.lower() for x in ("não encontrad", "sem palavras", "consulta sem")):
+                        tr_lines = tr.splitlines()
+                        lines.append("### 📝 Falas na Transcrição")
+                        lines += tr_lines[:10]
+                        if len(tr_lines) > 10:
+                            lines.append(f"*… {len(tr_lines) - 10} linha(s) adicionais*")
+                    else:
+                        lines.append("### 📝 Falas na Transcrição\n_Nenhuma fala encontrada_")
+                except Exception:
+                    lines.append("### 📝 Falas na Transcrição\n_Erro ao buscar_")
+                lines.append("")
+
+            # ── BPMN
+            if include_bpmn:
+                try:
+                    from core.project_store import list_bpmn_processes
+                    procs = list_bpmn_processes(self.project_id)
+                    words = [w for w in title.lower().split() if len(w) > 3]
+                    matched = [
+                        p for p in procs
+                        if any(w in (p.get("name") or "").lower() for w in words)
+                    ]
+                    if matched:
+                        lines.append("### ⚙️ Processos BPMN Relacionados")
+                        for p in matched[:3]:
+                            lines.append(
+                                f"- **{p.get('name')}** — {p.get('version_count', 0)} versão(ões) "
+                                f"[{p.get('status', '—')}]"
+                            )
+                    else:
+                        lines.append(
+                            "### ⚙️ Processos BPMN Relacionados\n"
+                            "_Nenhum processo com nome diretamente relacionado_"
+                        )
+                except Exception:
+                    pass
+                lines.append("")
+
+            # ── SBVR
+            if include_sbvr:
+                try:
+                    sbvr = self.get_sbvr_rules(keyword=title)
+                    if "nenhuma" not in sbvr.lower():
+                        lines.append("### 📐 Regras SBVR Relacionadas")
+                        lines.append(sbvr[:800])
+                    else:
+                        lines.append("### 📐 Regras SBVR Relacionadas\n_Nenhuma regra encontrada_")
+                except Exception:
+                    pass
+                lines.append("")
+
+            # ── IBIS
+            if include_ibis:
+                try:
+                    ibis_qs = self._load_ibis_questions(topic_filter=title)
+                    _icon = {"decided": "✅", "deferred": "⏳", "unresolved": "❓"}
+                    if ibis_qs:
+                        lines.append("### 🗺️ Debates IBIS Relacionados")
+                        for q2 in ibis_qs[:4]:
+                            rt   = (q2.get("resolution") or {}).get("type", "unresolved")
+                            lines.append(
+                                f"- {_icon.get(rt, '❓')} **{q2.get('id','?')}** "
+                                f"(Reunião {q2.get('_mnum','?')}): {q2.get('statement','')}"
+                            )
+                        if len(ibis_qs) > 4:
+                            lines.append(f"*… e mais {len(ibis_qs) - 4} debate(s)*")
+                    else:
+                        lines.append("### 🗺️ Debates IBIS Relacionados\n_Nenhum debate encontrado_")
+                except Exception:
+                    pass
+                lines.append("")
+
+        return "\n".join(lines)
+
+    def simular_cenario(
+        self,
+        descricao: str,
+        requisitos_afetados: list | None = None,
+        restricoes: dict | None = None,
+    ) -> str:
+        """Simulate the impact of a scenario change using LLM + project data."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        # 1. Load all requirements
+        try:
+            all_reqs = (
+                db.table("requirements")
+                .select("req_number, title, description, req_type, priority, status")
+                .eq("project_id", self.project_id)
+                .order("req_number")
+                .execute().data or []
+            )
+        except Exception as exc:
+            return f"Erro ao buscar requisitos: {exc}"
+
+        if not all_reqs:
+            return "Nenhum requisito encontrado no projeto para simular impacto."
+
+        # 2. Identify affected requirements
+        affected_rows: list[dict] = []
+        if requisitos_afetados:
+            for raw_id in requisitos_afetados:
+                key = raw_id.strip().upper().replace("REQ-", "").lstrip("0") or "0"
+                try:
+                    n = int(key)
+                    match = next((r for r in all_reqs if r.get("req_number") == n), None)
+                    if match and match not in affected_rows:
+                        affected_rows.append(match)
+                except ValueError:
+                    kw = raw_id.lower()
+                    affected_rows += [
+                        r for r in all_reqs
+                        if kw in (r.get("title") or "").lower() and r not in affected_rows
+                    ][:2]
+        else:
+            words = [w for w in descricao.lower().split() if len(w) > 4]
+            affected_rows = [
+                r for r in all_reqs
+                if any(
+                    w in (r.get("title") or "").lower()
+                    or w in (r.get("description") or "").lower()
+                    for w in words
+                )
+            ][:5]
+
+        # 3. Build compact context
+        def _fmt_reqs(reqs: list, label: str) -> str:
+            if not reqs:
+                return f"{label}: (nenhum identificado)"
+            lines = [label + ":"]
+            for r in reqs[:12]:
+                n = r.get("req_number", "?")
+                lines.append(
+                    f"  REQ-{n:03d} [{r.get('req_type','—')}/{r.get('priority','—')}]: "
+                    f"{r.get('title','')} — {(r.get('description') or '')[:80]}"
+                )
+            return "\n".join(lines)
+
+        try:
+            from core.project_store import list_sbvr_rules
+            rules = list_sbvr_rules(self.project_id)
+            words = [w for w in descricao.lower().split() if len(w) > 4]
+            rel_rules = [
+                r for r in rules
+                if any(w in (r.get("statement") or "").lower() for w in words)
+            ][:5]
+            rules_ctx = "\n".join(
+                f"  [{r.get('rule_id','')}] {r.get('statement','')}" for r in rel_rules
+            ) or "(nenhuma regra diretamente relacionada)"
+        except Exception:
+            rules_ctx = "(não disponível)"
+
+        try:
+            from core.knowledge_store import get_contradictions
+            contras = get_contradictions(self.project_id, status="open", limit=10)
+            words = [w for w in descricao.lower().split() if len(w) > 4]
+            rel_contras = [
+                c for c in contras
+                if any(w in (c.get("description") or "").lower() for w in words)
+            ][:3]
+            contra_ctx = "\n".join(
+                f"  [{c.get('severity','—')}] {c.get('description','')}" for c in rel_contras
+            ) or "(nenhuma contradição relacionada)"
+        except Exception:
+            contra_ctx = "(não disponível)"
+
+        restricoes_str = (
+            "\n".join(f"  - {k}: {v}" for k, v in restricoes.items())
+            if restricoes else "  (não informadas)"
+        )
+
+        system_prompt = (
+            "Você é especialista em análise de impacto de mudanças em projetos de software. "
+            "Analise o cenário proposto e retorne análise de impacto clara em Markdown. "
+            "Seja conciso e prático. Responda em Português do Brasil."
+        )
+        user_prompt = (
+            f"## Cenário proposto\n{descricao}\n\n"
+            f"## Restrições\n{restricoes_str}\n\n"
+            f"## Requisitos diretamente afetados\n{_fmt_reqs(affected_rows, 'Afetados')}\n\n"
+            f"## Todos os requisitos do projeto\n{_fmt_reqs(all_reqs, 'Todos')}\n\n"
+            f"## Regras SBVR relacionadas\n{rules_ctx}\n\n"
+            f"## Contradições abertas relacionadas\n{contra_ctx}\n\n"
+            "## Responda com:\n"
+            "1. **Sumário do Impacto** (🔴 Alto / 🟡 Médio / 🟢 Baixo) com justificativa\n"
+            "2. **Requisitos bloqueados ou afetados indiretamente**\n"
+            "3. **Regras SBVR a revisar**\n"
+            "4. **Riscos e efeitos colaterais**\n"
+            "5. **Recomendação final** (prosseguir / revisar / não prosseguir)\n\n"
+            "Máximo 600 palavras."
+        )
+
+        # 4. LLM call
+        try:
+            provider_cfg = self.llm_config.get("provider_cfg", {})
+            api_key      = self.llm_config.get("api_key", "")
+            model        = self.llm_config.get("model", "deepseek-v4-flash")
+            client_type  = provider_cfg.get("client_type", "openai_compatible")
+
+            if client_type == "anthropic":
+                import anthropic as _ant
+                ac  = _ant.Anthropic(api_key=api_key)
+                msg = ac.messages.create(
+                    model=model, max_tokens=2048, system=system_prompt,
+                    messages=[{"role": "user", "content": user_prompt}],
+                )
+                analysis = (msg.content[0].text or "").strip()
+            else:
+                from openai import OpenAI as _OAI
+                client = _OAI(api_key=api_key, base_url=provider_cfg.get("base_url"))
+                kwargs: dict = dict(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user",   "content": user_prompt},
+                    ],
+                    max_tokens=2048,
+                )
+                if not provider_cfg.get("reasoning_effort") and "deepseek-v4" not in model.lower():
+                    kwargs["temperature"] = 0.3
+                analysis = (client.chat.completions.create(**kwargs).choices[0].message.content or "").strip()
+
+        except Exception as exc:
+            # Heuristic fallback
+            n_aff   = len(affected_rows)
+            impact  = "🔴 Alto" if n_aff >= 3 else ("🟡 Médio" if n_aff >= 1 else "🟢 Baixo")
+            analysis = (
+                f"**Análise heurística** *(LLM indisponível: {exc})*\n\n"
+                f"- **Impacto estimado:** {impact}\n"
+                f"- **{n_aff}** requisito(s) diretamente identificado(s) como afetado(s).\n"
+                f"- Verifique dependências com os demais {len(all_reqs)} requisitos manualmente.\n"
+                f"- Regras SBVR relacionadas:\n{rules_ctx[:300]}\n"
+            )
+
+        return (
+            f"# 🔮 Simulação de Cenário\n\n"
+            f"**Cenário:** {descricao}\n\n"
+            "---\n\n"
+            + analysis
+        )
+
+    def verificar_conformidade(
+        self,
+        doc_id: str | None = None,
+        req_type_filter: str | None = None,
+        threshold: float = 0.75,
+        mode: str = "keyword",
+    ) -> str:
+        """Check coverage of project requirements against library documents."""
+        from modules.supabase_client import get_supabase_client
+        from modules.document_store import list_documents, get_document
+        import re as _re
+
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        # 1. Get documents
+        if doc_id:
+            doc = get_document(doc_id)
+            if not doc:
+                return f"Documento com ID `{doc_id}` não encontrado."
+            docs = [doc]
+        else:
+            docs = [d for d in list_documents(project_id=self.project_id, limit=30) if d.get("content_text")]
+
+        if not docs:
+            return (
+                "Nenhum documento com conteúdo encontrado. "
+                "Faça upload e indexe documentos via **📄 Documentos**."
+            )
+
+        # 2. Get requirements
+        try:
+            q = (
+                db.table("requirements")
+                .select("req_number, title, description, req_type, priority")
+                .eq("project_id", self.project_id)
+                .order("req_number")
+            )
+            if req_type_filter:
+                q = q.eq("req_type", req_type_filter)
+            reqs = q.execute().data or []
+        except Exception as exc:
+            return f"Erro ao buscar requisitos: {exc}"
+
+        if not reqs:
+            hint = f" do tipo '{req_type_filter}'" if req_type_filter else ""
+            return f"Nenhum requisito{hint} encontrado no projeto."
+
+        # 3. Keyword helper
+        _STOP = {
+            "a","o","as","os","de","do","da","dos","das","em","no","na","nos","nas",
+            "para","que","um","uma","e","ou","se","com","por","mas","é","ser","ter",
+            "ao","à","não","como","mais","deve","há","este","esta","seu","sua","foi",
+            "sendo","está","são","pelo","pela","isso","cada","todos","todas",
+        }
+
+        def _words(text: str) -> set:
+            return {
+                w for w in _re.sub(r"[^\w\sáéíóúâêôãçÁÉÍÓÚÂÊÔÃÇ]", " ", text.lower()).split()
+                if w not in _STOP and len(w) > 2
+            }
+
+        def _score(req_w: set, doc_w: set) -> float:
+            return len(req_w & doc_w) / len(req_w) if req_w else 0.0
+
+        # Pre-compute doc word sets (cap content at 50k chars for performance)
+        doc_word_sets = [
+            (d, _words((d.get("content_text") or "")[:50_000]))
+            for d in docs
+        ]
+
+        # 4. Analyse each requirement
+        covered, partial, uncovered = 0, 0, 0
+        gap_rows: list[tuple] = []  # (req_id, title, score, doc_title, doc_id)
+
+        for r in reqs:
+            n      = r.get("req_number", "?")
+            title  = r.get("title", "")
+            desc   = r.get("description", "")
+            req_id = f"REQ-{n:03d}" if isinstance(n, int) else f"REQ-{n}"
+            rw     = _words(f"{title} {desc}")
+
+            best_score, best_doc = 0.0, None
+            for d, dw in doc_word_sets:
+                s = _score(rw, dw)
+                if s > best_score:
+                    best_score, best_doc = s, d
+
+            if best_score >= threshold:
+                covered += 1
+            elif best_score >= threshold * 0.55:
+                partial += 1
+                gap_rows.append((req_id, title, best_score, best_doc))
+            else:
+                uncovered += 1
+                gap_rows.append((req_id, title, best_score, best_doc))
+
+        total = len(reqs)
+        pct   = 100 * covered / total if total else 0
+        icon  = "✅" if pct >= 80 else ("🟡" if pct >= 50 else "🔴")
+
+        lines = [
+            "# 🔍 Relatório de Conformidade",
+            f"**Documentos analisados:** {len(docs)}  |  **Requisitos:** {total}\n",
+            f"## {icon} Cobertura Geral: **{pct:.0f}%** ({covered}/{total})\n",
+            f"| Cobertos ✅ | Parciais 🟡 | Não mapeados ❌ |",
+            f"|---|---|---|",
+            f"| {covered} | {partial} | {uncovered} |\n",
+        ]
+
+        if gap_rows:
+            lines.append("## ⚠️ Gaps e Cobertura Parcial\n")
+            # Sort: uncovered first, then partial
+            gap_rows.sort(key=lambda x: x[2])
+            for req_id, title, score, d in gap_rows[:20]:
+                status     = "❌" if score < threshold * 0.55 else "🟡"
+                doc_label  = d.get("title", "—") if d else "nenhum documento"
+                lines.append(
+                    f"- {status} **{req_id}** — {title}\n"
+                    f"  Cobertura: {score:.0%} | Melhor match: *{doc_label}*"
+                )
+            if len(gap_rows) > 20:
+                lines.append(f"*… e mais {len(gap_rows) - 20} requisito(s) com gap*")
+
+        if mode == "llm" and gap_rows:
+            lines.append(
+                "\n> **Modo LLM:** análise semântica profunda ainda não disponível nesta versão. "
+                "Os gaps acima foram identificados por correspondência de palavras-chave (keyword). "
+                "Para análise semântica completa, use a aba **⚗️ Extrair Artefatos** em Documentos."
+            )
+
+        if uncovered > 0 or partial > 0:
+            lines += [
+                "\n## 📋 Ações Recomendadas",
+                f"- **{uncovered}** requisito(s) sem cobertura — considere criar documentos de especificação.",
+                f"- **{partial}** requisito(s) com cobertura parcial — revise a completude dos documentos existentes.",
+                "- Use **📄 Documentos** para adicionar BRDs, contratos ou specs e re-execute esta análise.",
+            ]
+
+        return "\n".join(lines)
+
     # ── Editor Estrutural (Fase 2) ────────────────────────────────────────────
 
     def reordenar_requisitos(
@@ -9548,6 +10124,26 @@ class AssistantToolExecutor:
                     include_roi=bool(tool_input.get("include_roi", True)),
                     include_recurring=bool(tool_input.get("include_recurring", True)),
                     include_pendencies=bool(tool_input.get("include_pendencies", True)),
+                ),
+                # ── Rastreabilidade / Simulação / Conformidade (Fase 3)
+                "mapa_rastreabilidade":   lambda: self.mapa_rastreabilidade(
+                    req_number=tool_input.get("req_number"),
+                    topic=tool_input.get("topic"),
+                    include_transcript=bool(tool_input.get("include_transcript", True)),
+                    include_bpmn=bool(tool_input.get("include_bpmn", True)),
+                    include_sbvr=bool(tool_input.get("include_sbvr", True)),
+                    include_ibis=bool(tool_input.get("include_ibis", True)),
+                ),
+                "simular_cenario":        lambda: self.simular_cenario(
+                    descricao=tool_input["descricao"],
+                    requisitos_afetados=tool_input.get("requisitos_afetados"),
+                    restricoes=tool_input.get("restricoes"),
+                ),
+                "verificar_conformidade": lambda: self.verificar_conformidade(
+                    doc_id=tool_input.get("doc_id"),
+                    req_type_filter=tool_input.get("req_type_filter"),
+                    threshold=float(tool_input.get("threshold", 0.75)),
+                    mode=tool_input.get("mode", "keyword"),
                 ),
                 # ── Editor Estrutural (Fase 2)
                 "reordenar_requisitos":   lambda: self.reordenar_requisitos(
