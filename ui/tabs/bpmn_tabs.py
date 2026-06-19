@@ -13,6 +13,20 @@ def render_bpmn(hub, prefix, suffix):
     with _c2:
         render_quality_badge(hub, "bpmn")
     if hub.bpmn.bpmn_xml:
+        # ── Reformatar button (deterministic, no LLM) ──────────────────────
+        _rb_col, _ = st.columns([1, 9])
+        with _rb_col:
+            if st.button("🔧 Reformatar", key="btn_reformat_bpmn",
+                         help="Centraliza rótulos nas caixas do diagrama — correção determinística sem LLM"):
+                from modules.bpmn_auto_repair import reformat_bpmn_di
+                _fixed, _changes = reformat_bpmn_di(hub.bpmn.bpmn_xml)
+                if _changes:
+                    hub.bpmn.bpmn_xml = _fixed
+                    st.session_state["hub"] = hub
+                    st.toast(f"✅ {len(_changes)} rótulo(s) centralizado(s)", icon="🔧")
+                else:
+                    st.toast("Nenhum problema de formatação detectado.", icon="ℹ️")
+
         bpmn_html = preview_from_xml(hub.bpmn.bpmn_xml)
         components.html(bpmn_html, height=800, scrolling=False)
         if hub.bpmn.lanes:

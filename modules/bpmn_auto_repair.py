@@ -323,3 +323,73 @@ def _repair_pool(
                 )
                 _pass5_changed = True
                 break  # restart with fresh adjacency
+
+
+# ── DI reformatter (deterministic, no LLM) ───────────────────────────────────
+
+def reformat_bpmn_di(xml_str: str) -> tuple[str, list[str]]:
+    """
+    Remove explicit dc:Bounds from BPMNLabel of task shapes so that bpmn-js
+    auto-centers label text inside task boxes (prevents left-anchored text).
+
+    Heuristic: shapes with dc:Bounds width >= 100px are tasks (events ~30px,
+    gateways ~50px).
+
+    Returns (fixed_xml, changes). Never raises — returns (xml_str, []) on error.
+    """
+    import io
+    import xml.etree.ElementTree as ET
+
+    _BPMNDI     = "http://www.omg.org/spec/BPMN/20100524/DI"
+    _DC         = "http://www.omg.org/spec/DD/20100524/DC"
+    _SHAPE      = f"{{{_BPMNDI}}}BPMNShape"
+    _LABEL      = f"{{{_BPMNDI}}}BPMNLabel"
+    _BOUNDS     = f"{{{_DC}}}Bounds"
+    _TASK_MIN_W = 100  # tasks ≥ 100px wide; events ~30px; gateways ~50px
+
+    try:
+        # Register all namespace prefixes to prevent ns0/ns1 mangling in output
+        for _, (pfx, uri) in ET.iterparse(io.StringIO(xml_str), events=["start-ns"]):
+            ET.register_namespace(pfx, uri)
+
+        root = ET.fromstring(xml_str)
+        changes: list[str] = []
+
+        for shape in root.iter(_SHAPE):
+            bounds = shape.find(_BOUNDS)
+            if bounds is None:
+                continue
+            try:
+                w = float(bounds.get("width", "0"))
+            except ValueError:
+                continue
+            if w < _TASK_MIN_W:
+                continue  # event or gateway shape — skip
+
+            label = shape.find(_LABEL)
+            if label is None:
+                continue
+
+            label_bounds = label.find(_BOUNDS)
+            if label_bounds is not None:
+                label.remove(label_bounds)
+                elem_id = shape.get("bpmnElement", shape.get("id", "?"))
+                changes.append(f"Rótulo centralizado: '{elem_id}'")
+
+        if not changes:
+            return xml_str, []
+
+        buf = io.StringIO()
+        ET.ElementTree(root).write(buf, encoding="unicode", xml_declaration=False)
+        fixed = buf.getvalue()
+
+        # Re-attach original XML declaration if the source had one
+        stripped = xml_str.lstrip()
+        if stripped.startswith("<?xml"):
+            decl_end = stripped.index("?>") + 2
+            fixed = stripped[:decl_end] + "\n" + fixed
+
+        return fixed, changes
+
+    except Exception:
+        return xml_str, []
