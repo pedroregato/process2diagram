@@ -377,3 +377,33 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Multi-sphere SBVR (Fase G)** — `BusinessRule` com `sphere`, `sphere_owner`, `bmm_policy_ref`, `speaker_quote`; `RequirementItem` com `business_rule_refs: list` + `sphere: Optional[str]`; `_VALID_SPHERES` frozenset; **SBVR reordenado para Step 2.5** (antes de Minutes+Requirements) para rastreabilidade de BR-IDs; `skill_sbvr.md` atualizado com tabela de esferas; `sbvr_tab.py` reescrito com métricas, agrupamento por esfera, filtro, speaker_quote, bmm_policy_ref, requisitos vinculados
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
+
+### PC48 — Concluído (v4.33 / 2026-06-19)
+
+**Top-10 Ferramentas do Assistente — Fases 1–4** (`melhorias/top-10-ferramamentas-assistente.md`)
+
+#### Fase 1 — Plantonista e Diagnóstico (pré-sessão)
+- [x] **`sugestoes_plantonista`** — ferramenta não-admin em `core/assistant_tools.py`; analisa atas + requisitos pendentes + IBIS sem resposta + encaminhamentos vencidos; retorna lista priorizada de sugestões de ação para o usuário
+- [x] **`diagnostico_projeto`** — ferramenta não-admin; varre cobertura de artefatos por reunião (BPMN, ata, DMN, IBIS, relatório), contagem de requisitos por status, score ROI-TR médio, pendências IBIS abertas; retorna relatório de saúde consolidado em Markdown
+- [x] **Plantonista auto-trigger** — `pages/Assistente.py` exibe sugestões automaticamente ao abrir o Assistente com projeto ativo, sem precisar digitar comando
+
+#### Fase 2 — Editor Estrutural
+- [x] **`reordenar_requisitos`** — ferramenta de escrita; aceita `nova_ordem: array[str]` (lista de req_numbers) ou `agrupar_por: enum[tipo,prioridade]`; atualiza campo `sort_order` na tabela `requirements` via Supabase; retorna confirmação com nova sequência
+- [x] **`inserir_secao_ata`** — ferramenta admin; aceita `meeting_number`, `titulo`, `conteudo`, `posicao: enum[inicio,fim,antes_X,apos_X]`; faz parse do `minutes_md`, injeta nova seção `## titulo`, persiste no Supabase
+- [x] **`vincular_regra_debate`** — ferramenta de escrita; faz upsert na tabela `sbvr_ibis_links` (rule_id, ibis_question_id, relacao: justifica|contradiz|limita); cria rastreabilidade bidirecional SBVR ↔ IBIS
+- [x] **`mesclar_reunioes`** — ferramenta admin; modo `preview=True` (padrão) mostra impacto antes de executar; modo execute reassigna requisitos/SBVR/BPMN/chunks da reunião absorvida, concatena atas, deleta meeting absorvida; parâmetro `razao` registrado nos metadados
+- [x] **`sincronizar_calendario`** — ferramenta admin; lê action items das atas, cria eventos Google Calendar via `modules/calendar_client.py create_event()`; rastreia status em `calendar_sync_items`; suporta `direction: to_calendar|from_calendar|bidirectional`; parâmetros de janela de trabalho (`default_work_start/end`)
+- [x] **Migration SQL** — `setup/supabase_migration_fase2.sql`: coluna `sort_order INTEGER` em `requirements`; tabela `sbvr_ibis_links` (project_id, rule_id, ibis_question_id, relacao, created_at); tabela `calendar_sync_items` (project_id, meeting_id, action_text, google_event_id, sync_direction, status, last_sync_at); ambas com `ENABLE ROW LEVEL SECURITY` (service_role ignora RLS; bloqueia anon/authenticated); índices em project_id e meeting_id — **migration executada com sucesso**
+
+#### Fase 3 — Rastreabilidade, What-If e Conformidade
+- [x] **`mapa_rastreabilidade`** — ferramenta de consulta; coordena `search_transcript()`, `list_bpmn_processes()`, `get_sbvr_rules()`, `_load_ibis_questions()` para construir mapa Markdown de rastreabilidade de um requisito ou tópico; flags booleanas `include_transcript|bpmn|sbvr|ibis` controlam escopo; sem SQL novo (usa tabelas existentes)
+- [x] **`simular_cenario`** — ferramenta de consulta; recebe `descricao` + `requisitos_afetados: array` + `restricoes: object`; agrega requisitos + regras SBVR + contradições do KnowledgeGraph; chama LLM via `_llm_call()` para análise de impacto; fallback heurístico automático se LLM falhar; sem SQL novo
+- [x] **`verificar_conformidade`** — ferramenta de consulta; keyword-match de títulos/descrições de requisitos contra conteúdo de documento (`meeting_documents` + `document_chunks`); classifica Coberto/Parcial/Não Mapeado por threshold configurável; retorna relatório de lacunas; suporta `mode: keyword|llm`; sem SQL novo
+
+#### Fase 4 — Geração de Documentos Estratégicos
+- [x] **`sugerir_processos`** — ferramenta de consulta; single-linkage clustering de questões IBIS por overlap Jaccard de keywords; filtra clusters com ≥ `min_reunioes` reuniões; verifica contra BPMNs existentes para evitar duplicatas; infere etapas das alternativas IBIS escolhidas; sem LLM (algoritmo determinístico)
+- [x] **`gerar_deck_executivo`** — ferramenta de consulta; coleta BMM, CKF, breakdown de requisitos, processos BPMN, ROI-TR, encaminhamentos; chama LLM para gerar deck de 7 slides em Markdown (`incluir_secoes` configurável); suporta `tema_cores` para personalização visual
+- [x] **`gerar_project_charter`** — ferramenta de consulta; agrega todos os artefatos do projeto; chama LLM para gerar Project Charter formal PMO em Markdown (10 seções); flags booleanas `incluir_riscos|cronograma|stakeholders|escopo`
+- [x] **`_llm_call()` helper** — método privado compartilhado em `AssistantToolExecutor`; roteamento OpenAI-compat / Anthropic; evita duplicação de código entre `simular_cenario`, `gerar_deck_executivo` e `gerar_project_charter`
+- [x] **`_ADMIN_TOOLS` atualizado** — `inserir_secao_ata`, `mesclar_reunioes`, `sincronizar_calendario` adicionados ao frozenset; perfil não-admin vê apenas ferramentas de consulta e escrita leve
+- [x] **`_TOOL_CATEGORIES` atualizado** — todas as 10 novas ferramentas categorizadas: Fase 2 escrita/admin, Fases 3–4 como consulta
