@@ -332,7 +332,10 @@ def _bpmn_parse(xml_str: str):
     import io
     import xml.etree.ElementTree as ET
     for _, (pfx, uri) in ET.iterparse(io.StringIO(xml_str), events=["start-ns"]):
-        ET.register_namespace(pfx, uri)
+        try:
+            ET.register_namespace(pfx, uri)
+        except ValueError:
+            pass  # skip reserved prefixes (xml, xmlns, …)
     return ET.fromstring(xml_str), ET
 
 
