@@ -44,7 +44,7 @@ def init_session_state():
     if "run_query_summarizer" not in st.session_state:
         st.session_state.run_query_summarizer = True
     if "run_communication_noise" not in st.session_state:
-        st.session_state.run_communication_noise = False
+        st.session_state.run_communication_noise = True
     if "n_bpmn_runs" not in st.session_state:
         st.session_state.n_bpmn_runs = 3
     if "bpmn_weights" not in st.session_state:
