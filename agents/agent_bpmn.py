@@ -242,6 +242,13 @@ class AgentBPMN(BaseAgent):
         except Exception:
             hub.bpmn.mermaid = ""
         hub.bpmn.bpmn_xml = self._generate_bpmn_xml(hub.bpmn)
+        try:
+            from modules.bpmn_auto_repair import reformat_bpmn_di
+            _xml_fmt, _fmt_changes = reformat_bpmn_di(hub.bpmn.bpmn_xml)
+            if _fmt_changes:
+                hub.bpmn.bpmn_xml = _xml_fmt
+        except Exception:
+            pass
         hub.bpmn.ready = True
         hub.mark_agent_run(self.name)
         hub.bump()
