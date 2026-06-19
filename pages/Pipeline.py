@@ -297,26 +297,20 @@ if pipeline_mode == _MODE_NEW:
 else:
     st.markdown(t("load_meeting"))
 
-    projects = list_projects()
-    if not projects:
-        st.info(t("no_context_db"))
+    # Contexto vem da Central de Operações (Home) — nunca mostramos selectbox aqui.
+    selected_proj_id = st.session_state.get("active_project_id")
+    if not selected_proj_id:
+        st.warning(
+            "Nenhum contexto ativo. Selecione um contexto na **Central de Operações** antes de carregar uma reunião.",
+            icon="⚠️",
+        )
         st.stop()
 
-    proj_options = {p["name"]: p["id"] for p in projects}
-    active_pid = st.session_state.get("active_project_id")
-    _last_load_pid = st.session_state.get("_load_synced_pid")
-    if active_pid and active_pid != _last_load_pid:
-        for p in projects:
-            if p["id"] == active_pid:
-                st.session_state["load_proj_select"] = p["name"]
-                st.session_state["_load_synced_pid"] = active_pid
-                break
-    selected_proj_name = st.selectbox(
-        "Contexto",
-        list(proj_options.keys()),
-        key="load_proj_select",
-    )
-    selected_proj_id = proj_options[selected_proj_name]
+    # Mostra o contexto ativo como informação (somente leitura)
+    _projects = list_projects()
+    _active_proj = next((p for p in _projects if p["id"] == selected_proj_id), None)
+    if _active_proj:
+        st.caption(f"Contexto ativo: **{_active_proj['name']}**")
 
     meetings = list_meetings(selected_proj_id)
     if not meetings:
