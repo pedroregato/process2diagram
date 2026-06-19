@@ -386,11 +386,12 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
 
     try:
         root, ET = _bpmn_parse(xml_str)
-        changes: list[str] = []
+        fixes:    list[str] = []   # actual structural changes
+        verified: int       = 0    # task shapes successfully checked
 
         # Detect namespace mangling from previous serializations
         if "ns0:" in xml_str or "xmlns:ns0=" in xml_str:
-            changes.append("Namespaces XML normalizados (ns0: → padrão BPMN)")
+            fixes.append("Namespaces XML normalizados (ns0: → padrão BPMN)")
 
         for shape in root.iter(_SHAPE):
             # Skip pools and lanes — they carry isHorizontal="true"
@@ -407,6 +408,7 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
             if not (_TASK_MIN_W <= w <= _TASK_MAX_W):
                 continue  # too narrow (event/gateway) or too wide (pool/lane fallback)
 
+            verified += 1
             elem_id = shape.get("bpmnElement", shape.get("id", "?"))
 
             label = shape.find(_LABEL)
@@ -414,17 +416,23 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
                 # BPMNLabel missing entirely — add empty one
                 import xml.etree.ElementTree as _ET
                 _ET.SubElement(shape, _LABEL)
-                changes.append(f"BPMNLabel adicionado: '{elem_id}'")
+                fixes.append(f"BPMNLabel adicionado: '{elem_id}'")
                 continue
 
             label_bounds = label.find(_BOUNDS)
             if label_bounds is not None:
                 label.remove(label_bounds)
-                changes.append(f"Rótulo centralizado: '{elem_id}'")
+                fixes.append(f"Rótulo centralizado: '{elem_id}'")
 
-        if not changes:
-            return xml_str, []
-        return _bpmn_serialize(root, xml_str, ET), changes
+        # Always re-serialize: ensures canonical namespaces are applied even
+        # when no label fixes were needed (prevents stale ns0: and guarantees
+        # bpmn-js receives clean, standardized XML).
+        fixed = _bpmn_serialize(root, xml_str, ET)
+        if fixes:
+            changes = fixes
+        else:
+            changes = [f"[OK] {verified} task(s) verificada(s) — labels já centralizados"]
+        return fixed, changes
 
     except Exception as exc:
         return xml_str, [f"[ERRO] reformat_bpmn_labels: {exc}"]

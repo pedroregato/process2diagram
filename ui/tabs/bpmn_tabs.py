@@ -21,15 +21,18 @@ def render_bpmn(hub, prefix, suffix):
                 from modules.bpmn_auto_repair import reformat_bpmn_labels
                 _fixed, _changes = reformat_bpmn_labels(hub.bpmn.bpmn_xml)
                 _errors = [c for c in _changes if c.startswith("[ERRO]")]
-                _fixes  = [c for c in _changes if not c.startswith("[ERRO]")]
+                _ok     = [c for c in _changes if c.startswith("[OK]")]
+                _fixes  = [c for c in _changes if not c.startswith("[ERRO]") and not c.startswith("[OK]")]
                 if _errors:
                     st.toast(_errors[0], icon="❌")
-                elif _fixes:
+                else:
+                    # Always apply re-serialized XML (canonical namespaces)
                     hub.bpmn.bpmn_xml = _fixed
                     st.session_state["hub"] = hub
-                    st.toast(f"✅ {len(_fixes)} correção(ões) aplicada(s)", icon="🏷️")
-                else:
-                    st.toast("Labels já centralizados — nenhuma correção necessária.", icon="✅")
+                    if _fixes:
+                        st.toast(f"✅ {len(_fixes)} correção(ões) aplicada(s)", icon="🏷️")
+                    elif _ok:
+                        st.toast(_ok[0].replace("[OK] ", ""), icon="✅")
         with _rb2:
             if st.button("↔️ Ajustar Sequências", key="btn_reformat_flows",
                          help="Delega roteamento de flows ao bpmn-js (pode melhorar cruzamentos em alguns diagramas)"):
