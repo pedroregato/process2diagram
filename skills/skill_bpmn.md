@@ -310,6 +310,8 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 - [ ] Start Event tem `title` descrevendo o **gatilho real** (não "Início"/"Start")?
 - [ ] End Event tem `title` descrevendo o **estado de negócio alcançado** (não "Fim"/"End")?
 - [ ] Nenhuma lane tem nome genérico (`usuário`, `sistema`, `validador`...)?
+- [ ] **Toda lane declarada em `lanes` tem pelo menos 1 step com `lane` igual ao seu nome?** (Lane sem steps = erro estrutural — o viewer exibe uma faixa vazia e o algoritmo de crossing detection fica incorreto)
+- [ ] Nenhum flow entre lanes distintas cruza uma lane intermediária com steps? (o gerador substitui automaticamente por Link Events, mas prefira fluxos limpos que não exijam esse mecanismo)
 - [ ] O campo `description` raiz do JSON está preenchido com 1–3 frases do objetivo?
 
 **Completude e Fechamento do Processo:**

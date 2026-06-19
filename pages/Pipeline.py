@@ -103,6 +103,17 @@ if pipeline_mode == _MODE_NEW:
     render_project_selector()
     render_bpmn_process_selector()
 
+    # ── Botão Nova Transcrição — aparece quando resultados já estão na tela ──
+    if "hub" in st.session_state:
+        _nc_col, _ = st.columns([1, 5])
+        if _nc_col.button("🆕 Nova Transcrição", key="btn_nova_transcricao",
+                          help="Limpa a transcrição atual e os resultados para processar uma nova"):
+            for _k in ["hub", "curated_clean", "pp_result",
+                       "_last_uploaded_file", "current_meeting_id"]:
+                st.session_state.pop(_k, None)
+            st.session_state["transcript_text"] = ""
+            st.rerun()
+
     # Área de entrada e curadoria
     start_process = render_input_area()
 

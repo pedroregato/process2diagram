@@ -242,16 +242,13 @@ class AgentBPMN(BaseAgent):
         except Exception:
             hub.bpmn.mermaid = ""
         hub.bpmn.bpmn_xml = self._generate_bpmn_xml(hub.bpmn)
-        try:
-            from modules.bpmn_auto_repair import reformat_bpmn_labels
-            _xml_fmt, _fmt_changes = reformat_bpmn_labels(hub.bpmn.bpmn_xml)
-            # Always apply: normaliza namespaces e garante BPMNLabel vazio em tasks.
-            # Quando não há mudanças, _xml_fmt == bpmn_xml (atribuição inócua).
-            _has_error = any(c.startswith("[ERRO]") for c in _fmt_changes)
-            if not _has_error:
-                hub.bpmn.bpmn_xml = _xml_fmt
-        except Exception:
-            pass
+        # Always apply: normaliza namespaces e garante BPMNLabel vazio em tasks.
+        # reformat_bpmn_labels é fail-safe (nunca levanta exceção); o outer
+        # try/except foi removido para garantir visibilidade de erros inesperados.
+        from modules.bpmn_auto_repair import reformat_bpmn_labels
+        _xml_fmt, _fmt_changes = reformat_bpmn_labels(hub.bpmn.bpmn_xml)
+        if not any(c.startswith("[ERRO]") for c in _fmt_changes):
+            hub.bpmn.bpmn_xml = _xml_fmt
         hub.bpmn.ready = True
         hub.mark_agent_run(self.name)
         hub.bump()
@@ -424,6 +421,8 @@ class AgentBPMN(BaseAgent):
         Rule 1b — generic lane names → infer from step descriptions
         Rule 2  — correction loop pointing back to gateway → redirect to
                   the upstream work step that feeds the gateway
+        Rule 3  — remove empty lanes (lanes with 0 steps assigned); runs
+                  after Rules 1/1b so vacated lanes are also pruned
         """
         # ── Rule 0: strip redundant start/end event steps (single-pool) ──────
         if not model.is_collaboration:
@@ -472,13 +471,15 @@ class AgentBPMN(BaseAgent):
         step_map = {s.id: s for s in model.steps}
 
         # ── Rule 1: serviceTask with unnamed system → lane = None ─────────────
+        # (runs before Rule 3 so that lanes vacated by Rule 1 are also removed)
         for step in model.steps:
             if step.task_type == "serviceTask":
                 actor_lower = (step.actor or "").lower().strip()
                 if actor_lower in _GENERIC_ACTORS or not actor_lower:
                     step.lane = None
 
-        # ── Rule 2: correction loop pointing back to a gateway ─────────────────
+        # ── Rule 2: correction loop pointing back to a gateway ────────────────
+        # (no change in order — runs after Rule 1)
         outgoing: dict[str, list] = {s.id: [] for s in model.steps}
         for edge in model.edges:
             if edge.source in outgoing:
@@ -526,6 +527,17 @@ class AgentBPMN(BaseAgent):
             ]
             best = same_lane[0] if same_lane else upstream_candidates[0]
             edge.target = best
+
+        # ── Rule 3: remove empty lanes (lanes with no step assigned) ──────────
+        # Can happen after Rule 1 sets lane=None for serviceTask, or when the
+        # LLM declares a lane in `lanes` but assigns no steps to it.
+        # Empty lanes create blank rows in the viewer and inflate lane spans,
+        # causing the crossing detector to miscount lane boundaries.
+        populated = {s.lane for s in model.steps if s.lane}
+        model.lanes = [ln for ln in model.lanes if ln in populated]
+        for pm in model.pool_models:
+            pm_pop = {s.lane for s in pm.steps if s.lane}
+            pm.lanes = [ln for ln in pm.lanes if ln in pm_pop]
 
     # ── BPMN XML generation ───────────────────────────────────────────────────
 
