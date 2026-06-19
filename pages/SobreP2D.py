@@ -1,10 +1,11 @@
 # pages/SobreP2D.py
 # ─────────────────────────────────────────────────────────────────────────────
-# Sobre o Process2Diagram — visao geral, arquitetura, tecnologias e credito
+# Sobre o Process2Diagram — design fiel à apresentação executiva (FGV)
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
 
+import base64
 import sys
 from pathlib import Path
 
@@ -17,428 +18,533 @@ from ui.auth_gate import apply_auth_gate
 
 apply_auth_gate()
 
-# ── CSS ───────────────────────────────────────────────────────────────────────
+# ── Foto do autor em base64 ───────────────────────────────────────────────────
+_PHOTO_PATH = root_dir / "assets" / "pedro_regato.png"
+_PHOTO_B64 = ""
+if _PHOTO_PATH.exists():
+    _PHOTO_B64 = base64.b64encode(_PHOTO_PATH.read_bytes()).decode()
+
+_PHOTO_SRC = (
+    f"data:image/png;base64,{_PHOTO_B64}"
+    if _PHOTO_B64
+    else ""
+)
+
+# ── CSS — mesmo design da apresentação FGV ────────────────────────────────────
 st.markdown("""
 <style>
-/* ── Hero ── */
-.sobre-hero {
-    background: linear-gradient(135deg, #050E1F 0%, #071428 50%, #0B1E3D 100%);
-    border-bottom: 3px solid #C97B1A;
-    border-radius: 14px;
-    padding: 2rem 2.4rem 1.6rem;
-    margin-bottom: 1.8rem;
-    box-shadow: 0 6px 32px rgba(0,0,0,.45);
-    position: relative;
-    overflow: hidden;
-}
-.sobre-hero::before {
-    content: "";
-    position: absolute; top: -40px; right: -40px;
-    width: 220px; height: 220px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(201,123,26,.10) 0%, transparent 70%);
-}
-.sobre-hero .hero-badge {
-    display: inline-block;
-    background: rgba(201,123,26,.15); border: 1px solid rgba(201,123,26,.35);
-    border-radius: 20px; padding: .22rem .8rem;
-    font-size: .68rem; font-weight: 700; color: #C97B1A;
-    letter-spacing: .10em; text-transform: uppercase;
-    margin-bottom: .7rem;
-}
-.sobre-hero .hero-title {
-    font-size: 2rem; font-weight: 800; color: #FAFAF8;
-    line-height: 1.15; margin-bottom: .5rem;
-}
-.sobre-hero .hero-title span { color: #C97B1A; }
-.sobre-hero .hero-sub {
-    font-size: .92rem; color: #7A8EA8; line-height: 1.6;
-    max-width: 680px;
-}
-.sobre-hero .hero-version {
-    display: inline-block; margin-top: .9rem;
-    background: rgba(59,130,246,.12); border: 1px solid rgba(59,130,246,.25);
-    border-radius: 20px; padding: .22rem .8rem;
-    font-size: .70rem; font-weight: 700; color: #60a5fa;
-    letter-spacing: .06em;
+:root {
+  --navy:  #0B1F3A;
+  --navy2: #112848;
+  --gold:  #C9973A;
+  --gold2: #E8B84B;
+  --white: #F4F6FA;
+  --muted: #8A9BC4;
+  --green: #2ECC71;
+  --red:   #E74C3C;
+  --blue:  #3498DB;
+  --bg:    #060E1C;
 }
 
-/* ── Section header ── */
-.s-hdr {
-    display: flex; align-items: center; gap: .6rem;
-    font-size: .72rem; font-weight: 700; color: #6A7E98;
-    letter-spacing: .12em; text-transform: uppercase;
-    margin: 2rem 0 .9rem;
-}
-.s-hdr::after {
-    content: ""; flex: 1; height: 1px;
-    background: linear-gradient(90deg, #1e3a55 0%, transparent 100%);
+/* Fundo da página */
+.stApp { background: var(--bg) !important; }
+
+/* ── Slide card ── */
+.slide-card {
+  background: var(--navy);
+  border: 1px solid #1E3456;
+  border-radius: 14px;
+  padding: 48px 56px;
+  margin-bottom: 24px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.5);
 }
 
-/* ── Capability cards ── */
-.cap-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: .7rem; margin-bottom: .5rem;
-}
-.cap-card {
-    background: #080F1F;
-    border: 1px solid #1A3050;
-    border-radius: 12px;
-    padding: 1rem 1.1rem;
-    box-shadow: 0 2px 12px rgba(0,0,0,.22);
-    transition: border-color .2s;
-}
-.cap-card:hover { border-color: #2a4a70; }
-.cap-card .cc-icon { font-size: 1.5rem; margin-bottom: .5rem; }
-.cap-card .cc-title { font-size: .88rem; font-weight: 700; color: #FAFAF8; margin-bottom: .3rem; }
-.cap-card .cc-desc  { font-size: .75rem; color: #7A8EA8; line-height: 1.5; }
-
-/* ── Pipeline steps ── */
-.pipe-row {
-    display: flex; align-items: flex-start; gap: 1rem;
-    background: #080F1F; border: 1px solid #1A3050;
-    border-radius: 10px; padding: .85rem 1rem;
-    margin-bottom: .5rem;
-}
-.pipe-row .pr-num {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 28px; height: 28px; min-width: 28px;
-    border-radius: 50%; background: #C97B1A;
-    color: #fff; font-size: .72rem; font-weight: 800; flex-shrink: 0;
-}
-.pipe-row .pr-body { flex: 1; }
-.pipe-row .pr-title { font-size: .88rem; font-weight: 700; color: #FAFAF8; margin-bottom: .2rem; }
-.pipe-row .pr-desc  { font-size: .78rem; color: #7A8EA8; line-height: 1.5; }
-.pipe-row .pr-tag {
-    display: inline-block; padding: 1px 8px; border-radius: 10px;
-    font-size: .60rem; font-weight: 700; letter-spacing: .05em;
-    background: rgba(201,123,26,.12); color: #C97B1A;
-    border: 1px solid rgba(201,123,26,.25); margin-right: .3rem;
-}
-.pipe-row .pr-tag.blue {
-    background: rgba(59,130,246,.12); color: #60a5fa;
-    border-color: rgba(59,130,246,.25);
-}
-.pipe-row .pr-tag.green {
-    background: rgba(16,185,129,.10); color: #34d399;
-    border-color: rgba(16,185,129,.25);
+/* ── Label ── */
+.label {
+  font-size: 11px; font-weight: 700; letter-spacing: 2.5px;
+  color: var(--gold); text-transform: uppercase; margin-bottom: 10px;
 }
 
-/* ── Tech pills ── */
-.tech-grid {
-    display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: .5rem;
-}
-.tech-pill {
-    display: inline-flex; align-items: center; gap: .3rem;
-    background: #080F1F; border: 1px solid #1A3050;
-    border-radius: 20px; padding: .28rem .8rem;
-    font-size: .74rem; color: #FAFAF8;
-}
-.tech-pill .tp-dot {
-    width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+/* ── Tipografia ── */
+.slide-card h1 { font-size: 42px; font-weight: 700; line-height: 1.15; color: var(--white); }
+.slide-card h1 span { color: var(--gold2); }
+.slide-card h2 { font-size: 26px; font-weight: 700; color: var(--white); margin-bottom: 6px; }
+.slide-card h3 { font-size: 17px; font-weight: 600; color: var(--gold2); margin-bottom: 8px; }
+.slide-card p  { font-size: 15px; color: #BDC8E0; line-height: 1.65; }
+.slide-card ul { padding-left: 20px; }
+.slide-card li { font-size: 15px; color: #BDC8E0; line-height: 1.65; margin-bottom: 6px; }
+
+/* ── Motto ── */
+.motto {
+  font-size: 18px; font-style: italic; color: var(--gold2);
+  line-height: 1.55; margin: 18px 0 26px;
+  border-left: 3px solid var(--gold); padding-left: 18px;
 }
 
-/* ── Info box ── */
-.info-box {
-    background: #080F1F; border: 1px solid #1A3050;
-    border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: .8rem;
-}
-.info-box .ib-title {
-    font-size: .75rem; font-weight: 700; color: #C97B1A;
-    letter-spacing: .08em; text-transform: uppercase; margin-bottom: .55rem;
-}
+/* ── Cover line ── */
+.cover-line { height: 3px; width: 80px; background: var(--gold); margin: 20px 0; }
 
-/* ── Credit card ── */
-.credit-card {
-    background: linear-gradient(135deg, #080F1F 0%, #0B1528 100%);
-    border: 1px solid #1A3050;
-    border-radius: 14px;
-    padding: 1.5rem 1.8rem;
-    margin-top: 1.2rem;
-    display: flex; align-items: center; gap: 1.4rem;
-    box-shadow: 0 4px 20px rgba(0,0,0,.3);
+/* ── Tag / badge ── */
+.tag {
+  display: inline-block; font-size: 11px; font-weight: 700;
+  padding: 4px 10px; border-radius: 12px; letter-spacing: .5px; margin: 3px 2px;
 }
-.credit-avatar {
-    width: 80px; height: 80px; min-width: 80px; border-radius: 50%;
-    background: linear-gradient(135deg, #0B1E3D 0%, #142d52 100%);
-    border: 2px solid #C97B1A;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.5rem; font-weight: 800; color: #C97B1A;
-    letter-spacing: .02em; flex-shrink: 0;
+.tag.blue  { background:#1A4070; color:#7EC8F5; }
+.tag.gold  { background:#3A2900; color:var(--gold2); }
+.tag.green { background:#0D3020; color:#5DE8A0; }
+.tag.red   { background:#3A0D0D; color:#F59B9B; }
+.tag.gray  { background:#1A2436; color:var(--muted); }
+
+/* ── Stat box ── */
+.cols-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 28px; }
+.cols-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 20px; }
+.cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 20px; }
+.stat {
+  background: #0D1F38; border: 1px solid #1E3456;
+  border-radius: 10px; padding: 20px 18px; text-align: center;
 }
-.credit-info .ci-name {
-    font-size: 1rem; font-weight: 700; color: #FAFAF8; margin-bottom: .25rem;
+.stat .number { font-size: 34px; font-weight: 800; color: var(--gold2); line-height: 1; }
+.stat .unit   { font-size: 13px; color: var(--gold); margin-top: 2px; }
+.stat .desc   { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+
+/* ── Card ── */
+.card {
+  background: #0D1F38; border: 1px solid #1E3456;
+  border-radius: 10px; padding: 18px 20px;
 }
-.credit-info .ci-role {
-    font-size: .80rem; color: #C97B1A; margin-bottom: .35rem;
+.card.gold-border { border-color: var(--gold); }
+.card.red-border  { border-color: var(--red); }
+.card p { font-size: 14px; color: #BDC8E0; line-height: 1.65; margin: 0; }
+
+/* ── Pipeline ── */
+.pipeline {
+  display: flex; align-items: center; gap: 6px;
+  flex-wrap: wrap; margin-top: 18px;
 }
-.credit-info .ci-bio {
-    font-size: .77rem; color: #7A8EA8; line-height: 1.55; margin-bottom: .45rem;
+.pipe-step {
+  background: #0D1F38; border: 1px solid #1E3456;
+  border-radius: 8px; padding: 8px 14px;
+  font-size: 12px; color: #BDC8E0; white-space: nowrap;
 }
-.credit-info .ci-contact {
-    font-size: .70rem; color: #4A6080; letter-spacing: .03em;
+.pipe-step.highlight { border-color: var(--gold); color: var(--gold2); }
+.pipe-arrow { color: var(--gold); font-size: 18px; }
+
+/* ── ROI bar ── */
+.roi-row { margin-bottom: 14px; }
+.roi-label {
+  display: flex; justify-content: space-between;
+  font-size: 13px; color: #BDC8E0; margin-bottom: 5px;
+}
+.roi-bar-bg { height: 10px; background: #0D1F38; border-radius: 5px; }
+.roi-bar    { height: 10px; border-radius: 5px;
+              background: linear-gradient(90deg, var(--gold), var(--gold2)); }
+
+/* ── Divider ── */
+.divider { height: 1px; background: #1E3456; margin: 20px 0; }
+
+/* ── Autor ── */
+.autor-block {
+  display: flex; gap: 40px; align-items: flex-start; margin-top: 8px;
+}
+.autor-col-left { flex-shrink: 0; text-align: center; width: 160px; }
+.autor-col-left img {
+  width: 130px; height: 130px; border-radius: 50%;
+  object-fit: cover; border: 3px solid var(--gold);
+  display: block; margin: 0 auto;
+}
+.autor-col-left .a-name {
+  font-size: 14px; font-weight: 700; color: var(--white);
+  margin-top: 14px; line-height: 1.35;
+}
+.autor-col-left .a-role {
+  font-size: 11px; color: var(--gold2); margin-top: 5px;
+}
+.autor-col-left .a-bio {
+  font-size: 10px; color: var(--muted); margin-top: 8px; line-height: 1.5;
+}
+.autor-col-right { flex: 1; }
+
+/* ── Watermark ── */
+.watermark {
+  text-align: right; margin-top: 24px;
+  font-size: 11px; color: #1E3456; font-weight: 700; letter-spacing: 2px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Hero ──────────────────────────────────────────────────────────────────────
+
+# ── SLIDE 1 — CAPA ────────────────────────────────────────────────────────────
 st.markdown("""
-<div class="sobre-hero">
-  <div class="hero-badge">Sobre o Produto</div>
-  <div class="hero-title">Process2Diagram<br><span>Da fala ao diagrama.</span></div>
-  <div class="hero-sub">
-    Plataforma de inteligencia artificial que converte transcricoes de reunioes em artefatos
-    profissionais de analise de processos — diagramas BPMN, atas, requisitos, vocabulario de
-    negocios e relatorios executivos — usando um pipeline de multiplos agentes LLM encadeados.
+<div class="slide-card" style="background:linear-gradient(135deg,#0B1F3A 0%,#071428 60%,#0D1F38 100%);">
+  <div class="label">Plataforma de Inteligência Artificial — Visão Geral</div>
+  <h1>Process<span>2</span>Diagram</h1>
+  <div class="cover-line"></div>
+  <div class="motto">
+    "Reunião — o ativo intangível que gera<br>maior impacto tangível nas corporações."
   </div>
-  <span class="hero-version">v4.32 &nbsp;·&nbsp; Streamlit Cloud &nbsp;·&nbsp; Python 3.13</span>
+  <p style="color:var(--muted); font-size:14px; max-width:520px;">
+    Uma plataforma de Inteligência Artificial que transforma o conhecimento gerado
+    em reuniões em artefatos formais, rastreáveis e auditáveis — em minutos.
+  </p>
+  <div style="margin-top:24px; display:flex; gap:8px; flex-wrap:wrap;">
+    <span class="tag blue">BPMN 2.0</span>
+    <span class="tag gold">Requisitos IEEE 830</span>
+    <span class="tag green">Governança</span>
+    <span class="tag blue">IA Generativa</span>
+    <span class="tag gold">Grafo de Conhecimento</span>
+    <span class="tag green">Auditoria</span>
+    <span class="tag gray">Multi-LLM</span>
+    <span class="tag gray">Supabase + pgvector</span>
+  </div>
+  <div class="watermark">P2D v4.32</div>
 </div>
 """, unsafe_allow_html=True)
 
-# ── O problema que resolve ─────────────────────────────────────────────────────
-st.markdown('<div class="s-hdr">O problema que resolve</div>', unsafe_allow_html=True)
 
-col_prob, col_sol = st.columns(2)
-
-with col_prob:
-    st.markdown("""
-<div class="info-box">
-<div class="ib-title">Antes do P2D</div>
-<ul style="font-size:.80rem;color:#9AAABB;margin:0;padding-left:1.2rem;line-height:1.9">
-  <li>Analistas transcrevem reunioes manualmente</li>
-  <li>Diagramas BPMN criados do zero em ferramentas separadas</li>
-  <li>Requisitos identificados informalmente, sem rastreamento</li>
-  <li>Atas nao padronizadas e sujeitas a erros de interpretacao</li>
-  <li>Decisoes e acoes dispersas em e-mails e arquivos</li>
-  <li>Semanas de trabalho para documentar um projeto</li>
-</ul>
-</div>
-""", unsafe_allow_html=True)
-
-with col_sol:
-    st.markdown("""
-<div class="info-box">
-<div class="ib-title">Com o P2D</div>
-<ul style="font-size:.80rem;color:#9AAABB;margin:0;padding-left:1.2rem;line-height:1.9">
-  <li>Cole a transcricao &rarr; clique em Gerar &rarr; artefatos prontos</li>
-  <li>Diagrama BPMN 2.0 gerado automaticamente, pronto para editar</li>
-  <li>Requisitos estruturados IEEE&nbsp;830 com rastreabilidade</li>
-  <li>Ata padronizada com participantes, decisoes e acoes</li>
-  <li>Vocabulario SBVR e modelo BMM integrados</li>
-  <li>Pipeline completo em minutos, nao em semanas</li>
-</ul>
-</div>
-""", unsafe_allow_html=True)
-
-# ── Capacidades ───────────────────────────────────────────────────────────────
-st.markdown('<div class="s-hdr">Capacidades principais</div>', unsafe_allow_html=True)
-
-_CAPS = [
-    ("📐", "BPMN 2.0",
-     "Diagrama de processo com lanes, gateways, eventos e fluxos de sequencia. "
-     "Visualizador bpmn-js embutido com pan, zoom e setas de navegacao."),
-    ("📊", "Fluxograma Mermaid",
-     "Representacao alternativa do mesmo processo em sintaxe Mermaid, "
-     "com renderizacao SVG e opcoes horizontal/vertical."),
-    ("📋", "Ata de Reuniao",
-     "Minuta estruturada com participantes, pauta, decisoes, encaminhamentos "
-     "e proximos passos. Exportavel em Markdown, Word e PDF."),
-    ("📝", "Requisitos IEEE 830",
-     "Extração estruturada de requisitos funcionais e nao funcionais com "
-     "codigo, tipo, prioridade, descricao e rastreabilidade por reuniao."),
-    ("📖", "Vocabulario SBVR",
-     "Termos de negocio, definicoes e regras de negocio no padrao OMG SBVR, "
-     "com exportacao JSON e visualizacao por categoria."),
-    ("🎯", "Modelo BMM",
-     "Visao, missao, objetivos, estrategias e politicas no padrao OMG Business "
-     "Motivation Model — alinha processos a estrategia corporativa."),
-    ("⚖️", "Tabelas de Decisao DMN",
-     "Regras de negocio extraidas no padrao OMG DMN 1.4 com renderizacao "
-     "dark-theme, hit-policy badge e DRD topologico."),
-    ("💬", "Assistente RAG",
-     "Chat conversacional com historico e ate 90 ferramentas de consulta ao "
-     "banco de dados — tool-use ou RAG classico com pgvector."),
-    ("📄", "Relatorio Executivo",
-     "Sintese HTML auto-contido com graficos, metricas e destaques — "
-     "pronto para enviar a stakeholders sem nenhuma instalacao."),
-    ("📈", "Dashboard ROI-TR",
-     "Qualidade e retorno sobre investimento por tipo de reuniao (11 tipos), "
-     "com pesos por dimensao de artefato e historico comparativo."),
-    ("🕸️", "Grafo de Conhecimento",
-     "Visualizacao interativa de entidades, contradicoes e fatos extraidos "
-     "de multiplas reunioes — estilo Obsidian com fisicas pyvis."),
-    ("📅", "Google Calendar",
-     "Agendamento de itens de acao e sugestao de horarios diretamente "
-     "pelo Assistente, integrado ao calendario do projeto."),
-]
-
-caps_html = ""
-for icon, title, desc in _CAPS:
-    caps_html += (
-        f'<div class="cap-card">'
-        f'<div class="cc-icon">{icon}</div>'
-        f'<div class="cc-title">{title}</div>'
-        f'<div class="cc-desc">{desc}</div>'
-        f'</div>'
-    )
-st.markdown(f'<div class="cap-grid">{caps_html}</div>', unsafe_allow_html=True)
-
-# ── Pipeline ──────────────────────────────────────────────────────────────────
-st.markdown('<div class="s-hdr">Como funciona — Pipeline de agentes</div>', unsafe_allow_html=True)
-
-_PIPE = [
-    ("Qualidade da Transcricao", "Avalia a transcricao com grade A-E e identifica lacunas antes de processar.", "LLM", None, None),
-    ("Pre-processamento", "Remove ruidos de ASR (repeticoes, hesitacoes, artefatos) sem usar LLM.", "Sem LLM", None, None),
-    ("NLP Chunker", "Segmentacao, deteccao de atores e NER via spaCy — identifica participantes e papeis.", "spaCy", None, None),
-    ("Agente BPMN", "Extrai steps, edges e lanes da transcricao e gera XML BPMN 2.0 + Mermaid. "
-     "Suporta torneio multi-pass (1/3/5 candidatos) e retry adaptativo via LangGraph.", "LLM", "Core", None),
-    ("Agente de Ata + Requisitos", "Execucao paralela via ThreadPoolExecutor. Extrai minuta estruturada "
-     "e requisitos IEEE 830 simultaneamente.", "LLM", "Paralelo", "green"),
-    ("Agentes de Enriquecimento", "SBVR, BMM, DMN, Sintetizador e Ruidos de Comunicacao — todos opcionais, "
-     "executados em sequencia apos o nucleo.", "LLM", "Opcional", "blue"),
-    ("KnowledgeHub", "Todos os artefatos convergemm para o hub central (dataclass). "
-     "Persistido no Supabase e disponivel para o Assistente.", None, "Estado", "blue"),
-]
-
-for i, (title, desc, tag, tag2, tag_color) in enumerate(_PIPE, 1):
-    tags_html = ""
-    if tag:
-        tags_html += f'<span class="pr-tag">{tag}</span>'
-    if tag2:
-        color_cls = f" {tag_color}" if tag_color else ""
-        tags_html += f'<span class="pr-tag{color_cls}">{tag2}</span>'
-    st.markdown(
-        f'<div class="pipe-row">'
-        f'<span class="pr-num">{i}</span>'
-        f'<div class="pr-body">'
-        f'<div class="pr-title">{title} &nbsp;{tags_html}</div>'
-        f'<div class="pr-desc">{desc}</div>'
-        f'</div>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
-
-# ── Tecnologias ────────────────────────────────────────────────────────────────
-st.markdown('<div class="s-hdr">Tecnologias</div>', unsafe_allow_html=True)
-
-_TECHS = [
-    ("#C97B1A", "Python 3.13"),
-    ("#3b82f6", "Streamlit 1.45"),
-    ("#10b981", "LangGraph"),
-    ("#8b5cf6", "bpmn-js 17"),
-    ("#C97B1A", "Supabase + pgvector"),
-    ("#3b82f6", "DeepSeek V4"),
-    ("#10b981", "Claude Sonnet 4"),
-    ("#8b5cf6", "OpenAI GPT-4o"),
-    ("#C97B1A", "Google Gemini 2.0"),
-    ("#3b82f6", "Groq Llama 3.3"),
-    ("#10b981", "Grok xAI"),
-    ("#8b5cf6", "spaCy NER"),
-    ("#C97B1A", "Mermaid.ink"),
-    ("#3b82f6", "Plotly"),
-    ("#10b981", "python-docx"),
-    ("#8b5cf6", "fpdf2"),
-    ("#C97B1A", "pyvis"),
-    ("#3b82f6", "Google Calendar API"),
-]
-
-pills_html = ""
-for color, label in _TECHS:
-    pills_html += (
-        f'<span class="tech-pill">'
-        f'<span class="tp-dot" style="background:{color}"></span>'
-        f'{label}'
-        f'</span>'
-    )
-st.markdown(f'<div class="tech-grid">{pills_html}</div>', unsafe_allow_html=True)
-
-# ── Provedores LLM ──────────────────────────────────────────────────────────
-st.markdown('<div class="s-hdr">Provedores LLM suportados</div>', unsafe_allow_html=True)
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown("""
-<div class="info-box">
-<div class="ib-title">Producao e Baixo Custo</div>
-<ul style="font-size:.80rem;color:#9AAABB;margin:0;padding-left:1.2rem;line-height:1.9">
-  <li><strong style="color:#FAFAF8">DeepSeek V4 Flash</strong> — padrao; contexto 1M; custo minimo</li>
-  <li><strong style="color:#FAFAF8">DeepSeek V4 Pro</strong> — premium; mais preciso para BPMN complexo</li>
-  <li><strong style="color:#FAFAF8">DeepSeek V4 Flash (Thinking)</strong> — modo raciocinio chain-of-thought</li>
-  <li><strong style="color:#FAFAF8">Groq (Llama 3.3 70B)</strong> — mais rapido; tier gratuito disponivel</li>
-  <li><strong style="color:#FAFAF8">Google Gemini 2.0</strong> — gratuito no tier free; contexto longo</li>
-</ul>
-</div>
-""", unsafe_allow_html=True)
-
-with col2:
-    st.markdown("""
-<div class="info-box">
-<div class="ib-title">Alta Qualidade</div>
-<ul style="font-size:.80rem;color:#9AAABB;margin:0;padding-left:1.2rem;line-height:1.9">
-  <li><strong style="color:#FAFAF8">Claude Sonnet 4 (Anthropic)</strong> — excelente para SBVR e BMM</li>
-  <li><strong style="color:#FAFAF8">OpenAI GPT-4o / GPT-4o-mini</strong> — balanco qualidade/custo</li>
-  <li><strong style="color:#FAFAF8">Grok 4 (xAI)</strong> — contexto 2M; raciocinio avancado</li>
-</ul>
-<div style="margin-top:.7rem;padding:.6rem .8rem;background:rgba(201,123,26,.07);
-            border-left:2px solid #C97B1A;border-radius:4px;
-            font-size:.74rem;color:#C9A060;line-height:1.5">
-  Cada agente pode usar um provedor diferente via
-  <strong>Cenarios de Custo-Beneficio</strong>.
-</div>
-</div>
-""", unsafe_allow_html=True)
-
-# ── Deploy ───────────────────────────────────────────────────────────────────
-st.markdown('<div class="s-hdr">Implantacao</div>', unsafe_allow_html=True)
-
+# ── SLIDE 2 — O PARADOXO ──────────────────────────────────────────────────────
 st.markdown("""
-<div class="info-box">
-<div class="ib-title">Opcoes de Deploy</div>
-<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.7rem;margin-top:.3rem">
-  <div style="padding:.7rem .9rem;background:#0A1528;border:1px solid #1A3050;border-radius:8px">
-    <div style="font-size:.80rem;font-weight:700;color:#FAFAF8;margin-bottom:.3rem">Streamlit Cloud</div>
-    <div style="font-size:.74rem;color:#7A8EA8">Deploy automatico via push para GitHub. Sem infraestrutura para gerenciar.</div>
-  </div>
-  <div style="padding:.7rem .9rem;background:#0A1528;border:1px solid #1A3050;border-radius:8px">
-    <div style="font-size:.80rem;font-weight:700;color:#FAFAF8;margin-bottom:.3rem">Docker / VPS</div>
-    <div style="font-size:.74rem;color:#7A8EA8">Containerizacao simples com <code>streamlit run app.py</code>. Sem build step.</div>
-  </div>
-  <div style="padding:.7rem .9rem;background:#0A1528;border:1px solid #1A3050;border-radius:8px">
-    <div style="font-size:.80rem;font-weight:700;color:#FAFAF8;margin-bottom:.3rem">On-Premises</div>
-    <div style="font-size:.74rem;color:#7A8EA8">Dados 100% na infraestrutura do cliente. Supabase self-hosted disponivel.</div>
-  </div>
-  <div style="padding:.7rem .9rem;background:#0A1528;border:1px solid #1A3050;border-radius:8px">
-    <div style="font-size:.80rem;font-weight:700;color:#FAFAF8;margin-bottom:.3rem">Implantacao em 1 dia</div>
-    <div style="font-size:.74rem;color:#7A8EA8">Sem instalacao de cliente. Suporte a qualquer provedor LLM ja contratado.</div>
-  </div>
-</div>
-</div>
-""", unsafe_allow_html=True)
+<div class="slide-card">
+  <div class="label">O paradoxo corporativo</div>
+  <h2>O ativo mais caro da empresa é o menos documentado</h2>
+  <p style="margin-top:14px; max-width:700px;">
+    Reuniões executivas concentram as decisões mais estratégicas de uma organização.
+    São o momento onde estratégia vira compromisso, onde requisitos são definidos,
+    onde processos são redesenhados. E, paradoxalmente, onde o conhecimento mais evapora.
+  </p>
 
-# ── Credito ───────────────────────────────────────────────────────────────────
-st.markdown('<div class="s-hdr">Criador</div>', unsafe_allow_html=True)
-
-st.markdown("""
-<div class="credit-card">
-  <div class="credit-avatar">PGR</div>
-  <div class="credit-info">
-    <div class="ci-name">Pedro Gentil Regato de Oliveira Soares</div>
-    <div class="ci-role">Estatistico e BPM Senior</div>
-    <div class="ci-bio">
-      Da automacao de processos a IA em producao &mdash;
-      solucoes que integram modelo, fluxo e sistema.
+  <div class="cols-4">
+    <div class="stat">
+      <div class="number">71%</div>
+      <div class="unit">das decisões</div>
+      <div class="desc">estratégicas nascem em reuniões corporativas</div>
     </div>
-    <div class="ci-contact">pedro.regato@gmail.com &nbsp;&middot;&nbsp; P2D v4.32</div>
+    <div class="stat">
+      <div class="number">R$&nbsp;8.2k</div>
+      <div class="unit">por hora</div>
+      <div class="desc">custo médio de 1h de reunião executiva no Brasil</div>
+    </div>
+    <div class="stat">
+      <div class="number">2,3h</div>
+      <div class="unit">por dia</div>
+      <div class="desc">tempo médio de executivos em reuniões (Harvard)</div>
+    </div>
+    <div class="stat">
+      <div class="number">67%</div>
+      <div class="unit">do conhecimento</div>
+      <div class="desc">gerado em reuniões nunca é formalizado (Gartner)</div>
+    </div>
+  </div>
+
+  <div class="card red-border" style="margin-top:22px;">
+    <p style="color:#F59B9B; font-weight:600;">
+      ⚠️ Uma organização com 50 executivos que se reúnem 2h/dia gasta
+      <strong style="color:var(--white);">R$ 3,5 milhões/ano em reuniões</strong> —
+      e documenta menos de <strong style="color:var(--white);">33% do conhecimento gerado</strong>.
+    </p>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-# ── Rodape ───────────────────────────────────────────────────────────────────
-st.markdown(
-    "<div style='margin-top:2.5rem;padding-top:.8rem;border-top:1px solid #1A3050;"
-    "text-align:center;font-size:.68rem;color:#3A5070;letter-spacing:.04em'>"
-    "Process2Diagram v4.32 &nbsp;&middot;&nbsp; Sobre o Produto"
-    "</div>",
-    unsafe_allow_html=True,
+
+# ── SLIDE 3 — O QUE É ────────────────────────────────────────────────────────
+st.markdown("""
+<div class="slide-card">
+  <div class="label">O que é o Process2Diagram</div>
+  <h2>Da transcrição ao artefato formal — em minutos</h2>
+
+  <p style="margin-top:14px; max-width:680px;">
+    O P2D é um pipeline de múltiplos agentes LLM encadeados que processa transcrições
+    de reuniões e gera automaticamente todos os artefatos de análise de processos exigidos
+    por frameworks de governança corporativa.
+  </p>
+
+  <div class="pipeline" style="margin-top:24px;">
+    <div class="pipe-step">📄 Transcrição</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-step">🔬 Qualidade</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-step">🧹 Pré-proc.</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-step">🔍 NLP / NER</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-step highlight">📐 AgentBPMN</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-step">📋 Ata + Req.</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-step">📖 SBVR + BMM</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-step highlight">🧠 KnowledgeHub</div>
+  </div>
+
+  <div class="cols-3" style="margin-top:26px;">
+    <div class="card gold-border">
+      <h3>Input</h3>
+      <p>Texto bruto, .txt, .docx ou .pdf — transcrição de qualquer ferramenta
+      (Teams, Zoom, Google Meet, manual).</p>
+    </div>
+    <div class="card">
+      <h3>Processamento</h3>
+      <p>8 agentes especializados em sequência e paralelo, com retry adaptativo
+      via LangGraph e torneio multi-pass para BPMN.</p>
+    </div>
+    <div class="card gold-border">
+      <h3>Output</h3>
+      <p>BPMN 2.0 · Mermaid · Ata Word/PDF · Requisitos IEEE 830 · SBVR · BMM ·
+      DMN · Relatório HTML · Grafo de Conhecimento.</p>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ── SLIDE 4 — CAPACIDADES ─────────────────────────────────────────────────────
+st.markdown("""
+<div class="slide-card">
+  <div class="label">Capacidades</div>
+  <h2>12 artefatos gerados automaticamente</h2>
+
+  <div class="cols-3" style="margin-top:22px;">
+    <div class="card">
+      <h3>📐 BPMN 2.0</h3>
+      <p>Diagrama com lanes, gateways e eventos. Visualizador bpmn-js embutido
+      com pan, zoom, editor visual e histórico de versões.</p>
+    </div>
+    <div class="card">
+      <h3>📋 Ata de Reunião</h3>
+      <p>Minuta estruturada com participantes, pauta, decisões e encaminhamentos.
+      Exportável em Markdown, Word (.docx) e PDF.</p>
+    </div>
+    <div class="card">
+      <h3>📝 Requisitos IEEE 830</h3>
+      <p>Extração estruturada com código, tipo, prioridade e rastreabilidade
+      por reunião. Rastreados ao longo do projeto.</p>
+    </div>
+    <div class="card">
+      <h3>📖 Vocabulário SBVR</h3>
+      <p>Termos de negócio e regras formais no padrão OMG SBVR —
+      base para governança e compliance.</p>
+    </div>
+    <div class="card">
+      <h3>🎯 Modelo BMM</h3>
+      <p>Visão, missão, objetivos, estratégias e políticas no padrão OMG BMM —
+      alinha processos à estratégia corporativa.</p>
+    </div>
+    <div class="card">
+      <h3>⚖️ Tabelas DMN</h3>
+      <p>Regras de negócio no padrão OMG DMN 1.4 com DRD topológico e
+      renderizador dark-theme embutido.</p>
+    </div>
+    <div class="card">
+      <h3>📄 Relatório Executivo</h3>
+      <p>Síntese HTML auto-contido com métricas e destaques —
+      pronto para enviar a stakeholders sem instalação.</p>
+    </div>
+    <div class="card">
+      <h3>💬 Assistente RAG</h3>
+      <p>Chat com 90+ ferramentas de consulta ao banco —
+      tool-use ou RAG clássico com pgvector.</p>
+    </div>
+    <div class="card">
+      <h3>🕸️ Grafo de Conhecimento</h3>
+      <p>Entidades, contradições e fatos indexados de múltiplas reuniões —
+      visualização Obsidian com física pyvis.</p>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ── SLIDE 5 — PROVEDORES LLM ──────────────────────────────────────────────────
+st.markdown("""
+<div class="slide-card">
+  <div class="label">Infraestrutura de IA</div>
+  <h2>Multi-LLM — cada agente usa o melhor modelo para seu papel</h2>
+
+  <div class="cols-2" style="margin-top:22px;">
+    <div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr>
+            <th style="background:#0D1F38;color:var(--gold);font-weight:700;padding:10px 14px;
+                       text-align:left;border-bottom:2px solid #1E3456;font-size:11px;
+                       letter-spacing:1px;text-transform:uppercase;">Provedor</th>
+            <th style="background:#0D1F38;color:var(--gold);font-weight:700;padding:10px 14px;
+                       text-align:left;border-bottom:2px solid #1E3456;font-size:11px;
+                       letter-spacing:1px;text-transform:uppercase;">Modelo padrão</th>
+            <th style="background:#0D1F38;color:var(--gold);font-weight:700;padding:10px 14px;
+                       text-align:left;border-bottom:2px solid #1E3456;font-size:11px;
+                       letter-spacing:1px;text-transform:uppercase;">Contexto</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:9px 14px;border-bottom:1px solid #141F30;color:var(--white);font-weight:600;">DeepSeek V4 Flash ⭐</td>
+            <td style="padding:9px 14px;border-bottom:1px solid #141F30;color:#BDC8E0;">deepseek-v4-flash</td>
+            <td style="padding:9px 14px;border-bottom:1px solid #141F30;color:#BDC8E0;">1M tokens</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 14px;border-bottom:1px solid #141F30;color:var(--white);font-weight:600;">DeepSeek V4 Pro</td>
+            <td style="padding:9px 14px;border-bottom:1px solid #141F30;color:#BDC8E0;">deepseek-v4-pro</td>
+            <td style="padding:9px 14px;border-bottom:1px solid #141F30;color:#BDC8E0;">1M tokens</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 14px;border-bottom:1px solid #141F30;color:var(--white);font-weight:600;">Claude (Anthropic)</td>
+            <td style="padding:9px 14px;border-bottom:1px solid #141F30;color:#BDC8E0;">claude-sonnet-4</td>
+            <td style="padding:9px 14px;border-bottom:1px solid #141F30;color:#BDC8E0;">200K tokens</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 14px;border-bottom:1px solid #141F30;color:var(--white);font-weight:600;">OpenAI</td>
+            <td style="padding:9px 14px;border-bottom:1px solid #141F30;color:#BDC8E0;">gpt-4o-mini</td>
+            <td style="padding:9px 14px;border-bottom:1px solid #141F30;color:#BDC8E0;">128K tokens</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 14px;border-bottom:1px solid #141F30;color:var(--white);font-weight:600;">Groq (Llama)</td>
+            <td style="padding:9px 14px;border-bottom:1px solid #141F30;color:#BDC8E0;">llama-3.3-70b</td>
+            <td style="padding:9px 14px;border-bottom:1px solid #141F30;color:#BDC8E0;">128K tokens</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 14px;border-bottom:1px solid #141F30;color:var(--white);font-weight:600;">Google Gemini</td>
+            <td style="padding:9px 14px;border-bottom:1px solid #141F30;color:#BDC8E0;">gemini-2.0-flash</td>
+            <td style="padding:9px 14px;border-bottom:1px solid #141F30;color:#BDC8E0;">1M tokens</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 14px;color:var(--white);font-weight:600;">Grok (xAI)</td>
+            <td style="padding:9px 14px;color:#BDC8E0;">grok-4-1-fast</td>
+            <td style="padding:9px 14px;color:#BDC8E0;">2M tokens</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div class="card gold-border">
+        <h3>Cenários de Custo-Benefício</h3>
+        <p>Cada agente pode usar um provedor diferente. Compare combinações de
+        modelos e selecione o perfil ideal por agente antes de processar.</p>
+      </div>
+      <div class="card">
+        <h3>Cache Semântico</h3>
+        <p>Respostas cacheadas via SHA-256 no Supabase — evita chamadas
+        duplicadas e reduz custo em reprocessamentos.</p>
+      </div>
+      <div class="card">
+        <h3>Long Context</h3>
+        <p>Detecção automática de transcrições longas (&gt;50k tokens) —
+        ajusta <code>max_tokens</code> e timeout por agente.</p>
+      </div>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ── SLIDE 6 — CRÉDITO / AGRADECIMENTOS ───────────────────────────────────────
+_photo_html = (
+    f'<img src="{_PHOTO_SRC}" alt="Pedro Gentil Regato de Oliveira Soares">'
+    if _PHOTO_SRC
+    else '<div style="width:130px;height:130px;border-radius:50%;background:#0D1F38;'
+         'border:3px solid var(--gold);display:flex;align-items:center;justify-content:center;'
+         'font-size:2rem;font-weight:800;color:var(--gold);margin:0 auto;">PGR</div>'
 )
+
+st.markdown(f"""
+<div class="slide-card">
+  <div class="label">Criador</div>
+
+  <div class="autor-block">
+
+    <!-- Coluna esquerda: autor -->
+    <div class="autor-col-left">
+      {_photo_html}
+      <div class="a-name">Pedro Gentil Regato<br>de Oliveira Soares</div>
+      <div class="a-role">Estatístico &amp; BPM Sênior</div>
+      <div class="a-bio">
+        Da automação de processos<br>à IA em produção —<br>
+        soluções que integram<br>modelo, fluxo e sistema.
+      </div>
+    </div>
+
+    <!-- Coluna direita -->
+    <div class="autor-col-right">
+
+      <div class="card gold-border" style="margin-bottom:18px;">
+        <p style="color:var(--white);">
+          O <strong style="color:var(--gold2);">Process2Diagram</strong> é resultado exclusivo de
+          <strong>esforço pessoal</strong> de estudo, investigação e experimentação contínuas —
+          nascido da convicção de que o conhecimento gerado em reuniões corporativas é o ativo
+          estratégico mais desperdiçado das organizações modernas.<br><br>
+          Cada linha de código, cada agente, cada ferramenta foi construída com a crença de que
+          <em style="color:var(--gold2);">a IA generativa, quando bem orientada por padrões formais,
+          transforma conversa em governança</em>.
+        </p>
+      </div>
+
+      <h3 style="margin-bottom:12px;">Valor concreto para a organização que adotar o P2D</h3>
+
+      <div class="cols-2" style="gap:10px;">
+        <div>
+          <div class="roi-row">
+            <div class="roi-label">
+              <span>⏱️ Formalização de processos</span>
+              <span style="color:var(--gold2);">−90%</span>
+            </div>
+            <div class="roi-bar-bg"><div class="roi-bar" style="width:90%"></div></div>
+          </div>
+          <div class="roi-row">
+            <div class="roi-label">
+              <span>🔁 Retrabalho por falta de documentação</span>
+              <span style="color:var(--gold2);">−35%</span>
+            </div>
+            <div class="roi-bar-bg"><div class="roi-bar" style="width:35%"></div></div>
+          </div>
+          <div class="roi-row">
+            <div class="roi-label">
+              <span>🚀 Onboarding de novos membros</span>
+              <span style="color:var(--gold2);">+80%</span>
+            </div>
+            <div class="roi-bar-bg"><div class="roi-bar" style="width:80%"></div></div>
+          </div>
+          <div class="roi-row">
+            <div class="roi-label">
+              <span>📐 Cobertura de artefatos por reunião</span>
+              <span style="color:var(--gold2);">+320%</span>
+            </div>
+            <div class="roi-bar-bg"><div class="roi-bar" style="width:95%"></div></div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div class="card" style="padding:12px 14px;">
+            <p style="font-size:12px;">
+              🧠 <strong style="color:var(--white);">Memória corporativa persistente</strong><br>
+              Conhecimento não se perde quando pessoas saem — fica indexado e consultável.
+            </p>
+          </div>
+          <div class="card" style="padding:12px 14px;">
+            <p style="font-size:12px;">
+              ⚖️ <strong style="color:var(--white);">Governança e compliance</strong><br>
+              Trilha de auditoria completa: decisão → requisito → processo → regra DMN.
+            </p>
+          </div>
+          <div class="card" style="padding:12px 14px;">
+            <p style="font-size:12px;">
+              🎯 <strong style="color:var(--white);">Reuniões mais eficientes</strong><br>
+              Pauta gerada automaticamente a partir de pendências reais — sem repetição.
+            </p>
+          </div>
+          <div class="card" style="padding:12px 14px;">
+            <p style="font-size:12px;">
+              🔍 <strong style="color:var(--white);">Detecção proativa de riscos</strong><br>
+              Contradições identificadas antes de virarem problemas em produção.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <p style="font-size:12px;color:var(--muted);margin-top:0;">
+        pedro.regato@gmail.com &nbsp;·&nbsp; P2D v4.32 &nbsp;·&nbsp; Streamlit Cloud
+      </p>
+
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
