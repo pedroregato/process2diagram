@@ -243,8 +243,8 @@ class AgentBPMN(BaseAgent):
             hub.bpmn.mermaid = ""
         hub.bpmn.bpmn_xml = self._generate_bpmn_xml(hub.bpmn)
         try:
-            from modules.bpmn_auto_repair import reformat_bpmn_di
-            _xml_fmt, _fmt_changes = reformat_bpmn_di(hub.bpmn.bpmn_xml)
+            from modules.bpmn_auto_repair import reformat_bpmn_labels
+            _xml_fmt, _fmt_changes = reformat_bpmn_labels(hub.bpmn.bpmn_xml)
             if _fmt_changes:
                 hub.bpmn.bpmn_xml = _xml_fmt
         except Exception:

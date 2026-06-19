@@ -325,46 +325,48 @@ def _repair_pool(
                 break  # restart with fresh adjacency
 
 
-# ── DI reformatter (deterministic, no LLM) ───────────────────────────────────
+# ── DI reformatters (deterministic, no LLM) ──────────────────────────────────
 
-def reformat_bpmn_di(xml_str: str) -> tuple[str, list[str]]:
+def _bpmn_parse(xml_str: str):
+    """Register namespaces + parse. Returns (root, ET module). Raises on error."""
+    import io
+    import xml.etree.ElementTree as ET
+    for _, (pfx, uri) in ET.iterparse(io.StringIO(xml_str), events=["start-ns"]):
+        ET.register_namespace(pfx, uri)
+    return ET.fromstring(xml_str), ET
+
+
+def _bpmn_serialize(root, xml_str: str, ET) -> str:
+    """Serialize root to string, re-attaching original XML declaration."""
+    import io
+    buf = io.StringIO()
+    ET.ElementTree(root).write(buf, encoding="unicode", xml_declaration=False)
+    fixed = buf.getvalue()
+    stripped = xml_str.lstrip()
+    if stripped.startswith("<?xml"):
+        decl_end = stripped.index("?>") + 2
+        fixed = stripped[:decl_end] + "\n" + fixed
+    return fixed
+
+
+def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
     """
-    Two-pass deterministic DI reformatter:
-
-    Pass 1 — Label centering
-        Removes explicit dc:Bounds from BPMNLabel of task shapes (width ≥ 100px)
-        so that bpmn-js auto-centers text inside task boxes.
-
-    Pass 2 — Flow auto-routing
-        Removes waypoints from BPMNEdge elements that have exactly 2 waypoints
-        (straight start→end line). bpmn-js Manhattan router then takes over,
-        producing L-shaped paths that avoid element collisions and reduce crossings.
-        Edges with 3+ waypoints are preserved (intentional lane-crossing routes).
+    Remove explicit dc:Bounds from BPMNLabel of task shapes (width ≥ 100px)
+    so that bpmn-js auto-centers text inside task boxes.
 
     Returns (fixed_xml, changes). Never raises — returns (xml_str, []) on error.
     """
-    import io
-    import xml.etree.ElementTree as ET
-
     _BPMNDI     = "http://www.omg.org/spec/BPMN/20100524/DI"
     _DC         = "http://www.omg.org/spec/DD/20100524/DC"
-    _DI         = "http://www.omg.org/spec/DD/20100524/DI"
     _SHAPE      = f"{{{_BPMNDI}}}BPMNShape"
-    _EDGE       = f"{{{_BPMNDI}}}BPMNEdge"
     _LABEL      = f"{{{_BPMNDI}}}BPMNLabel"
     _BOUNDS     = f"{{{_DC}}}Bounds"
-    _WAYPOINT   = f"{{{_DI}}}waypoint"
-    _TASK_MIN_W = 100  # tasks ≥ 100px wide; events ~30px; gateways ~50px
+    _TASK_MIN_W = 100
 
     try:
-        # Register all namespace prefixes to prevent ns0/ns1 mangling in output
-        for _, (pfx, uri) in ET.iterparse(io.StringIO(xml_str), events=["start-ns"]):
-            ET.register_namespace(pfx, uri)
-
-        root = ET.fromstring(xml_str)
+        root, ET = _bpmn_parse(xml_str)
         changes: list[str] = []
 
-        # ── Pass 1: remove explicit label bounds from task shapes ─────────────
         for shape in root.iter(_SHAPE):
             bounds = shape.find(_BOUNDS)
             if bounds is None:
@@ -374,7 +376,7 @@ def reformat_bpmn_di(xml_str: str) -> tuple[str, list[str]]:
             except ValueError:
                 continue
             if w < _TASK_MIN_W:
-                continue  # event or gateway shape — skip
+                continue
 
             label = shape.find(_LABEL)
             if label is None:
@@ -386,7 +388,35 @@ def reformat_bpmn_di(xml_str: str) -> tuple[str, list[str]]:
                 elem_id = shape.get("bpmnElement", shape.get("id", "?"))
                 changes.append(f"Rótulo centralizado: '{elem_id}'")
 
-        # ── Pass 2: remove redundant waypoints from straight edges ────────────
+        if not changes:
+            return xml_str, []
+        return _bpmn_serialize(root, xml_str, ET), changes
+
+    except Exception:
+        return xml_str, []
+
+
+def reformat_bpmn_flows(xml_str: str) -> tuple[str, list[str]]:
+    """
+    Remove waypoints from BPMNEdge elements that have exactly 2 waypoints
+    (straight start→end line). bpmn-js Manhattan router then takes over,
+    producing L-shaped paths that avoid element collisions and may reduce crossings.
+    Edges with 3+ waypoints are preserved (intentional lane-crossing routes).
+
+    NOTE: results vary by diagram — use manually via the "Ajustar Sequências"
+    button rather than applying automatically in the pipeline.
+
+    Returns (fixed_xml, changes). Never raises — returns (xml_str, []) on error.
+    """
+    _BPMNDI   = "http://www.omg.org/spec/BPMN/20100524/DI"
+    _DI       = "http://www.omg.org/spec/DD/20100524/DI"
+    _EDGE     = f"{{{_BPMNDI}}}BPMNEdge"
+    _WAYPOINT = f"{{{_DI}}}waypoint"
+
+    try:
+        root, ET = _bpmn_parse(xml_str)
+        changes: list[str] = []
+
         for edge in root.iter(_EDGE):
             waypoints = edge.findall(_WAYPOINT)
             if len(waypoints) != 2:
@@ -398,18 +428,12 @@ def reformat_bpmn_di(xml_str: str) -> tuple[str, list[str]]:
 
         if not changes:
             return xml_str, []
-
-        buf = io.StringIO()
-        ET.ElementTree(root).write(buf, encoding="unicode", xml_declaration=False)
-        fixed = buf.getvalue()
-
-        # Re-attach original XML declaration if the source had one
-        stripped = xml_str.lstrip()
-        if stripped.startswith("<?xml"):
-            decl_end = stripped.index("?>") + 2
-            fixed = stripped[:decl_end] + "\n" + fixed
-
-        return fixed, changes
+        return _bpmn_serialize(root, xml_str, ET), changes
 
     except Exception:
         return xml_str, []
+
+
+# kept for backwards compatibility — calls labels only (flows is manual-only)
+def reformat_bpmn_di(xml_str: str) -> tuple[str, list[str]]:
+    return reformat_bpmn_labels(xml_str)

@@ -13,19 +13,30 @@ def render_bpmn(hub, prefix, suffix):
     with _c2:
         render_quality_badge(hub, "bpmn")
     if hub.bpmn.bpmn_xml:
-        # ── Reformatar button (deterministic, no LLM) ──────────────────────
-        _rb_col, _ = st.columns([1, 9])
-        with _rb_col:
-            if st.button("🔧 Reformatar", key="btn_reformat_bpmn",
-                         help="Centraliza rótulos nas caixas do diagrama — correção determinística sem LLM"):
-                from modules.bpmn_auto_repair import reformat_bpmn_di
-                _fixed, _changes = reformat_bpmn_di(hub.bpmn.bpmn_xml)
+        # ── Botões de reformatação (determinístico, sem LLM) ───────────────
+        _rb1, _rb2, _ = st.columns([1, 1, 8])
+        with _rb1:
+            if st.button("🏷️ Ajustar Labels", key="btn_reformat_labels",
+                         help="Centraliza os rótulos dentro das caixas de tarefa"):
+                from modules.bpmn_auto_repair import reformat_bpmn_labels
+                _fixed, _changes = reformat_bpmn_labels(hub.bpmn.bpmn_xml)
                 if _changes:
                     hub.bpmn.bpmn_xml = _fixed
                     st.session_state["hub"] = hub
-                    st.toast(f"✅ {len(_changes)} rótulo(s) centralizado(s)", icon="🔧")
+                    st.toast(f"✅ {len(_changes)} rótulo(s) centralizado(s)", icon="🏷️")
                 else:
-                    st.toast("Nenhum problema de formatação detectado.", icon="ℹ️")
+                    st.toast("Nenhum problema de label detectado.", icon="ℹ️")
+        with _rb2:
+            if st.button("↔️ Ajustar Sequências", key="btn_reformat_flows",
+                         help="Delega roteamento de flows ao bpmn-js (pode melhorar cruzamentos em alguns diagramas)"):
+                from modules.bpmn_auto_repair import reformat_bpmn_flows
+                _fixed, _changes = reformat_bpmn_flows(hub.bpmn.bpmn_xml)
+                if _changes:
+                    hub.bpmn.bpmn_xml = _fixed
+                    st.session_state["hub"] = hub
+                    st.toast(f"✅ {len(_changes)} sequência(s) re-roteada(s)", icon="↔️")
+                else:
+                    st.toast("Nenhuma sequência de 2 pontos encontrada.", icon="ℹ️")
 
         bpmn_html = preview_from_xml(hub.bpmn.bpmn_xml)
         components.html(bpmn_html, height=800, scrolling=False)
