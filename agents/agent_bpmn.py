@@ -245,7 +245,10 @@ class AgentBPMN(BaseAgent):
         try:
             from modules.bpmn_auto_repair import reformat_bpmn_labels
             _xml_fmt, _fmt_changes = reformat_bpmn_labels(hub.bpmn.bpmn_xml)
-            if _fmt_changes:
+            # Always apply: normaliza namespaces e garante BPMNLabel vazio em tasks.
+            # Quando não há mudanças, _xml_fmt == bpmn_xml (atribuição inócua).
+            _has_error = any(c.startswith("[ERRO]") for c in _fmt_changes)
+            if not _has_error:
                 hub.bpmn.bpmn_xml = _xml_fmt
         except Exception:
             pass
