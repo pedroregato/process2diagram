@@ -2865,6 +2865,113 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        # ── Fase 4: Sugestor de Processos, Deck Executivo, Project Charter ──────
+        {
+            "type": "function",
+            "function": {
+                "name": "sugerir_processos",
+                "description": (
+                    "Analisa os debates IBIS e decisões das reuniões para identificar "
+                    "temas recorrentes que podem originar novos processos BPMN. "
+                    "Verifica se cada tema já está modelado, infere steps das decisões "
+                    "e aponta regras SBVR associadas. "
+                    "Use quando o usuário pedir 'que processos novos podemos mapear?', "
+                    "'há processos não modelados?', 'quais temas se repetem nas reuniões?'."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "min_reunioes": {
+                            "type": "integer",
+                            "description": "Mínimo de reuniões distintas em que o tema deve aparecer para ser sugerido. Padrão: 2.",
+                        },
+                        "confidence": {
+                            "type": "number",
+                            "description": "Limiar de sobreposição de keywords para agrupar questões no mesmo tema (0–1). Padrão: 0.7.",
+                        },
+                        "include_evidence": {
+                            "type": "boolean",
+                            "description": "Incluir citações das reuniões como evidência. Padrão: true.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "gerar_deck_executivo",
+                "description": (
+                    "Gera um deck executivo completo (Markdown) consolidando todos os "
+                    "artefatos do projeto: visão/missão (BMM), métricas, requisitos, "
+                    "processos BPMN, ROI-TR, pendências e recomendações. "
+                    "Use quando o usuário pedir 'gere uma apresentação', 'preciso de um "
+                    "deck para o comitê', 'resumo executivo do projeto', 'prepare slides'."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "incluir_secoes": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": (
+                                "Seções a incluir. Padrão: todas. Opções: 'resumo_executivo', "
+                                "'metricas_principais', 'evolucao_requisitos', 'processos_bpmn', "
+                                "'indicadores_roi', 'pendencias', 'recomendacoes'."
+                            ),
+                        },
+                        "meeting_numbers": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": "Reuniões a incluir. Padrão: todas.",
+                        },
+                        "tema_cores": {
+                            "type": "string",
+                            "enum": ["corporativo", "moderno", "clean"],
+                            "description": "Estilo visual. Padrão: 'corporativo'.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "gerar_project_charter",
+                "description": (
+                    "Gera um Project Charter formal em Markdown consolidando todos os "
+                    "artefatos: visão, missão, stakeholders, escopo (requisitos), "
+                    "processos BPMN, regras SBVR, riscos (contradições), cronograma "
+                    "(datas das reuniões + encaminhamentos). "
+                    "Use quando o usuário pedir 'gere o Project Charter', 'crie o documento "
+                    "de abertura do projeto', 'preciso de um term of reference', 'PDD do projeto'."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "incluir_riscos": {
+                            "type": "boolean",
+                            "description": "Incluir seção de riscos baseada em contradições abertas. Padrão: true.",
+                        },
+                        "incluir_cronograma": {
+                            "type": "boolean",
+                            "description": "Incluir cronograma inferido das datas de reunião e encaminhamentos. Padrão: true.",
+                        },
+                        "incluir_stakeholders": {
+                            "type": "boolean",
+                            "description": "Incluir seção de stakeholders extraídos das atas. Padrão: true.",
+                        },
+                        "incluir_escopo": {
+                            "type": "boolean",
+                            "description": "Incluir breakdown do escopo por tipo de requisito. Padrão: true.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
         # ── Sincronizador Calendário (Fase 2) ─────────────────────────────────
         {
             "type": "function",
@@ -3036,6 +3143,10 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "mapa_rastreabilidade":            "consulta",
     "simular_cenario":                 "consulta",
     "verificar_conformidade":          "consulta",
+    # Sugestor / Deck / Charter (Fase 4)
+    "sugerir_processos":               "consulta",
+    "gerar_deck_executivo":            "consulta",
+    "gerar_project_charter":           "consulta",
     # Editor Estrutural (Fase 2)
     "reordenar_requisitos":            "escrita",
     "inserir_secao_ata":               "admin",
@@ -8884,6 +8995,415 @@ class AssistantToolExecutor:
 
         return "\n".join(lines)
 
+    # ── Sugestor de Processos / Deck Executivo / Project Charter (Fase 4) ──────
+
+    def sugerir_processos(
+        self,
+        min_reunioes: int = 2,
+        confidence: float = 0.7,
+        include_evidence: bool = True,
+    ) -> str:
+        """Identify potential new BPMN processes from IBIS debates and decisions."""
+        import re as _re
+
+        qs = self._load_ibis_questions()
+        if not qs:
+            return (
+                "Nenhuma questão IBIS encontrada no projeto. "
+                "Execute o pipeline com AgentArgumentation habilitado para gerar questões IBIS."
+            )
+
+        _STOP = {
+            "a","o","as","os","de","do","da","dos","das","em","no","na","nos","nas",
+            "para","que","um","uma","e","ou","se","com","por","mas","é","ser","ter",
+            "ao","à","não","como","mais","deve","há","este","esta","seu","sua","foi",
+            "sendo","está","são","pelo","pela","isso","cada","todos","todas","qual",
+            "quem","quando","onde","seria","será","pode","precisa","sobre","ainda",
+        }
+
+        def _kw(text: str) -> set:
+            return {
+                w for w in _re.sub(r"[^\w\sáéíóúâêôãçÁÉÍÓÚÂÊÔÃÇ]", " ", text.lower()).split()
+                if w not in _STOP and len(w) > 3
+            }
+
+        # Keyword set per question (statement + alternatives)
+        q_words = [
+            _kw(q.get("statement", "") + " " + " ".join(
+                a.get("description", "") for a in q.get("alternatives", [])
+            ))
+            for q in qs
+        ]
+
+        # Single-linkage clustering by Jaccard overlap >= confidence
+        assigned = [False] * len(qs)
+        clusters: list[dict] = []
+
+        for i, qi in enumerate(qs):
+            if assigned[i]:
+                continue
+            cl_qs    = [qi]
+            cl_words = set(q_words[i])
+            cl_mtgs  = {qi["_mnum"]}
+            assigned[i] = True
+
+            for j in range(len(qs)):
+                if assigned[j]:
+                    continue
+                union = cl_words | q_words[j]
+                if not union:
+                    continue
+                if len(cl_words & q_words[j]) / len(union) >= confidence:
+                    cl_qs.append(qs[j])
+                    cl_words |= q_words[j]
+                    cl_mtgs.add(qs[j]["_mnum"])
+                    assigned[j] = True
+
+            if len(cl_mtgs) >= min_reunioes:
+                clusters.append({"questions": cl_qs, "meetings": sorted(cl_mtgs), "words": cl_words})
+
+        if not clusters:
+            return (
+                f"Nenhum tema emergente encontrado em ≥{min_reunioes} reunião(ões) "
+                f"com confiança ≥{confidence:.0%}. "
+                "Tente reduzir `min_reunioes` ou `confidence`."
+            )
+
+        try:
+            from core.project_store import list_bpmn_processes, list_sbvr_rules
+            existing_procs = list_bpmn_processes(self.project_id)
+            existing_names = [(p.get("name") or "").lower() for p in existing_procs]
+            all_rules      = list_sbvr_rules(self.project_id)
+        except Exception:
+            existing_procs, existing_names, all_rules = [], [], []
+
+        lines = [
+            "# 💡 Sugestão de Novos Processos BPMN",
+            f"*{len(clusters)} tema(s) emergente(s) detectado(s) em ≥{min_reunioes} reunião(ões)*\n",
+        ]
+
+        for idx, cl in enumerate(clusters, 1):
+            # Topic name from most frequent keywords
+            freq: dict[str, int] = {}
+            for q in cl["questions"]:
+                for w in _kw(q.get("statement", "")):
+                    freq[w] = freq.get(w, 0) + 1
+            top_words  = sorted(freq, key=lambda w: -freq[w])[:4]
+            topic_name = " ".join(top_words).title() or f"Tema {idx}"
+            mtg_list   = ", ".join(f"Reunião {m}" for m in cl["meetings"])
+
+            already = any(
+                any(w in name for w in top_words[:2]) for name in existing_names
+            )
+            badge = "✅ Processo existente" if already else "🆕 Novo processo sugerido"
+
+            lines += [
+                f"---\n## {idx}. {topic_name}",
+                f"**{badge}** | Reuniões: {mtg_list} ({len(cl['meetings'])})",
+                "",
+            ]
+
+            if already:
+                match = next(
+                    (p.get("name") for p in existing_procs
+                     if any(w in (p.get("name") or "").lower() for w in top_words[:2])),
+                    "processo existente",
+                )
+                lines.append(f"*Processo relacionado já modelado: **{match}***")
+                lines.append("Verifique se cobre todos os cenários discutidos.\n")
+            else:
+                # Infer steps from IBIS alternatives
+                steps: list[str] = []
+                for q in cl["questions"]:
+                    for alt in q.get("alternatives", []):
+                        desc = (alt.get("description") or "").strip()
+                        if not desc:
+                            continue
+                        prefix = "✅ " if alt.get("was_chosen") else "• "
+                        steps.insert(0, prefix + desc) if alt.get("was_chosen") else steps.append(prefix + desc)
+                if not steps:
+                    steps = [
+                        f"Definir/Resolver: {q.get('statement','').rstrip('?')}"
+                        for q in cl["questions"][:4]
+                    ]
+
+                lines.append("### Steps inferidos das decisões IBIS")
+                for i_s, step in enumerate(steps[:6], 1):
+                    lines.append(f"{i_s}. {step}")
+                lines.append("")
+
+                rel_rules = [
+                    r for r in all_rules
+                    if any(w in (r.get("statement") or "").lower() for w in top_words[:3])
+                ][:3]
+                if rel_rules:
+                    lines.append("### Regras SBVR associadas")
+                    for r in rel_rules:
+                        lines.append(f"- [{r.get('rule_id','')}] {r.get('statement','')}")
+                    lines.append("")
+
+            if include_evidence:
+                lines.append("### Evidências")
+                for q in cl["questions"][:4]:
+                    lines.append(f"- Reunião {q.get('_mnum','?')}: *\"{q.get('statement','')}\"*")
+                lines.append("")
+
+        n_new      = sum(1 for cl in clusters if not any(
+            any(w in name for w in sorted(
+                {w for q in cl["questions"] for w in _kw(q.get("statement",""))},
+                key=lambda w: -sum(1 for q in cl["questions"] if w in q.get("statement","").lower()),
+            )[:2]) for name in existing_names
+        ))
+        lines.append(
+            f"\n---\n*Resumo: {len(clusters)} tema(s) encontrado(s) — "
+            f"{n_new} novo(s) processo(s) sugerido(s), "
+            f"{len(clusters) - n_new} já modelado(s).*"
+        )
+        return "\n".join(lines)
+
+    def _llm_call(self, system: str, user: str, max_tokens: int = 3000) -> str:
+        """Shared LLM call helper used by gerar_deck_executivo and gerar_project_charter."""
+        provider_cfg = self.llm_config.get("provider_cfg", {})
+        api_key      = self.llm_config.get("api_key", "")
+        model        = self.llm_config.get("model", "deepseek-v4-flash")
+        client_type  = provider_cfg.get("client_type", "openai_compatible")
+
+        if client_type == "anthropic":
+            import anthropic as _ant
+            ac  = _ant.Anthropic(api_key=api_key)
+            msg = ac.messages.create(
+                model=model, max_tokens=max_tokens, system=system,
+                messages=[{"role": "user", "content": user}],
+            )
+            return (msg.content[0].text or "").strip()
+        else:
+            from openai import OpenAI as _OAI
+            client = _OAI(api_key=api_key, base_url=provider_cfg.get("base_url"))
+            kwargs: dict = dict(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user",   "content": user},
+                ],
+                max_tokens=max_tokens,
+            )
+            if not provider_cfg.get("reasoning_effort") and "deepseek-v4" not in model.lower():
+                kwargs["temperature"] = 0.35
+            return (client.chat.completions.create(**kwargs).choices[0].message.content or "").strip()
+
+    def gerar_deck_executivo(
+        self,
+        incluir_secoes: list | None = None,
+        meeting_numbers: list | None = None,
+        tema_cores: str = "corporativo",
+    ) -> str:
+        """Generate a Markdown executive deck from all project artifacts."""
+        meetings = self._get_meetings()
+        if meeting_numbers:
+            meetings = [m for m in meetings if m.get("meeting_number") in meeting_numbers]
+        if not meetings:
+            return "Nenhuma reunião encontrada para gerar o deck executivo."
+
+        bmm  = self.get_bmm()
+        ckf  = self.get_ckf()
+        bpmn = self.list_bpmn_processes()
+        roi  = self.calculate_meeting_roi()
+
+        try:
+            from modules.supabase_client import get_supabase_client
+            db = get_supabase_client()
+            reqs = (
+                db.table("requirements")
+                .select("req_type, priority, status")
+                .eq("project_id", self.project_id)
+                .execute().data or []
+            ) if db else []
+        except Exception:
+            reqs = []
+
+        n_reqs   = len(reqs)
+        n_func   = sum(1 for r in reqs if r.get("req_type") == "Funcional")
+        n_nf     = sum(1 for r in reqs if r.get("req_type") == "Não Funcional")
+        n_rn     = sum(1 for r in reqs if r.get("req_type") == "Regra de Negócio")
+        n_crit   = sum(1 for r in reqs if r.get("priority") == "Crítico")
+        n_active = sum(1 for r in reqs if (r.get("status") or "").lower() == "active")
+
+        actions: list[str] = []
+        for m in meetings:
+            ai = self._section(m.get("minutes_md") or "", "Itens de Ação", "Action Items", "Ações")
+            if ai:
+                actions.append(f"Reunião {m.get('meeting_number')}: {ai[:150]}")
+
+        bmm_ctx  = bmm[:1500]  if "não encontrad" not in bmm.lower()  else "(não disponível)"
+        ckf_ctx  = ckf[:600]   if "não encontrad" not in ckf.lower()  else "(não disponível)"
+        bpmn_ctx = bpmn[:600]
+        roi_ctx  = roi[:600]
+        ai_ctx   = "\n".join(actions[:4]) or "(nenhum)"
+
+        sections = incluir_secoes or [
+            "resumo_executivo", "metricas_principais", "evolucao_requisitos",
+            "processos_bpmn", "indicadores_roi", "pendencias", "recomendacoes",
+        ]
+
+        system = (
+            "Você é especialista em apresentações executivas. "
+            "Gere um deck executivo em Markdown estruturado. "
+            "Cada slide começa com ## (H2). Bullet points concisos, máx 5 por slide. "
+            "Tom formal e objetivo. Responda em Português do Brasil."
+        )
+        user = (
+            f"Gere um deck executivo de {len(sections)} slides para um projeto de software.\n\n"
+            f"**Dados:**\n"
+            f"- Reuniões: {len(meetings)} | Requisitos: {n_reqs} "
+            f"({n_func} Func / {n_nf} NF / {n_rn} RN) | Críticos: {n_crit} | Ativos: {n_active}\n\n"
+            f"**BMM (Visão/Missão/Objetivos):**\n{bmm_ctx}\n\n"
+            f"**Processos BPMN:**\n{bpmn_ctx}\n\n"
+            f"**ROI-TR das reuniões:**\n{roi_ctx}\n\n"
+            f"**CKF (Contexto estratégico):**\n{ckf_ctx}\n\n"
+            f"**Encaminhamentos pendentes:**\n{ai_ctx}\n\n"
+            f"**Seções solicitadas:** {', '.join(sections)}\n\n"
+            "**Slides obrigatórios:**\n"
+            "1. ## 🎯 Visão Geral — visão, missão, objetivo central\n"
+            "2. ## 📊 Métricas Principais — KPIs quantitativos\n"
+            "3. ## 📋 Análise de Requisitos — breakdown e cobertura\n"
+            "4. ## ⚙️ Processos de Negócio — processos BPMN modelados\n"
+            "5. ## 📈 Qualidade das Reuniões — ROI-TR resumido\n"
+            "6. ## ⚠️ Pendências — encaminhamentos em aberto\n"
+            "7. ## 🚀 Próximos Passos — 3-5 ações priorizadas\n\n"
+            "Máx 5 bullets por slide. Total aprox. 400 palavras."
+        )
+
+        try:
+            deck = self._llm_call(system, user, max_tokens=3000)
+        except Exception as exc:
+            return f"❌ Erro ao gerar deck executivo: {exc}"
+
+        return f"# 📊 Deck Executivo — Process2Diagram\n\n{deck}"
+
+    def gerar_project_charter(
+        self,
+        incluir_riscos: bool = True,
+        incluir_cronograma: bool = True,
+        incluir_stakeholders: bool = True,
+        incluir_escopo: bool = True,
+    ) -> str:
+        """Generate a formal project charter in Markdown from all project artifacts."""
+        meetings = self._get_meetings()
+        if not meetings:
+            return "Nenhuma reunião encontrada no projeto para gerar o Project Charter."
+
+        bmm  = self.get_bmm()
+        ckf  = self.get_ckf()
+        bpmn = self.list_bpmn_processes()
+
+        try:
+            from modules.supabase_client import get_supabase_client
+            db = get_supabase_client()
+            reqs = (
+                db.table("requirements")
+                .select("req_number, title, description, req_type, priority, status")
+                .eq("project_id", self.project_id)
+                .order("req_number")
+                .execute().data or []
+            ) if db else []
+        except Exception:
+            reqs = []
+
+        try:
+            from core.project_store import list_sbvr_rules
+            rules = list_sbvr_rules(self.project_id)[:8]
+        except Exception:
+            rules = []
+
+        try:
+            from core.knowledge_store import get_contradictions
+            contras = get_contradictions(self.project_id, status="open", limit=8)
+        except Exception:
+            contras = []
+
+        participants: list[str] = []
+        action_items: list[str] = []
+        dates: list[str] = []
+        for m in meetings:
+            md = m.get("minutes_md") or ""
+            p  = self._section(md, "Participantes")
+            if p:
+                participants.append(f"Reunião {m.get('meeting_number')}: {p[:200]}")
+            ai = self._section(md, "Itens de Ação", "Action Items", "Ações")
+            if ai:
+                action_items.append(f"Reunião {m.get('meeting_number')}: {ai[:200]}")
+            dt = m.get("meeting_date")
+            if dt:
+                dates.append(str(dt)[:10])
+
+        n_reqs = len(reqs)
+        n_func = sum(1 for r in reqs if r.get("req_type") == "Funcional")
+        n_nf   = sum(1 for r in reqs if r.get("req_type") == "Não Funcional")
+        n_rn   = sum(1 for r in reqs if r.get("req_type") == "Regra de Negócio")
+
+        top_reqs_txt = "\n".join(
+            f"  REQ-{r.get('req_number',0):03d} [{r.get('req_type','—')}/{r.get('priority','—')}]: "
+            f"{r.get('title','')} — {(r.get('description') or '')[:80]}"
+            for r in reqs[:15]
+        ) or "(nenhum)"
+
+        rules_txt  = "\n".join(f"  [{r.get('rule_id','')}] {r.get('statement','')}" for r in rules) or "(nenhuma)"
+        contra_txt = "\n".join(f"  [{c.get('severity','—')}] {c.get('description','')[:100]}" for c in contras) or "(nenhuma)"
+        parts_txt  = "\n".join(participants[:5]) or "(não disponível)"
+        ai_txt     = "\n".join(action_items[:5]) or "(nenhum)"
+        period     = f"{min(dates)} a {max(dates)}" if dates else "não disponível"
+        bmm_ctx    = bmm[:2000] if "não encontrad" not in bmm.lower() else "(não disponível)"
+        ckf_ctx    = ckf[:800]  if "não encontrad" not in ckf.lower() else "(não disponível)"
+
+        optional = []
+        if incluir_stakeholders:
+            optional.append("5. ## 👥 Stakeholders")
+        if incluir_escopo:
+            optional.append("6. ## 📋 Escopo e Requisitos")
+        if incluir_riscos:
+            optional.append("8. ## ⚠️ Riscos e Restrições")
+        if incluir_cronograma:
+            optional.append("9. ## 📅 Cronograma e Próximos Passos")
+
+        system = (
+            "Você é especialista em gestão de projetos (PMO). "
+            "Gere um Project Charter formal e completo em Markdown. "
+            "Linguagem formal e profissional. Responda em Português do Brasil."
+        )
+        user = (
+            f"Gere um Project Charter formal para um projeto de software.\n\n"
+            f"**BMM (Visão/Missão/Objetivos/Estratégias/Políticas):**\n{bmm_ctx}\n\n"
+            f"**CKF:**\n{ckf_ctx}\n\n"
+            f"**Reuniões:** {len(meetings)} | **Período:** {period}\n\n"
+            f"**Participantes:**\n{parts_txt}\n\n"
+            f"**Requisitos:** {n_reqs} total ({n_func} Func / {n_nf} NF / {n_rn} RN)\n{top_reqs_txt}\n\n"
+            f"**Processos BPMN:**\n{bpmn[:500]}\n\n"
+            f"**Regras SBVR:**\n{rules_txt}\n\n"
+            f"**Contradições em Aberto (Riscos):**\n{contra_txt}\n\n"
+            f"**Encaminhamentos Pendentes:**\n{ai_txt}\n\n"
+            "**Seções obrigatórias do charter:**\n"
+            "1. ## 🎯 Identificação do Projeto\n"
+            "2. ## 📌 Visão e Missão\n"
+            "3. ## 🎯 Objetivos Estratégicos\n"
+            "4. ## 🔭 Escopo (dentro / fora)\n"
+            + ("\n".join(optional)) + "\n"
+            "7. ## ⚙️ Processos de Negócio Mapeados\n"
+            "10. ## 📜 Premissas e Restrições\n\n"
+            "Linguagem formal de PMO. Máx 900 palavras."
+        )
+
+        try:
+            charter = self._llm_call(system, user, max_tokens=3500)
+        except Exception as exc:
+            return f"❌ Erro ao gerar Project Charter: {exc}"
+
+        return (
+            f"# 📄 Project Charter\n\n"
+            f"*Gerado pelo Process2Diagram — {len(meetings)} reunião(ões) | {n_reqs} requisitos*\n\n"
+            "---\n\n"
+            + charter
+        )
+
     # ── Rastreabilidade / Simulação / Conformidade (Fase 3) ──────────────────
 
     def mapa_rastreabilidade(
@@ -10124,6 +10644,23 @@ class AssistantToolExecutor:
                     include_roi=bool(tool_input.get("include_roi", True)),
                     include_recurring=bool(tool_input.get("include_recurring", True)),
                     include_pendencies=bool(tool_input.get("include_pendencies", True)),
+                ),
+                # ── Sugestor / Deck / Charter (Fase 4)
+                "sugerir_processos":      lambda: self.sugerir_processos(
+                    min_reunioes=int(tool_input.get("min_reunioes", 2)),
+                    confidence=float(tool_input.get("confidence", 0.7)),
+                    include_evidence=bool(tool_input.get("include_evidence", True)),
+                ),
+                "gerar_deck_executivo":   lambda: self.gerar_deck_executivo(
+                    incluir_secoes=tool_input.get("incluir_secoes"),
+                    meeting_numbers=tool_input.get("meeting_numbers"),
+                    tema_cores=tool_input.get("tema_cores", "corporativo"),
+                ),
+                "gerar_project_charter":  lambda: self.gerar_project_charter(
+                    incluir_riscos=bool(tool_input.get("incluir_riscos", True)),
+                    incluir_cronograma=bool(tool_input.get("incluir_cronograma", True)),
+                    incluir_stakeholders=bool(tool_input.get("incluir_stakeholders", True)),
+                    incluir_escopo=bool(tool_input.get("incluir_escopo", True)),
                 ),
                 # ── Rastreabilidade / Simulação / Conformidade (Fase 3)
                 "mapa_rastreabilidade":   lambda: self.mapa_rastreabilidade(
