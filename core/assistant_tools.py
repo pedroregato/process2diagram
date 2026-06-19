@@ -2550,6 +2550,66 @@ def get_tool_schemas_openai() -> list[dict]:
                 },
             },
         },
+        # ── Plantonista / Diagnóstico ─────────────────────────────────────────
+        {
+            "type": "function",
+            "function": {
+                "name": "sugestoes_plantonista",
+                "description": (
+                    "Gera um briefing proativo do estado atual do projeto: reuniões sem ata, "
+                    "contradições abertas, tópicos recorrentes sem resolução e encaminhamentos "
+                    "pendentes — com sugestões de ação priorizadas. "
+                    "Use quando o usuário pedir um resumo do projeto, 'o que está pendente', "
+                    "'raio-x do projeto' ou quando não houver conversa ativa."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "diagnostico_projeto",
+                "description": (
+                    "Executa um checkup completo do projeto: integridade do banco (admin), "
+                    "contradições abertas, reuniões sem ata, ROI-TR abaixo do limiar, "
+                    "tópicos recorrentes e encaminhamentos pendentes. "
+                    "Retorna relatório estruturado com itens críticos, alertas, situações OK "
+                    "e ações recomendadas priorizadas. "
+                    "Use quando o usuário pedir 'diagnóstico', 'checkup', 'saúde do projeto' "
+                    "ou quiser um relatório completo de problemas e pendências."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "include_integrity": {
+                            "type": "boolean",
+                            "description": "Incluir verificação de integridade do banco (requer admin). Padrão: true.",
+                        },
+                        "include_contradictions": {
+                            "type": "boolean",
+                            "description": "Incluir contagem de contradições abertas no Knowledge Hub. Padrão: true.",
+                        },
+                        "include_roi": {
+                            "type": "boolean",
+                            "description": "Incluir análise de ROI-TR das reuniões. Padrão: true.",
+                        },
+                        "include_recurring": {
+                            "type": "boolean",
+                            "description": "Incluir detecção de tópicos recorrentes sem resolução. Padrão: true.",
+                        },
+                        "include_pendencies": {
+                            "type": "boolean",
+                            "description": "Incluir contagem de reuniões com encaminhamentos listados. Padrão: true.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
     ]
 
 
@@ -2672,6 +2732,9 @@ _TOOL_CATEGORIES: dict[str, str] = {
     # Cross-meeting / agenda
     "generate_next_agenda":            "consulta",
     "cluster_topic_decisions":         "consulta",
+    # Plantonista / Diagnóstico
+    "sugestoes_plantonista":           "consulta",
+    "diagnostico_projeto":             "consulta",
     # A2UI
     "show_bpmn_diagram":               "consulta",
     "show_mermaid_diagram":            "consulta",
@@ -8238,6 +8301,278 @@ class AssistantToolExecutor:
             f"Seções disponíveis:\n{available}"
         )
 
+    # ── Plantonista / Diagnóstico ─────────────────────────────────────────────
+
+    def sugestoes_plantonista(self) -> str:
+        """Briefing proativo do estado atual do projeto sem chamada LLM."""
+        from modules.supabase_client import get_supabase_client
+        from modules.cross_meeting_analyzer import find_recurring_topics as _find
+
+        meetings = self._get_meetings()
+        if not meetings:
+            return (
+                "👋 **Olá!** Nenhuma reunião encontrada neste projeto.\n"
+                "Processe a primeira transcrição na aba **Pipeline** para começar."
+            )
+
+        n = len(meetings)
+        last = meetings[-1]
+        last_n = last.get("meeting_number", "?")
+        last_title = last.get("title") or f"Reunião {last_n}"
+
+        # Reuniões sem ata
+        sem_ata = [m for m in meetings if not m.get("minutes_md")]
+
+        # Contradições abertas
+        n_contradictions = 0
+        try:
+            db = get_supabase_client()
+            if db:
+                r = (
+                    db.table("kh_contradictions")
+                    .select("id", count="exact")
+                    .eq("project_id", self.project_id)
+                    .eq("status", "open")
+                    .execute()
+                )
+                n_contradictions = r.count or 0
+        except Exception:
+            pass
+
+        # Tópicos recorrentes
+        recurring = []
+        try:
+            recurring, _ = _find(self.project_id, threshold=0.85, max_results=5)
+        except Exception:
+            pass
+
+        # Reuniões com encaminhamentos listados (qualquer ata que tenha seção "Ações")
+        n_with_actions = sum(
+            1 for m in meetings
+            if m.get("minutes_md") and (
+                "Itens de Ação" in (m.get("minutes_md") or "")
+                or "Action Items" in (m.get("minutes_md") or "")
+            )
+        )
+
+        lines: list[str] = []
+        sugestoes: list[str] = []
+
+        lines.append(f"👋 **Raio-X do Projeto** — {n} reunião(ões) processada(s)")
+        lines.append(f"📅 Última reunião: **{last_title}**")
+        lines.append("")
+
+        if sem_ata:
+            ns_str = ", ".join(str(m.get("meeting_number", "?")) for m in sem_ata)
+            lines.append(f"⚠️ **{len(sem_ata)} reunião(ões) sem ata** — Reuniões {ns_str}")
+            sugestoes.append("Gerar atas ausentes: use `generate_missing_minutes()`")
+        else:
+            lines.append("✅ Todas as reuniões têm ata")
+
+        if n_contradictions > 0:
+            lines.append(f"⚠️ **{n_contradictions} contradição(ões) aberta(s)** no Knowledge Hub")
+            sugestoes.append("Revisar contradições: pergunte *'mostre as contradições abertas'*")
+        else:
+            lines.append("✅ Nenhuma contradição aberta no Knowledge Hub")
+
+        if recurring:
+            kws = [" · ".join(t.keywords[:3]) for t in recurring[:2] if t.keywords]
+            lines.append(
+                f"🔄 **{len(recurring)} tópico(s) recorrente(s)** sem resolução: "
+                f"*{', '.join(kws)}*"
+            )
+            sugestoes.append(
+                "Gerar pauta focada no tópico recorrente: use `generate_next_agenda()`"
+            )
+        else:
+            lines.append("✅ Nenhum tópico recorrente detectado")
+
+        if n_with_actions > 0:
+            lines.append(
+                f"📋 **{n_with_actions} reunião(ões)** com encaminhamentos listados"
+            )
+            sugestoes.append(
+                "Ver encaminhamentos: pergunte *'quais são os encaminhamentos em aberto?'*"
+            )
+
+        if sugestoes:
+            lines.append("")
+            lines.append("**Sugestões de ação:**")
+            for i, s in enumerate(sugestoes, 1):
+                lines.append(f"{i}. {s}")
+
+        lines.append("")
+        lines.append(
+            "*Para um diagnóstico completo, use `diagnostico_projeto()`. "
+            "Ou faça qualquer pergunta sobre o projeto.*"
+        )
+
+        return "\n".join(lines)
+
+    def diagnostico_projeto(
+        self,
+        include_integrity: bool = True,
+        include_contradictions: bool = True,
+        include_roi: bool = True,
+        include_recurring: bool = True,
+        include_pendencies: bool = True,
+    ) -> str:
+        """Checkup completo do projeto: orquestra ferramentas existentes sem LLM."""
+        import re as _re
+        from modules.supabase_client import get_supabase_client
+        from modules.auth import is_admin as _is_admin
+        from modules.cross_meeting_analyzer import find_recurring_topics as _find
+
+        meetings = self._get_meetings()
+        if not meetings:
+            return "Nenhuma reunião encontrada. Processe transcrições no Pipeline."
+
+        n_reunioes = len(meetings)
+        criticos: list[str] = []
+        alertas: list[str] = []
+        oks: list[str] = []
+        acoes: list[tuple[int, str]] = []  # (prioridade, texto)
+
+        # 1. Integridade — admin only
+        if include_integrity and _is_admin():
+            try:
+                report = self.get_database_integrity()
+                m = _re.search(r'Saúde geral\s*:\s*(\d+)%', report)
+                if m:
+                    hp = int(m.group(1))
+                    if hp < 70:
+                        criticos.append(f"Integridade do banco: **{hp}%** — abaixo do mínimo")
+                        acoes.append((1, "Verificar campos ausentes: `get_database_integrity()`"))
+                    elif hp < 90:
+                        alertas.append(f"Integridade do banco: **{hp}%** — campos ausentes detectados")
+                        acoes.append((3, "Verificar campos ausentes: `get_database_integrity()`"))
+                    else:
+                        oks.append(f"Integridade do banco: **{hp}%** ✓")
+            except Exception:
+                pass
+
+        # 2. Contradições abertas
+        if include_contradictions:
+            n_contra = 0
+            try:
+                db = get_supabase_client()
+                if db:
+                    r = (
+                        db.table("kh_contradictions")
+                        .select("id", count="exact")
+                        .eq("project_id", self.project_id)
+                        .eq("status", "open")
+                        .execute()
+                    )
+                    n_contra = r.count or 0
+            except Exception:
+                pass
+            if n_contra > 0:
+                alertas.append(f"**{n_contra} contradição(ões)** aberta(s) no Knowledge Hub")
+                acoes.append((2, "Revisar contradições: pergunte *'mostre as contradições abertas'*"))
+            else:
+                oks.append("Nenhuma contradição aberta no Knowledge Hub ✓")
+
+        # 3. Reuniões sem ata
+        sem_ata = [m for m in meetings if not m.get("minutes_md")]
+        if sem_ata:
+            ns = ", ".join(str(m.get("meeting_number", "?")) for m in sem_ata)
+            alertas.append(f"**{len(sem_ata)} reunião(ões) sem ata** — Reuniões {ns}")
+            acoes.append((2, "Gerar atas ausentes: `generate_missing_minutes()`"))
+        else:
+            oks.append("Todas as reuniões têm ata ✓")
+
+        # 4. ROI baixo
+        if include_roi:
+            try:
+                roi_text = self.calculate_meeting_roi()
+                low = _re.findall(r'Reunião (\d+)[^\n]*ROI-TR[^\n]*?(\d+\.\d+)', roi_text)
+                low_meetings = [(n, float(v)) for n, v in low if float(v) < 5.0]
+                if low_meetings:
+                    itens = ", ".join(f"R{n} (ROI={v:.1f})" for n, v in low_meetings)
+                    alertas.append(f"**ROI-TR baixo** em: {itens}")
+                    acoes.append((4, "Analisar reunião(ões) com baixo aproveitamento"))
+                else:
+                    oks.append("ROI-TR adequado em todas as reuniões ✓")
+            except Exception:
+                pass
+
+        # 5. Tópicos recorrentes
+        if include_recurring:
+            try:
+                topics, _ = _find(self.project_id, threshold=0.85, max_results=10)
+                if topics:
+                    kws = "; ".join(
+                        " · ".join(t.keywords[:3])
+                        for t in topics[:3] if t.keywords
+                    )
+                    alertas.append(
+                        f"**{len(topics)} tópico(s) recorrente(s)** sem resolução: *{kws}*"
+                    )
+                    acoes.append((3, "Gerar pauta focada: `generate_next_agenda()`"))
+                else:
+                    oks.append("Nenhum tópico recorrente detectado ✓")
+            except Exception:
+                pass
+
+        # 6. Encaminhamentos em atas
+        if include_pendencies:
+            n_with_actions = sum(
+                1 for m in meetings
+                if m.get("minutes_md") and (
+                    "Itens de Ação" in (m.get("minutes_md") or "")
+                    or "Action Items" in (m.get("minutes_md") or "")
+                )
+            )
+            if n_with_actions > 0:
+                alertas.append(
+                    f"**{n_with_actions} reunião(ões)** com seção de encaminhamentos"
+                )
+                acoes.append(
+                    (5, "Ver pendências: pergunte *'quais encaminhamentos estão em aberto?'*")
+                )
+            else:
+                oks.append("Nenhum encaminhamento registrado ✓")
+
+        # Score estimado
+        total = len(criticos) + len(alertas) + len(oks)
+        score = round(100 * (len(oks) + 0.5 * len(alertas)) / total) if total else 100
+
+        lines = [
+            "## 🏥 Diagnóstico do Projeto",
+            "",
+            (
+                f"**{n_reunioes} reunião(ões)** · "
+                f"Saúde estimada: **{score}%** · "
+                f"{'🔴 ' + str(len(criticos)) + ' crítico(s) · ' if criticos else ''}"
+                f"🟡 {len(alertas)} alerta(s) · "
+                f"🟢 {len(oks)} ok"
+            ),
+            "",
+        ]
+
+        if criticos:
+            lines.append("### 🔴 Crítico")
+            lines.extend(f"- {s}" for s in criticos)
+            lines.append("")
+
+        if alertas:
+            lines.append("### 🟡 Atenção")
+            lines.extend(f"- {s}" for s in alertas)
+            lines.append("")
+
+        if oks:
+            lines.append("### 🟢 OK")
+            lines.extend(f"- {s}" for s in oks)
+            lines.append("")
+
+        if acoes:
+            lines.append("### 📋 Ações recomendadas")
+            for i, (_, texto) in enumerate(sorted(acoes), 1):
+                lines.append(f"{i}. {texto}")
+
+        return "\n".join(lines)
+
     # ── Dispatcher ────────────────────────────────────────────────────────────
 
     def execute(self, tool_name: str, tool_input: dict) -> str:
@@ -8580,6 +8915,15 @@ class AssistantToolExecutor:
                 "show_metrics":           lambda: self.show_metrics(
                     items=tool_input["items"],
                     title=tool_input.get("title", ""),
+                ),
+                # ── Plantonista / Diagnóstico
+                "sugestoes_plantonista":  lambda: self.sugestoes_plantonista(),
+                "diagnostico_projeto":    lambda: self.diagnostico_projeto(
+                    include_integrity=bool(tool_input.get("include_integrity", True)),
+                    include_contradictions=bool(tool_input.get("include_contradictions", True)),
+                    include_roi=bool(tool_input.get("include_roi", True)),
+                    include_recurring=bool(tool_input.get("include_recurring", True)),
+                    include_pendencies=bool(tool_input.get("include_pendencies", True)),
                 ),
             }
             if tool_name not in dispatch:

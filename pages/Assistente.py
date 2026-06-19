@@ -1322,6 +1322,25 @@ if "assistant_history" not in st.session_state:
 
 history: list[dict] = st.session_state["assistant_history"]
 
+# ── Modo Plantonista — briefing automático na primeira abertura ───────────────
+_plantonista_key = f"_plantonista_done_{project_id}"
+if (
+    not history
+    and project_id
+    and st.session_state.get("asst_use_tools", True)
+    and not st.session_state.get(_plantonista_key)
+):
+    try:
+        from core.assistant_tools import AssistantToolExecutor as _ATE
+        _executor = _ATE(project_id=project_id)
+        _briefing = _executor.sugestoes_plantonista()
+        if _briefing:
+            history.append({"role": "assistant", "content": _briefing, "charts": [], "tables": [], "widgets": []})
+            st.session_state["assistant_history"] = history
+    except Exception:
+        pass
+    st.session_state[_plantonista_key] = True
+
 
 # ── Chat toolbar (export + limpar) ───────────────────────────────────────
 if st.session_state.get("_confirm_clear"):
