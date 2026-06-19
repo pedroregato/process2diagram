@@ -49,8 +49,9 @@ if _admin:
 
 pages = {
     "Início": [
-        st.Page("pages/Home.py",     title="Central de Operações", icon="🏠", default=True),
-        st.Page("pages/SobreP2D.py", title="Sobre o P2D",          icon="ℹ️"),
+        st.Page("pages/Home.py",              title="Central de Operações", icon="🏠", default=True),
+        st.Page("pages/SobreP2D.py",          title="Sobre o P2D",          icon="ℹ️"),
+        st.Page("pages/ApresentacaoGeral.py", title="Apresentação Geral",   icon="🎯"),
     ],
     "Pipeline": [
         st.Page("pages/Pipeline.py",    title="Processar Transcrição", icon="🚀"),

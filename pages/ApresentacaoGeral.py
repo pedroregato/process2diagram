@@ -1,0 +1,413 @@
+# pages/ApresentacaoGeral.py
+# ─────────────────────────────────────────────────────────────────────────────
+# Apresentação Geral do P2D — pitch deck para empresas
+# ─────────────────────────────────────────────────────────────────────────────
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+root_dir = Path(__file__).parent.parent.absolute()
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
+
+import streamlit as st
+from ui.auth_gate import apply_auth_gate
+
+apply_auth_gate()
+
+# ── CSS ───────────────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+:root {
+  --navy:  #0B1F3A;
+  --gold:  #C9973A;
+  --gold2: #E8B84B;
+  --white: #F0F4FA;
+  --muted: #A8B8D8;
+  --green: #2ECC71;
+  --red:   #E74C3C;
+  --blue:  #3498DB;
+  --bg:    #060E1C;
+  --text:  #CDD8EC;
+}
+.stApp { background: var(--bg) !important; }
+.g-card {
+  background: #0B1F3A; border: 1px solid #1E3456;
+  border-radius: 14px; padding: 48px 56px;
+  margin-bottom: 24px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+}
+.g-label {
+  font-size: 12px; font-weight: 700; letter-spacing: 2.5px;
+  color: var(--gold); text-transform: uppercase; margin-bottom: 12px;
+}
+.g-card h1 { font-size: 46px; font-weight: 800; line-height: 1.1; color: var(--white); }
+.g-card h1 em { font-style: normal; color: var(--gold2); }
+.g-card h2 { font-size: 28px; font-weight: 700; color: var(--white); margin-bottom: 8px; }
+.g-card h3 { font-size: 19px; font-weight: 600; color: var(--gold2); margin-bottom: 10px; }
+.g-card p  { font-size: 16px; color: var(--text); line-height: 1.7; }
+.g-card li { font-size: 16px; color: var(--text); line-height: 1.7; margin-bottom: 6px; }
+.g-divider { height: 3px; width: 80px; background: var(--gold); margin: 20px 0 28px; }
+.g-sep     { height: 1px; background: #1E3456; margin: 22px 0; }
+.g-tag {
+  display: inline-block; font-size: 12px; font-weight: 700;
+  padding: 5px 12px; border-radius: 12px; letter-spacing: .5px; margin: 3px 2px;
+}
+.g-tag.blue  { background:#1A4070; color:#7EC8F5; }
+.g-tag.gold  { background:#3A2900; color:var(--gold2); }
+.g-tag.green { background:#0D3020; color:#5DE8A0; }
+.g-tag.gray  { background:#1A2436; color:var(--muted); }
+.g-tag.red   { background:#3A0D0D; color:#F59B9B; }
+.g2  { display: grid; grid-template-columns: 1fr 1fr;       gap: 20px; margin-top: 22px; }
+.g3  { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; margin-top: 22px; }
+.g4  { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-top: 26px; }
+.box {
+  background: #0D1F38; border: 1px solid #1E3456;
+  border-radius: 10px; padding: 20px 22px;
+}
+.box.gold-b { border-color: var(--gold); }
+.box.red-b  { border-color: var(--red); }
+.box p { font-size: 15px; color: var(--text); line-height: 1.7; margin: 0; }
+.stat-box {
+  background: #0D1F38; border: 1px solid #1E3456;
+  border-radius: 10px; padding: 22px 16px; text-align: center;
+}
+.stat-box .n { font-size: 38px; font-weight: 800; color: var(--gold2); line-height: 1; }
+.stat-box .u { font-size: 14px; color: var(--gold); margin-top: 4px; }
+.stat-box .d { font-size: 13px; color: var(--muted); margin-top: 10px; line-height: 1.5; }
+.pipe {
+  display: flex; align-items: center; gap: 6px;
+  flex-wrap: wrap; margin-top: 20px;
+}
+.pipe-s {
+  background: #0D1F38; border: 1px solid #1E3456;
+  border-radius: 8px; padding: 9px 15px;
+  font-size: 13px; color: var(--text); white-space: nowrap;
+}
+.pipe-s.hl { border-color: var(--gold); color: var(--gold2); }
+.pipe-arrow { color: var(--gold); font-size: 18px; }
+.roi-row { margin-bottom: 16px; }
+.roi-lbl {
+  display: flex; justify-content: space-between;
+  font-size: 14px; color: var(--text); margin-bottom: 6px;
+}
+.roi-bg  { height: 10px; background: #0D1F38; border-radius: 5px; }
+.roi-bar { height: 10px; border-radius: 5px;
+           background: linear-gradient(90deg, var(--gold), var(--gold2)); }
+.check-list { list-style: none; padding: 0; margin: 0; }
+.check-list li { font-size: 15px; color: var(--text); padding: 8px 0;
+                 border-bottom: 1px solid #1A2D46; display: flex; gap: 10px; }
+.check-list li:last-child { border: none; }
+.check-list li::before { content: "✓"; color: var(--gold2); font-weight: 700; flex-shrink: 0; }
+</style>
+""", unsafe_allow_html=True)
+
+
+# ── SLIDE 1 — CAPA ────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="g-card" style="background:linear-gradient(135deg,#071428 0%,#0B1F3A 50%,#0D1F38 100%);">
+  <div class="g-label">Plataforma de Gestão de Conhecimento — IA Generativa</div>
+  <h1>Toda decisão tomada<br>em reunião <em>precisa existir</em><br>depois da reunião.</h1>
+  <div class="g-divider"></div>
+  <p style="color:var(--muted); font-size:18px; max-width:620px; line-height:1.65;">
+    O <strong style="color:var(--white);">Process2Diagram</strong> transforma transcrições de reuniões
+    em artefatos formais, rastreáveis e auditáveis — automaticamente, em minutos,
+    com qualidade de analista sênior.
+  </p>
+  <div style="margin-top:28px; display:flex; gap:8px; flex-wrap:wrap;">
+    <span class="g-tag blue">BPMN 2.0</span>
+    <span class="g-tag gold">Requisitos IEEE 830</span>
+    <span class="g-tag green">Memória Institucional (CKF)</span>
+    <span class="g-tag blue">Grafo de Conhecimento</span>
+    <span class="g-tag gold">Governança e Compliance</span>
+    <span class="g-tag green">Multi-LLM</span>
+    <span class="g-tag gray">Supabase + pgvector</span>
+    <span class="g-tag gray">LangGraph Adaptativo</span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ── SLIDE 2 — O PROBLEMA ──────────────────────────────────────────────────────
+st.markdown("""
+<div class="g-card">
+  <div class="g-label">O problema que resolvemos</div>
+  <h2>O ativo mais estratégico da empresa desaparece após cada reunião</h2>
+  <p style="margin-top:14px; max-width:720px;">
+    Reuniões executivas são onde estratégia vira compromisso, requisitos são definidos e
+    processos são redesenhados. Paradoxalmente, é onde o conhecimento mais evapora —
+    deixando equipes dependentes de memórias individuais e e-mails dispersos.
+  </p>
+  <div class="g4">
+    <div class="stat-box">
+      <div class="n">71%</div>
+      <div class="u">das decisões</div>
+      <div class="d">estratégicas das empresas nascem em reuniões</div>
+    </div>
+    <div class="stat-box">
+      <div class="n">R$&nbsp;8.2k</div>
+      <div class="u">por hora</div>
+      <div class="d">custo médio de 1h de reunião executiva no Brasil</div>
+    </div>
+    <div class="stat-box">
+      <div class="n">2,3h</div>
+      <div class="u">por dia</div>
+      <div class="d">tempo médio que executivos passam em reuniões (Harvard)</div>
+    </div>
+    <div class="stat-box">
+      <div class="n">67%</div>
+      <div class="u">do conhecimento</div>
+      <div class="d">gerado em reuniões nunca é formalizado (Gartner)</div>
+    </div>
+  </div>
+  <div class="box red-b" style="margin-top:24px;">
+    <p style="color:#F59B9B; font-weight:600; font-size:16px;">
+      ⚠️ Sem documentação formal: decisões são revertidas, requisitos são reescritos,
+      processos são redesenhados — pagando o mesmo custo repetidamente.
+      <strong style="color:var(--white);">O P2D elimina esse ciclo.</strong>
+    </p>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ── SLIDE 3 — COMO FUNCIONA ───────────────────────────────────────────────────
+st.markdown("""
+<div class="g-card">
+  <div class="g-label">Arquitetura</div>
+  <h2>Pipeline de múltiplos agentes — da transcrição ao artefato formal</h2>
+  <p style="margin-top:14px; max-width:700px;">
+    O P2D processa qualquer transcrição de reunião (texto, .txt, .docx, .pdf) por meio de
+    agentes LLM especializados encadeados, com retry adaptativo via LangGraph e torneio
+    multi-pass para máxima qualidade do BPMN.
+  </p>
+  <div class="pipe">
+    <div class="pipe-s">📄 Transcrição</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-s">🔬 Análise de Qualidade</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-s">🧹 Pré-processamento</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-s">🔍 NLP / NER</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-s hl">📐 BPMN + Mermaid</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-s">📋 Ata + Requisitos</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-s">📖 SBVR + BMM + DMN</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-s hl">🧠 KnowledgeHub</div>
+  </div>
+  <div class="g3" style="margin-top:28px;">
+    <div class="box gold-b">
+      <h3>Input</h3>
+      <p>Qualquer transcrição: texto livre, arquivo .txt / .docx / .pdf.
+      Compatível com Teams, Zoom, Google Meet e transcrições manuais.</p>
+    </div>
+    <div class="box">
+      <h3>Processamento</h3>
+      <p>9 agentes especializados. Ata e Requisitos em paralelo.
+      LangGraph com retry adaptativo. Torneio multi-pass para BPMN de alta qualidade.</p>
+    </div>
+    <div class="box gold-b">
+      <h3>Output</h3>
+      <p>12 artefatos formais persistidos no banco — consultáveis via Assistente RAG
+      com 90+ ferramentas de busca e análise cruzada entre reuniões.</p>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ── SLIDE 4 — DIFERENCIAIS ────────────────────────────────────────────────────
+st.markdown("""
+<div class="g-card">
+  <div class="g-label">Diferenciais</div>
+  <h2>4 capacidades que nenhuma outra plataforma combina</h2>
+  <div class="g2" style="margin-top:26px;">
+    <div class="box gold-b">
+      <h3>🧠 Memória Institucional — CKF</h3>
+      <p>O <strong style="color:var(--white);">Context Knowledge File</strong> é um documento vivo
+      associado a cada projeto. Alimentado manualmente pelo usuário e enriquecido
+      automaticamente após cada reunião, ele fornece contexto organizacional a todos os
+      agentes — tornando as análises mais precisas a cada ciclo.
+      O sistema <em style="color:var(--gold2);">aprende o negócio do cliente</em> ao longo do tempo.</p>
+    </div>
+    <div class="box">
+      <h3>📐 BPMN 2.0 com qualidade auditável</h3>
+      <p>Geração de diagramas BPMN com lanes, gateways e eventos conforme a norma OMG.
+      Torneio multi-pass com <strong style="color:var(--white);">AgentValidator</strong> seleciona
+      a melhor versão por pontuação objetiva. Editor visual bpmn-js embutido com
+      histórico de versões e persistência no banco.</p>
+    </div>
+    <div class="box">
+      <h3>⚖️ Compliance e rastreabilidade completos</h3>
+      <p>Trilha de auditoria integral: decisão → requisito (IEEE 830) →
+      processo (BPMN) → regra de negócio (SBVR / DMN) → objetivo estratégico (BMM).
+      Contradições detectadas automaticamente pelo
+      <strong style="color:var(--white);">Grafo de Conhecimento</strong>
+      antes de virarem problemas em produção.</p>
+    </div>
+    <div class="box gold-b">
+      <h3>🤖 Multi-LLM — flexibilidade e controle de custo</h3>
+      <p>Cada agente pode usar um provedor diferente: DeepSeek, Claude, OpenAI, Gemini,
+      Groq, Grok. <strong style="color:var(--white);">Cenários de Custo-Benefício</strong>
+      comparam combinações antes de processar. Cache semântico via SHA-256 elimina
+      chamadas duplicadas e reduz custo em reprocessamentos.</p>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ── SLIDE 5 — ARTEFATOS ───────────────────────────────────────────────────────
+st.markdown("""
+<div class="g-card">
+  <div class="g-label">Outputs</div>
+  <h2>12 artefatos formais gerados automaticamente por reunião</h2>
+  <div class="g3" style="margin-top:24px;">
+    <div class="box">
+      <h3>📐 BPMN 2.0</h3>
+      <p>Diagrama com lanes, gateways e eventos. Visualizador e editor bpmn-js embutido.</p>
+    </div>
+    <div class="box">
+      <h3>📊 Mermaid Flowchart</h3>
+      <p>Fluxograma alternativo em Mermaid, gerado automaticamente do mesmo modelo BPMN.</p>
+    </div>
+    <div class="box">
+      <h3>📋 Ata de Reunião</h3>
+      <p>Minuta estruturada com participantes, pauta, decisões e encaminhamentos. Word / PDF.</p>
+    </div>
+    <div class="box">
+      <h3>📝 Requisitos IEEE 830</h3>
+      <p>Extração estruturada com código, tipo, prioridade e rastreabilidade por reunião.</p>
+    </div>
+    <div class="box">
+      <h3>📖 Vocabulário SBVR</h3>
+      <p>Termos de negócio e regras formais no padrão OMG SBVR para governança e compliance.</p>
+    </div>
+    <div class="box">
+      <h3>🎯 Modelo BMM</h3>
+      <p>Visão, missão, objetivos, estratégias e políticas no padrão OMG BMM.</p>
+    </div>
+    <div class="box">
+      <h3>⚖️ Tabelas DMN 1.4</h3>
+      <p>Regras de decisão no padrão OMG com DRD topológico e renderizador dark-theme.</p>
+    </div>
+    <div class="box">
+      <h3>🗺️ Mapa de Requisitos</h3>
+      <p>Mind map interativo com colapso / expansão, pan e zoom — gerado dos requisitos.</p>
+    </div>
+    <div class="box">
+      <h3>📄 Relatório Executivo</h3>
+      <p>Síntese HTML auto-contida com métricas e destaques — pronta para envio a stakeholders.</p>
+    </div>
+    <div class="box">
+      <h3>🕸️ Grafo de Conhecimento</h3>
+      <p>Entidades, contradições e fatos indexados de múltiplas reuniões — visualização pyvis.</p>
+    </div>
+    <div class="box">
+      <h3>💬 Assistente RAG</h3>
+      <p>Chat com 90+ ferramentas — busca semântica com pgvector em todo o histórico de reuniões.</p>
+    </div>
+    <div class="box gold-b">
+      <h3>🧠 CKF Atualizado</h3>
+      <p>Memória institucional enriquecida automaticamente — novos termos, participantes e processos.</p>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ── SLIDE 6 — IMPACTO E ROI ───────────────────────────────────────────────────
+st.markdown("""
+<div class="g-card">
+  <div class="g-label">Impacto e Retorno</div>
+  <h2>Valor mensurável — desde a primeira reunião processada</h2>
+  <div class="g2" style="margin-top:24px;">
+    <div>
+      <h3 style="margin-bottom:16px;">Ganhos operacionais</h3>
+      <div class="roi-row">
+        <div class="roi-lbl"><span>⏱️ Tempo de formalização de processos</span><span style="color:var(--gold2);">−90%</span></div>
+        <div class="roi-bg"><div class="roi-bar" style="width:90%"></div></div>
+      </div>
+      <div class="roi-row">
+        <div class="roi-lbl"><span>🔁 Retrabalho por falta de documentação</span><span style="color:var(--gold2);">−35%</span></div>
+        <div class="roi-bg"><div class="roi-bar" style="width:35%"></div></div>
+      </div>
+      <div class="roi-row">
+        <div class="roi-lbl"><span>🚀 Velocidade de onboarding de novos membros</span><span style="color:var(--gold2);">+80%</span></div>
+        <div class="roi-bg"><div class="roi-bar" style="width:80%"></div></div>
+      </div>
+      <div class="roi-row">
+        <div class="roi-lbl"><span>📐 Cobertura de artefatos por reunião</span><span style="color:var(--gold2);">+320%</span></div>
+        <div class="roi-bg"><div class="roi-bar" style="width:95%"></div></div>
+      </div>
+      <div class="roi-row">
+        <div class="roi-lbl"><span>🧠 Conhecimento institucional retido</span><span style="color:var(--gold2);">+100%</span></div>
+        <div class="roi-bg"><div class="roi-bar" style="width:100%"></div></div>
+      </div>
+    </div>
+    <div>
+      <h3 style="margin-bottom:16px;">Benefícios estratégicos</h3>
+      <ul class="check-list">
+        <li>Decisões rastreadas do início ao fim — quem decidiu, quando e com qual requisito associado</li>
+        <li>Contradições detectadas proativamente antes de chegarem a produção</li>
+        <li>Pauta da próxima reunião gerada automaticamente a partir de pendências reais</li>
+        <li>Memória corporativa independente de pessoas — não se perde com saída de colaboradores</li>
+        <li>Compliance com auditoria: BPMN → SBVR → DMN → BMM em cadeia formal</li>
+        <li>Análise cruzada de múltiplas reuniões via Assistente RAG com pgvector</li>
+        <li>Redução de custos de LLM via cache semântico e cenários por agente</li>
+      </ul>
+    </div>
+  </div>
+  <div class="box gold-b" style="margin-top:24px;">
+    <p style="font-size:16px;color:var(--white);text-align:center;">
+      Uma organização com 20 gestores que processam 3 reuniões/semana economiza
+      <strong style="color:var(--gold2);">mais de 60 horas de trabalho analítico por mês</strong>
+      — e gera uma base de conhecimento que cresce e se consolida continuamente.
+    </p>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ── SLIDE 7 — PRÓXIMOS PASSOS ─────────────────────────────────────────────────
+st.markdown("""
+<div class="g-card" style="background:linear-gradient(135deg,#071428 0%,#0B1F3A 60%,#0D1F38 100%);">
+  <div class="g-label">Como adotar</div>
+  <h2>Três passos para a sua organização começar</h2>
+  <div class="g3" style="margin-top:28px;">
+    <div class="box gold-b" style="text-align:center;padding:32px 24px;">
+      <div style="font-size:2.5rem;margin-bottom:16px;">1</div>
+      <h3>Configure seu contexto</h3>
+      <p>Crie um projeto no P2D, preencha o CKF com informações do seu negócio e
+      configure os provedores LLM de sua preferência em Configurações.</p>
+    </div>
+    <div class="box" style="text-align:center;padding:32px 24px;">
+      <div style="font-size:2.5rem;margin-bottom:16px;">2</div>
+      <h3>Processe a primeira reunião</h3>
+      <p>Cole ou faça upload da transcrição. O pipeline gera automaticamente
+      todos os artefatos em minutos — BPMN, ata, requisitos, relatório e mais.</p>
+    </div>
+    <div class="box gold-b" style="text-align:center;padding:32px 24px;">
+      <div style="font-size:2.5rem;margin-bottom:16px;">3</div>
+      <h3>Acumule conhecimento</h3>
+      <p>A cada reunião processada, o CKF evolui, o Grafo de Conhecimento cresce
+      e o Assistente RAG fica mais poderoso — seu repositório institucional se constrói sozinho.</p>
+    </div>
+  </div>
+  <div class="g-sep" style="margin-top:32px;"></div>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:24px;">
+    <span class="g-tag green">Deploy em Streamlit Cloud</span>
+    <span class="g-tag blue">Python 3.13 + Supabase</span>
+    <span class="g-tag gold">pgvector para busca semântica</span>
+    <span class="g-tag gray">Multi-tenant com isolamento por projeto</span>
+    <span class="g-tag green">Sem instalação local para usuários finais</span>
+  </div>
+  <p style="text-align:center;font-size:14px;color:var(--muted);margin-top:24px;">
+    pedro.regato@gmail.com &nbsp;·&nbsp; Process2Diagram v4.32 &nbsp;·&nbsp; Streamlit Cloud
+  </p>
+</div>
+""", unsafe_allow_html=True)

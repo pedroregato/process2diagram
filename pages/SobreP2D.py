@@ -422,7 +422,70 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ── SLIDE 6 — PROVEDORES LLM ──────────────────────────────────────────────────
+# ── SLIDE 6 — CKF ────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="slide-card">
+  <div class="label">Context Knowledge File — Memória Institucional</div>
+  <h2>O sistema que aprende com cada reunião processada</h2>
+  <p style="margin-top:14px; max-width:740px;">
+    O <strong>CKF (Context Knowledge File)</strong> é a memória institucional viva do P2D — um documento
+    Markdown associado a cada projeto que evolui automaticamente após cada reunião processada.
+    Todos os agentes consultam o CKF antes de analisar qualquer transcrição, tornando cada análise
+    progressivamente mais precisa, contextualizada e alinhada ao vocabulário da organização.
+  </p>
+  <div class="cols-2" style="margin-top:24px;">
+    <div>
+      <h3>Como funciona o ciclo evolutivo</h3>
+      <div class="card" style="margin-bottom:12px;">
+        <p style="font-size:15px;"><strong style="color:var(--gold2);">1. Contexto inicial</strong><br>
+        O usuário preenche o CKF com informações permanentes do negócio: participantes-chave,
+        termos técnicos, processos existentes e objetivos estratégicos.</p>
+      </div>
+      <div class="card" style="margin-bottom:12px;">
+        <p style="font-size:15px;"><strong style="color:var(--gold2);">2. Pipeline usa o CKF</strong><br>
+        Todos os agentes recebem o CKF como contexto adicional — extraem termos corretos,
+        reconhecem unidades organizacionais e respeitam regras já documentadas.</p>
+      </div>
+      <div class="card" style="margin-bottom:12px;">
+        <p style="font-size:15px;"><strong style="color:var(--gold2);">3. CKF é enriquecido automaticamente</strong><br>
+        O <em>AgentCKFUpdater</em> adiciona ao CKF os aprendizados de cada reunião —
+        novos participantes, termos e processos — sem remover o que o usuário escreveu.</p>
+      </div>
+      <div class="card gold-border">
+        <p style="font-size:15px;color:var(--white);"><strong style="color:var(--gold2);">Resultado:</strong>
+        o P2D acumula conhecimento organizacional ao longo do tempo — tornando-se um especialista
+        no negócio do cliente a cada ciclo de reuniões.</p>
+      </div>
+    </div>
+    <div>
+      <h3>Seções do CKF</h3>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div class="card gold-border" style="padding:12px 16px;">
+          <p style="font-size:14px;">🏢 <strong style="color:var(--white);">Visão Geral do Contexto</strong><br>Propósito do projeto, área de negócio e escopo das reuniões.</p>
+        </div>
+        <div class="card" style="padding:12px 16px;">
+          <p style="font-size:14px;">👥 <strong style="color:var(--white);">Participantes Frequentes</strong><br>Nomes, cargos e iniciais dos participantes habituais do contexto.</p>
+        </div>
+        <div class="card" style="padding:12px 16px;">
+          <p style="font-size:14px;">📖 <strong style="color:var(--white);">Glossário e Termos Técnicos</strong><br>Vocabulário específico da organização — siglas, acrônimos, jargões internos.</p>
+        </div>
+        <div class="card" style="padding:12px 16px;">
+          <p style="font-size:14px;">⚙️ <strong style="color:var(--white);">Processos de Negócio Conhecidos</strong><br>Fluxos e processos já mapeados que os agentes devem reconhecer.</p>
+        </div>
+        <div class="card" style="padding:12px 16px;">
+          <p style="font-size:14px;">📐 <strong style="color:var(--white);">Regras de Negócio Permanentes</strong><br>Políticas e restrições aplicáveis a todos os processos do contexto.</p>
+        </div>
+        <div class="card gold-border" style="padding:12px 16px;">
+          <p style="font-size:14px;">🎯 <strong style="color:var(--white);">Objetivos Estratégicos</strong><br>Visão, missão e metas que orientam a priorização de requisitos e decisões.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ── SLIDE 7 — PROVEDORES LLM ──────────────────────────────────────────────────
 st.markdown("""
 <div class="slide-card">
   <div class="label">Infraestrutura de IA</div>
