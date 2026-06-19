@@ -215,13 +215,14 @@ def _card(name: str, category: str, desc: str, examples: list[str]) -> str:
 
 
 # ── Tabs por categoria ─────────────────────────────────────────────────────────
-tab_reunioes, tab_analise, tab_graficos, tab_calendario, tab_hub, tab_admin = st.tabs([
+tab_reunioes, tab_analise, tab_graficos, tab_calendario, tab_hub, tab_admin, tab_avancado = st.tabs([
     "🗂️ Reuniões",
     "📋 Análise",
     "📈 Gráficos",
     "📅 Calendário",
     "🧠 Knowledge Hub",
     "🛡️ Admin & Sistema",
+    "🚀 Avançado",
 ])
 
 
@@ -445,6 +446,34 @@ with tab_analise:
         ]
     ), unsafe_allow_html=True)
 
+    st.markdown('<div class="g-section-hdr">Editor estrutural de artefatos</div>', unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "reordenar_requisitos", "escrita",
+        "Reordena os requisitos do projeto. Aceita uma lista explícita de números "
+        "(ex: <code>[REQ-003, REQ-001, REQ-002]</code>) ou agrupa automaticamente "
+        "por <code>tipo</code> ou <code>prioridade</code>. Atualiza o campo "
+        "<code>sort_order</code> no banco.",
+        [
+            "Reordene os requisitos por prioridade — coloque os críticos primeiro",
+            "Coloque o REQ-010 antes do REQ-005",
+            "Agrupe os requisitos por tipo: funcionais, depois não-funcionais",
+        ]
+    ), unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "vincular_regra_debate", "escrita",
+        "Cria um vínculo rastreável entre uma regra de negócio SBVR e uma questão "
+        "IBIS. O tipo de relação pode ser <em>justifica</em>, <em>contradiz</em> ou "
+        "<em>limita</em>. Os vínculos ficam armazenados na tabela "
+        "<code>sbvr_ibis_links</code>.",
+        [
+            "Vincule a regra BR-002 à questão IBIS sobre autenticação com relação 'justifica'",
+            "A regra de prazo (BR-007) contradiz o debate sobre SLA — registre isso",
+            "Mostre as regras SBVR vinculadas à questão sobre integração",
+        ]
+    ), unsafe_allow_html=True)
+
     st.markdown('<div class="g-section-hdr">Referência de skills dos agentes</div>', unsafe_allow_html=True)
 
     st.markdown(_card(
@@ -626,6 +655,19 @@ with tab_calendario:
     st.markdown('<div class="g-section-hdr">Google Calendar — ações (admin)</div>', unsafe_allow_html=True)
 
     st.markdown(_card(
+        "sincronizar_calendario", "admin",
+        "Lê os itens de ação das atas do projeto e cria eventos no Google Calendar "
+        "automaticamente. Aceita sincronização <code>to_calendar</code> (ata → agenda), "
+        "<code>from_calendar</code> (agenda → ata) ou <code>bidirectional</code>. "
+        "Rastreia status em <code>calendar_sync_items</code> (pending / synced / completed).",
+        [
+            "Sincronize todos os encaminhamentos da reunião 3 com o Google Calendar",
+            "Crie eventos para os itens de ação de todas as reuniões do projeto",
+            "Sincronize o calendário bidirecionalmente com a reunião 5",
+        ]
+    ), unsafe_allow_html=True)
+
+    st.markdown(_card(
         "calendar_create_event", "admin",
         "Cria um novo evento no Google Calendar do projeto com título, descrição, "
         "data/hora, duração e convidados.",
@@ -795,6 +837,34 @@ with tab_admin:
         ]
     ), unsafe_allow_html=True)
 
+    st.markdown('<div class="g-section-hdr">Editor de atas e reuniões — admin</div>', unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "inserir_secao_ata", "admin",
+        "Insere uma nova seção na ata de uma reunião. A posição aceita "
+        "<code>inicio</code>, <code>fim</code>, <code>antes_&lt;Título&gt;</code> ou "
+        "<code>apos_&lt;Título&gt;</code>. Persiste o <code>minutes_md</code> atualizado "
+        "no Supabase.",
+        [
+            "Adicione uma seção 'Riscos Identificados' ao final da ata da reunião 3",
+            "Insira uma seção 'Decisões Pendentes' antes de Encaminhamentos na reunião 5",
+            "Acrescente a seção 'Contexto Regulatório' no início da ata da reunião 2",
+        ]
+    ), unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "mesclar_reunioes", "admin",
+        "Mescla dois registros de reunião em um. A reunião <em>manter</em> absorve "
+        "todos os artefatos da reunião <em>absorver</em> (requisitos, SBVR, BPMN, chunks). "
+        "Use <code>preview=True</code> (padrão) para ver o impacto antes de confirmar. "
+        "A reunião absorvida é excluída em cascata após a mesclagem.",
+        [
+            "Mostre o impacto de mesclar a reunião 6 na reunião 5",
+            "Mescle a reunião 8 na reunião 7 — eram a mesma sessão dividida em dois registros",
+            "Faça um preview antes de mesclar as reuniões 3 e 4",
+        ]
+    ), unsafe_allow_html=True)
+
     st.markdown('<div class="g-section-hdr">Reprocessamento — admin</div>', unsafe_allow_html=True)
 
     st.markdown(_card(
@@ -831,6 +901,136 @@ with tab_admin:
             "Troque para o projeto do cliente X",
         ]
     ), unsafe_allow_html=True)
+
+# ── Tab 7: Avançado ───────────────────────────────────────────────────────────
+with tab_avancado:
+
+    st.markdown("""
+    <div class="tip-box">
+      Ferramentas de inteligência avançada: plantonista proativo, rastreabilidade
+      bidirecional entre artefatos, simulação de cenários e geração de documentos
+      estratégicos via LLM. Todas disponíveis para usuários não-admin.
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="g-section-hdr">Plantonista — diagnóstico proativo</div>', unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "sugestoes_plantonista", "consulta",
+        "Analisa automaticamente o estado do projeto e retorna uma lista priorizada "
+        "de ações recomendadas: requisitos pendentes de aprovação, debates IBIS sem "
+        "resposta, encaminhamentos vencidos e lacunas de artefatos. "
+        "Exibido automaticamente ao abrir o Assistente com projeto ativo.",
+        [
+            "O que devo priorizar hoje no projeto?",
+            "Quais são as pendências mais críticas do projeto?",
+            "Mostre as sugestões do plantonista",
+        ]
+    ), unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "diagnostico_projeto", "consulta",
+        "Gera um relatório completo de saúde do projeto: cobertura de artefatos "
+        "por reunião (BPMN ✅/❌, ata, DMN, IBIS, relatório), distribuição de "
+        "requisitos por status, score ROI-TR médio, questões IBIS abertas e "
+        "regras SBVR sem requisito vinculado.",
+        [
+            "Faça um diagnóstico completo do projeto",
+            "Qual é a saúde atual do projeto em termos de artefatos?",
+            "Quais reuniões ainda estão sem BPMN gerado?",
+            "Mostre o dashboard de cobertura de requisitos",
+        ]
+    ), unsafe_allow_html=True)
+
+    st.markdown('<div class="g-section-hdr">Rastreabilidade e análise de impacto</div>', unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "mapa_rastreabilidade", "consulta",
+        "Constrói um mapa de rastreabilidade vertical para um requisito ou tópico: "
+        "localiza as falas na transcrição, os processos BPMN afetados, as regras "
+        "SBVR relacionadas e os debates IBIS vinculados. Retorna em Markdown "
+        "estruturado. Use flags para controlar o escopo.",
+        [
+            "Mostre o mapa de rastreabilidade do REQ-007",
+            "Rastreie o tópico 'autenticação' por todos os artefatos",
+            "Onde o requisito de LGPD aparece: transcrição, BPMN e SBVR?",
+            "Trace o caminho completo do REQ-003 desde a transcrição até o processo",
+        ]
+    ), unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "simular_cenario", "consulta",
+        "Simula o impacto de uma mudança ou cenário hipotético sobre os artefatos "
+        "do projeto. Usa LLM para analisar requisitos afetados, regras SBVR "
+        "impactadas e contradições do Knowledge Hub. Inclui fallback heurístico "
+        "automático se o LLM não estiver disponível.",
+        [
+            "Simule o impacto de remover o módulo de relatórios do escopo",
+            "O que muda se reduzirmos o prazo de entrega em 30 dias?",
+            "Analise o impacto de adicionar suporte a dispositivos móveis",
+            "Se a integração com o ERP for cancelada, quais requisitos são afetados?",
+        ]
+    ), unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "verificar_conformidade", "consulta",
+        "Verifica a cobertura dos requisitos do projeto contra um documento "
+        "(contrato, edital, norma). Classifica cada requisito como "
+        "<em>Coberto</em>, <em>Parcial</em> ou <em>Não Mapeado</em> com base "
+        "em correspondência de palavras-chave. Retorna relatório de lacunas "
+        "para tomada de ação.",
+        [
+            "Verifique a conformidade dos requisitos com o edital de licitação",
+            "O documento de contrato cobre todos os requisitos funcionais?",
+            "Quais requisitos não estão mapeados no termo de referência?",
+            "Analise a cobertura dos requisitos não-funcionais contra a norma ISO",
+        ]
+    ), unsafe_allow_html=True)
+
+    st.markdown('<div class="g-section-hdr">Geração de documentos estratégicos</div>', unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "sugerir_processos", "consulta",
+        "Identifica oportunidades de novos processos BPMN a partir de debates IBIS "
+        "recorrentes. Usa clustering por similaridade de palavras-chave (Jaccard) "
+        "para agrupar questões repetidas em múltiplas reuniões. Verifica contra os "
+        "BPMNs existentes para evitar duplicatas e infere as etapas do processo "
+        "a partir das alternativas escolhidas.",
+        [
+            "Quais processos ainda não foram mapeados mas aparecem nos debates?",
+            "Sugira novos BPMNs com base nas questões IBIS recorrentes",
+            "Há temas discutidos em 3 ou mais reuniões sem processo mapeado?",
+        ]
+    ), unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "gerar_deck_executivo", "consulta",
+        "Gera uma apresentação executiva em Markdown com 7 slides sobre o projeto: "
+        "visão geral (BMM), situação atual de requisitos, processos mapeados (BPMN), "
+        "ROI-TR das reuniões, encaminhamentos pendentes, riscos e próximos passos. "
+        "Baseado em LLM com todos os artefatos do projeto como contexto.",
+        [
+            "Gere um deck executivo do projeto para apresentação ao cliente",
+            "Crie uma apresentação resumida das últimas 3 reuniões",
+            "Monte um deck executivo focado em requisitos e processos",
+            "Prepare slides para a reunião de status com a diretoria",
+        ]
+    ), unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "gerar_project_charter", "consulta",
+        "Gera um Project Charter formal em Markdown (padrão PMO) com 10 seções: "
+        "objetivo, escopo, stakeholders, premissas, restrições, riscos, cronograma "
+        "macro, orçamento estimado, critérios de aceite e aprovação. "
+        "Consolida BMM, requisitos, SBVR e IBIS como base de geração.",
+        [
+            "Gere o Project Charter completo do projeto",
+            "Crie o termo de abertura do projeto com riscos e cronograma",
+            "Monte um Project Charter sem a seção de orçamento",
+            "Gere o Project Charter incluindo a análise de stakeholders",
+        ]
+    ), unsafe_allow_html=True)
+
 
 # ── Footer ─────────────────────────────────────────────────────────────────────
 st.markdown("---")
