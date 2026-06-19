@@ -329,11 +329,17 @@ def _repair_pool(
 
 def reformat_bpmn_di(xml_str: str) -> tuple[str, list[str]]:
     """
-    Remove explicit dc:Bounds from BPMNLabel of task shapes so that bpmn-js
-    auto-centers label text inside task boxes (prevents left-anchored text).
+    Two-pass deterministic DI reformatter:
 
-    Heuristic: shapes with dc:Bounds width >= 100px are tasks (events ~30px,
-    gateways ~50px).
+    Pass 1 — Label centering
+        Removes explicit dc:Bounds from BPMNLabel of task shapes (width ≥ 100px)
+        so that bpmn-js auto-centers text inside task boxes.
+
+    Pass 2 — Flow auto-routing
+        Removes waypoints from BPMNEdge elements that have exactly 2 waypoints
+        (straight start→end line). bpmn-js Manhattan router then takes over,
+        producing L-shaped paths that avoid element collisions and reduce crossings.
+        Edges with 3+ waypoints are preserved (intentional lane-crossing routes).
 
     Returns (fixed_xml, changes). Never raises — returns (xml_str, []) on error.
     """
@@ -342,9 +348,12 @@ def reformat_bpmn_di(xml_str: str) -> tuple[str, list[str]]:
 
     _BPMNDI     = "http://www.omg.org/spec/BPMN/20100524/DI"
     _DC         = "http://www.omg.org/spec/DD/20100524/DC"
+    _DI         = "http://www.omg.org/spec/DD/20100524/DI"
     _SHAPE      = f"{{{_BPMNDI}}}BPMNShape"
+    _EDGE       = f"{{{_BPMNDI}}}BPMNEdge"
     _LABEL      = f"{{{_BPMNDI}}}BPMNLabel"
     _BOUNDS     = f"{{{_DC}}}Bounds"
+    _WAYPOINT   = f"{{{_DI}}}waypoint"
     _TASK_MIN_W = 100  # tasks ≥ 100px wide; events ~30px; gateways ~50px
 
     try:
@@ -355,6 +364,7 @@ def reformat_bpmn_di(xml_str: str) -> tuple[str, list[str]]:
         root = ET.fromstring(xml_str)
         changes: list[str] = []
 
+        # ── Pass 1: remove explicit label bounds from task shapes ─────────────
         for shape in root.iter(_SHAPE):
             bounds = shape.find(_BOUNDS)
             if bounds is None:
@@ -375,6 +385,16 @@ def reformat_bpmn_di(xml_str: str) -> tuple[str, list[str]]:
                 label.remove(label_bounds)
                 elem_id = shape.get("bpmnElement", shape.get("id", "?"))
                 changes.append(f"Rótulo centralizado: '{elem_id}'")
+
+        # ── Pass 2: remove redundant waypoints from straight edges ────────────
+        for edge in root.iter(_EDGE):
+            waypoints = edge.findall(_WAYPOINT)
+            if len(waypoints) != 2:
+                continue  # 0 = already auto-routed; 3+ = intentional path
+            for wp in waypoints:
+                edge.remove(wp)
+            elem_id = edge.get("bpmnElement", edge.get("id", "?"))
+            changes.append(f"Roteamento automático: '{elem_id}'")
 
         if not changes:
             return xml_str, []
