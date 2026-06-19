@@ -20,12 +20,16 @@ def render_bpmn(hub, prefix, suffix):
                          help="Centraliza os rótulos dentro das caixas de tarefa"):
                 from modules.bpmn_auto_repair import reformat_bpmn_labels
                 _fixed, _changes = reformat_bpmn_labels(hub.bpmn.bpmn_xml)
-                if _changes:
+                _errors = [c for c in _changes if c.startswith("[ERRO]")]
+                _fixes  = [c for c in _changes if not c.startswith("[ERRO]")]
+                if _errors:
+                    st.toast(_errors[0], icon="❌")
+                elif _fixes:
                     hub.bpmn.bpmn_xml = _fixed
                     st.session_state["hub"] = hub
-                    st.toast(f"✅ {len(_changes)} rótulo(s) centralizado(s)", icon="🏷️")
+                    st.toast(f"✅ {len(_fixes)} correção(ões) aplicada(s)", icon="🏷️")
                 else:
-                    st.toast("Nenhum problema de label detectado.", icon="ℹ️")
+                    st.toast("Labels já centralizados — nenhuma correção necessária.", icon="✅")
         with _rb2:
             if st.button("↔️ Ajustar Sequências", key="btn_reformat_flows",
                          help="Delega roteamento de flows ao bpmn-js (pode melhorar cruzamentos em alguns diagramas)"):

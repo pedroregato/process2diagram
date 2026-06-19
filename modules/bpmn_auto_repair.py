@@ -351,10 +351,13 @@ def _bpmn_serialize(root, xml_str: str, ET) -> str:
 
 def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
     """
-    Remove explicit dc:Bounds from BPMNLabel of task shapes (width ≥ 100px)
+    Ensure every task BPMNShape has an empty BPMNLabel (no dc:Bounds child),
     so that bpmn-js auto-centers text inside task boxes.
 
-    Returns (fixed_xml, changes). Never raises — returns (xml_str, []) on error.
+    Skips: pools / lanes (isHorizontal="true"), events (~36px), gateways (~50px).
+    Task width heuristic: 100px ≤ width ≤ 400px AND not isHorizontal.
+
+    Returns (fixed_xml, changes). Never raises — returns (xml_str, [error]) on error.
     """
     _BPMNDI     = "http://www.omg.org/spec/BPMN/20100524/DI"
     _DC         = "http://www.omg.org/spec/DD/20100524/DC"
@@ -362,12 +365,17 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
     _LABEL      = f"{{{_BPMNDI}}}BPMNLabel"
     _BOUNDS     = f"{{{_DC}}}Bounds"
     _TASK_MIN_W = 100
+    _TASK_MAX_W = 400   # pools/lanes are much wider (1000-2000px)
 
     try:
         root, ET = _bpmn_parse(xml_str)
         changes: list[str] = []
 
         for shape in root.iter(_SHAPE):
+            # Skip pools and lanes — they carry isHorizontal="true"
+            if shape.get("isHorizontal") == "true":
+                continue
+
             bounds = shape.find(_BOUNDS)
             if bounds is None:
                 continue
@@ -375,25 +383,30 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
                 w = float(bounds.get("width", "0"))
             except ValueError:
                 continue
-            if w < _TASK_MIN_W:
-                continue
+            if not (_TASK_MIN_W <= w <= _TASK_MAX_W):
+                continue  # too narrow (event/gateway) or too wide (pool/lane fallback)
+
+            elem_id = shape.get("bpmnElement", shape.get("id", "?"))
 
             label = shape.find(_LABEL)
             if label is None:
+                # BPMNLabel missing entirely — add empty one
+                import xml.etree.ElementTree as _ET
+                _ET.SubElement(shape, _LABEL)
+                changes.append(f"BPMNLabel adicionado: '{elem_id}'")
                 continue
 
             label_bounds = label.find(_BOUNDS)
             if label_bounds is not None:
                 label.remove(label_bounds)
-                elem_id = shape.get("bpmnElement", shape.get("id", "?"))
                 changes.append(f"Rótulo centralizado: '{elem_id}'")
 
         if not changes:
             return xml_str, []
         return _bpmn_serialize(root, xml_str, ET), changes
 
-    except Exception:
-        return xml_str, []
+    except Exception as exc:
+        return xml_str, [f"[ERRO] reformat_bpmn_labels: {exc}"]
 
 
 def reformat_bpmn_flows(xml_str: str) -> tuple[str, list[str]]:
