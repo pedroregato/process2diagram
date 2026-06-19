@@ -460,7 +460,6 @@ st.markdown(f"""
       </div>
     </div>
     <div class="autor-col-right">
-
       <div class="card gold-border" style="margin-bottom:18px;">
         <p style="color:var(--white);">
           O <strong style="color:var(--gold2);">Process2Diagram</strong> é resultado exclusivo de
@@ -472,9 +471,7 @@ st.markdown(f"""
           transforma conversa em governança</em>.
         </p>
       </div>
-
       <h3 style="margin-bottom:12px;">Valor concreto para a organização que adotar o P2D</h3>
-
       <div class="cols-2" style="gap:10px;">
         <div>
           <div class="roi-row">
@@ -533,12 +530,10 @@ st.markdown(f"""
           </div>
         </div>
       </div>
-
       <div class="divider"></div>
       <p style="font-size:12px;color:var(--muted);margin-top:0;">
         pedro.regato@gmail.com &nbsp;·&nbsp; P2D v4.32 &nbsp;·&nbsp; Streamlit Cloud
       </p>
-
     </div>
   </div>
 </div>
