@@ -370,6 +370,8 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
     """
     Ensure every task BPMNShape has an empty BPMNLabel (no dc:Bounds child),
     so that bpmn-js auto-centers text inside task boxes.
+    Also normalizes task shape dimensions from old generator constants to the
+    current standard (160×90), giving more room for long task names.
 
     Skips: pools / lanes (isHorizontal="true"), events (~36px), gateways (~50px).
     Task width heuristic: 100px ≤ width ≤ 400px AND not isHorizontal.
@@ -383,6 +385,11 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
     _BOUNDS     = f"{{{_DC}}}Bounds"
     _TASK_MIN_W = 100
     _TASK_MAX_W = 400   # pools/lanes are much wider (1000-2000px)
+
+    # Known old generator dimension pairs (w, h) → upgrade to current standard
+    _STD_W    = 160
+    _STD_H    = 90
+    _OLD_DIMS = {(150, 80), (120, 60)}
 
     try:
         root, ET = _bpmn_parse(xml_str)
@@ -411,6 +418,24 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
             verified += 1
             elem_id = shape.get("bpmnElement", shape.get("id", "?"))
 
+            # ── Pass A: Normalize old shape dimensions to current standard ────
+            try:
+                h = float(bounds.get("height", "0"))
+            except ValueError:
+                h = 0.0
+            if (round(w), round(h)) in _OLD_DIMS:
+                old_x = float(bounds.get("x", "0"))
+                old_y = float(bounds.get("y", "0"))
+                # Keep center: shift top-left corner by half the size increase
+                bounds.set("x",      str(old_x - (_STD_W - w) / 2))
+                bounds.set("y",      str(old_y - (_STD_H - h) / 2))
+                bounds.set("width",  str(_STD_W))
+                bounds.set("height", str(_STD_H))
+                fixes.append(
+                    f"Dimensões normalizadas {int(w)}×{int(h)}→{_STD_W}×{_STD_H}: '{elem_id}'"
+                )
+
+            # ── Pass B: Ensure BPMNLabel is empty (no dc:Bounds) ─────────────
             label = shape.find(_LABEL)
             if label is None:
                 # BPMNLabel missing entirely — add empty one
