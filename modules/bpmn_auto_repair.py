@@ -331,11 +331,25 @@ def _bpmn_parse(xml_str: str):
     """Register namespaces + parse. Returns (root, ET module). Raises on error."""
     import io
     import xml.etree.ElementTree as ET
+
+    # Register canonical BPMN prefixes FIRST (including "" for the default
+    # namespace) so serialization never produces ns0:/ns1: mangling.
+    _CANONICAL = [
+        ("",       "http://www.omg.org/spec/BPMN/20100524/MODEL"),
+        ("bpmndi", "http://www.omg.org/spec/BPMN/20100524/DI"),
+        ("dc",     "http://www.omg.org/spec/DD/20100524/DC"),
+        ("di",     "http://www.omg.org/spec/DD/20100524/DI"),
+    ]
+    for pfx, uri in _CANONICAL:
+        ET.register_namespace(pfx, uri)
+
+    # Register any additional namespaces declared in the document
     for _, (pfx, uri) in ET.iterparse(io.StringIO(xml_str), events=["start-ns"]):
         try:
             ET.register_namespace(pfx, uri)
         except ValueError:
             pass  # skip reserved prefixes (xml, xmlns, …)
+
     return ET.fromstring(xml_str), ET
 
 
@@ -373,6 +387,10 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
     try:
         root, ET = _bpmn_parse(xml_str)
         changes: list[str] = []
+
+        # Detect namespace mangling from previous serializations
+        if "ns0:" in xml_str or "xmlns:ns0=" in xml_str:
+            changes.append("Namespaces XML normalizados (ns0: → padrão BPMN)")
 
         for shape in root.iter(_SHAPE):
             # Skip pools and lanes — they carry isHorizontal="true"
