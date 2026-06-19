@@ -99,6 +99,7 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
   min-width: 40px; text-align: center; user-select: none;
 }}
 .tb-sep {{ width: 1px; height: 20px; background: #e2e8f0; margin: 0 2px; }}
+.tb-pan {{ min-width: 24px; padding: 0 5px; font-size: 15px; }}
 .tb-hint {{
   margin-left: auto; font-size: 10px; color: #cbd5e1;
   font-family: sans-serif; white-space: nowrap;
@@ -142,8 +143,13 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
   <div class="tb-sep"></div>
   <button class="tb-btn" id="btn-reset" title="Redefinir zoom">↺</button>
   <div class="tb-sep"></div>
+  <button class="tb-btn tb-pan" id="btn-left"  title="Mover esquerda (←)">←</button>
+  <button class="tb-btn tb-pan" id="btn-up"    title="Mover para cima (↑)">↑</button>
+  <button class="tb-btn tb-pan" id="btn-down"  title="Mover para baixo (↓)">↓</button>
+  <button class="tb-btn tb-pan" id="btn-right" title="Mover direita (→)">→</button>
+  <div class="tb-sep"></div>
   <button class="tb-btn" id="btn-new" title="Abrir em nova janela">↗ Janela</button>
-  <span class="tb-hint">Arraste: mover &nbsp;·&nbsp; Scroll: zoom &nbsp;·&nbsp; 0: ajustar</span>
+  <span class="tb-hint">Arraste ou setas: mover &nbsp;·&nbsp; Scroll: zoom &nbsp;·&nbsp; 0: ajustar</span>
 </div>
 
 <!-- bpmn-js JS inlined server-side — no CDN dependency in iframe -->
@@ -229,11 +235,19 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
       refreshLabel();
     }} catch(_) {{}}
   }}
+  function safePan(dx, dy) {{
+    try {{ viewer.get('canvas').scroll({{ dx: dx, dy: dy }}); }} catch(_) {{}}
+  }}
+  const PAN_STEP = 120;
 
   document.getElementById('btn-fit').onclick   = fitView;
   document.getElementById('btn-reset').onclick = fitView;
   document.getElementById('btn-in').onclick    = function() {{ safeZoom(1.2); }};
   document.getElementById('btn-out').onclick   = function() {{ safeZoom(0.8); }};
+  document.getElementById('btn-left').onclick  = function() {{ safePan( PAN_STEP, 0); }};
+  document.getElementById('btn-right').onclick = function() {{ safePan(-PAN_STEP, 0); }};
+  document.getElementById('btn-up').onclick    = function() {{ safePan(0,  PAN_STEP); }};
+  document.getElementById('btn-down').onclick  = function() {{ safePan(0, -PAN_STEP); }};
   document.getElementById('btn-new').onclick   = function() {{
     var html='<!DOCTYPE html>'+document.documentElement.outerHTML;
     var blob=new Blob([html],{{type:'text/html;charset=utf-8'}});
@@ -244,9 +258,13 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
   window.addEventListener('keydown', function(e) {{
-    if (e.key === '0')                   fitView();
-    if (e.key === '+' || e.key === '=')  safeZoom(1.15);
-    if (e.key === '-')                   safeZoom(0.87);
+    if (e.key === '0')                   {{ fitView(); e.preventDefault(); }}
+    if (e.key === '+' || e.key === '=')  {{ safeZoom(1.15); e.preventDefault(); }}
+    if (e.key === '-')                   {{ safeZoom(0.87); e.preventDefault(); }}
+    if (e.key === 'ArrowLeft')           {{ safePan( PAN_STEP, 0); e.preventDefault(); }}
+    if (e.key === 'ArrowRight')          {{ safePan(-PAN_STEP, 0); e.preventDefault(); }}
+    if (e.key === 'ArrowUp')             {{ safePan(0,  PAN_STEP); e.preventDefault(); }}
+    if (e.key === 'ArrowDown')           {{ safePan(0, -PAN_STEP); e.preventDefault(); }}
   }});
 }})();
 </script>
@@ -298,6 +316,10 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
   <button class="tb-btn" id="btn-in">+</button>
   <span id="zoom-label">100%</span>
   <button class="tb-btn" id="btn-out">−</button>
+  <button class="tb-btn" id="btn-left"  title="←">←</button>
+  <button class="tb-btn" id="btn-up"    title="↑">↑</button>
+  <button class="tb-btn" id="btn-down"  title="↓">↓</button>
+  <button class="tb-btn" id="btn-right" title="→">→</button>
   <button class="tb-btn" id="btn-new" title="Abrir em nova janela">↗ Janela</button>
 </div>
 <script src="https://unpkg.com/bpmn-js@17/dist/bpmn-viewer.production.min.js"></script>
@@ -315,9 +337,15 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
     document.getElementById('loading').style.display='none';
     document.getElementById('bpmn-container').innerHTML='<p style="color:red;padding:20px">Erro: '+e.message+'</p>';
   }});
+  function safePan(dx,dy){{ try{{ viewer.get('canvas').scroll({{dx:dx,dy:dy}}); }}catch(_){{}} }}
+  var PS=120;
   document.getElementById('btn-fit').onclick=fitView;
   document.getElementById('btn-in').onclick=function(){{ try{{ var c=viewer.get('canvas'); c.zoom(c.zoom()*1.2,'auto'); refreshLabel(); }}catch(_){{}} }};
   document.getElementById('btn-out').onclick=function(){{ try{{ var c=viewer.get('canvas'); c.zoom(c.zoom()*0.8,'auto'); refreshLabel(); }}catch(_){{}} }};
+  document.getElementById('btn-left').onclick=function(){{ safePan(PS,0); }};
+  document.getElementById('btn-right').onclick=function(){{ safePan(-PS,0); }};
+  document.getElementById('btn-up').onclick=function(){{ safePan(0,PS); }};
+  document.getElementById('btn-down').onclick=function(){{ safePan(0,-PS); }};
   document.getElementById('btn-new').onclick=function(){{
     var html='<!DOCTYPE html>'+document.documentElement.outerHTML;
     var blob=new Blob([html],{{type:'text/html;charset=utf-8'}});
@@ -325,7 +353,13 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
     var w=(window.top||window).open(url,'_blank');
     if(!w)window.open(url,'_blank');
   }};
-  window.addEventListener('keydown',function(e){{ if(e.key==='0') fitView(); }});
+  window.addEventListener('keydown',function(e){{
+    if(e.key==='0'){{fitView();e.preventDefault();}}
+    if(e.key==='ArrowLeft'){{safePan(PS,0);e.preventDefault();}}
+    if(e.key==='ArrowRight'){{safePan(-PS,0);e.preventDefault();}}
+    if(e.key==='ArrowUp'){{safePan(0,PS);e.preventDefault();}}
+    if(e.key==='ArrowDown'){{safePan(0,-PS);e.preventDefault();}}
+  }});
 }})();
 </script>
 </body>
