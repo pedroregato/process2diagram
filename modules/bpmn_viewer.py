@@ -22,6 +22,7 @@
 from __future__ import annotations
 import functools
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from modules.schema import BpmnProcess
 from modules.bpmn_generator import generate_bpmn_xml
@@ -34,12 +35,11 @@ _CSS_URLS = [
     "https://unpkg.com/bpmn-js@17/dist/assets/diagram-js.css",
     "https://unpkg.com/bpmn-js@17/dist/assets/bpmn-font/css/bpmn-embedded.css",
 ]
-_FETCH_TIMEOUT = 20  # seconds
+_FETCH_TIMEOUT = 8   # seconds per request — 4 parallel fetches → max 8s blocking
 
 
-@functools.lru_cache(maxsize=None)
 def _fetch_text(url: str) -> str:
-    """Fetch a URL server-side and return its text content. Cached forever."""
+    """Fetch a single URL server-side. Not cached here; _load_bpmn_assets is cached."""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "process2diagram/1.0"})
         with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT) as resp:
@@ -48,10 +48,26 @@ def _fetch_text(url: str) -> str:
         return ""
 
 
+@functools.lru_cache(maxsize=None)
 def _load_bpmn_assets() -> tuple[str, str]:
-    """Return (js_code, css_code). Both are inlined into the HTML template."""
-    js  = _fetch_text(_BPMN_JS_URL)
-    css = "\n".join(_fetch_text(u) for u in _CSS_URLS)
+    """Fetch bpmn-js JS + CSS in parallel; cached after first call.
+
+    All 4 URLs are requested concurrently so worst-case blocking is
+    _FETCH_TIMEOUT seconds (not 4×_FETCH_TIMEOUT as in the sequential case).
+    Falls back to CDN when any individual fetch fails.
+    """
+    all_urls = [_BPMN_JS_URL] + _CSS_URLS
+    results: dict[str, str] = {}
+
+    def _fetch(url: str) -> tuple[str, str]:
+        return url, _fetch_text(url)
+
+    with ThreadPoolExecutor(max_workers=len(all_urls)) as pool:
+        for url, content in pool.map(_fetch, all_urls):
+            results[url] = content
+
+    js  = results.get(_BPMN_JS_URL, "")
+    css = "\n".join(results.get(u, "") for u in _CSS_URLS)
     return js, css
 
 
