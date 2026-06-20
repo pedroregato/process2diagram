@@ -378,6 +378,23 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC50 — Concluído (v4.33 / 2026-06-20)
+
+**Pipeline — Background Thread para Reexecução de Agentes (fix "CONNECTING")**
+
+- [x] **Causa raiz** — `handle_rerun()` era chamado sincronamente no script thread do Streamlit; LLM calls de 60–180s bloqueavam o WebSocket → browser mostrava "CONNECTING" / "Página sem Resposta"
+- [x] **`core/rerun_handlers.py`** — removidos todos `st.info()` / `st.warning()` da função; substituídos por `messages.append((level, text))`; retorno alterado de `hub` para `(hub, messages)` — função agora thread-safe
+- [x] **`pages/Pipeline.py`** — handler síncrono substituído por `threading.Thread(daemon=True)` + polling de 1s (`sleep(1)` + `st.rerun()`); WebSocket permanece vivo durante toda a execução; mensagens exibidas no main thread após conclusão
+- [x] **Resultado** — reprocessamento de qualquer agente (especialmente BPMN) não causa mais "CONNECTING"; progresso visível com spinner "⏳ Executando agente…"
+
+**BPMN — Labels de Tasks Centrados (fix "Ajustar Labels")**
+
+- [x] **Problema** — `reformat_bpmn_labels()` (Pass B) removia `dc:Bounds` deixando `<bpmndi:BPMNLabel />` vazio; bpmn-js renderizava label abaixo do shape em vez de centralizado; função reportava falso positivo "labels já centralizados" para shapes 160×90
+- [x] **`modules/bpmn_auto_repair.py`** — Pass B reescrito: em vez de remover bounds, insere `dc:Bounds` explícitos centrados (`exp_lx = sx + PAD_X=10`, `exp_ly = sy + PAD_Y=8`, largura/altura inset); "já centralizados" agora só reportado quando todos os bounds estão dentro de 1px de tolerância (`SNAP_TOL`)
+- [x] **`modules/bpmn_generator.py`** — ambos os geradores (single-pool e multi-pool) passaram a emitir `dc:Bounds` explícitos centrados para tasks desde a geração (`_LBL_PAD_X=10`, `_LBL_PAD_Y=8`), eliminando a necessidade de repair posterior
+
+---
+
 ### PC49 — Concluído (v4.33 / 2026-06-20)
 
 **BPMN — Gateway Port Assignment + Parallel Edge Gap (Melhoria A+B)**
@@ -388,6 +405,17 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Integração nos dois loops de DI** — `_build_di` (single-pool) e `_generate_bpmn_xml_multi` (multi-pool) computam `_gw_exits` antes do loop de flows e passam `src_exit` ao roteador
 - [x] **Resultado visual** — 3 saídas do mesmo gateway passam de `y=235, 235, 235` para `y=223, 235, 247` (fanning); labels de condição ficam separados visualmente
 - [x] **149 testes passando**, zero regressões
+
+**BPMN Viewer — Parallel Asset Fetch (hotfix)**
+
+- [x] **`modules/bpmn_viewer.py`** — `_load_bpmn_assets()` buscava 4 URLs sequencialmente (timeout 20s cada → até 80s bloqueando o servidor Python); isso causava "CONNECTING" no browser e "Página sem Resposta" no Windows
+- [x] **Fix:** fetch paralelo via `ThreadPoolExecutor(max_workers=4)`; timeout reduzido 20s → 8s; `@lru_cache` movido de `_fetch_text` para `_load_bpmn_assets`; worst-case blocking 80s → 8s
+- [x] **Resultado:** aba BPMN carrega normalmente após reprocessamento de agente
+
+**CLAUDE.md — Redução de tamanho (37.8k)**
+
+- [x] **CLAUDE.md** reduzido de 42.4k → 37.8k chars (−11%); 12 blocos de descrição de grupos de ferramentas do Assistente migrados para `claude_guideline/architecture_details.md §Tool list`
+- [x] **`claude_guideline/architecture_details.md`** — nova seção `## Tool list — Assistente (core/assistant_tools.py)` com todos os 14 grupos de ferramentas
 
 ---
 
