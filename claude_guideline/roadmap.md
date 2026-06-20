@@ -387,6 +387,14 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **`pages/Pipeline.py`** — handler síncrono substituído por `threading.Thread(daemon=True)` + polling de 1s (`sleep(1)` + `st.rerun()`); WebSocket permanece vivo durante toda a execução; mensagens exibidas no main thread após conclusão
 - [x] **Resultado** — reprocessamento de qualquer agente (especialmente BPMN) não causa mais "CONNECTING"; progresso visível com spinner "⏳ Executando agente…"
 
+**Reexecução BPMN — Fix DeepSeek retornando conteúdo vazio**
+
+- [x] **Causa raiz** — `_lg_skip_cache = True` adicionado a todos os agentes em `handle_rerun()` para forçar chamadas frescas à API; chamadas DeepSeek a partir do background thread retornavam conteúdo vazio (sem ScriptRunContext); resultado: `ValueError: No JSON object found in LLM response` após 3 tentativas
+- [x] **`agents/base_agent.py`** — guard `and raw` em `_cache.set()`: respostas vazias nunca persistidas no cache semântico (previne cache poisoning)
+- [x] **`agents/base_agent.py`** — `_call_openai` levanta `ValueError` descritivo com `finish_reason` quando conteúdo é `None`/vazio (diagnóstico mais claro em logs)
+- [x] **`core/rerun_handlers.py`** — `_lg_skip_cache = True` removido de todos os 11 agentes; cache semântico reutilizado no rerun (respostas válidas do pipeline inicial disponíveis imediatamente); guard `and raw` garante que falhas anteriores não contaminem o cache
+- [x] **Resultado** — reexecução do agente BPMN via DeepSeek restaurada; rerun retorna do cache quando disponível (instantâneo) ou faz chamada fresca quando necessário
+
 **BPMN — Labels de Tasks Centrados (fix "Ajustar Labels")**
 
 - [x] **Problema** — `reformat_bpmn_labels()` (Pass B) removia `dc:Bounds` deixando `<bpmndi:BPMNLabel />` vazio; bpmn-js renderizava label abaixo do shape em vez de centralizado; função reportava falso positivo "labels já centralizados" para shapes 160×90
