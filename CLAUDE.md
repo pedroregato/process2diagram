@@ -389,7 +389,7 @@ Artefatos DMN tab: sub-tabs **📋 Tabelas** + **🔗 DRD** + download buttons (
 
 ---
 
-## Agent Skills (v4.32)
+## Agent Skills (v4.33)
 
 **Frontmatter stripping** — `BaseAgent._load_skill()` strips YAML `---...---` from 15/25 skill files (~80–200 tokens saved per agent call).
 
