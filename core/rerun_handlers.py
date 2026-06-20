@@ -14,6 +14,13 @@ from agents.agent_transcript_quality import AgentTranscriptQuality
 from core.knowledge_hub import SynthesizerModel
 
 def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
+    """Run a single agent and return (hub, messages).
+
+    messages is a list of (level, text) tuples where level is "info"|"warning"|"error".
+    No st.* calls are made here — safe to run from a background thread.
+    """
+    messages = []
+
     if agent_name == "quality":
         agent = AgentTranscriptQuality(client_info, provider_cfg)
         hub = agent.run(hub, output_language)
@@ -23,7 +30,7 @@ def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
         # Invalida relatório
         hub.synthesizer = SynthesizerModel()
         hub.synthesizer.ready = False
-        st.info("ℹ️ Executive report invalidated due to BPMN change.")
+        messages.append(("info", "ℹ️ Relatório executivo invalidado por mudança no BPMN."))
     elif agent_name == "minutes":
         agent = AgentMinutes(client_info, provider_cfg)
         hub = agent.run(hub, output_language)
@@ -33,12 +40,12 @@ def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
     elif agent_name == "sbvr":
         agent = AgentSBVR(client_info, provider_cfg)
         hub = agent.run(hub, output_language)
-        # Warn that Requirements traceability is now stale
         if hub.requirements.ready and hub.requirements.requirements:
-            st.info(
+            messages.append((
+                "info",
                 "ℹ️ Regras SBVR atualizadas. Re-execute o agente de Requisitos para "
-                "atualizar os campos `business_rule_refs`."
-            )
+                "atualizar os campos `business_rule_refs`.",
+            ))
     elif agent_name == "bmm":
         agent = AgentBMM(client_info, provider_cfg)
         hub = agent.run(hub, output_language)
@@ -77,7 +84,7 @@ def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
         if hub.bpmn.steps:
             hub.bpmn.mermaid = MermaidGenerator.generate(hub.bpmn)
         else:
-            st.warning("⚠️ Dados do BPMN não disponíveis nesta sessão. Execute o agente BPMN primeiro.")
+            messages.append(("warning", "⚠️ Dados do BPMN não disponíveis. Execute o agente BPMN primeiro."))
     else:
         raise ValueError(f"Unknown agent: {agent_name}")
-    return hub
+    return hub, messages

@@ -397,23 +397,57 @@ else:
 # HANDLER DE REEXECUÇÃO (ambos os modos)
 # ─────────────────────────────────────────────────────────────────────────────
 if "rerun_agent" in st.session_state:
-    agent = st.session_state.pop("rerun_agent")
-    hub = st.session_state.get("hub")
-    if hub:
-        client_info = get_session_llm_client(st.session_state.selected_provider)
-        if client_info:
-            try:
-                hub = handle_rerun(agent, hub, client_info,
-                                   st.session_state.provider_cfg,
-                                   st.session_state.output_language)
-                st.session_state.hub = hub
-                st.success(f"✅ {agent.capitalize()} re‑executado com sucesso.")
-            except Exception as e:
-                st.error(f"Erro na reexecução: {e}")
+    import threading as _threading
+    import copy as _copy
+    _agent_name = st.session_state.pop("rerun_agent")
+    _hub = st.session_state.get("hub")
+    if _hub:
+        _client_info = get_session_llm_client(st.session_state.selected_provider)
+        if _client_info:
+            _task = {"done": False, "hub": None, "messages": [], "error": None}
+            st.session_state["_rr_task"] = _task
+            st.session_state["_rr_agent"] = _agent_name
+            _pcfg = st.session_state.provider_cfg
+            _olang = st.session_state.output_language
+            _hub_copy = _copy.copy(_hub)
+            def _rr_worker(_t=_task, _a=_agent_name, _h=_hub_copy, _c=_client_info, _p=_pcfg, _o=_olang):
+                try:
+                    _t["hub"], _t["messages"] = handle_rerun(_a, _h, _c, _p, _o)
+                except Exception as _e:
+                    _t["error"] = str(_e)
+                finally:
+                    _t["done"] = True
+            _threading.Thread(target=_rr_worker, daemon=True).start()
+            st.rerun()
         else:
             st.error("Chave de API não encontrada.")
     else:
         st.error("Nenhuma sessão ativa. Execute o pipeline primeiro.")
+
+# POLLING — mantém WebSocket vivo enquanto o agente roda em background
+_rr_task = st.session_state.get("_rr_task")
+if _rr_task is not None:
+    import time as _time
+    _rr_agent = st.session_state.get("_rr_agent", "agente")
+    if _rr_task["done"]:
+        st.session_state.pop("_rr_task", None)
+        st.session_state.pop("_rr_agent", None)
+        if _rr_task["hub"] is not None:
+            st.session_state.hub = _rr_task["hub"]
+            st.success(f"✅ {_rr_agent.capitalize()} re‑executado com sucesso.")
+            for _lvl, _msg in (_rr_task["messages"] or []):
+                if _lvl == "info":
+                    st.info(_msg)
+                elif _lvl == "warning":
+                    st.warning(_msg)
+                elif _lvl == "error":
+                    st.error(_msg)
+        elif _rr_task["error"]:
+            st.error(f"Erro na reexecução: {_rr_task['error']}")
+    else:
+        st.info(f"⏳ Executando agente **{_rr_agent}**… aguarde.")
+        _time.sleep(1)
+        st.rerun()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # EXIBIÇÃO DOS RESULTADOS (ambos os modos)

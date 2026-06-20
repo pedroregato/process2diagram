@@ -368,8 +368,8 @@ def _bpmn_serialize(root, xml_str: str, ET) -> str:
 
 def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
     """
-    Ensure every task BPMNShape has an empty BPMNLabel (no dc:Bounds child),
-    so that bpmn-js auto-centers text inside task boxes.
+    Ensure every task BPMNShape has a BPMNLabel with dc:Bounds centered inside
+    the shape box, so bpmn-js renders text inside task boxes regardless of viewer.
     Also normalizes task shape dimensions from old generator constants to the
     current standard (160×90), giving more room for long task names.
 
@@ -378,6 +378,8 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
 
     Returns (fixed_xml, changes). Never raises — returns (xml_str, [error]) on error.
     """
+    import xml.etree.ElementTree as _ET
+
     _BPMNDI     = "http://www.omg.org/spec/BPMN/20100524/DI"
     _DC         = "http://www.omg.org/spec/DD/20100524/DC"
     _SHAPE      = f"{{{_BPMNDI}}}BPMNShape"
@@ -390,6 +392,13 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
     _STD_W    = 160
     _STD_H    = 90
     _OLD_DIMS = {(150, 80), (120, 60)}
+
+    # Label inset padding (pixels from shape edge) and tolerance for "already ok"
+    _PAD_X       = 10.0
+    _PAD_Y       = 8.0
+    _MIN_LABEL_W = 60.0
+    _MIN_LABEL_H = 20.0
+    _SNAP_TOL    = 1.0
 
     try:
         root, ET = _bpmn_parse(xml_str)
@@ -435,19 +444,61 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
                     f"Dimensões normalizadas {int(w)}×{int(h)}→{_STD_W}×{_STD_H}: '{elem_id}'"
                 )
 
-            # ── Pass B: Ensure BPMNLabel is empty (no dc:Bounds) ─────────────
+            # ── Pass B: Set explicit centered dc:Bounds inside BPMNLabel ─────
+            # Re-read from bounds element to pick up any Pass A changes
+            try:
+                sx = float(bounds.get("x", "0"))
+                sy = float(bounds.get("y", "0"))
+                sw = float(bounds.get("width", str(w)))
+                sh = float(bounds.get("height", str(h)))
+            except ValueError:
+                sx, sy, sw, sh = 0.0, 0.0, w, h
+
+            exp_lx = sx + _PAD_X
+            exp_ly = sy + _PAD_Y
+            exp_lw = max(sw - 2 * _PAD_X, _MIN_LABEL_W)
+            exp_lh = max(sh - 2 * _PAD_Y, _MIN_LABEL_H)
+
             label = shape.find(_LABEL)
             if label is None:
-                # BPMNLabel missing entirely — add empty one
-                import xml.etree.ElementTree as _ET
-                _ET.SubElement(shape, _LABEL)
-                fixes.append(f"BPMNLabel adicionado: '{elem_id}'")
-                continue
-
-            label_bounds = label.find(_BOUNDS)
-            if label_bounds is not None:
-                label.remove(label_bounds)
-                fixes.append(f"Rótulo centralizado: '{elem_id}'")
+                label = _ET.SubElement(shape, _LABEL)
+                lb = _ET.SubElement(label, _BOUNDS)
+                lb.set("x",      str(round(exp_lx, 1)))
+                lb.set("y",      str(round(exp_ly, 1)))
+                lb.set("width",  str(round(exp_lw, 1)))
+                lb.set("height", str(round(exp_lh, 1)))
+                fixes.append(f"Rótulo posicionado: '{elem_id}'")
+            else:
+                label_bounds = label.find(_BOUNDS)
+                if label_bounds is None:
+                    # BPMNLabel exists but has no dc:Bounds — add them
+                    lb = _ET.SubElement(label, _BOUNDS)
+                    lb.set("x",      str(round(exp_lx, 1)))
+                    lb.set("y",      str(round(exp_ly, 1)))
+                    lb.set("width",  str(round(exp_lw, 1)))
+                    lb.set("height", str(round(exp_lh, 1)))
+                    fixes.append(f"Rótulo posicionado: '{elem_id}'")
+                else:
+                    # dc:Bounds exist — update only if not already centered
+                    try:
+                        clx = float(label_bounds.get("x", "-999"))
+                        cly = float(label_bounds.get("y", "-999"))
+                        clw = float(label_bounds.get("width", "-999"))
+                        clh = float(label_bounds.get("height", "-999"))
+                        already_ok = (
+                            abs(clx - exp_lx) <= _SNAP_TOL
+                            and abs(cly - exp_ly) <= _SNAP_TOL
+                            and abs(clw - exp_lw) <= _SNAP_TOL
+                            and abs(clh - exp_lh) <= _SNAP_TOL
+                        )
+                    except ValueError:
+                        already_ok = False
+                    if not already_ok:
+                        label_bounds.set("x",      str(round(exp_lx, 1)))
+                        label_bounds.set("y",      str(round(exp_ly, 1)))
+                        label_bounds.set("width",  str(round(exp_lw, 1)))
+                        label_bounds.set("height", str(round(exp_lh, 1)))
+                        fixes.append(f"Rótulo centralizado: '{elem_id}'")
 
         # Always re-serialize: ensures canonical namespaces are applied even
         # when no label fixes were needed (prevents stale ns0: and guarantees

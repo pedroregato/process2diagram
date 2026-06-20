@@ -1119,13 +1119,11 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         b.set("width", str(int(w))); b.set("height", str(int(h)))
         lbl = _sub(shape, DI + "BPMNLabel")
         # Label placement strategy:
-        # • Tasks / sub-processes: NO dc:Bounds child — bpmn-js auto-centers the label
-        #   text inside the shape with text-anchor="middle". Providing explicit bounds
-        #   causes bpmn-js to treat the label as manually repositioned and render it
-        #   left-aligned at the given x, which is why text appeared to start from the
-        #   horizontal middle of the box.
+        # • Tasks / sub-processes: explicit dc:Bounds inset by padding inside the shape,
+        #   so text is reliably centered in all BPMN viewers.
         # • Events (small circles): explicit bounds BELOW the circle — wider to fit 2 lines.
         # • Gateways (diamonds): explicit bounds BELOW the diamond — wider for longer names.
+        _LBL_PAD_X = 10; _LBL_PAD_Y = 8
         _event_types   = ("startEvent", "endEvent",
                           "intermediateThrowEvent", "intermediateCatchEvent")
         _gateway_types = ("exclusiveGateway", "parallelGateway", "inclusiveGateway",
@@ -1138,7 +1136,13 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
             lb = _sub(lbl, DC + "Bounds")
             lb.set("x", str(int(x - 25))); lb.set("y", str(int(y + h + 2)))
             lb.set("width",  str(int(w + 50))); lb.set("height", "44")
-        # else: task/subprocess — leave BPMNLabel empty; bpmn-js centers automatically
+        else:
+            # task / subprocess — inset bounds so text stays inside the box
+            lb = _sub(lbl, DC + "Bounds")
+            lb.set("x",      str(int(x + _LBL_PAD_X)))
+            lb.set("y",      str(int(y + _LBL_PAD_Y)))
+            lb.set("width",  str(max(int(w - 2 * _LBL_PAD_X), 60)))
+            lb.set("height", str(max(int(h - 2 * _LBL_PAD_Y), 20)))
 
     # ── Lane bounds for smart routing ─────────────────────────────────────────
     _la = _assign_lanes(bpmn)
@@ -1607,6 +1611,7 @@ def _generate_bpmn_xml_multi(bpmn: BpmnProcess) -> str:
         b.set("x", str(int(x))); b.set("y", str(int(y)))
         b.set("width", str(int(w))); b.set("height", str(int(h)))
         lbl = _sub(shape, DI + "BPMNLabel")
+        _LBL_PAD_X = 10; _LBL_PAD_Y = 8
         if el.type in _event_types:
             lb = _sub(lbl, DC + "Bounds")
             lb.set("x", str(int(x - 25))); lb.set("y", str(int(y + h + 4)))
@@ -1615,7 +1620,13 @@ def _generate_bpmn_xml_multi(bpmn: BpmnProcess) -> str:
             lb = _sub(lbl, DC + "Bounds")
             lb.set("x", str(int(x - 25))); lb.set("y", str(int(y + h + 2)))
             lb.set("width",  str(int(w + 50))); lb.set("height", "44")
-        # else: task/subprocess — BPMNLabel vazio; bpmn-js centraliza automaticamente
+        else:
+            # task / subprocess — inset bounds so text stays inside the box
+            lb = _sub(lbl, DC + "Bounds")
+            lb.set("x",      str(int(x + _LBL_PAD_X)))
+            lb.set("y",      str(int(y + _LBL_PAD_Y)))
+            lb.set("width",  str(max(int(w - 2 * _LBL_PAD_X), 60)))
+            lb.set("height", str(max(int(h - 2 * _LBL_PAD_Y), 20)))
 
     # ── Lane bounds for smart routing (multi-pool) ────────────────────────────
     _all_la: dict = {}
