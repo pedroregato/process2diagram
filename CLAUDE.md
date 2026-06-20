@@ -126,16 +126,7 @@ process2diagram/
 │   │   ├── copy_button.py        # clipboard copy (navigator.clipboard + execCommand)
 │   │   ├── download_button.py    # styled download wrapper
 │   │   └── page_header.py        # render_page_header(icon, title, caption)
-│   └── tabs/
-│       ├── bpmn_tabs.py          # render_bpmn(), render_mermaid(), render_validation()
-│       ├── quality_tab.py        # transcript quality results
-│       ├── minutes_tab.py        # meeting minutes display
-│       ├── requirements_tab.py   # requirements table + mindmap
-│       ├── sbvr_tab.py           # SBVR vocabulary + rules + JSON export
-│       ├── bmm_tab.py            # BMM vision/mission/goals/strategies/policies
-│       ├── synthesizer_tab.py    # executive HTML report
-│       ├── export_tab.py         # all download buttons
-│       └── dev_tools_tab.py      # KnowledgeHub JSON debug panel
+│   └── tabs/                 # bpmn, quality, minutes, requirements, sbvr, bmm, synthesizer, export, dev_tools
 │
 ├── services/
 │   ├── export_service.py         # make_filename(base, ext, prefix, suffix) → str
@@ -372,31 +363,7 @@ Within Assistente mode, sidebar toggle `asst_use_tools`:
 
 **Admin only (`is_admin()`):** `get_database_integrity`, `fix_missing_llm_provider`, `generate_meeting_embeddings`, `reprocess_meeting_full`, `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`, `delete_entity`, `resolve_entity_ambiguity`, `clear_llm_cache`, `delete_bpmn_version`, `inserir_secao_ata`, `mesclar_reunioes`, `sincronizar_calendario`, write/generate tools.
 
-**Requirement tools (2):** `get_requirements(keyword?, req_type?, status?, page?)` — paginado; `get_requirement_history(req_number)` — histórico de versões (tipo/prioridade/contradição) via `requirement_versions`.
-
-**BMM / CKF tools (2):** `get_bmm(meeting_number?)` — visão/missão/objetivos/estratégias/políticas de `meetings.bmm_json`; `get_ckf()` — CKF acumulado via `contexts.skill_md`.
-
-**KnowledgeGraph tools (4):** `lookup_entity` — busca por nome; `list_kh_entities(entity_type?, limit?)` — por frequência; `list_kh_contradictions(status?)` — com severidade/relação/resolução; `list_kh_facts(fact_type?, limit?)` — fatos ativos. Admin: `delete_entity`, `resolve_entity_ambiguity`.
-
-**Cache tools (2):** `get_cache_stats(agent_name?)`; `clear_llm_cache(agent_name?)` admin. Tabela `llm_cache`. **BPMN version tools (2):** `list_bpmn_versions(process_name)`; `delete_bpmn_version(version_id, reason?)` admin. **Document tools (4):** `list_meeting_documents`, `get_document_content`, `search_documents`, `get_document_types`. Tabelas: `meeting_documents`, `document_chunks vector(1536)`.
-
-**Skill reference tool (1):** `read_skill_reference(agent, section?)` — lê skill file de qualquer agente; `section` extrai seção específica (Divulgação Progressiva no Assistente multi-turno).
-
-**IBIS tools (3):** `search_ibis_debates(query, meeting_number?, resolution_filter?)`, `get_ibis_timeline(topic?)`, `generate_ibis_map(topic?)`.
-
-**Cross-meeting tools (2):** `cluster_topic_decisions(topic, artifact_type?)` — cruza DMN+IBIS+atas; `generate_next_agenda(topic?)` — pauta com pendentes IBIS + encaminhamentos.
-
-**Chart tools (5):** `generate_requirements_chart`, `generate_meetings_timeline`, `generate_action_items_chart`, `generate_roi_chart`, `generate_custom_chart` — Plotly via `st.plotly_chart()`. Palettes em `core/chart_config.py`.
-
-**Plantonista tools (2):** `sugestoes_plantonista` — analisa atas + requisitos pendentes + IBIS sem resposta + encaminhamentos vencidos; retorna lista priorizada de ações; auto-exibido ao abrir o Assistente com projeto ativo. `diagnostico_projeto` — varre cobertura de artefatos por reunião, contagem req por status, score ROI-TR médio, pendências IBIS abertas; relatório de saúde em Markdown.
-
-**Editor Estrutural tools (5):** `reordenar_requisitos(nova_ordem?, agrupar_por?)` — atualiza `sort_order` em `requirements`. `inserir_secao_ata(meeting_number, titulo, conteudo, posicao)` — admin; injeta seção `## titulo` no `minutes_md`. `vincular_regra_debate(rule_id, ibis_question_id, relacao)` — upsert em `sbvr_ibis_links` (justifica|contradiz|limita). `mesclar_reunioes(manter, absorver, razao, preview=True)` — admin; reassigna artefatos e deleta meeting absorvida. `sincronizar_calendario(direction, meeting_number?, ...)` — admin; cria eventos Google Calendar a partir de action items; rastreia em `calendar_sync_items`. SQL: `setup/supabase_migration_fase2.sql`.
-
-**Rastreabilidade / What-If tools (3):** `mapa_rastreabilidade(req_number?, topic?, include_*)` — mapa Markdown cruzando transcrição + BPMN + SBVR + IBIS. `simular_cenario(descricao, requisitos_afetados?, restricoes?)` — análise de impacto via LLM com fallback heurístico. `verificar_conformidade(doc_id?, req_type_filter?, threshold?, mode?)` — keyword-match de requisitos contra documentos; classifica Coberto/Parcial/Não Mapeado.
-
-**Geração de Documentos Estratégicos (3):** `sugerir_processos(min_reunioes?, confidence?, include_evidence?)` — clustering Jaccard de questões IBIS; sugere novos processos BPMN sem LLM. `gerar_deck_executivo(incluir_secoes?, meeting_numbers?, tema_cores?)` — deck 7 slides Markdown via LLM. `gerar_project_charter(incluir_riscos?, incluir_cronograma?, incluir_stakeholders?, incluir_escopo?)` — Project Charter PMO 10 seções via LLM. Helper privado `_llm_call(system, user, max_tokens)` compartilhado entre as 3 ferramentas LLM.
-
-Tool schemas: `get_tool_schemas_openai()` / `get_tool_schemas_anthropic()`.
+Detalhes de parâmetros e comportamento por grupo de ferramentas: `claude_guideline/architecture_details.md §Tool list`.
 
 ### Exportação da conversa
 
