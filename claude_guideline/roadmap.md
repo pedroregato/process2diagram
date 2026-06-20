@@ -378,6 +378,19 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC49 — Concluído (v4.33 / 2026-06-20)
+
+**BPMN — Gateway Port Assignment + Parallel Edge Gap (Melhoria A+B)**
+
+- [x] **`_GATEWAY_TYPES`** — frozenset centralizado em `modules/bpmn_generator.py` com os 5 tipos de gateway
+- [x] **`_compute_gateway_exits(flows, el_map, shapes)`** — para gateways com ≥2 saídas, distribui exits no right edge com Y-spread de ±12px (total 24px para n=3), ordenados por target-centre-Y; retorna `{flow_id: (exit_x, exit_y)}`
+- [x] **`_route_waypoints(..., src_exit=None)`** — novo parâmetro opcional; quando fornecido, substitui o ponto de partida `(sx+sw, sy+sh/2)` sem alterar nenhuma das 7 estratégias de roteamento (cross-lane, backward, skip, default)
+- [x] **Integração nos dois loops de DI** — `_build_di` (single-pool) e `_generate_bpmn_xml_multi` (multi-pool) computam `_gw_exits` antes do loop de flows e passam `src_exit` ao roteador
+- [x] **Resultado visual** — 3 saídas do mesmo gateway passam de `y=235, 235, 235` para `y=223, 235, 247` (fanning); labels de condição ficam separados visualmente
+- [x] **149 testes passando**, zero regressões
+
+---
+
 ### PC48 — Concluído (v4.33 / 2026-06-19)
 
 **Top-10 Ferramentas do Assistente — Fases 1–4** (`melhorias/top-10-ferramamentas-assistente.md`)
