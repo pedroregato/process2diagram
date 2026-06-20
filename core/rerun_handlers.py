@@ -23,11 +23,9 @@ def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
 
     if agent_name == "quality":
         agent = AgentTranscriptQuality(client_info, provider_cfg)
-        agent._lg_skip_cache = True
         hub = agent.run(hub, output_language)
     elif agent_name == "bpmn":
         agent = AgentBPMN(client_info, provider_cfg)
-        agent._lg_skip_cache = True
         hub = agent.run(hub, output_language)
         # Invalida relatório
         hub.synthesizer = SynthesizerModel()
@@ -35,15 +33,12 @@ def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
         messages.append(("info", "ℹ️ Relatório executivo invalidado por mudança no BPMN."))
     elif agent_name == "minutes":
         agent = AgentMinutes(client_info, provider_cfg)
-        agent._lg_skip_cache = True
         hub = agent.run(hub, output_language)
     elif agent_name == "requirements":
         agent = AgentRequirements(client_info, provider_cfg)
-        agent._lg_skip_cache = True
         hub = agent.run(hub, output_language)
     elif agent_name == "sbvr":
         agent = AgentSBVR(client_info, provider_cfg)
-        agent._lg_skip_cache = True
         hub = agent.run(hub, output_language)
         if hub.requirements.ready and hub.requirements.requirements:
             messages.append((
@@ -53,11 +48,9 @@ def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
             ))
     elif agent_name == "bmm":
         agent = AgentBMM(client_info, provider_cfg)
-        agent._lg_skip_cache = True
         hub = agent.run(hub, output_language)
     elif agent_name == "synthesizer":
         agent = AgentSynthesizer(client_info, provider_cfg)
-        agent._lg_skip_cache = True
         hub = agent.run(hub, output_language)
         # Auto-save report_html to Supabase so it persists without requiring a manual save
         try:
@@ -76,19 +69,15 @@ def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
             pass  # fail-open: session state update still happened
     elif agent_name == "dmn":
         agent = AgentDMN(client_info, provider_cfg)
-        agent._lg_skip_cache = True
         hub = agent.run(hub, output_language)
     elif agent_name == "argumentation":
         agent = AgentArgumentation(client_info, provider_cfg)
-        agent._lg_skip_cache = True
         hub = agent.run(hub, output_language)
     elif agent_name == "query_summarizer":
         agent = AgentQuerySummarizer(client_info, provider_cfg)
-        agent._lg_skip_cache = True
         hub = agent.run(hub, output_language)
     elif agent_name == "communication_noise":
         agent = AgentCommunicationNoise(client_info, provider_cfg)
-        agent._lg_skip_cache = True
         hub = agent.run(hub, output_language)
     elif agent_name == "mermaid":
         from agents.agent_mermaid import MermaidGenerator
