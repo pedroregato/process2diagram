@@ -313,7 +313,16 @@ class BaseAgent(ABC):
         resp = client.chat.completions.create(**kwargs, timeout=timeout)
         tokens_in  = resp.usage.prompt_tokens     if resp.usage else 0
         tokens_out = resp.usage.completion_tokens if resp.usage else 0
-        return resp.choices[0].message.content, tokens_in, tokens_out
+        content = resp.choices[0].message.content if resp.choices else None
+        if not content:
+            finish_reason = (resp.choices[0].finish_reason if resp.choices else "no_choices")
+            raise ValueError(
+                f"[{self.name}] LLM retornou conteúdo vazio "
+                f"(finish_reason={finish_reason!r}, model={model!r}). "
+                f"Possíveis causas: filtro de conteúdo, contexto muito longo, "
+                f"ou instabilidade do provider."
+            )
+        return content, tokens_in, tokens_out
 
     def _call_anthropic(
         self,

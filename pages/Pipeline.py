@@ -399,30 +399,38 @@ else:
 if "rerun_agent" in st.session_state:
     import threading as _threading
     import copy as _copy
+    import time as _time
     _agent_name = st.session_state.pop("rerun_agent")
-    _hub = st.session_state.get("hub")
-    if _hub:
-        _client_info = get_session_llm_client(st.session_state.selected_provider)
-        if _client_info:
-            _task = {"hub": None, "messages": [], "error": None}
-            st.session_state["_rr_task"] = _task
-            st.session_state["_rr_agent"] = _agent_name
-            _pcfg = st.session_state.provider_cfg
-            _olang = st.session_state.output_language
-            _hub_copy = _copy.copy(_hub)
-            def _rr_worker(_t=_task, _a=_agent_name, _h=_hub_copy, _c=_client_info, _p=_pcfg, _o=_olang):
-                try:
-                    _t["hub"], _t["messages"] = handle_rerun(_a, _h, _c, _p, _o)
-                except Exception as _e:
-                    _t["error"] = str(_e)
-            _rr_thread = _threading.Thread(target=_rr_worker, daemon=True)
-            st.session_state["_rr_thread"] = _rr_thread
-            _rr_thread.start()
-            st.rerun()
-        else:
-            st.error("Chave de API não encontrada.")
+    # Guard: não inicia novo thread se já existe um em execução
+    _existing = st.session_state.get("_rr_thread")
+    if _existing is not None and _existing.is_alive():
+        _running_agent = st.session_state.get("_rr_agent", _agent_name)
+        st.warning(f"⏳ Agente **{_running_agent}** já está em execução. Aguarde a conclusão.")
     else:
-        st.error("Nenhuma sessão ativa. Execute o pipeline primeiro.")
+        _hub = st.session_state.get("hub")
+        if _hub:
+            _client_info = get_session_llm_client(st.session_state.selected_provider)
+            if _client_info:
+                _task = {"hub": None, "messages": [], "error": None}
+                st.session_state["_rr_task"] = _task
+                st.session_state["_rr_agent"] = _agent_name
+                st.session_state["_rr_start"] = _time.time()
+                _pcfg = st.session_state.provider_cfg
+                _olang = st.session_state.output_language
+                _hub_copy = _copy.copy(_hub)
+                def _rr_worker(_t=_task, _a=_agent_name, _h=_hub_copy, _c=_client_info, _p=_pcfg, _o=_olang):
+                    try:
+                        _t["hub"], _t["messages"] = handle_rerun(_a, _h, _c, _p, _o)
+                    except Exception as _e:
+                        _t["error"] = str(_e)
+                _rr_thread = _threading.Thread(target=_rr_worker, daemon=True)
+                st.session_state["_rr_thread"] = _rr_thread
+                _rr_thread.start()
+                st.rerun()
+            else:
+                st.error("Chave de API não encontrada.")
+        else:
+            st.error("Nenhuma sessão ativa. Execute o pipeline primeiro.")
 
 # POLLING — mantém WebSocket vivo enquanto o agente roda em background
 # Usa thread.is_alive() como fonte de verdade (evita problemas de referência de dict no session_state)
@@ -432,6 +440,7 @@ if _rr_thread is not None:
     _rr_agent = st.session_state.get("_rr_agent", "agente")
     _rr_task = st.session_state.get("_rr_task", {})
     if not _rr_thread.is_alive():
+        _rr_start = st.session_state.pop("_rr_start", None)
         st.session_state.pop("_rr_thread", None)
         st.session_state.pop("_rr_task", None)
         st.session_state.pop("_rr_agent", None)
@@ -450,7 +459,8 @@ if _rr_thread is not None:
         else:
             st.error("Reexecução falhou sem retornar resultado.")
     else:
-        st.info(f"⏳ Executando agente **{_rr_agent}**… aguarde.")
+        _elapsed = int(_time.time() - st.session_state.get("_rr_start", _time.time()))
+        st.info(f"⏳ Executando agente **{_rr_agent}**… aguarde. ({_elapsed}s)")
         _time.sleep(1)
         st.rerun()
 
