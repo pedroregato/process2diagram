@@ -243,7 +243,9 @@ class BaseAgent(ABC):
         # ─────────────────────────────────────────────────────────────────
 
         # ── Store in cache (raw, pre-desanitize) ──────────────────────────
-        if cache_hash is not None:
+        # Never cache empty/None responses — a transient API failure would
+        # permanently poison the cache for the same prompt hash.
+        if cache_hash is not None and raw:
             try:
                 from services.semantic_cache import _cache
                 _cache.set(cache_hash, self.name, raw, tokens)
