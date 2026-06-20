@@ -409,26 +409,36 @@ if "rerun_agent" in st.session_state:
     else:
         _hub = st.session_state.get("hub")
         if _hub:
-            _client_info = get_session_llm_client(st.session_state.selected_provider)
-            if _client_info:
-                _task = {"hub": None, "messages": [], "error": None}
-                st.session_state["_rr_task"] = _task
-                st.session_state["_rr_agent"] = _agent_name
-                st.session_state["_rr_start"] = _time.time()
-                _pcfg = st.session_state.provider_cfg
-                _olang = st.session_state.output_language
-                _hub_copy = _copy.copy(_hub)
-                def _rr_worker(_t=_task, _a=_agent_name, _h=_hub_copy, _c=_client_info, _p=_pcfg, _o=_olang):
-                    try:
-                        _t["hub"], _t["messages"] = handle_rerun(_a, _h, _c, _p, _o)
-                    except Exception as _e:
-                        _t["error"] = str(_e)
-                _rr_thread = _threading.Thread(target=_rr_worker, daemon=True)
-                st.session_state["_rr_thread"] = _rr_thread
-                _rr_thread.start()
-                st.rerun()
+            # Guard: transcript obrigatório para agentes que processam texto
+            _needs_transcript = _agent_name in ("bpmn", "minutes", "requirements", "sbvr", "bmm", "quality")
+            _has_transcript   = bool(getattr(_hub, "transcript_clean", "") or getattr(_hub, "transcript_raw", ""))
+            if _needs_transcript and not _has_transcript:
+                st.error(
+                    f"⚠️ Transcrição não encontrada no hub. "
+                    f"Para reexecutar **{_agent_name}**, carregue a reunião em Modo B "
+                    f"(a transcrição precisa estar salva no banco) ou execute o pipeline completo."
+                )
             else:
-                st.error("Chave de API não encontrada.")
+                _client_info = get_session_llm_client(st.session_state.selected_provider)
+                if _client_info:
+                    _task = {"hub": None, "messages": [], "error": None}
+                    st.session_state["_rr_task"] = _task
+                    st.session_state["_rr_agent"] = _agent_name
+                    st.session_state["_rr_start"] = _time.time()
+                    _pcfg = st.session_state.provider_cfg
+                    _olang = st.session_state.output_language
+                    _hub_copy = _copy.copy(_hub)
+                    def _rr_worker(_t=_task, _a=_agent_name, _h=_hub_copy, _c=_client_info, _p=_pcfg, _o=_olang):
+                        try:
+                            _t["hub"], _t["messages"] = handle_rerun(_a, _h, _c, _p, _o)
+                        except Exception as _e:
+                            _t["error"] = str(_e)
+                    _rr_thread = _threading.Thread(target=_rr_worker, daemon=True)
+                    st.session_state["_rr_thread"] = _rr_thread
+                    _rr_thread.start()
+                    st.rerun()
+                else:
+                    st.error("Chave de API não encontrada.")
         else:
             st.error("Nenhuma sessão ativa. Execute o pipeline primeiro.")
 
@@ -460,9 +470,21 @@ if _rr_thread is not None:
             st.error("Reexecução falhou sem retornar resultado.")
     else:
         _elapsed = int(_time.time() - st.session_state.get("_rr_start", _time.time()))
-        st.info(f"⏳ Executando agente **{_rr_agent}**… aguarde. ({_elapsed}s)")
-        _time.sleep(1)
-        st.rerun()
+        _MAX_RR_SECS = 180  # 3 min — 3 tentativas × 60s timeout cada
+        if _elapsed > _MAX_RR_SECS:
+            st.session_state.pop("_rr_thread", None)
+            st.session_state.pop("_rr_task", None)
+            st.session_state.pop("_rr_agent", None)
+            st.session_state.pop("_rr_start", None)
+            st.error(
+                f"⏱️ Timeout após {_elapsed}s aguardando o agente **{_rr_agent}**. "
+                f"O provider pode estar lento ou retornando resposta vazia. "
+                f"Tente novamente ou mude o provider em ⚙️ Configurações."
+            )
+        else:
+            st.info(f"⏳ Executando agente **{_rr_agent}**… aguarde. ({_elapsed}s)")
+            _time.sleep(1)
+            st.rerun()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # EXIBIÇÃO DOS RESULTADOS (ambos os modos)
