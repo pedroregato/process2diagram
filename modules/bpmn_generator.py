@@ -43,6 +43,11 @@ FIRST_X           = 80
 MIN_LANE_H        = 230   # increased proportionally with taller tasks (90 px + 2×80 pad)
 POOL_GAP          = 50    # vertical gap between pools in a collaboration
 
+_GATEWAY_TYPES = frozenset({
+    "exclusiveGateway", "parallelGateway", "inclusiveGateway",
+    "eventBasedGateway", "complexGateway",
+})
+
 
 # ── Link-event crossing elimination ──────────────────────────────────────────
 #
@@ -879,8 +884,70 @@ def _wp(edge, x, y):
     wp.set("y", str(int(y)))
 
 
+def _compute_gateway_exits(flows, el_map, shapes):
+    """
+    Melhoria A+B — gateway port assignment + parallel edge gap.
+
+    For each gateway with ≥2 outgoing sequence flows, assign distinct Y-spread
+    exit anchors on the right edge so that the flows do not all depart from the
+    exact same pixel.
+
+    Flows are sorted by target-centre-Y (ascending).  The sorted position
+    determines the Y offset on the right face of the gateway:
+
+        flow to topmost target    →  exit above gateway centre
+        flow to bottommost target →  exit below gateway centre
+
+    The spread is capped at ±MAX_HALF_SPREAD px so exits stay near the diamond
+    outline.  Only gateways with ≥2 outgoing flows are affected; single-output
+    gateways keep the default right-centre exit.
+
+    Returns {flow_id: (exit_x, exit_y)} for flows that receive a non-default
+    exit (i.e. offset > 1 px).  Flows absent from the result are routed
+    normally by _route_waypoints.
+    """
+    from collections import defaultdict
+
+    MAX_HALF_SPREAD = 12   # px — keeps exits clearly inside the diamond outline
+
+    gw_flow_map = defaultdict(list)
+    for flow in flows:
+        el = el_map.get(flow.source)
+        if el and el.type in _GATEWAY_TYPES:
+            gw_flow_map[flow.source].append(flow)
+
+    exits = {}
+
+    for gw_id, gw_flows in gw_flow_map.items():
+        if len(gw_flows) < 2:
+            continue
+        src = shapes.get(gw_id)
+        if not src or not _valid(src):
+            continue
+        sx, sy, sw, sh = src
+        gw_right = sx + sw
+        gw_cy    = sy + sh / 2
+
+        def _tcy(flow):
+            tgt = shapes.get(flow.target)
+            if tgt and _valid(tgt):
+                return tgt[1] + tgt[3] / 2
+            return gw_cy
+
+        sorted_flows = sorted(gw_flows, key=_tcy)
+        n = len(sorted_flows)
+
+        for i, flow in enumerate(sorted_flows):
+            offset = (i / (n - 1) - 0.5) * 2 * MAX_HALF_SPREAD if n > 1 else 0.0
+            if abs(offset) > 1:
+                exits[flow.id] = (gw_right, gw_cy + offset)
+
+    return exits
+
+
 def _route_waypoints(sx, sy, sw, sh, tx, ty, tw, th,
-                     src_lid, tgt_lid, lane_bounds):
+                     src_lid, tgt_lid, lane_bounds,
+                     src_exit=None):
     """
     Compute the waypoint list for a sequence flow.
 
@@ -893,12 +960,22 @@ def _route_waypoints(sx, sy, sw, sh, tx, ty, tw, th,
     forward   cross-lane             → L-shape: horizontal at source y, vertical at target x
     forward   same-lane skip         → top-of-lane detour (avoids intermediate elements)
     default   (adjacent, same lane)  → right-centre → left-centre
+
+    src_exit : optional (exit_x, exit_y) from _compute_gateway_exits.
+               When provided, the flow departs from that specific point instead
+               of the default right-centre of the source shape.  The rest of the
+               routing logic (cross-lane boundary, skip detour, etc.) is unchanged.
     """
+    # Effective departure point — overridden for multi-output gateways
+    _ex = src_exit[0] if src_exit else (sx + sw)
+    _ey = src_exit[1] if src_exit else (sy + sh / 2)
+
     x_overlap   = (sx < tx + tw) and (sx + sw > tx)
     is_backward = (not x_overlap) and (sx > tx)
     is_cross    = bool(src_lid and tgt_lid and src_lid != tgt_lid)
 
     # ── Vertically stacked in same column ─────────────────────────────────────
+    # Exit from bottom/top-centre; src_exit not applied here.
     if x_overlap and (sy + sh) <= ty:
         return [(sx + sw / 2, sy + sh), (tx + tw / 2, ty)]
 
@@ -917,7 +994,7 @@ def _route_waypoints(sx, sy, sw, sh, tx, ty, tw, th,
             # but keep a safe fallback).
             route_y = max(sy + sh, ty + th) + 25
         return [
-            (sx + sw, sy + sh / 2),
+            (_ex,    _ey),
             (sx + sw, route_y),
             (tx,      route_y),
             (tx,      ty + th / 2),
@@ -933,7 +1010,7 @@ def _route_waypoints(sx, sy, sw, sh, tx, ty, tw, th,
     # (above/below all elements), then continue to the target.
     min_skip_px = TASK_W + H_GAP + 10   # ≈ one column + gap
     if is_cross:
-        mid_y = sy + sh / 2
+        mid_y = _ey
         if (tx - (sx + sw)) > min_skip_px and src_lid in lane_bounds:
             src_top, src_bottom = lane_bounds[src_lid]
             tgt_top = lane_bounds.get(tgt_lid, (ty, ty + th))[0]
@@ -943,15 +1020,15 @@ def _route_waypoints(sx, sy, sw, sh, tx, ty, tw, th,
             else:                          # source is the upper lane
                 boundary_y = src_bottom - 10
             return [
-                (sx + sw, mid_y),
+                (_ex,    mid_y),
                 (sx + sw, boundary_y),
                 (tx,      boundary_y),
                 (tx,      ty + th / 2),
             ]
         return [
-            (sx + sw, mid_y),
-            (tx,      mid_y),
-            (tx,      ty + th / 2),
+            (_ex, mid_y),
+            (tx,  mid_y),
+            (tx,  ty + th / 2),
         ]
 
     # ── Same-lane forward skip ────────────────────────────────────────────────
@@ -970,14 +1047,14 @@ def _route_waypoints(sx, sy, sw, sh, tx, ty, tw, th,
         else:                              # lower lane — use bottom margin
             route_y = lane_bottom - 10
         return [
-            (sx + sw, sy + sh / 2),
+            (_ex,    _ey),
             (sx + sw, route_y),
             (tx,      route_y),
             (tx,      ty + th / 2),
         ]
 
     # ── Default: adjacent columns, straight line ──────────────────────────────
-    return [(sx + sw, sy + sh / 2), (tx, ty + th / 2)]
+    return [(_ex, _ey), (tx, ty + th / 2)]
 
 
 def _label_pos(wps):
@@ -1072,6 +1149,10 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
                 _lx, _ly, _lw, _lh = pool_shapes[_lane.id]
                 _lb[_lane.id] = (_ly, _ly + _lh)
 
+    # Gateway port assignment (Melhoria A+B)
+    _el_map_di = {e.id: e for e in bpmn.elements}
+    _gw_exits  = _compute_gateway_exits(bpmn.flows, _el_map_di, shapes)
+
     for flow in bpmn.flows:
         src = shapes.get(flow.source)
         tgt = shapes.get(flow.target)
@@ -1083,7 +1164,8 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         tx, ty, tw, th = tgt
 
         wps = _route_waypoints(sx, sy, sw, sh, tx, ty, tw, th,
-                               _la.get(flow.source), _la.get(flow.target), _lb)
+                               _la.get(flow.source), _la.get(flow.target), _lb,
+                               src_exit=_gw_exits.get(flow.id))
         for wx, wy in wps:
             _wp(edge, wx, wy)
 
@@ -1549,6 +1631,12 @@ def _generate_bpmn_xml_multi(bpmn: BpmnProcess) -> str:
 
     # Sequence flow edges (per pool)
     all_flows = [f for pool in bpmn.pools for f in pool.flows]
+
+    # Gateway port assignment (Melhoria A+B)
+    _all_elements  = [el for pool in bpmn.pools for el in pool.elements]
+    _el_map_multi  = {e.id: e for e in _all_elements}
+    _gw_exits_multi = _compute_gateway_exits(all_flows, _el_map_multi, all_shapes)
+
     for flow in all_flows:
         src = all_shapes.get(flow.source)
         tgt = all_shapes.get(flow.target)
@@ -1561,7 +1649,7 @@ def _generate_bpmn_xml_multi(bpmn: BpmnProcess) -> str:
 
         wps = _route_waypoints(sx, sy, sw, sh, tx, ty, tw, th,
                                _all_la.get(flow.source), _all_la.get(flow.target),
-                               _all_lb)
+                               _all_lb, src_exit=_gw_exits_multi.get(flow.id))
         for wx, wy in wps:
             _wp(edge, wx, wy)
 
