@@ -378,6 +378,25 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC52 — Concluído (v4.35 / 2026-06-21)
+
+**BPMN — Labels explicitamente centrados + Log de execução do agente**
+
+**Fix label: centrado determinístico (modules/bpmn_generator.py + bpmn_auto_repair.py)**
+- [x] **Causa raiz** — generator emitia `<bpmndi:BPMNLabel />` vazio confiando no auto-centering do bpmn-js; para `callActivity` o marcador "+" reduz a área de texto e o auto-centering falha; em re-render o texto aparece fora da forma
+- [x] **`modules/bpmn_generator.py`** — constantes `_LBL_PAD_X=10` / `_LBL_PAD_Y=8` adicionadas; ambos os loops DI (single-pool e multi-pool) agora emitem `dc:Bounds` explícitos centrados para todo tipo task/subprocess/callActivity (events e gateways mantêm posicionamento externo)
+- [x] **`modules/bpmn_auto_repair.py` — Pass B reescrito** — em vez de remover bounds, insere/corrige `dc:Bounds` centrados com `SNAP_TOL=1px` (atualiza apenas se fora de tolerância); cobre XML gerado por versões antigas sem bounds ou com bounds incorretos
+- [x] **Resultado** — labels sempre dentro da forma, centrados, independentemente do tipo de task ou comportamento do viewer bpmn-js
+
+**Log de execução do agente BPMN**
+- [x] **`core/knowledge_hub.py`** — campo `execution_log: Optional[dict] = None` adicionado a `BPMNModel`; guard em `migrate()` (v4.35)
+- [x] **`agents/agent_bpmn.py`** — log capturado após cada run: fonte (`llm_call`), provider/model/tokens/cache/latência, alterações de `_enforce_rules`, `repair_bpmn` passes, `reformat_bpmn_labels` passes, métricas (steps/edges/lanes/gateways/tipos de task, alert de títulos >35 chars)
+- [x] **`core/rerun_handlers.py`** — fast-path rerun também atualiza `execution_log` com fonte `fast_path_rerun` e métricas do diagrama regenerado
+- [x] **`core/assistant_tools.py`** — nova tool `get_bpmn_execution_log` (schema + executor + dispatch + categoria `consulta`); lê `hub.bpmn.execution_log` da sessão atual; formata relatório Markdown com todas as seções do log
+- [x] **149 testes passando**, zero regressões
+
+---
+
 ### PC51 — Concluído (v4.34 / 2026-06-21)
 
 **BPMN — Fix visual: fluxos cruzados, skip sobrepostos e labels fora do pool**

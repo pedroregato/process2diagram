@@ -34,6 +34,8 @@ DDI = "{%s}" % _NS["di"]
 # ── Layout constants ──────────────────────────────────────────────────────────
 TASK_W,  TASK_H   = 160, 90   # wider+taller: ~18 chars/line × 4 lines fits ≤35-char labels
 GW_W,    GW_H     = 50,  50
+_LBL_PAD_X        = 10   # horizontal inset for task BPMNLabel dc:Bounds
+_LBL_PAD_Y        = 8    # vertical inset for task BPMNLabel dc:Bounds
 EV_W,    EV_H     = 36,  36
 H_GAP             = 75    # slightly wider gap to give room around 160 px tasks
 V_PAD             = 80    # taller pad to prevent row overlap with 90 px tasks
@@ -1119,9 +1121,9 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         b.set("width", str(int(w))); b.set("height", str(int(h)))
         lbl = _sub(shape, DI + "BPMNLabel")
         # Label placement strategy:
-        # • Tasks / sub-processes: empty BPMNLabel — bpmn-js auto-centers text inside shape.
-        #   Explicit dc:Bounds on task shapes create floating label elements at absolute
-        #   coordinates, causing wrong positions or double rendering in bpmn-js.
+        # • Tasks / sub-processes: explicit dc:Bounds centered inside the shape.
+        #   Deterministic — does not rely on bpmn-js auto-centering, which fails for
+        #   callActivity (the "+" marker reduces effective text area) and on re-render.
         # • Events (small circles): explicit bounds BELOW the circle — wider to fit 2 lines.
         # • Gateways (diamonds): explicit bounds BELOW the diamond — wider for longer names.
         _event_types   = ("startEvent", "endEvent",
@@ -1136,7 +1138,13 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
             lb = _sub(lbl, DC + "Bounds")
             lb.set("x", str(int(x - 25))); lb.set("y", str(int(y + h + 2)))
             lb.set("width",  str(int(w + 50))); lb.set("height", "44")
-        # else: task / subprocess — BPMNLabel vazio; bpmn-js centraliza automaticamente
+        else:
+            # task / subprocess / callActivity: centered bounds inside shape
+            lb = _sub(lbl, DC + "Bounds")
+            lb.set("x",      str(int(x + _LBL_PAD_X)))
+            lb.set("y",      str(int(y + _LBL_PAD_Y)))
+            lb.set("width",  str(int(w - 2 * _LBL_PAD_X)))
+            lb.set("height", str(int(h - 2 * _LBL_PAD_Y)))
 
     # ── Lane bounds for smart routing ─────────────────────────────────────────
     _la = _assign_lanes(bpmn)
@@ -1613,7 +1621,13 @@ def _generate_bpmn_xml_multi(bpmn: BpmnProcess) -> str:
             lb = _sub(lbl, DC + "Bounds")
             lb.set("x", str(int(x - 25))); lb.set("y", str(int(y + h + 2)))
             lb.set("width",  str(int(w + 50))); lb.set("height", "44")
-        # else: task / subprocess — BPMNLabel vazio; bpmn-js centraliza automaticamente
+        else:
+            # task / subprocess / callActivity: centered bounds inside shape
+            lb = _sub(lbl, DC + "Bounds")
+            lb.set("x",      str(int(x + _LBL_PAD_X)))
+            lb.set("y",      str(int(y + _LBL_PAD_Y)))
+            lb.set("width",  str(int(w - 2 * _LBL_PAD_X)))
+            lb.set("height", str(int(h - 2 * _LBL_PAD_Y)))
 
     # ── Lane bounds for smart routing (multi-pool) ────────────────────────────
     _all_la: dict = {}

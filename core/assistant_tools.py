@@ -401,6 +401,21 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "get_bpmn_execution_log",
+                "description": (
+                    "Retorna o log de execução detalhado do último run do agente BPMN nesta sessão. "
+                    "Inclui: fonte (chamada LLM ou fast-path), provider/modelo, tokens, cache hit/miss, "
+                    "latência, alterações feitas por _enforce_rules, repair_bpmn e reformat_bpmn_labels, "
+                    "métricas do diagrama (steps/edges/lanes/gateways/tipos de tasks) e alertas de títulos "
+                    "com mais de 35 chars. Use quando o usuário perguntar sobre diagnóstico do BPMN, "
+                    "por que o diagrama ficou diferente do esperado, ou quais correções automáticas foram aplicadas."
+                ),
+                "parameters": {"type": "object", "properties": {}, "required": []},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "list_bpmn_processes",
                 "description": "Lista os processos BPMN modelados no projeto com nome e número de versões.",
                 "parameters": {"type": "object", "properties": {}, "required": []},
@@ -3041,6 +3056,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "search_transcript":            "consulta",
     "count_artifacts":              "consulta",
     "get_requirements":             "consulta",
+    "get_bpmn_execution_log":       "consulta",
     "list_bpmn_processes":          "consulta",
     "list_bpmn_versions":           "consulta",
     "delete_bpmn_version":          "admin",
@@ -3556,7 +3572,7 @@ class AssistantToolExecutor:
   Consulta (todos os perfis):
     get_meeting_list, get_meeting_participants, get_meeting_decisions,
     get_meeting_action_items, get_meeting_summary, search_transcript,
-    get_requirements, list_bpmn_processes, list_bpmn_versions, get_sbvr_terms, get_sbvr_rules,
+    get_requirements, get_bpmn_execution_log, list_bpmn_processes, list_bpmn_versions, get_sbvr_terms, get_sbvr_rules,
     list_context_files, calculate_meeting_roi, get_recurring_topics, get_meeting_metadata,
     preview_meeting_deletion, preview_text_correction, get_speaker_contributions,
     get_requirement_history, get_bmm, get_ckf,
@@ -4013,6 +4029,76 @@ class AssistantToolExecutor:
                 f"{n_open} contradições abertas"
             )
 
+        return "\n".join(lines)
+
+    def get_bpmn_execution_log(self) -> str:
+        """Return the execution log from the most recent BPMN agent run in the current session."""
+        hub = self.hub
+        if hub is None or not getattr(hub, "bpmn", None):
+            return "Hub não disponível. Execute o pipeline primeiro."
+        if not hub.bpmn.ready:
+            return "Agente BPMN ainda não foi executado nesta sessão."
+        log = getattr(hub.bpmn, "execution_log", None)
+        if not log:
+            return (
+                "Log de execução não disponível. "
+                "Reexecute o agente BPMN para gerar o log (disponível a partir do próximo run)."
+            )
+        import json as _json
+        source_label = {"llm_call": "Chamada LLM", "fast_path_rerun": "Fast-path (sem LLM)"}.get(
+            log.get("source", ""), log.get("source", "—")
+        )
+        lines = [
+            f"## Log de Execução BPMN",
+            f"**Gerado em:** {log.get('generated_at', '—')}",
+            f"**Fonte:** {source_label}",
+        ]
+        llm = log.get("llm")
+        if llm:
+            cache_str = f"Cache {'HIT' if llm.get('from_cache') else 'MISS'} ({llm.get('cache_hits',0)} hits)"
+            lines += [
+                "",
+                "### Chamada LLM",
+                f"- Provider: {llm.get('provider')} / {llm.get('model')}",
+                f"- Tokens in: {llm.get('tokens_in', '—')}",
+                f"- Latência: {llm.get('latency_s', '—')}s",
+                f"- Cache: {cache_str}",
+            ]
+        er = log.get("enforce_rules")
+        if er:
+            lines += [
+                "",
+                "### _enforce_rules",
+                f"- Steps antes: {er.get('steps_before')} → depois: {er.get('steps_after')} "
+                f"(removidos: {er.get('removed', 0)})",
+            ]
+        repairs = log.get("repair_passes", [])
+        lines += ["", "### repair_bpmn"]
+        if repairs:
+            for r in repairs:
+                lines.append(f"- {r}")
+        else:
+            lines.append("- Nenhum reparo necessário.")
+        reformats = log.get("reformat_passes", [])
+        lines += ["", "### reformat_bpmn_labels"]
+        if reformats:
+            for r in reformats:
+                lines.append(f"- {r}")
+        else:
+            lines.append("- Nenhuma alteração.")
+        m = log.get("metrics", {})
+        if m:
+            long_titles = m.get("long_titles", [])
+            lines += [
+                "",
+                "### Métricas do Diagrama",
+                f"- Steps: {m.get('steps')} | Edges: {m.get('edges')} | Lanes: {m.get('lanes')} | Gateways: {m.get('gateways')}",
+                f"- Tipos de tasks: {_json.dumps(m.get('task_types', {}), ensure_ascii=False)}",
+            ]
+            if long_titles:
+                lines.append(f"- ⚠️ Títulos com >35 chars ({len(long_titles)}): {', '.join(long_titles)}")
+            else:
+                lines.append("- ✅ Todos os títulos dentro do limite de 35 chars.")
         return "\n".join(lines)
 
     def list_bpmn_processes(self) -> str:
@@ -10350,6 +10436,7 @@ class AssistantToolExecutor:
                         count_only=bool(tool_input.get("count_only", False)),
                     )
                 ),
+                "get_bpmn_execution_log":    lambda: self.get_bpmn_execution_log(),
                 "list_bpmn_processes":       lambda: self.list_bpmn_processes(),
                 "list_bpmn_versions":        lambda: self._list_bpmn_versions(tool_input),
                 "delete_bpmn_version":       lambda: self._delete_bpmn_version(tool_input),

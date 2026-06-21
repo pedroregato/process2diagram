@@ -234,11 +234,19 @@ class AgentBPMN(BaseAgent):
                 f"Last error: {repr(last_error)}"
             )
 
+        import time as _time
+        _t0 = _time.monotonic()
+
         data = _bpmn_call_with_retry(system, user, hub)
 
         hub.bpmn = self._build_model(data)
         hub.bpmn.raw_llm_dict = data  # preserved for rerun-without-LLM
+
+        # Capture enforce_rules changes via before/after step count as proxy
+        _steps_before = len(hub.bpmn.steps)
         self._enforce_rules(hub.bpmn, getattr(hub.nlp, "actors", None))
+        _steps_after = len(hub.bpmn.steps)
+
         try:
             from modules.bpmn_auto_repair import repair_bpmn
             report = repair_bpmn(hub.bpmn)
@@ -250,13 +258,46 @@ class AgentBPMN(BaseAgent):
         except Exception:
             hub.bpmn.mermaid = ""
         hub.bpmn.bpmn_xml = self._generate_bpmn_xml(hub.bpmn)
-        # Always apply: normaliza namespaces e garante BPMNLabel vazio em tasks.
-        # reformat_bpmn_labels é fail-safe (nunca levanta exceção); o outer
-        # try/except foi removido para garantir visibilidade de erros inesperados.
         from modules.bpmn_auto_repair import reformat_bpmn_labels
         _xml_fmt, _fmt_changes = reformat_bpmn_labels(hub.bpmn.bpmn_xml)
         if not any(c.startswith("[ERRO]") for c in _fmt_changes):
             hub.bpmn.bpmn_xml = _xml_fmt
+
+        # ── Build execution log ───────────────────────────────────────────────
+        from datetime import datetime as _dt, timezone as _tz
+        _long_titles = [
+            s.title for s in hub.bpmn.steps if len(s.title) > 35
+        ]
+        _type_counts: dict = {}
+        for _s in hub.bpmn.steps:
+            _type_counts[_s.task_type] = _type_counts.get(_s.task_type, 0) + 1
+        hub.bpmn.execution_log = {
+            "generated_at": _dt.now(_tz.utc).isoformat(),
+            "source": "llm_call",
+            "llm": {
+                "provider": hub.meta.provider_name or "",
+                "model":    hub.meta.model_name or "",
+                "tokens_in":  hub.meta.total_tokens_used,
+                "from_cache": hub.meta.cache_hits > 0,
+                "cache_hits": hub.meta.cache_hits,
+                "latency_s":  round(_time.monotonic() - _t0, 1),
+            },
+            "enforce_rules": {
+                "steps_before": _steps_before,
+                "steps_after":  _steps_after,
+                "removed": _steps_before - _steps_after,
+            },
+            "repair_passes": hub.bpmn.repair_log,
+            "reformat_passes": _fmt_changes,
+            "metrics": {
+                "steps":       len(hub.bpmn.steps),
+                "edges":       len(hub.bpmn.edges),
+                "lanes":       len(hub.bpmn.lanes),
+                "gateways":    sum(1 for s in hub.bpmn.steps if s.is_decision),
+                "task_types":  _type_counts,
+                "long_titles": _long_titles,
+            },
+        }
         hub.bpmn.ready = True
         hub.mark_agent_run(self.name)
         hub.bump()

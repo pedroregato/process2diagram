@@ -54,6 +54,27 @@ def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
             hub.bpmn.ready = True
             hub.mark_agent_run("bpmn")
             hub.bump()
+            # Update execution log to reflect fast-path rerun
+            from datetime import datetime as _dt, timezone as _tz
+            _prev_log = hub.bpmn.execution_log or {}
+            try:
+                _reformat_log = _fmt_changes  # noqa: F821  defined in try block above
+            except NameError:
+                _reformat_log = []
+            hub.bpmn.execution_log = {
+                **_prev_log,
+                "generated_at": _dt.now(_tz.utc).isoformat(),
+                "source": "fast_path_rerun",
+                "repair_passes": hub.bpmn.repair_log,
+                "reformat_passes": _reformat_log,
+                "metrics": {
+                    "steps":      len(hub.bpmn.steps),
+                    "edges":      len(hub.bpmn.edges),
+                    "lanes":      len(hub.bpmn.lanes),
+                    "gateways":   sum(1 for s in hub.bpmn.steps if s.is_decision),
+                    "long_titles": [s.title for s in hub.bpmn.steps if len(s.title) > 35],
+                },
+            }
             messages.append(("info", "ℹ️ Diagrama BPMN regenerado a partir da extração anterior (sem nova chamada LLM)."))
         else:
             agent = AgentBPMN(client_info, provider_cfg)

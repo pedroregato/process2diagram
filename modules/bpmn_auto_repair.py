@@ -440,21 +440,55 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
                     f"Dimensões normalizadas {int(w)}×{int(h)}→{_STD_W}×{_STD_H}: '{elem_id}'"
                 )
 
-            # ── Pass B: ensure BPMNLabel is empty for task shapes ────────────
-            # bpmn-js auto-centers text inside task shapes when BPMNLabel has
-            # no dc:Bounds. Explicit bounds create a floating label element at
-            # those absolute coordinates, producing wrong positions or double
-            # rendering. Remove any stale explicit bounds; add empty BPMNLabel
-            # if missing.
+            # ── Pass B: ensure BPMNLabel has explicit centered dc:Bounds ─────
+            # Deterministic centering: explicit dc:Bounds set to shape interior
+            # with _LBL_PAD_X/Y inset.  Does NOT rely on bpmn-js auto-centering,
+            # which fails for callActivity (the "+" marker reduces text area) and
+            # on re-render after XML edits.
+            # SNAP_TOL=1px: skip update when bounds are already correct.
+            _LBL_PAD_X = 10
+            _LBL_PAD_Y = 8
+            _SNAP_TOL  = 1
+            try:
+                _sx = float(bounds.get("x", "0"))
+                _sy = float(bounds.get("y", "0"))
+                _sw = float(bounds.get("width", "0"))
+                _sh = float(bounds.get("height", "0"))
+            except ValueError:
+                _sx = _sy = _sw = _sh = 0.0
+            _exp_lx = int(_sx + _LBL_PAD_X)
+            _exp_ly = int(_sy + _LBL_PAD_Y)
+            _exp_lw = int(_sw - 2 * _LBL_PAD_X)
+            _exp_lh = int(_sh - 2 * _LBL_PAD_Y)
+
             label = shape.find(_LABEL)
             if label is None:
-                _ET.SubElement(shape, _LABEL)
-                fixes.append(f"BPMNLabel adicionado: '{elem_id}'")
+                label = _ET.SubElement(shape, _LABEL)
+                lb = _ET.SubElement(label, _BOUNDS)
+                lb.set("x", str(_exp_lx)); lb.set("y", str(_exp_ly))
+                lb.set("width", str(_exp_lw)); lb.set("height", str(_exp_lh))
+                fixes.append(f"BPMNLabel centrado adicionado: '{elem_id}'")
             else:
                 label_bounds = label.find(_BOUNDS)
-                if label_bounds is not None:
-                    label.remove(label_bounds)
-                    fixes.append(f"Bounds externos removidos (bpmn-js centraliza): '{elem_id}'")
+                if label_bounds is None:
+                    lb = _ET.SubElement(label, _BOUNDS)
+                    lb.set("x", str(_exp_lx)); lb.set("y", str(_exp_ly))
+                    lb.set("width", str(_exp_lw)); lb.set("height", str(_exp_lh))
+                    fixes.append(f"Bounds centrados adicionados: '{elem_id}'")
+                else:
+                    try:
+                        _ok = (
+                            abs(float(label_bounds.get("x","0"))      - _exp_lx) <= _SNAP_TOL
+                            and abs(float(label_bounds.get("y","0"))   - _exp_ly) <= _SNAP_TOL
+                            and abs(float(label_bounds.get("width","0"))- _exp_lw) <= _SNAP_TOL
+                            and abs(float(label_bounds.get("height","0"))- _exp_lh) <= _SNAP_TOL
+                        )
+                    except ValueError:
+                        _ok = False
+                    if not _ok:
+                        label_bounds.set("x", str(_exp_lx)); label_bounds.set("y", str(_exp_ly))
+                        label_bounds.set("width", str(_exp_lw)); label_bounds.set("height", str(_exp_lh))
+                        fixes.append(f"Bounds de label corrigidos para centrado: '{elem_id}'")
 
         # ── Pass C: Stagger overlapping same-channel skip flows ──────────────
         # Flows with 4 waypoints where wp[1].y ≈ wp[2].y (horizontal detour
