@@ -100,6 +100,7 @@ class BPMNModel:
     is_collaboration: bool = False
     pool_models: list[BPMNPoolData] = field(default_factory=list)
     message_flows_data: list[BPMNMessageFlow] = field(default_factory=list)
+    raw_llm_dict: Optional[dict] = None  # last successful LLM extraction — rerun bypasses LLM
 
     def to_process(self):
         """Bridge to legacy schema.Process for diagram generators."""
@@ -711,6 +712,10 @@ class KnowledgeHub:
             hub.bpmn.lg_attempts = 0
         if not hasattr(hub.bpmn, 'lg_final_score'):
             hub.bpmn.lg_final_score = 0.0
+
+        # ── v4.34: raw_llm_dict for rerun-without-LLM ────────────────────────────
+        if not hasattr(hub.bpmn, 'raw_llm_dict'):
+            hub.bpmn.raw_llm_dict = None
 
         # ── v4.7: structural score fields added to BPMNValidationScore ──────────
         for score_obj in [hub.validation.bpmn_score] + list(hub.validation.bpmn_candidates):

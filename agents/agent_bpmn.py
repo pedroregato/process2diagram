@@ -208,12 +208,19 @@ class AgentBPMN(BaseAgent):
         def _bpmn_call_with_retry(system, user, hub):
             parse = self._parse_json
             last_error = None
+            _h0 = None  # hash of attempt-0 prompt; backfilled on successful retry
             for attempt in range(1 + self.max_retries):
                 try:
                     raw = self._call_llm(system, user, hub)
-                    return parse(raw)
+                    result = parse(raw)
+                    # Linha B: retry succeeded — backfill H0 so future reruns hit cache
+                    if attempt > 0 and _h0 and not getattr(self, "_lg_skip_cache", False):
+                        self._backfill_cache(_h0, raw)
+                    return result
                 except (ValueError, KeyError) as exc:
                     last_error = exc
+                    if attempt == 0:
+                        _h0 = getattr(self, "_last_computed_cache_hash", None)
                     if attempt < self.max_retries:
                         hint = repr(str(exc))[:300]
                         user = _original_ensure_utf8(
@@ -230,6 +237,7 @@ class AgentBPMN(BaseAgent):
         data = _bpmn_call_with_retry(system, user, hub)
 
         hub.bpmn = self._build_model(data)
+        hub.bpmn.raw_llm_dict = data  # preserved for rerun-without-LLM
         self._enforce_rules(hub.bpmn, getattr(hub.nlp, "actors", None))
         try:
             from modules.bpmn_auto_repair import repair_bpmn

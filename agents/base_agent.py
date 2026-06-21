@@ -186,6 +186,7 @@ class BaseAgent(ABC):
                 from services.semantic_cache import _cache
                 provider_label = self.provider_cfg.get("api_key_label", client_type)
                 cache_hash = _cache.compute_hash(provider_label, model, system, safe_user)
+                self._last_computed_cache_hash = cache_hash  # exposed for retry backfill
                 hit = _cache.get(cache_hash)
                 if hit is not None:
                     cached_raw, cached_tokens = hit
@@ -315,7 +316,7 @@ class BaseAgent(ABC):
         tokens_in  = resp.usage.prompt_tokens     if resp.usage else 0
         tokens_out = resp.usage.completion_tokens if resp.usage else 0
         content = resp.choices[0].message.content if resp.choices else None
-        if not content:
+        if not content or not content.strip():
             finish_reason = (resp.choices[0].finish_reason if resp.choices else "no_choices")
             raise ValueError(
                 f"[{self.name}] LLM retornou conteúdo vazio "
@@ -430,6 +431,18 @@ class BaseAgent(ABC):
             f"[{self.name}] Failed after {1 + self.max_retries} attempts. "
             f"Last error: {repr(last_error)}"
         )
+
+    # ── Cache backfill ────────────────────────────────────────────────────────
+
+    def _backfill_cache(self, cache_hash: str, raw: str) -> None:
+        """Store raw LLM output under an alternate hash (used to backfill H0 after retry)."""
+        if not cache_hash or not raw:
+            return
+        try:
+            from services.semantic_cache import _cache
+            _cache.set(cache_hash, self.name, raw, 0)
+        except Exception:
+            pass
 
     # ── Skill loading ─────────────────────────────────────────────────────────
 

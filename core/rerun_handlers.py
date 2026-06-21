@@ -25,8 +25,39 @@ def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
         agent = AgentTranscriptQuality(client_info, provider_cfg)
         hub = agent.run(hub, output_language)
     elif agent_name == "bpmn":
-        agent = AgentBPMN(client_info, provider_cfg)
-        hub = agent.run(hub, output_language)
+        if hub.bpmn.raw_llm_dict:
+            # Fast path: regenerate XML/Mermaid from stored extraction data (no LLM call).
+            # Avoids calling DeepSeek from a background thread, which returns empty responses.
+            agent = AgentBPMN(client_info, provider_cfg)
+            hub.bpmn = agent._build_model(hub.bpmn.raw_llm_dict)
+            hub.bpmn.raw_llm_dict = hub.bpmn.raw_llm_dict  # preserve
+            agent._enforce_rules(hub.bpmn, getattr(hub.nlp, "actors", None))
+            try:
+                from modules.bpmn_auto_repair import repair_bpmn, reformat_bpmn_labels
+                report = repair_bpmn(hub.bpmn)
+                hub.bpmn.repair_log = report.repairs
+            except Exception:
+                hub.bpmn.repair_log = []
+            try:
+                from agents.agent_mermaid import MermaidGenerator
+                hub.bpmn.mermaid = MermaidGenerator.generate(hub.bpmn)
+            except Exception:
+                hub.bpmn.mermaid = ""
+            hub.bpmn.bpmn_xml = agent._generate_bpmn_xml(hub.bpmn)
+            try:
+                from modules.bpmn_auto_repair import reformat_bpmn_labels
+                _xml_fmt, _fmt_changes = reformat_bpmn_labels(hub.bpmn.bpmn_xml)
+                if not any(c.startswith("[ERRO]") for c in _fmt_changes):
+                    hub.bpmn.bpmn_xml = _xml_fmt
+            except Exception:
+                pass
+            hub.bpmn.ready = True
+            hub.mark_agent_run("bpmn")
+            hub.bump()
+            messages.append(("info", "ℹ️ Diagrama BPMN regenerado a partir da extração anterior (sem nova chamada LLM)."))
+        else:
+            agent = AgentBPMN(client_info, provider_cfg)
+            hub = agent.run(hub, output_language)
         # Invalida relatório
         hub.synthesizer = SynthesizerModel()
         hub.synthesizer.ready = False
