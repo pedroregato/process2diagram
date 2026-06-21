@@ -382,9 +382,12 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
 
     _BPMNDI     = "http://www.omg.org/spec/BPMN/20100524/DI"
     _DC         = "http://www.omg.org/spec/DD/20100524/DC"
+    _DI         = "http://www.omg.org/spec/DD/20100524/DI"
     _SHAPE      = f"{{{_BPMNDI}}}BPMNShape"
     _LABEL      = f"{{{_BPMNDI}}}BPMNLabel"
     _BOUNDS     = f"{{{_DC}}}Bounds"
+    _EDGE       = f"{{{_BPMNDI}}}BPMNEdge"
+    _WAYPOINT   = f"{{{_DI}}}waypoint"
     _TASK_MIN_W = 100
     _TASK_MAX_W = 400   # pools/lanes are much wider (1000-2000px)
 
@@ -452,6 +455,92 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
                 if label_bounds is not None:
                     label.remove(label_bounds)
                     fixes.append(f"Bounds externos removidos (bpmn-js centraliza): '{elem_id}'")
+
+        # ── Pass C: Stagger overlapping same-channel skip flows ──────────────
+        # Flows with 4 waypoints where wp[1].y ≈ wp[2].y (horizontal detour
+        # near the top/bottom of a lane) may overlap when multiple flows share
+        # the same y-channel.  Sort by span length (shorter stays, longer gets
+        # offset +15 px each) so the skip routes are visually distinct.
+        skip_groups: dict[float, list] = {}
+        for _edge in root.iter(_EDGE):
+            _wps = _edge.findall(_WAYPOINT)
+            if len(_wps) != 4:
+                continue
+            try:
+                _y1 = float(_wps[1].get("y", "nan"))
+                _y2 = float(_wps[2].get("y", "nan"))
+            except ValueError:
+                continue
+            if abs(_y1 - _y2) < 1:  # horizontal skip segment
+                _xa = min(float(_wps[1].get("x", "0")), float(_wps[2].get("x", "0")))
+                _xb = max(float(_wps[1].get("x", "0")), float(_wps[2].get("x", "0")))
+                skip_groups.setdefault(_y1, []).append((_edge, _wps, _xa, _xb))
+
+        for _skip_y, _group in skip_groups.items():
+            if len(_group) < 2:
+                continue
+            # Sort ascending by horizontal span (shortest stays at original y)
+            _group.sort(key=lambda g: g[3] - g[2])
+            for _i, (_edge, _wps, _xa, _xb) in enumerate(_group):
+                _offset = _i * 15
+                if _offset == 0:
+                    continue
+                _new_y = str(int(_skip_y) + _offset)
+                _wps[1].set("y", _new_y)
+                _wps[2].set("y", _new_y)
+                _eid = _edge.get("bpmnElement", _edge.get("id", "?"))
+                fixes.append(f"Canal de skip escalonado +{_offset}px: '{_eid}'")
+
+        # ── Pass D: Auto-route diagonal 2-point sequence flows ───────────────
+        # A BPMNEdge with exactly 2 waypoints where Δx ≠ 0 AND Δy ≠ 0 is a
+        # straight diagonal line.  When two such flows converge on the same
+        # target they create X-crossing patterns (e.g. two tasks ending at a
+        # shared End Event from different lanes).  Removing the waypoints lets
+        # bpmn-js Manhattan router produce L-shaped paths that avoid crossings.
+        # Pure horizontal/vertical 2-point edges (Δx=0 or Δy=0) are preserved.
+        _diag_count = 0
+        for _edge in root.iter(_EDGE):
+            _wps = _edge.findall(_WAYPOINT)
+            if len(_wps) != 2:
+                continue
+            try:
+                _x1 = float(_wps[0].get("x", "0")); _y1 = float(_wps[0].get("y", "0"))
+                _x2 = float(_wps[1].get("x", "0")); _y2 = float(_wps[1].get("y", "0"))
+            except ValueError:
+                continue
+            if abs(_x2 - _x1) > 1 and abs(_y2 - _y1) > 1:
+                for _wp in _wps:
+                    _edge.remove(_wp)
+                _diag_count += 1
+        if _diag_count:
+            fixes.append(
+                f"Roteamento automático: {_diag_count} fluxo(s) diagonal(is) → bpmn-js L-path"
+            )
+
+        # ── Pass E: Clamp edge label y inside pool bounds ─────────────────────
+        # Skip-channel flows place their label 16 px above the skip line.
+        # If the skip line is at y=10 (topmost lane), the label ends up at y=-6
+        # — outside the pool bounding box and invisible in bpmn-js.
+        # Clamp any edge label y < 5 to y=5.
+        _clamp_count = 0
+        for _edge in root.iter(_EDGE):
+            _lbl = _edge.find(f"{{{_BPMNDI}}}BPMNLabel")
+            if _lbl is None:
+                continue
+            _lb = _lbl.find(f"{{{_DC}}}Bounds")
+            if _lb is None:
+                continue
+            try:
+                _ly = float(_lb.get("y", "0"))
+            except ValueError:
+                continue
+            if _ly < 5:
+                _lb.set("y", "5")
+                _clamp_count += 1
+        if _clamp_count:
+            fixes.append(
+                f"Labels de sequência reposicionados: {_clamp_count} fora dos limites do pool"
+            )
 
         # Always re-serialize: ensures canonical namespaces are applied even
         # when no label fixes were needed (prevents stale ns0: and guarantees

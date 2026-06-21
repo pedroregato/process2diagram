@@ -1072,7 +1072,7 @@ def _label_pos(wps):
         if seg_len > best_len:
             best_len = seg_len
             best_mid = ((x1 + x2) / 2, (y1 + y2) / 2)
-    return (int(best_mid[0]) - 30, int(best_mid[1]) - 16)
+    return (int(best_mid[0]) - 30, max(5, int(best_mid[1]) - 16))
 
 
 def _valid(coords):

@@ -3,7 +3,7 @@ agent: bpmn
 iniciativa: Pedro Regato
 project: process2diagram
 spec: BPMN 2.0 (OMG — ISO/IEC 19510) · Bruce Silver Method and Style
-version: 7.3
+version: 7.4
 ---
 
 # BPMN Agent — Instruções de Execução
@@ -86,9 +86,19 @@ Quando o processo identificado no Passo 0 tiver mais de 10 atividades:
 3. O fluxo de nível 1 deve ter no máximo 10 nós (gateways + callActivities + eventos).
 4. Não crie steps filhos dentro do JSON — subatividades ficam descritas no campo `description`.
 
+**Critério primário para usar `callActivity` — coesão, não contagem:**
+A contagem (> 10) é um sinal de alerta, não uma regra mecânica. Use `callActivity` quando o bloco:
+1. Representa uma **fase de negócio distinta** com objetivo próprio (ex: "Analisar Crédito" — fase coesa, não lista de tarefas).
+2. Pode ser **compreendido isoladamente** sem contexto do restante do fluxo.
+3. Tem **lógica interna complexa** que polui o nível 1 se expandida.
+4. Poderia ser **executado por outro ator ou terceirizado** sem impacto no fluxo principal.
+
+**NUNCA use `callActivity` apenas para reduzir a contagem de atividades** — se 12 atividades formam um único fluxo linear coeso, prefira o modelo flat e reveja se não há gateways ou paralelos que permitam consolidar.
+
 **Quando NÃO usar `callActivity`:**
 - Processo com ≤ 10 atividades → use steps normais. Não fragmente artificialmente.
 - Subatividades que são decisões independentes → extraia-as como gateways no nível 1.
+- Bloco com 1-2 tarefas → não faz sentido agrupar; incorpore ao fluxo diretamente.
 
 ### Passo 3 — Mapear Tarefas, Eventos e Exceções
 
@@ -150,9 +160,9 @@ Todo `title` deve seguir o padrão **[Verbo no Infinitivo] + [Objeto]**:
 - ✗ "Validação de Crédito" · "Emissão da NF" · "Processo de Encaminhamento"
 
 **Limite de caracteres nos títulos (CRÍTICO — afeta legibilidade do diagrama):**
-- Todo `title` deve ter **no máximo 30 caracteres** e **no máximo 4 palavras de conteúdo**.
+- Todo `title` deve ter **no máximo 35 caracteres** e **no máximo 4 palavras de conteúdo**.
 - O bpmn-js renderiza o texto dentro de uma caixa de largura fixa (~150 px) e **não quebra palavras longas** — palavras com mais de 13 caracteres sozinhas já causam overflow visual.
-- Limite absoluto: **35 caracteres** — o gerador trunca na última fronteira de palavra antes deste limite.
+- O gerador trunca na última fronteira de palavra antes de 35 caracteres — títulos com 36+ são silenciosamente cortados no viewer.
 - Prefira verbos curtos + objeto direto sem artigos: "Validar Cadastro" em vez de "Realizar Validação Cadastral do Cliente".
 - Abrevie termos longos recorrentes: "autenticação" → "auth.", "processamento" → "process.", "formalização" → "formalizar", "notificação" → "notificar".
 - ✓ "Validar Cadastro" (16 chars) · "Emitir Nota Fiscal" (18 chars) · "Aprovar por Alçada" (18 chars)
@@ -195,8 +205,14 @@ Use quando a transcrição descreve uma **interrupção** que ocorre *durante* a
 
 | Exceção | task_type | Quando usar |
 |---|---|---|
-| Prazo esgotado durante execução | `boundaryTimerEvent` | "se não responder em 2 dias", "timeout de aprovação" |
+| Prazo esgotado durante execução | `boundaryTimerEvent` | "se não responder em 2 dias", "timeout de aprovação", "cancelar após 30 dias sem retorno" |
 | Erro ou falha durante execução | `boundaryErrorEvent` | "se o sistema cair durante o processamento", "em caso de falha na integração" |
+| Mensagem externa interrompe a tarefa | `boundaryMessageEvent` | "cliente cancela durante a análise", "chegou contra-ordem antes de finalizar" |
+| Condição de negócio muda durante execução | `boundaryConditionalEvent` | "se o limite de crédito for alterado enquanto processa", "mudança de regulação em vigor" |
+
+**Interrompente vs. Não-interrompente (importante):**
+- **Interrompente (padrão):** a tarefa principal é abortada e o fluxo segue pelo caminho de exceção. Use na grande maioria dos casos.
+- **Não-interrompente (raro):** a tarefa principal continua e a exceção é tratada em paralelo. Use somente quando a transcrição deixa explícito que ambos prosseguem ao mesmo tempo (ex: "envia alerta enquanto continua processando").
 
 Modelagem de Boundary Events:
 1. Crie o step da tarefa principal normalmente.
@@ -303,10 +319,11 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 - [ ] Processos com > 10 atividades usam `callActivity` para agrupar fases lógicas?
 - [ ] Todo `callActivity` tem `description` listando as subatividades que representa?
 - [ ] Cada End Event distinto representa um **resultado de negócio nomeado**?
+- [ ] O nome de cada End Event **corresponde ao label do gateway que o precede**? (ex: gateway sai com "Reprovado" → End Event "Proposta Reprovada Definitivamente" — permite rastrear visualmente o caminho percorrido)
 
 **Nomenclatura e Semântica:**
 - [ ] Todos os títulos de tarefas seguem "[Verbo Infinitivo] + [Objeto]"?
-- [ ] **Todos os `title` têm ≤ 40 caracteres?** (títulos longos são truncados no viewer)
+- [ ] **Todos os `title` têm ≤ 35 caracteres?** (o gerador trunca em 35 — títulos mais longos são cortados silenciosamente no viewer)
 - [ ] Start Event tem `title` descrevendo o **gatilho real** (não "Início"/"Start")?
 - [ ] End Event tem `title` descrevendo o **estado de negócio alcançado** (não "Fim"/"End")?
 - [ ] Nenhuma lane tem nome genérico (`usuário`, `sistema`, `validador`...)?

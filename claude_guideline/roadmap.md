@@ -378,6 +378,26 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC51 — Concluído (v4.34 / 2026-06-21)
+
+**BPMN — Fix visual: fluxos cruzados, skip sobrepostos e labels fora do pool**
+
+- [x] **`modules/bpmn_auto_repair.py` — Pass C** — detecta flows com 4 waypoints e segmento horizontal no mesmo y-channel; os ordena por comprimento de span (menor fica, maiores recebem +15px por nível); elimina sobreposição visual de múltiplos skip flows em `reformat_bpmn_labels`
+- [x] **`modules/bpmn_auto_repair.py` — Pass D** — detecta BPMNEdge com exatamente 2 waypoints diagonais (Δx≠0 e Δy≠0); remove waypoints → bpmn-js aplica roteamento Manhattan (L-shaped) que elimina cruzamentos em X ao convergir no mesmo alvo (padrão sf_end/sf_end_1)
+- [x] **`modules/bpmn_auto_repair.py` — Pass E** — clamp de labels de sequências com y < 5 para y=5; impede labels invisíveis fora dos limites do pool (situação anterior: skip a y=10 → label a y=-6 não renderizado)
+- [x] **`modules/bpmn_generator.py` — `_label_pos()`** — adicionado `max(5, ...)` para garantir label y ≥ 5 em todos os diagramas gerados; previne y=-6 em novos XMLs desde a geração
+- [x] **Resultado** — labels de fluxos de sequência visíveis no viewer; flows de skip paralelos em canais distintos; flows diagonais convergentes deixam de se cruzar em X; "Ajustar Labels" agora relata as correções feitas em vez de falso positivo
+- [x] **84 testes passando**, zero regressões
+
+**`skill_bpmn.md` v7.4 — 4 correções de qualidade**
+
+- [x] **Limite de caracteres harmonizado** — corpo e checklist alinhados em `≤ 35 chars` (antes: corpo dizia 30, checklist dizia 40, absoluto dizia 35 — 3 valores conflitantes)
+- [x] **Critério de coesão para `callActivity`** — adicionado critério primário "coesão, não contagem": 4 critérios qualitativos de Bruce Silver (fase de negócio distinta, compreensível isoladamente, lógica interna complexa, terceirizável); proíbe explicitamente fragmentar só para reduzir contagem
+- [x] **Boundary Events completos** — tabela do Passo 3c ampliada com `boundaryMessageEvent` ("cliente cancela durante análise") e `boundaryConditionalEvent` ("mudança de regulação em vigor"); adicionada distinção interrompente vs. não-interrompente
+- [x] **Regra End Event ↔ label de gateway** — novo item no checklist do Passo 6: nome do End Event deve corresponder ao label do gateway que o precede (estilo de rastreabilidade visual de Bruce Silver)
+
+---
+
 ### PC50 — Concluído (v4.33 / 2026-06-20)
 
 **Pipeline — Background Thread para Reexecução de Agentes (fix "CONNECTING")**
