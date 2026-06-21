@@ -189,11 +189,12 @@ class BaseAgent(ABC):
                 hit = _cache.get(cache_hash)
                 if hit is not None:
                     cached_raw, cached_tokens = hit
-                    hub.meta.cache_hits = getattr(hub.meta, "cache_hits", 0) + 1
-                    hub.meta.tokens_saved = (
-                        getattr(hub.meta, "tokens_saved", 0) + cached_tokens
-                    )
-                    return desanitize(cached_raw, token_map)
+                    if cached_raw:  # defense-in-depth: never use empty cached entries
+                        hub.meta.cache_hits = getattr(hub.meta, "cache_hits", 0) + 1
+                        hub.meta.tokens_saved = (
+                            getattr(hub.meta, "tokens_saved", 0) + cached_tokens
+                        )
+                        return desanitize(cached_raw, token_map)
             except Exception:
                 cache_hash = None  # cache unavailable — proceed to API call
         else:

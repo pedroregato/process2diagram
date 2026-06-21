@@ -71,7 +71,15 @@ class SemanticCache:
             except Exception:
                 pass
 
-            return row["result"], int(row.get("tokens_used") or 0)
+            result = row["result"]
+            if not result:
+                # Stale empty entry (from a previous failed API call) — purge and miss
+                try:
+                    client.table(_TABLE).delete().eq("hash", cache_hash).execute()
+                except Exception:
+                    pass
+                return None
+            return result, int(row.get("tokens_used") or 0)
 
         except Exception as exc:
             logger.debug("SemanticCache.get error (fail-open): %s", exc)
