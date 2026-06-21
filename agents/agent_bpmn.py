@@ -275,8 +275,8 @@ class AgentBPMN(BaseAgent):
             "generated_at": _dt.now(_tz.utc).isoformat(),
             "source": "llm_call",
             "llm": {
-                "provider": hub.meta.provider_name or "",
-                "model":    hub.meta.model_name or "",
+                "provider": hub.meta.llm_provider or "",
+                "model":    hub.meta.llm_model or "",
                 "tokens_in":  hub.meta.total_tokens_used,
                 "from_cache": hub.meta.cache_hits > 0,
                 "cache_hits": hub.meta.cache_hits,
