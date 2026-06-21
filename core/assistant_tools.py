@@ -4033,7 +4033,11 @@ class AssistantToolExecutor:
 
     def get_bpmn_execution_log(self) -> str:
         """Return the execution log from the most recent BPMN agent run in the current session."""
-        hub = self.hub
+        try:
+            import streamlit as st
+            hub = st.session_state.get("hub")
+        except Exception:
+            hub = None
         if hub is None or not getattr(hub, "bpmn", None):
             return "Hub não disponível. Execute o pipeline primeiro."
         if not hub.bpmn.ready:
