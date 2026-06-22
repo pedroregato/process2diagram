@@ -378,6 +378,17 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC53 — Concluído (v4.36 / 2026-06-22)
+
+**BPMN auto-repair — 3 fixes de qualidade visual (Pass C/F/G)**
+
+- [x] **Pass C — stagger 15 → 30 px** — flows em skip channel sobrepostos agora têm separação mínima de 30px (era 15px), evitando sobreposição visual mesmo em canais próximos ao topo do pool
+- [x] **Pass F (novo) — waypoints sintéticos para edges vazias** — detecta `BPMNEdge` com zero waypoints (bug gerado pelo LLM ao não emitir `<bpmndi:BPMNEdge>` corretamente); constrói mapa `bpmnElement→Bounds` + mapa `sequenceFlow→(sourceRef,targetRef)`; adiciona 2 waypoints (right-center da shape source → left-center da shape target) garantindo que bpmn-js renderize o conector
+- [x] **Pass G (novo) — separar saídas sobrepostas** — detecta grupos de flows com os mesmos 2 primeiros waypoints (mesma shape source, mesmo ponto intermediário); ordena por Y final (flows que vão para cima recebem offset negativo); aplica offset `±(n-1)/2 × 18px` em `wp[0].y` e `wp[1].y` para criar fan-out visível direto da shape source
+- [x] **`core/assistant_tools.py`** — fix `get_bpmn_execution_log`: lê hub de `st.session_state.get("hub")` em vez de `self.hub` inexistente (AttributeError silencioso causava retorno "log não disponível")
+
+---
+
 ### PC52 — Concluído (v4.35 / 2026-06-21)
 
 **BPMN — Labels explicitamente centrados + Log de execução do agente**

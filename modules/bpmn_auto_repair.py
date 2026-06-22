@@ -516,7 +516,7 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
             # Sort ascending by horizontal span (shortest stays at original y)
             _group.sort(key=lambda g: g[3] - g[2])
             for _i, (_edge, _wps, _xa, _xb) in enumerate(_group):
-                _offset = _i * 15
+                _offset = _i * 30   # 30 px between adjacent skip channels (was 15)
                 if _offset == 0:
                     continue
                 _new_y = str(int(_skip_y) + _offset)
@@ -575,6 +575,101 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
             fixes.append(
                 f"Labels de sequência reposicionados: {_clamp_count} fora dos limites do pool"
             )
+
+        # ── Pass F: Synthetic waypoints for empty BPMNEdges ──────────────────
+        # bpmn-js cannot render BPMNEdge elements with zero waypoints.
+        # Build a shape-bounds map + sequenceFlow lookup to generate two
+        # minimal connection points: right-center of source → left-center of target.
+        _BPMN_NS = "http://www.omg.org/spec/BPMN/20100524/MODEL"
+        _shape_pos: dict[str, tuple[float, float, float, float]] = {}
+        for _shp in root.iter(_SHAPE):
+            if _shp.get("isHorizontal") == "true":
+                continue
+            _bid = _shp.get("bpmnElement")
+            _b   = _shp.find(_BOUNDS)
+            if not _bid or _b is None:
+                continue
+            try:
+                _shape_pos[_bid] = (
+                    float(_b.get("x", "0")), float(_b.get("y", "0")),
+                    float(_b.get("width",  "0")), float(_b.get("height", "0")),
+                )
+            except ValueError:
+                pass
+
+        _sf_map: dict[str, tuple[str, str]] = {}
+        for _sf in root.iter(f"{{{_BPMN_NS}}}sequenceFlow"):
+            _sid = _sf.get("id")
+            _sr  = _sf.get("sourceRef")
+            _tr  = _sf.get("targetRef")
+            if _sid and _sr and _tr:
+                _sf_map[_sid] = (_sr, _tr)
+
+        _empty_fixed = 0
+        for _edge in root.iter(_EDGE):
+            if _edge.findall(_WAYPOINT):
+                continue  # already has waypoints
+            _sfid = _edge.get("bpmnElement")
+            if not _sfid or _sfid not in _sf_map:
+                continue
+            _src_id, _tgt_id = _sf_map[_sfid]
+            _sb = _shape_pos.get(_src_id)
+            _tb = _shape_pos.get(_tgt_id)
+            if _sb is None or _tb is None:
+                continue
+            # Right-center of source shape → left-center of target shape
+            _wp1 = _ET.SubElement(_edge, _WAYPOINT)
+            _wp1.set("x", str(int(_sb[0] + _sb[2])))
+            _wp1.set("y", str(int(_sb[1] + _sb[3] / 2)))
+            _wp2 = _ET.SubElement(_edge, _WAYPOINT)
+            _wp2.set("x", str(int(_tb[0])))
+            _wp2.set("y", str(int(_tb[1] + _tb[3] / 2)))
+            _empty_fixed += 1
+        if _empty_fixed:
+            fixes.append(f"Waypoints sintéticos: {_empty_fixed} edge(s) vazia(s) corrigida(s)")
+
+        # ── Pass G: Separate overlapping exit flows ───────────────────────────
+        # When 2+ flows share the same source waypoint AND the same second
+        # waypoint, they look like a single arrow until they diverge.
+        # Key = (wp0.x, wp0.y, wp1.x, wp1.y) rounded to nearest pixel.
+        # Sort overlapping group by final waypoint Y (ascending = going up first),
+        # then offset BOTH wp[0].y and wp[1].y by ±SPREAD/2 to fan out from source.
+        _exit_groups: dict[tuple[int, int, int, int], list] = {}
+        for _edge in root.iter(_EDGE):
+            _wps = _edge.findall(_WAYPOINT)
+            if len(_wps) < 3:
+                continue  # need at least 3 waypoints: source, mid, target
+            try:
+                _k: tuple[int, int, int, int] = (
+                    round(float(_wps[0].get("x", "nan"))),
+                    round(float(_wps[0].get("y", "nan"))),
+                    round(float(_wps[1].get("x", "nan"))),
+                    round(float(_wps[1].get("y", "nan"))),
+                )
+            except ValueError:
+                continue
+            _exit_groups.setdefault(_k, []).append((_edge, _wps))
+
+        _overlap_fixed = 0
+        for _k, _grp in _exit_groups.items():
+            if len(_grp) < 2:
+                continue
+            # Sort by final waypoint Y so flows going up get negative offset
+            _grp.sort(key=lambda pair: float(pair[1][-1].get("y", "0")))
+            _n = len(_grp)
+            _SPREAD = 18  # px between adjacent overlapping flows
+            for _i, (_edge, _wps) in enumerate(_grp):
+                _off = int((_i - (_n - 1) / 2) * _SPREAD)
+                if _off == 0:
+                    continue
+                try:
+                    _wps[0].set("y", str(int(float(_wps[0].get("y", "0")) + _off)))
+                    _wps[1].set("y", str(int(float(_wps[1].get("y", "0")) + _off)))
+                    _overlap_fixed += 1
+                except ValueError:
+                    pass
+        if _overlap_fixed:
+            fixes.append(f"Saídas sobrepostas separadas: {_overlap_fixed} fluxo(s) ajustado(s)")
 
         # Always re-serialize: ensures canonical namespaces are applied even
         # when no label fixes were needed (prevents stale ns0: and guarantees
