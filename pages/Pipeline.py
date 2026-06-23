@@ -454,20 +454,27 @@ if _rr_thread is not None:
         st.session_state.pop("_rr_thread", None)
         st.session_state.pop("_rr_task", None)
         st.session_state.pop("_rr_agent", None)
+        # Defer messages to session_state + rerun so the widget tree is stable
+        # before rendering results. Direct st.* calls here create transient widgets
+        # that shift all subsequent widget positions, causing 'setIn index N' crashes
+        # when the user interacts with the page on the very next rerun.
         if _rr_task.get("hub") is not None:
             st.session_state.hub = _rr_task["hub"]
-            st.success(f"✅ {_rr_agent.capitalize()} re‑executado com sucesso.")
+            _pending: list[tuple[str, str]] = [
+                ("success", f"✅ {_rr_agent.capitalize()} re‑executado com sucesso.")
+            ]
             for _lvl, _msg in (_rr_task.get("messages") or []):
-                if _lvl == "info":
-                    st.info(_msg)
-                elif _lvl == "warning":
-                    st.warning(_msg)
-                elif _lvl == "error":
-                    st.error(_msg)
+                _pending.append((_lvl, _msg))
+            st.session_state["_rr_pending_messages"] = _pending
         elif _rr_task.get("error"):
-            st.error(f"Erro na reexecução: {_rr_task['error']}")
+            st.session_state["_rr_pending_messages"] = [
+                ("error", f"Erro na reexecução: {_rr_task['error']}")
+            ]
         else:
-            st.error("Reexecução falhou sem retornar resultado.")
+            st.session_state["_rr_pending_messages"] = [
+                ("error", "Reexecução falhou sem retornar resultado.")
+            ]
+        st.rerun()
     else:
         _elapsed = int(_time.time() - st.session_state.get("_rr_start", _time.time()))
         _MAX_RR_SECS = 180  # 3 min — 3 tentativas × 60s timeout cada
@@ -489,6 +496,20 @@ if _rr_thread is not None:
 # ─────────────────────────────────────────────────────────────────────────────
 # EXIBIÇÃO DOS RESULTADOS (ambos os modos)
 # ─────────────────────────────────────────────────────────────────────────────
+
+# Display deferred messages from completed background agent runs.
+# Shown here (stable tree position) instead of inside the polling block,
+# preventing widget-position desync between reruns.
+for _lvl, _msg in st.session_state.pop("_rr_pending_messages", []):
+    if _lvl == "success":
+        st.success(_msg)
+    elif _lvl == "info":
+        st.info(_msg)
+    elif _lvl == "warning":
+        st.warning(_msg)
+    else:
+        st.error(_msg)
+
 if "hub" in st.session_state:
     hub = st.session_state.hub
     prefix = st.session_state.prefix
