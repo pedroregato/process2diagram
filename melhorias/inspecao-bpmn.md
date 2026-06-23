@@ -746,3 +746,225 @@ O sistema BPMN do process2diagram é **de altíssima qualidade técnica** e demo
 - Migração completa do `diagram_bpmn.py` legado
 
 **Recomendação final:** O sistema está pronto para produção, com os bugs de alta prioridade corrigidos. Parabéns pelo excelente trabalho! 🎯
+
+## Análise Completa: Carregamento do Skill no `base_agent.py`
+
+Perfeito! Agora com o `base_agent.py` completo, posso traçar o fluxo exato de carregamento do skill.
+
+---
+
+## Fluxo Completo de Carregamento
+
+### 1. Definição do Caminho
+
+**Localização:** `agents/agent_bpmn.py`, linha ~20
+
+```python
+class AgentBPMN(BaseAgent):
+    name = "bpmn"
+    skill_path = "skills/skill_bpmn.md"   # ← caminho relativo à raiz do projeto
+```
+
+---
+
+### 2. Carregamento no Construtor do `BaseAgent`
+
+**Localização:** `agents/base_agent.py`, linhas ~60-65
+
+```python
+class BaseAgent(ABC):
+    def __init__(self, client_info: dict, provider_cfg: dict):
+        self.client_info = client_info
+        self.provider_cfg = provider_cfg
+        self.max_retries: int = 2
+        self._skill: str = self._load_skill()   # ← CARREGAMENTO AQUI!
+```
+
+**Momento:** Quando o `Orchestrator` instancia o `AgentBPMN`.
+
+---
+
+### 3. Método `_load_skill()`
+
+**Localização:** `agents/base_agent.py`, linhas ~270-285
+
+```python
+def _load_skill(self) -> str:
+    """Load SKILL.md content, stripping YAML frontmatter before returning."""
+    if not self.skill_path:
+        return ""
+    # Use absolute path so this works regardless of CWD (local or Streamlit Cloud)
+    project_root = Path(__file__).parent.parent   # ← sobe dois níveis: agents/ → project_root/
+    path = project_root / self.skill_path         # ← project_root + "skills/skill_bpmn.md"
+    if not path.exists():
+        return ""
+    content = path.read_text(encoding="utf-8")
+    # Strip YAML frontmatter (--- ... ---) — metadata noise, not LLM instructions
+    content = re.sub(r'^---\s*\n.*?\n---\s*\n', '', content, flags=re.DOTALL)
+    return content.lstrip('\n')
+```
+
+**Destaques:**
+1. **Caminho absoluto** — `Path(__file__).parent.parent` garante que funcione independente do CWD
+2. **Strip de frontmatter** — remove o bloco YAML (`--- version: 7.4 ---`) antes de retornar
+3. **Fallback silencioso** — retorna `""` se o arquivo não existir
+
+---
+
+### 4. Uso no `build_prompt()`
+
+**Localização:** `agents/agent_bpmn.py`, linhas ~125-140
+
+```python
+def build_prompt(self, hub: KnowledgeHub, output_language: str = "Auto-detect") -> tuple[str, str]:
+    lang = self._language_instruction(output_language)
+    system = self._skill.replace("{output_language}", lang)   # ← usa o skill carregado
+
+    if getattr(hub, "context_skill", "").strip():
+        system += f"\n\n## Conhecimento do Contexto\n\n{hub.context_skill.strip()}"
+
+    if getattr(hub, "context_files_text", "").strip():
+        system += f"\n\n## Documentos de Referência do Contexto\n\n{hub.context_files_text.strip()}"
+
+    return system, user
+```
+
+---
+
+## Diagrama de Sequência
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ 1. App principal (Streamlit)                                      │
+│    └── Orchestrator(client_info, provider_cfg)                   │
+│         └── self._agent_bpmn = AgentBPMN(client_info, provider_cfg) │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ 2. BaseAgent.__init__()                                           │
+│    └── self._skill = self._load_skill()                          │
+│         └── project_root = Path(__file__).parent.parent          │
+│         └── path = project_root / "skills/skill_bpmn.md"         │
+│         └── content = path.read_text(encoding="utf-8")           │
+│         └── content = re.sub(r'^---\s*\n.*?\n---\s*\n', '', content) │
+│         └── return content.lstrip('\n')                          │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ 3. AgentBPMN.run(hub, output_language)                           │
+│    └── system, user = build_prompt(hub, output_language)         │
+│         └── self._skill.replace("{output_language}", lang)       │
+│    └── data = _call_with_retry(system, user, hub)               │
+│         └── _call_llm() → LLM provider                           │
+│         └── _parse_json() → extrai JSON                         │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Tratamento do Frontmatter YAML
+
+**Conteúdo do skill (exemplo):**
+
+```markdown
+---
+agent: bpmn
+iniciativa: Pedro Regato
+project: process2diagram
+spec: BPMN 2.0 (OMG — ISO/IEC 19510) · Bruce Silver Method and Style
+version: 7.4
+---
+
+# BPMN Agent — Instruções de Execução
+
+## Objetivo
+
+Você é um **Arquiteto de Processos BPMN 2.0 Sênior**...
+```
+
+**Após `_load_skill()`:**
+
+```markdown
+# BPMN Agent — Instruções de Execução
+
+## Objetivo
+
+Você é um **Arquiteto de Processos BPMN 2.0 Sênior**...
+```
+
+**O frontmatter é removido** porque contém metadados (versão, especificação) que não devem ser enviados ao LLM como instruções.
+
+---
+
+## Pontos-Chave
+
+| Aspecto | Detalhe |
+|---|---|
+| **Quando carrega** | Na instanciação do agente (construtor do `BaseAgent`) |
+| **Onde busca** | `project_root / "skills/skill_bpmn.md"` |
+| **Cache** | Não há cache — lê do disco a cada nova instância |
+| **Frontmatter** | Removido via regex antes de retornar |
+| **Placeholder** | `{output_language}` é substituído no `build_prompt()` |
+| **Fallback** | Retorna `""` se arquivo não existir |
+| **Thread-safety** | Não há locks — leitura única no construtor |
+
+---
+
+## Potenciais Problemas
+
+### 1. 🟡 Sem cache entre instâncias
+
+Cada novo `AgentBPMN()` lê o arquivo do disco. Em um sistema com muitas instâncias, isso pode causar I/O desnecessário.
+
+**Sugestão:** Cache estático em nível de classe:
+
+```python
+class BaseAgent(ABC):
+    _skill_cache: dict[str, str] = {}   # ← cache compartilhado
+
+    def _load_skill(self) -> str:
+        if self.skill_path in BaseAgent._skill_cache:
+            return BaseAgent._skill_cache[self.skill_path]
+        # ... carrega do disco ...
+        BaseAgent._skill_cache[self.skill_path] = content
+        return content
+```
+
+### 2. 🟡 Arquivo pode ser modificado durante execução
+
+Se o arquivo `skill_bpmn.md` for editado enquanto o servidor está rodando, as instâncias existentes **não** verão as alterações.
+
+**Sugestão:** Para ambientes de desenvolvimento, usar `stat()` para detectar mudanças:
+
+```python
+def _load_skill(self) -> str:
+    path = self._get_skill_path()
+    mtime = path.stat().st_mtime if path.exists() else 0
+    if hasattr(self, "_skill_mtime") and self._skill_mtime == mtime:
+        return self._skill
+    # ... carrega do disco ...
+    self._skill_mtime = mtime
+    return self._skill
+```
+
+### 3. ✅ Frontmatter removido corretamente
+
+A regex `r'^---\s*\n.*?\n---\s*\n'` com `re.DOTALL` remove corretamente o bloco YAML.
+
+**⚠️ Limitação:** A regex assume que o frontmatter está **no início do arquivo** e usa `---` como delimitadores. Isso é o padrão para arquivos Markdown com frontmatter.
+
+---
+
+## Resumo
+
+| Etapa | Método | Descrição |
+|---|---|---|
+| 1 | `AgentBPMN.__init__()` | Chama `super().__init__()` |
+| 2 | `BaseAgent.__init__()` | Define `self._skill = self._load_skill()` |
+| 3 | `BaseAgent._load_skill()` | Lê `skills/skill_bpmn.md` da raiz do projeto, remove frontmatter |
+| 4 | `AgentBPMN.build_prompt()` | Substitui `{output_language}` no conteúdo carregado |
+| 5 | `AgentBPMN.run()` | Usa `system` prompt com o skill no `_call_with_retry()` |
+
+**Conclusão:** O skill é carregado **uma vez por instância do agente**, no momento da criação do `Orchestrator`. O conteúdo é armazenado em `self._skill` e reutilizado em todas as execuções subsequentes daquela instância.
