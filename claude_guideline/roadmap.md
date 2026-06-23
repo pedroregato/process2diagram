@@ -378,6 +378,16 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC54 — Concluído (v4.37 / 2026-06-23)
+
+**BPMN — 3 melhorias de qualidade de análise (inspeção inspecao-bpmn.md)**
+
+- [x] **`modules/bpmn_auto_repair.py` — import Pass 5 para nível de módulo** — `BPMNStep`/`BPMNEdge` importados uma única vez no topo do módulo com `try/except ImportError`; eliminado re-import a cada execução de `_repair_pool()` (melhora legibilidade + evita overhead repetido)
+- [x] **`modules/bpmn_structural_validator.py` — Check 8: eventBasedGateway** — valida que todos os flows saintes de `eventBasedGateway` apontam para `intermediateTimerCatchEvent`, `intermediateMessageCatchEvent` ou `receiveTask`; emite `BPMNIssue("warning")` com referência à OMG BPMN 2.0 §13.2.1 para qualquer violação
+- [x] **`modules/bpmn_diagnostics.py` — suporte multi-pool** — refatorado `_build_bpmn_process()` em dispatcher + `_build_single_process()` (lógica original) + `_build_collaboration_process()` (nova, itera `pool_models`, gera IDs com namespace por pool: `ev_start_{pool_id}`, `lane_{pool_id}_...`); diagnóstico BPMN agora funciona corretamente em modelos de colaboração
+
+---
+
 ### PC53 — Concluído (v4.36 / 2026-06-22)
 
 **BPMN auto-repair — 3 fixes de qualidade visual (Pass C/F/G)**
