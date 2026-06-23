@@ -65,9 +65,18 @@ def _build_bpmn_process(bpmn_model: "BPMNModel"):
     """
     Bridge BPMNModel → BpmnProcess.
 
-    Replica a lógica de AgentBPMN._generate_bpmn_xml() de forma isolada,
-    sem dependência do agente, para uso exclusivo no diagnóstico.
+    Handles both single-pool (bpmn_model.steps/edges/lanes) and
+    collaboration models (bpmn_model.is_collaboration / pool_models).
     """
+    from modules.schema import BpmnProcess, BpmnElement, BpmnPool, BpmnLane, SequenceFlow
+
+    if getattr(bpmn_model, "is_collaboration", False) and getattr(bpmn_model, "pool_models", None):
+        return _build_collaboration_process(bpmn_model)
+    return _build_single_process(bpmn_model)
+
+
+def _build_single_process(bpmn_model: "BPMNModel"):
+    """Bridge for single-pool models."""
     from modules.schema import BpmnProcess, BpmnElement, BpmnPool, BpmnLane, SequenceFlow
 
     _TASK_TYPE_MAP = {
@@ -98,7 +107,6 @@ def _build_bpmn_process(bpmn_model: "BPMNModel"):
         ))
 
         if i == len(bpmn_model.steps) - 1:
-            # End event lane = lane do step terminal real (sem edge de saída)
             source_ids = {e.source for e in bpmn_model.edges}
             terminal   = [s for s in bpmn_model.steps if s.id not in source_ids]
             end_lane   = terminal[-1].lane if terminal else step.lane
@@ -110,24 +118,17 @@ def _build_bpmn_process(bpmn_model: "BPMNModel"):
     # ── Flows ─────────────────────────────────────────────────────────────────
     flows = []
     if bpmn_model.steps:
-        flows.append(SequenceFlow(
-            id="sf_start", source="ev_start",
-            target=bpmn_model.steps[0].id,
-        ))
+        flows.append(SequenceFlow(id="sf_start", source="ev_start",
+                                  target=bpmn_model.steps[0].id))
     for i, edge in enumerate(bpmn_model.edges):
         flows.append(SequenceFlow(
             id=f"sf_{i+1:03d}",
-            source=edge.source,
-            target=edge.target,
-            name=edge.label or "",
-            condition=edge.condition or "",
+            source=edge.source, target=edge.target,
+            name=edge.label or "", condition=edge.condition or "",
         ))
     if bpmn_model.steps:
-        flows.append(SequenceFlow(
-            id="sf_end",
-            source=bpmn_model.steps[-1].id,
-            target="ev_end",
-        ))
+        flows.append(SequenceFlow(id="sf_end",
+                                  source=bpmn_model.steps[-1].id, target="ev_end"))
 
     # ── Pools / Lanes ─────────────────────────────────────────────────────────
     pools = []
@@ -139,19 +140,90 @@ def _build_bpmn_process(bpmn_model: "BPMNModel"):
                 s.id for s in bpmn_model.steps
                 if s.lane and s.lane.lower() == lane_name.lower()
             ]
-            lane_objects.append(BpmnLane(
-                id=lane_id, name=lane_name, element_ids=member_ids,
-            ))
-        pools.append(BpmnPool(
-            id="pool_1", name=bpmn_model.name, lanes=lane_objects,
-        ))
+            lane_objects.append(BpmnLane(id=lane_id, name=lane_name,
+                                         element_ids=member_ids))
+        pools.append(BpmnPool(id="pool_1", name=bpmn_model.name, lanes=lane_objects))
 
-    return BpmnProcess(
-        name=bpmn_model.name,
-        elements=elements,
-        flows=flows,
-        pools=pools,
-    )
+    return BpmnProcess(name=bpmn_model.name, elements=elements,
+                       flows=flows, pools=pools)
+
+
+def _build_collaboration_process(bpmn_model: "BPMNModel"):
+    """Bridge for collaboration models (multiple pools)."""
+    from modules.schema import BpmnProcess, BpmnElement, BpmnPool, BpmnLane, SequenceFlow
+
+    _TASK_TYPE_MAP = {
+        "userTask": "userTask", "serviceTask": "serviceTask",
+        "scriptTask": "scriptTask", "manualTask": "manualTask",
+        "businessRuleTask": "businessRuleTask",
+        "parallelGateway": "parallelGateway",
+        "exclusiveGateway": "exclusiveGateway",
+    }
+
+    all_elements: list = []
+    all_flows:    list = []
+    pool_objects: list = []
+
+    for pi, pool_model in enumerate(bpmn_model.pool_models):
+        steps = getattr(pool_model, "steps", [])
+        edges = getattr(pool_model, "edges", [])
+        lanes = getattr(pool_model, "lanes", [])
+        pool_id = getattr(pool_model, "id", None) or f"pool_{pi+1}"
+        pool_name = getattr(pool_model, "name", pool_id)
+
+        # Elements for this pool
+        for i, step in enumerate(steps):
+            el_type = "exclusiveGateway" if step.is_decision \
+                else _TASK_TYPE_MAP.get(step.task_type, "userTask")
+            if i == 0:
+                all_elements.append(BpmnElement(
+                    id=f"ev_start_{pool_id}", name="Início", type="startEvent",
+                    actor=None, lane=step.lane,
+                ))
+            all_elements.append(BpmnElement(
+                id=step.id, name=step.title, type=el_type,
+                actor=step.actor, lane=step.lane,
+            ))
+            if i == len(steps) - 1:
+                src_ids  = {e.source for e in edges}
+                terminal = [s for s in steps if s.id not in src_ids]
+                end_lane = terminal[-1].lane if terminal else step.lane
+                all_elements.append(BpmnElement(
+                    id=f"ev_end_{pool_id}", name="Fim", type="endEvent",
+                    actor=None, lane=end_lane,
+                ))
+
+        # Flows for this pool
+        if steps:
+            all_flows.append(SequenceFlow(
+                id=f"sf_start_{pool_id}",
+                source=f"ev_start_{pool_id}", target=steps[0].id,
+            ))
+        for i, edge in enumerate(edges):
+            all_flows.append(SequenceFlow(
+                id=f"sf_{pool_id}_{i+1:03d}",
+                source=edge.source, target=edge.target,
+                name=edge.label or "", condition=edge.condition or "",
+            ))
+        if steps:
+            all_flows.append(SequenceFlow(
+                id=f"sf_end_{pool_id}",
+                source=steps[-1].id, target=f"ev_end_{pool_id}",
+            ))
+
+        # Lanes for this pool
+        lane_objects: list = []
+        for lane_name in lanes:
+            lane_id    = f"lane_{pool_id}_" + lane_name.lower().replace(" ", "_")
+            member_ids = [s.id for s in steps
+                          if s.lane and s.lane.lower() == lane_name.lower()]
+            lane_objects.append(BpmnLane(id=lane_id, name=lane_name,
+                                         element_ids=member_ids))
+        pool_objects.append(BpmnPool(id=pool_id, name=pool_name,
+                                     lanes=lane_objects))
+
+    return BpmnProcess(name=bpmn_model.name, elements=all_elements,
+                       flows=all_flows, pools=pool_objects)
 
 
 # ── Internal: rendering ───────────────────────────────────────────────────────

@@ -27,6 +27,15 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from core.knowledge_hub import BPMNModel, BPMNStep, BPMNEdge
 
+# Runtime import for Pass 5 (XOR join insertion) — placed at module level so
+# it picks up sys.path modifications made before the module is imported, and
+# fails loudly in development instead of silently skipping the pass.
+try:
+    from core.knowledge_hub import BPMNStep as _BPMNStep, BPMNEdge as _BPMNEdge
+except ImportError:  # pragma: no cover — only occurs outside the app context
+    _BPMNStep = None  # type: ignore[assignment]
+    _BPMNEdge = None  # type: ignore[assignment]
+
 _GATEWAY_TYPES = {
     "exclusiveGateway", "parallelGateway", "inclusiveGateway",
     "eventBasedGateway", "complexGateway", "gateway",
@@ -220,13 +229,6 @@ def _repair_pool(
         "intermediateMessageThrowEvent",
     }
     _XOR_TYPES = {"exclusiveGateway", "gateway"}
-
-    # One import at module level is fine; BPMNStep/BPMNEdge available at runtime
-    try:
-        from core.knowledge_hub import BPMNStep as _BPMNStep, BPMNEdge as _BPMNEdge
-    except ImportError:
-        _BPMNStep = None
-        _BPMNEdge = None
 
     if _BPMNStep is not None:
         _pass5_changed = True

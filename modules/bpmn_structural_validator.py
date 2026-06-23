@@ -265,4 +265,28 @@ def _run_checks(model: "BPMNModel") -> list[BPMNIssue]:
                 f"— add an explicit XOR join gateway before this step "
                 f"(Method & Style: never merge branches directly into a task)"))
 
+    # ── Check 8: eventBasedGateway outgoing edges must be catch events ────────
+    # OMG BPMN 2.0 §13.2.1: all outgoing sequence flows from an eventBasedGateway
+    # must target intermediateTimerCatchEvent, intermediateMessageCatchEvent, or
+    # receiveTask.  Any other target type is a spec violation.
+    _EBG_VALID_TARGETS = {
+        "intermediateTimerCatchEvent",
+        "intermediateMessageCatchEvent",
+        "receiveTask",
+    }
+    step_by_id_ebg = {st.id: st for st in model.steps}
+    for s in model.steps:
+        if s.task_type != "eventBasedGateway":
+            continue
+        for e in outgoing.get(s.id, []):
+            tgt = step_by_id_ebg.get(e.target)
+            if tgt is None:
+                continue
+            if tgt.task_type not in _EBG_VALID_TARGETS:
+                issues.append(BPMNIssue("warning", s.id,
+                    f"eventBasedGateway '{s.title}' ({s.id}) → '{tgt.title}' ({tgt.task_type}): "
+                    f"target must be intermediateTimerCatchEvent, "
+                    f"intermediateMessageCatchEvent, or receiveTask "
+                    f"(OMG BPMN 2.0 §13.2.1)"))
+
     return issues
