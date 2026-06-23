@@ -378,6 +378,18 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC55 — Concluído (v4.38 / 2026-06-23)
+
+**BPMN — Start/End Event com nomes descritivos (bpmn-comparativa-001.md)**
+
+- [x] **`core/knowledge_hub.py`** — novos campos `process_trigger: str` e `process_outcomes: list[str]` em `BPMNModel`; guard em `migrate()` v4.37
+- [x] **`agents/agent_bpmn.py`** — `_build_model_flat()` parseia `process_trigger`/`process_outcomes` do JSON LLM; Rule 0 captura `title` dos steps de evento antes de removê-los (fallback sem mudança no JSON); `_generate_bpmn_xml_single()` usa `_start_name`/`_end_name` em vez de strings fixas "Início"/"Fim"
+- [x] **`skills/skill_bpmn.md` v7.5** — schema flat atualizado com campos `process_trigger` + `process_outcomes`; regra de nomenclatura obrigatória com exemplos corretos/incorretos
+- [x] **`modules/bpmn_diagnostics.py`** — `_build_single_process()` usa campos do `BPMNModel` em vez de hardcodes
+- **Itens não implementados (justificativa):** Boundary Events (item 🔴 2 do doc) — generator tem placeholder PC27b; é trabalho arquitetural separado. Múltiplos End Events distintos — requer mudança no algoritmo de terminal detection do generator.
+
+---
+
 ### PC54 — Concluído (v4.37 / 2026-06-23)
 
 **BPMN — 3 melhorias de qualidade de análise (inspeção inspecao-bpmn.md)**
