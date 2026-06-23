@@ -90,6 +90,10 @@ def _build_single_process(bpmn_model: "BPMNModel"):
     }
 
     # ── Elements ──────────────────────────────────────────────────────────────
+    _start_name = getattr(bpmn_model, "process_trigger", "") or "Início"
+    _outcomes   = getattr(bpmn_model, "process_outcomes", []) or []
+    _end_name   = (_outcomes[0] if _outcomes else None) or "Fim"
+
     elements = []
     for i, step in enumerate(bpmn_model.steps):
         el_type = "exclusiveGateway" if step.is_decision \
@@ -97,7 +101,7 @@ def _build_single_process(bpmn_model: "BPMNModel"):
 
         if i == 0:
             elements.append(BpmnElement(
-                id="ev_start", name="Início", type="startEvent",
+                id="ev_start", name=_start_name, type="startEvent",
                 actor=None, lane=step.lane,
             ))
 
@@ -111,7 +115,7 @@ def _build_single_process(bpmn_model: "BPMNModel"):
             terminal   = [s for s in bpmn_model.steps if s.id not in source_ids]
             end_lane   = terminal[-1].lane if terminal else step.lane
             elements.append(BpmnElement(
-                id="ev_end", name="Fim", type="endEvent",
+                id="ev_end", name=_end_name, type="endEvent",
                 actor=None, lane=end_lane,
             ))
 

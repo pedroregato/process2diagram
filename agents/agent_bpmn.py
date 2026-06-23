@@ -350,6 +350,11 @@ class AgentBPMN(BaseAgent):
             steps=steps,
             edges=edges,
             lanes=lanes,
+            process_trigger=(data.get("process_trigger") or "").strip(),
+            process_outcomes=[
+                o.strip() for o in (data.get("process_outcomes") or [])
+                if isinstance(o, str) and o.strip()
+            ],
         )
 
     @staticmethod
@@ -475,10 +480,25 @@ class AgentBPMN(BaseAgent):
         """
         # ── Rule 0: strip redundant start/end event steps (single-pool) ──────
         if not model.is_collaboration:
-            event_step_ids = {
-                s.id for s in model.steps
-                if s.task_type in (_START_TYPES | _END_TYPES)
-            }
+            _start_steps = [s for s in model.steps if s.task_type in _START_TYPES]
+            _end_steps   = [s for s in model.steps if s.task_type in _END_TYPES]
+
+            # Capture meaningful names before stripping (only if not already set by JSON parse)
+            _generic_start = {"início", "inicio", "start", "begin", "iniciar"}
+            _generic_end   = {"fim", "end", "finish", "término", "termino", "encerrar"}
+            if _start_steps and not model.process_trigger:
+                _t = (_start_steps[0].title or "").strip()
+                if _t and _t.lower() not in _generic_start:
+                    model.process_trigger = _t
+            if _end_steps and not model.process_outcomes:
+                _outcomes = [
+                    s.title.strip() for s in _end_steps
+                    if s.title and s.title.strip().lower() not in _generic_end
+                ]
+                if _outcomes:
+                    model.process_outcomes = _outcomes
+
+            event_step_ids = {s.id for s in _start_steps + _end_steps}
             if event_step_ids:
                 model.steps = [s for s in model.steps if s.id not in event_step_ids]
                 model.edges = [
@@ -616,6 +636,8 @@ class AgentBPMN(BaseAgent):
     @staticmethod
     def _generate_bpmn_xml_single(model, BpmnProcess, BpmnElement, BpmnPool,
                                   BpmnLane, SequenceFlow, generate_bpmn_xml) -> str:
+        _start_name = model.process_trigger or "Início"
+        _end_name   = (model.process_outcomes[0] if model.process_outcomes else None) or "Fim"
         elements = []
         for i, step in enumerate(model.steps):
             if step.is_decision:
@@ -632,7 +654,7 @@ class AgentBPMN(BaseAgent):
                     ))
                     if i == 0:
                         elements.insert(0, BpmnElement(
-                            id="ev_start", name="Início", type="startEvent",
+                            id="ev_start", name=_start_name, type="startEvent",
                             lane=step.lane, actor=None,
                         ))
                     if i == len(model.steps) - 1:
@@ -640,7 +662,7 @@ class AgentBPMN(BaseAgent):
                         terminal = [s for s in model.steps if s.id not in source_ids]
                         end_lane = terminal[-1].lane if terminal else step.lane
                         elements.append(BpmnElement(
-                            id="ev_end", name="Fim", type="endEvent",
+                            id="ev_end", name=_end_name, type="endEvent",
                             lane=end_lane, actor=None,
                         ))
                     continue
@@ -651,7 +673,7 @@ class AgentBPMN(BaseAgent):
 
             if i == 0:
                 elements.append(BpmnElement(
-                    id="ev_start", name="Início", type="startEvent",
+                    id="ev_start", name=_start_name, type="startEvent",
                     actor=None, lane=step.lane,
                 ))
 
@@ -666,7 +688,7 @@ class AgentBPMN(BaseAgent):
                 terminal = [s for s in model.steps if s.id not in source_ids]
                 end_lane = terminal[-1].lane if terminal else step.lane
                 elements.append(BpmnElement(
-                    id="ev_end", name="Fim", type="endEvent",
+                    id="ev_end", name=_end_name, type="endEvent",
                     actor=None, lane=end_lane,
                 ))
 

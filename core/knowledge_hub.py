@@ -102,6 +102,8 @@ class BPMNModel:
     message_flows_data: list[BPMNMessageFlow] = field(default_factory=list)
     raw_llm_dict: Optional[dict] = None  # last successful LLM extraction — rerun bypasses LLM
     execution_log: Optional[dict] = None  # structured log of the last agent run
+    process_trigger: str = ""             # Start Event title (LLM-supplied; default: "Início")
+    process_outcomes: list[str] = field(default_factory=list)  # End Event titles per outcome
 
     def to_process(self):
         """Bridge to legacy schema.Process for diagram generators."""
@@ -721,6 +723,12 @@ class KnowledgeHub:
         # ── v4.35: execution_log for BPMN agent diagnostics ──────────────────────
         if not hasattr(hub.bpmn, 'execution_log'):
             hub.bpmn.execution_log = None
+
+        # ── v4.37: process_trigger / process_outcomes for meaningful Start/End Event names
+        if not hasattr(hub.bpmn, 'process_trigger'):
+            hub.bpmn.process_trigger = ""
+        if not hasattr(hub.bpmn, 'process_outcomes'):
+            hub.bpmn.process_outcomes = []
 
         # ── v4.7: structural score fields added to BPMNValidationScore ──────────
         for score_obj in [hub.validation.bpmn_score] + list(hub.validation.bpmn_candidates):

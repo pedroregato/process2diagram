@@ -356,6 +356,11 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 {
   "name": "Nome do Processo",
   "description": "Resumo em 1-3 frases do objetivo e escopo do processo. Usado como documentacao no XML BPMN.",
+  "process_trigger": "Evento ou condicao que dispara o processo (ex: 'Proposta de Credito Submetida'). Nunca 'Inicio' ou 'Start'.",
+  "process_outcomes": [
+    "Estado de negocio alcancado no caminho principal (ex: 'Contrato Formalizado e Registrado')",
+    "Estado alternativo se houver (ex: 'Proposta Recusada Definitivamente')"
+  ],
   "steps": [
     {
       "id": "S01",
@@ -373,6 +378,15 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
   "lanes": ["Lane A", "Lane B"]
 }
 ```
+
+> **Regra de Nomenclatura Obrigatoria — Start e End Events:**
+> - `process_trigger`: descreve o **gatilho real** do processo — o evento externo ou condicao que o inicia.
+>   Exemplos corretos: "Solicitacao de Ferias Recebida", "NF Emitida pelo Fornecedor", "Chamado Tecnico Aberto".
+>   Nunca use: "Inicio", "Start", "Comecar", "Iniciar o processo".
+> - `process_outcomes`: lista os **estados de negocio** alcancados ao final.
+>   Cada item deve ser o resultado de um caminho distinto.
+>   Exemplos corretos: "Pagamento Processado com Sucesso", "Pedido Cancelado por Inadimplencia".
+>   Nunca use: "Fim", "End", "Encerrar", "Terminar".
 
 ### Colaboracao — formato pools
 
