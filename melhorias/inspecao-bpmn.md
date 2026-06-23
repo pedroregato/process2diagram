@@ -501,3 +501,248 @@ setTimeout(function() {
 Os artefatos do agente BPMN são de **altíssima qualidade** e refletem um entendimento profundo da especificação BPMN 2.0 e do *Method and Style* de Bruce Silver. Os problemas identificados são **localizados e corrigíveis**, não comprometendo a funcionalidade geral do sistema.
 
 **Recomendação:** Corrigir os 2 bugs de **alta prioridade** (Gerador XML e Validador) antes do próximo deploy. Os demais podem ser tratados como backlog de melhoria contínua.
+
+## Avaliação Complementar: `diagram_bpmn.py`, `pipeline.py`, `agent_bpmn.py` e `orchestrator.py`
+
+---
+
+### 8. `diagram_bpmn.py` — Gerador XML (versão legada)
+
+**Status: ⚠️ DEPRECATED — funcional, mas com limitações significativas**
+
+#### O que está excelente:
+
+1. **Código limpo e bem organizado**
+2. **Topological sort** com fallback para nós não ordenados
+3. **Lane ordering** (startEvents primeiro, endEvents por último)
+4. **Suporte a pools e lanes** básico
+
+#### 🔴 PROBLEMAS CRÍTICOS (comparado ao `bpmn_generator.py`):
+
+| Problema | Impacto | Gravidade |
+|---|---|---|
+| **Tamanho fixo de tarefas (120×60)** | Texto de 35 caracteres fica ilegível | 🔴 Alta |
+| **Roteamento de fluxo sempre reto** (right-centre → left-centre) | Cruzamentos visuais inevitáveis | 🔴 Alta |
+| **Sem Link Events** para eliminar cruzamentos | Diagramas complexos ficam ilegíveis | 🔴 Alta |
+| **Label sempre abaixo do elemento** (y = y + h + 2) | Labels de gateway/event cortados | 🟡 Média |
+| **Sem suporte a multi-pool** | Colaborações não funcionam | 🔴 Alta |
+| **Pan/zoom manual via CSS transform** | Conflita com bpmn-js internamente | 🟡 Média |
+| **Sem suporte a `callActivity`** | Hierarquia de Silver Level 1 não renderizada | 🟡 Média |
+
+**Conclusão:** Este arquivo é uma **versão legada** que deve ser substituída pelo `bpmn_generator.py`. Se ainda estiver em uso, recomendo **migrar completamente** para o `bpmn_generator.py` e remover este arquivo para evitar confusão.
+
+---
+
+### 9. `pipeline.py` — Orquestração do Pipeline
+
+**Status: ✅ Robusto e bem estruturado**
+
+#### O que está excelente:
+
+1. **Suporte a multi-run tournament** para BPMN (N passes → melhor score)
+2. **LangGraph integration** para retry adaptativo
+3. **Parallel execution** de Minutes + Requirements via ThreadPoolExecutor
+4. **Progress callback** com lock thread-safe
+5. **Post-pipeline agents** (CKF Updater, Knowledge Extractor, Contradiction Detector)
+6. **Tratamento de erros** fail-open (nunca quebra o fluxo principal)
+
+#### 🟡 Melhoria Sugerida: Lógica de condicionais complexa
+
+**Localização:** `run_pipeline()`, linhas ~30-120
+
+**Problema:** A lógica de decisão tem múltiplas condicionais aninhadas que dificultam a manutenção:
+
+```python
+if run_bpmn and n_bpmn_runs > 1:
+    # Multi-run tournament
+elif run_bpmn and config.get("use_langgraph", False):
+    # LangGraph expandido
+else:
+    # Standard single-run
+```
+
+**Sugestão:** Extrair para estratégias:
+
+```python
+class PipelineStrategy:
+    def execute(self, hub, config, ...): ...
+
+class TournamentStrategy(PipelineStrategy): ...
+class LangGraphStrategy(PipelineStrategy): ...
+class StandardStrategy(PipelineStrategy): ...
+
+def run_pipeline(...):
+    strategy = _select_strategy(config)
+    return strategy.execute(...)
+```
+
+**Impacto:** Baixo — a lógica atual é funcional, mas a refatoração melhoraria a legibilidade.
+
+---
+
+### 10. `agent_bpmn.py` — Agente BPMN (Core)
+
+**Status: ✅ Excelente — bem projetado e completo**
+
+#### O que está excelente:
+
+1. **Suporte a flat e multi-pool** via `_build_model()` dispatch
+2. **Event task types** mapeados corretamente para BPMN 2.0
+3. **Inferência de lane names** com 3 níveis de prioridade:
+   - Priority 1: step.actor fields
+   - Priority 2: NLP actors em textos
+   - Priority 3: regex heurística
+4. **Enforce rules** determinísticas:
+   - Rule 0: remove start/end event steps
+   - Rule 1: serviceTask sem sistema nomeado → lane = None
+   - Rule 1b: generic lane names → inferir do contexto
+   - Rule 2: correction loop → redirecionar para upstream
+   - Rule 3: remove empty lanes
+5. **Auto-repair** via `bpmn_auto_repair.py`
+6. **Reformat labels** via `reformat_bpmn_labels()`
+7. **Execução log** com métricas detalhadas
+8. **Retry mechanism** com fallback para flat format
+9. **Bridge para Mermaid** e BPMN XML
+
+#### 🟡 Melhoria Sugerida: `_infer_lane_name` pode ser mais robusta
+
+**Localização:** `_infer_lane_name()`, linhas ~40-90
+
+**Problema:** A heurística de inferência pode produzir nomes genéricos se nenhuma das 3 prioridades encontrar um match.
+
+**Sugestão:** Adicionar fallback com prefixo do departamento:
+
+```python
+# Priority 4: fallback contextual
+if not candidate:
+    # Use the generic name itself but add a contextual hint
+    if "comercial" in combined.lower():
+        return "Equipe Comercial"
+    elif "financeiro" in combined.lower():
+        return "Equipe Financeira"
+    # ...
+    return generic_name
+```
+
+**Impacto:** Baixo — a inferência já funciona bem na maioria dos casos.
+
+#### 🟡 Melhoria Sugerida: `_build_model_multi` poderia validar pools
+
+**Localização:** `_build_model_multi()`, linhas ~200-250
+
+**Sugestão:** Adicionar validação básica:
+
+```python
+# Validate pool has at least one step
+if not raw_steps:
+    continue  # skip empty pools (or issue warning)
+
+# Validate message flow references exist
+for mf in message_flows:
+    if not any(s.id == mf.source_step for s in all_steps):
+        # warn: message flow source not found
+```
+
+**Impacto:** Baixo — a validação é feita em etapas posteriores.
+
+---
+
+### 11. `orchestrator.py` — Orquestrador
+
+**Status: ✅ Excelente — arquitetura sólida**
+
+#### O que está excelente:
+
+1. **Pipeline claro** com 8+ etapas
+2. **Parallel execution** de Minutes + Requirements com `ThreadPoolExecutor`
+3. **Isolamento de meta** (`copy.copy(hub)`) para evitar race conditions
+4. **Merge de tokens** após execução paralela
+5. **Fallback para sequencial** se paralelo falhar
+6. **Progress callback** com lock thread-safe
+7. **Suporte a SBVR, BMM, DMN, Argumentation, Query Summarizer, Communication Noise**
+8. **ATA Engine HTML generation** pós-minutes
+
+#### 🟡 Melhoria Sugerida: Pipeline steps poderiam ser extraídos
+
+**Localização:** `run()`, linhas ~80-250
+
+**Sugestão:** Extrair cada step para um método próprio:
+
+```python
+def _run_quality(self, hub, output_language): ...
+def _run_preprocessing(self, hub): ...
+def _run_nlp(self, hub): ...
+def _run_bpmn(self, hub, output_language): ...
+def _run_minutes_requirements(self, hub, output_language): ...
+def _run_sbvr(self, hub, output_language): ...
+# etc.
+```
+
+**Impacto:** Baixo — a lógica atual é funcional, mas a refatoração melhoraria a legibilidade e testabilidade.
+
+---
+
+## Resumo Final (Completo)
+
+| Artefato | Status | Problemas | Prioridade |
+|---|---|---|---|
+| **Instruções do Agente** | ✅ 9.5/10 | Sugestão de exemplo visual | Baixa |
+| **bpmn_generator.py** | ⚠️ 8.0/10 | **Bug:** `mid_y = boundary_y` | **Alta** |
+| **bpmn_structural_validator.py** | ⚠️ 7.0/10 | Faltam 4 regras de validação | Média |
+| **bpmn_auto_repair.py** | ⚠️ 7.5/10 | **Bug:** Importação do Pass 5 | Média |
+| **bpmn_diagnostics.py** | ⚠️ 7.5/10 | **Bug:** Bridge não suporta multi-pool | Média |
+| **bpmn_editor.py** | ✅ 9.5/10 | Sem defeitos críticos | Baixa |
+| **bpmn_viewer.py** | ✅ 9.0/10 | Bug sutil no fit-viewport | Baixa |
+| **diagram_bpmn.py (legado)** | ⚠️ 5.0/10 | Múltiplas limitações (DEPRECATED) | **Migrar** |
+| **pipeline.py** | ✅ 9.0/10 | Condicionais complexas (refatoração opcional) | Baixa |
+| **agent_bpmn.py** | ✅ 9.5/10 | Inferência de lane pode ser melhorada | Baixa |
+| **orchestrator.py** | ✅ 9.5/10 | Pipeline steps poderiam ser extraídos | Baixa |
+
+---
+
+## Mapa de Dependências
+
+```
+diagram_bpmn.py (legado) ────────┐
+                                  │
+bpmn_generator.py ←───────────────┤
+       ↑                          │
+       │                          │
+bpmn_viewer.py                    │
+       ↑                          │
+       │                          │
+agent_bpmn.py ←───────────────────┤
+       ↑                          │
+       │                          │
+orchestrator.py ←─────────────────┤
+       ↑                          │
+       │                          │
+pipeline.py ──────────────────────┘
+```
+
+**Recomendação:** 
+1. **Remover `diagram_bpmn.py`** e migrar completamente para `bpmn_generator.py`
+2. **Corrigir os 2 bugs de alta prioridade** no `bpmn_generator.py`
+3. **Adicionar as 4 regras de validação** no `bpmn_structural_validator.py`
+4. Os demais problemas são **baixa prioridade** e podem ser tratados como backlog
+
+---
+
+## Conclusão Geral
+
+O sistema BPMN do process2diagram é **de altíssima qualidade técnica** e demonstra um profundo conhecimento da especificação BPMN 2.0, do *Method and Style* de Bruce Silver e das melhores práticas de engenharia de software.
+
+**Pontos fortes:**
+- Arquitetura modular com responsabilidades bem definidas
+- Suporte a flat e multi-pool
+- Auto-repair e validação estrutural
+- Editor e viewer interativos com bpmn-js
+- Pipeline robusto com paralelismo e fallback
+- Logs detalhados de execução
+
+**Áreas de melhoria:**
+- Correção dos 2 bugs críticos no gerador XML
+- Adição das 4 regras de validação faltantes
+- Migração completa do `diagram_bpmn.py` legado
+
+**Recomendação final:** O sistema está pronto para produção, com os bugs de alta prioridade corrigidos. Parabéns pelo excelente trabalho! 🎯
