@@ -525,32 +525,6 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
                 _eid = _edge.get("bpmnElement", _edge.get("id", "?"))
                 fixes.append(f"Canal de skip escalonado +{_offset}px: '{_eid}'")
 
-        # ── Pass D: Auto-route diagonal 2-point sequence flows ───────────────
-        # A BPMNEdge with exactly 2 waypoints where Δx ≠ 0 AND Δy ≠ 0 is a
-        # straight diagonal line.  When two such flows converge on the same
-        # target they create X-crossing patterns (e.g. two tasks ending at a
-        # shared End Event from different lanes).  Removing the waypoints lets
-        # bpmn-js Manhattan router produce L-shaped paths that avoid crossings.
-        # Pure horizontal/vertical 2-point edges (Δx=0 or Δy=0) are preserved.
-        _diag_count = 0
-        for _edge in root.iter(_EDGE):
-            _wps = _edge.findall(_WAYPOINT)
-            if len(_wps) != 2:
-                continue
-            try:
-                _x1 = float(_wps[0].get("x", "0")); _y1 = float(_wps[0].get("y", "0"))
-                _x2 = float(_wps[1].get("x", "0")); _y2 = float(_wps[1].get("y", "0"))
-            except ValueError:
-                continue
-            if abs(_x2 - _x1) > 1 and abs(_y2 - _y1) > 1:
-                for _wp in _wps:
-                    _edge.remove(_wp)
-                _diag_count += 1
-        if _diag_count:
-            fixes.append(
-                f"Roteamento automático: {_diag_count} fluxo(s) diagonal(is) → bpmn-js L-path"
-            )
-
         # ── Pass E: Clamp edge label y inside pool bounds ─────────────────────
         # Skip-channel flows place their label 16 px above the skip line.
         # If the skip line is at y=10 (topmost lane), the label ends up at y=-6
@@ -627,6 +601,32 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
             _empty_fixed += 1
         if _empty_fixed:
             fixes.append(f"Waypoints sintéticos: {_empty_fixed} edge(s) vazia(s) corrigida(s)")
+
+        # ── Pass D: Auto-route diagonal 2-point sequence flows ───────────────
+        # Runs AFTER Pass F so that synthetic waypoints added to previously-empty
+        # edges are also auto-routed when diagonal (e.g. sf_end / sf_end_1).
+        # A BPMNEdge with exactly 2 waypoints where Δx ≠ 0 AND Δy ≠ 0 is a
+        # straight diagonal line.  Removing the waypoints lets bpmn-js Manhattan
+        # router produce L-shaped paths that avoid crossings.
+        # Pure horizontal/vertical 2-point edges (Δx=0 or Δy=0) are preserved.
+        _diag_count = 0
+        for _edge in root.iter(_EDGE):
+            _wps = _edge.findall(_WAYPOINT)
+            if len(_wps) != 2:
+                continue
+            try:
+                _x1 = float(_wps[0].get("x", "0")); _y1 = float(_wps[0].get("y", "0"))
+                _x2 = float(_wps[1].get("x", "0")); _y2 = float(_wps[1].get("y", "0"))
+            except ValueError:
+                continue
+            if abs(_x2 - _x1) > 1 and abs(_y2 - _y1) > 1:
+                for _wp in _wps:
+                    _edge.remove(_wp)
+                _diag_count += 1
+        if _diag_count:
+            fixes.append(
+                f"Roteamento automático: {_diag_count} fluxo(s) diagonal(is) → bpmn-js L-path"
+            )
 
         # ── Pass G: Separate overlapping exit flows ───────────────────────────
         # When 2+ flows share the same source waypoint AND the same second
