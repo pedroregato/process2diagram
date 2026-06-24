@@ -651,21 +651,34 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
         # ── Pass D: Auto-route diagonal 2-point sequence flows ───────────────
         # Runs AFTER Pass F so that synthetic waypoints added to previously-empty
         # edges are also auto-routed when diagonal (e.g. sf_end / sf_end_1).
-        # A BPMNEdge with exactly 2 waypoints where Δx ≠ 0 AND Δy ≠ 0 is a
-        # straight diagonal line.  Removing the waypoints lets bpmn-js Manhattan
-        # router produce L-shaped paths that avoid crossings.
-        # Pure horizontal/vertical 2-point edges (Δx=0 or Δy=0) are preserved.
+        # A BPMNEdge with exactly 2 waypoints where Δx ≠ 0 AND |Δy| > threshold
+        # is a genuine cross-lane diagonal.  Removing the waypoints lets bpmn-js
+        # Manhattan router produce L-shaped paths that avoid crossings.
+        #
+        # Threshold rules:
+        # • Message flow edges (inter-pool) are EXEMPT — they are supposed to have
+        #   diagonal waypoints; removing them degrades the viewer rendering.
+        # • |Δy| ≤ _DIAG_THRESHOLD (30 px): shallow diagonal caused by slight
+        #   vertical misalignment of same-lane elements (e.g. endEvent vs task
+        #   height difference).  Removing these is counter-productive — bpmn-js
+        #   auto-routing can produce worse L-paths.  Keep them as-is.
+        # • |Δy| > _DIAG_THRESHOLD: genuine cross-lane diagonal → remove and let
+        #   bpmn-js Manhattan-route the connection cleanly.
+        _DIAG_THRESHOLD = 70   # ≈ H_GAP; same-lane misalignment < 70 px → keep
         _diag_count = 0
         for _edge in root.iter(_EDGE):
             _wps = _edge.findall(_WAYPOINT)
             if len(_wps) != 2:
                 continue
+            _eid = _edge.get("bpmnElement", "")
+            if _eid in _mf_map:
+                continue  # message flows: keep diagonal waypoints (inter-pool routing)
             try:
                 _x1 = float(_wps[0].get("x", "0")); _y1 = float(_wps[0].get("y", "0"))
                 _x2 = float(_wps[1].get("x", "0")); _y2 = float(_wps[1].get("y", "0"))
             except ValueError:
                 continue
-            if abs(_x2 - _x1) > 1 and abs(_y2 - _y1) > 1:
+            if abs(_x2 - _x1) > 1 and abs(_y2 - _y1) > _DIAG_THRESHOLD:
                 for _wp in _wps:
                     _edge.remove(_wp)
                 _diag_count += 1
