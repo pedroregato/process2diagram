@@ -573,6 +573,7 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
             except ValueError:
                 pass
 
+        # Build lookup: flow_id → (sourceRef, targetRef) for sequenceFlows
         _sf_map: dict[str, tuple[str, str]] = {}
         for _sf in root.iter(f"{{{_BPMN_NS}}}sequenceFlow"):
             _sid = _sf.get("id")
@@ -581,28 +582,71 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
             if _sid and _sr and _tr:
                 _sf_map[_sid] = (_sr, _tr)
 
+        # Build lookup for messageFlows (collaboration models) — same structure
+        _mf_map: dict[str, tuple[str, str]] = {}
+        for _mf in root.iter(f"{{{_BPMN_NS}}}messageFlow"):
+            _mid = _mf.get("id")
+            _sr  = _mf.get("sourceRef")
+            _tr  = _mf.get("targetRef")
+            if _mid and _sr and _tr:
+                _mf_map[_mid] = (_sr, _tr)
+
         _empty_fixed = 0
+        _mf_fixed = 0
         for _edge in root.iter(_EDGE):
             if _edge.findall(_WAYPOINT):
                 continue  # already has waypoints
-            _sfid = _edge.get("bpmnElement")
-            if not _sfid or _sfid not in _sf_map:
+            _eid = _edge.get("bpmnElement")
+            if not _eid:
                 continue
-            _src_id, _tgt_id = _sf_map[_sfid]
-            _sb = _shape_pos.get(_src_id)
-            _tb = _shape_pos.get(_tgt_id)
-            if _sb is None or _tb is None:
-                continue
-            # Right-center of source shape → left-center of target shape
-            _wp1 = _ET.SubElement(_edge, _WAYPOINT)
-            _wp1.set("x", str(int(_sb[0] + _sb[2])))
-            _wp1.set("y", str(int(_sb[1] + _sb[3] / 2)))
-            _wp2 = _ET.SubElement(_edge, _WAYPOINT)
-            _wp2.set("x", str(int(_tb[0])))
-            _wp2.set("y", str(int(_tb[1] + _tb[3] / 2)))
-            _empty_fixed += 1
+
+            if _eid in _sf_map:
+                # Sequence flow: right-center of source → left-center of target
+                _src_id, _tgt_id = _sf_map[_eid]
+                _sb = _shape_pos.get(_src_id)
+                _tb = _shape_pos.get(_tgt_id)
+                if _sb is None or _tb is None:
+                    continue
+                _wp1 = _ET.SubElement(_edge, _WAYPOINT)
+                _wp1.set("x", str(int(_sb[0] + _sb[2])))
+                _wp1.set("y", str(int(_sb[1] + _sb[3] / 2)))
+                _wp2 = _ET.SubElement(_edge, _WAYPOINT)
+                _wp2.set("x", str(int(_tb[0])))
+                _wp2.set("y", str(int(_tb[1] + _tb[3] / 2)))
+                _empty_fixed += 1
+
+            elif _eid in _mf_map:
+                # Message flow between pools: route vertically between pool levels
+                # bottom-centre of source → top-centre of target (or reverse)
+                _src_id, _tgt_id = _mf_map[_eid]
+                _sb = _shape_pos.get(_src_id)
+                _tb = _shape_pos.get(_tgt_id)
+                if _sb is None or _tb is None:
+                    continue
+                _sx_c = _sb[0] + _sb[2] / 2
+                _tx_c = _tb[0] + _tb[2] / 2
+                if _sb[1] < _tb[1]:
+                    # source is above target → exit from bottom, enter at top
+                    _wp1 = _ET.SubElement(_edge, _WAYPOINT)
+                    _wp1.set("x", str(int(_sx_c)))
+                    _wp1.set("y", str(int(_sb[1] + _sb[3])))
+                    _wp2 = _ET.SubElement(_edge, _WAYPOINT)
+                    _wp2.set("x", str(int(_tx_c)))
+                    _wp2.set("y", str(int(_tb[1])))
+                else:
+                    # source is below target → exit from top, enter at bottom
+                    _wp1 = _ET.SubElement(_edge, _WAYPOINT)
+                    _wp1.set("x", str(int(_sx_c)))
+                    _wp1.set("y", str(int(_sb[1])))
+                    _wp2 = _ET.SubElement(_edge, _WAYPOINT)
+                    _wp2.set("x", str(int(_tx_c)))
+                    _wp2.set("y", str(int(_tb[1] + _tb[3])))
+                _mf_fixed += 1
+
         if _empty_fixed:
-            fixes.append(f"Waypoints sintéticos: {_empty_fixed} edge(s) vazia(s) corrigida(s)")
+            fixes.append(f"Waypoints sintéticos: {_empty_fixed} sequenceFlow(s) vazio(s) corrigido(s)")
+        if _mf_fixed:
+            fixes.append(f"Waypoints sintéticos: {_mf_fixed} messageFlow(s) vazio(s) corrigido(s)")
 
         # ── Pass D: Auto-route diagonal 2-point sequence flows ───────────────
         # Runs AFTER Pass F so that synthetic waypoints added to previously-empty
