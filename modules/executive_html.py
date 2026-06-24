@@ -1093,7 +1093,7 @@ def _fetch_mermaid_svg(mermaid_code: str) -> str | None:
                 )
             new_tag = _re.sub(r'\s*width="[^"]*"',  "", new_tag)
             new_tag = _re.sub(r'\s*height="[^"]*"', "", new_tag)
-            new_tag = new_tag.replace("<svg", '<svg width="100%" height="auto"', 1)
+            new_tag = new_tag.replace("<svg", '<svg width="100%" style="height:auto"', 1)
             svg = svg.replace(tag_m.group(0), new_tag, 1)
         return svg
     except Exception:
