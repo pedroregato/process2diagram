@@ -570,6 +570,95 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 
 ---
 
+### Exemplo C — Colaboração (multi-pool com message flows)
+
+**Transcricao:**
+> "O cliente envia a proposta de crédito pelo portal. O banco a recebe, consulta a Receita Federal
+> e o Serasa para validar o cadastro, analisa o risco internamente e, conforme o score, aprova
+> automaticamente ou envia para revisão manual do gerente. Ao final, o banco notifica o cliente
+> com o resultado."
+
+**Análise do Passo 1:** Três organizações juridicamente distintas trocam mensagens:
+Cliente (externo) ↔ Banco (interno, com departamentos) ↔ Bureau/Receita Federal (externo).
+→ **Formato pools obrigatório.** "Receita Federal" e "Serasa" são entidades externas — NUNCA lanes internas do Banco.
+
+**JSON gerado:**
+
+```json
+{
+  "name": "Aprovação de Proposta de Crédito",
+  "description": "Processo de análise e aprovação de crédito entre Cliente, Banco e Bureaus externos.",
+  "pools": [
+    {
+      "id": "pool_1",
+      "name": "Cliente",
+      "process": {
+        "steps": [
+          { "id": "S01", "title": "Enviar Proposta", "description": "Cliente submete proposta pelo portal.", "actor": null, "is_decision": false, "task_type": "sendTask", "lane": null },
+          { "id": "S02", "title": "Receber Resultado", "description": "Cliente aguarda e recebe notificação.", "actor": null, "is_decision": false, "task_type": "receiveTask", "lane": null }
+        ],
+        "edges": [
+          { "source": "S01", "target": "S02", "label": "", "condition": "" }
+        ],
+        "lanes": []
+      }
+    },
+    {
+      "id": "pool_2",
+      "name": "Banco Meridional",
+      "process": {
+        "steps": [
+          { "id": "S01", "title": "Receber Proposta", "description": "Proposta recebida do portal.", "actor": null, "is_decision": false, "task_type": "startMessageEvent", "lane": "Análise de Crédito" },
+          { "id": "S02", "title": "Validar Cadastro", "description": "Consulta simultânea a Receita Federal e Serasa.", "actor": null, "is_decision": false, "task_type": "callActivity", "lane": "Análise de Crédito" },
+          { "id": "S03", "title": "Analisar Risco", "description": "Score calculado pelo motor de risco.", "actor": null, "is_decision": false, "task_type": "serviceTask", "lane": "Análise de Crédito" },
+          { "id": "S04", "title": "Score aprovável?", "description": "Score ≥ 700: aprovação automática. 500–699: revisão manual. < 500: recusa.", "actor": null, "is_decision": true, "task_type": "exclusiveGateway", "lane": "Análise de Crédito" },
+          { "id": "S05", "title": "Revisar Manualmente", "description": "Gerente revisa proposta com score intermediário.", "actor": "Gerente de Crédito", "is_decision": false, "task_type": "userTask", "lane": "Gerência de Crédito" },
+          { "id": "S06", "title": "Notificar Cliente", "description": "Envio de resultado por e-mail e SMS.", "actor": null, "is_decision": false, "task_type": "endMessageEvent", "lane": "Análise de Crédito" }
+        ],
+        "edges": [
+          { "source": "S01", "target": "S02", "label": "", "condition": "" },
+          { "source": "S02", "target": "S03", "label": "", "condition": "" },
+          { "source": "S03", "target": "S04", "label": "", "condition": "" },
+          { "source": "S04", "target": "S05", "label": "500–699", "condition": "" },
+          { "source": "S04", "target": "S06", "label": "≥ 700 ou < 500", "condition": "" },
+          { "source": "S05", "target": "S06", "label": "", "condition": "" }
+        ],
+        "lanes": ["Análise de Crédito", "Gerência de Crédito"]
+      }
+    },
+    {
+      "id": "pool_3",
+      "name": "Bureaus de Crédito",
+      "process": {
+        "steps": [
+          { "id": "S01", "title": "Consulta Recebida", "description": "Bureau recebe consulta do banco.", "actor": null, "is_decision": false, "task_type": "startMessageEvent", "lane": null },
+          { "id": "S02", "title": "Retornar Dados", "description": "Bureau processa e retorna dados cadastrais.", "actor": null, "is_decision": false, "task_type": "endMessageEvent", "lane": null }
+        ],
+        "edges": [
+          { "source": "S01", "target": "S02", "label": "", "condition": "" }
+        ],
+        "lanes": []
+      }
+    }
+  ],
+  "message_flows": [
+    { "id": "mf_1", "name": "Proposta de Crédito", "source": { "pool": "pool_1", "step": "S01" }, "target": { "pool": "pool_2", "step": "S01" } },
+    { "id": "mf_2", "name": "Resultado da Análise", "source": { "pool": "pool_2", "step": "S06" }, "target": { "pool": "pool_1", "step": "S02" } },
+    { "id": "mf_3", "name": "Consulta Cadastral", "source": { "pool": "pool_2", "step": "S02" }, "target": { "pool": "pool_3", "step": "S01" } },
+    { "id": "mf_4", "name": "Resposta Cadastral", "source": { "pool": "pool_3", "step": "S02" }, "target": { "pool": "pool_2", "step": "S02" } }
+  ]
+}
+```
+
+*Observacoes:*
+- "Receita Federal", "Serasa", "Bureau" → pool separado, NUNCA lane interna do banco
+- Departamentos internos do banco (Análise, Gerência) → lanes dentro do pool_2
+- `sendTask`/`receiveTask` no pool_1 (Cliente) porque há message flows com o banco
+- `startMessageEvent`/`endMessageEvent` nos pools que iniciam/terminam por mensagem
+- Cada pool com sua lista de `steps`/`edges`/`lanes` independente; IDs reiniciam em S01 por pool
+
+---
+
 ## Instrucao Final
 
 Retorne **APENAS o JSON valido** resultante da analise da transcricao fornecida.

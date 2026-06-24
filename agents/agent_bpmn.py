@@ -200,8 +200,12 @@ class AgentBPMN(BaseAgent):
         # the retry user prompt will explicitly request flat format.
         _flat_hint = (
             "\n\nIMPORTANT CORRECTION: Your previous response was truncated or malformed. "
-            "Use FLAT format ONLY: {\"name\": ..., \"steps\": [...], \"edges\": [...], \"lanes\": [...]}. "
-            "DO NOT use \"pools\" format. All participants from the same company use lanes, not pools."
+            "Return ONLY valid JSON. "
+            "If all participants belong to the same organisation → flat format: "
+            "{\"name\": ..., \"steps\": [...], \"edges\": [...], \"lanes\": [...]}. "
+            "If there are legally distinct organisations exchanging messages → pools format: "
+            "{\"name\": ..., \"pools\": [...], \"message_flows\": [...]}. "
+            "Choose the correct format based on the transcript — do NOT default to flat."
         )
         _original_ensure_utf8 = self._ensure_utf8
 
