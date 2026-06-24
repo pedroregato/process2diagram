@@ -1069,6 +1069,19 @@ def _render_message_widgets(widgets: list[dict], msg_idx: int) -> None:
                     )
                 except Exception as _e:
                     st.warning(f"Não foi possível renderizar o Mermaid: {_e}")
+        elif w_type == "transcript":
+            content = widget.get("content", "")
+            wc = widget.get("word_count", 0)
+            cc = widget.get("char_count", 0)
+            st.caption(f"{wc:,} palavras · {cc:,} caracteres")
+            st.text_area(
+                label="transcrição",
+                value=content,
+                height=420,
+                disabled=True,
+                key=f"ta_asst_transcript_{msg_idx}_{wi}",
+                label_visibility="collapsed",
+            )
         elif w_type == "metrics":
             items = widget.get("items") or []
             if items:

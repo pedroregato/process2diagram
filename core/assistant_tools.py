@@ -130,6 +130,27 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "show_meeting_transcript",
+                "description": (
+                    "Exibe a transcrição de uma reunião no chat. "
+                    "USE quando o usuário pedir para ver, ler ou exibir a transcrição de uma reunião específica. "
+                    "Mostra a transcrição processada (pré-processada) e, se diferente, a original como opção secundária."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Número da reunião cuja transcrição será exibida",
+                        },
+                    },
+                    "required": ["meeting_number"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "compare_meeting_transcripts",
                 "description": (
                     "Compara as transcrições de 2 a 5 reuniões para detectar duplicatas ou conteúdos muito similares. "
@@ -3150,6 +3171,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "get_meeting_action_items":     "consulta",
     "get_meeting_summary":          "consulta",
     "compare_meeting_transcripts":  "consulta",
+    "show_meeting_transcript":      "consulta",
     "search_transcript":            "consulta",
     "count_artifacts":              "consulta",
     "get_requirements":             "consulta",
@@ -6073,6 +6095,36 @@ class AssistantToolExecutor:
                     f"({u.get('login', '')}) `{u.get('role', 'user')}`"
                 )
         return "\n".join(lines)
+
+    def show_meeting_transcript(self, meeting_number: int) -> str:
+        """Exibe a transcrição de uma reunião no chat via _pending_widgets."""
+        import streamlit as st
+        m = self._find_meeting(meeting_number)
+        if not m:
+            return f"❌ Reunião {meeting_number} não encontrada no projeto."
+        clean = (m.get("transcript_clean") or "").strip()
+        raw   = (m.get("transcript_raw")   or "").strip()
+        text  = clean or raw
+        if not text:
+            return (
+                f"❌ Reunião {meeting_number} — transcrição não disponível no banco. "
+                "A transcrição pode não ter sido salva para esta reunião."
+            )
+        title = m.get("title") or f"Reunião {meeting_number}"
+        date  = (m.get("meeting_date") or "")[:10]
+        label = f"Reunião {meeting_number} — {title}" + (f" ({date})" if date else "")
+        wc = len(text.split())
+        cc = len(text)
+        version = "processada" if clean else "original"
+        widget_title = f"📜 Transcrição {version} — {label}"
+        st.session_state.setdefault("_pending_widgets", []).append({
+            "type":       "transcript",
+            "title":      widget_title,
+            "content":    text,
+            "word_count": wc,
+            "char_count": cc,
+        })
+        return f"📜 Transcrição da {label} exibida abaixo ({wc:,} palavras · {cc:,} caracteres)."
 
     def compare_meeting_transcripts(self, meeting_numbers: list) -> str:
         """Compare transcripts from multiple meetings to detect duplicates."""
@@ -10821,6 +10873,9 @@ class AssistantToolExecutor:
                 "batch_rename_meetings":          lambda: self.batch_rename_meetings(
                     renames=tool_input["renames"],
                 ),
+                "show_meeting_transcript":        lambda: self.show_meeting_transcript(
+                    meeting_number=tool_input["meeting_number"],
+                ),
                 "compare_meeting_transcripts":    lambda: self.compare_meeting_transcripts(
                     meeting_numbers=tool_input["meeting_numbers"],
                 ),
@@ -10945,6 +11000,9 @@ class AssistantToolExecutor:
                 ),
                 "batch_rename_meetings":          lambda: self.batch_rename_meetings(
                     renames=tool_input["renames"],
+                ),
+                "show_meeting_transcript":        lambda: self.show_meeting_transcript(
+                    meeting_number=tool_input["meeting_number"],
                 ),
                 "compare_meeting_transcripts":    lambda: self.compare_meeting_transcripts(
                     meeting_numbers=tool_input["meeting_numbers"],

@@ -616,7 +616,43 @@ if "hub" in st.session_state:
 
     # ─────────────────────────────────────────────────────────────────────────
 
+    def _render_transcript_tab(hub):
+        clean = (hub.transcript_clean or "").strip()
+        raw   = (hub.transcript_raw  or "").strip()
+        text  = clean or raw
+        if not text:
+            st.warning("Transcrição não disponível.")
+            return
+        wc = len(text.split())
+        cc = len(text)
+        version = "processada" if clean else "original"
+        st.caption(f"**Transcrição {version}** · {wc:,} palavras · {cc:,} caracteres")
+        st.text_area(
+            label="transcrição",
+            value=text,
+            height=520,
+            disabled=True,
+            key="ta_pipeline_transcript_clean",
+            label_visibility="collapsed",
+        )
+        if raw and clean and raw != clean:
+            with st.expander("📄 Transcrição original (antes do pré-processamento)", expanded=False):
+                wc_r = len(raw.split())
+                cc_r = len(raw)
+                st.caption(f"{wc_r:,} palavras · {cc_r:,} caracteres")
+                st.text_area(
+                    label="transcrição bruta",
+                    value=raw,
+                    height=400,
+                    disabled=True,
+                    key="ta_pipeline_transcript_raw",
+                    label_visibility="collapsed",
+                )
+
+    # ─────────────────────────────────────────────────────────────────────────
+
     tab_labels = {
+        "transcript":          t("tab_transcript"),
         "minutes":             t("tab_minutes"),
         "requirements":        t("tab_requirements"),
         "bpmn":                t("tab_bpmn"),
@@ -637,6 +673,8 @@ if "hub" in st.session_state:
     # ── Monta lista única de abas na ordem desejada ───────────────────────────
     all_tabs = []
 
+    if hub.transcript_clean or hub.transcript_raw:
+        all_tabs.append("transcript")
     if hub.minutes.ready:
         all_tabs.append("minutes")
     if hub.requirements.ready:
@@ -668,7 +706,9 @@ if "hub" in st.session_state:
         all_tabs.append("devtools")
 
     def _render_tab(tab_id):
-        if tab_id == "minutes":        render_minutes(hub, prefix, suffix)
+        if tab_id == "transcript":
+            _render_transcript_tab(hub)
+        elif tab_id == "minutes":      render_minutes(hub, prefix, suffix)
         elif tab_id == "requirements": render_requirements(hub, prefix, suffix)
         elif tab_id == "bpmn":         render_bpmn(hub, prefix, suffix)
         elif tab_id == "mermaid":      render_mermaid(hub, prefix, suffix)

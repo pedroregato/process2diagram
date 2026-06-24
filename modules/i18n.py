@@ -154,6 +154,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "save_back":                "💾 Salvar alterações no banco",
 
         # ── Pipeline — abas ────────────────────────────────────────────────────
+        "tab_transcript":           "📜 Transcrição",
         "tab_minutes":              "📋 Ata de Reunião",
         "tab_requirements":         "📝 Requisitos",
         "tab_bpmn":                 "📐 BPMN 2.0",
@@ -319,6 +320,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "save_back":                "💾 Save changes to database",
 
         # ── Pipeline — tabs ────────────────────────────────────────────────────
+        "tab_transcript":           "📜 Transcript",
         "tab_minutes":              "📋 Meeting Minutes",
         "tab_requirements":         "📝 Requirements",
         "tab_bpmn":                 "📐 BPMN 2.0",
