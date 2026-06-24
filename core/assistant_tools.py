@@ -1798,6 +1798,31 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "rename_meeting",
+                "description": (
+                    "Renomeia uma reunião — altera o título exibido em toda a aplicação. "
+                    "USE quando o usuário pedir para renomear, alterar o nome ou corrigir o título de uma reunião. "
+                    "O novo título é persistido imediatamente no banco de dados."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Número da reunião a renomear (ex: 1, 2, 3...).",
+                        },
+                        "new_title": {
+                            "type": "string",
+                            "description": "Novo título da reunião. Máximo 200 caracteres.",
+                        },
+                    },
+                    "required": ["meeting_number", "new_title"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "save_context_skill",
                 "description": (
                     "Salva ou atualiza o Context Knowledge File (CKF) do contexto de trabalho ativo. "
@@ -3108,6 +3133,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "list_all_domains":      "consulta",
     "list_users_by_project": "consulta",
     "set_active_project":    "escrita",
+    "rename_meeting":        "escrita",
     "save_context_skill":    "escrita",
 
     "convert_usd_to_brl": "consulta",
@@ -5977,6 +6003,29 @@ class AssistantToolExecutor:
                     f"({u.get('login', '')}) `{u.get('role', 'user')}`"
                 )
         return "\n".join(lines)
+
+    def rename_meeting(self, meeting_number: int, new_title: str) -> str:
+        """Renomeia uma reunião no banco de dados."""
+        m = self._find_meeting(meeting_number)
+        if not m:
+            return f"Reunião {meeting_number} não encontrada no contexto atual."
+        new_title = new_title.strip()[:200]
+        if not new_title:
+            return "O novo título não pode ser vazio."
+        old_title = m.get("title") or ""
+        if new_title == old_title:
+            return f"O título da Reunião {meeting_number} já é «{old_title}» — nenhuma alteração necessária."
+        from core.project_store import update_meeting_title
+        ok = update_meeting_title(m["id"], new_title)
+        if not ok:
+            return f"❌ Falha ao renomear a Reunião {meeting_number} no banco de dados."
+        # Invalidate meeting cache so the next call reflects the new title
+        self._meeting_cache = None
+        return (
+            f"✅ Reunião {meeting_number} renomeada com sucesso.\n"
+            f"- **Título anterior:** {old_title}\n"
+            f"- **Novo título:** {new_title}"
+        )
 
     def set_active_project(self, project_name: str) -> str:
         """Define o contexto de trabalho ativo para toda a aplicação."""
@@ -10668,6 +10717,10 @@ class AssistantToolExecutor:
                 "list_all_domains":               lambda: self.list_all_domains_tool(),
                 "list_users_by_project":          lambda: self.list_users_by_project_tool(
                     tool_input.get("project_id"),
+                ),
+                "rename_meeting":                 lambda: self.rename_meeting(
+                    meeting_number=tool_input["meeting_number"],
+                    new_title=tool_input["new_title"],
                 ),
                 "set_active_project":             lambda: self.set_active_project(
                     tool_input["project_name"],

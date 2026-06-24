@@ -369,6 +369,36 @@ else:
             f"**{_title}** · {_date}  |  provedor: `{_prov}`  |  tokens originais: {_tok:,}"
         )
 
+        # ── Renomear reunião ──────────────────────────────────────────────────
+        with st.expander("✏️ Renomear reunião", expanded=False):
+            _ri_col, _rb_col = st.columns([5, 1])
+            _new_title_val = _ri_col.text_input(
+                "Novo título",
+                value=_title,
+                key="rename_title_input",
+                max_chars=200,
+                label_visibility="collapsed",
+            )
+            if _rb_col.button("💾 Salvar", key="btn_rename_meeting", use_container_width=True):
+                _clean_title = _new_title_val.strip()
+                if _clean_title and _clean_title != _title:
+                    from core.project_store import update_meeting_title
+                    if update_meeting_title(_loaded_id, _clean_title):
+                        # Keep selectbox label in sync so the correct item stays selected
+                        st.session_state["load_meet_select"] = _fmt_meeting(
+                            {**(_meeting_obj or {}), "title": _clean_title}
+                        )
+                        # Update minutes title in loaded hub
+                        if hasattr(st.session_state.hub.minutes, "title"):
+                            st.session_state.hub.minutes.title = _clean_title
+                        st.toast(f"✅ Título alterado para «{_clean_title}»", icon="✏️")
+                    else:
+                        st.error("Erro ao atualizar o título no banco de dados.")
+                elif not _clean_title:
+                    st.warning("O título não pode ser vazio.")
+                else:
+                    st.info("Nenhuma alteração detectada.")
+
     if "hub" in st.session_state and st.session_state.hub.loaded_from_db:
         _lhub = st.session_state.hub
         _mid  = st.session_state.get("_loaded_meeting_id")
