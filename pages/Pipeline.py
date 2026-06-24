@@ -333,15 +333,16 @@ else:
         title = m.get("title") or m.get("id", "")[:8]
         return f"{date}  {title}" if date else title
 
-    meet_labels = [_fmt_meeting(m) for m in meetings]
-    meet_ids    = [m["id"] for m in meetings]
+    meet_ids = [m["id"] for m in meetings]
 
-    selected_meet_label = st.selectbox(
+    # Use index-based selectbox so duplicate labels never map to the wrong meeting
+    _meet_idx = st.selectbox(
         t("meeting_selector"),
-        meet_labels,
-        key="load_meet_select",
+        options=range(len(meetings)),
+        format_func=lambda i: _fmt_meeting(meetings[i]),
+        key="load_meet_select_idx",
     )
-    selected_meet_id = meet_ids[meet_labels.index(selected_meet_label)]
+    selected_meet_id = meet_ids[_meet_idx]
 
     col_load, col_gap = st.columns([1, 4])
     load_clicked = col_load.button(t("load"), type="primary", key="btn_load_meeting")
@@ -384,10 +385,6 @@ else:
                 if _clean_title and _clean_title != _title:
                     from core.project_store import update_meeting_title
                     if update_meeting_title(_loaded_id, _clean_title):
-                        # Keep selectbox label in sync so the correct item stays selected
-                        st.session_state["load_meet_select"] = _fmt_meeting(
-                            {**(_meeting_obj or {}), "title": _clean_title}
-                        )
                         # Update minutes title in loaded hub
                         if hasattr(st.session_state.hub.minutes, "title"):
                             st.session_state.hub.minutes.title = _clean_title
