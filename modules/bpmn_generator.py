@@ -713,6 +713,50 @@ def _compute_layout(bpmn, lane_assignment):
             if f.target.startswith("lnk_throw_") and f.source in col_of:
                 col_of[f.target] = col_of[f.source]
 
+        # ── Post-pass: resolve cross-lane return column conflicts ──────────────
+        # Problem: a "cross-lane detour" pattern (e.g. S04→S07[Gerente]→S08[Aurora])
+        # assigns the returning element S08 to the same column as S06[Aurora]
+        # (which arrived via the direct branch S04→S05→S06). Both end up in
+        # column 5 of Sistema AURORA: the reject end-event circle visually
+        # sits on top of the happy-path task box.
+        #
+        # Fix: for each cross-lane flow A→B, if B's column already has another
+        # element in B's lane, push B (and all its downstream successors) one
+        # column forward.  Repeats until stable.
+        _cl_changed = True
+        while _cl_changed:
+            _cl_changed = False
+            # lane → col → [eids]
+            _lc_map: dict = {}
+            for _eid, _c in col_of.items():
+                _lid = lane_assignment.get(_eid)
+                if _lid:
+                    _lc_map.setdefault(_lid, {}).setdefault(_c, []).append(_eid)
+            for _f in bpmn.flows:
+                _sl = lane_assignment.get(_f.source)
+                _tl = lane_assignment.get(_f.target)
+                if not _sl or not _tl or _sl == _tl:
+                    continue  # same-lane or unassigned — not a cross-lane return
+                _tc = col_of.get(_f.target)
+                if _tc is None:
+                    continue
+                _others = [_e for _e in _lc_map.get(_tl, {}).get(_tc, [])
+                           if _e != _f.target]
+                if not _others:
+                    continue  # no conflict
+                # Push _f.target and all downstream successors forward by 1
+                _push_queue = [(_f.target, _tc + 1)]
+                while _push_queue:
+                    _cur, _mc = _push_queue.pop(0)
+                    if col_of.get(_cur, -1) >= _mc:
+                        continue
+                    col_of[_cur] = _mc
+                    for _f2 in bpmn.flows:
+                        if _f2.source == _cur and _f2.target in col_of:
+                            _push_queue.append((_f2.target, _mc + 1))
+                _cl_changed = True
+                break  # restart with fresh _lc_map
+
         # ── Step 2: compute the width of each column (widest element in it) ───
         col_widths = {}
         for eid in order:

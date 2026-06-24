@@ -378,6 +378,16 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC58 — Concluído (v4.41 / 2026-06-23)
+
+**BPMN generator — resolução de conflito de coluna em retorno cross-lane**
+
+- [x] **`modules/bpmn_generator.py` `_compute_layout`** — novo post-pass após `_align_parallel_branches`: detecta quando um flow cross-lane (source em lane diferente do target) aterrissa o target na mesma coluna que outro elemento na lane do target; empurra o target (e todos os seus successores downstream) uma coluna à frente; repete até estável
+- **Root cause:** no padrão "detour cross-lane" (S04→S07[Gerente]→S08[Aurora] em paralelo com S04→S05→S06[Aurora]), `_assign_columns` atribuía S06 e S08 à mesma coluna 5 em Sistema AURORA; end event circle (36px) ficava centrado dentro do range horizontal da callActivity (160px), com apenas 20px de gap vertical — visual de sobreposição
+- **Resultado após fix:** S06 fica sozinho na coluna 5 (width=36px); S08 vai para coluna 6; S05→S06 fica horizontal perfeito (ambos centrados em y=425 na lane); pool 2% mais largo mas layout muito mais limpo
+
+---
+
 ### PC57 — Concluído (v4.40 / 2026-06-23)
 
 **BPMN auto-repair — Pass D: threshold 70px + isenção de messageFlow**
