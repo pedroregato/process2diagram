@@ -2510,6 +2510,39 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "render_mermaid_code",
+                "description": (
+                    "Renderiza um diagrama Mermaid gerado pelo assistente diretamente no chat. "
+                    "USE quando o usuário pedir para criar, gerar ou desenhar um fluxograma, "
+                    "diagrama de sequência, diagrama de classes, diagrama de estado ou qualquer "
+                    "outro diagrama Mermaid a partir de uma descrição. "
+                    "Gere o código Mermaid completo e válido no parâmetro 'mermaid_code'. "
+                    "O diagrama é renderizado inline com pan/zoom."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "mermaid_code": {
+                            "type": "string",
+                            "description": (
+                                "Código Mermaid completo e válido. Deve começar com o tipo do diagrama "
+                                "(ex: 'flowchart LR', 'sequenceDiagram', 'classDiagram', 'stateDiagram-v2'). "
+                                "Evite IDs com espaços ou caracteres especiais. "
+                                "Para flowchart, use LR (esquerda→direita) por padrão."
+                            ),
+                        },
+                        "title": {
+                            "type": "string",
+                            "description": "Título descritivo para exibir acima do diagrama (opcional).",
+                        },
+                    },
+                    "required": ["mermaid_code"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "show_metrics",
                 "description": (
                     "Exibe um painel visual de métricas/KPIs destacados no chat. "
@@ -3173,6 +3206,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     # A2UI
     "show_bpmn_diagram":               "consulta",
     "show_mermaid_diagram":            "consulta",
+    "render_mermaid_code":             "consulta",
     "show_metrics":                    "consulta",
 }
 
@@ -8532,6 +8566,19 @@ class AssistantToolExecutor:
         })
         return f"🔀 Fluxograma Mermaid da Reunião {meeting_number} — '{title}' renderizado no chat."
 
+    def render_mermaid_code(self, mermaid_code: str, title: str = "") -> str:
+        """Render LLM-generated Mermaid code inline in the chat."""
+        if not mermaid_code or not mermaid_code.strip():
+            return "❌ Código Mermaid vazio — nada a renderizar."
+        import streamlit as st
+        widget_title = title.strip() if title else "🔀 Diagrama Mermaid"
+        st.session_state.setdefault("_pending_widgets", []).append({
+            "type":  "mermaid",
+            "code":  mermaid_code.strip(),
+            "title": widget_title,
+        })
+        return f"🔀 Diagrama Mermaid '{widget_title}' renderizado no chat."
+
     def show_metrics(self, items: list[dict], title: str = "") -> str:
         """Display a grid of KPI metrics inline in the chat."""
         if not items:
@@ -10722,6 +10769,10 @@ class AssistantToolExecutor:
                 ),
                 "show_mermaid_diagram":   lambda: self.show_mermaid_diagram(
                     meeting_number=tool_input["meeting_number"],
+                ),
+                "render_mermaid_code":    lambda: self.render_mermaid_code(
+                    mermaid_code=tool_input["mermaid_code"],
+                    title=tool_input.get("title", ""),
                 ),
                 "show_metrics":           lambda: self.show_metrics(
                     items=tool_input["items"],

@@ -378,6 +378,35 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC62 — Concluído (v4.45 / 2026-06-24)
+
+**Assistente — tool `render_mermaid_code` (geração de diagramas Mermaid)**
+
+- [x] **`core/assistant_tools.py`** — nova tool `render_mermaid_code`: o LLM gera código Mermaid válido como parâmetro da chamada; o executor faz `_pending_widgets.append({type: mermaid, code: ...})` para renderização inline no chat; funciona com qualquer tipo Mermaid (`flowchart`, `sequenceDiagram`, `classDiagram`, `stateDiagram-v2`, etc.)
+- [x] Schema registrado em `get_tool_schemas_openai()` (Anthropic derivado automaticamente); categoria `"consulta"` em `_TOOL_CATEGORIES`; roteamento no executor
+- **Diferença de `show_mermaid_diagram`:** essa tool busca Mermaid salvo no banco para uma reunião existente; `render_mermaid_code` renderiza qualquer Mermaid gerado sob-demanda pelo LLM — inclui diagramas de sequência, estado, etc.
+
+---
+
+### PC61 — Concluído (v4.44 / 2026-06-24)
+
+**UI — diagnóstico estrutural BPMN não roda em hub carregado do DB**
+
+- [x] **`ui/tabs/bpmn_tabs.py`** — guard `if not hub.bpmn.steps:` envolve chamada ao `validate_bpmn_structure`; quando hub carregado do banco (`steps` vazio), exibe nota informativa em vez do falso "✅ Nenhum problema estrutural detectado"
+- **Root cause:** `load_meeting_as_hub` persiste apenas `bpmn_xml`, não os campos estruturados `steps/edges/lanes`; o validador iterava sobre lista vazia e reportava zero issues (falso positivo enganoso)
+
+---
+
+### PC60 — Concluído (v4.43 / 2026-06-24)
+
+**BPMN skill — Exemplo C (colaboração multi-pool) + corrige retry hint**
+
+- [x] **`skills/skill_bpmn.md`** — adicionado Exemplo C mostrando colaboração com 3 pools (Cliente, Banco Meridional com 2 lanes internas, Bureaus de Crédito); nota explícita: "Receita Federal/Serasa → pool separado, NUNCA lane interna do banco"; dá ao LLM template concreto para processos multi-organização
+- [x] **`agents/agent_bpmn.py`** — `_flat_hint` no retry corrigido: antes proibia pools mesmo em processos multi-org; agora instrui o LLM a escolher o formato correto baseado na transcrição
+- **Root cause da regressão:** LLM gerou flat format porque não havia exemplo de colaboração no skill; o retry hint reforçava o erro ao dizer "DO NOT use pools format"
+
+---
+
 ### PC59 — Concluído (v4.42 / 2026-06-24)
 
 **BPMN viewer auto-repair + Pass F waypoint ordering**
