@@ -927,69 +927,6 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
-                "name": "rename_meeting",
-                "description": (
-                    "Altera o título de uma reunião existente no banco de dados. "
-                    "Use get_meeting_list para obter o número da reunião antes de renomear. "
-                    "Operação irreversível via esta ferramenta — confirme com o usuário antes de executar."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "meeting_number": {
-                            "type": "integer",
-                            "description": "Número da reunião cujo título será alterado",
-                        },
-                        "new_title": {
-                            "type": "string",
-                            "description": "Novo título para a reunião (não pode ser vazio)",
-                        },
-                    },
-                    "required": ["meeting_number", "new_title"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "batch_rename_meetings",
-                "description": (
-                    "Renomeia múltiplas reuniões de uma vez em lote. "
-                    "USE quando detectar que vários títulos estão incorretos ou repetidos — "
-                    "por exemplo, após comparar o campo 'title' com o conteúdo real das atas. "
-                    "Chame get_meeting_list antes para obter os números e títulos atuais."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "renames": {
-                            "type": "array",
-                            "description": "Lista de renomeações a aplicar",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "meeting_number": {
-                                        "type": "integer",
-                                        "description": "Número da reunião",
-                                    },
-                                    "new_title": {
-                                        "type": "string",
-                                        "description": "Novo título (máximo 200 caracteres)",
-                                    },
-                                },
-                                "required": ["meeting_number", "new_title"],
-                            },
-                            "minItems": 1,
-                            "maxItems": 20,
-                        },
-                    },
-                    "required": ["renames"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
                 "name": "reprocess_meeting_requirements",
                 "description": (
                     "Re-executa o AgentRequirements sobre a transcrição armazenada de uma reunião "
