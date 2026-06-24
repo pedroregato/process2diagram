@@ -1073,7 +1073,23 @@ def _render_message_widgets(widgets: list[dict], msg_idx: int) -> None:
             content = widget.get("content", "")
             wc = widget.get("word_count", 0)
             cc = widget.get("char_count", 0)
-            st.caption(f"{wc:,} palavras · {cc:,} caracteres")
+            _th, _tc, _td = st.columns([5, 1, 1])
+            _th.caption(f"{wc:,} palavras · {cc:,} caracteres")
+            with _tc:
+                try:
+                    from ui.components.copy_button import copy_button
+                    copy_button(content, key=f"tr_asst_{msg_idx}_{wi}", label="📋 Copiar", compact=True)
+                except Exception:
+                    pass
+            with _td:
+                st.download_button(
+                    "⬇️ .txt",
+                    data=content.encode("utf-8"),
+                    file_name="transcricao.txt",
+                    mime="text/plain",
+                    key=f"dl_asst_transcript_{msg_idx}_{wi}",
+                    use_container_width=True,
+                )
             st.text_area(
                 label="transcrição",
                 value=content,

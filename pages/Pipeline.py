@@ -617,6 +617,9 @@ if "hub" in st.session_state:
     # ─────────────────────────────────────────────────────────────────────────
 
     def _render_transcript_tab(hub):
+        from ui.components.copy_button import copy_button
+        from services.export_service import make_filename
+
         clean = (hub.transcript_clean or "").strip()
         raw   = (hub.transcript_raw  or "").strip()
         text  = clean or raw
@@ -626,7 +629,20 @@ if "hub" in st.session_state:
         wc = len(text.split())
         cc = len(text)
         version = "processada" if clean else "original"
-        st.caption(f"**Transcrição {version}** · {wc:,} palavras · {cc:,} caracteres")
+
+        _hdr, _act1, _act2 = st.columns([6, 1, 1])
+        _hdr.caption(f"**Transcrição {version}** · {wc:,} palavras · {cc:,} caracteres")
+        with _act1:
+            copy_button(text, key="tr_clean", label="📋 Copiar", compact=True)
+        with _act2:
+            st.download_button(
+                "⬇️ .txt",
+                data=text.encode("utf-8"),
+                file_name=make_filename("transcricao", "txt", prefix, suffix),
+                mime="text/plain",
+                key="dl_transcript_clean",
+                use_container_width=True,
+            )
         st.text_area(
             label="transcrição",
             value=text,
@@ -639,7 +655,19 @@ if "hub" in st.session_state:
             with st.expander("📄 Transcrição original (antes do pré-processamento)", expanded=False):
                 wc_r = len(raw.split())
                 cc_r = len(raw)
-                st.caption(f"{wc_r:,} palavras · {cc_r:,} caracteres")
+                _hdr2, _a1, _a2 = st.columns([6, 1, 1])
+                _hdr2.caption(f"{wc_r:,} palavras · {cc_r:,} caracteres")
+                with _a1:
+                    copy_button(raw, key="tr_raw", label="📋 Copiar", compact=True)
+                with _a2:
+                    st.download_button(
+                        "⬇️ .txt",
+                        data=raw.encode("utf-8"),
+                        file_name=make_filename("transcricao_original", "txt", prefix, suffix),
+                        mime="text/plain",
+                        key="dl_transcript_raw",
+                        use_container_width=True,
+                    )
                 st.text_area(
                     label="transcrição bruta",
                     value=raw,
