@@ -607,12 +607,16 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
                 _tb = _shape_pos.get(_tgt_id)
                 if _sb is None or _tb is None:
                     continue
-                _wp1 = _ET.SubElement(_edge, _WAYPOINT)
-                _wp1.set("x", str(int(_sb[0] + _sb[2])))
-                _wp1.set("y", str(int(_sb[1] + _sb[3] / 2)))
-                _wp2 = _ET.SubElement(_edge, _WAYPOINT)
+                # Insert at index 0 so waypoints precede any existing BPMNLabel
+                # child (BPMN DI spec requires waypoints before label in BPMNEdge)
+                _wp2 = _ET.Element(_WAYPOINT)
                 _wp2.set("x", str(int(_tb[0])))
                 _wp2.set("y", str(int(_tb[1] + _tb[3] / 2)))
+                _wp1 = _ET.Element(_WAYPOINT)
+                _wp1.set("x", str(int(_sb[0] + _sb[2])))
+                _wp1.set("y", str(int(_sb[1] + _sb[3] / 2)))
+                _edge.insert(0, _wp1)
+                _edge.insert(1, _wp2)
                 _empty_fixed += 1
 
             elif _eid in _mf_map:
@@ -627,20 +631,22 @@ def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
                 _tx_c = _tb[0] + _tb[2] / 2
                 if _sb[1] < _tb[1]:
                     # source is above target → exit from bottom, enter at top
-                    _wp1 = _ET.SubElement(_edge, _WAYPOINT)
-                    _wp1.set("x", str(int(_sx_c)))
-                    _wp1.set("y", str(int(_sb[1] + _sb[3])))
-                    _wp2 = _ET.SubElement(_edge, _WAYPOINT)
+                    _wp2 = _ET.Element(_WAYPOINT)
                     _wp2.set("x", str(int(_tx_c)))
                     _wp2.set("y", str(int(_tb[1])))
+                    _wp1 = _ET.Element(_WAYPOINT)
+                    _wp1.set("x", str(int(_sx_c)))
+                    _wp1.set("y", str(int(_sb[1] + _sb[3])))
                 else:
                     # source is below target → exit from top, enter at bottom
-                    _wp1 = _ET.SubElement(_edge, _WAYPOINT)
-                    _wp1.set("x", str(int(_sx_c)))
-                    _wp1.set("y", str(int(_sb[1])))
-                    _wp2 = _ET.SubElement(_edge, _WAYPOINT)
+                    _wp2 = _ET.Element(_WAYPOINT)
                     _wp2.set("x", str(int(_tx_c)))
                     _wp2.set("y", str(int(_tb[1] + _tb[3])))
+                    _wp1 = _ET.Element(_WAYPOINT)
+                    _wp1.set("x", str(int(_sx_c)))
+                    _wp1.set("y", str(int(_sb[1])))
+                _edge.insert(0, _wp1)
+                _edge.insert(1, _wp2)
                 _mf_fixed += 1
 
         if _empty_fixed:

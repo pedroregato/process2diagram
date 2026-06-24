@@ -399,7 +399,23 @@ def preview_from_xml(xml: str) -> str:
 
     bpmn-js assets are fetched server-side on first call (cached).
     Falls back to CDN URLs if server-side fetch fails.
+
+    Always applies reformat_bpmn_labels before rendering so that:
+    • Missing waypoints are filled with synthetic border-to-border points
+      (including messageFlow edges) — prevents bpmn-js from drawing
+      sequence flows from the centre of elements.
+    • Task label dc:Bounds are ensured to be centred inside shape boxes.
+    This guarantees a correct visual regardless of whether the stored XML
+    was saved before or after the repair passes were introduced.
     """
+    try:
+        from modules.bpmn_auto_repair import reformat_bpmn_labels as _rl
+        _fixed, _changes = _rl(xml)
+        if not any(c.startswith("[ERRO]") for c in _changes):
+            xml = _fixed
+    except Exception:
+        pass
+
     xml_js = _escape_xml_for_js(xml)
 
     js, css = _load_bpmn_assets()

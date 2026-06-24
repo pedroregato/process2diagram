@@ -378,6 +378,16 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC59 — Concluído (v4.42 / 2026-06-24)
+
+**BPMN viewer auto-repair + Pass F waypoint ordering**
+
+- [x] **`modules/bpmn_viewer.py` `preview_from_xml`** — aplica `reformat_bpmn_labels` automaticamente antes de renderizar; garante que XMLs carregados do banco (salvos antes das correções de waypoints) recebam reparos completos (Pass F + Pass G); elimina o problema de sequence flows saindo do centro dos elementos em todas as visualizações (pipeline, Diagramas.py, meetings existentes)
+- [x] **`modules/bpmn_auto_repair.py` Pass F** — waypoints sintéticos inseridos com `_edge.insert(0, wp1)` / `_edge.insert(1, wp2)` ao invés de `_ET.SubElement`; garante que waypoints precedam qualquer `BPMNLabel` existente no `BPMNEdge` (exigência da spec BPMN DI); fix aplica-se tanto a `sequenceFlow` quanto a `messageFlow`
+- **Root cause:** quando um edge tinha `BPMNLabel` filho mas zero waypoints (ex: `p2_sf_004`, `sf_end`), `SubElement` appendava os waypoints *após* o label; bpmn-js ignorava a ordem inválida e renderizava center-to-center; com `insert(0, ...)` os waypoints ficam antes do label e bpmn-js usa-os corretamente como border-to-border
+
+---
+
 ### PC58 — Concluído (v4.41 / 2026-06-23)
 
 **BPMN generator — resolução de conflito de coluna em retorno cross-lane**
