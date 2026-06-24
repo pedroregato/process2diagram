@@ -51,29 +51,33 @@ def render_bpmn(hub, prefix, suffix):
             st.markdown("**Lanes:** " + ", ".join(hub.bpmn.lanes))
 
         # ── Structural validation panel ────────────────────────────────────
-        try:
-            from modules.bpmn_structural_validator import validate_bpmn_structure
-            issues = validate_bpmn_structure(hub.bpmn)
-            if issues:
-                errors   = [i for i in issues if i.severity == "error"]
-                warnings = [i for i in issues if i.severity == "warning"]
-                infos    = [i for i in issues if i.severity == "info"]
-                label = (
-                    f"🔴 {len(errors)} erro(s)" if errors else
-                    f"🟡 {len(warnings)} aviso(s)" if warnings else
-                    f"🔵 {len(infos)} info(s)"
-                )
-                with st.expander(f"Diagnóstico estrutural — {label}", expanded=bool(errors)):
-                    for i in errors:
-                        st.error(f"`{i.element_id or '—'}` {i.message}")
-                    for i in warnings:
-                        st.warning(f"`{i.element_id or '—'}` {i.message}")
-                    for i in infos:
-                        st.info(f"`{i.element_id or '—'}` {i.message}")
-            else:
-                st.caption("✅ Nenhum problema estrutural detectado.")
-        except Exception:
-            pass
+        if not hub.bpmn.steps:
+            # Steps not populated when loaded from DB (only bpmn_xml is persisted)
+            st.caption("ℹ️ Diagnóstico estrutural disponível apenas para diagramas gerados na sessão atual.")
+        else:
+            try:
+                from modules.bpmn_structural_validator import validate_bpmn_structure
+                issues = validate_bpmn_structure(hub.bpmn)
+                if issues:
+                    errors   = [i for i in issues if i.severity == "error"]
+                    warnings = [i for i in issues if i.severity == "warning"]
+                    infos    = [i for i in issues if i.severity == "info"]
+                    label = (
+                        f"🔴 {len(errors)} erro(s)" if errors else
+                        f"🟡 {len(warnings)} aviso(s)" if warnings else
+                        f"🔵 {len(infos)} info(s)"
+                    )
+                    with st.expander(f"Diagnóstico estrutural — {label}", expanded=bool(errors)):
+                        for i in errors:
+                            st.error(f"`{i.element_id or '—'}` {i.message}")
+                        for i in warnings:
+                            st.warning(f"`{i.element_id or '—'}` {i.message}")
+                        for i in infos:
+                            st.info(f"`{i.element_id or '—'}` {i.message}")
+                else:
+                    st.caption("✅ Nenhum problema estrutural detectado.")
+            except Exception:
+                pass
 
         repair_log = getattr(hub.bpmn, 'repair_log', [])
         if repair_log:
