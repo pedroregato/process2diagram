@@ -952,6 +952,44 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "batch_rename_meetings",
+                "description": (
+                    "Renomeia múltiplas reuniões de uma vez em lote. "
+                    "USE quando detectar que vários títulos estão incorretos ou repetidos — "
+                    "por exemplo, após comparar o campo 'title' com o conteúdo real das atas. "
+                    "Chame get_meeting_list antes para obter os números e títulos atuais."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "renames": {
+                            "type": "array",
+                            "description": "Lista de renomeações a aplicar",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "meeting_number": {
+                                        "type": "integer",
+                                        "description": "Número da reunião",
+                                    },
+                                    "new_title": {
+                                        "type": "string",
+                                        "description": "Novo título (máximo 200 caracteres)",
+                                    },
+                                },
+                                "required": ["meeting_number", "new_title"],
+                            },
+                            "minItems": 1,
+                            "maxItems": 20,
+                        },
+                    },
+                    "required": ["renames"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "reprocess_meeting_requirements",
                 "description": (
                     "Re-executa o AgentRequirements sobre a transcrição armazenada de uma reunião "
@@ -1842,6 +1880,44 @@ def get_tool_schemas_openai() -> list[dict]:
                         },
                     },
                     "required": ["meeting_number", "new_title"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "batch_rename_meetings",
+                "description": (
+                    "Renomeia múltiplas reuniões de uma vez em lote. "
+                    "USE quando detectar que vários títulos estão incorretos ou repetidos — "
+                    "por exemplo, após comparar o campo 'title' com o conteúdo real das atas. "
+                    "Chame get_meeting_list antes para obter os números e títulos atuais."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "renames": {
+                            "type": "array",
+                            "description": "Lista de renomeações a aplicar",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "meeting_number": {
+                                        "type": "integer",
+                                        "description": "Número da reunião",
+                                    },
+                                    "new_title": {
+                                        "type": "string",
+                                        "description": "Novo título (máximo 200 caracteres)",
+                                    },
+                                },
+                                "required": ["meeting_number", "new_title"],
+                            },
+                            "minItems": 1,
+                            "maxItems": 20,
+                        },
+                    },
+                    "required": ["renames"],
                 },
             },
         },
@@ -3181,6 +3257,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     # Admin — escrita privilegiada
     "apply_text_correction":        "admin",
     "rename_meeting":               "admin",
+    "batch_rename_meetings":        "admin",
     "delete_meeting":               "admin",
     "delete_project_artifacts":     "admin",
     "fix_missing_llm_provider":     "admin",
@@ -3271,6 +3348,7 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "delete_meeting",
     "delete_project_artifacts",
     "rename_meeting",
+    "batch_rename_meetings",
     "apply_text_correction",
     "reprocess_meeting_requirements",
     "reprocess_meeting_full",
@@ -5083,6 +5161,35 @@ class AssistantToolExecutor:
             )
         return f"❌ Falha ao atualizar o título da Reunião {meeting_number}. Verifique a conexão com o banco."
 
+    def batch_rename_meetings(self, renames: list) -> str:
+        """Renomeia múltiplas reuniões em lote."""
+        if not renames:
+            return "❌ Lista de renomeações vazia."
+        from core.project_store import update_meeting_title
+        results = []
+        for item in renames:
+            num = int(item.get("meeting_number", 0))
+            new_title = str(item.get("new_title", "")).strip()[:200]
+            if not new_title:
+                results.append(f"- Reunião {num}: ❌ título vazio — ignorado")
+                continue
+            m = self._find_meeting(num)
+            if not m:
+                results.append(f"- Reunião {num}: ❌ não encontrada")
+                continue
+            old_title = m.get("title") or f"Reunião {num}"
+            if new_title == old_title:
+                results.append(f"- Reunião {num}: ℹ️ título já correto — «{old_title}»")
+                continue
+            ok = update_meeting_title(m["id"], new_title)
+            if ok:
+                results.append(f"- Reunião {num}: ✅ «{old_title}» → «{new_title}»")
+            else:
+                results.append(f"- Reunião {num}: ❌ falha ao atualizar no banco")
+        self._meeting_cache = None
+        ok_count = sum(1 for r in results if "✅" in r)
+        return f"**Renomeação em lote — {ok_count}/{len(renames)} sucesso(s):**\n" + "\n".join(results)
+
     def reprocess_meeting_requirements(
         self,
         meeting_number: int,
@@ -6168,6 +6275,35 @@ class AssistantToolExecutor:
             f"- **Título anterior:** {old_title}\n"
             f"- **Novo título:** {new_title}"
         )
+
+    def batch_rename_meetings(self, renames: list) -> str:
+        """Renomeia múltiplas reuniões em lote."""
+        if not renames:
+            return "❌ Lista de renomeações vazia."
+        from core.project_store import update_meeting_title
+        results = []
+        for item in renames:
+            num = int(item.get("meeting_number", 0))
+            new_title = str(item.get("new_title", "")).strip()[:200]
+            if not new_title:
+                results.append(f"- Reunião {num}: ❌ título vazio — ignorado")
+                continue
+            m = self._find_meeting(num)
+            if not m:
+                results.append(f"- Reunião {num}: ❌ não encontrada")
+                continue
+            old_title = m.get("title") or f"Reunião {num}"
+            if new_title == old_title:
+                results.append(f"- Reunião {num}: ℹ️ título já correto — «{old_title}»")
+                continue
+            ok = update_meeting_title(m["id"], new_title)
+            if ok:
+                results.append(f"- Reunião {num}: ✅ «{old_title}» → «{new_title}»")
+            else:
+                results.append(f"- Reunião {num}: ❌ falha ao atualizar no banco")
+        self._meeting_cache = None
+        ok_count = sum(1 for r in results if "✅" in r)
+        return f"**Renomeação em lote — {ok_count}/{len(renames)} sucesso(s):**\n" + "\n".join(results)
 
     def set_active_project(self, project_name: str) -> str:
         """Define o contexto de trabalho ativo para toda a aplicação."""
@@ -10745,6 +10881,9 @@ class AssistantToolExecutor:
                     tool_input["meeting_number"],
                     tool_input["new_title"],
                 ),
+                "batch_rename_meetings":          lambda: self.batch_rename_meetings(
+                    renames=tool_input["renames"],
+                ),
                 "compare_meeting_transcripts":    lambda: self.compare_meeting_transcripts(
                     meeting_numbers=tool_input["meeting_numbers"],
                 ),
@@ -10866,6 +11005,9 @@ class AssistantToolExecutor:
                 "rename_meeting":                 lambda: self.rename_meeting(
                     meeting_number=tool_input["meeting_number"],
                     new_title=tool_input["new_title"],
+                ),
+                "batch_rename_meetings":          lambda: self.batch_rename_meetings(
+                    renames=tool_input["renames"],
                 ),
                 "compare_meeting_transcripts":    lambda: self.compare_meeting_transcripts(
                     meeting_numbers=tool_input["meeting_numbers"],
