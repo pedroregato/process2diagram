@@ -378,6 +378,14 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC56 — Concluído (v4.39 / 2026-06-23)
+
+**BPMN auto-repair — Pass F cobre messageFlow BPMNEdges (bpmn-comparativa-v3)**
+
+- [x] **`modules/bpmn_auto_repair.py`** — Pass F agora constrói `_mf_map` indexando `messageFlow` além de `sequenceFlow`; BPMNEdge de message flow sem waypoints recebe 2 waypoints sintéticos com roteamento vertical entre pools: `bottom-centre → top-centre` se source acima de target, reverso caso contrário; contadores e log separados por tipo
+
+---
+
 ### PC55 — Concluído (v4.38 / 2026-06-23)
 
 **BPMN — Start/End Event com nomes descritivos (bpmn-comparativa-001.md)**
