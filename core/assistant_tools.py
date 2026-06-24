@@ -130,6 +130,31 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "compare_meeting_transcripts",
+                "description": (
+                    "Compara as transcrições de 2 a 5 reuniões para detectar duplicatas ou conteúdos muito similares. "
+                    "Retorna score de similaridade combinado (textual + Jaccard + razão de tamanho), veredicto "
+                    "(DUPLICATA / MUITO SIMILAR / PARCIALMENTE SIMILAR / DISTINTOS) e trechos comuns como evidência. "
+                    "USE quando o usuário perguntar se há duplicatas, reuniões repetidas ou conteúdo idêntico."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_numbers": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "minItems": 2,
+                            "maxItems": 5,
+                            "description": "Lista de 2 a 5 números de reunião a comparar. Ex: [1, 2] ou [3, 4, 5].",
+                        },
+                    },
+                    "required": ["meeting_numbers"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "search_transcript",
                 "description": (
                     "Busca trechos relevantes nas transcrições das reuniões "
@@ -3111,6 +3136,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "get_meeting_decisions":        "consulta",
     "get_meeting_action_items":     "consulta",
     "get_meeting_summary":          "consulta",
+    "compare_meeting_transcripts":  "consulta",
     "search_transcript":            "consulta",
     "count_artifacts":              "consulta",
     "get_requirements":             "consulta",
@@ -6003,6 +6029,122 @@ class AssistantToolExecutor:
                     f"({u.get('login', '')}) `{u.get('role', 'user')}`"
                 )
         return "\n".join(lines)
+
+    def compare_meeting_transcripts(self, meeting_numbers: list) -> str:
+        """Compare transcripts from multiple meetings to detect duplicates."""
+        import difflib
+
+        meeting_numbers = list(dict.fromkeys(int(n) for n in meeting_numbers))  # dedupe, preserve order
+        if len(meeting_numbers) < 2:
+            return "Forneça pelo menos 2 números de reunião distintos para comparar."
+        if len(meeting_numbers) > 5:
+            return "Máximo de 5 reuniões por comparação."
+
+        # Load data
+        _PT_STOP = {
+            "a","o","e","de","da","do","que","em","um","uma","para","com","não",
+            "se","por","mais","como","mas","ao","dos","das","foi","ser","são",
+            "essa","esse","isso","ele","ela","eles","elas","eu","você","nós",
+            "na","no","nos","nas","pelo","pela","pelos","pelas","já","também",
+        }
+        meetings_data = []
+        for num in meeting_numbers:
+            m = self._find_meeting(num)
+            if not m:
+                return f"❌ Reunião {num} não encontrada no contexto atual."
+            transcript = (m.get("transcript_clean") or m.get("transcript_raw") or "").strip()
+            meetings_data.append({
+                "number": num,
+                "title":  m.get("title") or f"Reunião {num}",
+                "date":   (m.get("meeting_date") or "")[:10],
+                "transcript": transcript,
+                "length": len(transcript),
+            })
+
+        lines = [f"## 🔍 Comparação de Transcrições — {len(meetings_data)} reuniões\n"]
+
+        pair_sections = []
+        for i in range(len(meetings_data)):
+            for j in range(i + 1, len(meetings_data)):
+                a, b = meetings_data[i], meetings_data[j]
+                t_a, t_b = a["transcript"], b["transcript"]
+
+                if not t_a or not t_b:
+                    missing = a["number"] if not t_a else b["number"]
+                    pair_sections.append(
+                        f"### R{a['number']} ↔ R{b['number']}\n"
+                        f"⚠️ Reunião {missing} não possui transcrição salva no banco."
+                    )
+                    continue
+
+                # ── Métricas ─────────────────────────────────────────────────
+                # 1. Similaridade textual (amostra de até 12k chars para performance)
+                sample_a = t_a[:12_000]
+                sample_b = t_b[:12_000]
+                char_sim = difflib.SequenceMatcher(None, sample_a, sample_b).ratio()
+
+                # 2. Jaccard sobre palavras significativas (len>3, fora de stop words)
+                words_a = {w for w in t_a.lower().split() if len(w) > 3 and w not in _PT_STOP}
+                words_b = {w for w in t_b.lower().split() if len(w) > 3 and w not in _PT_STOP}
+                union   = words_a | words_b
+                jaccard = len(words_a & words_b) / len(union) if union else 0.0
+
+                # 3. Razão de comprimento
+                len_ratio = (
+                    min(a["length"], b["length"]) / max(a["length"], b["length"])
+                    if max(a["length"], b["length"]) > 0 else 0.0
+                )
+
+                # Score combinado
+                score = (char_sim * 0.50 + jaccard * 0.35 + len_ratio * 0.15) * 100
+
+                # ── Veredicto ────────────────────────────────────────────────
+                if score >= 80:
+                    verdict = "🔴 **DUPLICATA PROVÁVEL**"
+                    rec = "Considere excluir a duplicata ou mesclar com `mesclar_reunioes`."
+                elif score >= 60:
+                    verdict = "🟠 **MUITO SIMILAR** (possível duplicata parcial)"
+                    rec = "Investigue manualmente — podem ser partes da mesma sessão ou reprocessamento."
+                elif score >= 35:
+                    verdict = "🟡 **PARCIALMENTE SIMILAR**"
+                    rec = "Tópicos em comum mas conteúdos distintos — provavelmente reuniões diferentes."
+                else:
+                    verdict = "🟢 **CONTEÚDOS DISTINTOS**"
+                    rec = "Não são duplicatas."
+
+                # ── Evidência: maiores blocos em comum ───────────────────────
+                matcher = difflib.SequenceMatcher(None, t_a, t_b, autojunk=False)
+                evidence = []
+                for blk in sorted(matcher.get_matching_blocks(), key=lambda x: x.size, reverse=True)[:4]:
+                    if blk.size < 80:
+                        break
+                    snippet = " ".join(t_a[blk.a : blk.a + blk.size].split())[:130]
+                    if len(snippet) >= 40:
+                        evidence.append(f'  > *"…{snippet}…"*')
+
+                sec = [
+                    f"### R{a['number']} «{a['title']}» ({a['date']}) ↔ "
+                    f"R{b['number']} «{b['title']}» ({b['date']})",
+                    f"**Veredicto:** {verdict}",
+                    "",
+                    "| Métrica | Valor |",
+                    "|---|---|",
+                    f"| **Score combinado** | **{score:.1f}%** |",
+                    f"| Similaridade textual (char) | {char_sim*100:.1f}% |",
+                    f"| Jaccard palavras-chave | {jaccard*100:.1f}% |",
+                    f"| Razão de comprimento | {len_ratio*100:.0f}% "
+                    f"({a['length']:,} vs {b['length']:,} chars) |",
+                    "",
+                ]
+                if evidence:
+                    sec.append("**Trechos idênticos encontrados:**")
+                    sec.extend(evidence)
+                    sec.append("")
+                sec.append(f"💡 *{rec}*")
+                pair_sections.append("\n".join(sec))
+
+        lines.extend(pair_sections)
+        return "\n\n---\n\n".join(lines)
 
     def rename_meeting(self, meeting_number: int, new_title: str) -> str:
         """Renomeia uma reunião no banco de dados."""
@@ -10603,6 +10745,9 @@ class AssistantToolExecutor:
                     tool_input["meeting_number"],
                     tool_input["new_title"],
                 ),
+                "compare_meeting_transcripts":    lambda: self.compare_meeting_transcripts(
+                    meeting_numbers=tool_input["meeting_numbers"],
+                ),
                 "reprocess_meeting_requirements": lambda: self.reprocess_meeting_requirements(
                     tool_input["meeting_number"],
                     tool_input.get("output_language", "Auto-detect"),
@@ -10721,6 +10866,9 @@ class AssistantToolExecutor:
                 "rename_meeting":                 lambda: self.rename_meeting(
                     meeting_number=tool_input["meeting_number"],
                     new_title=tool_input["new_title"],
+                ),
+                "compare_meeting_transcripts":    lambda: self.compare_meeting_transcripts(
+                    meeting_numbers=tool_input["meeting_numbers"],
                 ),
                 "set_active_project":             lambda: self.set_active_project(
                     tool_input["project_name"],

@@ -378,6 +378,24 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC64 — Concluído (v4.47 / 2026-06-24)
+
+**Assistente — tool `compare_meeting_transcripts` (detecção de duplicatas)**
+
+- [x] **`core/assistant_tools.py`** — nova tool `compare_meeting_transcripts(meeting_numbers: list[int])`: compara pares de transcrições por similaridade de texto; score ponderado = `char_sim × 0.50 + jaccard × 0.35 + len_ratio × 0.15`; veredictos: DUPLICATA (≥80%), MUITO SIMILAR (≥60%), PARCIALMENTE SIMILAR (≥35%), DISTINTOS; evidências: até 4 trechos comuns com ≥80 chars
+- [x] `SequenceMatcher` char-level (amostra 12k chars), Jaccard sobre palavras >3 chars sem stopwords PT, razão de comprimento; aceita 2–5 reuniões; schema + categoria `"consulta"` + roteamento duplo (non-admin + admin dispatch)
+
+---
+
+### PC63 — Concluído (v4.46 / 2026-06-24)
+
+**Renomear título de reunião — UI + assistente**
+
+- [x] **`pages/Pipeline.py`** (Modo B) — expander "✏️ Renomear reunião" com `text_input` + botão "💾 Salvar"; chama `update_meeting_title(meeting_id, new_title)`; atualiza `st.session_state["load_meet_select"]` para manter seleção sincronizada; atualiza `hub.minutes.title` se disponível
+- [x] **`core/assistant_tools.py`** — nova tool `rename_meeting(meeting_number, new_title)`: localiza reunião via `_find_meeting`, chama `update_meeting_title`, invalida cache; retorna diff de título; categoria `"escrita"` + roteamento duplo
+
+---
+
 ### PC62 — Concluído (v4.45 / 2026-06-24)
 
 **Assistente — tool `render_mermaid_code` (geração de diagramas Mermaid)**
