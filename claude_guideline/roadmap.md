@@ -378,6 +378,16 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC57 — Concluído (v4.40 / 2026-06-23)
+
+**BPMN auto-repair — Pass D: threshold 70px + isenção de messageFlow**
+
+- [x] **`modules/bpmn_auto_repair.py` Pass D** — threshold de detecção de diagonais alterado de 1px para 70px (`_DIAG_THRESHOLD = 70`, ≈ H_GAP); flows com `|Δy| ≤ 70px` são preservados (misalignment legítimo de lane por diferença de altura entre elemento: `endEvent` 36×36 vs `task` 90×90)
+- [x] **Isenção de messageFlow em Pass D** — `_eid in _mf_map` pula o check diagonal; evita que Pass D remova os waypoints verticais recém-gerados por Pass F
+- **Root cause identificada:** `p2_sf_004` (dy≈-12 por port offset de gateway), `p2_sf_006` (dy=-55), `p2_sf_008` (dy=-28) e `mf_1` (diagonal vertical entre pools) eram todos removidos pelo threshold=1px; cross-lane flows têm `|Δy| ≥ 100px`, logo threshold=70px distingue corretamente os dois casos
+
+---
+
 ### PC56 — Concluído (v4.39 / 2026-06-23)
 
 **BPMN auto-repair — Pass F cobre messageFlow BPMNEdges (bpmn-comparativa-v3)**
