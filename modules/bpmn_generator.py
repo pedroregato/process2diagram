@@ -296,7 +296,18 @@ def _apply_link_events(bpmn, lane_assignment, shapes):
 
     new_elements = list(bpmn.elements)
     new_flows    = []
-    link_counter = [0]   # mutable so nested helper can increment
+    # Start counter above any existing link-event IDs so that repeated calls
+    # within the MAX_ITERATIONS loop never produce duplicate IDs (e.g. a second
+    # pass that detects new crossings created by the first injection would
+    # otherwise restart at 1 and collide with already-placed lnk_throw_1 etc.).
+    _existing_max = 0
+    for _el in bpmn.elements:
+        if _el.id.startswith("lnk_throw_") or _el.id.startswith("lnk_catch_"):
+            try:
+                _existing_max = max(_existing_max, int(_el.id.rsplit("_", 1)[-1]))
+            except ValueError:
+                pass
+    link_counter = [_existing_max]
 
     for flow in bpmn.flows:
         if flow.id not in crossing_ids:
