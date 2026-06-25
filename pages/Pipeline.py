@@ -504,7 +504,7 @@ if _rr_thread is not None:
         st.rerun()
     else:
         _elapsed = int(_time.time() - st.session_state.get("_rr_start", _time.time()))
-        _MAX_RR_SECS = 180  # 3 min — 3 tentativas × 60s timeout cada
+        _MAX_RR_SECS = 660  # 11 min — worst case: 3 retries × 180s (long-ctx) + 120s buffer
         if _elapsed > _MAX_RR_SECS:
             st.session_state.pop("_rr_thread", None)
             st.session_state.pop("_rr_task", None)
@@ -516,7 +516,7 @@ if _rr_thread is not None:
                 f"Tente novamente ou mude o provider em ⚙️ Configurações."
             )
         else:
-            st.info(f"⏳ Executando agente **{_rr_agent}**… aguarde. ({_elapsed}s)")
+            st.info(f"⏳ Executando agente **{_rr_agent}**… aguarde. ({_elapsed}s / máx {_MAX_RR_SECS}s)")
             _time.sleep(1)
             st.rerun()
 
