@@ -61,6 +61,13 @@ Exemplos de **pools** (organizações distintas):
 
 - Entidades externas autônomas (ex: "Cliente externo", "Fornecedor", "SAP de terceiro") → Pools separados
 - Papéis internos do mesmo participante → Lanes
+
+**REGRA CRÍTICA — Nome do pool deve ser o nome exato da organização na transcrição:**
+Nunca adivinhe, abrevie ou troque pelo nome do setor. Use o nome oficial mencionado pelos participantes.
+- ✗ "Banco Meridional" quando a transcrição diz "Grupo Meridional S.A." → use "Grupo Meridional"
+- ✗ "Empresa" ou "Contratante" quando a transcrição diz "Prefeitura de São Paulo" → use "Prefeitura de São Paulo"
+- ✗ Abreviar "Receita Federal do Brasil" para "Receita" ou "RFB"
+- ✓ Se a transcrição não citar nome oficial, use o papel descritivo mais específico: "Cliente B2B", "Fornecedor de TI"
 - **Nunca** nomeie Lane como: `usuário`, `user`, `sistema`, `system`, `ator`, `actor`,
   `validador`, `pessoa`, `participante` ou equivalente genérico.
   Use o nome real da unidade organizacional (ex: "Equipe de Cadastro", "Auditoria Interna").
@@ -138,6 +145,16 @@ Regras de eventos:
 - End Event: descreve o **estado de negócio alcançado**
   - ✓ "Contrato assinado e arquivado" · "Cadastro rejeitado definitivamente" · "Migração homologada"
   - ✗ "Fim" · "End" · "Processo encerrado"
+
+**REGRA CRÍTICA — End Events com resultado semelhante devem ter nomes distintos:**
+Quando múltiplos caminhos terminam com o mesmo resultado conceitual (ex: duas rejeições),
+diferencie pelo **motivo ou contexto** que originou cada encerramento.
+- ✗ Errado: dois End Events chamados "Recusar Proposta" em caminhos diferentes
+- ✓ Correto:
+  - "Proposta Recusada — Score Baixo" (caminho automático por score < 500)
+  - "Proposta Recusada — Revisão Manual" (caminho após análise humana)
+- Regra mnemônica: **leia o label do gateway que precede o End Event** e incorpore-o ao nome.
+  Ex: gateway sai com label "reprovado na revisão" → End Event "Proposta Reprovada na Revisão Manual".
 
 #### 3b. Tarefas
 
@@ -326,6 +343,8 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 - [ ] **Todos os `title` têm ≤ 35 caracteres?** (o gerador trunca em 35 — títulos mais longos são cortados silenciosamente no viewer)
 - [ ] Start Event tem `title` descrevendo o **gatilho real** (não "Início"/"Start")?
 - [ ] End Event tem `title` descrevendo o **estado de negócio alcançado** (não "Fim"/"End")?
+- [ ] **End Events com resultado semelhante têm nomes distintos?** (ex: duas rejeições → diferenciar pelo motivo)
+- [ ] **Nomes de pools correspondem ao nome exato da organização na transcrição?** (não abreviar nem trocar por nome do setor)
 - [ ] Nenhuma lane tem nome genérico (`usuário`, `sistema`, `validador`...)?
 - [ ] **Toda lane declarada em `lanes` tem pelo menos 1 step com `lane` igual ao seu nome?** (Lane sem steps = erro estrutural — o viewer exibe uma faixa vazia e o algoritmo de crossing detection fica incorreto)
 - [ ] Nenhum flow entre lanes distintas cruza uma lane intermediária com steps? (o gerador substitui automaticamente por Link Events, mas prefira fluxos limpos que não exijam esse mecanismo)
