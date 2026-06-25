@@ -227,6 +227,16 @@ class AgentBPMN(BaseAgent):
                     if _pools:
                         _total_steps = sum(len(p.get("steps") or []) for p in _pools)
                         _total_edges = sum(len(p.get("edges") or []) for p in _pools)
+                        # Per-pool check: a pool with steps but no edges is incomplete
+                        # even if other pools have edges (aggregate check misses this).
+                        for _p in _pools:
+                            _p_steps = len(_p.get("steps") or [])
+                            _p_edges = len(_p.get("edges") or [])
+                            if _p_steps > 2 and _p_edges == 0:
+                                raise ValueError(
+                                    f"Incomplete BPMN: pool '{_p.get('name', '?')}' has "
+                                    f"{_p_steps} steps but 0 edges — sequence flows missing."
+                                )
                     else:
                         _total_steps = len(result.get("steps") or []) if isinstance(result, dict) else 0
                         _total_edges = len(result.get("edges") or []) if isinstance(result, dict) else 0

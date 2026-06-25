@@ -1676,7 +1676,6 @@ def generate_executive_html(hub, narrative) -> str:
     built = list(filter(None, [
         _section_summary(narrative),
         _section_process(hub, narrative),
-        _section_bpmn_diagram(hub),
         _section_mermaid_diagram(hub),
         _section_minutes(hub),
         _section_requirements(hub),
