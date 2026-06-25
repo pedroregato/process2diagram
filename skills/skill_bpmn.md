@@ -3,7 +3,7 @@ agent: bpmn
 iniciativa: Pedro Regato
 project: process2diagram
 spec: BPMN 2.0 (OMG — ISO/IEC 19510) · Bruce Silver Method and Style
-version: 7.4
+version: 7.5
 ---
 
 # BPMN Agent — Instruções de Execução
