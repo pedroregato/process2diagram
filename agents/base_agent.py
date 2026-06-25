@@ -284,6 +284,10 @@ class BaseAgent(ABC):
             )
         else:
             max_out = self.provider_cfg.get("max_tokens", 4096)
+        # Agent subclasses may declare _min_output_tokens to guarantee a
+        # minimum output budget regardless of long-context mode.
+        # Example: AgentBPMN sets 8192 because collaboration JSON is large.
+        max_out = max(max_out, getattr(self, "_min_output_tokens", 0))
 
         kwargs: dict[str, Any] = dict(
             model=model,
@@ -344,6 +348,7 @@ class BaseAgent(ABC):
             )
         else:
             max_out = self.provider_cfg.get("max_tokens", 4096)
+        max_out = max(max_out, getattr(self, "_min_output_tokens", 0))
         msg = client.messages.create(
             model=model,
             max_tokens=max_out,
