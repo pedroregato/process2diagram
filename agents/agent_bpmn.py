@@ -217,6 +217,21 @@ class AgentBPMN(BaseAgent):
                 try:
                     raw = self._call_llm(system, user, hub)
                     result = parse(raw)
+                    # Semantic validation: steps without edges is an incomplete extraction.
+                    # Pools format: check each pool; flat format: check top-level.
+                    # Only enforce when there are > 2 steps (trivial processes may have no edges).
+                    _pools = result.get("pools") if isinstance(result, dict) else None
+                    if _pools:
+                        _total_steps = sum(len(p.get("steps") or []) for p in _pools)
+                        _total_edges = sum(len(p.get("edges") or []) for p in _pools)
+                    else:
+                        _total_steps = len(result.get("steps") or []) if isinstance(result, dict) else 0
+                        _total_edges = len(result.get("edges") or []) if isinstance(result, dict) else 0
+                    if _total_steps > 2 and _total_edges == 0:
+                        raise ValueError(
+                            f"Incomplete BPMN: {_total_steps} steps but 0 edges — "
+                            "all sequence flows are missing."
+                        )
                     # Linha B: retry succeeded — backfill H0 so future reruns hit cache
                     if attempt > 0 and _h0 and not getattr(self, "_lg_skip_cache", False):
                         self._backfill_cache(_h0, raw)

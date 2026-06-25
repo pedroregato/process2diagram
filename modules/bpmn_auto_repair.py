@@ -116,6 +116,10 @@ def _repair_pool(
         isolated = [s for s in steps if out_cnt[s.id] == 0 and in_cnt[s.id] == 0]
         if not isolated:
             break
+        # Guard: if ALL steps are isolated (zero edges), keep them all.
+        # Removing every step produces an empty diagram — worse than a disconnected one.
+        if len(isolated) == len(steps):
+            break
         isolated_ids = {s.id for s in isolated}
         for s in isolated:
             report.repairs.append(
