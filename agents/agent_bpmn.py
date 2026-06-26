@@ -198,18 +198,60 @@ class AgentBPMN(BaseAgent):
 
     def run(self, hub: KnowledgeHub, output_language: str = "Auto-detect") -> KnowledgeHub:
         system, user = self.build_prompt(hub, output_language)
-        # On BPMN, add a flat-format fallback hint to the retry mechanism:
-        # if JSON fails (often caused by oversized multi-pool output being truncated),
-        # the retry user prompt will explicitly request flat format.
+
+        # ── Proactive collaboration detection ─────────────────────────────────
+        # Uses two independent signals: NLP actors (structured) + keyword scan.
+        # When either fires, we inject a mandatory format directive into the
+        # system prompt AND adjust retry hints to never offer flat format.
+        _COLLAB_KEYWORDS = {
+            "cliente", "fornecedor", "banco", "bureau", "serasa", "quod",
+            "receita federal", "parceiro", "portal do cliente", "externo",
+            "contratante", "contratado", "prestador", "tomador",
+        }
+        _transcript_lower = (hub.transcript_clean or "").lower()
+        _kw_hits = sum(1 for kw in _COLLAB_KEYWORDS if kw in _transcript_lower)
+        _nlp_orgs = len(hub.nlp.actors) if (hub.nlp and hub.nlp.actors) else 0
+        _collaboration_expected = _nlp_orgs >= 2 or _kw_hits >= 2
+
+        if _collaboration_expected:
+            system += (
+                "\n\n## MANDATORY FORMAT — COLLABORATION\n\n"
+                "This transcript involves legally distinct organisations exchanging messages. "
+                "You MUST use the multi-pool collaboration format:\n"
+                "{\"name\": \"...\", \"pools\": ["
+                "{\"id\": \"pool_1\", \"name\": \"Organisation A\", "
+                "\"steps\": [...], \"edges\": [...], \"lanes\": [...]}, "
+                "{\"id\": \"pool_2\", \"name\": \"Organisation B\", "
+                "\"steps\": [...], \"edges\": [...], \"lanes\": [...]}], "
+                "\"message_flows\": [{\"id\": \"mf_1\", \"name\": \"...\", "
+                "\"source\": {\"pool\": \"pool_1\", \"step\": \"S01\"}, "
+                "\"target\": {\"pool\": \"pool_2\", \"step\": \"S01\"}}]}\n"
+                "NEVER use flat format (steps/edges/lanes at root level) "
+                "when the process involves multiple organisations."
+            )
+
+        # ── Retry hints — separated by error type ────────────────────────────
+        # _flat_hint  : JSON parse errors (KeyError / malformed structure).
+        #               Offers flat format only when collaboration is NOT expected.
+        # _semantic_hint: semantic validation errors (ValueError — edges missing).
+        #               Preserves multi-pool structure; names the failing pool.
         _flat_hint = (
             "\n\nIMPORTANT CORRECTION: Your previous response was truncated or malformed. "
             "Return ONLY valid JSON. "
-            "If all participants belong to the same organisation → flat format: "
-            "{\"name\": ..., \"steps\": [...], \"edges\": [...], \"lanes\": [...]}. "
-            "If there are legally distinct organisations exchanging messages → pools format: "
-            "{\"name\": ..., \"pools\": [...], \"message_flows\": [...]}. "
-            "Choose the correct format based on the transcript — do NOT default to flat."
+            + (
+                "This transcript involves multiple organisations — you MUST use the "
+                "multi-pool collaboration format: "
+                "{\"name\": ..., \"pools\": [...], \"message_flows\": [...]}. "
+                "NEVER switch to flat format."
+                if _collaboration_expected else
+                "If all participants belong to the same organisation → flat format: "
+                "{\"name\": ..., \"steps\": [...], \"edges\": [...], \"lanes\": [...]}. "
+                "If there are legally distinct organisations → pools format: "
+                "{\"name\": ..., \"pools\": [...], \"message_flows\": [...]}. "
+                "Choose the correct format based on the transcript — do NOT default to flat."
+            )
         )
+
         _original_ensure_utf8 = self._ensure_utf8
 
         def _bpmn_call_with_retry(system, user, hub):
@@ -255,11 +297,32 @@ class AgentBPMN(BaseAgent):
                         _h0 = getattr(self, "_last_computed_cache_hash", None)
                     if attempt < self.max_retries:
                         hint = repr(str(exc))[:300]
+                        # ── Hint selection by error type ──────────────────────
+                        # ValueError = semantic validation (incomplete content).
+                        #   → preserve format, pinpoint the specific problem.
+                        # KeyError   = JSON parse / structure mismatch.
+                        #   → may need format guidance → use _flat_hint.
+                        if isinstance(exc, ValueError):
+                            _retry_suffix = (
+                                "\n\nCRITICAL CORRECTION REQUIRED: The JSON was parsed "
+                                "successfully but the content is INCOMPLETE. "
+                                + (
+                                    "DO NOT change to flat format — keep the multi-pool "
+                                    "collaboration structure. "
+                                    if _collaboration_expected else ""
+                                )
+                                + "Fix the specific problem described above: "
+                                + str(exc)
+                                + " Ensure EVERY pool has sequence flows (edges) "
+                                "connecting ALL its steps in order."
+                            )
+                        else:
+                            _retry_suffix = _flat_hint
                         user = _original_ensure_utf8(
                             f"{user}\n\n"
                             f"IMPORTANT: Your previous response caused a parse error:\n{hint}\n"
                             f"Return ONLY valid JSON. No markdown. No explanation."
-                            f"{_flat_hint}"
+                            f"{_retry_suffix}"
                         )
             raise RuntimeError(
                 f"[{self.name}] Failed after {1 + self.max_retries} attempts. "
@@ -267,12 +330,23 @@ class AgentBPMN(BaseAgent):
             )
 
         import time as _time
+        import logging as _logging
         _t0 = _time.monotonic()
 
         data = _bpmn_call_with_retry(system, user, hub)
 
         hub.bpmn = self._build_model(data)
         hub.bpmn.raw_llm_dict = data  # preserved for rerun-without-LLM
+
+        # ── Format escape detection ───────────────────────────────────────────
+        # If collaboration was expected but the LLM returned flat format, log it.
+        _format_escape = _collaboration_expected and not hub.bpmn.is_collaboration
+        if _format_escape:
+            _logging.warning(
+                "[AgentBPMN] Format escape detected: collaboration expected "
+                "(nlp_actors=%d, kw_hits=%d) but LLM returned flat format.",
+                _nlp_orgs, _kw_hits,
+            )
 
         # Capture enforce_rules changes via before/after step count as proxy
         _steps_before = len(hub.bpmn.steps)
@@ -321,6 +395,12 @@ class AgentBPMN(BaseAgent):
             },
             "repair_passes": hub.bpmn.repair_log,
             "reformat_passes": _fmt_changes,
+            "collaboration": {
+                "expected": _collaboration_expected,
+                "nlp_actors": _nlp_orgs,
+                "keyword_hits": _kw_hits,
+                "format_escape": _format_escape,
+            },
             "metrics": {
                 "steps":       len(hub.bpmn.steps),
                 "edges":       len(hub.bpmn.edges),

@@ -378,6 +378,20 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC65 — Concluído (v4.48 / 2026-06-25)
+
+**BPMN — prevenção de format escape: detecção proativa de colaboração + hints separados por tipo de erro**
+
+- [x] **`agents/agent_bpmn.py` — detecção proativa de colaboração** — calcula `_collaboration_expected` combinando dois sinais: `hub.nlp.actors >= 2` (NLP estruturado) + scan de keywords no transcript (≥2 hits: cliente, fornecedor, banco, bureau, serasa, quod, receita federal, parceiro, externo, contratante, contratado, prestador, tomador); quando positivo, injeta diretiva `## MANDATORY FORMAT — COLLABORATION` com template multi-pool no system prompt ANTES da chamada LLM
+- [x] **Hints separados por tipo de erro em `_bpmn_call_with_retry`** — `ValueError` (validação semântica: pool sem edges) → `_retry_suffix` semântico que preserva estrutura multi-pool e cita o erro específico; nunca menciona flat format quando `_collaboration_expected`; `KeyError` (parse JSON) → `_flat_hint` contextualizado (quando colaboração esperada, proíbe explicitamente formato flat)
+- [x] **`_flat_hint` context-aware** — quando `_collaboration_expected`, o hint de parse também proíbe flat; quando não, mantém comportamento original (escolha baseada no transcript)
+- [x] **Detecção de format escape + logging** — após `_build_model()`, se colaboração era esperada mas LLM retornou flat: `WARNING [AgentBPMN] Format escape detected`; registrado em `execution_log["collaboration"]` com `expected`, `nlp_actors`, `keyword_hits`, `format_escape`
+- [x] **`execution_log["collaboration"]`** — novo bloco de diagnóstico adicionado ao log de execução para rastreabilidade de fugas de formato
+
+**Problema resolvido:** o hint `_flat_hint` era injetado em TODOS os retries (incluindo `ValueError` de validação semântica); o LLM explorava a menção de flat format para escapar do per-pool check, gerando diagramas sem pools/gateways/raias que passavam silenciosamente em todas as validações.
+
+---
+
 ### PC64 — Concluído (v4.47 / 2026-06-24)
 
 **Assistente — tool `compare_meeting_transcripts` (detecção de duplicatas)**
