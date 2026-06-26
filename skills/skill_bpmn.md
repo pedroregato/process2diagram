@@ -3,7 +3,7 @@ agent: bpmn
 iniciativa: Pedro Regato
 project: process2diagram
 spec: BPMN 2.0 (OMG — ISO/IEC 19510) · Bruce Silver Method and Style
-version: 7.5
+version: 7.6
 ---
 
 # BPMN Agent — Instruções de Execução
@@ -31,6 +31,8 @@ Antes de qualquer outra análise, responda mentalmente:
    - **≤ 10 atividades** → modelo **flat** (nível único, passos diretos)
    - **> 10 atividades** → modelo **hierárquico**: agrupar em 3–7 fases com `callActivity`
 
+Em formato pools, **a contagem é feita por pool** — cada pool aplica a regra de densidade independentemente.
+
 > **Regra de Densidade Cognitiva (Bruce Silver Level 1):**
 > Nunca gere sequências lineares com mais de 10 atividades no mesmo nível.
 > Processos longos devem ser particionados em fases lógicas usando `callActivity`.
@@ -48,6 +50,15 @@ Antes de qualquer outra análise, responda mentalmente:
 |---|---|
 | Todos os participantes pertencem à mesma empresa/organização | Formato **flat** (`steps`, `edges`, `lanes`) — **OBRIGATÓRIO** |
 | Participantes de organizações juridicamente distintas que trocam mensagens | Formato **pools** com `message_flows` |
+
+**Colaboração é OBRIGATÓRIA quando a transcrição mencionar qualquer um destes sinais:**
+- Entidade externa: "cliente", "fornecedor", "parceiro", "contratado", "prestador", "segurador"
+- Órgão externo nomeado: "Receita Federal", "bureau", "Serasa", "QUOD", "banco" (externo), "cartório"
+- Comunicação interorganizacional: "portal do cliente", "notifica o cliente", "envia para o banco"
+- Troca formal de documentos entre empresas: "proposta enviada", "resposta do fornecedor"
+
+**Regra de desempate:** quando em dúvida entre flat e pools → **sempre prefira pools**.
+Formato flat é PROIBIDO quando há comunicação com entidade externa.
 
 Exemplos de **lanes** (mesma organização):
 - ✓ TI, Operações, Supervisora de Loja → 3 lanes num único pool da empresa
@@ -73,6 +84,10 @@ Nunca adivinhe, abrevie ou troque pelo nome do setor. Use o nome oficial mencion
   Use o nome real da unidade organizacional (ex: "Equipe de Cadastro", "Auditoria Interna").
 - Se o nome for ambíguo, registre com `[AMBIGUIDADE: não ficou claro quem executa — assumido como 'X']` na `description`.
 - Ordene as lanes: **ator principal no topo**, suporte abaixo, sistemas nomeados por último.
+
+**Lanes são OBRIGATÓRIAS quando o pool tem 2+ papéis ou departamentos com responsabilidades distintas:**
+Um pool com Gerente, Analista e Diretor tomando decisões diferentes **deve ter 3 lanes**.
+Nunca omita lanes para simplificar — lane ausente = responsabilidade invisível no diagrama.
 
 **Message flows e comunicação intra-pool:**
 - `message_flows` existem **exclusivamente entre pools distintos** — nunca dentro do mesmo pool.
@@ -295,6 +310,13 @@ Se você só consegue identificar **uma** saída → **não use gateway**: use t
 
 **Toda saída de gateway `is_decision: true` deve ter `label` preenchido descrevendo a condição de negócio.**
 
+**Quando um gateway é OBRIGATÓRIO na transcrição:**
+- Threshold numérico com N intervalos ("score < 500", "entre 500 e 699", "≥ 700") → gateway com **N saídas** — nunca combine intervalos distintos numa única aresta
+- Regra de alçada escalonada ("Gerente até X, Diretor até Y, Comitê acima") → gateway com N saídas (uma por nível)
+- Aprovação/rejeição que ocorrem em pontos distintos do fluxo → gateways separados com End Events nomeados pelo motivo
+
+Nunca omita gateways para simplificar. Um processo com 3 regras de decisão explícitas na transcrição deve ter ≥ 3 gateways.
+
 **Regras do `eventBasedGateway`:**
 - As saídas de um `eventBasedGateway` devem ser **exclusivamente** nós do tipo:
   `intermediateTimerCatchEvent`, `intermediateMessageCatchEvent` ou `receiveTask`.
@@ -326,6 +348,7 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 - [ ] Toda saída de gateway `is_decision: true` tem `label` preenchido
 - [ ] IDs de steps são sequenciais S01, S02, S03... sem lacunas
 - [ ] Message flows existem apenas entre pools distintos
+- [ ] Em formato pools, `message_flows` cobre **todos** os pontos de comunicação interorganizacional? (todo `sendTask`/`endMessageEvent` num pool que inicia contato com outro pool deve ter message_flow correspondente — pool sem message_flow = pool isolado, erro)
 - [ ] `sendTask`/`receiveTask` aparecem **somente** no formato pools
 - [ ] Coreografia balanceada: todo `sendTask` é recebido por `receiveTask` ou `intermediateMessageCatchEvent`; nunca por `userTask` ou `serviceTask`. Do mesmo modo, todo emissor de message flow é `sendTask` ou evento throw — nunca `userTask`
 - [ ] Saídas de `eventBasedGateway` são apenas eventos intermediários ou `receiveTask`
@@ -589,32 +612,37 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 
 ---
 
-### Exemplo C — Colaboração (multi-pool com message flows)
+### Exemplo C — Colaboração (multi-pool, múltiplos End Events, gateways completos, lanes)
 
 **Transcricao:**
 > "O cliente envia a proposta de crédito pelo portal. O banco a recebe, consulta a Receita Federal
-> e o Serasa para validar o cadastro, analisa o risco internamente e, conforme o score, aprova
-> automaticamente ou envia para revisão manual do gerente. Ao final, o banco notifica o cliente
-> com o resultado."
+> e o Serasa para validar o cadastro, depois calcula o score de crédito com motor interno.
+> Conforme o score: abaixo de 500 recusa automaticamente; entre 500 e 699 o gerente revisa —
+> se aprovar formaliza o contrato, se reprovar encerra; acima de 700 aprova e formaliza
+> automaticamente. O banco notifica o cliente com o resultado em todos os casos."
 
-**Análise do Passo 1:** Três organizações juridicamente distintas trocam mensagens:
-Cliente (externo) ↔ Banco (interno, com departamentos) ↔ Bureau/Receita Federal (externo).
-→ **Formato pools obrigatório.** "Receita Federal" e "Serasa" são entidades externas — NUNCA lanes internas do Banco.
+**Análise do Passo 1:**
+- Três organizações juridicamente distintas: Cliente ↔ Banco ↔ Bureaus → **formato pools obrigatório**
+- "Receita Federal" e "Serasa" são entidades externas — pool separado, NUNCA lanes internas do banco
+- Gateways obrigatórios: (1) "Score?" com **3 saídas** (< 500, 500–699, ≥ 700) — nunca combinar numa só aresta; (2) "Aprovado?" com 2 saídas após revisão manual
+- End Events obrigatórios: 3 distintos (recusa automática, recusa manual, aprovação) — cada caminho de encerramento tem seu End Event nomeado pelo resultado
+- Lanes obrigatórias no pool do banco: "Análise de Crédito" (sistema + automação) e "Gerência de Crédito" (decisão humana)
+- Message flows obrigatórios: toda comunicação interorganizacional deve ser coberta
 
 **JSON gerado:**
 
 ```json
 {
   "name": "Aprovação de Proposta de Crédito",
-  "description": "Processo de análise e aprovação de crédito entre Cliente, Banco e Bureaus externos.",
+  "description": "Processo de análise e aprovação de crédito entre Cliente, Banco e Bureaus externos. Score determina caminho: recusa automática, revisão manual ou aprovação direta.",
   "pools": [
     {
       "id": "pool_1",
       "name": "Cliente",
       "process": {
         "steps": [
-          { "id": "S01", "title": "Enviar Proposta", "description": "Cliente submete proposta pelo portal.", "actor": null, "is_decision": false, "task_type": "sendTask", "lane": null },
-          { "id": "S02", "title": "Receber Resultado", "description": "Cliente aguarda e recebe notificação.", "actor": null, "is_decision": false, "task_type": "receiveTask", "lane": null }
+          { "id": "S01", "title": "Enviar Proposta", "description": "Cliente submete proposta de crédito pelo portal digital.", "actor": null, "is_decision": false, "task_type": "sendTask", "lane": null },
+          { "id": "S02", "title": "Receber Resultado", "description": "Cliente aguarda e recebe notificação do banco com resultado da análise de crédito.", "actor": null, "is_decision": false, "task_type": "receiveTask", "lane": null }
         ],
         "edges": [
           { "source": "S01", "target": "S02", "label": "", "condition": "" }
@@ -624,23 +652,31 @@ Cliente (externo) ↔ Banco (interno, com departamentos) ↔ Bureau/Receita Fede
     },
     {
       "id": "pool_2",
-      "name": "Banco Meridional",
+      "name": "Banco ABC",
       "process": {
         "steps": [
-          { "id": "S01", "title": "Receber Proposta", "description": "Proposta recebida do portal.", "actor": null, "is_decision": false, "task_type": "startMessageEvent", "lane": "Análise de Crédito" },
-          { "id": "S02", "title": "Validar Cadastro", "description": "Consulta simultânea a Receita Federal e Serasa.", "actor": null, "is_decision": false, "task_type": "callActivity", "lane": "Análise de Crédito" },
-          { "id": "S03", "title": "Analisar Risco", "description": "Score calculado pelo motor de risco.", "actor": null, "is_decision": false, "task_type": "serviceTask", "lane": "Análise de Crédito" },
-          { "id": "S04", "title": "Score aprovável?", "description": "Score ≥ 700: aprovação automática. 500–699: revisão manual. < 500: recusa.", "actor": null, "is_decision": true, "task_type": "exclusiveGateway", "lane": "Análise de Crédito" },
-          { "id": "S05", "title": "Revisar Manualmente", "description": "Gerente revisa proposta com score intermediário.", "actor": "Gerente de Crédito", "is_decision": false, "task_type": "userTask", "lane": "Gerência de Crédito" },
-          { "id": "S06", "title": "Notificar Cliente", "description": "Envio de resultado por e-mail e SMS.", "actor": null, "is_decision": false, "task_type": "endMessageEvent", "lane": "Análise de Crédito" }
+          { "id": "S01", "title": "Proposta Recebida", "description": "Proposta de crédito recebida do cliente pelo portal.", "actor": null, "is_decision": false, "task_type": "startMessageEvent", "lane": "Análise de Crédito" },
+          { "id": "S02", "title": "Validar Cadastro", "description": "Consulta simultânea à Receita Federal e ao Serasa para validação cadastral. Subatividades: enviar consulta, aguardar retorno dos bureaus, consolidar dados.", "actor": null, "is_decision": false, "task_type": "callActivity", "lane": "Análise de Crédito" },
+          { "id": "S03", "title": "Calcular Score", "description": "Motor de risco calcula score de crédito com base nos dados cadastrais consolidados.", "actor": null, "is_decision": false, "task_type": "serviceTask", "lane": "Análise de Crédito" },
+          { "id": "S04", "title": "Score?", "description": "Decisão baseada no score: < 500 recusa automática, 500-699 revisão manual pelo gerente, ≥ 700 aprovação automática.", "actor": null, "is_decision": true, "task_type": "exclusiveGateway", "lane": "Análise de Crédito" },
+          { "id": "S05", "title": "Recusada — Score Baixo", "description": "Recusa automática por score abaixo de 500. Notifica cliente com motivo.", "actor": null, "is_decision": false, "task_type": "endMessageEvent", "lane": "Análise de Crédito" },
+          { "id": "S06", "title": "Revisar Manualmente", "description": "Gerente de crédito analisa proposta com score intermediário (500-699) e decide aprovar ou recusar.", "actor": "Gerente de Crédito", "is_decision": false, "task_type": "userTask", "lane": "Gerência de Crédito" },
+          { "id": "S07", "title": "Aprovado?", "description": "Gerente decide após revisão manual da proposta.", "actor": "Gerente de Crédito", "is_decision": true, "task_type": "exclusiveGateway", "lane": "Gerência de Crédito" },
+          { "id": "S08", "title": "Recusada — Revisão Manual", "description": "Recusa após análise do gerente. Notifica cliente com motivo da reprovação.", "actor": null, "is_decision": false, "task_type": "endMessageEvent", "lane": "Gerência de Crédito" },
+          { "id": "S09", "title": "Formalizar Contrato", "description": "Emite e registra contrato de crédito no sistema. Alimentado tanto pelo caminho automático (≥700) quanto pelo caminho manual aprovado.", "actor": null, "is_decision": false, "task_type": "serviceTask", "lane": "Análise de Crédito" },
+          { "id": "S10", "title": "Proposta Aprovada", "description": "Notifica cliente com aprovação e detalhes do contrato formalizado.", "actor": null, "is_decision": false, "task_type": "endMessageEvent", "lane": "Análise de Crédito" }
         ],
         "edges": [
           { "source": "S01", "target": "S02", "label": "", "condition": "" },
           { "source": "S02", "target": "S03", "label": "", "condition": "" },
           { "source": "S03", "target": "S04", "label": "", "condition": "" },
-          { "source": "S04", "target": "S05", "label": "500–699", "condition": "" },
-          { "source": "S04", "target": "S06", "label": "≥ 700 ou < 500", "condition": "" },
-          { "source": "S05", "target": "S06", "label": "", "condition": "" }
+          { "source": "S04", "target": "S05", "label": "< 500", "condition": "" },
+          { "source": "S04", "target": "S06", "label": "500-699", "condition": "" },
+          { "source": "S04", "target": "S09", "label": ">= 700", "condition": "" },
+          { "source": "S06", "target": "S07", "label": "", "condition": "" },
+          { "source": "S07", "target": "S08", "label": "Não", "condition": "" },
+          { "source": "S07", "target": "S09", "label": "Sim", "condition": "" },
+          { "source": "S09", "target": "S10", "label": "", "condition": "" }
         ],
         "lanes": ["Análise de Crédito", "Gerência de Crédito"]
       }
@@ -650,8 +686,8 @@ Cliente (externo) ↔ Banco (interno, com departamentos) ↔ Bureau/Receita Fede
       "name": "Bureaus de Crédito",
       "process": {
         "steps": [
-          { "id": "S01", "title": "Consulta Recebida", "description": "Bureau recebe consulta do banco.", "actor": null, "is_decision": false, "task_type": "startMessageEvent", "lane": null },
-          { "id": "S02", "title": "Retornar Dados", "description": "Bureau processa e retorna dados cadastrais.", "actor": null, "is_decision": false, "task_type": "endMessageEvent", "lane": null }
+          { "id": "S01", "title": "Consulta Recebida", "description": "Bureau recebe consulta cadastral do banco.", "actor": null, "is_decision": false, "task_type": "startMessageEvent", "lane": null },
+          { "id": "S02", "title": "Retornar Dados", "description": "Bureau processa e retorna dados cadastrais consolidados.", "actor": null, "is_decision": false, "task_type": "endMessageEvent", "lane": null }
         ],
         "edges": [
           { "source": "S01", "target": "S02", "label": "", "condition": "" }
@@ -662,19 +698,25 @@ Cliente (externo) ↔ Banco (interno, com departamentos) ↔ Bureau/Receita Fede
   ],
   "message_flows": [
     { "id": "mf_1", "name": "Proposta de Crédito", "source": { "pool": "pool_1", "step": "S01" }, "target": { "pool": "pool_2", "step": "S01" } },
-    { "id": "mf_2", "name": "Resultado da Análise", "source": { "pool": "pool_2", "step": "S06" }, "target": { "pool": "pool_1", "step": "S02" } },
-    { "id": "mf_3", "name": "Consulta Cadastral", "source": { "pool": "pool_2", "step": "S02" }, "target": { "pool": "pool_3", "step": "S01" } },
-    { "id": "mf_4", "name": "Resposta Cadastral", "source": { "pool": "pool_3", "step": "S02" }, "target": { "pool": "pool_2", "step": "S02" } }
+    { "id": "mf_2", "name": "Consulta Cadastral", "source": { "pool": "pool_2", "step": "S02" }, "target": { "pool": "pool_3", "step": "S01" } },
+    { "id": "mf_3", "name": "Resposta Cadastral", "source": { "pool": "pool_3", "step": "S02" }, "target": { "pool": "pool_2", "step": "S02" } },
+    { "id": "mf_4", "name": "Resultado — Recusa Automática", "source": { "pool": "pool_2", "step": "S05" }, "target": { "pool": "pool_1", "step": "S02" } },
+    { "id": "mf_5", "name": "Resultado — Recusa Manual", "source": { "pool": "pool_2", "step": "S08" }, "target": { "pool": "pool_1", "step": "S02" } },
+    { "id": "mf_6", "name": "Resultado — Aprovação", "source": { "pool": "pool_2", "step": "S10" }, "target": { "pool": "pool_1", "step": "S02" } }
   ]
 }
 ```
 
 *Observacoes:*
-- "Receita Federal", "Serasa", "Bureau" → pool separado, NUNCA lane interna do banco
-- Departamentos internos do banco (Análise, Gerência) → lanes dentro do pool_2
+- Gateway S04 tem **3 saídas com labels distintos** ("< 500", "500-699", ">= 700") — nunca combine "< 500 ou >= 700" numa aresta só
+- Gateway S07 tem **2 saídas fechadas**: "Não" → End Event específico; "Sim" → Formalizar; nenhuma branch aberta
+- **3 End Events distintos**, cada um nomeado pelo resultado de negócio: recusa automática ≠ recusa manual ≠ aprovação
+- **6 message flows** cobrem toda comunicação interorganizacional — se um pool envia/recebe mensagem e não há message_flow correspondente, o pool está isolado (erro)
+- S04→S09 ("≥700") e S07→S09 ("Sim") convergem em S09: quando dois caminhos XOR chegam à mesma tarefa de continuação, o join é implícito e o gerador renderiza corretamente
+- "Receita Federal", "Serasa", "Bureau" → pool_3, **NUNCA lane interna** do banco
+- Departamentos do banco (Análise, Gerência) → lanes dentro do pool_2
 - `sendTask`/`receiveTask` no pool_1 (Cliente) porque há message flows com o banco
-- `startMessageEvent`/`endMessageEvent` nos pools que iniciam/terminam por mensagem
-- Cada pool com sua lista de `steps`/`edges`/`lanes` independente; IDs reiniciam em S01 por pool
+- Cada pool tem `steps`/`edges`/`lanes` independentes; IDs reiniciam em S01 por pool
 
 ---
 

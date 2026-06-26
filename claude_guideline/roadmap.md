@@ -378,6 +378,21 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC66 — Concluído (v4.49 / 2026-06-25)
+
+**skill_bpmn v7.6 — Exemplo C reescrito + regras de colaboração/gateways/lanes fortalecidas**
+
+- [x] **Exemplo C reescrito completamente** — causa raiz identificada: o exemplo anterior tinha (1) aresta combinando "≥700 ou <500" em uma só saída de gateway, ensinando o LLM que 2 branches bastam para 3 intervalos; (2) único `endMessageEvent "Notificar Cliente"` servindo tanto recusa quanto aprovação; (3) 2 lanes apenas; (4) nome "Banco Meridional" contraditório com a regra de nomenclatura na linha 67. Novo Exemplo C: gateway S04 com 3 saídas distintas ("< 500", "500-699", ">= 700"), gateway S07 com 2 saídas fechadas (Não → End Event específico; Sim → Formalizar), 3 End Events distintos nomeados por resultado, 6 message flows cobrindo toda comunicação, 2 lanes, pool "Banco ABC" (nome fictício genérico)
+- [x] **Colaboração obrigatória — triggers explícitos** — adicionado após tabela flat/pools no Passo 1: lista de sinais que tornam pools OBRIGATÓRIO (entidade externa, órgão nomeado, comunicação interorganizacional, troca formal de docs); regra de desempate "quando em dúvida → sempre prefira pools"; "formato flat é PROIBIDO quando há entidade externa"
+- [x] **Lanes obrigatórias** — adicionado após regra de ordenação de lanes: "Lanes são OBRIGATÓRIAS quando o pool tem 2+ papéis com responsabilidades distintas — nunca omita lanes para simplificar"
+- [x] **Density rule por pool** — adicionado ao Passo 0: "em formato pools, a contagem é feita por pool — cada pool aplica a regra de densidade independentemente"
+- [x] **Gateways obrigatórios** — adicionado após regra de labels no Passo 4: triggers explícitos para quando gateway é obrigatório (threshold numérico com N intervalos → N saídas, alçada escalonada → N saídas, aprovação/rejeição em pontos distintos → gateways separados); "nunca combine intervalos distintos numa única aresta"
+- [x] **Checklist** — novo item: "Em formato pools, message_flows cobre TODOS os pontos de comunicação interorganizacional? Pool sem message_flow = pool isolado (erro)"
+
+**Causa raiz do problema:** o Exemplo C era o principal professor do LLM e ensinava padrões errados — gateway com branches combinadas, End Event único para resultados distintos, poucas lanes, nome contraditório.
+
+---
+
 ### PC65 — Concluído (v4.48 / 2026-06-25)
 
 **BPMN — prevenção de format escape: detecção proativa de colaboração + hints separados por tipo de erro**
