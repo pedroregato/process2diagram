@@ -378,6 +378,19 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC69 — Concluído (v4.52 / 2026-06-26)
+
+**BPMN — fix validação cega a steps/edges sob sub-chave "process"**
+
+- [x] **Causa raiz identificada** — `_build_model_multi` lê steps/edges de `pool["process"]["steps"]` mas a validação lia de `pool["steps"]` (top level); quando o LLM aninha steps sob `"process"` a validação via `_p.get("steps")` retornava `[]`, `_p_steps = 0`, condição `_p_steps > 2` ficava `False` → validação nunca disparava → pool 2 com 15 steps e 0 edges (sequence flows ausentes) passava intacto
+- [x] **Fix 1 — Validação** (`_bpmn_call_with_retry`) — helper `_pf(p, key)` busca o campo primeiro no top-level do pool, depois em `pool["process"]`; total_steps/total_edges e per-pool check usam `_pf` em vez de `_p.get()`
+- [x] **Fix 2 — Model builder** (`_build_model_multi`) — `raw_steps/edges/lanes` agora usam `proc.get() or pool_data.get() or []`; aceita tanto o formato `pool.process.steps` quanto `pool.steps` sem perder dados
+- [x] **`agents/agent_bpmn.py`** — ambas as correções aplicadas
+
+**Problema resolvido:** "15 nós isolados — no incoming or outgoing edges" no pool "Grupo Meridional S.A." — o LLM retornava steps corretamente aninhados sob `"process"` mas sem edges (ou edges no nível errado); validação era cega a esse caso e modelo ficava sem sequenceFlows.
+
+---
+
 ### PC68 — Concluído (v4.51 / 2026-06-25)
 
 **Pipeline.py — Fix widget-tree desync (setIn index N, should be between [0, 0])**

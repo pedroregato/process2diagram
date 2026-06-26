@@ -267,13 +267,24 @@ class AgentBPMN(BaseAgent):
                     # Only enforce when there are > 2 steps (trivial processes may have no edges).
                     _pools = result.get("pools") if isinstance(result, dict) else None
                     if _pools:
-                        _total_steps = sum(len(p.get("steps") or []) for p in _pools)
-                        _total_edges = sum(len(p.get("edges") or []) for p in _pools)
+                        # Helper: steps/edges may be nested under pool["process"]
+                        # (code expects that sub-key per docstring) OR at the top level
+                        # of the pool dict (as taught in skill examples).
+                        # Validation must check both to avoid a silent blind spot.
+                        def _pf(p, key):
+                            top = p.get(key) or []
+                            if not top:
+                                _sub = p.get("process")
+                                if isinstance(_sub, dict):
+                                    top = _sub.get(key) or []
+                            return top
+                        _total_steps = sum(len(_pf(p, "steps")) for p in _pools)
+                        _total_edges = sum(len(_pf(p, "edges")) for p in _pools)
                         # Per-pool check: a pool with steps but no edges is incomplete
                         # even if other pools have edges (aggregate check misses this).
                         for _p in _pools:
-                            _p_steps = len(_p.get("steps") or [])
-                            _p_edges = len(_p.get("edges") or [])
+                            _p_steps = len(_pf(_p, "steps"))
+                            _p_edges = len(_pf(_p, "edges"))
                             if _p_steps > 2 and _p_edges == 0:
                                 raise ValueError(
                                     f"Incomplete BPMN: pool '{_p.get('name', '?')}' has "
@@ -522,11 +533,16 @@ class AgentBPMN(BaseAgent):
             prefix   = f"p{i + 1}_"
             pool_id  = pool_data.get("id", f"pool_{i + 1}")
             pool_name = pool_data.get("name", f"Pool {i + 1}")
-            proc     = pool_data.get("process", {})
+            # Steps/edges may be nested under pool["process"] (expected by code)
+            # OR at the top level of the pool dict (as taught in skill examples).
+            # Read from "process" first; fall back to top-level pool fields so that
+            # both LLM output styles are handled without losing data.
+            _proc_sub = pool_data.get("process")
+            proc = _proc_sub if isinstance(_proc_sub, dict) else {}
 
-            raw_steps = proc.get("steps", [])
-            raw_edges = proc.get("edges", [])
-            raw_lanes = proc.get("lanes", [])
+            raw_steps = proc.get("steps") or pool_data.get("steps") or []
+            raw_edges = proc.get("edges") or pool_data.get("edges") or []
+            raw_lanes = proc.get("lanes") or pool_data.get("lanes") or []
 
             orig_steps = [
                 BPMNStep(
