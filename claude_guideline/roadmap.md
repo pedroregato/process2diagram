@@ -378,6 +378,30 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC71 — Concluído (v4.54 / 2026-06-26)
+
+**Assistente — novas ferramentas: resolve_contradiction + delete_contradiction**
+
+- [x] **`resolve_contradiction`** — marca contradição como resolvida (ou esclarecida/descartada); identifica por busca parcial na descrição; registra `resolution_note` + `resolved_by` + novo `status`; chama `knowledge_store.resolve_contradiction()`; escopo "escrita" (todos os perfis)
+- [x] **`delete_contradiction`** — exclua permanentemente uma contradição; requer `confirm=true`; identifica por busca parcial; delete direto via Supabase; escopo "escrita"
+- [x] **Proteção multi-match** — se a query ambígua retorna >1 contradição, lista até 5 candidatos e pede refinamento; sem exclusão/resolução acidental
+- [x] **`core/assistant_tools.py`** — schemas OpenAI (+ dispatch), permissões no `_TOOL_PERMISSION_MAP`, implementações `resolve_contradiction()` + `delete_contradiction()`
+- [x] **`update_requirement_status`** — já existia (PC anterior); confirmado funcional — trigger: "Evolua o status do requisito X para Y"
+
+---
+
+### PC70 — Concluído (v4.53 / 2026-06-26)
+
+**skill_bpmn.md v7.8 — Todo pool em colaboração deve ter startEvent/endEvent explícitos**
+
+- [x] **Causa raiz** — Example C, pool_1 (Cliente) só tinha `sendTask`/`receiveTask` sem `noneStartEvent`/`noneEndEvent` → gerador injetava "Início"/"Fim" genéricos violando a regra de nomenclatura
+- [x] **Example C — pool_1 atualizado** — adicionados S00 (`noneStartEvent` = "Necessidade de Crédito Identificada") e S03 (`noneEndEvent` = "Resultado de Crédito Recebido"); edges atualizadas: S00→S01→S02→S03; message_flows inalterados (continuam em S01/S02)
+- [x] **Nova regra em Passo 3** — "REGRA CRÍTICA — Formato colaboração: todo pool deve ter Start Event e End Event explícitos"; estrutura mínima S00 (noneStartEvent) … Sm (noneEndEvent) documentada com exemplos ✓/✗
+- [x] **Nota de rodapé atualizada** — observações do Example C reforçam que `sendTask`/`receiveTask` NÃO dispensam os eventos explícitos
+- [x] **`skills/skill_bpmn.md`** — versão v7.8
+
+---
+
 ### PC69 — Concluído (v4.52 / 2026-06-26)
 
 **BPMN — fix validação cega a steps/edges sob sub-chave "process"**

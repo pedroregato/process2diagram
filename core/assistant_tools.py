@@ -419,6 +419,70 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "resolve_contradiction",
+                "description": (
+                    "Marca uma contradição do Grafo de Conhecimento como resolvida, registrando "
+                    "a solução adotada. Use quando o usuário disser: "
+                    "'A contradição X está resolvida desta forma: Y', "
+                    "'Resolva a contradição X com a solução Y', "
+                    "'Marque a contradição X como resolvida — a decisão foi Y'. "
+                    "A contradição é identificada por trecho da descrição."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "description_query": {
+                            "type": "string",
+                            "description": "Trecho do texto da contradição para identificá-la (busca parcial, case-insensitive)",
+                        },
+                        "resolution_note": {
+                            "type": "string",
+                            "description": "Descrição da solução adotada para a contradição",
+                        },
+                        "resolved_by": {
+                            "type": "string",
+                            "description": "Nome ou papel de quem resolveu (opcional, padrão: 'assistente')",
+                        },
+                        "new_status": {
+                            "type": "string",
+                            "enum": ["resolved", "clarified", "dismissed"],
+                            "description": "Novo status da contradição (padrão: resolved)",
+                        },
+                    },
+                    "required": ["description_query", "resolution_note"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "delete_contradiction",
+                "description": (
+                    "Remove permanentemente uma contradição do Grafo de Conhecimento. "
+                    "Use quando o usuário disser: 'Exclua a contradição X', "
+                    "'Remova a contradição X', 'Delete a contradição X'. "
+                    "Requer confirmação explícita antes de excluir. "
+                    "A contradição é identificada por trecho da descrição."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "description_query": {
+                            "type": "string",
+                            "description": "Trecho do texto da contradição para identificá-la (busca parcial, case-insensitive)",
+                        },
+                        "confirm": {
+                            "type": "boolean",
+                            "description": "Deve ser true para confirmar a exclusão permanente",
+                        },
+                    },
+                    "required": ["description_query", "confirm"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "list_kh_facts",
                 "description": (
                     "Lista os fatos consolidados do Grafo de Conhecimento: "
@@ -3262,6 +3326,8 @@ _TOOL_CATEGORIES: dict[str, str] = {
     # Knowledge Graph
     "list_kh_entities":                "consulta",
     "list_kh_contradictions":          "consulta",
+    "resolve_contradiction":           "escrita",
+    "delete_contradiction":            "escrita",
     "list_kh_facts":                   "consulta",
     # Glossário / Skills
     "search_glossary":                 "consulta",
@@ -3699,7 +3765,7 @@ class AssistantToolExecutor:
     list_context_files, calculate_meeting_roi, get_recurring_topics, get_meeting_metadata,
     preview_meeting_deletion, preview_text_correction, get_speaker_contributions,
     get_requirement_history, get_bmm, get_ckf,
-    list_kh_entities, list_kh_contradictions, list_kh_facts,
+    list_kh_entities, list_kh_contradictions, resolve_contradiction, delete_contradiction, list_kh_facts,
     search_ibis_debates, get_ibis_timeline, generate_ibis_map, search_glossary,
     generate_next_agenda, cluster_topic_decisions, read_skill_reference,
     show_bpmn_diagram, show_mermaid_diagram, show_metrics
@@ -9100,6 +9166,112 @@ class AssistantToolExecutor:
             lines.append("")
         return "\n".join(lines)
 
+    def resolve_contradiction(
+        self,
+        description_query: str,
+        resolution_note: str,
+        resolved_by: str = "assistente",
+        new_status: str = "resolved",
+    ) -> str:
+        """Marca uma contradição como resolvida."""
+        from core.knowledge_store import get_contradictions, resolve_contradiction as _resolve
+
+        contradictions = get_contradictions(self.project_id, status=None, limit=100)
+        if not contradictions:
+            return "Nenhuma contradição encontrada no projeto."
+
+        query_lower = description_query.lower()
+        matches = [c for c in contradictions if query_lower in (c.get("description") or "").lower()]
+        if not matches:
+            matches = [c for c in contradictions if any(
+                query_lower in (c.get(f) or "").lower()
+                for f in ("process_name", "clarifying_question")
+            )]
+        if not matches:
+            return (
+                f"Nenhuma contradição encontrada com a descrição '{description_query}'. "
+                "Use list_kh_contradictions para ver as contradições disponíveis."
+            )
+        if len(matches) > 1:
+            summaries = "\n".join(
+                f"  • [{c['id']}] {c.get('process_name', '—')}: {(c.get('description') or '')[:80]}…"
+                for c in matches[:5]
+            )
+            return (
+                f"{len(matches)} contradições corresponderam a '{description_query}'. "
+                f"Refine a busca:\n{summaries}"
+            )
+
+        c = matches[0]
+        success = _resolve(
+            contradiction_id=c["id"],
+            resolved_by=resolved_by,
+            resolution_note=resolution_note,
+            status=new_status,
+        )
+        if not success:
+            return f"Erro ao atualizar contradição [{c['id']}]. Tente novamente."
+
+        status_label = {"resolved": "resolvida", "clarified": "esclarecida", "dismissed": "descartada"}.get(
+            new_status, new_status
+        )
+        return (
+            f"Contradição {status_label} com sucesso.\n\n"
+            f"**Contradição:** {c.get('process_name', '—')} — {(c.get('description') or '')[:120]}\n"
+            f"**Resolução:** {resolution_note}\n"
+            f"**Registrado por:** {resolved_by}"
+        )
+
+    def delete_contradiction(self, description_query: str, confirm: bool) -> str:
+        """Remove permanentemente uma contradição."""
+        if not confirm:
+            return (
+                "Exclusão cancelada. Para excluir, confirme com confirm=true. "
+                "Esta ação é irreversível."
+            )
+
+        from core.knowledge_store import get_contradictions
+        from modules.supabase_client import get_supabase_client
+
+        contradictions = get_contradictions(self.project_id, status=None, limit=100)
+        if not contradictions:
+            return "Nenhuma contradição encontrada no projeto."
+
+        query_lower = description_query.lower()
+        matches = [c for c in contradictions if query_lower in (c.get("description") or "").lower()]
+        if not matches:
+            matches = [c for c in contradictions if any(
+                query_lower in (c.get(f) or "").lower()
+                for f in ("process_name", "clarifying_question")
+            )]
+        if not matches:
+            return (
+                f"Nenhuma contradição encontrada com a descrição '{description_query}'. "
+                "Use list_kh_contradictions para ver as contradições disponíveis."
+            )
+        if len(matches) > 1:
+            summaries = "\n".join(
+                f"  • [{c['id']}] {c.get('process_name', '—')}: {(c.get('description') or '')[:80]}…"
+                for c in matches[:5]
+            )
+            return (
+                f"{len(matches)} contradições corresponderam a '{description_query}'. "
+                f"Refine a busca:\n{summaries}"
+            )
+
+        c = matches[0]
+        try:
+            sb = get_supabase_client()
+            sb.table("kh_contradictions").delete().eq("id", c["id"]).execute()
+        except Exception as exc:
+            return f"Erro ao excluir contradição [{c['id']}]: {exc}"
+
+        return (
+            f"Contradição excluída permanentemente.\n\n"
+            f"**Processo:** {c.get('process_name', '—')}\n"
+            f"**Descrição:** {(c.get('description') or '')[:200]}"
+        )
+
     def list_kh_facts(self, fact_type: str | None = None, limit: int = 50) -> str:
         """Lista fatos consolidados do Grafo de Conhecimento."""
         from core.knowledge_store import get_facts
@@ -11064,6 +11236,16 @@ class AssistantToolExecutor:
                 ),
                 "list_kh_contradictions": lambda: self.list_kh_contradictions(
                     status=tool_input.get("status", "open"),
+                ),
+                "resolve_contradiction":  lambda: self.resolve_contradiction(
+                    description_query=tool_input["description_query"],
+                    resolution_note=tool_input["resolution_note"],
+                    resolved_by=tool_input.get("resolved_by", "assistente"),
+                    new_status=tool_input.get("new_status", "resolved"),
+                ),
+                "delete_contradiction":   lambda: self.delete_contradiction(
+                    description_query=tool_input["description_query"],
+                    confirm=bool(tool_input.get("confirm", False)),
                 ),
                 "list_kh_facts":          lambda: self.list_kh_facts(
                     fact_type=tool_input.get("fact_type"),

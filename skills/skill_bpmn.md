@@ -161,6 +161,17 @@ Regras de eventos:
   - ✓ "Contrato assinado e arquivado" · "Cadastro rejeitado definitivamente" · "Migração homologada"
   - ✗ "Fim" · "End" · "Processo encerrado"
 
+**REGRA CRÍTICA — Formato colaboração: todo pool deve ter Start Event e End Event explícitos:**
+- Mesmo pools simples (Cliente, Fornecedor, Bureaus) precisam de `noneStartEvent` e `noneEndEvent` declarados nos `steps`.
+- Nunca omita os eventos de um pool esperando que o gerador injete "Início"/"Fim" — o gerador usa nomes genéricos que violam a regra de nomenclatura acima.
+- Pool com apenas `sendTask`/`receiveTask` sem eventos explícitos → **erro**: nome genérico injetado.
+- Estrutura mínima obrigatória para qualquer pool em colaboração:
+  ```
+  S00: noneStartEvent  — descreve o gatilho real no contexto deste ator
+  S01…Sn: tarefas e gateways
+  Sm: noneEndEvent     — descreve o estado final alcançado por este ator
+  ```
+
 **REGRA CRÍTICA — End Events com resultado semelhante devem ter nomes distintos:**
 Quando múltiplos caminhos terminam com o mesmo resultado conceitual (ex: duas rejeições),
 diferencie pelo **motivo ou contexto** que originou cada encerramento.
@@ -641,11 +652,15 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
       "name": "Cliente",
       "process": {
         "steps": [
+          { "id": "S00", "title": "Necessidade de Crédito Identificada", "description": "Cliente decide solicitar crédito e acessa o portal digital.", "actor": null, "is_decision": false, "task_type": "noneStartEvent", "lane": null },
           { "id": "S01", "title": "Enviar Proposta", "description": "Cliente submete proposta de crédito pelo portal digital.", "actor": null, "is_decision": false, "task_type": "sendTask", "lane": null },
-          { "id": "S02", "title": "Receber Resultado", "description": "Cliente aguarda e recebe notificação do banco com resultado da análise de crédito.", "actor": null, "is_decision": false, "task_type": "receiveTask", "lane": null }
+          { "id": "S02", "title": "Receber Resultado", "description": "Cliente aguarda e recebe notificação do banco com resultado da análise de crédito.", "actor": null, "is_decision": false, "task_type": "receiveTask", "lane": null },
+          { "id": "S03", "title": "Resultado de Crédito Recebido", "description": "Processo encerrado para o cliente após recebimento da notificação final do banco.", "actor": null, "is_decision": false, "task_type": "noneEndEvent", "lane": null }
         ],
         "edges": [
-          { "source": "S01", "target": "S02", "label": "", "condition": "" }
+          { "source": "S00", "target": "S01", "label": "", "condition": "" },
+          { "source": "S01", "target": "S02", "label": "", "condition": "" },
+          { "source": "S02", "target": "S03", "label": "", "condition": "" }
         ],
         "lanes": []
       }
@@ -715,8 +730,8 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 - S04→S09 ("≥700") e S07→S09 ("Sim") convergem em S09: quando dois caminhos XOR chegam à mesma tarefa de continuação, o join é implícito e o gerador renderiza corretamente
 - "Receita Federal", "Serasa", "Bureau" → pool_3, **NUNCA lane interna** do banco
 - Departamentos do banco (Análise, Gerência) → lanes dentro do pool_2
-- `sendTask`/`receiveTask` no pool_1 (Cliente) porque há message flows com o banco
-- Cada pool tem `steps`/`edges`/`lanes` independentes; IDs reiniciam em S01 por pool
+- `sendTask`/`receiveTask` no pool_1 (Cliente) porque há message flows com o banco — mas `noneStartEvent` e `noneEndEvent` são **obrigatórios mesmo assim**: S00 e S03 delimitam o ciclo de vida do ator Cliente
+- Cada pool tem `steps`/`edges`/`lanes` independentes; IDs reiniciam em S00 por pool (S00 = startEvent, último = endEvent)
 
 ---
 
