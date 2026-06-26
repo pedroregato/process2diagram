@@ -63,7 +63,7 @@ Para cada **pool** (ou processo flat), extraia:
 ## Fase 2 — Auditoria Semantica
 
 Aplique **TODOS** os checklists abaixo em ordem. Cada item deve ser
-avaliado como: OK | VIOLACAO | ATENCAO (sugestao).
+avaliado como: ✅ OK | ❌ VIOLACAO | ⚠️ ATENCAO (sugestao).
 
 Para cada violacao, fornexa:
 - **Elemento:** ID + Nome
@@ -216,11 +216,13 @@ Ao final da execucao, retorne UM relatorio consolidado:
 
 | Tipo | Elemento | Problema | Correcao |
 |---|---|---|---|
-| VIOLACAO | G01 "Validar Conteudo" | Gateway com verbo de atividade | Virar userTask + novo gateway |
-| ... | ... | ... | ... |
-| OK | — | Nomenclaturas de tasks | — |
+| ❌ VIOLACAO | G01 "Validar Conteudo" | Gateway com verbo de atividade | Virar userTask + novo gateway |
+| ❌ VIOLACAO | ... | ... | ... |
+| ✅ OK | — | Nomenclaturas de tasks corretas | — |
+| ⚠️ ATENCAO | ... | Sugestao de melhoria | ... |
 
-Score de qualidade: X/10
+**Score de qualidade: X/10**
+_(0-3: critico · 4-6: com problemas · 7-8: bom · 9-10: excelente)_
 
 ---
 
