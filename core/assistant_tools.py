@@ -741,7 +741,44 @@ def get_tool_schemas_openai() -> list[dict]:
                     "required": ["new_status"],
                 },
             },
-        },        
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "update_requirement_text",
+                "description": (
+                    "Atualiza o título e/ou a descrição completa de um requisito específico pelo número. "
+                    "USE quando o usuário pedir para corrigir, trocar ou reescrever o texto de um requisito "
+                    "e a correção envolver aspas, caracteres especiais ou mudança substancial de conteúdo — "
+                    "casos em que apply_text_correction não seria adequada. "
+                    "Exemplos de trigger: 'Corrija a descrição do REQ-710', "
+                    "'Substitua o texto do requisito 710 por ...', "
+                    "'Altere o título do REQ-005 para ...'."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "req_number": {
+                            "type": "integer",
+                            "description": "Número do requisito a atualizar (ex: 710 para REQ-710)",
+                        },
+                        "new_description": {
+                            "type": "string",
+                            "description": "Novo texto completo da descrição do requisito (opcional se apenas title for alterado)",
+                        },
+                        "new_title": {
+                            "type": "string",
+                            "description": "Novo título do requisito (opcional se apenas description for alterada)",
+                        },
+                        "change_note": {
+                            "type": "string",
+                            "description": "Nota explicando o motivo da alteração (opcional, mas recomendada para rastreabilidade)",
+                        },
+                    },
+                    "required": ["req_number"],
+                },
+            },
+        },
         {
             "type": "function",
             "function": {
@@ -771,6 +808,67 @@ def get_tool_schemas_openai() -> list[dict]:
                         },
                     },
                     "required": ["statement"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "update_sbvr_rule",
+                "description": (
+                    "Atualiza o enunciado e/ou tipo de uma regra SBVR existente pelo seu ID (ex: BR002, BR006). "
+                    "USE quando o usuário pedir para corrigir, atualizar ou substituir o texto de uma regra SBVR. "
+                    "Exemplos de trigger: 'Corrija a regra BR002', 'Atualize o enunciado de BR006 para ...', "
+                    "'Troque o texto da regra BR007'."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "rule_id": {
+                            "type": "string",
+                            "description": "ID da regra SBVR a atualizar (ex: 'BR002', 'RBN-003')",
+                        },
+                        "new_statement": {
+                            "type": "string",
+                            "description": "Novo enunciado formal da regra no padrão SBVR",
+                        },
+                        "new_rule_type": {
+                            "type": "string",
+                            "description": "Novo tipo da regra: 'Definitional Rule', 'Behavioral Rule', 'Structural Rule' (opcional)",
+                        },
+                    },
+                    "required": ["rule_id", "new_statement"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "update_sbvr_term_by_id",
+                "description": (
+                    "Atualiza um termo SBVR pelo seu UUID — necessário quando há múltiplos termos "
+                    "com o mesmo nome (ex: 3 entradas de 'Identificador do Documento'). "
+                    "USE quando o usuário quiser atualizar um termo específico identificado pelo ID, "
+                    "ou quando update_sbvr_term falhou por haver mais de um termo com o mesmo nome. "
+                    "Para obter o ID de um termo, use get_sbvr_terms primeiro."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "term_id": {
+                            "type": "string",
+                            "description": "UUID do termo SBVR a atualizar",
+                        },
+                        "new_definition": {
+                            "type": "string",
+                            "description": "Nova definição do termo (opcional se apenas category for alterada)",
+                        },
+                        "new_category": {
+                            "type": "string",
+                            "description": "Nova categoria do termo (opcional)",
+                        },
+                    },
+                    "required": ["term_id"],
                 },
             },
         },
@@ -3275,8 +3373,11 @@ _TOOL_CATEGORIES: dict[str, str] = {
     # Escrita / Modificação
     "add_sbvr_term":                "escrita",
     "update_sbvr_term":             "escrita",
+    "update_sbvr_term_by_id":       "escrita",
     "add_sbvr_rule":                "escrita",
-    "update_requirement_status": "escrita",
+    "update_sbvr_rule":             "escrita",
+    "update_requirement_status":    "escrita",
+    "update_requirement_text":      "escrita",
     # Admin — escrita privilegiada
     "apply_text_correction":        "admin",
     "rename_meeting":               "admin",
@@ -3629,6 +3730,84 @@ class AssistantToolExecutor:
             lines.append(f"\n📝 Nota registrada: *{status_note}*")
         return "\n".join(lines)
 
+    def update_requirement_text(
+        self,
+        req_number: int,
+        new_description: str | None = None,
+        new_title: str | None = None,
+        change_note: str | None = None,
+    ) -> str:
+        """Atualiza título e/ou descrição de um requisito específico, com versionamento."""
+        from modules.supabase_client import get_supabase_client
+        from datetime import datetime, timezone
+        db = get_supabase_client()
+        if not db:
+            return "❌ Supabase não configurado."
+        if not new_description and not new_title:
+            return "❌ Informe new_description e/ou new_title para atualizar."
+
+        try:
+            rows = (
+                db.table("requirements")
+                .select("id, req_number, title, description, status, first_meeting_id")
+                .eq("project_id", self.project_id)
+                .eq("req_number", req_number)
+                .execute().data or []
+            )
+        except Exception as exc:
+            return f"❌ Erro ao buscar REQ-{req_number:03d}: {exc}"
+
+        if not rows:
+            return f"❌ REQ-{req_number:03d} não encontrado no projeto."
+
+        row = rows[0]
+        rid = row["id"]
+        patch: dict = {}
+        if new_title:
+            patch["title"] = new_title.strip()
+        if new_description:
+            patch["description"] = new_description.strip()
+
+        try:
+            db.table("requirements").update(patch).eq("id", rid).execute()
+        except Exception as exc:
+            return f"❌ Erro ao atualizar REQ-{req_number:03d}: {exc}"
+
+        # Registrar versão
+        try:
+            ver_rows = (
+                db.table("requirement_versions")
+                .select("version")
+                .eq("requirement_id", rid)
+                .order("version", desc=True)
+                .limit(1)
+                .execute().data or []
+            )
+            next_ver = (ver_rows[0]["version"] + 1) if ver_rows else 1
+            ver_payload = {
+                "requirement_id": rid,
+                "meeting_id":     row.get("first_meeting_id"),
+                "version":        next_ver,
+                "title":          patch.get("title", row.get("title", "")),
+                "description":    patch.get("description", row.get("description")),
+                "status":         row.get("status", "active"),
+                "change_type":    "text_edit",
+                "changed_at":     datetime.now(timezone.utc).isoformat(),
+                "change_note":    change_note or "Texto atualizado via Assistente",
+            }
+            db.table("requirement_versions").insert(ver_payload).execute()
+        except Exception:
+            pass  # versionamento é best-effort
+
+        fields = (["título"] if new_title else []) + (["descrição"] if new_description else [])
+        return (
+            f"✅ REQ-{req_number:03d} atualizado com sucesso!\n"
+            f"• Campos alterados: {', '.join(fields)}"
+            + (f"\n• Novo título: {new_title}" if new_title else "")
+            + (f"\n• Nova descrição: {(new_description or '')[:200]}" if new_description else "")
+            + (f"\n• Nota: {change_note}" if change_note else "")
+        )
+
     @staticmethod
     def _section(minutes_md: str, *section_names: str) -> str:
         """Extract a named section from minutes markdown. Tries each name in order."""
@@ -3771,7 +3950,8 @@ class AssistantToolExecutor:
     show_bpmn_diagram, show_mermaid_diagram, show_metrics
 
   Escrita (todos os perfis):
-    add_sbvr_term, update_sbvr_term, add_sbvr_rule
+    add_sbvr_term, update_sbvr_term, update_sbvr_term_by_id, add_sbvr_rule, update_sbvr_rule,
+    update_requirement_text
 
   Admin (perfil admin/master):
     apply_text_correction, rename_meeting, delete_meeting, delete_project_artifacts,
@@ -4615,6 +4795,93 @@ class AssistantToolExecutor:
                     f"• Erro com meeting_id: {exc2}"
                 )
         return f"❌ Falha ao inserir regra SBVR: {err1}"
+
+    def update_sbvr_rule(
+        self,
+        rule_id: str,
+        new_statement: str,
+        new_rule_type: str | None = None,
+    ) -> str:
+        """Atualiza o enunciado e/ou tipo de uma regra SBVR existente pelo ID."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "❌ Supabase não configurado."
+
+        try:
+            rows = (
+                db.table("sbvr_rules")
+                .select("id, rule_id, statement, rule_type")
+                .eq("project_id", self.project_id)
+                .ilike("rule_id", rule_id.strip())
+                .execute().data or []
+            )
+        except Exception as exc:
+            return f"❌ Erro ao buscar regra: {exc}"
+
+        if not rows:
+            return f"❌ Regra '{rule_id}' não encontrada no projeto."
+
+        patch: dict = {"statement": new_statement.strip()}
+        if new_rule_type:
+            patch["rule_type"] = new_rule_type.strip()
+
+        try:
+            db.table("sbvr_rules").update(patch).eq("id", rows[0]["id"]).execute()
+            fields = ["enunciado"] + (["tipo"] if new_rule_type else [])
+            return (
+                f"✅ Regra {rule_id} atualizada com sucesso!\n"
+                f"• Campos alterados: {', '.join(fields)}\n"
+                f"• Novo enunciado: {new_statement}"
+            )
+        except Exception as exc:
+            return f"❌ Erro ao atualizar regra '{rule_id}': {exc}"
+
+    def update_sbvr_term_by_id(
+        self,
+        term_id: str,
+        new_definition: str | None = None,
+        new_category: str | None = None,
+    ) -> str:
+        """Atualiza um termo SBVR pelo UUID — para termos homônimos com IDs distintos."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "❌ Supabase não configurado."
+
+        patch: dict = {}
+        if new_definition:
+            patch["definition"] = new_definition.strip()
+        if new_category:
+            patch["category"] = new_category.strip()
+
+        if not patch:
+            return "❌ Nenhum campo para atualizar. Informe new_definition e/ou new_category."
+
+        try:
+            rows = (
+                db.table("sbvr_terms")
+                .select("id, term, definition")
+                .eq("id", term_id.strip())
+                .execute().data or []
+            )
+        except Exception as exc:
+            return f"❌ Erro ao verificar termo: {exc}"
+
+        if not rows:
+            return f"❌ Termo com ID '{term_id}' não encontrado."
+
+        term_name = rows[0].get("term", "—")
+        try:
+            db.table("sbvr_terms").update(patch).eq("id", term_id.strip()).execute()
+            fields = (["definição"] if new_definition else []) + (["categoria"] if new_category else [])
+            return (
+                f"✅ Termo '{term_name}' (ID: {term_id[:8]}…) atualizado!\n"
+                f"• Campos alterados: {', '.join(fields)}"
+                + (f"\n• Nova definição: {new_definition}" if new_definition else "")
+            )
+        except Exception as exc:
+            return f"❌ Erro ao atualizar termo '{term_id}': {exc}"
 
     # ── Write tools ───────────────────────────────────────────────────────────
 
@@ -10994,17 +11261,33 @@ class AssistantToolExecutor:
                     filter_current_status=tool_input.get("filter_current_status"),
                     filter_meeting_number=tool_input.get("filter_meeting_number"),
                     status_note=tool_input.get("status_note"),
-                ),                
+                ),
+                "update_requirement_text":   lambda: self.update_requirement_text(
+                    req_number=int(tool_input["req_number"]),
+                    new_description=tool_input.get("new_description"),
+                    new_title=tool_input.get("new_title"),
+                    change_note=tool_input.get("change_note"),
+                ),
                 "update_sbvr_term":          lambda: self.update_sbvr_term(
                     tool_input["term"],
                     tool_input.get("definition"),
                     tool_input.get("category"),
                     tool_input.get("origin", "assistente"),
                 ),
+                "update_sbvr_term_by_id":    lambda: self.update_sbvr_term_by_id(
+                    term_id=tool_input["term_id"],
+                    new_definition=tool_input.get("new_definition"),
+                    new_category=tool_input.get("new_category"),
+                ),
                 "add_sbvr_rule":             lambda: self.add_sbvr_rule(
                     tool_input["statement"],
                     tool_input.get("rule_type", "Behavioral Rule"),
                     tool_input.get("source", "manual"),
+                ),
+                "update_sbvr_rule":          lambda: self.update_sbvr_rule(
+                    rule_id=tool_input["rule_id"],
+                    new_statement=tool_input["new_statement"],
+                    new_rule_type=tool_input.get("new_rule_type"),
                 ),
                 "preview_text_correction":   lambda: self.preview_text_correction(
                     tool_input["find_text"],
