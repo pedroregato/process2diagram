@@ -378,6 +378,25 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC75 — Concluído (v4.58 / 2026-06-26)
+
+**AgentBPMNReviewer completo — apply_bpmn_corrections + agent LLM + DB tables**
+
+- [x] **`agents/agent_bpmn_reviewer.py`** (novo) — agente LLM standalone (padrão `_MinimalHub`):
+  - `review(bpmn_xml, process_name)` → str — relatório Markdown completo em 4 fases via `skill_bpmn_reviewer.md`; chama `_call_llm` diretamente (resposta Markdown, não JSON)
+  - `apply_corrections(bpmn_xml, process_name, corrections)` → dict | None — aplica lista de correções cirúrgicas; prompt focado em JSON puro (retorna formato AgentBPMN flat); usa `_call_with_retry` (3 tentativas)
+- [x] **`apply_bpmn_corrections(process_name, corrections, version_notes?)`** — ferramenta admin no Assistente:
+  - Obtém XML atual do banco; chama `AgentBPMNReviewer.apply_corrections()`; constrói `BPMNModel` via `AgentBPMN._build_model()` + `_enforce_rules()` + `_generate_bpmn_xml()`; salva como nova versão via `save_bpmn_new_version()`; loga em `bpmn_review_log` (fail-open)
+  - Ações suportadas: `convert_to_task`, `convert_to_gateway`, `rename`, `add_edge_labels`, `add_missing_gateway`
+- [x] **`setup/supabase_migration_bpmn_review.sql`** — 2 novas tabelas:
+  - `bpmn_process_descriptions`: armazena descrição Markdown por processo/versão (`process_id FK`, `version_id FK nullable`, `description_md`, `generated_by`)
+  - `bpmn_review_log`: audit log de correções (`project_id`, `process_name`, `version_before/after`, `issues_found/corrected`, `review_report jsonb`, `user_approved`)
+- [x] **`core/project_store.py`** — `save_bpmn_review_log()` fail-open; insere em `bpmn_review_log`
+- [x] **`core/assistant_tools.py`** — schema OpenAI, categoria "admin", `_ADMIN_TOOLS`, executor `apply_bpmn_corrections()`, dispatch
+- [x] **Fluxo completo implementado:** `suggest_bpmn_corrections` → usuário confirma → `apply_bpmn_corrections` → nova versão BPMN salva → log de auditoria
+
+---
+
 ### PC74 — Concluído (v4.57 / 2026-06-26)
 
 **BPMN + Assistente — describe_bpmn_process + suggest_bpmn_corrections + Rule 4 + process_type/description_md**

@@ -3862,3 +3862,35 @@ def list_communication_noise_by_project(project_id: str) -> list[dict]:
             continue
     return result
 
+
+# ── BPMN Review Log ──────────────────────────────────────────────────────────
+
+def save_bpmn_review_log(
+    project_id: str,
+    process_name: str,
+    version_before: int = 0,
+    version_after: int = 0,
+    issues_found: int = 0,
+    issues_corrected: int = 0,
+    review_report: dict | None = None,
+    user_approved: bool = True,
+) -> bool:
+    """Registra uma entrada no log de revisão BPMN. Fail-open."""
+    db = _db()
+    if not db:
+        return False
+    try:
+        db.table("bpmn_review_log").insert({
+            "project_id":       project_id or None,
+            "process_name":     process_name,
+            "version_before":   version_before,
+            "version_after":    version_after,
+            "issues_found":     issues_found,
+            "issues_corrected": issues_corrected,
+            "review_report":    review_report or {},
+            "user_approved":    user_approved,
+        }).execute()
+        return True
+    except Exception:
+        return False
+

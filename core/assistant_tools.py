@@ -644,6 +644,76 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "apply_bpmn_corrections",
+                "description": (
+                    "Aplica correções cirúrgicas ao diagrama BPMN via LLM (AgentBPMNReviewer) "
+                    "e salva o resultado como nova versão no banco. "
+                    "Use APÓS suggest_bpmn_corrections identificar os problemas e o usuário confirmar. "
+                    "O agente aplica as correções, regenera o XML e incrementa a versão. "
+                    "Exemplos de ações: convert_to_task (gateway→userTask), "
+                    "convert_to_gateway (task→exclusiveGateway), rename, add_edge_labels. "
+                    "Admin only."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "process_name": {
+                            "type": "string",
+                            "description": "Nome (ou parte do nome) do processo BPMN a corrigir",
+                        },
+                        "corrections": {
+                            "type": "array",
+                            "description": "Lista de correções a aplicar ao diagrama",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "element_id": {
+                                        "type": "string",
+                                        "description": "ID do elemento no XML (ex: S05, G01)",
+                                    },
+                                    "element_name": {
+                                        "type": "string",
+                                        "description": "Nome atual do elemento",
+                                    },
+                                    "action": {
+                                        "type": "string",
+                                        "enum": [
+                                            "convert_to_task",
+                                            "convert_to_gateway",
+                                            "rename",
+                                            "add_edge_labels",
+                                            "add_missing_gateway",
+                                        ],
+                                        "description": "Ação a executar",
+                                    },
+                                    "new_type": {
+                                        "type": "string",
+                                        "description": "Novo tipo BPMN (ex: userTask, exclusiveGateway)",
+                                    },
+                                    "new_name": {
+                                        "type": "string",
+                                        "description": "Novo nome do elemento",
+                                    },
+                                    "reason": {
+                                        "type": "string",
+                                        "description": "Motivo da correção (para o log)",
+                                    },
+                                },
+                                "required": ["element_id", "action"],
+                            },
+                        },
+                        "version_notes": {
+                            "type": "string",
+                            "description": "Nota de versão (opcional)",
+                        },
+                    },
+                    "required": ["process_name", "corrections"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "list_bpmn_versions",
                 "description": (
                     "Lista todas as versões de um processo BPMN, mostrando ID, número de versão, "
@@ -3453,6 +3523,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "describe_bpmn_process":        "consulta",
     "suggest_bpmn_corrections":     "consulta",
     "save_bpmn_revision":           "admin",
+    "apply_bpmn_corrections":       "admin",
     "list_bpmn_versions":           "consulta",
     "delete_bpmn_version":          "admin",
     "get_sbvr_terms":               "consulta",
@@ -3608,6 +3679,7 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "delete_entity",
     "delete_bpmn_version",
     "save_bpmn_revision",
+    "apply_bpmn_corrections",
     "clear_llm_cache",
     "inserir_secao_ata",
     "mesclar_reunioes",
@@ -5220,6 +5292,118 @@ class AssistantToolExecutor:
             f"Processo: {proc['name']}\n"
             f"Nova versao: v{version_count}\n"
             f"Notas: {notes}"
+        )
+
+    def apply_bpmn_corrections(
+        self,
+        process_name: str,
+        corrections: list[dict],
+        version_notes: str = "",
+    ) -> str:
+        """Aplica correções cirúrgicas via AgentBPMNReviewer e salva nova versão."""
+        from core.project_store import (
+            list_bpmn_processes, list_bpmn_versions, save_bpmn_new_version,
+            save_bpmn_review_log,
+        )
+        from agents.agent_bpmn_reviewer import AgentBPMNReviewer
+        from agents.agent_bpmn import AgentBPMN
+
+        # 1. Localizar processo e versão atual
+        procs = list_bpmn_processes(self.project_id)
+        name_lower = process_name.lower().strip()
+        matches = [p for p in procs if name_lower in (p.get("name") or "").lower()]
+        if not matches:
+            return f"Processo '{process_name}' não encontrado. Use list_bpmn_processes."
+        if len(matches) > 1:
+            return "Múltiplos processos:\n" + "\n".join(f"  • {p['name']}" for p in matches)
+
+        proc = matches[0]
+        versions = list_bpmn_versions(proc["id"])
+        current = next((v for v in versions if v.get("is_current")), versions[0] if versions else None)
+        if not current or not current.get("bpmn_xml"):
+            return f"Processo '{proc['name']}' sem XML BPMN armazenado."
+
+        if not corrections:
+            return "Lista de correções vazia — nada a aplicar."
+
+        # 2. Chamar AgentBPMNReviewer para aplicar as correções e gerar JSON corrigido
+        reviewer = AgentBPMNReviewer()
+        corrected_json = reviewer.apply_corrections(
+            bpmn_xml=current["bpmn_xml"],
+            process_name=proc["name"],
+            corrections=corrections,
+        )
+        if not corrected_json or not isinstance(corrected_json, dict):
+            return (
+                "Falha ao gerar modelo corrigido via LLM.\n"
+                "Alternativas: use suggest_bpmn_corrections para ver o plano de correção "
+                "e depois save_bpmn_revision com o XML completo corrigido manualmente."
+            )
+
+        # 3. Construir BPMNModel a partir do JSON e gerar novo XML
+        try:
+            model = AgentBPMN._build_model(corrected_json)
+            AgentBPMN._enforce_rules(model, nlp_actors=[])
+            bpmn_xml_new = AgentBPMN._generate_bpmn_xml(model)
+        except Exception as exc:
+            return f"Erro ao gerar XML a partir do modelo corrigido: {exc}"
+
+        if not bpmn_xml_new:
+            return (
+                "Geração de XML retornou vazio.\n"
+                "Use save_bpmn_revision com o XML completo corrigido."
+            )
+
+        # 4. Salvar como nova versão
+        notes = version_notes.strip() or (
+            f"Correções aplicadas via AgentBPMNReviewer "
+            f"({len(corrections)} item(s)): "
+            + "; ".join(
+                f"{c.get('action', '?')} {c.get('element_name') or c.get('element_id', '?')}"
+                for c in corrections[:3]
+            )
+            + ("..." if len(corrections) > 3 else "")
+        )
+
+        version_before = current.get("version", 0) or 0
+        meeting_id_ref = current.get("meeting_id") or ""
+
+        ok = save_bpmn_new_version(
+            process_id=proc["id"],
+            meeting_id=meeting_id_ref,
+            project_id=self.project_id,
+            bpmn_xml=bpmn_xml_new,
+            mermaid_code="",
+            version_notes=notes,
+            created_by="bpmn_reviewer",
+        )
+
+        if not ok:
+            return f"Correções geradas, mas falha ao salvar no banco. Tente save_bpmn_revision."
+
+        version_after = version_before + 1
+
+        # 5. Registrar no log de auditoria (fail-open)
+        try:
+            save_bpmn_review_log(
+                project_id=self.project_id,
+                process_name=proc["name"],
+                version_before=version_before,
+                version_after=version_after,
+                issues_found=len(corrections),
+                issues_corrected=len(corrections),
+                review_report={"corrections": corrections},
+                user_approved=True,
+            )
+        except Exception:
+            pass
+
+        return (
+            f"Correções aplicadas com sucesso em '{proc['name']}'.\n"
+            f"  Versao: v{version_before} -> v{version_after}\n"
+            f"  {len(corrections)} correcao(oes) processada(s)\n"
+            f"  Nova versao salva como atual (is_current=True)\n\n"
+            f"Use review_bpmn_diagram para confirmar a qualidade do diagrama corrigido."
         )
 
     def get_sbvr_terms(self, keyword: str | None = None) -> str:
@@ -11943,6 +12127,11 @@ class AssistantToolExecutor:
                     process_description=tool_input.get("process_description", ""),
                     meeting_number=tool_input.get("meeting_number"),
                     revision_notes=tool_input.get("revision_notes", ""),
+                ),
+                "apply_bpmn_corrections":    lambda: self.apply_bpmn_corrections(
+                    process_name=tool_input["process_name"],
+                    corrections=tool_input.get("corrections", []),
+                    version_notes=tool_input.get("version_notes", ""),
                 ),
                 "list_bpmn_versions":        lambda: self._list_bpmn_versions(tool_input),
                 "delete_bpmn_version":       lambda: self._delete_bpmn_version(tool_input),
