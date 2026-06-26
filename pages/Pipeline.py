@@ -421,112 +421,16 @@ else:
                         st.error(f"Erro ao salvar: {e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HANDLER DE REEXECUÇÃO (ambos os modos)
-# ─────────────────────────────────────────────────────────────────────────────
-if "rerun_agent" in st.session_state:
-    import threading as _threading
-    import copy as _copy
-    import time as _time
-    _agent_name = st.session_state.pop("rerun_agent")
-    # Guard: não inicia novo thread se já existe um em execução
-    _existing = st.session_state.get("_rr_thread")
-    if _existing is not None and _existing.is_alive():
-        _running_agent = st.session_state.get("_rr_agent", _agent_name)
-        st.warning(f"⏳ Agente **{_running_agent}** já está em execução. Aguarde a conclusão.")
-    else:
-        _hub = st.session_state.get("hub")
-        if _hub:
-            # Guard: transcript obrigatório para agentes que processam texto
-            _needs_transcript = _agent_name in ("bpmn", "minutes", "requirements", "sbvr", "bmm", "quality")
-            _has_transcript   = bool(getattr(_hub, "transcript_clean", "") or getattr(_hub, "transcript_raw", ""))
-            if _needs_transcript and not _has_transcript:
-                st.error(
-                    f"⚠️ Transcrição não encontrada no hub. "
-                    f"Para reexecutar **{_agent_name}**, carregue a reunião em Modo B "
-                    f"(a transcrição precisa estar salva no banco) ou execute o pipeline completo."
-                )
-            else:
-                _client_info = get_session_llm_client(st.session_state.selected_provider)
-                if _client_info:
-                    _task = {"hub": None, "messages": [], "error": None}
-                    st.session_state["_rr_task"] = _task
-                    st.session_state["_rr_agent"] = _agent_name
-                    st.session_state["_rr_start"] = _time.time()
-                    _pcfg = st.session_state.provider_cfg
-                    _olang = st.session_state.output_language
-                    _hub_copy = _copy.copy(_hub)
-                    def _rr_worker(_t=_task, _a=_agent_name, _h=_hub_copy, _c=_client_info, _p=_pcfg, _o=_olang):
-                        try:
-                            _t["hub"], _t["messages"] = handle_rerun(_a, _h, _c, _p, _o)
-                        except Exception as _e:
-                            _t["error"] = str(_e)
-                    _rr_thread = _threading.Thread(target=_rr_worker, daemon=True)
-                    st.session_state["_rr_thread"] = _rr_thread
-                    _rr_thread.start()
-                    st.rerun()
-                else:
-                    st.error("Chave de API não encontrada.")
-        else:
-            st.error("Nenhuma sessão ativa. Execute o pipeline primeiro.")
-
-# POLLING — mantém WebSocket vivo enquanto o agente roda em background
-# Usa thread.is_alive() como fonte de verdade (evita problemas de referência de dict no session_state)
-_rr_thread = st.session_state.get("_rr_thread")
-if _rr_thread is not None:
-    import time as _time
-    _rr_agent = st.session_state.get("_rr_agent", "agente")
-    _rr_task = st.session_state.get("_rr_task", {})
-    if not _rr_thread.is_alive():
-        _rr_start = st.session_state.pop("_rr_start", None)
-        st.session_state.pop("_rr_thread", None)
-        st.session_state.pop("_rr_task", None)
-        st.session_state.pop("_rr_agent", None)
-        # Defer messages to session_state + rerun so the widget tree is stable
-        # before rendering results. Direct st.* calls here create transient widgets
-        # that shift all subsequent widget positions, causing 'setIn index N' crashes
-        # when the user interacts with the page on the very next rerun.
-        if _rr_task.get("hub") is not None:
-            st.session_state.hub = _rr_task["hub"]
-            _pending: list[tuple[str, str]] = [
-                ("success", f"✅ {_rr_agent.capitalize()} re‑executado com sucesso.")
-            ]
-            for _lvl, _msg in (_rr_task.get("messages") or []):
-                _pending.append((_lvl, _msg))
-            st.session_state["_rr_pending_messages"] = _pending
-        elif _rr_task.get("error"):
-            st.session_state["_rr_pending_messages"] = [
-                ("error", f"Erro na reexecução: {_rr_task['error']}")
-            ]
-        else:
-            st.session_state["_rr_pending_messages"] = [
-                ("error", "Reexecução falhou sem retornar resultado.")
-            ]
-        st.rerun()
-    else:
-        _elapsed = int(_time.time() - st.session_state.get("_rr_start", _time.time()))
-        _MAX_RR_SECS = 660  # 11 min — worst case: 3 retries × 180s (long-ctx) + 120s buffer
-        if _elapsed > _MAX_RR_SECS:
-            st.session_state.pop("_rr_thread", None)
-            st.session_state.pop("_rr_task", None)
-            st.session_state.pop("_rr_agent", None)
-            st.session_state.pop("_rr_start", None)
-            st.error(
-                f"⏱️ Timeout após {_elapsed}s aguardando o agente **{_rr_agent}**. "
-                f"O provider pode estar lento ou retornando resposta vazia. "
-                f"Tente novamente ou mude o provider em ⚙️ Configurações."
-            )
-        else:
-            st.info(f"⏳ Executando agente **{_rr_agent}**… aguarde. ({_elapsed}s / máx {_MAX_RR_SECS}s)")
-            _time.sleep(1)
-            st.rerun()
-
-# ─────────────────────────────────────────────────────────────────────────────
 # EXIBIÇÃO DOS RESULTADOS (ambos os modos)
+# Hub renders here — BEFORE the polling block — so the widget tree has the
+# same structure on every Streamlit rerun cycle (polling or not).
+# Without this ordering the polling st.rerun() stopped execution before the
+# hub tabs, causing client/server widget-tree desync after extended polling
+# (symptom: "Bad setIn index N, should be between [0, 0]" → blank screen).
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Display deferred messages from completed background agent runs.
-# Shown here (stable tree position) instead of inside the polling block,
-# preventing widget-position desync between reruns.
+# Rendered before hub so they appear prominently at the top of results.
 for _lvl, _msg in st.session_state.pop("_rr_pending_messages", []):
     if _lvl == "success":
         st.success(_msg)
@@ -756,6 +660,107 @@ if "hub" in st.session_state:
     for idx, tab_id in enumerate(all_tabs):
         with tabs[idx]:
             _render_tab(tab_id)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HANDLER DE REEXECUÇÃO (ambos os modos)
+# Placed AFTER hub render so the widget tree is fully stable before any
+# st.rerun() fires — prevents setIn widget-tree desync on long agent runs.
+# ─────────────────────────────────────────────────────────────────────────────
+if "rerun_agent" in st.session_state:
+    import threading as _threading
+    import copy as _copy
+    import time as _time
+    _agent_name = st.session_state.pop("rerun_agent")
+    # Guard: não inicia novo thread se já existe um em execução
+    _existing = st.session_state.get("_rr_thread")
+    if _existing is not None and _existing.is_alive():
+        _running_agent = st.session_state.get("_rr_agent", _agent_name)
+        st.warning(f"⏳ Agente **{_running_agent}** já está em execução. Aguarde a conclusão.")
+    else:
+        _hub = st.session_state.get("hub")
+        if _hub:
+            # Guard: transcript obrigatório para agentes que processam texto
+            _needs_transcript = _agent_name in ("bpmn", "minutes", "requirements", "sbvr", "bmm", "quality")
+            _has_transcript   = bool(getattr(_hub, "transcript_clean", "") or getattr(_hub, "transcript_raw", ""))
+            if _needs_transcript and not _has_transcript:
+                st.error(
+                    f"⚠️ Transcrição não encontrada no hub. "
+                    f"Para reexecutar **{_agent_name}**, carregue a reunião em Modo B "
+                    f"(a transcrição precisa estar salva no banco) ou execute o pipeline completo."
+                )
+            else:
+                _client_info = get_session_llm_client(st.session_state.selected_provider)
+                if _client_info:
+                    _task = {"hub": None, "messages": [], "error": None}
+                    st.session_state["_rr_task"] = _task
+                    st.session_state["_rr_agent"] = _agent_name
+                    st.session_state["_rr_start"] = _time.time()
+                    _pcfg = st.session_state.provider_cfg
+                    _olang = st.session_state.output_language
+                    _hub_copy = _copy.copy(_hub)
+                    def _rr_worker(_t=_task, _a=_agent_name, _h=_hub_copy, _c=_client_info, _p=_pcfg, _o=_olang):
+                        try:
+                            _t["hub"], _t["messages"] = handle_rerun(_a, _h, _c, _p, _o)
+                        except Exception as _e:
+                            _t["error"] = str(_e)
+                    _rr_thread = _threading.Thread(target=_rr_worker, daemon=True)
+                    st.session_state["_rr_thread"] = _rr_thread
+                    _rr_thread.start()
+                    st.rerun()
+                else:
+                    st.error("Chave de API não encontrada.")
+        else:
+            st.error("Nenhuma sessão ativa. Execute o pipeline primeiro.")
+
+# POLLING — mantém WebSocket vivo enquanto o agente roda em background
+# Hub section above already rendered; polling info appears at page bottom.
+# sleep(2) instead of 1s reduces WebSocket stress during long LLM calls.
+_rr_thread = st.session_state.get("_rr_thread")
+if _rr_thread is not None:
+    import time as _time
+    _rr_agent = st.session_state.get("_rr_agent", "agente")
+    _rr_task = st.session_state.get("_rr_task", {})
+    if not _rr_thread.is_alive():
+        _rr_start = st.session_state.pop("_rr_start", None)
+        st.session_state.pop("_rr_thread", None)
+        st.session_state.pop("_rr_task", None)
+        st.session_state.pop("_rr_agent", None)
+        # Defer messages to session_state + rerun so they render at a stable
+        # widget-tree position (top of results) on the very next rerun.
+        if _rr_task.get("hub") is not None:
+            st.session_state.hub = _rr_task["hub"]
+            _pending: list[tuple[str, str]] = [
+                ("success", f"✅ {_rr_agent.capitalize()} re‑executado com sucesso.")
+            ]
+            for _lvl, _msg in (_rr_task.get("messages") or []):
+                _pending.append((_lvl, _msg))
+            st.session_state["_rr_pending_messages"] = _pending
+        elif _rr_task.get("error"):
+            st.session_state["_rr_pending_messages"] = [
+                ("error", f"Erro na reexecução: {_rr_task['error']}")
+            ]
+        else:
+            st.session_state["_rr_pending_messages"] = [
+                ("error", "Reexecução falhou sem retornar resultado.")
+            ]
+        st.rerun()
+    else:
+        _elapsed = int(_time.time() - st.session_state.get("_rr_start", _time.time()))
+        _MAX_RR_SECS = 660  # 11 min — worst case: 3 retries × 180s (long-ctx) + 120s buffer
+        if _elapsed > _MAX_RR_SECS:
+            st.session_state.pop("_rr_thread", None)
+            st.session_state.pop("_rr_task", None)
+            st.session_state.pop("_rr_agent", None)
+            st.session_state.pop("_rr_start", None)
+            st.error(
+                f"⏱️ Timeout após {_elapsed}s aguardando o agente **{_rr_agent}**. "
+                f"O provider pode estar lento ou retornando resposta vazia. "
+                f"Tente novamente ou mude o provider em ⚙️ Configurações."
+            )
+        else:
+            st.info(f"⏳ Executando agente **{_rr_agent}**… aguarde. ({_elapsed}s / máx {_MAX_RR_SECS}s)")
+            _time.sleep(2)
+            st.rerun()
 
 # Rodapé
 st.markdown("---")

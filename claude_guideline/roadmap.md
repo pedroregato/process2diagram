@@ -378,6 +378,19 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC68 — Concluído (v4.51 / 2026-06-25)
+
+**Pipeline.py — Fix widget-tree desync (setIn index N, should be between [0, 0])**
+
+- [x] **Root cause identified** — during background-agent polling, `st.rerun()` at line 521 stopped Python execution before the hub section (tabs), leaving the client with a "no-tabs" widget tree. After 660 s of 1-second reruns, the WebSocket desync caused `setIn index 134 (should be between [0, 0])` on completion, resulting in a blank screen
+- [x] **Fix: hub section moved BEFORE rerun handler + polling block** — hub now renders on every Streamlit render cycle (including during polling), keeping the widget tree structurally identical throughout; the polling info (`st.info`) appears at the bottom of the page and disappears cleanly when the agent completes
+- [x] **sleep(2) instead of sleep(1)** — halved polling frequency to reduce WebSocket stress during extended LLM calls (LangGraph + PC67 validation can run 10+ min)
+- [x] **`pages/Pipeline.py`** — reordered: deferred messages → hub section → rerun handler → polling block → footer
+
+**Problema resolvido:** re-execução do agente BPMN (com PC67 validações + LangGraph retries) rodava em múltiplos ciclos longos; ao final o cliente tinha widget-tree desync e mostrava tela em branco.
+
+---
+
 ### PC67 — Concluído (v4.50 / 2026-06-25)
 
 **BPMN — validação de message_flows órfãos + skill v7.7**
