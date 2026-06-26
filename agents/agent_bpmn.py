@@ -287,6 +287,37 @@ class AgentBPMN(BaseAgent):
                             f"Incomplete BPMN: {_total_steps} steps but 0 edges — "
                             "all sequence flows are missing."
                         )
+                    # Message flow coverage: every endMessageEvent and sendTask must
+                    # have a corresponding outgoing message_flow entry.
+                    # An endMessageEvent without a message_flow is a "silent" event —
+                    # it sends nothing and breaks choreography between pools.
+                    if _pools:
+                        _mf_list = result.get("message_flows") or []
+                        _mf_sources = {
+                            (mf.get("source", {}).get("pool"),
+                             mf.get("source", {}).get("step"))
+                            for mf in _mf_list
+                            if isinstance(mf, dict)
+                            and isinstance(mf.get("source"), dict)
+                        }
+                        _orphaned = []
+                        for _p in _pools:
+                            _p_id = _p.get("id", "")
+                            for _s in (_p.get("steps") or []):
+                                _tt = _s.get("task_type", "")
+                                if _tt in ("endMessageEvent", "sendTask"):
+                                    if (_p_id, _s.get("id")) not in _mf_sources:
+                                        _orphaned.append(
+                                            f"'{_s.get('title', _s.get('id', '?'))}'"
+                                            f" ({_tt}) in pool"
+                                            f" '{_p.get('name', _p_id)}'"
+                                        )
+                        if _orphaned:
+                            raise ValueError(
+                                "Incomplete BPMN: the following message-sending elements "
+                                "have no outgoing message_flow — add them to "
+                                "`message_flows`: " + "; ".join(_orphaned)
+                            )
                     # Linha B: retry succeeded — backfill H0 so future reruns hit cache
                     if attempt > 0 and _h0 and not getattr(self, "_lg_skip_cache", False):
                         self._backfill_cache(_h0, raw)

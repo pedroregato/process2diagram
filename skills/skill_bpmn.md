@@ -3,7 +3,7 @@ agent: bpmn
 iniciativa: Pedro Regato
 project: process2diagram
 spec: BPMN 2.0 (OMG — ISO/IEC 19510) · Bruce Silver Method and Style
-version: 7.6
+version: 7.7
 ---
 
 # BPMN Agent — Instruções de Execução
@@ -721,6 +721,11 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 ---
 
 ## Instrucao Final
+
+**Verificação obrigatória antes de retornar (formato pools):**
+Todo `endMessageEvent` e todo `sendTask` em qualquer pool DEVE ter uma entrada correspondente em `message_flows` com `source.pool` e `source.step` apontando para ele.
+`endMessageEvent` sem `message_flow` de saída = evento mudo (não comunica nada = erro de coreografia).
+Conte: N `endMessageEvent` + N `sendTask` que iniciam comunicação → deve haver N entradas em `message_flows` cobrindo-os.
 
 Retorne **APENAS o JSON valido** resultante da analise da transcricao fornecida.
 Sem texto antes ou depois. Sem markdown fora do bloco de codigo. Sem explicacoes.

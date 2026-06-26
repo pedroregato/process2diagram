@@ -378,6 +378,17 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC67 — Concluído (v4.50 / 2026-06-25)
+
+**BPMN — validação de message_flows órfãos + skill v7.7**
+
+- [x] **`agents/agent_bpmn.py` — validação de message_flows órfãos** — após validação de edges por pool, verifica que todo `endMessageEvent` e `sendTask` em cada pool tem uma entrada correspondente em `message_flows` com `source.pool/step` apontando para ele; se qualquer um estiver sem message_flow → `ValueError` com lista dos elementos órfãos → retry com `_retry_suffix` semântico que preserva multi-pool e cita os elementos específicos; `endMessageEvent` sem message_flow = evento mudo (não comunica nada)
+- [x] **`skills/skill_bpmn.md` v7.7 — Instrução Final** — adicionada verificação obrigatória pré-retorno: contar N `endMessageEvent` + N `sendTask` que iniciam comunicação → deve haver N entradas cobrindo-os em `message_flows`
+
+**Problema resolvido:** o LLM gerava endMessageEvents corretos no banco (recusa automática, recusa manual, aprovação) mas omitia os message_flows correspondentes para o cliente — a coreografia ficava incompleta, p1_S03 (receiveTask) sem nenhum message_flow de entrada.
+
+---
+
 ### PC66 — Concluído (v4.49 / 2026-06-25)
 
 **skill_bpmn v7.6 — Exemplo C reescrito + regras de colaboração/gateways/lanes fortalecidas**
