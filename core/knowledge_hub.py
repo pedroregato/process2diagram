@@ -104,6 +104,8 @@ class BPMNModel:
     execution_log: Optional[dict] = None  # structured log of the last agent run
     process_trigger: str = ""             # Start Event title (LLM-supplied; default: "Início")
     process_outcomes: list[str] = field(default_factory=list)  # End Event titles per outcome
+    process_type: str = ""               # "flat" | "hierarchical" | "collaboration" (optional, LLM-supplied)
+    process_description_md: str = ""     # Natural language description of the process (AgentBPMN or reviewer)
 
     def to_process(self):
         """Bridge to legacy schema.Process for diagram generators."""
@@ -729,6 +731,12 @@ class KnowledgeHub:
             hub.bpmn.process_trigger = ""
         if not hasattr(hub.bpmn, 'process_outcomes'):
             hub.bpmn.process_outcomes = []
+
+        # ── v4.55: process_type + process_description_md
+        if not hasattr(hub.bpmn, 'process_type'):
+            hub.bpmn.process_type = ""
+        if not hasattr(hub.bpmn, 'process_description_md'):
+            hub.bpmn.process_description_md = ""
 
         # ── v4.7: structural score fields added to BPMNValidationScore ──────────
         for score_obj in [hub.validation.bpmn_score] + list(hub.validation.bpmn_candidates):

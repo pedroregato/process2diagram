@@ -12,7 +12,7 @@
 - **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown / Word / PDF), requirements analysis (JSON/Markdown), executive HTML report, interactive requirements mind map
 - **Deploy:** Streamlit Cloud — auto-deploy on push to `main` branch (`github.com/pedroregato/process2diagram`)
 - **Dev environment:** PyCharm on Windows; Python 3.13
-- **Current version:** v4.33
+- **Current version:** v4.57
 
 Supported LLM providers: DeepSeek V4 Flash (default), DeepSeek V4 Pro, DeepSeek V4 Flash (Thinking), Claude (Anthropic), OpenAI, Groq, Google Gemini, Grok (xAI).
 
@@ -359,9 +359,9 @@ Within Assistente mode, sidebar toggle `asst_use_tools`:
 
 ### Tool list (`core/assistant_tools.py`)
 
-**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `get_requirement_history`, `list_bpmn_processes`, `list_bpmn_versions`, `get_sbvr_terms`, `get_sbvr_rules`, `get_bmm`, `get_ckf`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`, `get_cache_stats`, `list_meeting_documents`, `get_document_content`, `search_documents`, `get_document_types`, `search_glossary`, `read_skill_reference`, `search_ibis_debates`, `get_ibis_timeline`, `generate_ibis_map`, `list_kh_entities`, `list_kh_contradictions`, `list_kh_facts`, `cluster_topic_decisions`, `generate_next_agenda`, `sugestoes_plantonista`, `diagnostico_projeto`, `reordenar_requisitos`, `vincular_regra_debate`, `mapa_rastreabilidade`, `simular_cenario`, `verificar_conformidade`, `sugerir_processos`, `gerar_deck_executivo`, `gerar_project_charter`.
+**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `get_requirement_history`, `update_requirement_text`, `list_bpmn_processes`, `list_bpmn_versions`, `review_bpmn_diagram`, `describe_bpmn_process`, `suggest_bpmn_corrections`, `get_sbvr_terms`, `get_sbvr_rules`, `update_sbvr_rule`, `update_sbvr_term_by_id`, `get_bmm`, `get_ckf`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`, `get_cache_stats`, `list_meeting_documents`, `get_document_content`, `search_documents`, `get_document_types`, `search_glossary`, `read_skill_reference`, `search_ibis_debates`, `get_ibis_timeline`, `generate_ibis_map`, `list_kh_entities`, `list_kh_contradictions`, `resolve_contradiction`, `delete_contradiction`, `list_kh_facts`, `cluster_topic_decisions`, `generate_next_agenda`, `sugestoes_plantonista`, `diagnostico_projeto`, `reordenar_requisitos`, `vincular_regra_debate`, `mapa_rastreabilidade`, `simular_cenario`, `verificar_conformidade`, `sugerir_processos`, `gerar_deck_executivo`, `gerar_project_charter`.
 
-**Admin only (`is_admin()`):** `get_database_integrity`, `fix_missing_llm_provider`, `generate_meeting_embeddings`, `reprocess_meeting_full`, `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`, `delete_entity`, `resolve_entity_ambiguity`, `clear_llm_cache`, `delete_bpmn_version`, `inserir_secao_ata`, `mesclar_reunioes`, `sincronizar_calendario`, write/generate tools.
+**Admin only (`is_admin()`):** `get_database_integrity`, `fix_missing_llm_provider`, `generate_meeting_embeddings`, `reprocess_meeting_full`, `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`, `delete_entity`, `resolve_entity_ambiguity`, `clear_llm_cache`, `delete_bpmn_version`, `save_bpmn_revision`, `inserir_secao_ata`, `mesclar_reunioes`, `sincronizar_calendario`, write/generate tools.
 
 Detalhes de parâmetros e comportamento por grupo de ferramentas: `claude_guideline/architecture_details.md §Tool list`.
 
@@ -389,7 +389,7 @@ Artefatos DMN tab: sub-tabs **📋 Tabelas** + **🔗 DRD** + download buttons (
 
 ---
 
-## Agent Skills (v4.33)
+## Agent Skills (v4.57)
 
 **Frontmatter stripping** — `BaseAgent._load_skill()` strips YAML `---...---` from 15/25 skill files (~80–200 tokens saved per agent call).
 

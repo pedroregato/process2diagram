@@ -558,6 +558,54 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "describe_bpmn_process",
+                "description": (
+                    "Gera uma descrição textual estruturada de um processo BPMN a partir do XML armazenado. "
+                    "Produz: participantes (pools/lanes), fluxo numerado passo-a-passo com tipos e condições, "
+                    "e resultados possíveis. Útil como 'elo perdido' entre transcrição e diagrama. "
+                    "Use quando o usuário pedir: 'Descreva o processo X', 'Como funciona o fluxo Y?', "
+                    "'Documente o processo Z em texto'. "
+                    "Use list_bpmn_processes para descobrir os nomes disponíveis."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "process_name": {
+                            "type": "string",
+                            "description": "Nome (ou parte do nome) do processo BPMN a descrever",
+                        },
+                    },
+                    "required": ["process_name"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "suggest_bpmn_corrections",
+                "description": (
+                    "A partir das violações detectadas por review_bpmn_diagram, gera um plano de correção "
+                    "estruturado para o processo BPMN — lista o que mudar em cada elemento sem aplicar. "
+                    "Use quando o usuário pedir: 'Que correções devo fazer no processo X?', "
+                    "'Proponha as correções para o diagrama Y', "
+                    "'O que precisa mudar no processo Z?'. "
+                    "Execute ANTES de save_bpmn_revision."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "process_name": {
+                            "type": "string",
+                            "description": "Nome (ou parte do nome) do processo BPMN a corrigir",
+                        },
+                    },
+                    "required": ["process_name"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "save_bpmn_revision",
                 "description": (
                     "Salva uma revisão corrigida de um diagrama BPMN como nova versão no banco. "
@@ -3402,6 +3450,8 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "get_bpmn_execution_log":       "consulta",
     "list_bpmn_processes":          "consulta",
     "review_bpmn_diagram":          "consulta",
+    "describe_bpmn_process":        "consulta",
+    "suggest_bpmn_corrections":     "consulta",
     "save_bpmn_revision":           "admin",
     "list_bpmn_versions":           "consulta",
     "delete_bpmn_version":          "admin",
@@ -4781,6 +4831,328 @@ class AssistantToolExecutor:
             "2. Quando satisfeito com o JSON corrigido, use `save_bpmn_revision` para salvar.",
         ]
 
+        return "\n".join(lines)
+
+    def describe_bpmn_process(self, process_name: str) -> str:
+        """Gera descrição textual estruturada de um processo BPMN a partir do XML."""
+        import xml.etree.ElementTree as ET
+        from core.project_store import list_bpmn_processes, list_bpmn_versions
+
+        procs = list_bpmn_processes(self.project_id)
+        name_lower = process_name.lower().strip()
+        matches = [p for p in procs if name_lower in (p.get("name") or "").lower()]
+        if not matches:
+            return f"Processo '{process_name}' não encontrado. Use list_bpmn_processes para ver os disponíveis."
+        if len(matches) > 1:
+            return "Múltiplos processos:\n" + "\n".join(f"  • {p['name']}" for p in matches)
+
+        proc = matches[0]
+        versions = list_bpmn_versions(proc["id"])
+        current = next((v for v in versions if v.get("is_current")), versions[0] if versions else None)
+        if not current or not current.get("bpmn_xml"):
+            return f"Processo '{proc['name']}' não possui XML BPMN armazenado."
+
+        xml_str = current["bpmn_xml"]
+        BPMN_NS = "http://www.omg.org/spec/BPMN/20100524/MODEL"
+
+        try:
+            root = ET.fromstring(xml_str)
+        except ET.ParseError as exc:
+            return f"Erro de parsing no XML: {exc}"
+
+        # Coletar elementos com nomes e tipos
+        elem_map: dict[str, dict] = {}
+        lane_elements: dict[str, list[str]] = {}  # lane_name → [elem_ids]
+        pool_names: list[str] = []
+        flows: list[tuple] = []  # (src_id, tgt_id, label)
+
+        for elem in root.iter():
+            tag = elem.tag
+            eid = elem.get("id", "")
+            name = (elem.get("name") or "").strip()
+            local = tag.replace(f"{{{BPMN_NS}}}", "")
+
+            KNOWN_TYPES = {
+                "task", "userTask", "serviceTask", "manualTask", "businessRuleTask",
+                "scriptTask", "sendTask", "receiveTask", "callActivity",
+                "startEvent", "endEvent", "intermediateCatchEvent", "intermediateThrowEvent",
+                "boundaryEvent", "exclusiveGateway", "parallelGateway", "inclusiveGateway",
+                "eventBasedGateway", "complexGateway",
+            }
+            if local in KNOWN_TYPES and eid:
+                elem_map[eid] = {"name": name, "type": local}
+            elif local == "sequenceFlow" and eid:
+                flows.append((elem.get("sourceRef", ""), elem.get("targetRef", ""), name))
+            elif local == "lane" and eid:
+                lane_name = name
+                # collect flowNodeRef children
+                refs = [c.text.strip() for c in elem if c.tag == f"{{{BPMN_NS}}}flowNodeRef" and c.text]
+                lane_elements[lane_name] = refs
+            elif local == "participant" and name:
+                pool_names.append(name)
+
+        # Mapear saídas por elemento
+        outgoing_map: dict[str, list] = {}
+        for src, tgt, lbl in flows:
+            outgoing_map.setdefault(src, []).append((tgt, lbl))
+
+        # Determinar ordem topológica simples (BFS a partir de startEvents)
+        start_ids = [eid for eid, e in elem_map.items() if "start" in e["type"].lower()]
+        visited: list[str] = []
+        queue = list(start_ids)
+        seen: set[str] = set(start_ids)
+        while queue:
+            cur = queue.pop(0)
+            visited.append(cur)
+            for tgt, _ in outgoing_map.get(cur, []):
+                if tgt not in seen and tgt in elem_map:
+                    seen.add(tgt)
+                    queue.append(tgt)
+        # Append any remaining (cycles / unreachable)
+        for eid in elem_map:
+            if eid not in seen:
+                visited.append(eid)
+
+        # Mapear cada elemento à sua lane
+        elem_to_lane: dict[str, str] = {}
+        for lane_name, refs in lane_elements.items():
+            for ref in refs:
+                elem_to_lane[ref] = lane_name
+
+        # Construir descrição
+        TYPE_LABELS = {
+            "exclusiveGateway": "Decisão exclusiva (XOR)",
+            "parallelGateway":  "Fork/join paralelo (AND)",
+            "inclusiveGateway": "Gateway inclusivo (OR)",
+            "eventBasedGateway": "Gateway baseado em evento",
+            "startEvent": "Evento de início",
+            "endEvent":   "Evento de fim",
+            "userTask":    "Tarefa humana",
+            "serviceTask": "Tarefa de sistema",
+            "manualTask":  "Tarefa manual",
+            "businessRuleTask": "Regra de negócio",
+            "sendTask":    "Envio de mensagem",
+            "receiveTask": "Recebimento de mensagem",
+            "callActivity": "Subprocesso chamado",
+            "intermediateCatchEvent": "Evento intermediário (captura)",
+            "intermediateThrowEvent": "Evento intermediário (lançamento)",
+            "boundaryEvent": "Evento de fronteira",
+        }
+
+        lines = [
+            f"## Processo: {proc['name']} (v{current.get('version', '?')})",
+            "",
+        ]
+
+        if pool_names:
+            lines += ["### Participantes (Pools)", ""]
+            for p in pool_names:
+                lines.append(f"- **{p}**")
+            lines.append("")
+
+        if lane_elements:
+            lines += ["### Participantes (Lanes)", ""]
+            for lane_name in lane_elements:
+                lines.append(f"- **{lane_name}**")
+            lines.append("")
+
+        lines += ["### Fluxo do Processo", ""]
+        step_num = 0
+        for eid in visited:
+            e = elem_map.get(eid)
+            if not e:
+                continue
+            step_num += 1
+            ename = e["name"] or f"[sem nome — {eid}]"
+            etype = e["type"]
+            type_label = TYPE_LABELS.get(etype, etype)
+            lane = elem_to_lane.get(eid, "")
+            lane_str = f" ({lane})" if lane else ""
+
+            outs = outgoing_map.get(eid, [])
+            if "gateway" in etype.lower():
+                if outs:
+                    out_desc = "; ".join(
+                        f'"{lbl}" → {elem_map.get(tgt, {}).get("name", tgt)}'
+                        for tgt, lbl in outs if lbl
+                    ) or "; ".join(
+                        elem_map.get(tgt, {}).get("name", tgt) for tgt, _ in outs
+                    )
+                    lines.append(f"{step_num}. **{ename}**{lane_str} — {type_label}: {out_desc}.")
+                else:
+                    lines.append(f"{step_num}. **{ename}**{lane_str} — {type_label}.")
+            elif "end" in etype.lower():
+                lines.append(f"{step_num}. **{ename}**{lane_str} — {type_label}. *(resultado final)*")
+            else:
+                lines.append(f"{step_num}. **{ename}**{lane_str} — {type_label}.")
+
+        end_names = [elem_map[e]["name"] for e in visited
+                     if elem_map.get(e, {}).get("type", "").startswith("end") and elem_map[e]["name"]]
+        if end_names:
+            lines += ["", "### Resultados Possíveis", ""]
+            for n in end_names:
+                lines.append(f"- {n}")
+
+        return "\n".join(lines)
+
+    def suggest_bpmn_corrections(self, process_name: str) -> str:
+        """Gera plano de correção estruturado a partir da auditoria do diagrama BPMN."""
+        import xml.etree.ElementTree as ET
+        from core.project_store import list_bpmn_processes, list_bpmn_versions
+
+        procs = list_bpmn_processes(self.project_id)
+        name_lower = process_name.lower().strip()
+        matches = [p for p in procs if name_lower in (p.get("name") or "").lower()]
+        if not matches:
+            return f"Processo '{process_name}' não encontrado. Use list_bpmn_processes para ver os disponíveis."
+        if len(matches) > 1:
+            return "Múltiplos processos:\n" + "\n".join(f"  • {p['name']}" for p in matches)
+
+        proc = matches[0]
+        versions = list_bpmn_versions(proc["id"])
+        current = next((v for v in versions if v.get("is_current")), versions[0] if versions else None)
+        if not current or not current.get("bpmn_xml"):
+            return f"Processo '{proc['name']}' sem XML armazenado."
+
+        xml_str = current["bpmn_xml"]
+        BPMN_NS = "http://www.omg.org/spec/BPMN/20100524/MODEL"
+        VERB_TRIGGERS = ("validar", "analisar", "verificar", "revisar", "conferir",
+                         "aprovar", "checar", "inspecionar", "auditar", "processar")
+
+        try:
+            root = ET.fromstring(xml_str)
+        except ET.ParseError as exc:
+            return f"Erro de parsing no XML: {exc}"
+
+        tasks, gateways, events, flows = [], [], [], []
+        for elem in root.iter():
+            tag = elem.tag; eid = elem.get("id", "?"); name = (elem.get("name") or "").strip()
+            local = tag.replace(f"{{{BPMN_NS}}}", "")
+            if local in {"exclusiveGateway", "parallelGateway", "inclusiveGateway",
+                         "eventBasedGateway", "complexGateway"}:
+                gateways.append((eid, name, local))
+            elif local in {"task", "userTask", "serviceTask", "manualTask",
+                           "businessRuleTask", "scriptTask", "sendTask", "receiveTask", "callActivity"}:
+                tasks.append((eid, name, local))
+            elif local in {"startEvent", "endEvent"}:
+                events.append((eid, name, local))
+            elif local == "sequenceFlow":
+                flows.append((eid, elem.get("sourceRef", "?"), elem.get("targetRef", "?"), name))
+
+        gw_ids = {g[0] for g in gateways}
+        outgoing: dict[str, list] = {}
+        for fid, src, tgt, lbl in flows:
+            outgoing.setdefault(src, []).append((tgt, lbl))
+
+        corrections: list[dict] = []
+
+        # Gateways com verbos de atividade
+        for eid, name, gtype in gateways:
+            if any(v in name.lower() for v in VERB_TRIGGERS):
+                outs = outgoing.get(eid, [])
+                gw_label = f"{'Conteúdo Validado?' if 'valid' in name.lower() else name + '?'}"
+                corrections.append({
+                    "element_id": eid,
+                    "element_name": name,
+                    "current_type": gtype,
+                    "action": "convert_to_task",
+                    "new_type": "userTask",
+                    "new_name": name,
+                    "reason": f"'{name}' é verbo de atividade — gateways não executam trabalho",
+                    "additional_steps": [
+                        f"Criar gateway exclusivo '{gw_label}' após o novo userTask '{name}'",
+                        f"Mover as {len(outs)} saídas atuais para o novo gateway",
+                    ],
+                })
+
+        # Tasks nomeadas como decisão
+        for eid, name, ttype in tasks:
+            if name.endswith("?"):
+                corrections.append({
+                    "element_id": eid,
+                    "element_name": name,
+                    "current_type": ttype,
+                    "action": "convert_to_gateway",
+                    "new_type": "exclusiveGateway",
+                    "new_name": name,
+                    "reason": f"'{name}' termina com '?' — é um ponto de decisão, não uma tarefa",
+                })
+
+        # Gateways com saídas sem rótulo
+        for eid, name, gtype in gateways:
+            unlabeled = [(tgt, lbl) for tgt, lbl in outgoing.get(eid, []) if not lbl.strip()]
+            if unlabeled and gtype == "exclusiveGateway":
+                n_out = len(outgoing.get(eid, []))
+                suggested = ["Sim", "Não"] if n_out == 2 else [f"Caminho {i+1}" for i in range(n_out)]
+                corrections.append({
+                    "element_id": eid,
+                    "element_name": name,
+                    "current_type": gtype,
+                    "action": "add_edge_labels",
+                    "reason": f"Gateway exclusivo com {len(unlabeled)} saída(s) sem rótulo",
+                    "suggested_labels": suggested,
+                })
+
+        # Start/End eventos genéricos
+        GENERIC_START = {"inicio", "start", "comecar", "iniciar", "começo"}
+        GENERIC_END   = {"fim", "end", "encerrar", "terminar", "final"}
+        for eid, name, etype in events:
+            nl = name.lower().strip()
+            if "start" in etype.lower() and nl in GENERIC_START:
+                corrections.append({
+                    "element_id": eid, "element_name": name, "current_type": etype,
+                    "action": "rename",
+                    "reason": "Start Event com nome genérico — descreva o gatilho real do processo",
+                    "suggestion": "Ex: 'Solicitação Recebida', 'Demanda Registrada'",
+                })
+            elif "end" in etype.lower() and nl in GENERIC_END:
+                corrections.append({
+                    "element_id": eid, "element_name": name, "current_type": etype,
+                    "action": "rename",
+                    "reason": "End Event com nome genérico — descreva o resultado de negócio",
+                    "suggestion": "Ex: 'Processo Concluído com Sucesso', 'Solicitação Recusada'",
+                })
+
+        if not corrections:
+            return (
+                f"Nenhuma correção automática identificada para '{proc['name']}'.\n"
+                f"O diagrama passou nos principais critérios de auditoria estrutural.\n"
+                f"Para auditoria detalhada, use review_bpmn_diagram."
+            )
+
+        lines = [
+            f"# Plano de Correcao — {proc['name']}",
+            f"**{len(corrections)} correcao(oes) identificada(s)**",
+            "",
+            "## Correcoes em ordem de prioridade",
+            "",
+        ]
+        for i, c in enumerate(corrections, 1):
+            lines += [
+                f"### {i}. {c['element_name']} (`{c['element_id']}`)",
+                f"- **Tipo atual:** {c['current_type']}",
+                f"- **Acao:** {c['action']}",
+                f"- **Motivo:** {c['reason']}",
+            ]
+            if "new_type" in c:
+                lines.append(f"- **Novo tipo:** {c['new_type']}")
+            if "new_name" in c:
+                lines.append(f"- **Novo nome:** {c['new_name']}")
+            if "additional_steps" in c:
+                lines.append("- **Passos adicionais:**")
+                for s in c["additional_steps"]:
+                    lines.append(f"  - {s}")
+            if "suggested_labels" in c:
+                lines.append(f"- **Labels sugeridos:** {', '.join(repr(l) for l in c['suggested_labels'])}")
+            if "suggestion" in c:
+                lines.append(f"- **Sugestao:** {c['suggestion']}")
+            lines.append("")
+
+        lines += [
+            "---",
+            "## Proximo passo",
+            "Revise as correcoes acima, ajuste o JSON BPMN conforme necessario e use `save_bpmn_revision` para salvar.",
+        ]
         return "\n".join(lines)
 
     def save_bpmn_revision(
@@ -11557,6 +11929,12 @@ class AssistantToolExecutor:
                 "get_bpmn_execution_log":    lambda: self.get_bpmn_execution_log(),
                 "list_bpmn_processes":       lambda: self.list_bpmn_processes(),
                 "review_bpmn_diagram":       lambda: self.review_bpmn_diagram(
+                    process_name=tool_input["process_name"],
+                ),
+                "describe_bpmn_process":     lambda: self.describe_bpmn_process(
+                    process_name=tool_input["process_name"],
+                ),
+                "suggest_bpmn_corrections":  lambda: self.suggest_bpmn_corrections(
                     process_name=tool_input["process_name"],
                 ),
                 "save_bpmn_revision":        lambda: self.save_bpmn_revision(

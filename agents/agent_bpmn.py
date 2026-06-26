@@ -509,6 +509,8 @@ class AgentBPMN(BaseAgent):
                 o.strip() for o in (data.get("process_outcomes") or [])
                 if isinstance(o, str) and o.strip()
             ],
+            process_type=(data.get("process_type") or "").strip(),
+            process_description_md=(data.get("process_description") or "").strip(),
         )
 
     @staticmethod
@@ -766,6 +768,41 @@ class AgentBPMN(BaseAgent):
         for pm in model.pool_models:
             pm_pop = {s.lane for s in pm.steps if s.lane}
             pm.lanes = [ln for ln in pm.lanes if ln in pm_pop]
+
+        # ── Rule 4: exclusiveGateway unlabeled exits → assign default labels ──
+        # BPMN Method and Style Level 1: every outgoing edge from an XOR gateway
+        # MUST have a conditionExpression. Missing labels make the diagram
+        # unreadable and violate the spec.
+        _xor_ids = {
+            s.id for s in model.steps
+            if s.task_type == "exclusiveGateway" or (s.is_decision and s.task_type in ("exclusiveGateway", "gateway"))
+        }
+        # Same for collaboration pools
+        for pm in model.pool_models:
+            for s in pm.steps:
+                if s.task_type == "exclusiveGateway" or (s.is_decision and s.task_type in ("exclusiveGateway", "gateway")):
+                    _xor_ids.add(s.id)
+
+        all_edges = list(model.edges) + [e for pm in model.pool_models for e in pm.edges]
+        for gw_id in _xor_ids:
+            gw_outs = [e for e in all_edges if e.source == gw_id]
+            unlabeled = [e for e in gw_outs if not (e.label or "").strip()]
+            if not unlabeled:
+                continue
+            total = len(gw_outs)
+            if total == 2:
+                # Assign "Sim"/"Não" only if both are unlabeled (avoid overwriting partial labels)
+                labeled = [e for e in gw_outs if (e.label or "").strip()]
+                if not labeled:
+                    unlabeled[0].label = "Sim"
+                    unlabeled[1].label = "Não"
+            else:
+                # Generic labels for N-way gateway (only fill blanks)
+                counter = 1
+                for e in gw_outs:
+                    if not (e.label or "").strip():
+                        e.label = f"Caminho {counter}"
+                        counter += 1
 
     # ── BPMN XML generation ───────────────────────────────────────────────────
 

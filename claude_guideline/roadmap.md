@@ -378,6 +378,41 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC74 — Concluído (v4.57 / 2026-06-26)
+
+**BPMN + Assistente — describe_bpmn_process + suggest_bpmn_corrections + Rule 4 + process_type/description_md**
+
+- [x] **`describe_bpmn_process(process_name)`** — gera descrição textual estruturada do processo a partir do XML BPMN; parse puro Python (`xml.etree`); extrai participantes (pools/lanes), fluxo numerado em ordem topológica (BFS), rótulos de saída de gateways, resultados possíveis (endEvents); escopo "consulta"
+- [x] **`suggest_bpmn_corrections(process_name)`** — plano de correção estruturado sem aplicar alterações; detecta: gateways com verbos de atividade → propõe conversão para userTask + novo gateway; tasks com `?` → propõe conversão para gateway; XOR sem labels → sugere "Sim"/"Não" ou "Caminho N"; eventos genéricos → sugere nomes de trigger/resultado; escopo "consulta"
+- [x] **`core/assistant_tools.py`** — schemas OpenAI, categorias, implementações e dispatch para as 2 novas ferramentas
+- [x] **Rule 4 (`_enforce_rules`)** — XOR gateways com arestas sem rótulo recebem labels padrão automaticamente: 2 saídas → "Sim"/"Não"; N saídas → "Caminho 1..N" (só preenche lacunas, não sobrescreve labels existentes)
+- [x] **`BPMNModel.process_type`** — campo opcional `"flat"|"hierarchical"|"collaboration"` (LLM-supplied via skill v7.9); `migrate()` guard v4.57
+- [x] **`BPMNModel.process_description_md`** — campo Markdown para descrição textual do processo (AgentBPMN ou revisor); `migrate()` guard v4.57
+
+---
+
+### PC73 — Concluído (v4.56 / 2026-06-26)
+
+**skill_bpmn v7.9 + AgentBPMNReviewer + review_bpmn_diagram + save_bpmn_revision**
+
+- [x] **`skills/skill_bpmn.md` v7.9** — 11 melhorias de prompt engineering: CKF Injection Awareness, Passo 0.5 (padrões estruturais), §1.1 Lane vs Ator Descartável, §1.2 Regra do Nome Exato, Rótulo Refletido (traceability label), Data Objects §8.5.1, §4.1 Detecção de Gateways Faltantes, Join Flexível de XOR, checklist "Gateway NÃO tem verbo", Passo 7 (Validação de Cobertura + Regra do Espelho), `process_type` no JSON de saída
+- [x] **`skills/skill_bpmn_reviewer.md`** (novo) — skill completo do AgentBPMNReviewer: 4 fases (parse → auditoria 25 regras → reelaboração textual → JSON); checklists: nomenclatura (R1–R7), gateway (R8–R12), tasks (R13–R16), fluxos (R17–R20), pools/lanes (R21–R23), hierarquia (R24–R25)
+- [x] **`review_bpmn_diagram(process_name)`** — auditoria pura Python via `xml.etree`; detecta: gateways com verbos, tasks como gateways, eventos genéricos, lanes genéricas, fluxos XOR sem rótulo, elementos órfãos; score /10; escopo "consulta"
+- [x] **`save_bpmn_revision(process_name, bpmn_xml, ...)`** — salva nova versão via `save_bpmn_new_version`; persiste `process_description` em `bpmn_processes` (best-effort); escopo "admin"
+
+---
+
+### PC72 — Concluído (v4.55 / 2026-06-26)
+
+**Assistente — 3 novas ferramentas de edição de req/SBVR**
+
+- [x] **`update_requirement_text(req_number, new_description, new_title, change_note)`** — atualiza título e/ou descrição completa de um requisito pelo número; registra versão em `requirement_versions` com `change_type='text_edit'`; resolve o caso de aspas simples que `apply_text_correction` não suportava; escopo "escrita"
+- [x] **`update_sbvr_rule(rule_id, new_statement, new_rule_type)`** — atualiza enunciado de uma regra SBVR pelo ID (ex: BR002, BR006); escopo "escrita"
+- [x] **`update_sbvr_term_by_id(term_id, new_definition, new_category)`** — atualiza termo SBVR pelo UUID; necessário quando múltiplos termos têm o mesmo nome; escopo "escrita"
+- [x] **`core/assistant_tools.py`** — schemas OpenAI, categorias, implementações e dispatch para as 3 ferramentas
+
+---
+
 ### PC71 — Concluído (v4.54 / 2026-06-26)
 
 **Assistente — novas ferramentas: resolve_contradiction + delete_contradiction**
