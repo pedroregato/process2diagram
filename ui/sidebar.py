@@ -107,6 +107,7 @@ def render_sidebar():
                         "task_type":   st.slider(t("task_type"),   0, 10, st.session_state.bpmn_weights.get("task_type",   5)),
                         "gateways":    st.slider(t("gateways"),    0, 10, st.session_state.bpmn_weights.get("gateways",    5)),
                         "structural":  st.slider(t("structural"),  0, 10, st.session_state.bpmn_weights.get("structural",  5)),
+                        "semantic":    st.slider(t("semantic"),    0, 10, st.session_state.bpmn_weights.get("semantic",    5)),
                     }
                 if st.session_state.n_bpmn_runs == 1:
                     st.session_state.use_langgraph = st.checkbox(

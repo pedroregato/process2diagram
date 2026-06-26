@@ -1,6 +1,6 @@
 # tests/test_agent_validator.py
 """
-Tests for agents/agent_validator.py — all four scoring dimensions.
+Tests for agents/agent_validator.py — all five scoring dimensions.
 No LLM calls; pure heuristic scoring.
 """
 
@@ -10,11 +10,12 @@ from core.knowledge_hub import BPMNValidationScore
 from tests.conftest import step, edge, model
 
 
-WEIGHTS_EQUAL = {"granularity": 5, "task_type": 5, "gateways": 5, "structural": 5}
-WEIGHTS_GRAN_ONLY = {"granularity": 10, "task_type": 0, "gateways": 0, "structural": 0}
-WEIGHTS_TYPE_ONLY = {"granularity": 0, "task_type": 10, "gateways": 0, "structural": 0}
-WEIGHTS_GW_ONLY   = {"granularity": 0, "task_type": 0,  "gateways": 10, "structural": 0}
-WEIGHTS_STR_ONLY  = {"granularity": 0, "task_type": 0,  "gateways": 0,  "structural": 10}
+WEIGHTS_EQUAL    = {"granularity": 5, "task_type": 5, "gateways": 5, "structural": 5, "semantic": 5}
+WEIGHTS_GRAN_ONLY = {"granularity": 10, "task_type": 0, "gateways": 0, "structural": 0, "semantic": 0}
+WEIGHTS_TYPE_ONLY = {"granularity": 0, "task_type": 10, "gateways": 0, "structural": 0, "semantic": 0}
+WEIGHTS_GW_ONLY   = {"granularity": 0, "task_type": 0,  "gateways": 10, "structural": 0, "semantic": 0}
+WEIGHTS_STR_ONLY  = {"granularity": 0, "task_type": 0,  "gateways": 0,  "structural": 10, "semantic": 0}
+WEIGHTS_SEM_ONLY  = {"granularity": 0, "task_type": 0,  "gateways": 0,  "structural": 0,  "semantic": 10}
 
 
 @pytest.fixture
@@ -178,12 +179,104 @@ class TestStructural:
         assert sc.n_structural_warnings >= 1
 
 
+# ── Semantic dimension ─────────────────────────────────────────────────────────
+
+class TestSemantic:
+    def test_clean_model_scores_ten(self, validator):
+        m = model(
+            step("s",  "Solicitação Recebida",  task_type="noneStartEvent"),
+            step("t1", "Validar Documento",     task_type="userTask"),
+            step("gw", "Documento Válido?",     task_type="exclusiveGateway"),
+            step("e",  "Processo Concluído",    task_type="noneEndEvent"),
+            edges=[],
+        )
+        sc = validator.score(m, "transcript", WEIGHTS_SEM_ONLY)
+        assert sc.semantic == 10.0
+        assert sc.n_semantic_violations == 0
+
+    def test_gateway_with_activity_verb_penalized(self, validator):
+        # "Validar" is an activity verb — gateway should be named as a question/state
+        gw = step("gw", "Validar Documento", task_type="exclusiveGateway")
+        m = model(gw, step("a", "A"), step("b", "B"),
+                  edges=[edge("gw", "a", "Sim"), edge("gw", "b", "Não")])
+        sc = validator.score(m, "transcript", WEIGHTS_SEM_ONLY)
+        assert sc.semantic < 10.0
+        assert sc.n_semantic_violations == 1
+
+    def test_multiple_gateway_verbs_cumulate(self, validator):
+        # Two gateways with activity verbs → 2 × 2.5 = 5.0 penalty → score 5.0
+        gw1 = step("gw1", "Validar Documento",  task_type="exclusiveGateway")
+        gw2 = step("gw2", "Analisar Proposta",  task_type="exclusiveGateway")
+        m = model(gw1, gw2)
+        sc = validator.score(m, "transcript", WEIGHTS_SEM_ONLY)
+        assert sc.n_semantic_violations == 2
+        assert sc.semantic == pytest.approx(5.0, rel=0.01)
+
+    def test_four_gateway_verb_violations_score_zero(self, validator):
+        steps_list = [
+            step(f"gw{i}", f"Validar Item {i}", task_type="exclusiveGateway")
+            for i in range(4)
+        ]
+        m = model(*steps_list)
+        sc = validator.score(m, "transcript", WEIGHTS_SEM_ONLY)
+        assert sc.semantic == 0.0
+        assert sc.n_semantic_violations == 4
+
+    def test_task_ending_with_question_mark_penalized(self, validator):
+        # userTask named like a gateway decision state
+        t = step("t", "Documento Válido?", task_type="userTask")
+        m = model(t)
+        sc = validator.score(m, "transcript", WEIGHTS_SEM_ONLY)
+        assert sc.semantic < 10.0
+        assert sc.n_semantic_violations == 1
+
+    def test_generic_start_event_penalized(self, validator):
+        s = step("s", "Início", task_type="noneStartEvent")
+        m = model(s)
+        sc = validator.score(m, "transcript", WEIGHTS_SEM_ONLY)
+        assert sc.semantic < 10.0
+        assert sc.n_semantic_violations == 1
+
+    def test_generic_end_event_penalized(self, validator):
+        e = step("e", "Fim", task_type="noneEndEvent")
+        m = model(e)
+        sc = validator.score(m, "transcript", WEIGHTS_SEM_ONLY)
+        assert sc.semantic < 10.0
+        assert sc.n_semantic_violations == 1
+
+    def test_descriptive_start_end_not_penalized(self, validator):
+        m = model(
+            step("s", "Demanda de Crédito Recebida", task_type="noneStartEvent"),
+            step("e", "Contrato Assinado e Arquivado", task_type="noneEndEvent"),
+            edges=[],
+        )
+        sc = validator.score(m, "transcript", WEIGHTS_SEM_ONLY)
+        assert sc.semantic == 10.0
+        assert sc.n_semantic_violations == 0
+
+    def test_good_gateway_name_not_penalized(self, validator):
+        # Gateway with question mark or state description — not a verb
+        gw = step("gw", "Contrato Válido?", task_type="exclusiveGateway")
+        m = model(gw, step("a", "A"), step("b", "B"),
+                  edges=[edge("gw", "a", "Sim"), edge("gw", "b", "Não")])
+        sc = validator.score(m, "transcript", WEIGHTS_SEM_ONLY)
+        assert sc.semantic == 10.0
+        assert sc.n_semantic_violations == 0
+
+    def test_semantic_violations_affect_weighted_score(self, validator):
+        gw_bad  = step("gw1", "Validar Contrato",  task_type="exclusiveGateway")
+        gw_good = step("gw2", "Contrato Válido?",  task_type="exclusiveGateway")
+        sc_bad  = validator.score(model(gw_bad),  "transcript", WEIGHTS_SEM_ONLY)
+        sc_good = validator.score(model(gw_good), "transcript", WEIGHTS_SEM_ONLY)
+        assert sc_good.weighted > sc_bad.weighted
+
+
 # ── Weighted composite ────────────────────────────────────────────────────────
 
 class TestWeightedScore:
     def test_zero_weight_dimension_excluded(self, validator):
         # 4 dangling edges → structural = 0.0 (maximum penalty)
-        # With structural weight=5: the 0 drags weighted below the 3-dim average.
+        # With structural weight=5: the 0 drags weighted below the 4-dim average.
         # With structural weight=0: structural excluded → higher weighted.
         m = model(step("a", "A"),
                   edges=[edge("a", "x1"), edge("a", "x2"),
@@ -191,7 +284,7 @@ class TestWeightedScore:
         sc_with    = validator.score(m, "word " * 50, WEIGHTS_EQUAL)
         sc_without = validator.score(m, "word " * 50,
                                      {"granularity": 5, "task_type": 5,
-                                      "gateways": 5, "structural": 0})
+                                      "gateways": 5, "structural": 0, "semantic": 5})
         assert sc_without.weighted > sc_with.weighted
 
     def test_score_returns_bpmn_validation_score_instance(self, validator):

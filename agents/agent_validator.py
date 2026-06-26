@@ -2,12 +2,14 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # AgentValidator — pure-Python BPMN quality scorer, no LLM call.
 #
-# Scores a BPMNModel on four user-configurable dimensions:
+# Scores a BPMNModel on five user-configurable dimensions:
 #   1. Granularidade  — activity count relative to transcript length
 #   2. Task type      — specificity of task_type assignments
 #   3. Gateways       — gateway correctness (labels, split/join symmetry)
 #   4. Structural     — penalty for structural issues (dangling refs, isolated
 #                       nodes, unreachable nodes, XOR missing labels, …)
+#   5. Semantic       — naming quality (gateway-with-verb, task-as-state,
+#                       generic start/end event names)
 #
 # Usage (called by Orchestrator when n_bpmn_runs > 1):
 #   validator = AgentValidator()
@@ -47,6 +49,21 @@ _MANUAL_KW   = {"assinar", "imprimir", "ligar", "coletar", "presencial",
 _RULE_KW     = {"classificar", "categorizar", "regra", "política",
                 "critério", "avaliar conformidade"}
 
+# Semantic dimension — activity verbs that must NOT appear as gateway names
+_ACTIVITY_VERBS = {
+    "validar", "analisar", "verificar", "revisar", "conferir", "aprovar",
+    "processar", "avaliar", "checar", "executar", "calcular", "gerar",
+    "encaminhar", "solicitar", "emitir", "registrar", "cadastrar",
+    "elaborar", "preparar", "enviar", "receber", "notificar", "publicar",
+}
+
+# Generic names that violate Bruce Silver Level 1 naming rules
+_GENERIC_START_NAMES = {
+    "início", "inicio", "start", "começar", "iniciar",
+    "início do processo", "inicio do processo",
+}
+_GENERIC_END_NAMES = {"fim", "end", "encerrar", "terminar", "fim do processo"}
+
 
 # ── Scorer ────────────────────────────────────────────────────────────────────
 
@@ -67,14 +84,18 @@ class AgentValidator:
         s_type = self._score_tasktype(steps)
         s_gw   = self._score_gateways(steps, edges)
         s_str, n_errors, n_warnings = self._score_structural(model)
+        s_sem, n_sem_viol = self._score_semantic(steps)
 
-        w_g  = weights.get("granularity", 5)
-        w_t  = weights.get("task_type",   5)
-        w_gw = weights.get("gateways",    5)
-        w_s  = weights.get("structural",  5)
-        total_w = w_g + w_t + w_gw + w_s or 1
+        w_g   = weights.get("granularity", 5)
+        w_t   = weights.get("task_type",   5)
+        w_gw  = weights.get("gateways",    5)
+        w_s   = weights.get("structural",  5)
+        w_sem = weights.get("semantic",    5)
+        total_w = w_g + w_t + w_gw + w_s + w_sem or 1
 
-        weighted = (w_g * s_gran + w_t * s_type + w_gw * s_gw + w_s * s_str) / total_w
+        weighted = (
+            w_g * s_gran + w_t * s_type + w_gw * s_gw + w_s * s_str + w_sem * s_sem
+        ) / total_w
 
         tasks    = [s for s in steps if s.task_type not in _EVENT_TYPES | _GATEWAY_TYPES]
         gateways = [s for s in steps if s.task_type in _GATEWAY_TYPES]
@@ -84,11 +105,13 @@ class AgentValidator:
             task_type=round(s_type, 2),
             gateways=round(s_gw, 2),
             structural=round(s_str, 2),
+            semantic=round(s_sem, 2),
             weighted=round(weighted, 2),
             n_tasks=len(tasks),
             n_gateways=len(gateways),
             n_structural_errors=n_errors,
             n_structural_warnings=n_warnings,
+            n_semantic_violations=n_sem_viol,
             transcript_words=len(transcript.split()),
         )
 
@@ -207,6 +230,50 @@ class AgentValidator:
         n_warnings = sum(1 for i in issues if i.severity == "warning")
         score = max(0.0, 10.0 - n_errors * 2.5 - n_warnings * 0.5)
         return round(score, 2), n_errors, n_warnings
+
+    def _score_semantic(self, steps) -> tuple[float, int]:
+        """
+        Score 0-10 based on BPMN naming conventions (Bruce Silver Level 1).
+
+        Violations detected (penalty per occurrence):
+          -2.5  Gateway title starts with an activity verb
+                ("Validar Contrato" as exclusiveGateway → should be userTask)
+          -2.0  Non-gateway/event task title ends with "?"
+                ("Documento Válido?" as userTask → should be exclusiveGateway)
+          -1.0  Start event with generic name ("Início", "Start", …)
+          -1.0  End event with generic name ("Fim", "End", …)
+
+        Returns (score 0–10, n_violations).
+        """
+        penalty = 0.0
+        n_violations = 0
+
+        for s in steps:
+            title_lower = s.title.lower().strip()
+            first_word  = title_lower.split()[0] if title_lower else ""
+
+            if s.task_type in _GATEWAY_TYPES:
+                if first_word in _ACTIVITY_VERBS:
+                    penalty += 2.5
+                    n_violations += 1
+
+            elif s.task_type in _EVENT_TYPES:
+                is_start = "start" in s.task_type.lower()
+                is_end   = "end"   in s.task_type.lower()
+                if is_start and title_lower in _GENERIC_START_NAMES:
+                    penalty += 1.0
+                    n_violations += 1
+                elif is_end and title_lower in _GENERIC_END_NAMES:
+                    penalty += 1.0
+                    n_violations += 1
+
+            else:
+                # Regular task named as a decision state
+                if s.title.strip().endswith("?"):
+                    penalty += 2.0
+                    n_violations += 1
+
+        return max(0.0, round(10.0 - penalty, 2)), n_violations
 
     # ══════════════════════════════════════════════════════════════════════════
     # Outcome validators — per-agent acceptance criteria (pure Python, no LLM)

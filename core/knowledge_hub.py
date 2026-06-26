@@ -264,11 +264,13 @@ class BPMNValidationScore:
     task_type:   float = 0.0   # 0–10
     gateways:    float = 0.0   # 0–10
     structural:  float = 0.0   # 0–10 (10 = no structural issues)
+    semantic:    float = 0.0   # 0–10 (10 = no naming violations)
     weighted:    float = 0.0   # weighted composite 0–10
     n_tasks:     int   = 0
     n_gateways:  int   = 0
     n_structural_errors:   int = 0
     n_structural_warnings: int = 0
+    n_semantic_violations: int = 0
     transcript_words: int = 0
     run_index:   int   = 0     # 1-based index of the run that produced this score
 
@@ -746,6 +748,13 @@ class KnowledgeHub:
                 score_obj.n_structural_errors = 0
             if not hasattr(score_obj, 'n_structural_warnings'):
                 score_obj.n_structural_warnings = 0
+
+        # ── v4.59: semantic score fields added to BPMNValidationScore ────────────
+        for score_obj in [hub.validation.bpmn_score] + list(hub.validation.bpmn_candidates):
+            if not hasattr(score_obj, 'semantic'):
+                score_obj.semantic = 0.0
+            if not hasattr(score_obj, 'n_semantic_violations'):
+                score_obj.n_semantic_violations = 0
 
         # ── v3.2: drawio_xml removed from BPMNModel ───────────────────────────
         if hasattr(hub.bpmn, 'drawio_xml'):
