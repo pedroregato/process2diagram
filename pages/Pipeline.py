@@ -190,6 +190,21 @@ if pipeline_mode == _MODE_NEW:
             "run_query_summarizer":      st.session_state.get("run_query_summarizer", False),
         }
 
+        # ── Tier-2 PII: detectar nomes antes do pipeline (PC82) ──────────────
+        # Constrói hub.meta.name_map uma vez a partir da transcrição para que
+        # todos os agentes compartilhem o mesmo esquema de pseudonimização via
+        # BaseAgent._call_llm(). Executado antes de run_pipeline() para que
+        # toda chamada LLM da sessão já receba name_map preenchido.
+        # Fail-open: qualquer erro aqui não bloqueia o pipeline.
+        try:
+            from modules.pii_sanitizer import detect_names as _detect_names
+            _nm = _detect_names(hub.transcript_clean or hub.transcript_raw)
+            if _nm:
+                hub.meta.name_map = _nm
+        except Exception:
+            pass
+        # ─────────────────────────────────────────────────────────────────────
+
         with st.status(t("pipeline_running"), expanded=True) as _pipeline_status:
             def update_progress(step, status):
                 if "done" in status:
