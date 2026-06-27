@@ -27,6 +27,29 @@ from core.knowledge_hub import KnowledgeHub
 from modules.pii_sanitizer import sanitize, desanitize
 
 
+# ── Name-privacy instruction (injected when hub.meta.name_map is populated) ──
+# Appended to the system prompt so the LLM preserves [PESSOA:XX] tokens intact
+# across all generated artefacts (BPMN lanes, minutes, requirements, etc.).
+# _NOME_PRIVACY_MARKER is used as an idempotent guard — prevents double-injection
+# on retry attempts where system is rebuilt from the same base string.
+
+_NOME_PRIVACY_MARKER = "##NOME_PRIVACY##"
+
+_NOME_INSTRUCTION = (
+    f"\n\n{_NOME_PRIVACY_MARKER}\n"
+    "## TOKENS DE PRIVACIDADE — OBRIGATÓRIO\n"
+    "Nomes de pessoas foram substituídos por tokens no formato [PESSOA:XX] "
+    "antes de chegarem a você.\n"
+    "REGRAS:\n"
+    "1. Copie os tokens EXATAMENTE como estão — nunca os expanda nem os modifique.\n"
+    "2. Use os tokens em todos os artefatos que gerar "
+    "(lanes do BPMN, participantes da ata, autor de requisitos, etc.).\n"
+    "3. NUNCA reconstrua nomes reais a partir dos tokens.\n"
+    "Correto: \"[PESSOA:PG] aprovou o processo\"  "
+    "Incorreto: \"Pedro aprovou o processo\""
+)
+
+
 # ── Base Agent ────────────────────────────────────────────────────────────────
 
 class BaseAgent(ABC):
@@ -154,9 +177,19 @@ class BaseAgent(ABC):
         # ─────────────────────────────────────────────────────────────────
 
         # ── PII sanitization ──────────────────────────────────────────────
-        sanitized = sanitize(user)
+        # Tier 1 (always): CPF, CNPJ, email, phone, monetary values.
+        # Tier 2 (when name_map present): personal names → [PESSOA:XX] tokens.
+        # name_map is built once per session (detect_names on the transcript)
+        # and stored in hub.meta.name_map so all agents share a consistent
+        # pseudonymization scheme.
+        _name_map: dict = getattr(getattr(hub, "meta", None), "name_map", None) or {}
+        sanitized = sanitize(user, name_map=_name_map if _name_map else None)
         safe_user = sanitized.text
         token_map = sanitized.token_map
+        # Inject LLM instruction to preserve [PESSOA:XX] tokens intact.
+        # Appended once (idempotent check prevents duplication on retries).
+        if _name_map and _NOME_PRIVACY_MARKER not in system:
+            system = system + _NOME_INSTRUCTION
         # ─────────────────────────────────────────────────────────────────
 
         # ── Long context detection (before cache hash) ────────────────────
