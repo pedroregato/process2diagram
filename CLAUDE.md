@@ -251,7 +251,7 @@ class MyAgent(BaseAgent):
         return hub
 ```
 
-`BaseAgent` provides: `_call_llm()`, `_parse_json()`, `_load_skill()` (absolute path, CWD-independent), 3 JSON retries, token tracking. `_call_llm()` flow: PII sanitize → long context detection (LONG_CONTEXT_AGENTS={bpmn,sbvr,bmm}, >50k tokens → max_tokens=8192, timeout=180s) → cache hash → `SemanticCache` check (PII-safe) → API call → telemetry (async) → cache store → desanitize. `hub.meta.cache_hits/tokens_saved/long_context_calls` tracked. Provider routing: `"openai_compatible"` → OpenAI SDK + custom `base_url`; `"anthropic"` → native SDK.
+`BaseAgent` provides: `_call_llm()`, `_parse_json()`, `_load_skill()` (absolute path, CWD-independent), 3 JSON retries, token tracking. `_call_llm()` flow: PII sanitize Tier-1 (CPF/CNPJ/email/tel/valores → `@LABEL_NNN`) + Tier-2 nomes (`hub.meta.name_map` → `[PESSOA:XX]`; `_NOME_INSTRUCTION` injetada no system prompt quando não-vazio) → long context detection (LONG_CONTEXT_AGENTS={bpmn,sbvr,bmm}, >50k tokens → max_tokens=8192, timeout=180s) → cache hash → `SemanticCache` check (PII-safe) → API call → telemetry (async) → cache store → desanitize (restaura Tier-1 + Tier-2 antes de retornar ao caller). `hub.meta.cache_hits/tokens_saved/long_context_calls/name_map` tracked. Provider routing: `"openai_compatible"` → OpenAI SDK + custom `base_url`; `"anthropic"` → native SDK.
 
 ### Orchestrator + AgentValidator
 
@@ -452,6 +452,11 @@ API keys: `st.session_state` only — never logged, written to disk, or persiste
 **Database (DDL / migrations):** `st.secrets["database"]["connection_string"]` — direct PostgreSQL via `psycopg2`. Password is URL-encoded (special chars: `?`→`%3F`, `#`→`%23`, `/`→`%2F`). Use this for running migrations programmatically (`conn.autocommit = True`). Only in local `secrets.toml` — never deployed to Streamlit Cloud.
 
 **Google Calendar secrets:** `st.secrets["google_calendar"]["calendar_id"]` + `["credentials_json"]`. Always use `'''` (triple-single-quotes) for `credentials_json` in TOML — `"""` corrupts the private key. Resolution order per call: Supabase `project_calendar_config` → secrets → local file → `"primary"`.
+
+**PII Sanitization (`modules/pii_sanitizer.py`) — dois tiers:**
+- **Tier 1 — Estruturado** (per-call, stateless): CPF, CNPJ, email, telefone, valores monetários → tokens `@LABEL_NNN`.
+- **Tier 2 — Nomes** (session-wide, `hub.meta.name_map`): `detect_names(transcript)` chamado uma vez em `Pipeline.py` antes de `run_pipeline()`; todos os agentes usam o mapa via `_call_llm()`; nomes substituídos por `[PESSOA:XX]` no wire; desanitizados antes de salvar no Supabase (nomes reais no banco — RAG preservado). Token `[PESSOA:XX]` escolhido por robustez LLM (>95% preservação vs ~70% para `{}`). Mapa em memória apenas — nunca persiste (a chave de reversão é dado pessoal).
+- **Camada LGPD** (`modules/compliance/`): detecção de PII pós-pipeline, painel de consentimento, trilha de auditoria. Tabelas: `compliance_consent`, `compliance_audit`.
 
 **MS365 integration:** PENDING — blocked by Azure AD admin consent. Plan in `CLAUDE_MS365.md`.
 
