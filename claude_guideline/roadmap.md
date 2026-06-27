@@ -4,6 +4,20 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC88 — Concluído (v4.64 / 2026-06-27) — skill_dmn.md v2.0 — Cobertura Normativa DMN 1.4
+
+- [x] **`skills/skill_dmn.md`** — reescrito de v1.1 (115 linhas) para v2.0 (569 linhas)
+  - Todas as 11 variantes de hit policy: U, A, F, P, R, C, C+, C<, C>, C#, O com semântica exata
+  - Árvore de decisão para seleção de hit policy
+  - Referência completa FEEL: intervalos `[N..M]`/`(N..M]`, listas (OR), negação, wildcard
+  - Regras de completude e sobreposição para hit policy U
+  - DRD: campo `depends_on` para decisões em cadeia
+  - Multi-output: campo `outputs` (lista) para tabelas com 2+ colunas de output
+  - Checklist de qualidade (15 critérios) por categoria
+  - 4 exemplos anotados: F com exceção, U multi-output, C+ acumulativo, DRD em cadeia
+
+---
+
 ### PC84 — Concluído (v4.62 / 2026-06-27) — Output Schemas com Pydantic v2
 
 - [x] **`core/output_schemas.py`** — 7 schemas Pydantic v2 fail-open (`_PermissiveModel` com `extra='allow'`):
