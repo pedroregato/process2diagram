@@ -4,6 +4,19 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC89 — Concluído (v4.65 / 2026-06-27) — skill_bmm.md v2.0 — Cobertura Normativa BMM 1.3
+
+- [x] **`skills/skill_bmm.md`** — reescrito de v1.0 (83 linhas, inglês) para v2.0 (445 linhas, PT)
+  - Tabela de construtos BMM: Fins (Visão/Missão/Meta) e Meios (Estratégia/Política)
+  - 4 distinções críticas com anti-padrões: Vision vs Mission, Meta vs Estratégia, Estratégia vs Política, Política vs SBVR
+  - Método de extração em 6 passos com sinais de reconhecimento por artefato
+  - `category` de políticas expandido de 4 para 6 (adiciona `strategic` e `people`)
+  - Campo `influencers` (opcional, SWOT) com tipos e `impact_on` (extra=allow no schema)
+  - Checklist de qualidade (15 critérios): integridade, distinções, conservadorismo
+  - 2 exemplos anotados: planejamento estratégico completo e reunião operacional
+
+---
+
 ### PC88 — Concluído (v4.64 / 2026-06-27) — skill_dmn.md v2.0 — Cobertura Normativa DMN 1.4
 
 - [x] **`skills/skill_dmn.md`** — reescrito de v1.1 (115 linhas) para v2.0 (569 linhas)
