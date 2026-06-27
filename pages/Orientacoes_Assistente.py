@@ -491,6 +491,25 @@ with tab_analise:
         ]
     ), unsafe_allow_html=True)
 
+    st.markdown('<div class="g-section-hdr">Glossário técnico & Segurança de Dados</div>', unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "search_glossary", "consulta",
+        "Busca definições no <strong>Glossário Técnico do P2D</strong> (90+ termos): BPMN, SBVR, BMM, DMN, "
+        "IBIS, RAG, CKF, ROI-TR, LangGraph, pgvector, Semantic Cache, "
+        "<strong>LGPD, PII, Sanitização de PII, Camada de Conformidade LGPD, "
+        "Trilha de Auditoria, Consentimento de Dados, Segurança</strong> e muitos outros. "
+        "Retorna definição, exemplo prático, termo em inglês e termos relacionados.",
+        [
+            "O que é LGPD no contexto do P2D?",
+            "Como funciona a sanitização de PII?",
+            "Explique a trilha de auditoria LGPD",
+            "O que é um gateway exclusivo no BPMN?",
+            "O que significa RAG?",
+            "Explique o conceito de Semantic Cache",
+        ]
+    ), unsafe_allow_html=True)
+
     st.markdown('<div class="g-section-hdr">Busca transversal entre reuniões</div>', unsafe_allow_html=True)
 
     st.markdown(_card(

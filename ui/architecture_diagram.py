@@ -83,15 +83,22 @@ flowchart TD
         R10["🔊 Análise de Ruído\\nCKF · Comunicação"]:::rCls
     end
 
+    subgraph SEC["🔒 Segurança Multicamada — transversal a todo o pipeline"]
+        direction LR
+        SC1["⚡ C1 Sanitização PII\\npii_sanitizer.py\\nCPF·CNPJ·Email·TEL→token"]:::rCls
+        SC2["📋 C2 Conformidade LGPD\\nmodules/compliance/\\nDetecção · Consentimento · Auditoria"]:::rCls
+        SC3["🔑 C3–C6 Auth · Keys · TLS · RLS\\nSHA-256 · session_state\\nSupabase AES-256"]:::rCls
+    end
+
     subgraph PERSIST["☁️ Persistência & Integrações"]
         direction LR
-        SB["🗄️ Supabase\\nReuniões · Requisitos · BPMN versioned\\nSBVR · BMM · Embeddings vector(1536)"]:::aCls
+        SB["🗄️ Supabase\\nReuniões · Requisitos · BPMN versioned\\nSBVR · BMM · Embeddings vector(1536)\\ncompliance_consent · compliance_audit"]:::aCls
         GC["📅 Google Calendar\\nAgendamento de action items\\nCompartilhamento por projeto"]:::lCls
         ASST["💬 Assistente RAG\\n35 ferramentas · tool-use + pgvector\\nKeyword + busca semântica"]:::optCls
     end
 
     IN --> A1
-    LLM -.->|"REST API"| PIPE
+    LLM -.->|"REST API (TLS)"| PIPE
     A4 --> R1
     A4 --> R2
     A5 --> R3
@@ -104,7 +111,9 @@ flowchart TD
     A12 --> R7
     OUTS -.->|"salvo em"| SB
     SB <-.->|"consulta"| ASST
-    SB -.->|"action items"| GC\
+    SB -.->|"action items"| GC
+    SC1 -.->|"antes de cada LLM call"| PIPE
+    SC2 -.->|"pós-pipeline (consent + audit)"| SB\
 """
 
 

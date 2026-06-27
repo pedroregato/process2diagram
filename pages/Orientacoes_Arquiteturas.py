@@ -37,6 +37,11 @@ st.markdown(
 Fluxo completo desde a transcrição bruta até os artefatos finais.
 Cada nó representa um agente ou módulo independente; as setas indicam
 dependências de dados via **KnowledgeHub**.
+
+O diagrama inclui a **camada de segurança transversal (🔒 C1–C6)**:
+sanitização de PII antes de cada chamada LLM, conformidade LGPD pós-pipeline
+(detecção · consentimento · auditoria) e autenticação/RLS na persistência.
+Para detalhes completos, consulte **Início → 🔒 Segurança de Dados**.
 """
 )
 

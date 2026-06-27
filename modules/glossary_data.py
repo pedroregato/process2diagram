@@ -300,6 +300,41 @@ GLOSSARY_ENTRIES: list[dict] = [
         ),
         "related": ["BaseAgent", "Token", "LLM"],
     },
+    {
+        "term": "Camada de Conformidade LGPD",
+        "en": "LGPD Compliance Layer",
+        "tag": "seg",
+        "def_": (
+            "Módulo <strong>modules/compliance/</strong> introduzido no PC81 com três componentes: "
+            "<strong>detector.py</strong> (classifica PII via regex + spaCy NER, sem anonimizar), "
+            "<strong>consent.py</strong> (painel pós-pipeline para registro da base legal LGPD), "
+            "<strong>audit.py</strong> (grava eventos na trilha compliance_audit de forma assíncrona). "
+            "Integrada ao Pipeline: executa automaticamente após salvar cada reunião."
+        ),
+        "example": (
+            "Ao processar reunião com CPF e e-mails, detector.py retorna risco=Alto. "
+            "O painel 🔒 abre automaticamente e exige seleção de base legal (ex.: Legítimo Interesse Art. 7°, IX) "
+            "antes de liberar as abas de resultados."
+        ),
+        "related": ["LGPD", "PII", "Sanitização de PII", "Trilha de Auditoria", "Consentimento de Dados"],
+    },
+    {
+        "term": "Consentimento de Dados",
+        "en": "Data Consent (LGPD)",
+        "tag": "seg",
+        "def_": (
+            "Registro formal da <strong>base legal LGPD (Art. 7°)</strong> para tratamento dos dados "
+            "pessoais de cada reunião. Salvo na tabela <code>compliance_consent</code> com: "
+            "base legal (Legítimo Interesse / Consentimento / Contrato / Obrigação Legal), "
+            "perfil dos participantes (interno / externo / misto), prazo de retenção (30–365 dias) "
+            "e resumo do PII detectado. Exibido como painel 🔒 no Pipeline após salvar a reunião."
+        ),
+        "example": (
+            "Reunião com parceiros externos → sistema alerta para uso de 'Consentimento Explícito (Art. 7°, I)' "
+            "em vez de Legítimo Interesse. Operador registra base legal → evento 'consent_granted' gravado na auditoria."
+        ),
+        "related": ["LGPD", "Camada de Conformidade LGPD", "Trilha de Auditoria"],
+    },
 
     # ── D ─────────────────────────────────────────────────────────────────────
 
@@ -610,17 +645,18 @@ GLOSSARY_ENTRIES: list[dict] = [
     {
         "term": "LGPD",
         "en": "Lei Geral de Proteção de Dados (Lei 13.709/2018)",
-        "tag": "dev",
+        "tag": "seg",
         "def_": (
-            "Lei brasileira que regula o tratamento de dados pessoais. "
-            "<strong>PII</strong> (Personally Identifiable Information) = qualquer dado que identifique "
-            "um indivíduo (CPF, e-mail, telefone). O pii_sanitizer substitui PIIs antes do LLM e restaura após."
+            "Lei brasileira de proteção de dados pessoais. O P2D implementa conformidade em <strong>6 camadas</strong>: "
+            "C1 sanitização PII (pii_sanitizer.py), C2 conformidade LGPD (modules/compliance/), "
+            "C3 autenticação SHA-256, C4 API keys em sessão, C5 dados em trânsito TLS, C6 Supabase RLS. "
+            "Bases legais suportadas (Art. 7°): Legítimo Interesse (IX), Consentimento (I), Contrato (V), Obrigação Legal (II)."
         ),
         "example": (
-            "'CPF 123.456.789-00' → [PII_CPF_1] enviado ao LLM → restaurado na resposta final. "
-            "Nunca envia dados pessoais reais para APIs externas."
+            "Pipeline salva reunião → detector.py classifica PII → painel 🔒 exige base legal "
+            "→ consentimento gravado em compliance_consent → evento auditado em compliance_audit."
         ),
-        "related": ["PII", "BaseAgent", "Segurança"],
+        "related": ["PII", "Sanitização de PII", "Camada de Conformidade LGPD", "Consentimento de Dados", "Trilha de Auditoria", "Segurança"],
     },
     {
         "term": "Link Intermediate Event",
@@ -1035,19 +1071,43 @@ GLOSSARY_ENTRIES: list[dict] = [
         "related": ["AgentSBVR", "Regra de Negócio", "Esfera de Negócio", "BMM 1.3"],
     },
     {
+        "term": "Sanitização de PII",
+        "en": "PII Sanitization",
+        "tag": "seg",
+        "def_": (
+            "Substituição reversível de dados pessoais estruturados por tokens opacos antes de cada chamada LLM. "
+            "Implementada em <strong>modules/pii_sanitizer.py</strong>. "
+            "Dados substituídos: CPF (@CPF_001), CNPJ (@CNPJ_001), e-mail (@EMAIL_001), "
+            "telefone (@TEL_001), valores monetários R$ (@VALOR_001). "
+            "Nomes de pessoas <em>não são substituídos</em> — necessários para lanes BPMN, atas e IBIS. "
+            "A restauração ocorre localmente após o retorno do LLM (desanitize)."
+        ),
+        "example": (
+            "'Contato: joao@empresa.com · CPF 123.456.789-00' → "
+            "'Contato: @EMAIL_001 · CPF @CPF_001' enviado ao LLM → "
+            "resposta recebida com tokens → restaurada antes de exibir ao usuário."
+        ),
+        "related": ["PII", "LGPD", "Camada de Conformidade LGPD", "BaseAgent"],
+    },
+    {
         "term": "Segurança",
         "en": "Security Model",
-        "tag": "dev",
+        "tag": "seg",
         "def_": (
-            "Modelo de segurança do sistema: API keys apenas em st.session_state (nunca em disco/logs), "
-            "credenciais <strong>SHA-256</strong> em modules/auth.py, Supabase RLS, "
-            "sanitização PII antes do LLM, secrets em st.secrets (nunca no código-fonte)."
+            "Arquitetura de segurança multicamada do P2D — <strong>6 camadas</strong>: "
+            "C1 Sanitização PII (pii_sanitizer.py), "
+            "C2 Conformidade LGPD (modules/compliance/), "
+            "C3 Autenticação SHA-256 com perfis master/admin/user, "
+            "C4 API Keys exclusivamente em st.session_state (nunca em disco), "
+            "C5 Dados em trânsito TLS para provedores LLM, "
+            "C6 Supabase RLS + criptografia AES-256 em repouso. "
+            "Documentada em <strong>páginas/Segurança de Dados</strong> (menu Início)."
         ),
         "example": (
             "USUARIOS = {'pedro': {'hash': sha256('senha'), 'role': 'master'}} — "
             "roles: master > admin > user. is_admin() retorna True para admin e master."
         ),
-        "related": ["PII", "RLS", "st.session_state", "Supabase"],
+        "related": ["PII", "Sanitização de PII", "LGPD", "Camada de Conformidade LGPD", "RLS", "Supabase"],
     },
     {
         "term": "Semantic Cache",
@@ -1233,7 +1293,26 @@ GLOSSARY_ENTRIES: list[dict] = [
             "'O sistema deve processar pedidos' ≈ 7 tokens. "
             "Uma transcrição de 1h de reunião ≈ 8.000–15.000 tokens de entrada."
         ),
-        "related": ["LLM", "BaseAgent", "Context Analyzer", "Semantic Cache"],
+        "related": ["LLM", "BaseAgent", "Context Analyzer", "Semantic Cache", "Sanitização de PII"],
+    },
+    {
+        "term": "Trilha de Auditoria",
+        "en": "Audit Trail (LGPD)",
+        "tag": "seg",
+        "def_": (
+            "Registro imutável e assíncrono de eventos de tratamento de dados, salvo na tabela "
+            "<strong>compliance_audit</strong> via <code>modules/compliance/audit.py</code>. "
+            "Eventos registrados: <code>pipeline_run</code> (nova reunião processada), "
+            "<code>consent_granted</code> (base legal registrada), <code>data_accessed</code>, "
+            "<code>data_deleted</code>, <code>pii_detected</code>. "
+            "Retida por <strong>365 dias</strong> — mais tempo que os próprios dados da reunião. "
+            "Gravação em thread daemon (fail-open: nunca bloqueia o pipeline)."
+        ),
+        "example": (
+            "Após processar reunião: compliance_audit recebe {event_type: 'pipeline_run', "
+            "meeting_id: '...', user_login: 'pedro', details: {pii_risk_level: 'high', categories: ['CPF', 'EMAIL']}}."
+        ),
+        "related": ["LGPD", "Camada de Conformidade LGPD", "Consentimento de Dados", "Segurança"],
     },
     {
         "term": "Tool-use",
@@ -1349,4 +1428,5 @@ TAG_META: dict[str, dict] = {
     "ai":   {"label": "IA & LLM",               "emoji": "🤖", "color": "#7a4a10"},
     "dev":  {"label": "Dev & Infraestrutura",    "emoji": "⚙️",  "color": "#4a1a7a"},
     "neg":  {"label": "Negócios & Metodologia",  "emoji": "🎯", "color": "#6a2a10"},
+    "seg":  {"label": "Segurança & Privacidade", "emoji": "🔒", "color": "#0a6050"},
 }
