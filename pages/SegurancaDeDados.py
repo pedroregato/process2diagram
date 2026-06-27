@@ -216,7 +216,7 @@ st.markdown('<div class="sec-label">Visão Geral da Arquitetura</div>', unsafe_a
 st.markdown("""
 <div class="overview-row">
   <div class="overview-pill"><div class="op-dot" style="--dot-color:#10B981"></div>6 camadas de proteção</div>
-  <div class="overview-pill"><div class="op-dot" style="--dot-color:#3B82F6"></div>Zero PII estruturado enviado ao LLM</div>
+  <div class="overview-pill"><div class="op-dot" style="--dot-color:#3B82F6"></div>Nomes e PII estruturado pseudonimizados para LLMs</div>
   <div class="overview-pill"><div class="op-dot" style="--dot-color:#8B5CF6"></div>API Keys apenas em sessão</div>
   <div class="overview-pill"><div class="op-dot" style="--dot-color:#F59E0B"></div>Trilha de auditoria LGPD</div>
   <div class="overview-pill"><div class="op-dot" style="--dot-color:#14B8A6"></div>Conformidade Art. 7° LGPD</div>
@@ -227,12 +227,14 @@ st.markdown("""
 st.markdown("""
 <div class="highlight-box">
   <div class="hb-title">Princípio central</div>
-  Os dados sensíveis (CPF, CNPJ, e-mail, telefone, valores monetários) são <strong>substituídos
-  por tokens reversíveis antes de qualquer chamada ao LLM</strong> — o modelo de linguagem nunca
-  recebe nem processa os valores reais. A restauração ocorre apenas localmente, dentro
-  do servidor Streamlit, depois que a resposta retorna. Nomes de pessoas são
-  classificados (não substituídos) para preservar a integridade dos diagramas BPMN,
-  das atas e dos debates IBIS.
+  Todos os dados que identificam pessoas são <strong>pseudonimizados antes de qualquer chamada ao LLM</strong>
+  — o modelo nunca recebe nem processa os valores reais. A restauração ocorre localmente,
+  dentro do servidor Streamlit, antes de salvar no banco.<br><br>
+  <strong>Tier 1 — PII estruturado</strong> (CPF, CNPJ, e-mail, telefone, valores monetários):
+  substituídos por tokens <code>@LABEL_NNN</code> a cada chamada.<br>
+  <strong>Tier 2 — Nomes de pessoas</strong> (PC82): detectados uma vez via spaCy NER e
+  pseudonimizados como <code>[PESSOA:PG]</code> em todas as chamadas da sessão;
+  restaurados nos artefatos antes de salvar no banco (nomes reais ficam no banco — RAG preservado).
 </div>
 """, unsafe_allow_html=True)
 
@@ -247,16 +249,19 @@ st.markdown("""
     <div class="lc-file">modules/pii_sanitizer.py</div>
   </div>
   <div class="lc-body">
-    Antes de cada chamada ao LLM, o texto da transcrição passa por um sanitizador baseado
-    em expressões regulares que detecta e substitui dados estruturados por tokens opacos
+    Dois tiers de pseudonimização aplicados antes de cada chamada ao LLM.<br><br>
+    <strong>Tier 1 — PII estruturado</strong> (stateless, por chamada): regex detecta e substitui
+    CPF, CNPJ, e-mail, telefone e valores monetários por tokens opacos
     (ex.: <code style="color:#10B981">@CPF_001</code>, <code style="color:#10B981">@EMAIL_002</code>).
-    O mapeamento token → valor original fica exclusivamente na memória do servidor.
-    Ao retornar a resposta do LLM, os tokens são revertidos antes de qualquer outra
-    operação.<br><br>
-    <strong>Dados substituídos:</strong>
-    CPF &nbsp;·&nbsp; CNPJ &nbsp;·&nbsp; E-mail &nbsp;·&nbsp; Telefone &nbsp;·&nbsp; Valores monetários (R$)<br>
-    <strong>Não substituídos:</strong> Nomes de pessoas — necessários para lanes BPMN, atas e debates IBIS
-    (ver seção "Transparência sobre Nomes" abaixo).
+    O mapeamento fica em memória; ao retornar, os tokens são revertidos antes de qualquer
+    outra operação.<br><br>
+    <strong>Tier 2 — Nomes de pessoas</strong> (PC82, session-wide): na abertura do pipeline,
+    <code>detect_names()</code> usa spaCy NER para detectar nomes completos e cria
+    <code>hub.meta.name_map</code>
+    (ex.: <code style="color:#10B981">[PESSOA:PG]</code> → "Pedro Gentil").
+    Todas as chamadas LLM substituem nomes por tokens e os restauram antes de salvar.
+    O mapa existe <strong>apenas em memória</strong> — nunca persiste no banco.
+    Nomes reais ficam nos artefatos armazenados para que RAG e busca semântica funcionem.
   </div>
 </div>
 
@@ -413,9 +418,9 @@ st.markdown("""
     <tr>
       <td><strong>Nome de pessoa</strong></td>
       <td style="font-family:monospace;font-size:.74rem">Maria Silva</td>
-      <td><span class="badge badge-classify">Classificado</span> (NER, não substituído)</td>
-      <td>Sim — necessário para atas e BPMN</td>
-      <td>C2 — detector.py</td>
+      <td><span class="badge badge-classify">Pseudonimizado</span> → [PESSOA:MS] para LLM; restaurado nos artefatos</td>
+      <td>Sim — com nome real (RAG preservado)</td>
+      <td>C1 Tier-2 — pii_sanitizer</td>
     </tr>
     <tr>
       <td><strong>API Key LLM</strong></td>
@@ -463,54 +468,71 @@ st.markdown("""
 </table>
 """, unsafe_allow_html=True)
 
-# ── Por que nomes não são anonimizados ───────────────────────────────────────
-st.markdown('<div class="sec-label">Transparência: Por que Nomes Não São Substituídos</div>', unsafe_allow_html=True)
+# ── Pseudonimização de nomes — PC82 ────────────────────────────────────────────
+st.markdown('<div class="sec-label">Pseudonimização de Nomes (PC82) — Como Funciona</div>', unsafe_allow_html=True)
+
+st.markdown("""
+<div class="highlight-box">
+  <div class="hb-title">Fluxo do Tier 2</div>
+  Antes do pipeline iniciar, <code>detect_names()</code> usa spaCy NER (<code>pt_core_news_lg</code>)
+  para identificar nomes completos e cria o mapa de sessão <code>hub.meta.name_map</code>:<br><br>
+  <code>"Pedro Gentil" → [PESSOA:PG]</code> &nbsp;·&nbsp;
+  <code>"Ana Souza" → [PESSOA:AS]</code> &nbsp;·&nbsp;
+  <code>"Sr. Gentil" → [PESSOA:PG]</code> (variantes título+sobrenome também substituídas)<br><br>
+  Todas as chamadas LLM recebem o texto com tokens; o LLM é instruído a
+  preservá-los intactos. Após retornar, os tokens são <strong>restaurados para os nomes reais
+  antes de salvar</strong> — os artefatos no banco têm nomes reais, RAG e busca semântica
+  funcionam normalmente.<br><br>
+  <strong>O mapa existe apenas em memória</strong> — nunca persiste no Supabase. A chave de
+  reversão é descartada ao encerrar a sessão.
+</div>
+""", unsafe_allow_html=True)
 
 st.markdown("""
 <div class="warn-box">
-  <strong>Decisão de design consciente — não uma omissão.</strong><br>
-  Nomes de pessoas são mantidos na transcrição enviada ao LLM porque fazem parte
-  integral dos artefatos que o P2D gera.
+  <strong>Por que nomes reais ainda aparecem nos artefatos finais?</strong><br>
+  Os artefatos são gerados com tokens e restaurados <em>antes de salvar</em>. Os nomes reais
+  ficam no banco porque são indispensáveis para as funcionalidades abaixo — o que muda
+  com PC82 é que as APIs externas (DeepSeek, Claude, OpenAI, etc.) <strong>nunca mais
+  recebem nomes reais no wire</strong>.
 </div>
 """, unsafe_allow_html=True)
 
 st.markdown("""
 <div class="feat-row">
   <div class="fr-icon">🏊</div>
-  <div class="fr-text"><strong>Lanes do BPMN</strong> — Os nomes dos participantes determinam as faixas de
-  responsabilidade (lanes) no diagrama de processo. Substituir "Maria Silva" por "@NOME_001"
-  produziria lanes sem significado organizacional.</div>
+  <div class="fr-text"><strong>Lanes do BPMN</strong> — O LLM recebe <code>[PESSOA:PG]</code> e cria a lane
+  com esse token; após restauração, a lane exibe "Pedro Gentil" com significado organizacional
+  preservado, sem expor o nome ao provider LLM.</div>
 </div>
 <div class="feat-row">
   <div class="fr-icon">📋</div>
-  <div class="fr-text"><strong>Atas de reunião</strong> — As atas registram quem disse o quê, quem é responsável
-  por cada ação e quem tomou cada decisão. Pseudonimização degradaria a rastreabilidade
-  que é o propósito central do produto.</div>
+  <div class="fr-text"><strong>Atas de reunião</strong> — O LLM gera a ata com tokens; após restauração,
+  a ata registra quem disse o quê com nomes reais. Rastreabilidade mantida;
+  o provider nunca processou os nomes.</div>
 </div>
 <div class="feat-row">
   <div class="fr-icon">⚖️</div>
-  <div class="fr-text"><strong>Debates IBIS</strong> — Questões, alternativas e posições são atribuídas a
-  participantes nominais. Sem nomes, o mapa argumentativo perde sua estrutura de
-  responsabilização.</div>
+  <div class="fr-text"><strong>Debates IBIS e Requisitos</strong> — Campos <code>raised_by</code> e
+  <code>cited_by</code> são gerados com tokens e restaurados antes de persistir.
+  A estrutura de responsabilização fica intacta.</div>
 </div>
 <div class="feat-row">
   <div class="fr-icon">🔍</div>
-  <div class="fr-text"><strong>Requisitos com autor</strong> — O campo <code>cited_by</code> nos requisitos
-  rastreia qual participante levantou cada necessidade — informação essencial para
-  elicitação e negociação de escopo.</div>
+  <div class="fr-text"><strong>RAG e busca semântica</strong> — Como os artefatos são salvos com nomes reais,
+  o Assistente responde corretamente a perguntas como "o que Pedro disse?" sem
+  degradação de qualidade.</div>
 </div>
 """, unsafe_allow_html=True)
 
 st.markdown("""
 <div class="highlight-box">
-  <div class="hb-title">Mitigação adotada</div>
-  O módulo <strong>detector.py (C2)</strong> detecta e lista todos os nomes identificados
-  via NER antes de salvar a reunião. O painel de consentimento LGPD exibe esses nomes
-  ao operador e exige que ele selecione a base legal que cobre o tratamento.
-  O tratamento de nomes fica coberto pelo registro de consentimento, pela trilha de
-  auditoria e pelo prazo de retenção configurado. Para reuniões com participantes
-  externos, o sistema alerta automaticamente para o uso de <strong>Consentimento explícito
-  (Art. 7°, I)</strong> em vez de Legítimo Interesse.
+  <div class="hb-title">Camada de conformidade LGPD complementar (C2)</div>
+  O módulo <strong>detector.py (C2)</strong> classifica os nomes detectados e exibe ao operador
+  o resumo de PII no painel de consentimento. O operador seleciona a base legal,
+  define o prazo de retenção e o registro é salvo em <code>compliance_consent</code>.
+  Para reuniões com participantes externos, o sistema alerta automaticamente para
+  <strong>Consentimento explícito (Art. 7°, I)</strong> em vez de Legítimo Interesse.
 </div>
 """, unsafe_allow_html=True)
 
@@ -636,7 +658,7 @@ st.markdown("""
 st.markdown("""
 <div style="margin-top: 2.5rem; padding: 1rem 1.2rem;
   border-top: 1px solid #1A3050; font-size: .72rem; color: #4A5E78; line-height: 1.6;">
-  <strong style="color:#6A7E98">Process2Diagram v4.59</strong> &nbsp;·&nbsp;
+  <strong style="color:#6A7E98">Process2Diagram v4.60</strong> &nbsp;·&nbsp;
   Arquitetura de segurança documentada conforme LGPD Lei 13.709/2018 &nbsp;·&nbsp;
   Para dúvidas de conformidade ou solicitação de relatório de auditoria, contate o
   responsável pelo tratamento de dados do seu contexto organizacional. &nbsp;·&nbsp;
