@@ -4,6 +4,25 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC82 — Concluído (v4.60 / 2026-06-27) — Pseudonimização Reversível de Nomes (Tier-2 PII)
+
+**Contexto:** Decisão de design anterior mantinha nomes reais nas chamadas LLM (necessários para lanes BPMN). PC82 implementa pseudonimização reversível com iniciais — nomes não saem no wire para APIs externas, mas são restaurados nos artefatos antes de qualquer persistência (RAG preservado).
+
+- [x] **`modules/pii_sanitizer.py`** — Tier-2 adicionado ao módulo existente (backward-compat total):
+  - `detect_names(text) -> dict[str, str]` — spaCy `pt_core_news_lg` NER; apenas nomes com >=2 palavras; desambiguação de colisões de iniciais (PG -> PGOMES -> PG2); cap 50k chars; fail-open (retorna {} se spaCy indisponível)
+  - `sanitize(text, name_map=None)` — novo arg opcional; nomes substituídos antes de PII estruturado (longest-match first); variantes título+sobrenome ("Sr. Gentil" -> [PESSOA:PG]); token_map unificado Tier1+Tier2
+  - Token format `[PESSOA:XX]` — >95% de preservação pelo LLM vs ~70% para `{}`
+  - `desanitize()` inalterado — já lida com ambos os tipos de token
+- [x] **`core/knowledge_hub.py`** — `SessionMetadata.name_map: dict` (token -> nome original); guard em `migrate()` para sessões existentes
+- [x] **`agents/base_agent.py`** — `_call_llm()` integrado: lê `hub.meta.name_map` (fail-safe getattr); passa para `sanitize()`; injeta `_NOME_INSTRUCTION` no system prompt quando name_map não-vazio; guard idempotente `_NOME_PRIVACY_MARKER` previne duplicação em retries
+- [x] **`pages/Pipeline.py`** — `detect_names(hub.transcript_clean)` chamado uma vez antes de `run_pipeline()`; resultado salvo em `hub.meta.name_map`; fail-open
+
+**Fluxo:** transcript (nomes reais) -> detect_names() -> hub.meta.name_map -> por chamada LLM: sanitize(user, name_map) -> API externa vê [PESSOA:PG] -> desanitize(raw, token_map) -> artefatos com nomes reais -> Supabase (RAG preservado)
+
+**Decisões de design:** mapa em memória apenas (nunca persiste no Supabase); nomes reais no banco (RAG funciona); nomes parciais (primeiro nome isolado) fora do MVP (ambíguos para regex segura)
+
+---
+
 ### PC81 — Concluído (v4.59) — LGPD Compliance Layer (Sprint 1 + 2)
 - [x] `modules/compliance/` package: `detector.py`, `audit.py`, `consent.py`, `__init__.py`
 - [x] `detector.py` — PII classification only (CPF, CNPJ, EMAIL, TEL, VALOR via regex + NOME_PESSOA via spaCy NER); no anonymization; `PIIDetectionResult` with `risk_level` (low/medium/high)
