@@ -21,6 +21,7 @@ from core.knowledge_hub import (
     KnowledgeHub, BPMNModel, BPMNStep, BPMNEdge,
     BPMNPoolData, BPMNMessageFlow,
 )
+from core.output_schemas import BPMNOutputSchema
 
 
 def _ascii_id(s: str) -> str:
@@ -168,6 +169,7 @@ class AgentBPMN(BaseAgent):
 
     name = "bpmn"
     skill_path = "skills/skill_bpmn.md"
+    output_schema = BPMNOutputSchema
     required_hub_fields = ["transcript_clean"]
     # Collaboration BPMN JSON with multiple pools can exceed 4096 output tokens.
     # Guarantee at least 8192 regardless of long-context mode.

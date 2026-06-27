@@ -17,6 +17,7 @@ from datetime import datetime
 
 from agents.base_agent import BaseAgent
 from core.knowledge_hub import KnowledgeHub, MinutesModel, ActionItem
+from core.output_schemas import MinutesOutputSchema
 
 _PREPOSITIONS = {"de", "da", "do", "das", "dos", "e", "a", "o", "em", "no", "na"}
 
@@ -221,6 +222,7 @@ class AgentMinutes(BaseAgent):
 
     name = "minutes"
     skill_path = "skills/skill_minutes.md"
+    output_schema = MinutesOutputSchema
     required_hub_fields = ["transcript_clean"]
 
     # ── Prompt ────────────────────────────────────────────────────────────────

@@ -8,11 +8,13 @@ from __future__ import annotations
 
 from agents.base_agent import BaseAgent
 from core.knowledge_hub import KnowledgeHub, SynthesizerModel
+from core.output_schemas import SynthesizerOutputSchema
 
 
 class AgentSynthesizer(BaseAgent):
     name = "synthesizer"
     skill_path = "skills/SKILL_SYNTHESIZER.md"
+    output_schema = SynthesizerOutputSchema
     required_hub_fields = ["bpmn.ready"]
 
     # ── Prompt builder ────────────────────────────────────────────────────────

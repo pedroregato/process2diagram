@@ -77,6 +77,7 @@ class BaseAgent(ABC):
     name: str = "base"
     skill_path: str = ""
     required_hub_fields: list = []  # dot-paths validated before run(); e.g. ["transcript_clean", "bpmn.ready"]
+    output_schema = None  # Pydantic model class for fail-open output validation; set by subclasses
 
     def __init__(self, client_info: dict, provider_cfg: dict):
         """
@@ -455,7 +456,19 @@ class BaseAgent(ABC):
         for attempt in range(1 + self.max_retries):
             try:
                 raw = self._call_llm(system, user, hub)
-                return parse(raw)
+                data = parse(raw)
+                # Fail-open schema validation — warns but never blocks the pipeline
+                _schema = getattr(self, "output_schema", None)
+                if _schema is not None:
+                    try:
+                        _schema.model_validate(data)
+                    except Exception as _exc:
+                        import warnings
+                        warnings.warn(
+                            f"[{self.name}] Output schema validation: {_exc}",
+                            stacklevel=2,
+                        )
+                return data
             except (ValueError, KeyError, UnicodeEncodeError) as exc:
                 last_error = exc
                 if attempt < self.max_retries:

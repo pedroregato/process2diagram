@@ -10,12 +10,14 @@ from __future__ import annotations
 
 from agents.base_agent import BaseAgent
 from core.knowledge_hub import KnowledgeHub, SBVRModel, BusinessTerm, BusinessRule, _VALID_SPHERES
+from core.output_schemas import SBVROutputSchema
 
 
 class AgentSBVR(BaseAgent):
 
     name = "sbvr"
     skill_path = "skills/skill_sbvr.md"
+    output_schema = SBVROutputSchema
     required_hub_fields = ["transcript_clean"]
 
     # ── Prompt ────────────────────────────────────────────────────────────────

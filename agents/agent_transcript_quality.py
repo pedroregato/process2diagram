@@ -23,6 +23,7 @@ import re
 
 from agents.base_agent import BaseAgent
 from core.knowledge_hub import KnowledgeHub, TranscriptQualityModel, CriterionScore, InconsistencyItem
+from core.output_schemas import TranscriptQualityOutputSchema
 
 
 # Canonical criterion names exactly as the LLM is instructed to return them,
@@ -100,6 +101,7 @@ class AgentTranscriptQuality(BaseAgent):
 
     name = "transcript_quality"
     skill_path = "skills/skill_transcript_quality.md"
+    output_schema = TranscriptQualityOutputSchema
     required_hub_fields = ["transcript_raw"]
 
     # ── Prompt ────────────────────────────────────────────────────────────────

@@ -12,6 +12,7 @@ from __future__ import annotations
 from agents.base_agent import BaseAgent
 from core.knowledge_hub import KnowledgeHub, RequirementsModel, RequirementItem
 from modules.requirements_mindmap import generate_requirements_mindmap
+from core.output_schemas import RequirementsOutputSchema
 
 
 # Emoji badge per requirement type — used in Markdown output
@@ -30,6 +31,7 @@ class AgentRequirements(BaseAgent):
 
     name = "requirements"
     skill_path = "skills/SKILL_REQUIREMENTS.md"
+    output_schema = RequirementsOutputSchema
     required_hub_fields = ["transcript_clean"]
 
     # ── Prompt ────────────────────────────────────────────────────────────────

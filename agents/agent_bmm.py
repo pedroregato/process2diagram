@@ -12,12 +12,14 @@ from agents.base_agent import BaseAgent
 from core.knowledge_hub import (
     KnowledgeHub, BMMModel, BMMGoal, BMMStrategy, BMMPolicy,
 )
+from core.output_schemas import BMMOutputSchema
 
 
 class AgentBMM(BaseAgent):
 
     name = "bmm"
     skill_path = "skills/skill_bmm.md"
+    output_schema = BMMOutputSchema
     required_hub_fields = ["transcript_clean"]
 
     # ── Prompt ────────────────────────────────────────────────────────────────
