@@ -236,6 +236,22 @@ if pipeline_mode == _MODE_NEW:
                     save_transcript(meeting_id, hub)
                     save_meeting_artifacts(meeting_id, hub)
 
+                    # LGPD audit — log pipeline run (async, fail-open)
+                    try:
+                        from modules.compliance import log_audit_event, detect_pii
+                        from modules.auth import get_current_user as _get_user
+                        _pii = detect_pii(hub.transcript_raw or "")
+                        st.session_state[f"_pii_result_{meeting_id}"] = _pii
+                        log_audit_event(
+                            "pipeline_run",
+                            meeting_id=meeting_id,
+                            project_id=st.session_state.get("project_id"),
+                            user_login=_get_user(),
+                            details=_pii.summary,
+                        )
+                    except Exception:
+                        pass
+
                     if hub.minutes.ready:
                         try:
                             from modules.ata_engine_generator import generate_ata_html
@@ -581,6 +597,25 @@ if "hub" in st.session_state:
                     label_visibility="collapsed",
                 )
 
+    # ─────────────────────────────────────────────────────────────────────────
+
+    # ── LGPD Compliance Panel ─────────────────────────────────────────────────
+    _compliance_mid = st.session_state.get("current_meeting_id")
+    if _compliance_mid and supabase_configured():
+        try:
+            from modules.compliance import detect_pii, render_consent_panel
+            from modules.auth import get_current_user as _lgpd_get_user
+            _pii_key = f"_pii_result_{_compliance_mid}"
+            if _pii_key not in st.session_state:
+                st.session_state[_pii_key] = detect_pii(hub.transcript_raw or "")
+            render_consent_panel(
+                meeting_id=_compliance_mid,
+                pii_result=st.session_state[_pii_key],
+                project_id=st.session_state.get("project_id"),
+                user_login=_lgpd_get_user(),
+            )
+        except Exception:
+            pass  # compliance panel must never block the pipeline UI
     # ─────────────────────────────────────────────────────────────────────────
 
     tab_labels = {

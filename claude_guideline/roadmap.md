@@ -4,6 +4,17 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC81 — Concluído (v4.59) — LGPD Compliance Layer (Sprint 1 + 2)
+- [x] `modules/compliance/` package: `detector.py`, `audit.py`, `consent.py`, `__init__.py`
+- [x] `detector.py` — PII classification only (CPF, CNPJ, EMAIL, TEL, VALOR via regex + NOME_PESSOA via spaCy NER); no anonymization; `PIIDetectionResult` with `risk_level` (low/medium/high)
+- [x] `audit.py` — async daemon thread write to `compliance_audit` table; fail-open; supports: `pipeline_run`, `consent_granted`, `data_accessed`, `data_deleted`, `pii_detected`
+- [x] `consent.py` — post-pipeline LGPD consent panel (`render_consent_panel()`); legal basis dropdown (4 options); participant type radio; retention slider (30–365 days); saves to `compliance_consent` + triggers audit event
+- [x] `pages/Pipeline.py` — two hooks: (1) after `save_meeting_artifacts()`: runs `detect_pii()`, caches result in session_state, logs `pipeline_run` audit; (2) before tabs: renders `render_consent_panel()` (fail-open wrapper)
+- [x] `setup/supabase_migration_compliance.sql` — `compliance_consent` + `compliance_audit` tables with FK cascade, indexes, COMMENT metadata
+- Architecture: consent form shown AFTER pipeline saves (meeting_id available) — solves chicken-and-egg; spaCy reuses same lazy-load cache pattern as nlp_chunker; panel is non-blocking (expander, expanded only on high-risk); all compliance ops fail-open
+
+---
+
 ### PC1 — Concluído (v3.4)
 - [x] Pipeline sequencial: Quality → Preprocessor → NLP → BPMN → Minutes → Requirements → Synthesizer
 - [x] BPMN 2.0 XML com layout absoluto, pools/lanes, Link Events
