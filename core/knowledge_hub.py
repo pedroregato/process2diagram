@@ -599,6 +599,11 @@ class SessionMetadata:
     cache_hits: int = 0
     tokens_saved: int = 0
     long_context_calls: int = 0
+    # Tier-2 PII pseudonymization (PC82) — built once via detect_names(transcript)
+    # Format: { "[PESSOA:PG]": "Pedro Gentil" }  token → original name
+    # Passed to sanitize() on every _call_llm() so all agents share a consistent
+    # pseudonymization scheme for the duration of the session.
+    name_map: dict = field(default_factory=dict)
 
 
 # ── Knowledge Hub (root) ──────────────────────────────────────────────────────
@@ -909,6 +914,10 @@ class KnowledgeHub:
         # ── v4.29: A2A delegation log ─────────────────────────────────────────
         if not hasattr(hub.validation, 'lg_delegation_log'):
             hub.validation.lg_delegation_log = []
+
+        # ── PC82: Tier-2 PII name_map in SessionMetadata ─────────────────────
+        if not hasattr(hub.meta, 'name_map'):
+            hub.meta.name_map = {}
 
         return hub
 
