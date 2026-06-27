@@ -356,18 +356,33 @@ with tab_tele:
         axis=1,
     )
 
+    # ── Filtro skill_version (post-load, populado da df_all) ──────────────
+    _sv_col = "skill_version"
+    _versions_in_data = sorted(df_all[_sv_col].dropna().unique().tolist())
+    if _versions_in_data:
+        _ver_opts = ["Todas"] + _versions_in_data
+        f_skill_ver = st.selectbox(
+            "Versão do skill",
+            _ver_opts,
+            key="tele_skill_ver",
+            help="Filtra registros pela versão do arquivo de skill que gerou a chamada (PC83)",
+        )
+        if f_skill_ver != "Todas":
+            df_all = df_all[df_all[_sv_col] == f_skill_ver]
+
     # ── KPIs ──────────────────────────────────────────────────────────────
-    k1, k2, k3, k4, k5 = st.columns(5)
+    k1, k2, k3, k4, k5, k6 = st.columns(6)
     k1.metric("Registros",        f"{len(df_all):,}")
     k2.metric("Latência mediana", f"{int(df_all['latency_ms'].median()):,} ms")
     k3.metric("p95 latência",     f"{int(df_all['latency_ms'].quantile(.95)):,} ms")
     k4.metric("Throughput mediano", f"{df_all['tokens_per_sec'].median():.0f} tok/s")
     k5.metric("Providers únicos", df_all["provider"].nunique())
+    k6.metric("Versões de skill", df_all[_sv_col].nunique())
 
     st.markdown("---")
 
-    sub_lat, sub_thr, sub_hist, sub_heat = st.tabs([
-        "📊 Latência", "⚡ Throughput", "📈 Histórico", "🔥 Heatmap",
+    sub_lat, sub_thr, sub_hist, sub_heat, sub_ver = st.tabs([
+        "📊 Latência", "⚡ Throughput", "📈 Histórico", "🔥 Heatmap", "📋 Versões",
     ])
 
     providers_present = sorted(df_all["provider"].unique())
@@ -514,6 +529,121 @@ with tab_tele:
             yaxis_title="Agente",
         )
         st.plotly_chart(fig4, use_container_width=True)
+
+    # ── Sub-tab: Versões de Skill ──────────────────────────────────────────
+    with sub_ver:
+        df_ver = df_all[df_all[_sv_col].notna()].copy()
+        if df_ver.empty:
+            st.info(
+                "Nenhum registro com skill_version nos dados filtrados. "
+                "Versões são registradas a partir do PC83 — processe novas reuniões para populá-las."
+            )
+        else:
+            st.markdown(
+                "Latência e throughput agrupados por versão do arquivo de skill. "
+                "Permite comparar o impacto de mudanças no prompt entre versões."
+            )
+
+            # ── Tabela de resumo ──────────────────────────────────────────
+            agg_ver = (
+                df_ver.groupby([_sv_col, "agent_name"])
+                .agg(
+                    N=("latency_ms", "count"),
+                    p50=("latency_ms", "median"),
+                    p95=("latency_ms", lambda x: x.quantile(.95)),
+                    throughput=("tokens_per_sec", "median"),
+                )
+                .reset_index()
+                .rename(columns={
+                    _sv_col:      "Versão do Skill",
+                    "agent_name": "Agente",
+                    "p50":        "p50 (ms)",
+                    "p95":        "p95 (ms)",
+                    "throughput": "Throughput (tok/s)",
+                })
+            )
+            for col in ["p50 (ms)", "p95 (ms)"]:
+                agg_ver[col] = agg_ver[col].apply(lambda v: f"{v:.0f}")
+            agg_ver["Throughput (tok/s)"] = agg_ver["Throughput (tok/s)"].apply(
+                lambda v: f"{v:.1f}"
+            )
+            st.dataframe(agg_ver, use_container_width=True, hide_index=True)
+
+            # ── Bar chart: latência mediana por versão × agente ───────────
+            _ver_list = sorted(df_ver[_sv_col].unique())
+            _ver_colors = {v: _PALETTE[i % len(_PALETTE)] for i, v in enumerate(_ver_list)}
+            _agg_chart = (
+                df_ver.groupby([_sv_col, "agent_name"])["latency_ms"]
+                .median()
+                .reset_index()
+            )
+            fig_ver = go.Figure()
+            for ver in _ver_list:
+                sub = _agg_chart[_agg_chart[_sv_col] == ver]
+                fig_ver.add_trace(go.Bar(
+                    name=ver,
+                    x=sub["agent_name"],
+                    y=sub["latency_ms"],
+                    marker_color=_ver_colors[ver],
+                    text=sub["latency_ms"].apply(lambda v: f"{v:.0f} ms"),
+                    textposition="outside",
+                ))
+            fig_ver.update_layout(
+                title="Latência mediana por versão de skill × agente (ms)",
+                barmode="group",
+                height=400,
+                plot_bgcolor="#0d1b2a",
+                paper_bgcolor="#0d1b2a",
+                font_color="#f0f4f8",
+                yaxis_title="Latência mediana (ms)",
+                xaxis_title="Agente",
+                legend=dict(
+                    title="Versão do Skill",
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                ),
+            )
+            st.plotly_chart(fig_ver, use_container_width=True)
+
+            # ── Evolução temporal por versão ──────────────────────────────
+            if "created_at" in df_ver.columns:
+                df_ver_ts = df_ver.copy()
+                df_ver_ts["date"] = pd.to_datetime(df_ver_ts["created_at"]).dt.date
+                agg_vts = (
+                    df_ver_ts.groupby(["date", _sv_col])["latency_ms"]
+                    .median()
+                    .reset_index()
+                )
+                fig_vts = go.Figure()
+                for ver in _ver_list:
+                    sub = agg_vts[agg_vts[_sv_col] == ver].sort_values("date")
+                    if sub.empty:
+                        continue
+                    fig_vts.add_trace(go.Scatter(
+                        x=sub["date"],
+                        y=sub["latency_ms"],
+                        name=ver,
+                        mode="lines+markers",
+                        line=dict(color=_ver_colors[ver], width=2),
+                        marker=dict(size=6),
+                    ))
+                fig_vts.update_layout(
+                    title="Evolução da latência mediana por versão de skill (ms/dia)",
+                    height=340,
+                    plot_bgcolor="#0d1b2a",
+                    paper_bgcolor="#0d1b2a",
+                    font_color="#f0f4f8",
+                    yaxis_title="Latência mediana (ms)",
+                    xaxis_title="Data",
+                    legend=dict(
+                        title="Versão",
+                        orientation="h",
+                        yanchor="bottom",
+                        y=1.02,
+                    ),
+                )
+                st.plotly_chart(fig_vts, use_container_width=True)
 
     st.markdown("---")
     st.caption(
