@@ -3,7 +3,7 @@ agent: bpmn
 iniciativa: Pedro Regato
 project: process2diagram
 spec: BPMN 2.0 (OMG — ISO/IEC 19510) · Bruce Silver Method and Style
-version: 7.9
+version: 8.0
 ---
 
 # BPMN Agent — Instruções de Execução
@@ -60,20 +60,16 @@ Em formato pools, **a contagem é feita por pool** — cada pool aplica a regra 
 Antes de identificar participantes, analise a natureza do processo e identifique
 padrões estruturais que moldarão o design do diagrama:
 
-**a) Densidade — Hierárquico ou Flat?**
-- Conte as atividades estimadas. Se > 10, planeje `callActivity`.
-- Se ≤ 10, mantenha flat — não fragmente artificialmente.
-
-**b) Repetição — Loop ou Multi-Instance?**
+**a) Repetição — Loop ou Multi-Instance?**
 - Mesma tarefa, mesmo ator, sem decisão externa → `loopTask`
 - Mesma tarefa para cada item de uma coleção → `multiInstanceTask`
 - Devolução entre atores diferentes → gateway + back-edge
 
-**c) Colaboração Interorganizacional?**
+**b) Colaboração Interorganizacional?**
 - Entidades externas trocando mensagens? → planeje formato **pools**.
 - Todos na mesma organização? → formato **flat**.
 
-**d) Exceções Durante Execução?**
+**c) Exceções Durante Execução?**
 - Timeout, falha de sistema, contra-ordem durante tarefa? → planeje **boundary events**.
 - Decisões ao final da tarefa? → planeje **gateways**.
 
@@ -110,15 +106,6 @@ Exemplos de **pools** (organizações distintas):
 - ✓ Loja ↔ Banco (aprovação de crédito) → 2 pools
 - ✓ Empresa ↔ Receita Federal → 2 pools
 
-- Entidades externas autônomas (ex: "Cliente externo", "Fornecedor", "SAP de terceiro") → Pools separados
-- Papéis internos do mesmo participante → Lanes
-
-**REGRA CRÍTICA — Nome do pool deve ser o nome exato da organização na transcrição:**
-Nunca adivinhe, abrevie ou troque pelo nome do setor. Use o nome oficial mencionado pelos participantes.
-- ✗ "Banco Meridional" quando a transcrição diz "Grupo Meridional S.A." → use "Grupo Meridional"
-- ✗ "Empresa" ou "Contratante" quando a transcrição diz "Prefeitura de São Paulo" → use "Prefeitura de São Paulo"
-- ✗ Abreviar "Receita Federal do Brasil" para "Receita" ou "RFB"
-- ✓ Se a transcrição não citar nome oficial, use o papel descritivo mais específico: "Cliente B2B", "Fornecedor de TI"
 - **Nunca** nomeie Lane como: `usuário`, `user`, `sistema`, `system`, `ator`, `actor`,
   `validador`, `pessoa`, `participante` ou equivalente genérico.
   Use o nome real da unidade organizacional (ex: "Equipe de Cadastro", "Auditoria Interna").
@@ -250,8 +237,6 @@ diferencie pelo **motivo ou contexto** que originou cada encerramento.
 - ✓ Correto:
   - "Proposta Recusada — Score Baixo" (caminho automático por score < 500)
   - "Proposta Recusada — Revisão Manual" (caminho após análise humana)
-- Regra mnemônica: **leia o label do gateway que precede o End Event** e incorpore-o ao nome.
-  Ex: gateway sai com label "reprovado na revisão" → End Event "Proposta Reprovada na Revisão Manual".
 
 **Regra do Rótulo Refletido (Traceability Label Rule):**
 O nome de cada End Event DEVE refletir o label do gateway que o precede, permitindo rastreabilidade visual:
@@ -494,7 +479,6 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 
 **Hierarquia e Densidade (Bruce Silver Level 1):**
 - [ ] O nível 1 tem ≤ 10 nós? Se não → reagrupar usando `callActivity`
-- [ ] Processos com > 10 atividades usam `callActivity` para agrupar fases lógicas?
 - [ ] Todo `callActivity` tem `description` listando as subatividades que representa?
 - [ ] Cada End Event distinto representa um **resultado de negócio nomeado**?
 - [ ] O nome de cada End Event **corresponde ao label do gateway que o precede**? (ex: gateway sai com "Reprovado" → End Event "Proposta Reprovada Definitivamente" — permite rastrear visualmente o caminho percorrido)
@@ -585,14 +569,7 @@ um step correspondente no JSON. Se não existir, justifique por que foi omitido
 
 > **`process_type`** (opcional): `"flat"` | `"hierarchical"` | `"collaboration"` — descreve a estrutura arquitetural do diagrama. Usado pelo revisor e para configuração do viewer.
 
-> **Regra de Nomenclatura Obrigatoria — Start e End Events:**
-> - `process_trigger`: descreve o **gatilho real** do processo — o evento externo ou condicao que o inicia.
->   Exemplos corretos: "Solicitacao de Ferias Recebida", "NF Emitida pelo Fornecedor", "Chamado Tecnico Aberto".
->   Nunca use: "Inicio", "Start", "Comecar", "Iniciar o processo".
-> - `process_outcomes`: lista os **estados de negocio** alcancados ao final.
->   Cada item deve ser o resultado de um caminho distinto.
->   Exemplos corretos: "Pagamento Processado com Sucesso", "Pedido Cancelado por Inadimplencia".
->   Nunca use: "Fim", "End", "Encerrar", "Terminar".
+> **Nomenclatura:** `process_trigger` = gatilho real (não "Inicio"/"Start"); `process_outcomes` = estados de negócio ao final (não "Fim"/"End") — ver Passo 3a.
 
 ### Colaboracao — formato pools
 
@@ -700,10 +677,8 @@ um step correspondente no JSON. Se não existir, justifique por que foi omitido
 ```
 
 *Observacoes:*
-- 4 atividades — modelo flat, sem callActivity
-- S02 é o gateway de decisão — ator diferente (Gestao) decide a devolução → gateway + back-edge, não `loopTask`
-- S03 retorna para S01 (tarefa original), nunca para S02 (gateway)
-- XOR sem join explícito: S04 vai para end event gerado automaticamente
+- Ator diferente (Gestao) decide a devolução → `exclusiveGateway` + back-edge, não `loopTask`
+- S03 retorna para S01 (tarefa original), nunca para S02 (gateway) — ver Passo 5
 
 ---
 
@@ -769,10 +744,8 @@ um step correspondente no JSON. Se não existir, justifique por que foi omitido
 ```
 
 *Observacoes:*
-- 13 atividades identificadas → agrupadas em 2 fases (`callActivity`)
-- Nivel 1 tem apenas 4 nos — cognitivamente legivel
-- Cada `callActivity` descreve subatividades na `description`
-- Start Event ("Requisicao de vaga recebida") e End Events sao gerados automaticamente
+- 13 atividades → 2 fases `callActivity`; cada fase descreve subatividades em `description`
+- Start/End Events gerados automaticamente (não declarados no JSON)
 
 ---
 
