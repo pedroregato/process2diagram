@@ -41,6 +41,25 @@ from services.llm_telemetry import (
     _telemetry,
     run_benchmark_call,
 )
+from core.agent_registry import AGENT_REGISTRY
+
+
+def _skill_version(agent_key: str) -> str | None:
+    """Parse version: from YAML frontmatter of the skill file for agent_key."""
+    import re
+    skill_path = (AGENT_REGISTRY.get(agent_key) or {}).get("skill_path")
+    if not skill_path:
+        return None
+    try:
+        content = open(skill_path, encoding="utf-8").read()
+        m = re.search(r'^---\s*\n(.*?)\n---', content, re.DOTALL)
+        if m:
+            v = re.search(r'^version:\s*(.+)', m.group(1), re.MULTILINE)
+            if v:
+                return v.group(1).strip()
+    except Exception:
+        pass
+    return None
 
 apply_auth_gate()
 render_page_header("⚡", "LLM Benchmark & Telemetria", "Avalie latência e throughput de cada provider por tipo de agente")
@@ -189,6 +208,7 @@ with tab_bench:
                                 long_context=False,
                                 is_error=bool(err),
                                 benchmark_run=True,
+                                skill_version=_skill_version(agent_key),
                             ))
 
                         if not err:
