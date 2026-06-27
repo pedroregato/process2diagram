@@ -71,7 +71,8 @@ process2diagram/
 │   ├── assistant_tools.py        # Tool schemas + AssistantToolExecutor
 │   ├── chart_config.py           # CHART_PALETTES + DEFAULT_PALETTE (zero-dependency)
 │   ├── cost_model.py             # ModelPricing, AgentTokenProfile, ScenarioConfig, ScenarioResult, PRICING_CATALOG, project_cost()
-│   └── schema.py                 # Legacy schemas
+│   ├── schema.py                 # Legacy schemas
+│   └── output_schemas.py         # Pydantic v2 output schemas (7 agents, fail-open, PC84)
 │
 ├── agents/
 │   ├── base_agent.py             # Abstract base — LLM routing, JSON retry, token tracking
@@ -251,7 +252,7 @@ class MyAgent(BaseAgent):
         return hub
 ```
 
-`BaseAgent` provides: `_call_llm()`, `_parse_json()`, `_load_skill()` (absolute path, CWD-independent), 3 JSON retries, token tracking. `_call_llm()` flow: PII sanitize Tier-1 (CPF/CNPJ/email/tel/valores → `@LABEL_NNN`) + Tier-2 nomes (`hub.meta.name_map` → `[PESSOA:XX]`; `_NOME_INSTRUCTION` injetada no system prompt quando não-vazio) → long context detection (LONG_CONTEXT_AGENTS={bpmn,sbvr,bmm}, >50k tokens → max_tokens=8192, timeout=180s) → cache hash → `SemanticCache` check (PII-safe) → API call → telemetry (async) → cache store → desanitize (restaura Tier-1 + Tier-2 antes de retornar ao caller). `hub.meta.cache_hits/tokens_saved/long_context_calls/name_map` tracked. Provider routing: `"openai_compatible"` → OpenAI SDK + custom `base_url`; `"anthropic"` → native SDK.
+`BaseAgent` provides: `_call_llm()`, `_parse_json()`, `_load_skill()` (absolute path, CWD-independent), 3 JSON retries, token tracking. **Output schemas (PC84):** `output_schema = XxxOutputSchema` class attr → `_call_with_retry()` calls `schema.model_validate(data)` after parse, emits `warnings.warn()` on failure — pipeline never blocked. **Pre-conditions (PC83):** `required_hub_fields` list (dot-paths) validated by `_check_preconditions(hub)` before `run()`. **Skill version (PC83):** `_load_skill()` parses `version:` from YAML frontmatter; persisted in `llm_telemetry.skill_version`. `_call_llm()` flow: PII sanitize Tier-1 (CPF/CNPJ/email/tel/valores → `@LABEL_NNN`) + Tier-2 nomes (`hub.meta.name_map` → `[PESSOA:XX]`; `_NOME_INSTRUCTION` injetada no system prompt quando não-vazio) → long context detection (LONG_CONTEXT_AGENTS={bpmn,sbvr,bmm}, >50k tokens → max_tokens=8192, timeout=180s) → cache hash → `SemanticCache` check (PII-safe) → API call → telemetry (async) → cache store → desanitize (restaura Tier-1 + Tier-2 antes de retornar ao caller). `hub.meta.cache_hits/tokens_saved/long_context_calls/name_map` tracked. Provider routing: `"openai_compatible"` → OpenAI SDK + custom `base_url`; `"anthropic"` → native SDK.
 
 ### Orchestrator + AgentValidator
 

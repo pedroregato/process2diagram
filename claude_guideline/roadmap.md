@@ -4,6 +4,31 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC84 — Concluído (v4.62 / 2026-06-27) — Output Schemas com Pydantic v2
+
+- [x] **`core/output_schemas.py`** — 7 schemas Pydantic v2 fail-open (`_PermissiveModel` com `extra='allow'`):
+  - `BPMNOutputSchema` — `name` obrigatório; suporta flat (`steps`/`edges`/`lanes`) e collaboration (`pools`/`message_flows`)
+  - `MinutesOutputSchema` — todos os campos opcionais com defaults
+  - `RequirementsOutputSchema` — `requirements` obrigatório e não-vazio
+  - `SBVROutputSchema` — `vocabulary` + `rules` com listas
+  - `BMMOutputSchema` — visão/missão/metas/estratégias/políticas
+  - `TranscriptQualityOutputSchema` — `criteria` obrigatório; `grade` validado em A–E
+  - `SynthesizerOutputSchema` — `executive_summary` obrigatório
+- [x] **`agents/base_agent.py`** — `output_schema = None` class attr; `_call_with_retry()` chama `schema.model_validate(data)` e `warnings.warn()` em falha — pipeline nunca bloqueado
+- [x] **7 agentes** — `output_schema = XxxOutputSchema` + import de `core.output_schemas`
+- [x] **`requirements.txt`** — `pydantic==2.12.5` fixado explicitamente
+
+---
+
+### PC83 — Concluído (v4.61 / 2026-06-27) — Skill Version em Telemetria + Pré-condições
+
+- [x] **`services/llm_telemetry.py`** — `TelemetryRecord.skill_version: Optional[str]`; campo incluído em `_write()` e `query()` select
+- [x] **`setup/supabase_migration_skill_version.sql`** — `ALTER TABLE llm_telemetry ADD COLUMN IF NOT EXISTS skill_version TEXT` + índice parcial — **migração executada**
+- [x] **`agents/base_agent.py`** — `self.skill_version` setado por `_load_skill()` via parse de `version:` no YAML frontmatter; passado ao `TelemetryRecord` em `_call_with_retry()`
+- [x] **Pré-condições** — `required_hub_fields: list = []` class attr; `_check_preconditions(hub)` valida dot-paths (`transcript_clean`, `bpmn.ready`) antes de `run()`; 7 agentes com seus campos declarados
+
+---
+
 ### PC82 — Concluído (v4.60 / 2026-06-27) — Pseudonimização Reversível de Nomes (Tier-2 PII)
 
 **Contexto:** Decisão de design anterior mantinha nomes reais nas chamadas LLM (necessários para lanes BPMN). PC82 implementa pseudonimização reversível com iniciais — nomes não saem no wire para APIs externas, mas são restaurados nos artefatos antes de qualquer persistência (RAG preservado).
