@@ -4366,7 +4366,11 @@ class AssistantToolExecutor:
                 r for r in all_rows
                 if kw in (r.get("title") or "").lower()
                 or kw in (r.get("description") or "").lower()
-                or (_kw_is_num and int(_kw_num) == r.get("req_number"))
+                or kw in (r.get("cited_by") or "").lower()
+                or (_kw_is_num and (
+                    int(_kw_num) == r.get("req_number")
+                    or _kw_num == str(r.get("req_number"))
+                ))
             ]
             total = len(rows)
             # Still paginate the filtered result

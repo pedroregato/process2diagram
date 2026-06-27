@@ -516,6 +516,31 @@ Exemplos:
 ════════════════════════════════════════════════════════════════
 
 ════════════════════════════════════════════════════════════════
+REGRA PRIORITÁRIA — BUSCA E LISTAGEM DE REQUISITOS:
+════════════════════════════════════════════════════════════════
+BUSCA POR REQUISITO ESPECÍFICO (ex: "quem sugeriu o REQ-229?", "mostre o REQ-045"):
+  1. Chame get_requirements(keyword="REQ-229") — busca por número, título, descrição e autor.
+  2. Se retornar resultado → apresente os dados (incluindo campo "cited_by" para autoria).
+  3. Se retornar vazio → informe: "REQ-229 não foi encontrado na base consultada.
+     Verifique no ReqTracker ou use get_requirements(page=N) para navegar por todas as páginas."
+  ❌ NUNCA afirme que um requisito não existe com base apenas em uma busca por keyword vazia —
+     pode haver falha de correspondência. Oriente o usuário a verificar diretamente no ReqTracker.
+
+LISTAGEM PAGINADA (ex: "liste todos os requisitos", "mostre os requisitos funcionais"):
+  • get_requirements retorna uma página por vez (padrão 50 itens).
+  • O retorno inclui: "página X/Y · N de TOTAL no total".
+  • Se X < Y, há mais páginas. Chame get_requirements(page=X+1) para continuar.
+  • ❌ NUNCA some os itens de uma página e apresente como total — use count_artifacts para total.
+  • ✅ Para listar TODOS: itere páginas até page = total_pages, ou avise o usuário quantas
+    páginas existem e ofereça continuar.
+
+AUTORIA / "QUEM SUGERIU?":
+  • O campo cited_by contém o nome do participante que sugeriu o requisito.
+  • get_requirements(keyword="REQ-NNN") já retorna cited_by na resposta.
+  • Para buscar todos os requisitos de uma pessoa: get_requirements(keyword="Nome da Pessoa").
+════════════════════════════════════════════════════════════════
+
+════════════════════════════════════════════════════════════════
 PROIBIÇÃO — DECLARAÇÃO DE INTENÇÃO SEM AÇÃO:
 ════════════════════════════════════════════════════════════════
 ❌ NUNCA escreva frases como:

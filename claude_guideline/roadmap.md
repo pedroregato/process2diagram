@@ -378,6 +378,56 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] **Glossário** — `pages/Orientacoes_Glossario.py`; 6 abas de categoria (BPMN/Process, Requisitos, Linguagem de Negócio, Qualidade, Tecnologia, Metodologia) + aba Referências (16 specs/libs); CSS dark-navy matching outras páginas Orientações; registrado em `app.py` Ajuda após "Como Iniciar"
 - [x] **Cobertura completa de reprocessamento** — `run_knowledge_extractor` + `run_query_summarizer` adicionados aos 3 caminhos: `core/batch_pipeline.py _reprocess_one()`, `core/assistant_tools.py reprocess_meeting_full()`, `pages/BatchRunner.py` (seção batch + expander reprocessar); UI expandida para 12 colunas com 🕸️ Grafo + 🔎 Sumário
 
+### PC79 — Concluído (v4.60 / 2026-06-26)
+
+**Precisão do Assistente — keyword search robusto + regras de paginação/contagem**
+
+- [x] **`core/assistant_tools.py` — `get_requirements` keyword search**:
+  - Corrigida busca por `req_number`: comparação type-safe (`int` e `str`) — resolve bug onde `REQ-229` não era encontrado quando `req_number` era string no banco
+  - Adicionado `cited_by` ao filtro de keyword — permite buscar "quem sugeriu" diretamente
+- [x] **`agents/agent_assistant.py` — `_SYSTEM_TOOLS_TEMPLATE`**: nova seção "BUSCA E LISTAGEM DE REQUISITOS" com regras explícitas:
+  - Fluxo de busca por REQ-NNN (keyword → cited_by → fallback ReqTracker)
+  - Paginação: nunca somar itens de uma página como total; iterar `page+1` se houver mais
+  - Autoria: `cited_by` disponível no retorno de `get_requirements(keyword="REQ-NNN")`
+  - Reforço: `count_artifacts` obrigatório para totais, nunca `get_requirements` sem filtros
+- [x] **`melhorias/estrategia_para_precisao.md`** → `melhorias/arquivados/`
+
+---
+
+### PC78 — Concluído (v4.59 / 2026-06-26)
+
+**Housekeeping — arquivamento de 22 propostas implementadas**
+
+- [x] `git mv` de 22 arquivos de `melhorias/` → `melhorias/arquivados/` (histórico preservado)
+- [x] Propostas arquivadas: BPMN (skill v7.9, method-and-style, AgentBPMNReviewer), Assistente (xlsx, UI, chat export, 4 novas ferramentas), Glossário, ATA Engine, Knowledge Hub Persistente, SemanticCache + ContextAnalyzer, migração DeepSeek v4-flash, ClaudeCodeWorkflow, BMIF Strategic Plan
+- [x] Mantidos em `melhorias/`: propostas futuras não implementadas (Jira, LGPD, multi-esfera 2.0, MCP/A2A, PII, Grok multi-agent, precisão Assistente)
+
+---
+
+### PC77 — Concluído (v4.59 / 2026-06-26)
+
+**AgentValidator — 5ª dimensão de scoring: semântica de nomenclatura BPMN**
+
+- [x] **`agents/agent_validator.py`** — nova dimensão `semantic` (0–10, pure Python, sem LLM):
+  - Constantes: `_ACTIVITY_VERBS` (23 verbos PT), `_GENERIC_START_NAMES`, `_GENERIC_END_NAMES`
+  - Penalizações: gateway com verbo de atividade (−2.5/viol), task terminando com `?` (−2.0), evento Start/End genérico (−1.0)
+  - `_score_semantic(steps) → tuple[float, int]`; peso via `weights.get("semantic", 5)` — fail-open
+- [x] **`core/knowledge_hub.py`** — `BPMNValidationScore`: campos `semantic: float` + `n_semantic_violations: int`; `migrate()` guard v4.59
+- [x] **`core/session_state.py`** — `bpmn_weights` default inclui `"semantic": 5`
+- [x] **`ui/sidebar.py`** — slider "Semântico" adicionado ao bloco de pesos do torneio
+- [x] **`modules/i18n.py`** — chave `"semantic"` em pt-BR e en-US
+- [x] **`tests/test_agent_validator.py`** — 9 novos testes em `TestSemantic`; constantes `WEIGHTS_*_ONLY` atualizadas com `"semantic": 0`
+
+---
+
+### PC76 — Concluído (v4.58 / 2026-06-26)
+
+**skill_bpmn_reviewer v1.1 — emojis na tabela de violações**
+
+- [x] `skills/skill_bpmn_reviewer.md` — tabela de violações com emojis de severidade
+
+---
+
 ### PC75 — Concluído (v4.58 / 2026-06-26)
 
 **AgentBPMNReviewer completo — apply_bpmn_corrections + agent LLM + DB tables**
