@@ -1,5 +1,5 @@
 ---
-version: 2.0
+version: 2.1
 agent: dmn
 description: Extração de tabelas de decisão DMN 1.4 a partir de transcrições de reuniões
 spec: OMG Decision Model and Notation 1.4 (formal/2019-01-22)
@@ -158,6 +158,41 @@ Language*), definida na especificação OMG DMN 1.4, Seção 10.
 > `"Premium", "VIP"` numa célula de input significa "Premium **ou** VIP" — não "Premium **e** VIP".
 > Para AND entre duas condições → use **duas colunas de input separadas**.
 
+#### Tipos de Dados DMN
+
+Cada input e output tem um tipo implícito. O tipo determina a sintaxe correta das expressões FEEL.
+
+| Tipo DMN | Quando usar | Sintaxe FEEL | Exemplo |
+|---|---|---|---|
+| `number` | Valores numéricos — valores, prazos, quantidades | Sem aspas | `> 50000`, `[0..100]`, `= 0` |
+| `string` | Texto categórico — status, tipo, categoria | Entre aspas duplas | `"aprovado"`, `"Premium"` |
+| `boolean` | Flags binários — habilitado, inadimplente, ativo | Literais `true`/`false` | `true`, `false` |
+| `date` | Datas sem horário | `date("YYYY-MM-DD")` | `>= date("2024-01-01")` |
+| `time` | Horários sem data | `time("HH:MM:SS")` | `< time("18:00:00")` |
+| `date and time` | Data com horário | `date and time("YYYY-MM-DDTHH:MM:SS")` | `> date and time("2024-06-01T00:00:00")` |
+| `duration` | Períodos de tempo (ISO 8601) | `duration("PnD")`, `duration("PnM")` | `> duration("P30D")` (30 dias), `>= duration("P6M")` (6 meses) |
+
+> **Inferência de tipo:** determine o tipo pelo que a transcrição descreve.
+> "prazo de 30 dias" → `number` (se armazenado como inteiro) ou `duration("P30D")` (se ISO 8601).
+> "após 1º de julho" → `date`. "ativo ou inativo" → `boolean`. "status = aprovado" → `string`.
+
+#### FEEL Avançado — Funções e Expressões Compostas
+
+Para casos que vão além de comparações simples:
+
+| Necessidade | Expressão FEEL | Exemplo |
+|---|---|---|
+| Verificar se valor pertence a lista | `list contains([lista], item)` | `list contains(["A","B","C"], tipo)` |
+| Condicional dentro de célula | `if condição then A else B` | `if valor > 10000 then "Diretoria" else "Gerência"` |
+| Verificar substring | `contains(texto, "substr")` | `contains(descricao, "urgente")` |
+| Extrair ano de uma data | `year(data)` | `year(data_solicitacao) = 2024` |
+| Calcular diferença de datas | `data2 - data1` (retorna duration) | `data_vencimento - today() < duration("P7D")` |
+| Não nulo | `not(null)` | Input obrigatoriamente preenchido |
+
+> **Regra de uso:** prefira sempre a expressão mais simples que represente fielmente a
+> transcrição. Funções avançadas só quando o caso realmente exigir (ex: "decisões que
+> vencem em menos de 7 dias", "pedidos feitos antes de 2024").
+
 #### Completude e Sobreposição para Hit Policy U
 
 Para hit policy **U**, a tabela deve ser:
@@ -239,7 +274,7 @@ Retorne **APENAS JSON válido**, sem markdown, sem comentários:
       "rationale": "Contexto e motivação desta decisão na reunião",
       "decided_by": ["Participante 1", "Participante 2"],
       "hit_policy": "U",
-      "depends_on": [],
+      "depends_on": [],                          // obrigatório — [] se sem dependência
       "inputs": [
         {"label": "Nome descritivo do Input", "expression": "nome_variavel"}
       ],
@@ -249,11 +284,12 @@ Retorne **APENAS JSON válido**, sem markdown, sem comentários:
       "rules": [
         {
           "inputs": ["expressão FEEL input 1", "expressão FEEL input 2"],
-          "output": "valor do output",
-          "annotation": "nota contextual opcional"
+          "output": "valor do output",           // string única para 1 output
+          "annotation": ""                       // opcional — deixe "" se não houver nota
         }
       ],
-      "confidence": 0.90
+      "decided_by": ["Participante 1"],          // opcional — omita se não identificado
+      "confidence": 0.90                         // obrigatório — < 0.75 se decisão implícita
     }
   ]
 }
