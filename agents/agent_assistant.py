@@ -570,7 +570,8 @@ metodologias que ele usa, incluindo (mas não limitado a):
   BPMN, Gateway, Lane, Pool, DMN, SBVR, BMM, IBIS, NER, RAG, CKF, ROI-TR,
   embedding, token, spaCy, LLM, pipeline, skill, KnowledgeHub, pgvector,
   Supabase, Mermaid, Torneio BPMN, LangGraph, Semantic Cache, PII, RLS,
-  LGPD, sanitização PII, conformidade LGPD, camada de compliance, trilha de auditoria,
+  LGPD, sanitização PII, pseudonimização de nomes, PC82, Tier-2 PII, name_map, [PESSOA:XX],
+  conformidade LGPD, camada de compliance, trilha de auditoria,
   consentimento de dados, segurança de dados, proteção de dados sensíveis,
   Qualidade de Transcrição, Reconciliação de Requisitos, ASR etc.
 
@@ -604,11 +605,16 @@ RESPONDA COM BASE NO CONHECIMENTO EMBUTIDO ABAIXO (não precisa chamar ferrament
 
 ━━━ ARQUITETURA DE SEGURANÇA — 6 CAMADAS ━━━
 
-C1 — SANITIZAÇÃO DE PII (modules/pii_sanitizer.py)
-  Antes de CADA chamada ao LLM, dados estruturados são substituídos por tokens:
+C1 — SANITIZAÇÃO DE PII (modules/pii_sanitizer.py) — DOIS TIERS
+  Tier 1 — PII estruturado (por chamada, stateless):
   CPF → @CPF_001 | CNPJ → @CNPJ_001 | E-mail → @EMAIL_001 | Tel → @TEL_001 | R$ → @VALOR_001
-  O LLM NUNCA recebe os valores reais. Restauração ocorre localmente após o retorno.
-  Nomes de pessoas NÃO são substituídos (necessários para BPMN, atas, IBIS).
+  Tier 2 — Nomes de pessoas (PC82, session-wide):
+  detect_names() usa spaCy NER para detectar nomes na transcrição UMA VEZ antes do pipeline;
+  cria hub.meta.name_map: {"[PESSOA:PG]": "Pedro Gentil", "[PESSOA:AS]": "Ana Souza"}
+  Todas as chamadas LLM substituem nomes por tokens [PESSOA:XX]; LLM recebe instrução
+  _NOME_INSTRUCTION para preservar tokens intactos nos artefatos gerados.
+  APÓS o LLM retornar → desanitize() restaura nomes reais ANTES de salvar no Supabase.
+  Resultado: APIs externas nunca recebem nomes reais | artefatos no banco têm nomes reais | RAG funciona.
 
 C2 — CONFORMIDADE LGPD (modules/compliance/)
   Após salvar cada reunião, o pipeline executa 3 operações automáticas:
@@ -635,12 +641,17 @@ C6 — BANCO DE DADOS (Supabase)
   AES-256 em repouso + TLS 1.3 em trânsito. Row Level Security (RLS) por project_id.
   Design fail-open: Supabase indisponível → pipeline continua sem persistir (sem erro ao usuário).
 
-━━━ NOMES DE PESSOAS — TRANSPARÊNCIA ━━━
-  Nomes NÃO são anonimizados porque são essenciais para:
-  lanes BPMN (responsáveis por tarefa) | atas (quem disse o quê, itens de ação)
-  debates IBIS (posições por participante) | requisitos (campo cited_by = autor)
-  Mitigação: detector.py lista os nomes detectados no painel de consentimento;
-  operador registra base legal que cobre o tratamento desses dados.
+━━━ NOMES DE PESSOAS — PSEUDONIMIZAÇÃO PC82 ━━━
+  Com PC82, nomes SÃO pseudonimizados durante chamadas LLM mas RESTAURADOS nos artefatos:
+  1. Pipeline.py chama detect_names(transcript) → hub.meta.name_map (em memória, nunca persiste)
+  2. Cada _call_llm() substitui "Pedro Gentil" → [PESSOA:PG] antes de enviar ao provider
+  3. Provider recebe [PESSOA:PG]; gera BPMN lane="[PESSOA:PG]", ata com "[PESSOA:PG] disse..."
+  4. desanitize() restaura [PESSOA:PG] → "Pedro Gentil" antes de salvar no Supabase
+  Resultado final: APIs externas nunca viram "Pedro Gentil" | banco tem nome real | RAG intacto
+  Por que nomes reais ficam nos artefatos: lanes BPMN precisam de identidade organizacional;
+  atas precisam de quem disse o quê; IBIS precisa de autoria; cited_by rastreia o autor.
+  Camada complementar: detector.py (C2) lista nomes no painel de consentimento LGPD;
+  operador registra base legal que cobre o tratamento.
 
 ━━━ TABELAS DE COMPLIANCE ━━━
   compliance_consent: base legal, perfil, retenção (30–365 dias), PII detectado — por reunião
