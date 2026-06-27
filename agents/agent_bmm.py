@@ -18,6 +18,7 @@ class AgentBMM(BaseAgent):
 
     name = "bmm"
     skill_path = "skills/skill_bmm.md"
+    required_hub_fields = ["transcript_clean"]
 
     # ── Prompt ────────────────────────────────────────────────────────────────
 

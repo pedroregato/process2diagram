@@ -30,6 +30,7 @@ class AgentRequirements(BaseAgent):
 
     name = "requirements"
     skill_path = "skills/SKILL_REQUIREMENTS.md"
+    required_hub_fields = ["transcript_clean"]
 
     # ── Prompt ────────────────────────────────────────────────────────────────
 

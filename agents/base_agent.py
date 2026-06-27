@@ -76,6 +76,7 @@ class BaseAgent(ABC):
     # Subclasses must declare these
     name: str = "base"
     skill_path: str = ""
+    required_hub_fields: list = []  # dot-paths validated before run(); e.g. ["transcript_clean", "bpmn.ready"]
 
     def __init__(self, client_info: dict, provider_cfg: dict):
         """
@@ -86,6 +87,7 @@ class BaseAgent(ABC):
         self.client_info = client_info
         self.provider_cfg = provider_cfg
         self.max_retries: int = 2
+        self.skill_version: Optional[str] = None  # set by _load_skill()
         self._skill: str = self._load_skill()
 
     # ── Abstract interface ────────────────────────────────────────────────────
@@ -272,6 +274,7 @@ class BaseAgent(ABC):
                 long_context=use_long_ctx,
                 is_error=False,
                 benchmark_run=False,
+                skill_version=getattr(self, "skill_version", None),
             ))
         except Exception:
             pass
@@ -482,10 +485,38 @@ class BaseAgent(ABC):
         except Exception:
             pass
 
+    # ── Pre-condition guard ───────────────────────────────────────────────────
+
+    def _check_preconditions(self, hub: KnowledgeHub) -> None:
+        """Validate hub has required data before this agent runs.
+
+        Checks each path in self.required_hub_fields — supports dotted notation
+        (e.g. "bpmn.ready" → hub.bpmn.ready).  Raises ValueError on any empty
+        or missing field so the pipeline fails fast with an actionable message
+        rather than producing silently invalid output.
+        """
+        missing = []
+        for field_path in getattr(self, "required_hub_fields", []):
+            obj = hub
+            for part in field_path.split("."):
+                obj = getattr(obj, part, None)
+                if obj is None:
+                    break
+            if not obj:
+                missing.append(field_path)
+        if missing:
+            raise ValueError(
+                f"[{self.name}] Pré-condição não atendida — "
+                + ", ".join(f"hub.{f}" for f in missing)
+                + " está vazio ou ausente. "
+                "Verifique se os agentes anteriores foram executados com sucesso."
+            )
+
     # ── Skill loading ─────────────────────────────────────────────────────────
 
     def _load_skill(self) -> str:
-        """Load SKILL.md content, stripping YAML frontmatter before returning."""
+        """Load SKILL.md content, stripping YAML frontmatter before returning.
+        Parses 'version:' from frontmatter and stores it in self.skill_version."""
         if not self.skill_path:
             return ""
         # Use absolute path so this works regardless of CWD (local or Streamlit Cloud)
@@ -494,6 +525,11 @@ class BaseAgent(ABC):
         if not path.exists():
             return ""
         content = path.read_text(encoding="utf-8")
+        # Parse skill version before stripping frontmatter
+        _fm = re.search(r'^---\s*\n(.*?)\n---\s*\n', content, flags=re.DOTALL)
+        if _fm:
+            _v = re.search(r'^version:\s*(.+)$', _fm.group(1), flags=re.MULTILINE)
+            self.skill_version = _v.group(1).strip() if _v else None
         # Strip YAML frontmatter (--- ... ---) — metadata noise, not LLM instructions
         content = re.sub(r'^---\s*\n.*?\n---\s*\n', '', content, flags=re.DOTALL)
         return content.lstrip('\n')

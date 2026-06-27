@@ -100,6 +100,7 @@ class AgentTranscriptQuality(BaseAgent):
 
     name = "transcript_quality"
     skill_path = "skills/skill_transcript_quality.md"
+    required_hub_fields = ["transcript_raw"]
 
     # ── Prompt ────────────────────────────────────────────────────────────────
 

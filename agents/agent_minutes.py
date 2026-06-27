@@ -221,6 +221,7 @@ class AgentMinutes(BaseAgent):
 
     name = "minutes"
     skill_path = "skills/skill_minutes.md"
+    required_hub_fields = ["transcript_clean"]
 
     # ── Prompt ────────────────────────────────────────────────────────────────
 

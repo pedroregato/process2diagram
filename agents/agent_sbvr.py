@@ -16,6 +16,7 @@ class AgentSBVR(BaseAgent):
 
     name = "sbvr"
     skill_path = "skills/skill_sbvr.md"
+    required_hub_fields = ["transcript_clean"]
 
     # ── Prompt ────────────────────────────────────────────────────────────────
 

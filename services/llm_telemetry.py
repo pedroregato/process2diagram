@@ -32,6 +32,7 @@ class TelemetryRecord:
     long_context:  bool = False
     is_error:      bool = False
     benchmark_run: bool = False
+    skill_version: Optional[str] = None
 
 
 # ── Synthetic transcripts for on-demand benchmarks ────────────────────────────
@@ -247,6 +248,7 @@ class LLMTelemetry:
                 "long_context":  rec.long_context,
                 "is_error":      rec.is_error,
                 "benchmark_run": rec.benchmark_run,
+                "skill_version": rec.skill_version,
             }).execute()
         except Exception:
             pass
@@ -271,7 +273,7 @@ class LLMTelemetry:
                 db.table("llm_telemetry")
                 .select("agent_name,provider,model,latency_ms,input_tokens,"
                         "output_tokens,total_tokens,from_cache,long_context,"
-                        "is_error,benchmark_run,created_at")
+                        "is_error,benchmark_run,skill_version,created_at")
                 .eq("is_error", False)
                 .gte("created_at", f"now() - interval '{days} days'")
                 .order("created_at", desc=True)

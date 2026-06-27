@@ -13,6 +13,7 @@ from core.knowledge_hub import KnowledgeHub, SynthesizerModel
 class AgentSynthesizer(BaseAgent):
     name = "synthesizer"
     skill_path = "skills/SKILL_SYNTHESIZER.md"
+    required_hub_fields = ["bpmn.ready"]
 
     # ── Prompt builder ────────────────────────────────────────────────────────
 

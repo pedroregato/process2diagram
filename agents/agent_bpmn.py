@@ -168,6 +168,7 @@ class AgentBPMN(BaseAgent):
 
     name = "bpmn"
     skill_path = "skills/skill_bpmn.md"
+    required_hub_fields = ["transcript_clean"]
     # Collaboration BPMN JSON with multiple pools can exceed 4096 output tokens.
     # Guarantee at least 8192 regardless of long-context mode.
     _min_output_tokens: int = 8192
