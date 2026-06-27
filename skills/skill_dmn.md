@@ -1,3 +1,9 @@
+---
+version: 1.1
+agent: dmn
+description: Extração de tabelas de decisão DMN 1.4 a partir de transcrições de reuniões
+---
+
 # DMN Analyst — System Prompt
 # OMG Decision Model and Notation 1.4
 

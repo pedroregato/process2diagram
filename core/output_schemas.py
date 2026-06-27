@@ -295,6 +295,56 @@ class TranscriptQualityOutputSchema(_PermissiveModel):
         return v.upper() if v else v
 
 
+# ── DMN ───────────────────────────────────────────────────────────────────────
+
+class DMNInputItemSchema(_PermissiveModel):
+    label: str = ""
+    expression: str = ""
+
+
+class DMNOutputItemSchema(_PermissiveModel):
+    label: str = ""
+    value: str = ""
+
+
+class DMNRuleSchema(_PermissiveModel):
+    inputs: list[Any] = []
+    output: str = ""
+    annotation: str = ""
+
+
+class DMNDecisionSchema(_PermissiveModel):
+    id: str = ""
+    name: str
+    question: str = ""
+    rationale: str = ""
+    decided_by: list[str] = []
+    inputs: list[DMNInputItemSchema] = []
+    outputs: list[DMNOutputItemSchema] = []
+    rules: list[DMNRuleSchema] = []
+    hit_policy: str = "U"
+    confidence: float = 1.0
+
+    @field_validator("name")
+    @classmethod
+    def not_blank(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("name cannot be blank")
+        return v
+
+    @field_validator("confidence")
+    @classmethod
+    def confidence_in_range(cls, v: float) -> float:
+        if not (0.0 <= v <= 1.0):
+            raise ValueError(f"confidence must be 0.0–1.0, got {v}")
+        return v
+
+
+class DMNOutputSchema(_PermissiveModel):
+    """Validates the raw LLM JSON from AgentDMN."""
+    decisions: list[DMNDecisionSchema] = []
+
+
 # ── Synthesizer ───────────────────────────────────────────────────────────────
 
 class SynthesizerOutputSchema(_PermissiveModel):

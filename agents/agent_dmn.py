@@ -12,12 +12,15 @@ from agents.base_agent import BaseAgent
 from core.knowledge_hub import (
     KnowledgeHub, DMNModel, DMNDecision, DMNInput, DMNOutput, DMNRule,
 )
+from core.output_schemas import DMNOutputSchema
 
 
 class AgentDMN(BaseAgent):
 
-    name       = "dmn"
-    skill_path = "skills/skill_dmn.md"
+    name                 = "dmn"
+    skill_path           = "skills/skill_dmn.md"
+    required_hub_fields  = ["transcript_clean"]
+    output_schema        = DMNOutputSchema
 
     # ── Prompt ────────────────────────────────────────────────────────────────
 
