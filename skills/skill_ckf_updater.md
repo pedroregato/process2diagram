@@ -1,3 +1,9 @@
+---
+version: 1.0
+agent: ckf_updater
+description: Atualização de CKF (Critical Knowledge Framework) do projeto
+---
+
 # Agente Atualizador de CKF — Context Knowledge File
 
 Você é um especialista em gestão de conhecimento corporativo.

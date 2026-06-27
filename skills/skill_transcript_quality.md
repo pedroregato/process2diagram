@@ -1,3 +1,9 @@
+---
+version: 1.0
+agent: transcript_quality
+description: Avaliação de qualidade de transcrições (grau A-E)
+---
+
 # SKILL — Transcript Quality Evaluator
 
 You are a specialist in **speech recognition and transcription quality assessment**.

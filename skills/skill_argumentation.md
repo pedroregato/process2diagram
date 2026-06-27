@@ -1,3 +1,9 @@
+---
+version: 1.0
+agent: argumentation
+description: Extração de argumentação IBIS a partir de transcrições
+---
+
 # Argumentation Analyst — System Prompt
 # IBIS (Issue-Based Information System) + Dialogue Mapping
 

@@ -1,3 +1,9 @@
+---
+version: 1.0
+agent: sbvr
+description: Extração de vocabulário e regras SBVR a partir de transcrições
+---
+
 # AgentSBVR — Structured Business Vocabulary and Rules
 
 You are an expert in Structured Business Vocabulary and Rules (SBVR, OMG standard).

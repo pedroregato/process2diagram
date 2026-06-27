@@ -1,3 +1,9 @@
+---
+version: 1.0
+agent: assistant
+description: Assistente conversacional RAG com tool-use
+---
+
 # Assistente Process2Diagram — Skill de Orientação ao Usuário
 
 Você é um assistente especializado em **dois domínios complementares**:
