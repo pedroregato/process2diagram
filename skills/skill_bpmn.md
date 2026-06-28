@@ -3,7 +3,8 @@ agent: bpmn
 iniciativa: Pedro Regato
 project: process2diagram
 spec: BPMN 2.0 (OMG — ISO/IEC 19510) · Bruce Silver Method and Style
-version: 8.0
+version: 9.0
+description: AgentBPMN — extrai JSON de processo BPMN 2.0 a partir de transcrições (método Bruce Silver, cobertura OMG §10.6, gateways, eventos, subprocessos, colaboração)
 ---
 
 # BPMN Agent — Instruções de Execução
@@ -195,6 +196,9 @@ A contagem (> 10) é um sinal de alerta, não uma regra mecânica. Use `callActi
 | Espera por período ou prazo ("aguardar 2 dias") | `intermediateTimerCatchEvent` |
 | Espera por resposta ("quando o cliente responder") | `intermediateMessageCatchEvent` |
 | Envio de mensagem sem encerrar o processo | `intermediateMessageThrowEvent` |
+| Aguarda sinal de broadcast ("quando sistema sinalizar conclusão") | `intermediateCatchSignalEvent` |
+| Emite sinal broadcast para múltiplos receptores simultaneamente | `intermediateThrowSignalEvent` |
+| Escalada hierárquica forçada (aciona supervisor dentro de subprocess) | `escalationBoundaryEvent` |
 
 Regras de eventos:
 - `actor` é sempre `null` em start/end events.
@@ -261,6 +265,8 @@ O nome de cada End Event DEVE refletir o label do gateway que o precede, permiti
 | Envio de mensagem para outro pool (**somente formato pools**) | `sendTask` |
 | Recebimento de mensagem de outro pool (**somente formato pools**) | `receiveTask` |
 | Fase que agrupa subatividades (> 10 atividades no processo) | `callActivity` |
+| Subprocess embutido com lógica interna visível no mesmo diagrama | `subProcess` |
+| Subprocess acionado por evento de exceção (tratamento global) | `eventSubProcess` |
 | Tarefa que repete até condição satisfeita | `loopTask` |
 | Tarefa executada para cada item de uma coleção | `multiInstanceTask` |
 
@@ -345,9 +351,49 @@ Modelagem de Boundary Events:
 3. Crie aresta saindo do boundary step para o tratamento da exceção (ex: escalonamento).
 4. Use apenas quando a exceção é **explicitamente descrita** como interrompendo a tarefa em andamento.
 
+**Campo `is_interrupting` (opcional, padrão: `true`):**
+- **Interrompente (padrão):** a tarefa principal é abortada. Não declare o campo (omitir = `true`).
+- **Não-interrompente:** adicione `"is_interrupting": false` ao step do boundary event. A tarefa principal continua em paralelo. Use **somente** quando a transcrição deixa explícito que ambos prosseguem ao mesmo tempo.
+  ```json
+  { "id": "S05", "title": "Alerta de Prazo Vencendo", "task_type": "boundaryTimerEvent",
+    "is_interrupting": false, "description": "[BOUNDARY de: S04] Envia alerta 48h antes do prazo enquanto aguarda resposta." }
+  ```
+
 **Quando NÃO usar Boundary Events:**
 - Decisões tomadas após completar a tarefa → use `exclusiveGateway`.
 - Fluxos alternativos conhecidos antes de executar → use gateway, não boundary.
+
+#### 3d. subProcess vs callActivity — Distinção Crítica
+
+**Regra de ouro:** se a lógica interna do bloco é **conhecida e descrita na transcrição** → `subProcess`. Se é um **processo separado, reutilizável ou cuja interna não foi discutida** → `callActivity`.
+
+| Critério | `subProcess` | `callActivity` |
+|---|---|---|
+| **Visibilidade interna** | Lógica interna modelada dentro do diagrama atual | Referencia um processo externo/reutilizável |
+| **Escopo** | Embutido — não existe fora deste processo | Independente — pode ser chamado de outros processos |
+| **Boundary events** | Pode receber boundary events | Pode receber boundary events |
+| **Quando usar** | "A fase X funciona assim: 1. faz A, 2. faz B, 3. decide se..." | "Executa o processo de triagem padrão da empresa" |
+| **Signal para identificar** | Transcrição descreve as subetapas em detalhe | Transcrição menciona o nome de um processo existente |
+| **Exemplo típico** | Loop de revisão com 3 passos internos bem descritos | "Passa para o processo de onboarding do RH" |
+
+**`eventSubProcess` — quando usar:**
+- Representa um subprocess que é **acionado por um evento de exceção** e pode interromper (ou não) o processo pai.
+- Use quando a transcrição menciona "se qualquer erro ocorrer durante o processo, aciona o time de suporte" — essa é uma exceção global, não de uma tarefa específica.
+- `is_interrupting: true` (padrão) = interrompe o processo pai. `is_interrupting: false` = executa em paralelo.
+- **Distinto de boundary event:** boundary event é exceção de *uma tarefa*; eventSubProcess é exceção de *todo o processo*.
+
+**Black Box Pool:**
+Quando uma entidade externa é mencionada mas sua lógica interna não é conhecida ou relevante:
+- Declare o pool com `name` correto e `steps: []` + `edges: []` + `lanes: []`
+- Os message flows chegam/partem deste pool sem referenciar steps específicos (`step: null`)
+- Use quando a transcrição cita apenas "o banco retorna o resultado" sem detalhar o processo interno do banco
+
+```json
+{ "id": "pool_ext", "name": "Bureau de Crédito Externo",
+  "process": { "steps": [], "edges": [], "lanes": [] } }
+```
+
+---
 
 ### Passo 4 — Identificar Gateways e Sincronizá-los
 
@@ -360,6 +406,21 @@ Modelagem de Boundary Events:
 | Inclusivo — um ou mais caminhos | `inclusiveGateway` | `false` | "Execute todos que se aplicarem" |
 | Baseado em evento — aguarda o primeiro evento | `eventBasedGateway` | `false` | "Aguarda resposta ou tempo esgota" |
 | Condição complexa — combinação AND/OR/XOR | `complexGateway` | `false` | Lógica híbrida explícita na transcrição |
+
+**Distinção crítica: XOR (`exclusiveGateway`) vs OR (`inclusiveGateway`):**
+
+| Critério | `exclusiveGateway` (XOR) | `inclusiveGateway` (OR) |
+|---|---|---|
+| **Semântica** | Exatamente **um** caminho é ativado | **Um ou mais** caminhos são ativados |
+| **Condições** | Mutuamente exclusivas — só uma pode ser verdadeira | Podem ser verdadeiras simultaneamente |
+| **Signal típico** | "Se aprovado… senão…" / "dependendo do valor X" | "Se aplicável… e/ou se também…" |
+| **Exemplo** | Score < 500 OU entre 500–699 OU ≥ 700 → XOR (intervalos cobrem todo o domínio) | "Notificar gestor E/OU notificar cliente se necessário" → OR |
+| **Join obrigatório** | XOR-join (implícito ou explícito) | OR-join **obrigatório** (aguarda todos os caminhos ativos) |
+| **Erro comum** | Usar XOR quando duas condições podem ocorrer juntas | Usar OR quando as condições são mutuamente exclusivas |
+
+📌 **Regra rápida:** se as condições são **intervalos numéricos ou estados mutuamente exclusivos** → XOR. Se são **critérios independentes que podem ser todos verdadeiros ao mesmo tempo** → OR.
+
+> **Cuidado com OR sem join:** todo `inclusiveGateway` split exige um `inclusiveGateway` join correspondente que sincroniza **apenas os caminhos que foram ativados**. Diferente do AND que aguarda todos — o OR aguarda apenas os que partiram.
 
 **REGRA CRÍTICA — Todo gateway exige ≥ 2 saídas:**
 
@@ -450,6 +511,19 @@ Nunca omita gateways para simplificar. Um processo com 3 regras de decisão expl
   ```
 - Use `eventBasedGateway` apenas quando o processo **aguarda competitivamente** dois ou mais eventos externos — o primeiro a ocorrer determina o caminho.
 
+**Exemplo correto de `eventBasedGateway`:**
+```
+"O processo aguarda até 5 dias pela resposta do cliente. Se o cliente responder, segue para aprovação. Se o prazo esgotar, cancela automaticamente."
+```
+```json
+{ "id": "S05", "title": "Aguardar Resposta ou Prazo", "task_type": "eventBasedGateway", "is_decision": false },
+{ "id": "S06", "title": "Resposta Recebida", "task_type": "intermediateMessageCatchEvent" },
+{ "id": "S07", "title": "Prazo de 5 Dias", "task_type": "intermediateTimerCatchEvent" },
+```
+Edges: S05→S06, S05→S07. De S06 → fluxo de aprovação. De S07 → cancelamento.
+
+⚠️ **Armadilha:** nunca conecte `eventBasedGateway` → `userTask` diretamente. O nó seguinte deve ser **sempre** um evento intermediário catch ou `receiveTask`.
+
 ### Passo 5 — Regra de Loop de Correção
 
 
@@ -510,6 +584,12 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 - [ ] Loops com ator diferente decidindo a devolução usam gateway + back-edge?
 - [ ] Exceções durante tarefas (timeout, falha de sistema) usam boundary events?
 - [ ] `actor` é `null` em todos os start/end events?
+- [ ] **`subProcess` vs `callActivity`** — lógica interna descrita na transcrição → `subProcess`; processo externo/reutilizável → `callActivity`?
+- [ ] **Boundary events não-interrompentes** têm `"is_interrupting": false` no step?
+- [ ] **OR vs XOR** — condições mutuamente exclusivas → XOR; condições independentes simultâneas → OR?
+- [ ] **`inclusiveGateway` (OR) split** tem join correspondente que sincroniza apenas caminhos ativos?
+- [ ] **Signal events** pareados: todo `intermediateThrowSignalEvent` tem `intermediateCatchSignalEvent` correspondente em outro pool/lane?
+- [ ] **Black box pools** (entidade externa sem processo descrito) declarados com `steps: []`, `edges: []`, `lanes: []`?
 
 ### Passo 7 — Validação de Cobertura contra a Transcrição (Anti-Omissão)
 

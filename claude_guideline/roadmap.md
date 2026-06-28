@@ -4,6 +4,22 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC94 — Concluído (v4.70 / 2026-06-27) — skill_bpmn.md v9.0 — Cobertura BPMN 2.0 OMG §10 Completa
+
+- [x] **`skills/skill_bpmn.md`** — v8.0 (873 linhas) → v9.0 (952 linhas), edições cirúrgicas
+  - `description:` adicionado ao frontmatter
+  - Signal events na tabela de eventos: `intermediateCatchSignalEvent`, `intermediateThrowSignalEvent`, `escalationBoundaryEvent`
+  - `subProcess` e `eventSubProcess` na tabela de task_types
+  - Nova seção 3d: `subProcess` vs `callActivity` — distinção crítica com tabela de critérios
+  - Black box pool documentado: pool com entidade externa sem processo conhecido (`steps: []`)
+  - `is_interrupting: false` documentado com campo JSON e exemplo de boundary não-interrompente
+  - Distinção crítica XOR vs OR (`exclusiveGateway` vs `inclusiveGateway`) com tabela de critérios e regra rápida
+  - OR join obrigatório: `inclusiveGateway` split exige join que sincroniza apenas caminhos ativos
+  - Exemplo concreto de `eventBasedGateway` com JSON e armadilha documentada
+  - Checklist expandido com 6 novos itens (subProcess, is_interrupting, OR vs XOR, signal pairs, black box)
+
+---
+
 ### PC93 — Concluído (v4.69 / 2026-06-27) — SKILL_REQUIREMENTS.md v2.0 — Cobertura IEEE 830 / ISO/IEC 29148
 
 - [x] **`skills/SKILL_REQUIREMENTS.md`** — reescrito de v1.0 (100 linhas) para v2.0 (201 linhas)
