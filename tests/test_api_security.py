@@ -311,7 +311,7 @@ class TestConcurrencyControl:
 
         # Chama diretamente o worker — vai falhar (KnowledgeHub não está disponível
         # sem o ambiente completo), mas o finally deve garantir que o contador volta a 0.
-        api_module._run_pipeline_sync("crash-job", "transcript text", config, "hash")
+        api_module._run_pipeline_sync("crash-job", "transcript text", config)
 
         with _active_pipeline_lock:
             # Independente de erro no pipeline, o contador deve ser 0 após o finally
@@ -325,7 +325,7 @@ class TestConcurrencyControl:
         config = api_module.PipelineConfig(job_id="z", provider="DeepSeek")
         api_module._JOBS["neg-job"] = api_module.JobRecord(job_id="neg-job")
 
-        api_module._run_pipeline_sync("neg-job", "transcript text", config, "hash")
+        api_module._run_pipeline_sync("neg-job", "transcript text", config)
 
         with _active_pipeline_lock:
             assert api_module._active_pipeline_count >= 0

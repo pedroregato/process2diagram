@@ -123,12 +123,19 @@ class BaseAgent(ABC):
     # ── LLM call ─────────────────────────────────────────────────────────────
 
     def _is_long_context_enabled(self) -> bool:
-        """Read the enable_long_context toggle from Streamlit session state."""
+        """
+        Resolution order (first match wins):
+          1. client_info["enable_long_context"]  — API / explicit config (no Streamlit)
+          2. st.session_state["enable_long_context"]  — Streamlit interactive mode
+          3. True  — safe default when neither is available
+        """
+        if "enable_long_context" in self.client_info:
+            return bool(self.client_info["enable_long_context"])
         try:
             import streamlit as st
             return bool(st.session_state.get("enable_long_context", True))
         except Exception:
-            return True  # default on when outside Streamlit (batch mode)
+            return True
 
     def _call_llm(
         self, system: str, user: str, hub: KnowledgeHub, skip_cache: bool = False
@@ -160,14 +167,17 @@ class BaseAgent(ABC):
         api_key = self.client_info["api_key"]
         model = self.provider_cfg["default_model"]
 
-        # ── Scenario model override (NF-5: safe — scenario_assignments may be absent) ─
-        try:
-            import streamlit as st
-            _assignments = st.session_state.get("scenario_assignments", {})
-            if self.name in _assignments:
-                model = _assignments[self.name]
-        except Exception:
-            pass
+        # ── Scenario model override ───────────────────────────────────────────
+        # Resolution order: client_info (API mode) → st.session_state (Streamlit) → {}
+        _assignments: dict = self.client_info.get("scenario_assignments") or {}
+        if not _assignments:
+            try:
+                import streamlit as st
+                _assignments = st.session_state.get("scenario_assignments", {})
+            except Exception:
+                pass
+        if self.name in _assignments:
+            model = _assignments[self.name]
         # ─────────────────────────────────────────────────────────────────────
 
         # ── A2A delegation hint (LangGraph cross-agent coordination) ─────────

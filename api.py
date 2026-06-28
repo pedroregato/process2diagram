@@ -46,6 +46,39 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+# ── Mapeamento provider → variável de ambiente da LLM key ─────────────────────
+# O servidor usa chaves próprias (server-side) para cada provedor LLM.
+# Fallback genérico: LLM_API_KEY cobre qualquer provedor não mapeado.
+_PROVIDER_ENV_VARS: dict[str, str] = {
+    "DeepSeek":                     "DEEPSEEK_API_KEY",
+    "DeepSeek V4 Pro":              "DEEPSEEK_API_KEY",
+    "DeepSeek V4 Flash (Thinking)": "DEEPSEEK_API_KEY",
+    "Claude (Anthropic)":           "ANTHROPIC_API_KEY",
+    "OpenAI":                       "OPENAI_API_KEY",
+    "Groq (Llama)":                 "GROQ_API_KEY",
+    "Google Gemini":                "GOOGLE_API_KEY",
+    "Grok (xAI)":                   "XAI_API_KEY",
+}
+
+
+def _get_llm_api_key(provider: str) -> str:
+    """
+    Resolve a API key do provedor LLM a partir de variáveis de ambiente.
+    Resolution order: env var específico do provedor → LLM_API_KEY → ""
+    Fail-open: retorna "" se nenhuma variável encontrada (pipeline falhará no LLM call).
+    """
+    env_var = _PROVIDER_ENV_VARS.get(provider, "")
+    key = (env_var and os.environ.get(env_var, "")) or os.environ.get("LLM_API_KEY", "")
+    if not key:
+        logger.warning(
+            "_get_llm_api_key: nenhuma LLM key encontrada para provider='%s' "
+            "(defina %s ou LLM_API_KEY)",
+            provider,
+            env_var or "LLM_API_KEY",
+        )
+    return key
+
+
 # ── Executor compartilhado ─────────────────────────────────────────────────────
 # Pipeline é CPU-bound + I/O-bound (LLM calls via ThreadPoolExecutor do Orchestrator).
 # max_workers conservador para não saturar o servidor; ajustar conforme hardware.
@@ -415,13 +448,13 @@ def _run_pipeline_sync(
     job_id:     str,
     transcript: str,
     config:     PipelineConfig,
-    api_key:    str,
 ) -> None:
     """
     Executa o pipeline completo em thread isolada.
     Segue CLAUDE.md §Agent Pattern: always go through Orchestrator.
     Fail-open: qualquer exceção → status ERROR (nunca propaga para o event loop).
     Decrementa _active_pipeline_count no finally (par com check_rate_limit).
+    A LLM API key é resolvida internamente via _get_llm_api_key() (env vars).
     """
     global _active_pipeline_count
 
@@ -442,53 +475,52 @@ def _run_pipeline_sync(
         job.updated_at = time.time()
         _progress(5, "Inicializando KnowledgeHub")
 
-        # ── Injetar config no session_state para compatibilidade com BaseAgent ──
-        # TODO (roadmap): refatorar BaseAgent para aceitar config dict explícito,
-        # eliminando a dependência de st.session_state em contexto API.
-        try:
-            import streamlit as st  # type: ignore
-            _patch: dict[str, Any] = {
-                "provider":            config.provider,
-                "model":               config.model or "",
-                "api_key":             api_key,
-                "run_quality":         config.run_quality,
-                "run_bpmn":            config.run_bpmn,
-                "run_minutes":         config.run_minutes,
-                "run_requirements":    config.run_requirements,
-                "run_sbvr":            config.run_sbvr,
-                "run_bmm":             config.run_bmm,
-                "run_synthesizer":     config.run_synthesizer,
-                "n_bpmn_runs":         config.n_bpmn_runs,
-                "use_langgraph":       config.use_langgraph,
-                "enable_long_context": True,
-                "asst_embed_provider": "OpenAI",
-                "asst_embed_key":      api_key,
-            }
-            for k, v in _patch.items():
-                if k not in st.session_state:
-                    st.session_state[k] = v
-        except Exception:
-            logger.warning("job %s: st.session_state inacessível — operando sem patch", job_id)
+        # ── Construir client_info explícito (sem st.session_state) ────────────
+        # Após a refatoração de BaseAgent._call_llm(), client_info é a única
+        # fonte de verdade para configuração do agente no contexto API.
+        # "enable_long_context" e "scenario_assignments" são lidos de client_info
+        # com prioridade sobre st.session_state — eliminando a dependência Streamlit.
+        from modules.config import AVAILABLE_PROVIDERS  # type: ignore
+
+        provider_name = config.provider
+        provider_cfg  = dict(AVAILABLE_PROVIDERS.get(provider_name, AVAILABLE_PROVIDERS["DeepSeek"]))
+
+        # Sobrescreve modelo se especificado explicitamente no request
+        if config.model:
+            provider_cfg["default_model"] = config.model
+
+        llm_api_key = _get_llm_api_key(provider_name)
+        client_info: dict[str, Any] = {
+            "api_key":             llm_api_key,
+            "provider":            provider_name,
+            "enable_long_context": True,       # BaseAgent lê daqui (sem st.session_state)
+            "scenario_assignments": {},        # BaseAgent lê daqui (sem st.session_state)
+        }
 
         # ── Inicializar KnowledgeHub ────────────────────────────────────────
         _progress(10, "Construindo KnowledgeHub")
         from core.knowledge_hub import KnowledgeHub  # type: ignore
         hub = KnowledgeHub.new(transcript_raw=transcript)
 
-        # ── Montar pipeline config ──────────────────────────────────────────
+        # ── Montar pipeline config completo ────────────────────────────────────
+        # Inclui client_info e provider_cfg explícitos — core/pipeline.py os lê
+        # diretamente sem tocar em st.session_state.
         pipeline_cfg: dict[str, Any] = {
-            "provider":         config.provider,
-            "model":            config.model,
-            "run_quality":      config.run_quality,
-            "run_bpmn":         config.run_bpmn,
-            "run_minutes":      config.run_minutes,
-            "run_requirements": config.run_requirements,
-            "run_sbvr":         config.run_sbvr,
-            "run_bmm":          config.run_bmm,
-            "run_synthesizer":  config.run_synthesizer,
-            "n_bpmn_runs":      config.n_bpmn_runs,
-            "use_langgraph":    config.use_langgraph,
-            "output_language":  config.output_language,
+            "client_info":          client_info,
+            "provider_cfg":         provider_cfg,
+            "output_language":      config.output_language,
+            "run_quality":          config.run_quality,
+            "run_bpmn":             config.run_bpmn,
+            "run_minutes":          config.run_minutes,
+            "run_requirements":     config.run_requirements,
+            "run_sbvr":             config.run_sbvr,
+            "run_bmm":              config.run_bmm,
+            "run_synthesizer":      config.run_synthesizer,
+            "n_bpmn_runs":          config.n_bpmn_runs,
+            "use_langgraph":        config.use_langgraph,
+            "bpmn_weights":         {},
+            "project_id":           config.project_id or "",
+            "run_knowledge_extractor": False,  # desabilitado na API por padrão
         }
 
         # ── Executar pipeline via run_pipeline() — nunca instanciar agentes ─
@@ -639,7 +671,6 @@ async def run_pipeline_endpoint(
         config.job_id,
         transcript_raw,
         config,
-        key_hash,  # apenas o hash SHA-256 — nunca a key bruta
     )
 
     logger.info("pipeline/run: job_id=%s provider=%s", config.job_id, config.provider)
