@@ -4,6 +4,21 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC95 — Concluído (v4.71 / 2026-06-27) — skill_bpmn.md v9.1 — Anti-Omissão: Alçada, Timer, Notificação, Log
+
+- [x] **`skills/skill_bpmn.md`** — v9.0 (952 linhas) → v9.1 (1002 linhas)
+  - Diagnóstico por regressão real (transcrição Grupo Meridional / Projeto AURORA)
+  - Gateway de alçada adicionado à tabela 4.1 de detecção de gateways faltantes
+  - Seção 3e "Padrões Implícitos de Alta Frequência" (4 padrões sistemáticos):
+    - SLA de tarefa ("em menos de 30s") → `boundaryTimerEvent` com exemplo JSON
+    - Notificações ("enviar e-mail/SMS") → tarefa explícita antes do End Event
+    - Logs de auditoria ("log auditável", "audit trail") → `serviceTask` de registro
+    - Regras de alçada ("até R$X / de R$X a R$Y") → gateway com N saídas por nível
+  - Checklist Passo 6 "Completude e Fechamento": 4 novos itens (alçada, SLA, notificação, log)
+  - Checklist Passo 7.2 "Perguntas de integridade": 4 novos itens correspondentes
+
+---
+
 ### PC94 — Concluído (v4.70 / 2026-06-27) — skill_bpmn.md v9.0 — Cobertura BPMN 2.0 OMG §10 Completa
 
 - [x] **`skills/skill_bpmn.md`** — v8.0 (873 linhas) → v9.0 (952 linhas), edições cirúrgicas

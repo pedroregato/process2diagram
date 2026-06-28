@@ -363,6 +363,47 @@ Modelagem de Boundary Events:
 - Decisões tomadas após completar a tarefa → use `exclusiveGateway`.
 - Fluxos alternativos conhecidos antes de executar → use gateway, não boundary.
 
+#### 3e. Padrões Implícitos de Alta Frequência (Omissões Sistemáticas Mais Comuns)
+
+Os padrões abaixo são frequentemente omitidos por parecerem "técnicos" ou "óbvios". São **obrigatórios quando mencionados na transcrição**.
+
+**⏱ SLA / Prazos de Resposta → `boundaryTimerEvent`**
+
+Qualquer prazo de resposta associado a uma tarefa específica (segundos, minutos, horas) deve virar `boundaryTimerEvent` naquela tarefa:
+- "em menos de 30 segundos" → `boundaryTimerEvent` na tarefa de validação
+- "tempo máximo de 45 segundos" → `boundaryTimerEvent` na tarefa de consulta
+- "score em menos de 60 segundos" → `boundaryTimerEvent` na tarefa de cálculo
+- "se não responder em 2 dias" → `boundaryTimerEvent` na tarefa de espera
+
+```json
+{ "id": "S03_timer", "title": "Timeout 30s", "task_type": "boundaryTimerEvent",
+  "description": "[BOUNDARY de: S03] Aciona fallback com cache local se validação exceder 30s.",
+  "lane": "Análise de Crédito" }
+```
+
+📌 **Regra:** SLA de processo inteiro (ex: "aprovação em 4 horas") → `non_functional`, não boundary event. SLA de tarefa específica → `boundaryTimerEvent`.
+
+**🔔 Notificações → tarefa explícita**
+
+"Notificar", "enviar e-mail", "enviar SMS", "comunicar ao cliente", "informar", "alertar" são tarefas — nunca estão implícitas no End Event:
+- "enviar notificação automática em cada mudança de status" → `serviceTask` "Notificar Cliente" antes de cada End Event
+- "notificar o cliente com o resultado" → `serviceTask` ou `userTask` explícita
+
+❌ Errado: fluxo vai direto para `endMessageEvent` sem tarefa de notificação
+✅ Correto: `[Tarefa anterior] → [Notificar Cliente por E-mail e SMS] → [endMessageEvent]`
+
+**📋 Logs e Auditoria → tarefa explícita**
+
+"Registrar", "log auditável", "audit trail", "rastrear", "armazenar histórico de decisão" são tarefas — não acontecem automaticamente:
+- "registrar com log auditável contendo score e responsável" → `serviceTask` "Registrar Decisão em Log"
+- "retenção mínima de 5 anos" → documenta na `description` da tarefa de registro
+
+**💰 Regras de Alçada → gateway com N saídas**
+
+Qualquer estrutura "até R$X / de R$X a R$Y / acima de R$Z" com atores diferentes é gateway obrigatório:
+- "Gerente até R$500k / Diretor R$500k–R$2M / Comitê acima de R$2M" → `exclusiveGateway` com 3 saídas, cada uma levando à lane/ator correto
+- Nunca colapse múltiplos níveis de alçada em uma única tarefa "Aprovação Manual" — cada nível é um caminho distinto com ator distinto
+
 #### 3d. subProcess vs callActivity — Distinção Crítica
 
 **Regra de ouro:** se a lógica interna do bloco é **conhecida e descrita na transcrição** → `subProcess`. Se é um **processo separado, reutilizável ou cuja interna não foi discutida** → `callActivity`.
@@ -450,6 +491,7 @@ Se você só consegue identificar **uma** saída → **não use gateway**: use t
 | "Pode ser aprovado ou devolvido" | gateway + back-edge | Decisão binária + loop |
 | "Para cada item da lista" (se não for `multiInstanceTask`) | `parallelGateway` | Fluxo paralelo |
 | "Se aprovado, segue; senão, encerra" | `exclusiveGateway` com 2 saídas | Ambos os caminhos devem existir |
+| **"Até R$X", "de R$X a R$Y", "acima de R$X"** (alçada) | `exclusiveGateway` com N saídas | Cada faixa de valor é um caminho — nunca combine em um só ramo |
 
 📌 **Regra de Ouro:** Para cada condicional na transcrição, pergunte:
 > *"Quantos caminhos de saída esta decisão produz?"*
@@ -574,6 +616,10 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 - [ ] Em fluxos de aprovação, o End Event está na **lane da unidade solicitante** (não do aprovador)?
 - [ ] Atividades pós-aprovação (assinar, emitir, executar) foram extraídas como steps explícitos?
 - [ ] Nenhuma atividade implícita foi omitida por ser "óbvia"?
+- [ ] **Toda regra de alçada** ("até R$X / de R$X a R$Y") virou `exclusiveGateway` com N saídas — uma por faixa, cada uma levando ao ator correto?
+- [ ] **Todo SLA de tarefa** ("em menos de Xs", "tempo máximo de Ys") virou `boundaryTimerEvent` naquela tarefa?
+- [ ] **Toda notificação** ("notificar cliente", "enviar e-mail/SMS", "informar") virou tarefa explícita antes do End Event?
+- [ ] **Todo log/auditoria** ("registrar", "log auditável", "audit trail") virou `serviceTask` explícita?
 
 **Tipos e Padrões Especiais:**
 - [ ] `serviceTask` sem sistema nomeado tem `lane: null`?
@@ -607,6 +653,10 @@ um step correspondente no JSON. Se não existir, justifique por que foi omitido
 - [ ] Todo prazo ou condição temporal vira evento de timer?
 - [ ] Toda aprovação/rejeição tem os dois caminhos modelados (aprovado E rejeitado)?
 - [ ] Toda exceção ou falha mencionada ("se o sistema cair", "se não responder em X dias") tem tratamento correspondente?
+- [ ] **Toda estrutura de alçada** ("Gerente até R$X, Diretor R$X–R$Y, Comitê acima de R$Z") está modelada como gateway com N saídas — não colapsada em uma tarefa genérica "Aprovação"?
+- [ ] **Toda notificação ao cliente** ("enviar notificação", "e-mail e SMS", "informar status") está como tarefa explícita — não implícita no End Event?
+- [ ] **Todo log de decisão** ("registrar com auditável", "audit trail", "log com score e responsável") está como tarefa explícita de registro?
+- [ ] **Todo SLA de tarefa específica** ("em menos de 30s", "tempo máximo de 45s") está como `boundaryTimerEvent` — não apenas documentado em `description`?
 
 **7.3 — Regra do Espelho:**
 > *"Se um participante da reunião gastou mais de 2 turnos de fala descrevendo um fluxo, esse fluxo DEVE estar representado no diagrama — mesmo que pareça óbvio ou secundário para o agente."*
