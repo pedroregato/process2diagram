@@ -4,6 +4,40 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC102 — Concluído (v4.78 / 2026-06-28) — skill improvements batch 4: query_summarizer, ner, analyst, context_template
+
+- [x] **`skills/skill_query_summarizer.md`** v1.0 → v1.1: move `{output_language}` to Rules section; add perspective differentiation guide table
+- [x] **`skills/skill_ner.md`** v1.0 → v1.1: add difficult cases guide (pronouns, company names, ASR distortion, name deduplication)
+- [x] **`skills/skill_analyst.md`** v1.0 → v1.1: add tool call efficiency rule, quality criteria section (evidence/facts/specificity)
+- [x] **`skills/skill_context_template.md`**: add YAML frontmatter v1.0 (user-editable template — content unchanged)
+
+---
+
+### PC101 — Concluído (v4.77 / 2026-06-28) — skill improvements batch 3: document_extractor, cross_doc_analyzer
+
+- [x] **`skills/skill_document_extractor.md`** v1.0 → v1.1: add 5-pass extraction method; harmonize `req_type`/`priority` to PT pipeline schema (Funcional/Não-Funcional/Negócio/Restrição/Qualidade and Alta/Média/Baixa); add `{output_language}` in Rules with 7 formal rules
+- [x] **`skills/skill_cross_doc_analyzer.md`** v1.0 → v1.1: add Rules section with `{output_language}` and 5 formal rules; clarify `gaps` key requirements
+
+---
+
+### PC100 — Concluído (v4.76 / 2026-06-28) — skill improvements batch 2: knowledge_extractor, contradiction_detector, communication_noise, document_analyzer
+
+- [x] **`skills/skill_knowledge_extractor.md`** v1.0 → v1.1: add calibration table (include vs omit per entity/fact type); Regras section with `{output_language}`
+- [x] **`skills/skill_contradiction_detector.md`** v1.0 → v1.1: add Regras section with `{output_language}` + 7 formal rules
+- [x] **`skills/skill_communication_noise.md`** v1.0 → v1.1: add per-type examples table for ambiguities and gaps
+- [x] **`skills/skill_document_analyzer.md`** v1.0 → v1.1: add 6-step analysis method (inventory → req mapping → process alignment → stakeholders → decisions → synthesis)
+
+---
+
+### PC99 — Concluído (v4.75 / 2026-06-28) — skill improvements batch 1: transcript_quality, argumentation, ckf_updater, entity_consolidator
+
+- [x] **`skills/skill_transcript_quality.md`** v1.0 → v2.0: add `overall_score`, `grade`, `artifact_ratio`, `metadata_issues` to JSON schema; add Weighted Score Formula section; add `{output_language}` in Rules
+- [x] **`skills/skill_argumentation.md`** v1.0 → v2.0: fix all missing Portuguese accents throughout; add signal recognition table, meeting type calibration table, `## Regras` section with `{output_language}`; add `confidence` field to each question
+- [x] **`skills/skill_ckf_updater.md`** v1.0 → v2.0: full rewrite — section-by-section guidance for all 7 CKF sections, conflict handling table (5 scenarios), update conventions, 5-item checklist
+- [x] **`skills/skill_entity_consolidator.md`** v1.0 → v2.0: full rewrite — similarity scoring table, 0.80 fusion threshold, edge case guide, examples table, `confidence` field in output
+
+---
+
 ### PC98 — Concluído (v4.74 / 2026-06-28) — skill_sbvr.md v2.1 — SBVR vs DMN, enforcement, Exemplo C
 
 - [x] **`skills/skill_sbvr.md`** — v2.0 (518 linhas) → v2.1 (662 linhas), edições cirúrgicas
