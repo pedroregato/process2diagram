@@ -4,6 +4,19 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC97 — Concluído (v4.73 / 2026-06-28) — skill_bmm.md v2.1 — Cadeia BMM, modal, deadline, Exemplo C
+
+- [x] **`skills/skill_bmm.md`** — v2.0 (446 linhas) → v2.1 (586 linhas), edições cirúrgicas
+  - Seção "Cadeia de Rastreabilidade BMM" explicando por que `supports` é obrigatório (diagrama Fins←Meios)
+  - Campo opcional `deadline` para metas com prazo explícito na transcrição
+  - Campo `modal` obrigatório em políticas: `must` / `must_not` / `may` com tabela de exemplos
+  - Seção `## Regras` adicionada com output_language e regras de conservadorismo
+  - `{output_language}` removido do final solto — integrado à seção Regras
+  - JSON schema atualizado com `deadline` em goals e `modal` em policies
+  - Exemplo C — kickoff estratégico (Meridional-style): visão explícita, 4 metas mistas, 3 políticas com modals distintos, 1 influenciador weakness quantificado; com notas explicando cada decisão de classificação
+
+---
+
 ### PC96 — Concluído (v4.72 / 2026-06-27) — SKILL_SYNTHESIZER.md v3.0 — Narrativa Executiva Calibrada
 
 - [x] **`skills/SKILL_SYNTHESIZER.md`** — reescrito de v2.0 (77 linhas) para v3.0 (208 linhas)

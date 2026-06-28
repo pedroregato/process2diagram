@@ -1,5 +1,5 @@
 ---
-version: 2.0
+version: 2.1
 agent: bmm
 description: Extração de motivação de negócio (OMG BMM) a partir de transcrições de reuniões
 spec: OMG Business Motivation Model 1.3 (formal/2015-05-15)
@@ -41,6 +41,28 @@ e **Meios** (como ela planeja alcançar).
 |---|---|---|---|
 | **Estratégia** | Como vamos alcançar as metas? | Direção escolhida — poderia ser diferente | "Focar em verticais de saúde e financeiro com casos de sucesso comprovados" |
 | **Política** | Que restrições governam como atuamos? | Obrigatória — limita o espaço de estratégias | "Nenhum cliente pode representar mais de 20% da receita" |
+
+---
+
+## Cadeia de Rastreabilidade BMM (por que `supports` é obrigatório)
+
+O BMM não é uma lista de elementos isolados — é um **sistema de razões encadeadas**:
+
+```
+Visão / Missão
+    ↓  perseguida através de
+Metas Estratégicas → Metas Táticas → Metas Operacionais
+    ↑  alcançadas mediante
+Estratégias  ←  constrangidas por  ←  Políticas
+    ↑  moldadas por
+Influenciadores (SWOT + mercado)
+```
+
+- **Fins** (visão, missão, metas): o que queremos alcançar — *destino*
+- **Meios** (estratégias, políticas): como chegamos lá e quais restrições valem — *caminho e limites*
+- `supports`: campo obrigatório nas estratégias que fecha a rastreabilidade Meios → Fins. Uma estratégia sem `supports` preenchido não tem justificativa — é ação sem propósito.
+
+> **Princípio de leitura:** se a transcrição descreve uma direção de ação ("vamos focar em X") e você consegue responder "para alcançar qual meta?", é uma estratégia. Se não consegue conectá-la a nenhuma meta → é tática ou tarefa, não estratégia BMM.
 
 ---
 
@@ -144,6 +166,10 @@ Para cada meta identificada, classifique por `goal_type` pelo **conteúdo**, nã
 - `medium`: 1–3 anos
 - `short`: < 1 ano, "este trimestre", "até o final do ano"
 
+**Campo opcional `deadline`:** quando a transcrição menciona prazo explícito para a meta, registre em formato livre:
+- `"deadline": "até 2028"` · `"deadline": "30/05/2026"` · `"deadline": "Q1 2027"`
+- Omita o campo se nenhum prazo foi mencionado — nunca invente
+
 **Anti-padrões frequentes em metas:**
 - ✗ "Implementar sistema de BI" → atividade/iniciativa, não meta
 - ✗ "Contratar equipe de dados" → recurso/tática, não meta
@@ -187,6 +213,13 @@ Para cada política identificada, classifique `category`:
 | `people` | Talento, cultura, desenvolvimento, estrutura de equipes | "Todo gestor deve ter substituto identificado e em desenvolvimento" |
 
 Formule como diretriz clara: "Toda X deve/não pode Y quando Z."
+
+**Campo `modal` (obrigatório):** qualificador modal que determina o caráter da política:
+| `modal` | Significado | Exemplo de formulação |
+|---|---|---|
+| `must` | Obrigação — é exigido | "Todo contrato deve ter aprovação formal antes da assinatura" |
+| `must_not` | Proibição — é vedado | "Nenhum dado pessoal pode ser armazenado fora do Brasil" |
+| `may` | Permissão — é permitido (mas não obrigatório) | "Propostas até R$50k podem ser aprovadas pelo gerente sem comitê" |
 
 **Limites:** 1–6 políticas.
 
@@ -247,6 +280,18 @@ registre como `influencers`. **Omita o campo completamente se não houver influe
 
 ---
 
+## Regras
+
+1. **Output language:** {output_language}
+2. **Retorne APENAS o JSON válido.** Nenhum texto antes ou depois. Nenhum markdown. Nenhum comentário.
+3. Não invente elementos. Sintetize apenas o que está na transcrição — explícito ou fortemente implicado.
+4. `vision` e `mission` → `null` se não mencionados. Nunca invente.
+5. `influencers` → omita o campo completamente se não houver nenhum identificado.
+6. Toda estratégia deve ter `supports` preenchido com IDs de metas válidos.
+7. Campos opcionais (`deadline` em metas) → omita se não mencionados na transcrição.
+
+---
+
 ## Formato de Saída
 
 Retorne **APENAS JSON válido**, sem markdown, sem comentários:
@@ -261,7 +306,8 @@ Retorne **APENAS JSON válido**, sem markdown, sem comentários:
       "name": "nome curto da meta (3–7 palavras)",
       "description": "o que significa ter esta meta alcançada — estado de sucesso",
       "goal_type": "strategic|tactical|operational",
-      "horizon": "short|medium|long"
+      "horizon": "short|medium|long",
+      "deadline": "prazo explícito ou omitir campo"
     }
   ],
   "strategies": [
@@ -276,7 +322,8 @@ Retorne **APENAS JSON válido**, sem markdown, sem comentários:
     {
       "id": "P1",
       "statement": "política formulada como diretriz ou restrição — clara e acionável",
-      "category": "governance|compliance|operational|financial|strategic|people"
+      "category": "governance|compliance|operational|financial|strategic|people",
+      "modal": "must|must_not|may"
     }
   ],
   "influencers": [
@@ -291,8 +338,6 @@ Retorne **APENAS JSON válido**, sem markdown, sem comentários:
 ```
 
 > `influencers` é opcional — omita o campo completamente se não houver influenciadores identificados.
-
-Output language: {output_language}
 
 ---
 
@@ -443,3 +488,99 @@ Output language: {output_language}
 - S1 e S2 são cursos de ação concretos ("como reduzir o prazo") — corretamente classificados como estratégias
 - P1 é `governance`: define direito de aprovação sobre mudanças de processo
 - I1 é `strength`: diferencial interno explicitamente nomeado que restringe como as estratégias devem ser implementadas
+
+---
+
+### Exemplo C — Kickoff Estratégico (visão explícita, metas mistas, políticas financeiras)
+
+**Transcrição (fragmento):**
+> "A visão que aprovamos com o Conselho é que seremos, até 2028, a plataforma de crédito B2B mais ágil do mercado brasileiro — com aprovação em menos de 4 horas para operações de até R$ 2 milhões. Hoje estamos em 72 horas em média.
+> Temos quatro objetivos: reduzir o tempo médio de aprovação de 72 para menos de 4 horas; reduzir a taxa de rejeição por erro técnico de 4,2% para menos de 0,5%; aumentar a capacidade de processamento de 800 para 5.000 propostas por dia; e garantir conformidade com a Resolução BACEN 4.557 e a LGPD.
+> A grande aposta técnica é migrar os módulos críticos para microsserviços em cloud. Fase 1 cobre API Gateway com bureaus externos, motor de análise de risco em Python com ML, e portal do cliente digital.
+> O budget aprovado para a Fase 1 é de R$ 4,2 milhões. Qualquer escopo adicional precisa de aprovação formal da área financeira. O Comitê Executivo tem poder de aprovação de mudanças de custo acima de 5% por marco. E qualquer dado de contrato precisa estar no Core Banking — é requisito regulatório, não de preferência.
+> O sistema atual tem 19 anos. Custo de manutenção triplicou. Taxa de rejeição de 4,2% representa R$ 75 milhões em receita não realizada por ano."
+
+**JSON gerado:**
+```json
+{
+  "vision": "Ser a plataforma de crédito B2B mais ágil do mercado brasileiro até 2028, com aprovação em menos de 4 horas para operações de até R$ 2 milhões",
+  "mission": null,
+  "goals": [
+    {
+      "id": "G1",
+      "name": "Reduzir Prazo de Aprovação de Crédito",
+      "description": "Tempo médio de aprovação reduzido de 72 horas para menos de 4 horas, tornando o Grupo referência em agilidade no mercado B2B",
+      "goal_type": "tactical",
+      "horizon": "medium",
+      "deadline": "até 2028"
+    },
+    {
+      "id": "G2",
+      "name": "Eliminar Rejeições por Erro Técnico",
+      "description": "Taxa de rejeição por erro de processamento reduzida de 4,2% para menos de 0,5%, recuperando aproximadamente R$ 68 milhões em receita anual",
+      "goal_type": "tactical",
+      "horizon": "medium"
+    },
+    {
+      "id": "G3",
+      "name": "Escalar Processamento de Propostas",
+      "description": "Capacidade de processamento ampliada de 800 para 5.000 propostas por dia sem aumento de equipe",
+      "goal_type": "tactical",
+      "horizon": "medium"
+    },
+    {
+      "id": "G4",
+      "name": "Conformidade BACEN e LGPD",
+      "description": "Todos os fluxos de dados de clientes em conformidade com a Resolução BACEN 4.557 e a LGPD",
+      "goal_type": "strategic",
+      "horizon": "long"
+    }
+  ],
+  "strategies": [
+    {
+      "id": "S1",
+      "name": "Migração para Microsserviços em Cloud",
+      "description": "Substituir os módulos COBOL do mainframe por arquitetura de microsserviços em cloud em três entregas na Fase 1: (1) API Gateway de integração com bureaus externos com circuit breaker e cache; (2) Motor de Análise de Risco em Python com modelo de machine learning para score de crédito; (3) Portal do Cliente em React para submissão digital de propostas.",
+      "supports": ["G1", "G2", "G3"]
+    }
+  ],
+  "policies": [
+    {
+      "id": "P1",
+      "statement": "O budget da Fase 1 é de R$ 4,2 milhões. Qualquer escopo adicional requer aprovação formal da área financeira antes da implementação.",
+      "category": "financial",
+      "modal": "must"
+    },
+    {
+      "id": "P2",
+      "statement": "Mudanças de custo acima de 5% do budget por marco não podem ser implementadas sem aprovação prévia do Comitê Executivo.",
+      "category": "governance",
+      "modal": "must_not"
+    },
+    {
+      "id": "P3",
+      "statement": "Todo dado de contrato de crédito formalizado deve ser registrado no Core Banking (mainframe IBM zSeries) — exigência regulatória bancária.",
+      "category": "compliance",
+      "modal": "must"
+    }
+  ],
+  "influencers": [
+    {
+      "id": "I1",
+      "type": "weakness",
+      "statement": "Sistema MeridionalCredit de 2007 (19 anos): custo de manutenção triplicou em 5 anos e taxa de rejeição de 4,2% representa R$ 75 milhões em receita não realizada por ano",
+      "impact_on": ["G1", "G2", "S1"]
+    }
+  ]
+}
+```
+
+*Observações:*
+- Visão presente e explícita — extraída literalmente, com `deadline: "até 2028"` no G1 que a operacionaliza
+- Missão → `null` — não foi mencionada; nunca inventar mesmo que a empresa seja conhecida
+- G1/G2/G3 são `tactical` + `medium`: métricas explícitas, habilitam a visão de 2028, mas são resultados intermediários — não o estado final
+- G4 é `strategic` + `long`: conformidade regulatória não tem prazo finito — é posicionamento permanente
+- S1 tem `supports: ["G1","G2","G3"]` mas **não inclui G4** — a estratégia técnica não resolve conformidade diretamente (G4 seria servido por estratégia de compliance separada, não mencionada)
+- P1 é `must` + `financial`; P2 é `must_not` + `governance` — modals distintos para políticas de natureza diferente
+- P3 é `must` + `compliance` — exigência regulatória bancária, não preferência
+- I1 é `weakness` — problema interno explicitamente quantificado (R$ 75M/ano) que motiva toda a iniciativa
