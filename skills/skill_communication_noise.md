@@ -1,5 +1,5 @@
 ---
-version: 1.0
+version: 1.1
 agent: communication_noise
 description: Detecção de ruídos de comunicação em transcrições
 ---
@@ -31,6 +31,15 @@ Termos, frases ou compromissos com mais de uma interpretação razoável.
 **Critério de inclusão:** só inclua se a ambiguidade puder causar um mal-entendido real no contexto desta reunião.
 **Confiança mínima para incluir:** 0.65.
 
+**Exemplos por tipo:**
+
+| Tipo | Trecho real | Problema |
+|---|---|---|
+| `lexical` | "Vamos migrar o sistema antes do go-live" — uns entendem ERP, outros entendem o portal | "sistema" refere dois objetos distintos no projeto |
+| `referential` | "Pedro falou com ele sobre isso e ficou resolvido" | "ele" e "isso" sem antecedente claro |
+| `vague_commitment` | "Resolvemos isso até o fim do mês" | Quem resolve? Que "isso" exatamente? |
+| `syntactic` | "Aprovação do contrato pelo diretor financeiro" | Diretor financeiro aprova, ou o contrato é do diretor financeiro? |
+
 ### 2. Lacunas de Comunicação (`gaps`)
 
 Informações ausentes, threads abandonadas ou divergências implícitas.
@@ -41,6 +50,15 @@ Informações ausentes, threads abandonadas ou divergências implícitas.
 | `abandoned_topic`        | Assunto iniciado mas não concluído — sem decisão, sem encaminhamento    |
 | `implicit_disagreement`  | Participantes demonstram entendimentos diferentes sem confronto explícito |
 | `missing_info`           | Decisão ou encaminhamento feito sem informação crítica necessária       |
+
+**Exemplos por tipo:**
+
+| Tipo | Descrição do caso real |
+|---|---|
+| `unanswered_question` | "Quem vai validar o cronograma?" — pergunta feita no fim da reunião sem resposta |
+| `abandoned_topic` | Discussão sobre integração com SAP iniciada e interrompida por outro assunto; nunca retomada |
+| `implicit_disagreement` | Ana diz "o prazo é factível"; Carlos diz "vai ser bem apertado" — sem confronto direto |
+| `missing_info` | Aprovação de fornecedor decidida sem que o valor do contrato tenha sido informado |
 
 ---
 

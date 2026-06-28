@@ -1,5 +1,5 @@
 ---
-version: 1.0
+version: 1.1
 agent: knowledge_extractor
 description: Extração de conhecimento e fatos do knowledge graph
 ---
@@ -109,3 +109,23 @@ Retorne APENAS JSON válido com a estrutura abaixo:
 - Normalize nomes: use sempre a forma mais completa e formal
 - Se a transcrição for muito curta ou de baixa qualidade, retorne listas vazias
 - Retorne APENAS o JSON — sem comentários, sem markdown wrapper
+
+### Calibração: quando incluir vs. omitir
+
+| Tipo | Incluir | Omitir |
+|---|---|---|
+| **Entidade** | Mencionada pelo nome ≥ 2 vezes ou com papel explícito | Nome genérico sem identidade organizacional ("o sistema", "a equipe") |
+| **Processo** | Nomeado explicitamente ("processo de onboarding") | Atividade pontual sem nome próprio |
+| **Fato/decisão** | Afirmação que fecha um ponto ("ficou definido que X") | Hipótese não confirmada, intenção sem compromisso |
+| **Fato/regra** | Obrigação ou restrição com impacto em outras reuniões | Regra implícita sem declaração explícita |
+| **Contradição** | "Antes era X, agora é Y" com citação explícita do estado anterior | Mudança normal de plano sem referência ao estado anterior |
+
+---
+
+## Regras
+
+1. **Output language:** {output_language}
+2. Retorne APENAS o JSON válido — sem comentários, sem markdown wrapper.
+3. `utterance_speaker` usa iniciais do nome completo do participante (ex: `"MF"` para Maria de Fátima).
+4. `confidence` entre 0.7 e 0.9 para fatos com alguma ambiguidade; 0.95–1.0 para afirmações explícitas.
+5. Se `aliases` estiver vazio, retorne `[]` (nunca omita o campo).

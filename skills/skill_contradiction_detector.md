@@ -1,5 +1,5 @@
 ---
-version: 1.0
+version: 1.1
 agent: contradiction_detector
 description: Detecção de contradições entre artefatos extraídos
 ---
@@ -127,3 +127,15 @@ Notas sobre os campos:
 - `clarifying_question`: sempre presente para `exception` e `ambiguous`; recomendado para contradições
 - `suggested_rewrite`: quando possível, mostre como as duas afirmações poderiam ser harmonizadas
 - Inclua na saída tanto contradições reais quanto `exception` e `ambiguous` que mereçam atenção humana
+
+---
+
+## Regras
+
+1. **Output language:** {output_language}
+2. Retorne APENAS JSON válido — sem markdown wrapper, sem comentários.
+3. `description` deve citar o **conteúdo textual** dos fatos conflitantes, nunca apenas os UUIDs.
+4. `confidence` mínimo para incluir: 0.50. Use < 0.70 para casos ambíguos.
+5. `clarifying_question` é obrigatório para `exception` e `ambiguous`; recomendado para contradições.
+6. `suggested_rewrite` deve harmonizar as duas afirmações quando possível; omita se a fusão não for clara.
+7. Máximo de 20 itens por resposta — priorize por severidade decrescente.
