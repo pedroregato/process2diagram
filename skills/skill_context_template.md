@@ -1,3 +1,9 @@
+---
+version: 1.0
+agent: context_template
+description: Template editável pelo usuário para o CKF (Context Knowledge File) do projeto
+---
+
 # Context Knowledge File (CKF)
 # ─────────────────────────────────────────────────────────────────────────────
 # Este arquivo é injetado no prompt de todos os agentes como contexto adicional.

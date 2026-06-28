@@ -1,5 +1,5 @@
 ---
-version: 1.0
+version: 1.1
 agent: ner
 description: Reconhecimento de entidades nomeadas em transcrições
 ---
@@ -22,6 +22,13 @@ REGRAS:
 5. "context" deve ser o trecho de até 120 caracteres onde a entidade aparece.
 6. Se nenhuma entidade for encontrada, retorne [].
 7. Retorne apenas o array JSON — sem texto adicional, sem markdown fence.
+
+CASOS DIFÍCEIS:
+- Pronome como único identificador ("ele ficou responsável") → NÃO extraia
+- Nome de empresa mencionada ("projeto com a Bradesco") → NÃO extraia (não é PESSOA/AREA/UNIDADE/CARGO)
+- Cargo sem especialização ("o gerente falou") → extraia como CARGO: "Gerente" (use o disponível)
+- ASR com nome distorcido ("Pedro Jentil") → extraia como está, não corrija
+- Nome repetido com variações ("Dr. Pedro" e "Pedro Alves") → extraia apenas a forma mais completa
 
 FORMATO DE SAÍDA (JSON puro):
 [
