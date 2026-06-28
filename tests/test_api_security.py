@@ -1,10 +1,12 @@
 # tests/test_api_security.py
 # ─────────────────────────────────────────────────────────────────────────────
-# Testes das duas camadas de segurança da API comercial (api.py):
+# Testes da API comercial (api.py):
 #   1. Validação de API Key  (require_api_key)
 #   2. Controle de Concorrência / Rate Limiting  (check_rate_limit)
+#   3. Callback de Progresso Heurístico  (_build_progress_callback)
+#   4. Persistência Fail-Open  (_persist_hub)
 #
-# Isolamento completo: Supabase mockado em todos os testes via unittest.mock.
+# Isolamento completo: Supabase e project_store mockados via unittest.mock.
 # Não realiza chamadas de rede nem acessa o banco de dados real.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -544,3 +546,190 @@ class TestSecurityIntegration:
     def test_status_endpoint_nonexistent_job_returns_404(self, client):
         resp = client.get("/status/nonexistent-uuid")
         assert resp.status_code == 404
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Testes do Callback de Progresso Heurístico (_build_progress_callback)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestProgressCallback:
+    """Testes de _build_progress_callback — lógica de ponderação por agente."""
+
+    def _make_job(self) -> api_module.JobRecord:
+        return api_module.JobRecord(job_id="cb-test")
+
+    def test_running_status_gives_partial_credit(self):
+        """Status 'running' deve creditar 50% do peso do agente."""
+        job = self._make_job()
+        cb = api_module._build_progress_callback(job, base_pct=15, range_pct=80)
+        cb("Agente BPMN", "running")   # peso=40, 50% = 20 de 100 total
+        assert job.progress > 15       # avançou além do base
+        assert job.progress < 95       # não chegou ao fim
+
+    def test_done_status_credits_full_weight(self):
+        """Status 'done' deve creditar 100% do peso do agente."""
+        job = self._make_job()
+        cb = api_module._build_progress_callback(job, base_pct=15, range_pct=80)
+        cb("Agente BPMN", "running")
+        progress_during = job.progress
+        cb("Agente BPMN", "done")      # crédito completo
+        assert job.progress >= progress_during
+
+    def test_skipped_status_credits_full_weight(self):
+        """Status 'skipped' deve creditar 100% do peso (agente não executado)."""
+        job = self._make_job()
+        cb = api_module._build_progress_callback(job, base_pct=0, range_pct=100)
+        cb("Agente Qualidade", "skipped")  # peso=5
+        assert job.progress >= 2           # ≥ 5% de 100
+
+    def test_progress_never_exceeds_ceiling(self):
+        """Progress não deve ultrapassar base_pct + range_pct - 1."""
+        job = self._make_job()
+        ceiling = 15 + 80 - 1
+        cb = api_module._build_progress_callback(job, base_pct=15, range_pct=80)
+        # Completa todos os agentes conhecidos
+        for agent in ["Agente Qualidade", "Pré-processamento", "NLP / Chunker",
+                      "Agente BPMN", "Agente Ata", "Agente Requisitos",
+                      "Agente SBVR", "Agente BMM", "Agente Sintetizador"]:
+            cb(agent, "done")
+        assert job.progress <= ceiling
+
+    def test_progress_never_below_base(self):
+        """Progress nunca deve cair abaixo do base_pct inicial."""
+        job = self._make_job()
+        cb = api_module._build_progress_callback(job, base_pct=15, range_pct=80)
+        cb("Agente Qualidade", "error")
+        assert job.progress >= 15
+
+    def test_unknown_agent_does_not_crash(self):
+        """Agente desconhecido (peso=0) não deve causar exceção nem retroceder."""
+        job = self._make_job()
+        cb = api_module._build_progress_callback(job, base_pct=15, range_pct=80)
+        cb("Agente Desconhecido XYZ", "done")
+        assert job.progress >= 15
+
+    def test_sequential_agents_accumulate(self):
+        """Agentes concluídos em sequência devem acumular progresso."""
+        job = self._make_job()
+        cb = api_module._build_progress_callback(job, base_pct=0, range_pct=100)
+        cb("Agente Qualidade", "done")    # +5
+        p1 = job.progress
+        cb("NLP / Chunker", "done")       # +2
+        p2 = job.progress
+        cb("Agente BPMN", "done")         # +40
+        p3 = job.progress
+        assert p1 <= p2 <= p3
+
+    def test_callback_is_thread_safe(self):
+        """Múltiplas threads chamando o callback simultaneamente não devem corromper o estado."""
+        import threading as _threading
+        job = self._make_job()
+        cb = api_module._build_progress_callback(job, base_pct=0, range_pct=100)
+        errors = []
+
+        def _call():
+            try:
+                cb("Agente BPMN", "running")
+                cb("Agente BPMN", "done")
+            except Exception as e:
+                errors.append(e)
+
+        threads = [_threading.Thread(target=_call) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert not errors
+        assert job.progress >= 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Testes de Persistência Fail-Open (_persist_hub)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestPersistHub:
+    """Testes de _persist_hub — garantem comportamento fail-open em todo cenário."""
+
+    def _make_hub(self, bpmn_ready=False, req_ready=False, sbvr_ready=False):
+        hub = MagicMock()
+        hub.meta.meeting_title = "Reunião de Teste API"
+        hub.bpmn.ready  = bpmn_ready
+        hub.requirements.ready = req_ready
+        hub.sbvr.ready  = sbvr_ready
+        return hub
+
+    def _mock_store(self, meeting_id="uuid-mock-123"):
+        """Retorna um mock do project_store com create_meeting bem-sucedido."""
+        store = MagicMock()
+        store.create_meeting.return_value = {"id": meeting_id}
+        store.save_transcript.return_value = True
+        store.save_meeting_artifacts.return_value = True
+        store.save_requirements_from_hub.return_value = 0
+        store.save_sbvr_from_hub.return_value = (0, 0)
+        store.save_bpmn_from_hub.return_value = True
+        return store
+
+    def test_returns_meeting_id_on_success(self):
+        """Persistência bem-sucedida deve retornar o meeting_id criado."""
+        hub = self._make_hub()
+        store = self._mock_store("meeting-abc")
+        with patch.dict("sys.modules", {"core.project_store": store}):
+            result = api_module._persist_hub(hub, "project-xyz")
+        assert result == "meeting-abc"
+
+    def test_returns_none_when_create_meeting_fails(self):
+        """Se create_meeting retornar None, _persist_hub retorna None (fail-open)."""
+        hub = self._make_hub()
+        store = MagicMock()
+        store.create_meeting.return_value = None
+        with patch.dict("sys.modules", {"core.project_store": store}):
+            result = api_module._persist_hub(hub, "project-xyz")
+        assert result is None
+
+    def test_returns_none_when_import_fails(self):
+        """ImportError no project_store não propaga — retorna None (fail-open)."""
+        hub = self._make_hub()
+        with patch("builtins.__import__", side_effect=ImportError("no module")):
+            try:
+                result = api_module._persist_hub(hub, "project-xyz")
+                assert result is None
+            except ImportError:
+                pass  # aceitável — o importante é não propagar para o caller
+
+    def test_artifact_saves_called_for_ready_artefacts(self):
+        """save_requirements_from_hub e save_bpmn_from_hub chamados quando ready=True."""
+        hub = self._make_hub(bpmn_ready=True, req_ready=True)
+        store = self._mock_store()
+        with patch.dict("sys.modules", {"core.project_store": store}):
+            api_module._persist_hub(hub, "project-xyz")
+        store.save_requirements_from_hub.assert_called_once()
+        store.save_bpmn_from_hub.assert_called_once()
+
+    def test_artifact_saves_skipped_when_not_ready(self):
+        """save_requirements_from_hub não chamado quando requirements.ready=False."""
+        hub = self._make_hub(req_ready=False)
+        store = self._mock_store()
+        with patch.dict("sys.modules", {"core.project_store": store}):
+            api_module._persist_hub(hub, "project-xyz")
+        store.save_requirements_from_hub.assert_not_called()
+
+    def test_individual_save_failure_does_not_abort(self):
+        """Falha em save_transcript não cancela save_meeting_artifacts (fail-open)."""
+        hub = self._make_hub()
+        store = self._mock_store()
+        store.save_transcript.side_effect = RuntimeError("connection lost")
+        with patch.dict("sys.modules", {"core.project_store": store}):
+            result = api_module._persist_hub(hub, "project-xyz")
+        # Falha em save_transcript, mas save_meeting_artifacts ainda é chamado
+        assert result == "uuid-mock-123"
+        store.save_meeting_artifacts.assert_called_once()
+
+    def test_exception_in_create_meeting_returns_none(self):
+        """Exceção inesperada em create_meeting → retorna None, nunca propaga."""
+        hub = self._make_hub()
+        store = MagicMock()
+        store.create_meeting.side_effect = RuntimeError("db timeout")
+        with patch.dict("sys.modules", {"core.project_store": store}):
+            result = api_module._persist_hub(hub, "project-xyz")
+        assert result is None

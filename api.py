@@ -38,7 +38,7 @@ import uuid
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -523,22 +523,27 @@ def _run_pipeline_sync(
             "run_knowledge_extractor": False,  # desabilitado na API por padrão
         }
 
-        # ── Executar pipeline via run_pipeline() — nunca instanciar agentes ─
+        # ── Callback de progresso heurístico por agente ────────────────────────
+        # Assinatura exigida por core/pipeline.py: (agent_name: str, status: str)
+        # Pesos somam 100 — mapeiam o intervalo 15–95 % do job progress.
         _progress(15, "Executando pipeline")
+        pipeline_callback = _build_progress_callback(job, base_pct=15, range_pct=80)
+
+        # ── Execução real do pipeline via run_pipeline() ────────────────────────
+        # Segue CLAUDE.md: "never instantiate agents directly — always go through
+        # Orchestrator". run_pipeline → Orchestrator → agentes via _PLAN.
         from core.pipeline import run_pipeline  # type: ignore
 
-        hub = run_pipeline(
-            hub,
-            pipeline_cfg,
-            lambda pct, msg="": _progress(15 + int(pct * 0.80), msg),
-        )
+        hub = run_pipeline(hub, pipeline_cfg, pipeline_callback)
 
         _progress(96, "Extraindo resumo de artefatos")
         result_summary = _extract_hub_summary(hub)
 
         if config.project_id and hub:
             _progress(98, "Persistindo no Supabase")
-            _persist_hub(hub, config.project_id)
+            meeting_id = _persist_hub(hub, config.project_id)
+            if meeting_id:
+                result_summary["meeting_id"] = meeting_id
 
         job.status     = JobStatus.DONE
         job.progress   = 100
@@ -556,6 +561,68 @@ def _run_pipeline_sync(
         # Sempre decrementa — garante que o contador não vaze mesmo em erro
         with _active_pipeline_lock:
             _active_pipeline_count = max(0, _active_pipeline_count - 1)
+
+
+def _build_progress_callback(job: JobRecord, base_pct: int = 15, range_pct: int = 80) -> Callable:
+    """
+    Retorna um callback (agent_name: str, status: str) → None compatível com
+    a assinatura de core/pipeline.py e agents/orchestrator.py.
+
+    Mapeamento de pesos (soma = 100) → intervalo [base_pct, base_pct + range_pct):
+      Agente Qualidade   :  5%   (rápido, LLM simples)
+      Pré-processamento  :  3%   (sem LLM)
+      NLP / Chunker      :  2%   (sem LLM)
+      Agente BPMN        : 40%   (mais pesado — multi-run opcional + LangGraph)
+      Agente Ata         : 20%   (LLM paralelo)
+      Agente Requisitos  : 20%   (LLM paralelo)
+      Agente SBVR        :  4%
+      Agente BMM         :  3%
+      Agente Sintetizador:  3%   ← todos somam 100
+
+    Agentes "running" recebem 50% do peso como crédito parcial visual.
+    Agentes "done"/"skipped" creditam 100%.
+    Thread-safe via threading.Lock (callback invocado de threads worker).
+    """
+    _WEIGHTS: dict[str, int] = {
+        "Agente Qualidade":         5,
+        "Pré-processamento":        3,
+        "NLP / Chunker":            2,
+        "Agente BPMN":             40,
+        "BPMN Agent":              40,   # label do caminho multi-run
+        "Agente Ata":              20,
+        "Agente Requisitos":       20,
+        "Agente SBVR":              4,
+        "Agente BMM":               3,
+        "Agente Sintetizador":      3,
+    }
+    _TOTAL   = 100
+    _lock    = threading.Lock()
+    _done_w  = [0.0]   # mutable float via list (nonlocal-safe across threads)
+
+    def _callback(agent_name: str, agent_status: str) -> None:
+        weight = _WEIGHTS.get(agent_name, 0)
+        with _lock:
+            if agent_status in ("running", "running (sequencial)"):
+                partial = _done_w[0] + weight * 0.5
+            elif agent_status in ("done", "skipped"):
+                _done_w[0] = min(_done_w[0] + weight, _TOTAL)
+                partial = _done_w[0]
+            else:
+                # error / outro — credita peso para não congelar a barra
+                _done_w[0] = min(_done_w[0] + weight, _TOTAL)
+                partial = _done_w[0]
+
+            pct = base_pct + int((partial / _TOTAL) * range_pct)
+            # Teto em base_pct + range_pct - 1 para deixar espaço para etapas pós-pipeline
+            job.progress   = min(pct, base_pct + range_pct - 1)
+            job.updated_at = time.time()
+
+        logger.debug(
+            "job callback: agent='%s' status='%s' progress=%d%%",
+            agent_name, agent_status, job.progress,
+        )
+
+    return _callback
 
 
 def _extract_hub_summary(hub: Any) -> dict:
@@ -605,17 +672,81 @@ def _extract_hub_summary(hub: Any) -> dict:
     return summary
 
 
-def _persist_hub(hub: Any, project_id: str) -> None:
+def _persist_hub(hub: Any, project_id: str) -> str | None:
     """
-    Persiste artefatos do hub no Supabase.
-    Fail-open: loga e retorna silenciosamente em qualquer erro.
+    Persiste o KnowledgeHub no Supabase espelhando o fluxo de Pipeline.py.
+
+    Sequência (idêntica à página Streamlit, toda fail-open):
+      1. create_meeting()             → cria registro na tabela meetings
+      2. save_transcript()            → transcript_clean + transcript_raw
+      3. save_meeting_artifacts()     → BPMN XML, Mermaid, ata, BMM, DMN, HTML
+      4. save_requirements_from_hub() → tabela requirements (se ready)
+      5. save_sbvr_from_hub()         → tabelas sbvr_terms + sbvr_rules (se ready)
+      6. save_bpmn_from_hub()         → tabela bpmn_processes + bpmn_versions (se ready)
+
+    Retorna o meeting_id criado, ou None em qualquer falha.
+    Nunca propaga exceção — o resultado do pipeline já foi entregue ao cliente.
     """
     try:
-        from core import project_store  # type: ignore  # noqa: F401
-        # project_store.save_hub_to_db(hub, project_id)  # TODO: implementar
-        logger.info("_persist_hub: stub — project_id=%s (implementar save_hub_to_db)", project_id)
+        from core.project_store import (  # type: ignore
+            create_meeting,
+            save_transcript,
+            save_meeting_artifacts,
+            save_requirements_from_hub,
+            save_sbvr_from_hub,
+            save_bpmn_from_hub,
+        )
+        from datetime import date as _date
+    except ImportError as exc:
+        logger.warning("_persist_hub: project_store não importável — %s", exc)
+        return None
+
+    # ── 1. Título da reunião: hub.meta ou fallback com timestamp ──────────────
+    try:
+        _title = (
+            getattr(getattr(hub, "meta", None), "meeting_title", None)
+            or f"API Pipeline — {_date.today().isoformat()}"
+        )
+        meeting_row = create_meeting(project_id=project_id, title=_title)
+        if not meeting_row:
+            logger.warning("_persist_hub: create_meeting retornou None — Supabase indisponível")
+            return None
+        meeting_id: str = meeting_row["id"]
     except Exception as exc:
-        logger.warning("_persist_hub: falha silenciosa — %s", exc)
+        logger.warning("_persist_hub: falha ao criar reunião — %s", exc)
+        return None
+
+    # ── 2–6. Artefatos — cada chamada é independente e fail-open ──────────────
+    try:
+        save_transcript(meeting_id, hub)
+    except Exception as exc:
+        logger.warning("_persist_hub: save_transcript falhou — %s", exc)
+
+    try:
+        save_meeting_artifacts(meeting_id, hub)
+    except Exception as exc:
+        logger.warning("_persist_hub: save_meeting_artifacts falhou — %s", exc)
+
+    try:
+        if getattr(getattr(hub, "requirements", None), "ready", False):
+            save_requirements_from_hub(meeting_id, project_id, hub)
+    except Exception as exc:
+        logger.warning("_persist_hub: save_requirements_from_hub falhou — %s", exc)
+
+    try:
+        if getattr(getattr(hub, "sbvr", None), "ready", False):
+            save_sbvr_from_hub(meeting_id, project_id, hub)
+    except Exception as exc:
+        logger.warning("_persist_hub: save_sbvr_from_hub falhou — %s", exc)
+
+    try:
+        if getattr(getattr(hub, "bpmn", None), "ready", False):
+            save_bpmn_from_hub(meeting_id=meeting_id, project_id=project_id, hub=hub)
+    except Exception as exc:
+        logger.warning("_persist_hub: save_bpmn_from_hub falhou — %s", exc)
+
+    logger.info("_persist_hub: concluído — meeting_id=%s project_id=%s", meeting_id, project_id)
+    return meeting_id
 
 
 # ─────────────────────────────────────────────────────────────────────────────
