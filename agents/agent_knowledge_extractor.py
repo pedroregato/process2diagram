@@ -16,6 +16,7 @@ import logging
 
 from agents.base_agent import BaseAgent
 from core.knowledge_hub import KnowledgeHub
+from core.output_schemas import KnowledgeExtractorOutputSchema
 
 _log = logging.getLogger(__name__)
 
@@ -30,8 +31,10 @@ class AgentKnowledgeExtractor(BaseAgent):
     hub.meta.kh_ingest_error so the main pipeline result is never affected.
     """
 
-    name       = "knowledge_extractor"
-    skill_path = "skills/skill_knowledge_extractor.md"
+    name                 = "knowledge_extractor"
+    skill_path           = "skills/skill_knowledge_extractor.md"
+    required_hub_fields  = ["transcript_clean"]
+    output_schema        = KnowledgeExtractorOutputSchema
 
     def build_prompt(
         self,

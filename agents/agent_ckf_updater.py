@@ -20,8 +20,9 @@ from core.knowledge_hub import KnowledgeHub
 
 class AgentCKFUpdater(BaseAgent):
 
-    name = "ckf_updater"
-    skill_path = "skills/skill_ckf_updater.md"
+    name                 = "ckf_updater"
+    skill_path           = "skills/skill_ckf_updater.md"
+    required_hub_fields  = []   # digest gracefully handles absent artefacts; early-exit when empty
 
     # ── Prompt ────────────────────────────────────────────────────────────────
 

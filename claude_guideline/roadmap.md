@@ -4,6 +4,29 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC88 — Concluído (v4.79 / 2026-06-28) — PC83+PC84 compliance nos agentes pipeline restantes
+
+- [x] **`core/output_schemas.py`** — 4 novos schemas Pydantic v2 (fail-open, extra='allow'):
+  - `ArgumentationOutputSchema` (+ `IBISQuestionSchema`, `IBISAlternativeSchema`, `IBISResolutionSchema`)
+  - `CommunicationNoiseOutputSchema` (+ `AmbiguityItemSchema`, `CommunicationGapSchema`)
+  - `KnowledgeExtractorOutputSchema` (+ `KHEntitySchema`, `KHProcessSchema`, `KHFactSchema`, `KHContradictionSchema`)
+  - `QuerySummaryOutputSchema` (+ `PerspectiveSummarySchema`)
+
+- [x] **`agents/agent_argumentation.py`** — `required_hub_fields = ["transcript_clean"]` + `output_schema = ArgumentationOutputSchema`
+- [x] **`agents/agent_communication_noise.py`** — `required_hub_fields = ["transcript_clean"]` + `output_schema = CommunicationNoiseOutputSchema`
+- [x] **`agents/agent_knowledge_extractor.py`** — `required_hub_fields = ["transcript_clean"]` + `output_schema = KnowledgeExtractorOutputSchema`
+- [x] **`agents/agent_query_summarizer.py`** — `required_hub_fields = []` + `output_schema = QuerySummaryOutputSchema`
+- [x] **`agents/agent_ckf_updater.py`** — `required_hub_fields = []` (Markdown output — sem output_schema)
+
+Agentes isentos (padrão não-padrão):
+- `agent_bpmn_reviewer` — Markdown output, on-demand, `_MinimalHub` stub
+- `agent_contradiction_detector` / `agent_entity_consolidator` — entry points próprios, hub stubs internos
+- `agent_meeting_namer` / `agent_req_reconciler` — `skill_path = None`, prompts inline
+
+**Resultado:** 56/56 testes existentes passando; 4 novos schemas + 5 agentes com compliance completa.
+
+---
+
 ### PC102 — Concluído (v4.78 / 2026-06-28) — skill improvements batch 4: query_summarizer, ner, analyst, context_template
 
 - [x] **`skills/skill_query_summarizer.md`** v1.0 → v1.1: move `{output_language}` to Rules section; add perspective differentiation guide table

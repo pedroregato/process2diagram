@@ -360,3 +360,145 @@ class SynthesizerOutputSchema(_PermissiveModel):
         if not v or not v.strip():
             raise ValueError("executive_summary cannot be empty")
         return v
+
+
+# ── Argumentation (IBIS) ──────────────────────────────────────────────────────
+
+class IBISResolutionSchema(_PermissiveModel):
+    type: str = "unresolved"
+    chosen_alternative_id: str = ""
+    rationale: str = ""
+    with_caveats: list[str] = []
+
+
+class IBISAlternativeSchema(_PermissiveModel):
+    id: str = ""
+    description: str = ""
+    proposed_by: str = ""
+    pros: list[str] = []
+    cons: list[str] = []
+    supported_by: list[str] = []
+    opposed_by: list[str] = []
+    was_chosen: bool = False
+
+
+class IBISQuestionSchema(_PermissiveModel):
+    id: str = ""
+    statement: str = ""
+    raised_by: str = ""
+    alternatives: list[IBISAlternativeSchema] = []
+    resolution: IBISResolutionSchema = IBISResolutionSchema()
+    confidence: float = 1.0
+
+    @field_validator("confidence")
+    @classmethod
+    def confidence_in_range(cls, v: float) -> float:
+        if not (0.0 <= v <= 1.0):
+            raise ValueError(f"confidence must be 0.0–1.0, got {v}")
+        return v
+
+
+class ArgumentationOutputSchema(_PermissiveModel):
+    """Validates the raw LLM JSON from AgentArgumentation."""
+    questions: list[IBISQuestionSchema] = []
+
+
+# ── Communication Noise ───────────────────────────────────────────────────────
+
+class AmbiguityItemSchema(_PermissiveModel):
+    text: str = ""
+    ambiguity_type: str = "lexical"
+    speaker: str = ""
+    possible_interpretations: list[str] = []
+    suggestion: str = ""
+    confidence: float = 0.8
+
+    @field_validator("confidence")
+    @classmethod
+    def confidence_in_range(cls, v: float) -> float:
+        if not (0.0 <= v <= 1.0):
+            raise ValueError(f"confidence must be 0.0–1.0, got {v}")
+        return v
+
+
+class CommunicationGapSchema(_PermissiveModel):
+    gap_type: str = "missing_info"
+    description: str = ""
+    raised_by: str = "–"
+    topic: str = ""
+    evidence_quote: str = ""
+    impact: str = ""
+    recommendation: str = ""
+
+
+class CommunicationNoiseOutputSchema(_PermissiveModel):
+    """Validates the raw LLM JSON from AgentCommunicationNoise."""
+    ambiguities: list[AmbiguityItemSchema] = []
+    gaps: list[CommunicationGapSchema] = []
+    noise_score: float = 0.0
+    summary: str = ""
+
+    @field_validator("noise_score")
+    @classmethod
+    def score_in_range(cls, v: float) -> float:
+        if not (0.0 <= v <= 10.0):
+            raise ValueError(f"noise_score must be 0–10, got {v}")
+        return v
+
+
+# ── Knowledge Extractor ───────────────────────────────────────────────────────
+
+class KHEntitySchema(_PermissiveModel):
+    canonical_name: str = ""
+    entity_type: str = "other"
+    aliases: list[str] = []
+
+
+class KHProcessSchema(_PermissiveModel):
+    process_name: str = ""
+    description: str = ""
+
+
+class KHFactSchema(_PermissiveModel):
+    fact_type: str = "insight"
+    content: str = ""
+    confidence: float = 0.9
+    dialogue_act: str = ""
+    utterance_speaker: Optional[str] = None
+
+    @field_validator("confidence")
+    @classmethod
+    def confidence_in_range(cls, v: float) -> float:
+        if not (0.0 <= v <= 1.0):
+            raise ValueError(f"confidence must be 0.0–1.0, got {v}")
+        return v
+
+
+class KHContradictionSchema(_PermissiveModel):
+    process_name: str = ""
+    description: str = ""
+    severity: str = "medium"
+
+
+class KnowledgeExtractorOutputSchema(_PermissiveModel):
+    """Validates the raw LLM JSON from AgentKnowledgeExtractor."""
+    entities: list[KHEntitySchema] = []
+    processes: list[KHProcessSchema] = []
+    facts: list[KHFactSchema] = []
+    contradictions: list[KHContradictionSchema] = []
+
+
+# ── Query Summarizer ──────────────────────────────────────────────────────────
+
+class PerspectiveSummarySchema(_PermissiveModel):
+    perspective: str = ""
+    label: str = ""
+    headline: str = ""
+    highlights: list[str] = []
+    open_items: list[str] = []
+    recommended_actions: list[str] = []
+
+
+class QuerySummaryOutputSchema(_PermissiveModel):
+    """Validates the raw LLM JSON from AgentQuerySummarizer."""
+    perspectives: list[PerspectiveSummarySchema] = []

@@ -13,12 +13,15 @@ from core.knowledge_hub import (
     KnowledgeHub, ArgumentationMap,
     IBISQuestion, IBISAlternative, IBISResolution,
 )
+from core.output_schemas import ArgumentationOutputSchema
 
 
 class AgentArgumentation(BaseAgent):
 
-    name       = "argumentation"
-    skill_path = "skills/skill_argumentation.md"
+    name                 = "argumentation"
+    skill_path           = "skills/skill_argumentation.md"
+    required_hub_fields  = ["transcript_clean"]
+    output_schema        = ArgumentationOutputSchema
 
     # ── Prompt ────────────────────────────────────────────────────────────────
 

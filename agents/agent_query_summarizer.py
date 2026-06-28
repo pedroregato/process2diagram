@@ -12,12 +12,15 @@ from agents.base_agent import BaseAgent
 from core.knowledge_hub import (
     KnowledgeHub, QuerySummaryModel, PerspectiveSummary,
 )
+from core.output_schemas import QuerySummaryOutputSchema
 
 
 class AgentQuerySummarizer(BaseAgent):
 
-    name = "query_summarizer"
-    skill_path = "skills/skill_query_summarizer.md"
+    name                 = "query_summarizer"
+    skill_path           = "skills/skill_query_summarizer.md"
+    required_hub_fields  = []   # all artefacts are optional; graceful degradation in build_prompt
+    output_schema        = QuerySummaryOutputSchema
 
     # ── Prompt ────────────────────────────────────────────────────────────────
 

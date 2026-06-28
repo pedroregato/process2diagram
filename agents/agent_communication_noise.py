@@ -19,12 +19,15 @@ from core.knowledge_hub import (
     AmbiguityItem,
     CommunicationGap,
 )
+from core.output_schemas import CommunicationNoiseOutputSchema
 
 
 class AgentCommunicationNoise(BaseAgent):
 
-    name = "communication_noise"
-    skill_path = "skills/skill_communication_noise.md"
+    name                 = "communication_noise"
+    skill_path           = "skills/skill_communication_noise.md"
+    required_hub_fields  = ["transcript_clean"]
+    output_schema        = CommunicationNoiseOutputSchema
 
     # ── Prompt ────────────────────────────────────────────────────────────────
 
