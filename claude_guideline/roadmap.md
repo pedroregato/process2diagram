@@ -4,6 +4,20 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC91 — Concluído (v4.67 / 2026-06-27) — skill_bpmn_reviewer.md v2.0
+
+- [x] **`skills/skill_bpmn_reviewer.md`** — reescrito de v1.0 (242 linhas) para v2.0 (328 linhas)
+  - Português com acentos corretos (v1.0 sem acentos)
+  - 3 níveis de severidade: 🔴 Crítico (−2 pts), ❌ Violação (−0,5 pt), ⚠️ Atenção
+  - Cálculo explícito do score com regra: score_max=5 se houver qualquer crítico
+  - Checklist expandido de 25 → 38 itens em 8 seções (adiciona Eventos, Colaboração)
+  - Novos itens críticos: gateway com 1 saída, AND-fork sem AND-join, dead end, elemento órfão
+  - Novos itens de violação: sendTask/receiveTask fora de pools, message_flow dentro do mesmo pool, coreografia desbalanceada, End Event na lane errada em aprovações, Traceability Label Rule
+  - Seção "Quando NÃO gerar JSON" (> 5 críticos, intenção não inferível, colaboração complexa)
+  - Checklist pré-retorno do JSON na Fase 4
+
+---
+
 ### PC90 — Concluído (v4.66 / 2026-06-27) — skill_sbvr.md v2.0 — Cobertura Normativa SBVR 1.5
 
 - [x] **`skills/skill_sbvr.md`** — reescrito de v1.0 (111 linhas, inglês) para v2.0 (517 linhas, PT)
