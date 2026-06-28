@@ -25,7 +25,7 @@ DROP INDEX IF EXISTS document_chunks_embedding_idx;
 
 -- ── 3. Remover funções de busca com assinatura antiga ────────────────────────
 DROP FUNCTION IF EXISTS match_transcript_chunks(vector(1536), uuid, int);
-DROP FUNCTION IF EXISTS match_document_chunks(vector(1536), uuid, int, float);
+DROP FUNCTION IF EXISTS match_document_chunks(vector(1536), text, int, float);
 
 -- ── 4. Alterar colunas para vector(512) ──────────────────────────────────────
 ALTER TABLE transcript_chunks ALTER COLUMN embedding TYPE vector(512);
@@ -67,29 +67,44 @@ LANGUAGE sql STABLE AS $$
 $$;
 
 -- ── 7. Recriar função match_document_chunks com vector(512) ──────────────────
+-- Esquema original: document_chunks não tem project_id — filtro via JOIN meeting_documents.
+-- match_project_id é TEXT (project_id armazenado como text em meeting_documents).
 CREATE OR REPLACE FUNCTION match_document_chunks(
-    query_embedding   vector(512),
-    filter_project_id uuid,
-    match_count       int     DEFAULT 8,
-    similarity_threshold float DEFAULT 0.5
+    query_embedding  vector(512),
+    match_project_id TEXT,
+    match_count      INT   DEFAULT 5,
+    match_threshold  FLOAT DEFAULT 0.4
 )
 RETURNS TABLE (
-    id          uuid,
-    document_id uuid,
-    project_id  uuid,
-    chunk_index integer,
-    chunk_text  text,
-    similarity  float
+    id            UUID,
+    document_id   UUID,
+    chunk_index   INT,
+    content       TEXT,
+    similarity    FLOAT,
+    doc_title     TEXT,
+    doc_type      TEXT,
+    doc_file_name TEXT
 )
-LANGUAGE sql STABLE AS $$
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
     SELECT
-        dc.id, dc.document_id, dc.project_id, dc.chunk_index, dc.chunk_text,
-        1 - (dc.embedding <=> query_embedding) AS similarity
+        dc.id,
+        dc.document_id,
+        dc.chunk_index,
+        dc.content,
+        (1 - (dc.embedding <=> query_embedding))::FLOAT AS similarity,
+        md.title     AS doc_title,
+        md.doc_type,
+        md.file_name AS doc_file_name
     FROM document_chunks dc
-    WHERE dc.project_id = filter_project_id
-      AND 1 - (dc.embedding <=> query_embedding) >= similarity_threshold
+    JOIN meeting_documents md ON md.id = dc.document_id
+    WHERE md.project_id = match_project_id
+      AND dc.embedding  IS NOT NULL
+      AND (1 - (dc.embedding <=> query_embedding)) > match_threshold
     ORDER BY dc.embedding <=> query_embedding
     LIMIT match_count;
+END;
 $$;
 
 -- ── 8. Atualizar comentários ──────────────────────────────────────────────────
@@ -100,4 +115,4 @@ COMMENT ON COLUMN document_chunks.embedding IS
 COMMENT ON FUNCTION match_transcript_chunks IS
     'Busca semântica por cosine similarity (vector 512-dim). Retorna top-K chunks mais similares ao embedding da consulta.';
 COMMENT ON FUNCTION match_document_chunks IS
-    'Busca semântica por cosine similarity em documentos (vector 512-dim). Filtra por projeto e similarity threshold.';
+    'Busca semântica por cosine similarity em documentos (vector 512-dim). Filtra por projeto via JOIN meeting_documents.';
