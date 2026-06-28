@@ -4,6 +4,20 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC92 — Concluído (v4.68 / 2026-06-27) — skill_minutes.md v2.0
+
+- [x] **`skills/skill_minutes.md`** — reescrito de v1.0 (190 linhas) para v2.0 (244 linhas)
+  - Método de extração em 5 passos sequenciais
+  - Passo 0: leitura completa obrigatória + tabela de tipos de reunião (8 tipos) com calibração de ênfase
+  - Passo 3: formulação padrão de decisões (declarativa/passado) com exemplos ✓/✗
+  - Tabela de distinção crítica Decisão vs Action Item (natureza, responsável, tempo, verificação)
+  - Regra de não-duplicação entre decisões e action items
+  - Calibração de densidade do resumo por contexto (4 cenários)
+  - Antipadrões em formato de tabela com coluna "como identificar"
+  - Regra 6 explícita: sem duplicação entre campos
+
+---
+
 ### PC91 — Concluído (v4.67 / 2026-06-27) — skill_bpmn_reviewer.md v2.0
 
 - [x] **`skills/skill_bpmn_reviewer.md`** — reescrito de v1.0 (242 linhas) para v2.0 (328 linhas)
