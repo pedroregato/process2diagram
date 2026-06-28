@@ -1,5 +1,5 @@
 ---
-version: 1.0
+version: 1.1
 agent: cross_doc_analyzer
 description: Análise cruzada de documento versus artefatos da reunião
 ---
@@ -103,3 +103,14 @@ Respond with a single valid JSON object — no markdown, no prose outside the JS
 - Prefer precision over volume: fewer high-quality findings are better than many speculative ones.
 - Confidence below 0.6 should be omitted.
 - `alignment_score`: 0 = completely incompatible, 100 = fully aligned/equivalent documents.
+
+---
+
+## Rules
+
+1. **Output language:** {output_language}
+2. Return ONLY a single valid JSON object — no markdown, no prose outside the JSON.
+3. If a section has no items, return an empty array `[]` for that section.
+4. `relationships`: include all types including `equivalent` and `complementary` — not only conflicts.
+5. `contradictions`: only include genuine contradictions, not terminology differences.
+6. `gaps.only_in_a` and `gaps.only_in_b` are mandatory keys even if empty.
