@@ -1,5 +1,5 @@
 ---
-version: 2.0
+version: 2.1
 agent: sbvr
 description: Extração de vocabulário e regras SBVR a partir de transcrições de reuniões
 spec: OMG Semantics of Business Vocabulary and Rules 1.5 (formal/2019-10-01)
@@ -38,6 +38,20 @@ Não é processo (BPMN), não é decisão lógica (DMN), não é diretriz estrat
 > **Regra de ouro SBVR:** se a afirmação pode ser verificada como cumprida ou violada
 > em uma instância específica ("este pedido de R$15k tem aprovação do Gerente?"), é uma
 > regra SBVR. Se é uma orientação de direção geral, é BMM.
+
+### Fronteira SBVR vs DMN — Distinção Crítica
+
+O erro mais comum é registrar como regra SBVR o que deveria ser uma tabela de decisão DMN.
+
+| Padrão | SBVR ou DMN? | Critério |
+|---|---|---|
+| "Se atraso > 5 dias, fornecedor deve emitir notificação" | **SBVR** `conditional` | Uma condição, uma consequência |
+| "Score < 500 → recusa; 500–699 → revisão manual; ≥ 700 → aprovação automática" | **DMN** | N intervalos com saídas diferentes → tabela de decisão |
+| "Pedidos até R$50k: Gerente. R$50k–R$500k: Diretor. Acima: Comitê" | **DMN** | Múltiplos limiares → hit policy UNIQUE |
+| "É obrigatório que clientes inadimplentes sejam bloqueados" | **SBVR** | Uma obrigação, sem ramificações |
+| "Desconto varia de 5% a 20% conforme volume e categoria" | **DMN** | Cruzamento de múltiplas dimensões → tabela de decisão |
+
+**Regra prática:** se você precisaria de 3+ regras SBVR para cobrir todos os casos de uma mesma decisão, provavelmente é DMN. Uma tabela de decisão DMN com N linhas tem mais expressividade que N regras SBVR isoladas e deve ser preferida nesses casos.
 
 ---
 
@@ -220,6 +234,17 @@ Para cada regra:
 
 6. Copie `speaker_quote` da transcrição (máx. 200 chars) ou deixe `""` se não identificável.
 
+7. Preencha `enforcement` quando a transcrição indica como a regra é cumprida:
+   - `"automated"` — "o sistema bloqueia automaticamente", "validação automática no ERP"
+   - `"manual"` — "o gestor deve verificar", "conferência humana obrigatória"
+   - `"contractual"` — previsto em cláusula contratual
+   - `"regulatory"` — "exigência BACEN", "conforme LGPD", obrigação legal
+   - Omita o campo quando não mencionado — nunca invente o mecanismo
+
+8. Preencha `bmm_policy_ref` quando a regra SBVR é a instanciação operacional de uma política BMM conhecida:
+   - Exemplo: BMM tem P1 "Toda decisão financeira relevante requer aprovação do CFO" → SBVR extrai BR003 "É obrigatório que Pedidos acima de R$500k sejam aprovados pelo CFO antes da emissão" → `"bmm_policy_ref": "P1"`
+   - Deixe `null` quando não há política BMM correspondente identificada
+
 **Limite:** 3–12 regras por reunião. Prefira as que têm consequência operacional clara.
 
 ---
@@ -244,6 +269,19 @@ Para cada regra:
 - [ ] Nenhuma regra inventada — apenas o que está na transcrição
 - [ ] Regras operativas detalhadas não confundidas com políticas BMM (nível estratégico)
 - [ ] Regras com estrutura if-then complexa e múltiplos outputs não confundidas com tabelas DMN
+- [ ] Conjunto com 3+ variações do mesmo conteúdo (faixas de valor, score intervals) → avalie se é DMN, não múltiplas regras SBVR
+- [ ] `enforcement` preenchido apenas quando mencionado na transcrição — nunca inferido
+- [ ] `bmm_policy_ref` preenchido apenas quando a referência à política BMM é identificável
+
+---
+
+## Regras
+
+1. **Output language:** {output_language}
+2. **Retorne APENAS o JSON válido.** Nenhum texto antes ou depois. Nenhum markdown. Nenhum comentário.
+3. Não invente regras. Extraia apenas o que está na transcrição — explícito ou fortemente implicado.
+4. Regras com estrutura de tabela de decisão (N condições → N saídas diferentes) → deixe para AgentDMN, não extraia como SBVR.
+5. Campos opcionais (`enforcement`, `bmm_policy_ref`) → omita ou `null` quando não identificáveis.
 
 ---
 
@@ -271,13 +309,11 @@ Retorne **APENAS JSON válido**, sem markdown, sem comentários:
       "sphere": "financeiro|operacoes|juridico|tecnologia|rh|marketing|geral",
       "sphere_owner": "CFO|COO|CLO|CTO|CHRO|CMO|CEO",
       "bmm_policy_ref": null,
+      "enforcement": "automated|manual|contractual|regulatory — omitir se não mencionado",
       "speaker_quote": "trecho literal da transcrição (máx 200 chars) ou string vazia"
     }
   ]
 }
-```
-
-Output language: {output_language}
 
 ---
 
@@ -515,3 +551,112 @@ Output language: {output_language}
 - BR002 anota o mecanismo de enforcement ("sistema bloqueia") na própria declaração — isso é informação de rastreabilidade importante
 - BR005 é `constraint` com referência à LGPD — a regulação é o `individual` no vocabulário
 - `fact_type` documenta a relação central: Jurídico analisa Proposta
+
+---
+
+### Exemplo C — Kickoff Técnico com Regras Regulatórias e de Conformidade
+
+**Transcrição (fragmento):**
+> "A conformidade com a Resolução BACEN 4.557 é obrigatória em todos os fluxos de dados de clientes. Qualquer dado pessoal deve ser criptografado em repouso e em trânsito — chaves gerenciadas pelo KMS da cloud. Nenhum dado de contrato de crédito pode deixar de ser registrado no Core Banking — isso é requisito de regulamentação bancária, não preferência. O processamento das propostas que tenham score entre 500 e 700 vai para revisão manual do Gerente de Crédito — abaixo de 500, recusa automática; acima de 700, aprovação automática. O log de toda decisão de crédito deve ser retido por no mínimo 5 anos. Nenhum dado de teste pode usar dados reais de clientes sem processo formal de anonimização aprovado pelo DPO."
+
+**Análise antes de extrair:**
+- "Score < 500 → recusa; 500–699 → revisão; ≥ 700 → aprovação" → **DMN**, não SBVR — 3 intervalos com saídas distintas
+- "Dado pessoal criptografado" → SBVR `constraint` + `enforcement: regulatory`
+- "Log retido por 5 anos" → SBVR `structural`
+- "Dados reais sem anonimização proibidos em testes" → SBVR `constraint`
+- "Dado de contrato no Core Banking" → SBVR `constraint` + `enforcement: regulatory`
+
+```json
+{
+  "domain": "Crédito Digital — Conformidade e Governança de Dados",
+  "vocabulary": [
+    {
+      "term": "Dado Pessoal",
+      "definition": "Informação relacionada a pessoa física identificada ou identificável — sujeito às restrições da LGPD e da Resolução BACEN 4.557",
+      "category": "concept"
+    },
+    {
+      "term": "Core Banking",
+      "definition": "Sistema de registro oficial dos contratos de crédito do grupo — mainframe IBM zSeries; todo contrato formalizado deve ser registrado nele",
+      "category": "individual"
+    },
+    {
+      "term": "KMS",
+      "definition": "Key Management System da infraestrutura cloud — responsável pelo gerenciamento de chaves criptográficas para dados em repouso e em trânsito",
+      "category": "individual"
+    },
+    {
+      "term": "DPO",
+      "definition": "Data Protection Officer — Encarregado de Proteção de Dados; responsável pela aprovação de processos de anonimização de dados pessoais",
+      "category": "role"
+    },
+    {
+      "term": "Decisão de Crédito",
+      "definition": "Resultado formal do processo de análise de proposta — aprovação, recusa ou encaminhamento para revisão manual; deve ser registrada com log auditável",
+      "category": "concept"
+    },
+    {
+      "term": "BACEN 4.557",
+      "definition": "Resolução do Banco Central do Brasil que determina requisitos de gestão de riscos e conformidade para instituições financeiras — inclui tratamento de dados de clientes",
+      "category": "individual"
+    }
+  ],
+  "rules": [
+    {
+      "id": "BR001",
+      "short_title": "Criptografia obrigatória de dados pessoais",
+      "statement": "É obrigatório que todo Dado Pessoal seja criptografado em repouso e em trânsito, com chaves gerenciadas pelo KMS da infraestrutura cloud.",
+      "rule_type": "constraint",
+      "source": "FK",
+      "sphere": "tecnologia",
+      "sphere_owner": "CTO",
+      "bmm_policy_ref": null,
+      "enforcement": "regulatory",
+      "speaker_quote": "todos os dados pessoais de clientes devem ser criptografados em repouso e em trânsito, com chaves gerenciadas pelo sistema de KMS da infraestrutura cloud"
+    },
+    {
+      "id": "BR002",
+      "short_title": "Registro obrigatório no Core Banking",
+      "statement": "É proibido que contratos de crédito formalizados deixem de ser registrados no Core Banking — exigência regulatória bancária.",
+      "rule_type": "constraint",
+      "source": "PHS",
+      "sphere": "juridico",
+      "sphere_owner": "CLO",
+      "bmm_policy_ref": null,
+      "enforcement": "regulatory",
+      "speaker_quote": "qualquer dado de contrato precisa estar no sistema de registro oficial, que ainda é o mainframe. Isso é requisito de regulamentação bancária, não de preferência"
+    },
+    {
+      "id": "BR003",
+      "short_title": "Retenção de log de decisão de crédito",
+      "statement": "Todo log de Decisão de Crédito deve ser retido por no mínimo 5 anos, contendo score, parâmetros utilizados e identificação do responsável pela aprovação.",
+      "rule_type": "structural",
+      "source": "ALF",
+      "sphere": "juridico",
+      "sphere_owner": "CLO",
+      "bmm_policy_ref": null,
+      "enforcement": "automated",
+      "speaker_quote": "todas as decisões de crédito, aprovadas ou recusadas, devem ser registradas com log auditável contendo score, parâmetros utilizados e identificação do responsável, com retenção mínima de 5 anos"
+    },
+    {
+      "id": "BR004",
+      "short_title": "Proibição de dados reais em ambiente de teste",
+      "statement": "É proibido que dados pessoais reais de clientes sejam utilizados em ambientes de teste sem processo formal de anonimização previamente aprovado pelo DPO.",
+      "rule_type": "constraint",
+      "source": "PHS",
+      "sphere": "juridico",
+      "sphere_owner": "CLO",
+      "bmm_policy_ref": null,
+      "enforcement": "manual",
+      "speaker_quote": "isso precisa de autorização do DPO. Temos que abrir processo formal de anonimização antes de qualquer uso de dados reais em testes"
+    }
+  ]
+}
+```
+
+*Observações:*
+- A regra de score (< 500 / 500–699 / ≥ 700) **não foi extraída** — é tabela de decisão DMN com 3 intervalos e saídas distintas; registrar como 3 regras SBVR seria incorreto e redundante com o que AgentDMN produzirá
+- BR001/BR002 têm `enforcement: regulatory` — explicitamente mencionado na transcrição como exigência legal
+- BR003 tem `enforcement: automated` — log automático do sistema; BR004 tem `enforcement: manual` — processo humano com DPO
+- `source` preenchido com iniciais dos participantes identificáveis na transcrição
+- BACEN 4.557 e LGPD são `individual` no vocabulário — são entidades nomeadas que aparecem como restrições nas regras

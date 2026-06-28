@@ -4,6 +4,19 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC98 — Concluído (v4.74 / 2026-06-28) — skill_sbvr.md v2.1 — SBVR vs DMN, enforcement, Exemplo C
+
+- [x] **`skills/skill_sbvr.md`** — v2.0 (518 linhas) → v2.1 (662 linhas), edições cirúrgicas
+  - Fronteira SBVR vs DMN: tabela detalhada com 5 padrões e regra prática ("3+ variações → avalie DMN")
+  - Campo `enforcement` (opcional): automated / manual / contractual / regulatory com orientação de preenchimento
+  - Campo `bmm_policy_ref` documentado: quando e como usar para rastreabilidade SBVR↔BMM
+  - Seção `## Regras` adicionada; `{output_language}` solto removido do final
+  - JSON schema atualizado com `enforcement` como campo opcional
+  - Checklist expandido com 3 novos itens (DMN boundary, enforcement, bmm_policy_ref)
+  - Exemplo C: kickoff técnico com regras regulatórias (BACEN 4.557, LGPD, KMS, DPO) demonstrando enforcement regulatory/automated/manual e a decisão de NÃO extrair a regra de score como SBVR (→ DMN)
+
+---
+
 ### PC97 — Concluído (v4.73 / 2026-06-28) — skill_bmm.md v2.1 — Cadeia BMM, modal, deadline, Exemplo C
 
 - [x] **`skills/skill_bmm.md`** — v2.0 (446 linhas) → v2.1 (586 linhas), edições cirúrgicas
