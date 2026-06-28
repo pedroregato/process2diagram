@@ -4,6 +4,23 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC93 — Concluído (v4.69 / 2026-06-27) — SKILL_REQUIREMENTS.md v2.0 — Cobertura IEEE 830 / ISO/IEC 29148
+
+- [x] **`skills/SKILL_REQUIREMENTS.md`** — reescrito de v1.0 (100 linhas) para v2.0 (201 linhas)
+  - Persona com fronteiras explícitas de escopo (✅ extrai / ❌ não extrai)
+  - Convenção de iniciais de participantes (padrão compartilhado com skill_minutes.md)
+  - Método de extração em 5 passos: leitura completa, domínio, classificação, IEEE 830, checklist
+  - 6 tipos de requisito (adiciona `integration`) com tabela de sinais típicos
+  - Tabela distinção crítica `validation` vs `business_rule` com teste diagnóstico
+  - Tabela distinção crítica `functional` vs `non_functional`
+  - Regra de atomicidade com exemplos de decomposição (campo CNPJ → 4 requisitos)
+  - Tabela "O que NÃO Extrair" (6 linhas: BPMN/SBVR/BMM/ata/action items/problemas)
+  - Documentação de campos `sphere` e `business_rule_refs` (antes implícitos)
+  - Critérios de qualidade IEEE 830: específico, verificável, rastreável, não-ambíguo
+  - Checklist final (5 itens) no Passo 4
+
+---
+
 ### PC92 — Concluído (v4.68 / 2026-06-27) — skill_minutes.md v2.0
 
 - [x] **`skills/skill_minutes.md`** — reescrito de v1.0 (190 linhas) para v2.0 (244 linhas)
