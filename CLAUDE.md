@@ -372,7 +372,7 @@ Chat toolbar: **⬇️ Markdown** (texto simples) e **⬇️ HTML** (auto-contid
 
 ### Embedding pipeline
 
-`chunk_text(transcript, 500, 80)` → `transcript_chunks vector(1536)`. Default: OpenAI `text-embedding-3-small`; alternativas: Gemini `gemini-embedding-001` (`output_dimensionality=1536`), Grok `grok-embedding-small`. Rate limit: 1.2s + 5 retries. Search: `match_transcript_chunks()` pgvector cosine.
+`chunk_text(transcript, 500, 80)` → `transcript_chunks vector(512)`. Default: OpenAI `text-embedding-3-small` (`dimensions=512`, Matryoshka native); alternativas: Gemini `gemini-embedding-001` (`output_dimensionality=512`), Grok `grok-embedding-small` (slice manual). Rate limit: 1.2s + 5 retries. Search: `match_transcript_chunks()` pgvector cosine. Migration: `setup/supabase_migration_embedding_512.sql`.
 
 > Full details: `claude_guideline/architecture_details.md`
 
@@ -566,9 +566,9 @@ Coordinates are absolute. Edit constants at top of `bpmn_generator.py`: `TASK_W`
 | **bpmn-js SVGMatrix non-finite** | Defer `canvas.zoom('fit-viewport')` via `setTimeout(fn, 150)` with dimension guards |
 | **Active-project fragmentation** | Call `require_active_project()` — never add local project selectbox to analysis pages |
 | **`href="#id"` in components.html** | Use `data-target` + JS `scrollIntoView` — anchor hrefs navigate the Streamlit parent frame |
-| **Gemini embedding model 404** | Use `gemini-embedding-001` with `output_dimensionality=1536`; fallback to `gemini-embedding-2-preview` |
+| **Gemini embedding model 404** | Use `gemini-embedding-001` with `output_dimensionality=512`; fallback to `gemini-embedding-2-preview` |
 | **Gemini free tier rate limit** | 1.2s delay + 5 retries + extract `retry_delay` from 429 body |
-| **pgvector ivfflat > 2000 dims** | Always use `output_dimensionality=1536`; column must be `vector(1536)` |
+| **pgvector ivfflat > 2000 dims** | Use `output_dimensionality=EMBEDDING_DIM` (512); column must be `vector(512)`; migration `supabase_migration_embedding_512.sql` |
 | **Pages import path on Cloud** | Add project root to `sys.path` manually in each page file |
 | **Google Calendar TOML encoding** | Use `'''` not `"""` for `credentials_json` |
 | **delete_meeting cascade order** | `requirement_versions` → FK nullify → SBVR/chunks → bpmn_versions → bpmn_processes → meetings |

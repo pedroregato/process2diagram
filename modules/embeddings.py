@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 # ── Dimensão alvo ─────────────────────────────────────────────────────────────
-EMBEDDING_DIM = 1536  # gemini-embedding-001 truncado (máx ivfflat = 2000 dims)
+EMBEDDING_DIM = 512  # Matryoshka 512-dim — ~66% menos storage que 1536 (máx ivfflat = 2000 dims)
 
 # ── Provedores de embedding suportados ───────────────────────────────────────
 EMBEDDING_PROVIDERS = {
@@ -240,7 +240,11 @@ def chunk_text(
 
 def embed_text(text: str, api_key: str, provider: str) -> list[float]:
     """
-    Gera embedding de 1536 dimensões para um texto usando o provedor especificado.
+    Gera embedding de 512 dimensões para um texto usando o provedor especificado.
+
+    OpenAI usa truncagem Matryoshka nativa (dimensions=512).
+    Gemini usa output_dimensionality=512.
+    Grok faz slice manual das primeiras 512 posições.
 
     Args:
         text:     Texto a embedar.
@@ -248,7 +252,7 @@ def embed_text(text: str, api_key: str, provider: str) -> list[float]:
         provider: "Google Gemini", "OpenAI" ou "Grok (xAI)".
 
     Returns:
-        Lista de 1536 floats.
+        Lista de 512 floats.
 
     Raises:
         ValueError: provedor desconhecido ou resposta inesperada.
@@ -274,7 +278,7 @@ def embed_batch(texts: list[str], api_key: str, provider: str) -> list[list[floa
     Google Gemini: chamadas individuais (SDK Python não suporta batch).
 
     Returns:
-        Lista de listas de 1536 floats, na mesma ordem de `texts`.
+        Lista de listas de 512 floats, na mesma ordem de `texts`.
     """
     if not texts:
         return []
@@ -301,6 +305,9 @@ def _embed_openai_compatible(
     """
     Embedding via API compatível com OpenAI SDK.
     Usado para OpenAI e Grok (xAI).
+
+    OpenAI (base_url=None): passa dimensions=EMBEDDING_DIM (Matryoshka nativo).
+    Grok (base_url definido): sem suporte nativo — slice manual das primeiras EMBEDDING_DIM posições.
     """
     from openai import OpenAI
 
@@ -310,13 +317,28 @@ def _embed_openai_compatible(
 
     client = OpenAI(**kwargs)
 
-    resp = client.embeddings.create(model=model, input=text)
+    # OpenAI text-embedding-3-* suporta Matryoshka nativa via `dimensions`
+    # Grok e outros providers OpenAI-compatible não suportam — usamos slice manual
+    embed_kwargs: dict = {"model": model, "input": text}
+    if base_url is None:
+        embed_kwargs["dimensions"] = EMBEDDING_DIM
+
+    resp = client.embeddings.create(**embed_kwargs)
     embedding = resp.data[0].embedding
 
     if len(embedding) != EMBEDDING_DIM:
-        raise ValueError(
-            f"Embedding {model} retornou {len(embedding)} dims, esperado {EMBEDDING_DIM}"
-        )
+        if len(embedding) > EMBEDDING_DIM:
+            import warnings
+            warnings.warn(
+                f"Embedding {model} retornou {len(embedding)} dims; "
+                f"truncando para {EMBEDDING_DIM} (slice manual — provider sem suporte nativo).",
+                stacklevel=2,
+            )
+            embedding = embedding[:EMBEDDING_DIM]
+        else:
+            raise ValueError(
+                f"Embedding {model} retornou {len(embedding)} dims, esperado {EMBEDDING_DIM}"
+            )
     return embedding
 
 
@@ -335,8 +357,28 @@ def _embed_batch_openai_compatible(
 
     client = OpenAI(**kwargs)
 
-    resp = client.embeddings.create(model=model, input=texts)
-    return [item.embedding for item in sorted(resp.data, key=lambda x: x.index)]
+    embed_kwargs: dict = {"model": model, "input": texts}
+    if base_url is None:
+        embed_kwargs["dimensions"] = EMBEDDING_DIM
+
+    resp = client.embeddings.create(**embed_kwargs)
+    embeddings = [item.embedding for item in sorted(resp.data, key=lambda x: x.index)]
+
+    # Normaliza dimensões para providers sem suporte nativo a truncagem
+    if embeddings and len(embeddings[0]) != EMBEDDING_DIM:
+        if len(embeddings[0]) > EMBEDDING_DIM:
+            import warnings
+            warnings.warn(
+                f"Embedding batch {model} retornou {len(embeddings[0])} dims; "
+                f"truncando para {EMBEDDING_DIM} (slice manual — provider sem suporte nativo).",
+                stacklevel=2,
+            )
+            embeddings = [e[:EMBEDDING_DIM] for e in embeddings]
+        else:
+            raise ValueError(
+                f"Embedding batch {model} retornou {len(embeddings[0])} dims, esperado {EMBEDDING_DIM}"
+            )
+    return embeddings
 
 
 # (Todo o código de _embed_gemini, _embed_batch_gemini e list_gemini_embedding_models

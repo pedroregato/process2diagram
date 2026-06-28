@@ -143,7 +143,7 @@ Not all `text-embedding-*` models are available to every AI Studio key. `text-em
 **Diagnosis:** Settings → Embeddings & Busca → "🔍 Testar chave" → `list_gemini_embedding_models(api_key)`.
 
 **Confirmed working models:**
-- `models/gemini-embedding-001` — 1536 dims via `output_dimensionality=1536` (primary)
+- `models/gemini-embedding-001` — 512 dims via `output_dimensionality=512` (primary, Matryoshka)
 - `models/gemini-embedding-2-preview` — fallback on 404
 
 `_embed_gemini()` tries `gemini-embedding-001` first, falls back automatically.
@@ -165,7 +165,7 @@ Large transcripts easily exceed the free tier limit with one API call per chunk.
 
 PostgreSQL `ivfflat` index cannot handle vectors with more than 2000 dimensions. `gemini-embedding-001` natively produces 3072 dims.
 
-**Fix:** always use `output_dimensionality=1536` when calling the Gemini embedding API. Column must be `vector(1536)`. Schema in `setup/supabase_schema_transcript_chunks.sql`.
+**Fix:** always use `output_dimensionality=EMBEDDING_DIM` (currently 512) when calling the Gemini embedding API. OpenAI uses `dimensions=EMBEDDING_DIM` (Matryoshka native). Column must be `vector(512)`. Migration: `setup/supabase_migration_embedding_512.sql`.
 
 ---
 
