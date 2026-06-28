@@ -47,6 +47,12 @@ json-repair==0.60.1             # fallback robusto em _parse_json quando o LLM g
 # ── Supabase (persistência de projetos/reuniões/requisitos) ──────────────────
 supabase>=2.4.0                 # cliente Python para Supabase (project_store.py)
 
+# ── API Comercial (FastAPI) ────────────────────────────────────────────────────
+fastapi==0.115.0                # framework REST para api.py
+uvicorn[standard]==0.49.0       # servidor ASGI para api.py (uvicorn api:app --reload)
+python-multipart==0.0.9         # upload de arquivos nos endpoints FastAPI
+httpx==0.28.1                   # cliente HTTP async + TestClient dos testes FastAPI
+
 # ── Testes ────────────────────────────────────────────────────────────────────
 pytest>=8.0                     # suite de testes automatizados (run: pytest tests/)
 
