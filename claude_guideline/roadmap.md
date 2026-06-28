@@ -4,6 +4,24 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC96 — Concluído (v4.72 / 2026-06-27) — SKILL_SYNTHESIZER.md v3.0 — Narrativa Executiva Calibrada
+
+- [x] **`skills/SKILL_SYNTHESIZER.md`** — reescrito de v2.0 (77 linhas) para v3.0 (208 linhas)
+  - Persona expandida com audiência explícita (diretores/gestores não-presentes)
+  - Tabela de inputs com coluna "quando presente, priorize" (antes: coluna "obrigatória")
+  - Método de síntese em 4 passos: inventário, temas transversais, calibração por riqueza, ordem de redação
+  - Calibração por riqueza: tabela com 5 cenários (BPMN isolado → todos os 6 inputs)
+  - Checklist pré-retorno de 6 itens
+  - Guia por campo com estrutura de parágrafos para `executive_summary` (5 §)
+  - Arc narrativo para `process_narrative` (abertura, corpo, fechamento, exceções)
+  - Taxonomia de insights em 7 categorias com exemplos concretos
+  - Guia de recomendações SMART com exemplos ✗/✓
+  - Integração SBVR: usar termos do domínio no corpo do texto (não listar separado)
+  - Integração BMM: §1 do summary + key_insights de alinhamento + recomendações coerentes
+  - Anti-padrões: tabela de termos proibidos + estruturas de insight proibidas
+
+---
+
 ### PC95 — Concluído (v4.71 / 2026-06-27) — skill_bpmn.md v9.1 — Anti-Omissão: Alçada, Timer, Notificação, Log
 
 - [x] **`skills/skill_bpmn.md`** — v9.0 (952 linhas) → v9.1 (1002 linhas)
