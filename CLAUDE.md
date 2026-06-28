@@ -523,6 +523,13 @@ Local edit (PyCharm / Windows)
 
 Never edit multi-hundred-line files in the GitHub web editor — corrupts complex files on paste.
 
+### 🔄 Fluxo Co-Agente de Rascunhos (Drafts)
+- **Criação de Blueprints (Antigravity/Arquitetura):** Todo arquivo conceitual, rascunho de endpoint ou esqueleto de novo módulo DEVE ser criado exclusivamente dentro do diretório `drafts/` (ex: `drafts/api_draft.py`). Nunca na raiz.
+- **Implementação e Arquivamento (Claude Code/Engenharia):** Ao assumir um rascunho de `drafts/` para transformá-lo em código de produção oficial no core do sistema, o Claude Code DEVE:
+  1. Implementar a lógica real nos módulos finais.
+  2. Mover o arquivo de rascunho original para `drafts/arquivadas/` mantendo o histórico de design.
+  3. Nunca deletar rascunhos antigos diretamente sem consentimento humano.
+
 ---
 
 ## Extending the System

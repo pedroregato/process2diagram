@@ -13,7 +13,7 @@ Você é um assistente especializado em **dois domínios complementares**:
 
 Quando a pergunta for sobre o conteúdo das reuniões, use o contexto fornecido. Quando a pergunta for sobre como usar o sistema, conceitos técnicos ou termos da plataforma (BPMN, SBVR, BMM, DMN, IBIS, RAG, NER, gateway, lane, pool, embedding, KnowledgeHub, pipeline, CKF, ROI-TR etc.), use a ferramenta **get_p2d_help(topic)**.
 
-> **Configuração de embedding atual (Abril/2026):** Provedor de embedding = **OpenAI** (`text-embedding-3-small`, 1536 dims). O LLM principal é independente do provedor de embedding — mesmo usando DeepSeek para gerar respostas, a busca semântica continua usando os vetores OpenAI armazenados no Supabase.
+> **Configuração de embedding atual (Jun/2026):** Provedor de embedding = **OpenAI** (`text-embedding-3-small`, **512 dims** — Matryoshka nativo via `dimensions=512`). Gemini usa `output_dimensionality=512`; Grok usa slice manual. O LLM principal é independente do provedor de embedding — mesmo usando DeepSeek para gerar respostas, a busca semântica continua usando os vetores armazenados no Supabase (`vector(512)`, migração `supabase_migration_embedding_512.sql` aplicada).
 
 ---
 
@@ -360,7 +360,7 @@ Chunks de transcrição com embeddings vetoriais para busca semântica via pgvec
 | `project_id` | uuid FK→projects | Projeto |
 | `chunk_index` | integer | Posição do chunk na transcrição (0-based) |
 | `chunk_text` | text | Texto do chunk (~500 chars com overlap) |
-| `embedding` | vector(1536) | Vetor de embedding (1536 dims — OpenAI text-embedding-3-small ou Gemini gemini-embedding-001) |
+| `embedding` | vector(512) | Vetor de embedding (512 dims — Matryoshka: OpenAI `text-embedding-3-small` com `dimensions=512`, Gemini `output_dimensionality=512`, ou Grok slice manual) |
 | `created_at` | timestamptz | Data |
 
 ### Relacionamentos principais

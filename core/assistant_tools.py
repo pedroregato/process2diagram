@@ -4120,7 +4120,7 @@ class AssistantToolExecutor:
 {agents_section}
 ## Persistência (Supabase)
   • Projetos, reuniões, requisitos, BPMN, SBVR, embeddings vetoriais
-  • Busca semântica nas transcrições via pgvector (1536 dims)
+  • Busca semântica nas transcrições via pgvector (512 dims — Matryoshka `vector(512)`)
   • Grafo de Conhecimento (kh_entities, kh_facts, kh_contradictions)
 
 ## Ferramentas do Assistente (este chat)
