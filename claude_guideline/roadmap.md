@@ -4,6 +4,20 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC90 — Concluído (v4.66 / 2026-06-27) — skill_sbvr.md v2.0 — Cobertura Normativa SBVR 1.5
+
+- [x] **`skills/skill_sbvr.md`** — reescrito de v1.0 (111 linhas, inglês) para v2.0 (517 linhas, PT)
+  - Tabela de distinções SBVR vs BMM vs DMN vs BPMN com regra de ouro
+  - 5 categorias de vocabulário: concept, fact_type, role, process, **individual** (novo)
+  - 5 padrões formais de formulação SBVR com templates: obrigação, proibição, permissão, condicional, estrutural
+  - Regra de atomicidade com exemplos de decomposição de afirmações compostas
+  - 5 `rule_type`: constraint, permission, behavioral, structural, **conditional** (novo)
+  - Tabela expandida de `short_title` com 5 exemplos de inferência
+  - Checklist de qualidade (12 critérios) em 3 categorias
+  - 2 exemplos anotados completos: compras/fornecedores e contratos/compliance
+
+---
+
 ### PC89 — Concluído (v4.65 / 2026-06-27) — skill_bmm.md v2.0 — Cobertura Normativa BMM 1.3
 
 - [x] **`skills/skill_bmm.md`** — reescrito de v1.0 (83 linhas, inglês) para v2.0 (445 linhas, PT)
