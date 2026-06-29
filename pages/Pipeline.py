@@ -809,7 +809,7 @@ if _rr_thread is not None:
             )
         else:
             st.info(f"⏳ Executando agente **{_rr_agent}**… aguarde. ({_elapsed}s / máx {_MAX_RR_SECS}s)")
-            _time.sleep(2)
+            _time.sleep(0.5)
             st.rerun()
 
 # Rodapé

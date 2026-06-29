@@ -81,10 +81,11 @@ def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
             agent = AgentBPMN(client_info, provider_cfg)
             agent._lg_skip_cache = True  # rerun sempre ignora cache semântico
             hub = agent.run(hub, output_language)
-        # Invalida relatório
-        hub.synthesizer = SynthesizerModel()
-        hub.synthesizer.ready = False
-        messages.append(("info", "ℹ️ Relatório executivo invalidado por mudança no BPMN."))
+        # Não destrói o sintetizador — removê-lo altera a contagem de abas
+        # e provoca desync do widget tree Streamlit (setIn undefined → tela branca).
+        # O usuário é avisado para re-executar o sintetizador via mensagem.
+        if hub.synthesizer.ready:
+            messages.append(("info", "ℹ️ Relatório executivo desatualizado — re-execute o Sintetizador para refletir as mudanças no BPMN."))
     elif agent_name == "minutes":
         agent = AgentMinutes(client_info, provider_cfg)
         agent._lg_skip_cache = True
