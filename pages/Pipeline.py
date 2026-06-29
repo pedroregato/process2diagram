@@ -843,7 +843,19 @@ def _poll_background_agent():
             st.session_state["_rr_pending_messages"] = [
                 ("error", "Reexecução falhou sem retornar resultado.")
             ]
-        st.rerun()  # full-page rerun — picks up new hub cleanly
+        # Force a true browser reload instead of st.rerun().
+        # Root cause of blank screen: WebSocket drops during background
+        # execution (server overloaded → _stcore/health 404) leave the
+        # client with a stale cached widget tree. st.rerun() sends
+        # incremental deltas on top of that stale tree → "Bad setIn
+        # index N [0, M]" crash → blank screen.
+        # window.parent.location.reload() forces the client to discard
+        # all cached state and re-fetch the full page — guaranteed match.
+        import streamlit.components.v1 as _cv1_reload
+        _cv1_reload.html(
+            "<script>window.parent.location.reload();</script>",
+            height=0,
+        )
     elif _elapsed > _MAX_RR_SECS:
         st.session_state.pop("_rr_thread", None)
         st.session_state.pop("_rr_task",   None)
