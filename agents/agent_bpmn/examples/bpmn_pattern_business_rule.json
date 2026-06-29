@@ -1,0 +1,138 @@
+{
+  "pattern_id": "business_rule_delegation",
+  "pattern_name": "Delegação a Motor de Regras (businessRuleTask)",
+  "version": "1.0",
+  "description": "Tarefa que delega lógica de decisão complexa para um motor de regras ou tabela de decisão (DMN, Drools, engine de scoring, política automatizada). A businessRuleTask EXECUTA a lógica — o roteamento baseado na saída usa exclusiveGateway separado.",
+  "trigger_signals": [
+    "motor de regras",
+    "rules engine",
+    "DMN",
+    "tabela de decisão",
+    "decisão automatizada",
+    "scoring automático",
+    "calcula automaticamente pelo sistema",
+    "política de crédito automatizada",
+    "engine de aprovação",
+    "classificação automática por critério",
+    "pontuação por regra de negócio",
+    "aprovação automática por política"
+  ],
+  "distinction_guide": {
+    "businessRuleTask_vs_serviceTask": "serviceTask = integração técnica (chamada de API, banco de dados, transformação de dados). businessRuleTask = avaliação de regra de negócio codificada (score, classificação, elegibilidade, política).",
+    "businessRuleTask_vs_exclusiveGateway": "businessRuleTask EXECUTA o cálculo/classificação. exclusiveGateway DECIDE o caminho com base no resultado. São sempre elementos distintos em sequência.",
+    "businessRuleTask_vs_scriptTask": "scriptTask = transformação técnica interna (parse, formato, cálculo simples). businessRuleTask = avaliação de política de negócio com múltiplas variáveis de entrada."
+  },
+  "canonical_template": {
+    "description": "Padrão canônico: businessRuleTask → resultado armazenado → exclusiveGateway roteia com base no resultado.",
+    "steps": [
+      {
+        "id": "S01",
+        "title": "Coletar Dados para Avaliação",
+        "description": "Agrega dados de entrada necessários para o motor de regras: [listar fontes].",
+        "task_type": "serviceTask",
+        "lane": null
+      },
+      {
+        "id": "S02",
+        "title": "Avaliar [Critério] por Regra",
+        "description": "Motor de regras [nome do engine se mencionado] avalia [objeto] com base em [política/tabela]. Entradas: [variáveis]. Saída: [classificação/score/decisão]. Retém resultado para gateway subsequente.",
+        "task_type": "businessRuleTask",
+        "lane": null,
+        "note": "lane: null se o engine não tiver nome. Se o engine for nomeado ('Motor de Crédito XYZ'), crie lane para ele."
+      },
+      {
+        "id": "S03",
+        "title": "[Resultado] Adequado?",
+        "description": "Roteia o fluxo com base na saída da avaliação de regras.",
+        "task_type": "exclusiveGateway",
+        "is_decision": true,
+        "lane": "[lane do responsável pela decisão]"
+      }
+    ],
+    "edges": [
+      { "source": "S01", "target": "S02", "label": "", "condition": "" },
+      { "source": "S02", "target": "S03", "label": "", "condition": "" }
+    ],
+    "gateway_outputs_examples": {
+      "score_de_credito": [
+        { "label": ">= 700", "target": "Aprovar Automaticamente" },
+        { "label": "500–699", "target": "Encaminhar para Revisão Manual" },
+        { "label": "< 500", "target": "Recusar Automaticamente" }
+      ],
+      "classificacao_risco": [
+        { "label": "Baixo", "target": "Processar Diretamente" },
+        { "label": "Médio", "target": "Validar por Analista" },
+        { "label": "Alto", "target": "Encaminhar ao Comitê" }
+      ],
+      "elegibilidade": [
+        { "label": "Elegível", "target": "Prosseguir com Contratação" },
+        { "label": "Inelegível", "target": "Notificar Recusa" }
+      ]
+    }
+  },
+  "real_world_example": {
+    "scenario": "Análise de crédito com scoring automatizado",
+    "steps": [
+      {
+        "id": "S03",
+        "title": "Calcular Score de Crédito",
+        "description": "Motor de scoring avalia histórico, renda e capacidade de pagamento. Retorna score 0–1000 e classificação de risco.",
+        "actor": null,
+        "is_decision": false,
+        "task_type": "businessRuleTask",
+        "lane": null
+      },
+      {
+        "id": "S04",
+        "title": "Score Suficiente?",
+        "description": "Decisão baseada no score: >= 700 aprovação automática, 500-699 revisão manual, < 500 recusa.",
+        "actor": null,
+        "is_decision": true,
+        "task_type": "exclusiveGateway",
+        "lane": "Análise de Crédito"
+      },
+      {
+        "id": "S05",
+        "title": "Aprovar Crédito Automaticamente",
+        "description": "Score >= 700: aprovação sem intervenção humana.",
+        "task_type": "serviceTask",
+        "lane": "Análise de Crédito"
+      },
+      {
+        "id": "S06",
+        "title": "Encaminhar para Revisão Manual",
+        "description": "Score 500-699: analista de crédito avalia manualmente.",
+        "task_type": "userTask",
+        "lane": "Análise de Crédito"
+      },
+      {
+        "id": "S07",
+        "title": "Recusa Automática — Score Baixo",
+        "description": "Score < 500: recusa definitiva sem revisão.",
+        "task_type": "endMessageEvent",
+        "lane": "Análise de Crédito"
+      }
+    ],
+    "edges": [
+      { "source": "S03", "target": "S04" },
+      { "source": "S04", "target": "S05", "label": ">= 700" },
+      { "source": "S04", "target": "S06", "label": "500-699" },
+      { "source": "S04", "target": "S07", "label": "< 500" }
+    ]
+  },
+  "modeling_rules": [
+    "businessRuleTask NUNCA tem is_decision: true — ela EXECUTA, não decide. A decisão é do exclusiveGateway subsequente.",
+    "Sempre que a transcrição mencionar 'motor de regras', 'scoring automático', 'tabela de decisão', 'engine' → businessRuleTask obrigatória.",
+    "O campo description da businessRuleTask DEVE documentar: (1) nome do engine se mencionado, (2) variáveis de entrada, (3) saída esperada.",
+    "A businessRuleTask precede SEMPRE um exclusiveGateway — nunca conecte businessRuleTask diretamente a um End Event sem gateway.",
+    "Se a política de aprovação é descrita como 'automática por critério' sem intervenção humana → businessRuleTask, não userTask.",
+    "Se o scoring/classificação é feito por humano analisando dados → userTask, não businessRuleTask.",
+    "Para lógica simples (if/else de 2 variáveis), prefira serviceTask + exclusiveGateway. Use businessRuleTask para lógicas com 3+ variáveis ou tabelas de regras formais."
+  ],
+  "anti_patterns": [
+    "ERRADO: businessRuleTask como gateway ('Score?' com is_decision: true) — gateway e task são elementos distintos.",
+    "ERRADO: usar serviceTask para classificação por política de negócio — serviceTask é para integração técnica.",
+    "ERRADO: omitir o exclusiveGateway após businessRuleTask, conectando diretamente às tarefas de cada caminho.",
+    "ERRADO: businessRuleTask com lane de humano ('Gerente de Crédito') quando a avaliação é do engine, não do humano."
+  ]
+}

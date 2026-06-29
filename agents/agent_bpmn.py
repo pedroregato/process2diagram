@@ -13,6 +13,8 @@
 
 from __future__ import annotations
 
+import json as _json
+import pathlib as _pathlib
 import re as _re
 import unicodedata as _ud
 
@@ -165,6 +167,36 @@ _TASK_TYPE_MAP = {
 }
 
 
+# ── Canonical pattern library (few-shot Level 3) ─────────────────────────────
+# JSON files in agents/agent_bpmn/examples/ define canonical BPMN structures for
+# recurring process archetypes.  Loaded once per process; fail-open on any error.
+
+_PATTERNS_DIR = _pathlib.Path(__file__).parent / "agent_bpmn" / "examples"
+_PATTERN_CACHE: dict[str, dict] = {}
+_PATTERNS_LOADED: bool = False
+
+
+def _load_canonical_patterns() -> dict[str, dict]:
+    """Load bpmn_pattern_*.json files once per process from the examples directory."""
+    global _PATTERN_CACHE, _PATTERNS_LOADED
+    if _PATTERNS_LOADED:
+        return _PATTERN_CACHE
+    _PATTERNS_LOADED = True
+    if not _PATTERNS_DIR.exists():
+        return _PATTERN_CACHE
+    for _jf in sorted(_PATTERNS_DIR.glob("bpmn_pattern_*.json")):
+        try:
+            _p = _json.loads(_jf.read_text(encoding="utf-8"))
+            _pid = _p.get("pattern_id")
+            # applies_always=true (style_guide) is not selected here — it's always
+            # referenced in the skill itself; only structural templates are injected.
+            if _pid and not _p.get("applies_always"):
+                _PATTERN_CACHE[_pid] = _p
+        except Exception:
+            pass
+    return _PATTERN_CACHE
+
+
 class AgentBPMN(BaseAgent):
 
     name = "bpmn"
@@ -195,7 +227,52 @@ class AgentBPMN(BaseAgent):
             f"Extract the BPMN 2.0 process from this transcript:{actor_hint}\n\n"
             f"{hub.transcript_clean}"
         )
+
+        # ── Passo 0: inject canonical pattern template when detected (few-shot L3) ──
+        # _select_canonical_pattern scans trigger_signals from JSON files in
+        # agents/agent_bpmn/examples/ and returns the best-matching pattern
+        # (minimum 2 signal hits).  The template is prepended to the user prompt
+        # so the LLM uses it as a structural starting point, adapting to the
+        # actual transcript content — not copying it verbatim.
+        _pattern = self._select_canonical_pattern(hub.transcript_clean or "")
+        if _pattern:
+            _tpl   = _pattern.get("canonical_template") or _pattern.get("real_world_example", {})
+            _rules = _pattern.get("modeling_rules", [])
+            _tpl_str   = _json.dumps(_tpl, ensure_ascii=False, indent=2)
+            _rules_str = "\n".join(f"  {i+1}. {r}" for i, r in enumerate(_rules))
+            user = (
+                f"[GABARITO CANÔNICO: {_pattern['pattern_id']}]\n"
+                f"Padrão detectado: {_pattern['pattern_name']}\n\n"
+                f"Use a estrutura canônica abaixo como ponto de partida e adapte "
+                f"titles, lanes e edges ao conteúdo real da transcrição "
+                f"(não copie os placeholders literalmente):\n\n"
+                f"{_tpl_str}\n\n"
+                f"Regras obrigatórias deste padrão:\n{_rules_str}\n\n"
+                f"---\n\n{user}"
+            )
+
         return system, user
+
+    @staticmethod
+    def _select_canonical_pattern(transcript: str) -> dict | None:
+        """Detect the best-matching canonical pattern for this transcript.
+
+        Counts trigger_signal hits (case-insensitive substring) per pattern.
+        Returns the pattern with the most hits if >= 2; None otherwise.
+        Minimum threshold of 2 hits prevents false positives on short transcripts.
+        """
+        patterns = _load_canonical_patterns()
+        if not patterns:
+            return None
+        t = transcript.lower()
+        best_pattern: dict | None = None
+        best_hits: int = 1  # strictly above 1 → require >= 2 hits
+        for _pattern in patterns.values():
+            hits = sum(1 for s in _pattern.get("trigger_signals", []) if s.lower() in t)
+            if hits > best_hits:
+                best_hits = hits
+                best_pattern = _pattern
+        return best_pattern
 
     # ── Run ───────────────────────────────────────────────────────────────────
 

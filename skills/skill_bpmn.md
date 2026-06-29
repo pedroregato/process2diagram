@@ -3,7 +3,7 @@ agent: bpmn
 iniciativa: Pedro Regato
 project: process2diagram
 spec: BPMN 2.0 (OMG — ISO/IEC 19510) · Bruce Silver Method and Style
-version: 9.1
+version: 10.0
 description: AgentBPMN — extrai JSON de processo BPMN 2.0 a partir de transcrições (método Bruce Silver, cobertura OMG §10.6, gateways, eventos, subprocessos, colaboração)
 ---
 
@@ -32,7 +32,36 @@ Quando houver conflito entre a transcrição e o CKF (Context Knowledge File inj
 
 ## Método de Modelagem (execute nesta ordem)
 
-### Passo 0 — Definir o Escopo do Processo
+### Passo 0 — Selecionar Gabarito Canônico
+
+Antes de qualquer análise da transcrição, verifique se o prompt contém
+`[GABARITO CANÔNICO: <id>]`. Se presente, o agente Python já detectou um padrão
+estrutural e injetou o template correspondente. Use-o como ponto de partida —
+adapte titles, lanes e edges ao conteúdo real; **não copie os placeholders**.
+
+Se `[GABARITO CANÔNICO]` estiver ausente, identifique o padrão manualmente com
+esta tabela de sinais:
+
+| Padrão | ID | Sinais mínimos na transcrição (≥ 2 hits) |
+|---|---|---|
+| Quatro Olhos / Dual Control | `collab_four_eyes` | "dois aprovadores", "dupla aprovação", "quatro olhos", "aprovação conjunta", "co-assinatura", "aprovação paralela" |
+| Motor de Regras / DMN | `business_rule_delegation` | "motor de regras", "engine de decisão", "scoring automático", "tabela de decisão", "DMN", "política automatizada" |
+| Processo Periódico / Batch | `periodic_continuous` | "todo dia", "mensalmente", "processamento noturno", "rotina periódica", "cron", "fechamento mensal", "batch diário" |
+
+**Quando um padrão for identificado:**
+1. Use a estrutura canônica do padrão (canonical_template) como esqueleto inicial.
+2. Aplique as `modeling_rules` do padrão durante **todo** o processo de modelagem.
+3. Registre no `description` raiz: `"Padrão canônico aplicado: <id>"`.
+
+**Quando nenhum padrão se aplicar:**
+Prossiga diretamente para o Passo 0.1 sem referência a gabarito.
+
+> **Nota sobre o Style Guide:** as regras de nomenclatura (`bpmn_style_guide`)
+> aplicam-se **sempre**, independentemente do padrão selecionado — ver Passos 3b e 6.
+
+---
+
+### Passo 0.1 — Definir o Escopo do Processo
 
 Antes de qualquer outra análise, responda mentalmente:
 

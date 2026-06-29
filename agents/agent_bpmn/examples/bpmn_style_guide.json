@@ -1,0 +1,225 @@
+{
+  "pattern_id": "style_guide",
+  "pattern_name": "Guia de Estilo BPMN — Nomenclatura Canônica",
+  "version": "1.0",
+  "description": "Regras de nomenclatura derivadas do padrão OMG BPMN 2.0 e da metodologia Bruce Silver Method and Style. Aplicável a todos os diagramas, independentemente de outros padrões selecionados.",
+  "applies_always": true,
+  "tasks": {
+    "pattern": "Verbo no Infinitivo + Objeto Direto",
+    "max_chars": 35,
+    "max_words": 4,
+    "examples_correct": [
+      "Validar Cadastro do Cliente",
+      "Emitir Nota Fiscal Eletrônica",
+      "Encaminhar ao Jurídico",
+      "Aprovar por Alçada Gerencial",
+      "Registrar Decisão em Log",
+      "Calcular Score de Crédito",
+      "Notificar Equipe de Suporte",
+      "Gerar Relatório de Fechamento"
+    ],
+    "examples_wrong": [
+      "Validação de Cadastro → use 'Validar Cadastro'",
+      "Emissão da NF → use 'Emitir Nota Fiscal'",
+      "Processo de Encaminhamento Jurídico → muito longo, use 'Encaminhar ao Jurídico'",
+      "Aprovação Manual pela Gerência → use 'Aprovar por Alçada' (nominalização proibida)"
+    ],
+    "abbreviation_guide": {
+      "autenticação": "autenticar",
+      "processamento": "processar",
+      "formalização": "formalizar",
+      "notificação": "notificar",
+      "encaminhamento": "encaminhar",
+      "verificação": "verificar",
+      "consolidação": "consolidar",
+      "autorização": "autorizar",
+      "homologação": "homologar",
+      "cadastramento": "cadastrar"
+    },
+    "char_limit_rule": "Títulos > 35 chars são truncados silenciosamente pelo viewer bpmn-js. O gerador aplica truncamento na última fronteira de palavra antes de 35. Prefira verbos curtos sem artigos: 'Validar Cadastro' em vez de 'Realizar a Validação Cadastral'."
+  },
+  "events": {
+    "start_events": {
+      "pattern": "Objeto + Particípio Passado — descreve o estado que DISPARA o processo",
+      "rule": "Nunca 'Início', 'Start', 'Começo' — o start event deve ser o GATILHO REAL do negócio.",
+      "examples_correct": [
+        "Solicitação de Férias Recebida",
+        "Nota Fiscal Emitida pelo Fornecedor",
+        "Demanda de Auditoria Aprovada",
+        "Prazo de Fechamento Iniciado",
+        "Pedido de Compra Submetido",
+        "Proposta de Crédito Recebida",
+        "Reclamação do Cliente Registrada"
+      ],
+      "examples_wrong": [
+        "Início → use o gatilho real",
+        "Start → use o gatilho real",
+        "Começo do Processo → use o gatilho real",
+        "Processo Iniciado → não descreve o gatilho"
+      ],
+      "timer_variant": {
+        "pattern": "[Atividade] [Frequência] Iniciada",
+        "examples": [
+          "Fechamento Mensal Iniciado",
+          "Processamento Noturno Disparado",
+          "Rotina de Backup Semanal Ativada"
+        ]
+      }
+    },
+    "end_events": {
+      "pattern": "Objeto + Particípio — descreve o ESTADO DE NEGÓCIO alcançado",
+      "rule": "Nunca 'Fim', 'End' — cada End Event nomeado pelo resultado de negócio específico.",
+      "traceability_rule": "O nome do End Event DEVE refletir o label do gateway que o precede para rastreabilidade visual: gateway 'Score?' saída '< 500' → End Event 'Proposta Recusada — Score Baixo'.",
+      "examples_correct": [
+        "Contrato Assinado e Arquivado",
+        "Cadastro Rejeitado Definitivamente",
+        "Pagamento Processado com Sucesso",
+        "Proposta Recusada — Score Baixo",
+        "Proposta Recusada — Revisão Manual",
+        "Migração Homologada e em Produção",
+        "Pedido Cancelado por Inadimplência"
+      ],
+      "examples_wrong": [
+        "Fim → use o estado de negócio",
+        "End → use o estado de negócio",
+        "Processo Encerrado → não descreve o resultado",
+        "Concluído → genérico, sem semântica de negócio"
+      ],
+      "multiple_end_events_rule": "Quando múltiplos caminhos terminam com resultado semelhante, diferencie pelo MOTIVO: 'Proposta Recusada — Score Baixo' ≠ 'Proposta Recusada — Revisão Manual'. Nunca dois End Events com o mesmo nome."
+    },
+    "intermediate_events": {
+      "pattern": "Substantivo descrevendo o evento aguardado ou emitido",
+      "examples_correct": [
+        "Resposta do Cliente Recebida",
+        "Prazo de 5 Dias Esgotado",
+        "Confirmação de Pagamento Enviada",
+        "Alerta de Vencimento Emitido"
+      ]
+    },
+    "boundary_events": {
+      "pattern": "[Tipo do Evento] — [Contexto/Prazo]",
+      "examples_correct": [
+        "Timeout 30s",
+        "Prazo de Resposta Esgotado",
+        "Falha de Integração Detectada"
+      ],
+      "description_convention": "description DEVE iniciar com '[BOUNDARY de: <id_da_tarefa_principal>]'"
+    }
+  },
+  "gateways": {
+    "exclusive_xor": {
+      "pattern": "Pergunta fechada com '?' — a resposta determina o caminho",
+      "rule_critical": "Se o título contém verbo de atividade (Validar, Analisar, Verificar, Aprovar, Revisar, Conferir) → é TAREFA, não gateway. Gateways representam DECISÃO/RAMIFICAÇÃO, não trabalho executado.",
+      "examples_correct": [
+        "Score Suficiente?",
+        "Aprovado pela Gerência?",
+        "Valor Acima do Limite?",
+        "Documentação Completa?",
+        "Cliente Elegível?",
+        "Prazo Venceu?"
+      ],
+      "examples_wrong": [
+        "Validar Score → TAREFA (serviceTask ou businessRuleTask)",
+        "Aprovação Manual → TAREFA (userTask)",
+        "Verificar Limite → TAREFA (serviceTask)",
+        "Analisar Documentação → TAREFA (userTask)"
+      ]
+    },
+    "parallel_and": {
+      "pattern": "Sem título descritivo — é divisor/sincronizador, não decisão",
+      "rule": "parallelGateway NÃO tem is_decision: true. NÃO precisa de pergunta — representa execução simultânea.",
+      "title_suggestion": "Deixar título vazio ou usar descrição técnica como 'Split Paralelo' apenas se necessário para documentação."
+    },
+    "inclusive_or": {
+      "pattern": "Pergunta com '?' onde múltiplas respostas podem ser verdadeiras simultaneamente",
+      "distinction_from_xor": "XOR: condições mutuamente exclusivas (intervalos numéricos, estados alternativos). OR: critérios independentes que podem ocorrer juntos ('Notificar gestor E/OU cliente conforme aplicável').",
+      "join_mandatory": "Todo inclusiveGateway split EXIGE inclusiveGateway join correspondente que aguarda APENAS os caminhos ativados."
+    },
+    "edge_labels": {
+      "pattern": "Resposta curta e objetiva à pergunta do gateway",
+      "rule": "Labels devem cobrir TODOS os caminhos sem sobreposição. Intervalos numéricos exaustivos.",
+      "example": {
+        "gateway": "Score Suficiente?",
+        "labels": [">= 700 (Aprovação Automática)", "500–699 (Revisão Manual)", "< 500 (Recusa Automática)"]
+      },
+      "label_on_every_xor_exit": "Toda saída de exclusiveGateway (is_decision: true) DEVE ter label preenchido — nunca aresta sem label saindo de gateway de decisão."
+    }
+  },
+  "pools_and_lanes": {
+    "pools": {
+      "rule": "Nome OFICIAL da organização conforme citado na transcrição. Nunca abreviar, nunca usar papel genérico.",
+      "specificity_rule": "Se a transcrição cita nomes específicos ('Serasa, Quod e Receita Federal'), use esses nomes — NUNCA 'Bureaus Externos'.",
+      "examples_correct": [
+        "Grupo Meridional S.A.",
+        "Receita Federal do Brasil",
+        "Serasa Experian",
+        "Banco do Brasil S.A.",
+        "Prefeitura de São Paulo"
+      ],
+      "examples_wrong": [
+        "Banco → use o nome oficial",
+        "Cliente → use o nome da empresa se citado",
+        "Externo → use o nome real",
+        "Fornecedor Genérico → use o nome real ou papel descritivo específico"
+      ]
+    },
+    "lanes": {
+      "rule": "Nome da unidade organizacional real. Nunca papel genérico.",
+      "examples_correct": [
+        "Equipe de Cadastro",
+        "Gerência de Crédito",
+        "Análise de Risco",
+        "Diretoria Financeira",
+        "Equipe de TI",
+        "Assessoria Jurídica"
+      ],
+      "examples_wrong": [
+        "Usuário → use o departamento/equipe real",
+        "Sistema → use o nome do sistema se nomeado",
+        "Validador → use o cargo/equipe real",
+        "Aprovador → use 'Gerência de [Área]' ou cargo específico",
+        "Pessoa → use o departamento",
+        "Ator → completamente genérico, nunca usar"
+      ],
+      "system_lane_rule": "Sistema SEM nome → lane: null + serviceTask. Sistema COM nome (ex: 'SAP', 'Motor de Crédito XYZ') → crie lane com o nome do sistema SE tiver 2+ tarefas."
+    }
+  },
+  "field_conventions": {
+    "actor": "null em start/end events. Para tarefas: cargo/papel específico (ex: 'Gerente de Crédito'). Nunca duplicar o nome da lane.",
+    "description": "1–3 frases detalhando: (1) o que a tarefa faz, (2) regras de negócio relevantes, (3) [AMBIGUIDADE: ...] se houver incerteza. Nunca vazio em tarefas relevantes.",
+    "is_decision": "true APENAS para gateways que representam decisão (exclusiveGateway ou complexGateway). false para parallelGateway, inclusiveGateway, eventBasedGateway e todas as tarefas.",
+    "lane": "null para serviceTask sem sistema nomeado. null para actor em start/end events. Nome exato da lane declarada em 'lanes' para todas as outras tarefas.",
+    "id": "Formato S00, S01, S02... sem lacunas. Em formato pools, IDs reiniciam a cada pool (cada pool tem seu próprio S01, S02...)."
+  },
+  "quick_reference_table": {
+    "description": "Escolha rápida de task_type",
+    "mappings": [
+      { "situacao": "Humano executa com sistema digital", "task_type": "userTask" },
+      { "situacao": "Sistema/API executa automaticamente (integração técnica)", "task_type": "serviceTask" },
+      { "situacao": "Motor de regras avalia política/critério", "task_type": "businessRuleTask" },
+      { "situacao": "Script/transformação interna sem UI", "task_type": "scriptTask" },
+      { "situacao": "Ação física offline, sem sistema", "task_type": "manualTask" },
+      { "situacao": "Envia mensagem a pool externo", "task_type": "sendTask" },
+      { "situacao": "Recebe mensagem de pool externo", "task_type": "receiveTask" },
+      { "situacao": "Agrupa fase com > 10 atividades (hierárquico)", "task_type": "callActivity" },
+      { "situacao": "Subprocess embutido com lógica visível", "task_type": "subProcess" },
+      { "situacao": "Tarefa repete até condição (mesmo ator)", "task_type": "loopTask" },
+      { "situacao": "Tarefa para cada item de coleção", "task_type": "multiInstanceTask" },
+      { "situacao": "Decisão exclusiva (apenas 1 caminho)", "task_type": "exclusiveGateway + is_decision: true" },
+      { "situacao": "Execução paralela (todos os caminhos)", "task_type": "parallelGateway + is_decision: false" },
+      { "situacao": "Um ou mais caminhos (OR)", "task_type": "inclusiveGateway + is_decision: false" },
+      { "situacao": "Aguarda o primeiro evento (competitivo)", "task_type": "eventBasedGateway + is_decision: false" },
+      { "situacao": "Processo começa por gatilho de negócio", "task_type": "noneStartEvent" },
+      { "situacao": "Processo começa por mensagem de outro pool", "task_type": "startMessageEvent" },
+      { "situacao": "Processo começa por agendamento/timer", "task_type": "startTimerEvent" },
+      { "situacao": "Processo encerra normalmente", "task_type": "noneEndEvent" },
+      { "situacao": "Processo encerra enviando mensagem", "task_type": "endMessageEvent" },
+      { "situacao": "Processo encerra por falha crítica", "task_type": "errorEndEvent" },
+      { "situacao": "Espera por mensagem dentro do fluxo", "task_type": "intermediateMessageCatchEvent" },
+      { "situacao": "Espera por prazo dentro do fluxo", "task_type": "intermediateTimerCatchEvent" },
+      { "situacao": "Envia mensagem sem encerrar o processo", "task_type": "intermediateMessageThrowEvent" },
+      { "situacao": "Prazo vence DURANTE uma tarefa específica", "task_type": "boundaryTimerEvent" },
+      { "situacao": "Falha ocorre DURANTE uma tarefa específica", "task_type": "boundaryErrorEvent" }
+    ]
+  }
+}

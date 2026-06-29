@@ -1,0 +1,164 @@
+{
+  "pattern_id": "periodic_continuous",
+  "pattern_name": "Processo Periódico / Batch (startTimerEvent)",
+  "version": "1.0",
+  "description": "Processo iniciado por agendamento (cron, calendário, data/hora). Não iniciado por humano nem por mensagem externa. Usado para rotinas de fechamento, processamento noturno, relatórios periódicos, backups, reconciliações automáticas, manutenções programadas.",
+  "trigger_signals": [
+    "todo dia",
+    "mensalmente",
+    "semanalmente",
+    "diariamente",
+    "às 23h",
+    "processamento noturno",
+    "fechamento mensal",
+    "batch diário",
+    "rotina periódica",
+    "cron job",
+    "agendado",
+    "automaticamente toda segunda",
+    "no fim do mês",
+    "todo primeiro dia útil",
+    "relatório automático",
+    "reconciliação automática",
+    "backup periódico",
+    "processamento em lote"
+  ],
+  "segregation_rule": {
+    "description": "Quando o processo periódico e um processo on-demand (manual) existem em paralelo, SEGREGUE-OS em dois modelos distintos com start events próprios. NUNCA combine com gateway inicial 'Automático ou Manual?'.",
+    "correct_approach": {
+      "periodic_model": "Modelo A: startTimerEvent → processamento automático",
+      "ondemand_model": "Modelo B: noneStartEvent ou startMessageEvent → processamento manual"
+    },
+    "wrong_approach": "ERRADO: noneStartEvent → gateway 'Acionamento?' → ['Automático', 'Manual'] — mistura padrões incompatíveis num único processo"
+  },
+  "canonical_template": {
+    "name": "[Atividade] Periódica — [Frequência]",
+    "description": "Processo de [atividade] executado [frequência] de forma automatizada. Iniciado por agendamento sem intervenção humana.",
+    "process_type": "flat",
+    "steps": [
+      {
+        "id": "S01",
+        "title": "[Atividade] [Frequência] Iniciada",
+        "description": "Timer dispara [diariamente às HH:MM / todo último dia útil do mês / semanalmente às segundas às 06:00]. Aciona processamento automático.",
+        "actor": null,
+        "is_decision": false,
+        "task_type": "startTimerEvent",
+        "lane": "[Lane do Sistema ou Equipe Responsável]",
+        "note": "Title pattern: '[Objeto] [Frequência] Iniciado(a)' — ex: 'Fechamento Mensal Iniciado', 'Rotina Noturna de Backup Ativada'"
+      },
+      {
+        "id": "S02",
+        "title": "Consolidar [Dados/Transações]",
+        "description": "Sistema agrega [dados] do período [frequência]. Fonte: [sistema de origem].",
+        "actor": null,
+        "is_decision": false,
+        "task_type": "serviceTask",
+        "lane": null
+      },
+      {
+        "id": "S03",
+        "title": "Processar [Lógica Principal]",
+        "description": "Executa [cálculo/transformação/reconciliação] sobre os dados consolidados.",
+        "actor": null,
+        "is_decision": false,
+        "task_type": "scriptTask",
+        "lane": null
+      },
+      {
+        "id": "S04",
+        "title": "Inconsistências Encontradas?",
+        "description": "Verifica se o processamento encontrou erros ou divergências que exigem intervenção humana.",
+        "actor": null,
+        "is_decision": true,
+        "task_type": "exclusiveGateway",
+        "lane": "[Lane de Controle]"
+      },
+      {
+        "id": "S05",
+        "title": "Notificar Equipe de [Área]",
+        "description": "Alerta a equipe responsável sobre inconsistências para tratamento manual.",
+        "actor": null,
+        "is_decision": false,
+        "task_type": "serviceTask",
+        "lane": null
+      },
+      {
+        "id": "S06",
+        "title": "Gerar Relatório de [Processo]",
+        "description": "Produz relatório consolidado do [processo] para auditoria e controle.",
+        "actor": null,
+        "is_decision": false,
+        "task_type": "serviceTask",
+        "lane": null
+      },
+      {
+        "id": "S07",
+        "title": "[Processo] Concluído com Sucesso",
+        "description": "Processamento periódico finalizado sem erros.",
+        "actor": null,
+        "is_decision": false,
+        "task_type": "noneEndEvent",
+        "lane": "[Lane de Controle]"
+      },
+      {
+        "id": "S08",
+        "title": "[Processo] Concluído com Pendências",
+        "description": "Processamento finalizado, mas inconsistências foram detectadas e notificadas.",
+        "actor": null,
+        "is_decision": false,
+        "task_type": "noneEndEvent",
+        "lane": "[Lane de Controle]"
+      }
+    ],
+    "edges": [
+      { "source": "S01", "target": "S02", "label": "", "condition": "" },
+      { "source": "S02", "target": "S03", "label": "", "condition": "" },
+      { "source": "S03", "target": "S04", "label": "", "condition": "" },
+      { "source": "S04", "target": "S05", "label": "Sim", "condition": "" },
+      { "source": "S04", "target": "S06", "label": "Não", "condition": "" },
+      { "source": "S05", "target": "S06", "label": "", "condition": "" },
+      { "source": "S06", "target": "S07", "label": "Sem pendências", "condition": "" },
+      { "source": "S06", "target": "S08", "label": "Com pendências", "condition": "" }
+    ],
+    "lanes": ["[Lane do Sistema]", "[Lane de Controle]"]
+  },
+  "real_world_examples": {
+    "fechamento_mensal": {
+      "start_event_title": "Fechamento Mensal Iniciado",
+      "start_event_description": "Timer dispara no último dia útil do mês às 22:00. Inicia consolidação automática de todas as transações do período.",
+      "frequency": "Mensalmente — último dia útil às 22:00"
+    },
+    "processamento_noturno": {
+      "start_event_title": "Processamento Noturno Disparado",
+      "start_event_description": "Timer dispara diariamente às 23:30 para processar lote de operações acumuladas durante o dia.",
+      "frequency": "Diariamente às 23:30"
+    },
+    "backup_semanal": {
+      "start_event_title": "Backup Semanal de Base Iniciado",
+      "start_event_description": "Timer dispara toda segunda-feira às 01:00. Aciona backup completo da base de dados.",
+      "frequency": "Semanalmente — segunda-feira às 01:00"
+    }
+  },
+  "intermediate_timer_distinction": {
+    "description": "Distinção crítica entre startTimerEvent e intermediateTimerCatchEvent:",
+    "startTimerEvent": "Inicia o processo por agendamento. Uso: rotinas periódicas, batch automático.",
+    "intermediateTimerCatchEvent": "Pausa um processo JÁ EM ANDAMENTO até um prazo esgotar. Uso: 'aguardar 2 dias pela resposta', 'timeout de aprovação de 48h'.",
+    "mnemonic": "startTimer → NASCE por tempo. intermediateTimer → ESPERA por tempo dentro de fluxo já ativo."
+  },
+  "modeling_rules": [
+    "Use startTimerEvent para qualquer processo disparado por agendamento — nunca noneStartEvent para processos com horário fixo.",
+    "O title do startTimerEvent descreve o EVENTO OCORRIDO, não o timer: 'Fechamento Mensal Iniciado', nunca 'Timer Ativado' ou 'Início'.",
+    "O campo description DEVE documentar a frequência exata: 'Dispara todo último dia útil do mês às 22:00'.",
+    "Se processo periódico E manual coexistem: segregar em dois processos com start events distintos. NUNCA gateway de acionamento.",
+    "Processos periódicos geralmente terminam em noneEndEvent (sem mensagem para outro pool). Exceção: se notifica outro sistema ao final.",
+    "Para loop contínuo (processo que se reinicia), use intermediateTimerCatchEvent no final do fluxo apontando de volta para o início, ou documente o mecanismo de agendamento externo no description.",
+    "Saída de startTimerEvent → primeiro passo de trabalho. Nunca startTimerEvent → gateway (a pergunta de roteamento não faz sentido logo após o disparo)."
+  ],
+  "anti_patterns": [
+    "ERRADO: noneStartEvent em processo automático por horário — obscurece o mecanismo de disparo.",
+    "ERRADO: startTimerEvent com title 'Início' ou 'Timer' — não descreve o evento de negócio.",
+    "ERRADO: gateway 'Automático ou Manual?' como segundo elemento — mistura dois padrões incompatíveis.",
+    "ERRADO: intermediateTimerCatchEvent como start — eventos intermediários não iniciam processos.",
+    "ERRADO: omitir a frequência do description — informação essencial para operação e auditoria."
+  ]
+}
