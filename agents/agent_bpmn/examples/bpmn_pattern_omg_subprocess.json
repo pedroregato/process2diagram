@@ -1,0 +1,55 @@
+{
+  "id": "bpmn_pattern_omg_subprocess",
+  "name": "Sub-Processo e Call Activity (Agrupamento Hierárquico)",
+  "category": "Hierarquia",
+  "description": "Padrão OMG §10.3: agrupa atividades relacionadas em uma unidade colapsável. subProcess = lógica embutida no mesmo diagrama (visível ao expandir); callActivity = referência a processo reutilizável definido separadamente. Ambos aceitam boundaryEvents sobre o grupo inteiro. Use quando um grupo com mais de 5 atividades polui o fluxo principal ou quando a mesma sequência se repete em múltiplos processos.",
+  "when_to_use": "Use subProcess quando a transcrição agrupa etapas sob um nome de fase ('durante a análise de crédito', 'no processo de onboarding', 'etapa de homologação') com mais de 4 atividades internas. Use callActivity quando a mesma fase aparece em múltiplos processos distintos e deve ser mantida em um único lugar.",
+  "common_mistakes": [
+    "Não use subProcess para grupos com 2-3 tarefas simples — a hierarquia adiciona complexidade sem ganho de legibilidade.",
+    "Não coloque Start/End Events dentro de callActivity sem respeitar a interface de entrada/saída do processo chamado.",
+    "Não confunda subProcess (lógica visível embutida) com callActivity (referência externa reutilizável) — callActivity tem borda mais grossa no diagrama.",
+    "Lembre que boundaryEvents em subProcess/callActivity capturam eventos de QUALQUER tarefa interna, não apenas da última."
+  ],
+  "transcript_excerpt": "O processo de concessão de crédito começa com a análise cadastral do cliente: verificação de CPF na Receita Federal, consulta ao Serasa, validação de renda declarada e confirmação de endereço. Só após essa fase completa o comitê avalia a proposta.",
+  "ideal_json_output": {
+    "name": "Processo de Concessão de Crédito",
+    "steps": [
+      { "id": "S01", "title": "Proposta de Crédito Recebida", "task_type": "noneStartEvent" },
+      { "id": "S02", "title": "Análise Cadastral", "task_type": "subProcess", "lane": "Equipe de Cadastro",
+        "subprocess_steps": [
+          { "id": "SP01", "title": "Verificar CPF na Receita Federal", "task_type": "serviceTask" },
+          { "id": "SP02", "title": "Consultar Serasa", "task_type": "serviceTask" },
+          { "id": "SP03", "title": "Validar Renda Declarada", "task_type": "userTask" },
+          { "id": "SP04", "title": "Confirmar Endereço", "task_type": "serviceTask" }
+        ],
+        "subprocess_edges": [
+          { "source": "SP01", "target": "SP02", "label": "" },
+          { "source": "SP02", "target": "SP03", "label": "" },
+          { "source": "SP03", "target": "SP04", "label": "" }
+        ]
+      },
+      { "id": "S03", "title": "Falha em Consulta Externa", "task_type": "boundaryErrorEvent", "attached_to_ref": "S02", "is_boundary": true, "cancel_activity": true },
+      { "id": "S04", "title": "Avaliar Proposta no Comitê", "task_type": "userTask", "lane": "Comitê de Crédito" },
+      { "id": "S05", "title": "Proposta Aprovada?", "task_type": "exclusiveGateway", "is_decision": true },
+      { "id": "S06", "title": "Emitir Contrato de Crédito", "task_type": "serviceTask", "lane": "Sistema" },
+      { "id": "S07", "title": "Notificar Reprovação", "task_type": "sendTask", "lane": "Sistema" },
+      { "id": "S08", "title": "Registrar Erro de Integração", "task_type": "userTask", "lane": "Equipe de Cadastro" },
+      { "id": "S09", "title": "Crédito Concedido", "task_type": "noneEndEvent" },
+      { "id": "S10", "title": "Proposta Recusada", "task_type": "noneEndEvent" },
+      { "id": "S11", "title": "Análise Suspensa — Erro de Integração", "task_type": "noneEndEvent" }
+    ],
+    "edges": [
+      { "source": "S01", "target": "S02", "label": "" },
+      { "source": "S02", "target": "S04", "label": "Cadastro OK" },
+      { "source": "S03", "target": "S08", "label": "Consulta Falhou" },
+      { "source": "S04", "target": "S05", "label": "" },
+      { "source": "S05", "target": "S06", "label": "Aprovada" },
+      { "source": "S05", "target": "S07", "label": "Reprovada" },
+      { "source": "S06", "target": "S09", "label": "" },
+      { "source": "S07", "target": "S10", "label": "" },
+      { "source": "S08", "target": "S11", "label": "" }
+    ],
+    "lanes": ["Equipe de Cadastro", "Comitê de Crédito", "Sistema"],
+    "notes": "S02 é subProcess com 4 tarefas internas. S03 é boundaryErrorEvent no subProcess inteiro — captura falha de qualquer tarefa interna (SP01–SP04). Para processo reutilizável em múltiplos contextos, substitua task_type por 'callActivity' e remova subprocess_steps/subprocess_edges, referenciando o processo externo pelo nome."
+  }
+}

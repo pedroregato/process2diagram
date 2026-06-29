@@ -1,0 +1,46 @@
+{
+  "id": "bpmn_pattern_omg_event_based_gateway",
+  "name": "Event-Based Gateway (Corrida Competitiva de Eventos)",
+  "category": "Gateway",
+  "description": "Padrão OMG §10.6.3: o processo aguarda simultaneamente por múltiplos eventos alternativos e prossegue pelo caminho cujo evento ocorrer primeiro, cancelando a espera pelos demais. Diferente do exclusiveGateway (que decide com base em dados já conhecidos), o eventBasedGateway decide com base em qual evento externo chega primeiro.",
+  "when_to_use": "Use quando a transcrição indicar espera por múltiplos eventos alternativos e mutuamente exclusivos — ex: 'aguarda confirmação de pagamento ou cancelamento pelo cliente ou expiração de prazo', 'o processo segue pelo primeiro que responder', 'quem confirmar primeiro define o caminho'.",
+  "common_mistakes": [
+    "Não conecte o eventBasedGateway diretamente a tarefas — todos os caminhos de saída devem começar com um intermediateCatchEvent (message, timer ou signal).",
+    "Não use para decisões baseadas em dados já disponíveis — para isso use exclusiveGateway. Event-Based Gateway é apenas para eventos futuros incertos.",
+    "Não confunda com inclusiveGateway: no event-based gateway apenas UM caminho é ativado (o do primeiro evento); os demais são cancelados.",
+    "Não use parallelGateway quando os eventos são alternativos — parallel aguarda TODOS; event-based ativa apenas o primeiro."
+  ],
+  "transcript_excerpt": "Após enviar a proposta ao cliente, o sistema aguarda: se o cliente aceitar a proposta em até 3 dias, o contrato é gerado; se o cliente rejeitar, o processo encerra; se os 3 dias expirarem sem resposta, a equipe comercial faz um follow-up manual.",
+  "ideal_json_output": {
+    "name": "Processo de Proposta Comercial com Espera Competitiva",
+    "steps": [
+      { "id": "S01", "title": "Proposta Comercial Enviada", "task_type": "noneStartEvent" },
+      { "id": "S02", "title": "Enviar Proposta ao Cliente", "task_type": "sendTask", "lane": "Equipe Comercial" },
+      { "id": "S03", "title": "Aguardar Resposta ou Prazo", "task_type": "eventBasedGateway", "is_decision": false, "lane": "Equipe Comercial" },
+      { "id": "S04", "title": "Aceite Recebido", "task_type": "intermediateMessageCatchEvent", "lane": "Equipe Comercial" },
+      { "id": "S05", "title": "Rejeição Recebida", "task_type": "intermediateMessageCatchEvent", "lane": "Equipe Comercial" },
+      { "id": "S06", "title": "Prazo de 3 Dias Expirado", "task_type": "intermediateTimerCatchEvent", "lane": "Equipe Comercial" },
+      { "id": "S07", "title": "Gerar Contrato", "task_type": "serviceTask", "lane": "Sistema" },
+      { "id": "S08", "title": "Registrar Rejeição", "task_type": "serviceTask", "lane": "Sistema" },
+      { "id": "S09", "title": "Realizar Follow-up", "task_type": "userTask", "lane": "Equipe Comercial" },
+      { "id": "S10", "title": "Contrato Gerado", "task_type": "noneEndEvent" },
+      { "id": "S11", "title": "Proposta Recusada", "task_type": "noneEndEvent" },
+      { "id": "S12", "title": "Follow-up Realizado", "task_type": "noneEndEvent" }
+    ],
+    "edges": [
+      { "source": "S01", "target": "S02", "label": "" },
+      { "source": "S02", "target": "S03", "label": "" },
+      { "source": "S03", "target": "S04", "label": "" },
+      { "source": "S03", "target": "S05", "label": "" },
+      { "source": "S03", "target": "S06", "label": "" },
+      { "source": "S04", "target": "S07", "label": "Cliente Aceitou" },
+      { "source": "S05", "target": "S08", "label": "Cliente Rejeitou" },
+      { "source": "S06", "target": "S09", "label": "Sem Resposta" },
+      { "source": "S07", "target": "S10", "label": "" },
+      { "source": "S08", "target": "S11", "label": "" },
+      { "source": "S09", "target": "S12", "label": "" }
+    ],
+    "lanes": ["Equipe Comercial", "Sistema"],
+    "notes": "S03 é eventBasedGateway (is_decision: false). Os três caminhos de saída iniciam obrigatoriamente com intermediateCatchEvents (S04, S05, S06). Apenas o evento que ocorrer primeiro ativa seu caminho; os demais são cancelados automaticamente pelo motor BPMN."
+  }
+}

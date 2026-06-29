@@ -51,6 +51,8 @@ esta tabela de sinais:
 | Escalonamento de SLA (Non-Interrupting Timer) | `bpmn_pattern_omg_sla_timer` | "prazo limite", "se demorar mais", "SLA", "escalonar", "alerta sem interromper", "avise o diretor", "continuar trabalhando" |
 | Compensação de Atividade (Compensation) | `bpmn_pattern_omg_compensation` | "desfazer", "reverter", "estornar", "cancelar pagamento já processado", "compensar reserva", "rollback de etapa concluída" |
 | Evento de Sinal Broadcast (Signal) | `bpmn_pattern_omg_signal_event` | "todos os sistemas são notificados", "broadcast", "todos os departamentos ao mesmo tempo", "sinal para múltiplas áreas", "ao mesmo tempo em paralelo" |
+| Event-Based Gateway (Corrida Competitiva) | `bpmn_pattern_omg_event_based_gateway` | "aguarda confirmação ou cancelamento ou prazo", "primeiro que responder", "quem confirmar primeiro", "espera por múltiplos eventos alternativos" |
+| Sub-Processo / Call Activity (Hierarquia) | `bpmn_pattern_omg_subprocess` | "durante a fase de", "etapa de", "processo de onboarding", "agrupamento de tarefas", "processo reutilizável", "mais de 5 atividades internas" |
 
 **Quando um padrão for identificado:**
 1. Use o `ideal_json_output` do padrão (injetado no prompt ou aplicado via conhecimento do padrão) como esqueleto inicial — adapte ao conteúdo real da transcrição.
