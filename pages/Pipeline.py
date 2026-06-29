@@ -797,21 +797,36 @@ if "rerun_agent" in st.session_state:
         else:
             st.error("Nenhuma sessão ativa. Execute o pipeline primeiro.")
 
-# POLLING — mantém WebSocket vivo enquanto o agente roda em background
-# Hub section above already rendered; polling info appears at page bottom.
-# sleep(2) instead of 1s reduces WebSocket stress during long LLM calls.
-_rr_thread = st.session_state.get("_rr_thread")
-if _rr_thread is not None:
-    import time as _time
+# POLLING — fragment-based: only the fragment element re-renders every 2s,
+# keeping the main page widget tree completely stable during background runs.
+# This eliminates WebSocket flooding (was: full page rerun every 0.5s) and
+# the resulting "Bad setIn index N" crash that caused the blank screen.
+import time as _time
+
+@st.fragment(run_every=2)
+def _poll_background_agent():
+    """Polls background agent thread every 2s via fragment (not full-page rerun).
+
+    The fragment element occupies 1 fixed slot in the page widget tree.
+    Only this element updates during polling; all hub tabs remain frozen.
+    When the thread finishes, st.rerun() triggers ONE full-page rerun that
+    picks up the new hub cleanly, with no intermediate widget-tree desync.
+    """
+    _rr_thr = st.session_state.get("_rr_thread")
+    if _rr_thr is None:
+        return  # no background task — fragment is a transparent no-op
+
     _rr_agent = st.session_state.get("_rr_agent", "agente")
-    _rr_task = st.session_state.get("_rr_task", {})
-    if not _rr_thread.is_alive():
-        _rr_start = st.session_state.pop("_rr_start", None)
+    _rr_task  = st.session_state.get("_rr_task", {})
+    _elapsed  = int(_time.time() - st.session_state.get("_rr_start", _time.time()))
+    _MAX_RR_SECS = 660  # 11 min — worst case: 3 retries × 180s (long-ctx) + 120s buffer
+
+    if not _rr_thr.is_alive():
+        # Thread done — update session_state and trigger ONE full-page rerun.
+        st.session_state.pop("_rr_start",  None)
         st.session_state.pop("_rr_thread", None)
-        st.session_state.pop("_rr_task", None)
-        st.session_state.pop("_rr_agent", None)
-        # Defer messages to session_state + rerun so they render at a stable
-        # widget-tree position (top of results) on the very next rerun.
+        st.session_state.pop("_rr_task",   None)
+        st.session_state.pop("_rr_agent",  None)
         if _rr_task.get("hub") is not None:
             st.session_state.hub = _rr_task["hub"]
             _pending: list[tuple[str, str]] = [
@@ -828,24 +843,22 @@ if _rr_thread is not None:
             st.session_state["_rr_pending_messages"] = [
                 ("error", "Reexecução falhou sem retornar resultado.")
             ]
+        st.rerun()  # full-page rerun — picks up new hub cleanly
+    elif _elapsed > _MAX_RR_SECS:
+        st.session_state.pop("_rr_thread", None)
+        st.session_state.pop("_rr_task",   None)
+        st.session_state.pop("_rr_agent",  None)
+        st.session_state.pop("_rr_start",  None)
+        st.error(
+            f"⏱️ Timeout após {_elapsed}s aguardando o agente **{_rr_agent}**. "
+            f"O provider pode estar lento ou retornando resposta vazia. "
+            f"Tente novamente ou mude o provider em ⚙️ Configurações."
+        )
         st.rerun()
     else:
-        _elapsed = int(_time.time() - st.session_state.get("_rr_start", _time.time()))
-        _MAX_RR_SECS = 660  # 11 min — worst case: 3 retries × 180s (long-ctx) + 120s buffer
-        if _elapsed > _MAX_RR_SECS:
-            st.session_state.pop("_rr_thread", None)
-            st.session_state.pop("_rr_task", None)
-            st.session_state.pop("_rr_agent", None)
-            st.session_state.pop("_rr_start", None)
-            st.error(
-                f"⏱️ Timeout após {_elapsed}s aguardando o agente **{_rr_agent}**. "
-                f"O provider pode estar lento ou retornando resposta vazia. "
-                f"Tente novamente ou mude o provider em ⚙️ Configurações."
-            )
-        else:
-            st.info(f"⏳ Executando agente **{_rr_agent}**… aguarde. ({_elapsed}s / máx {_MAX_RR_SECS}s)")
-            _time.sleep(0.5)
-            st.rerun()
+        st.info(f"⏳ Executando agente **{_rr_agent}**… aguarde. ({_elapsed}s / máx {_MAX_RR_SECS}s)")
+
+_poll_background_agent()
 
 # Rodapé
 st.markdown("---")
