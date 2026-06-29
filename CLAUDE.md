@@ -523,6 +523,16 @@ Local edit (PyCharm / Windows)
 
 Never edit multi-hundred-line files in the GitHub web editor — corrupts complex files on paste.
 
+### 📂 Pasta `manifestos/` — Governança Macro
+
+Documentos de governança e princípios arquiteturais vivem em `manifestos/`. Leitura obrigatória ao iniciar qualquer nova sessão ou tarefa complexa:
+
+| Arquivo | Propósito |
+|---|---|
+| `manifestos/COLLABORATIVE_MANIFESTO.md` | Papéis (Antigravity / Claude Code / Humano), fluxo de rascunhos, memória cross-session |
+| `manifestos/ENGINEERING_MANIFESTO.md` | 9 princípios arquiteturais: Fail-Open, Isolamento de Estado, LGPD, API Auth, Padrão PC83/PC84 |
+| `manifestos/CONTINUIDADE_ARQUITETURAL.md` | Blindagem contra SPOF — protocolo de substituição do Arquiteto Sênior quando APIs indisponíveis |
+
 ### 🔄 Fluxo Co-Agente de Rascunhos (Drafts)
 - **Criação de Blueprints (Antigravity/Arquitetura):** Todo arquivo conceitual, rascunho de endpoint ou esqueleto de novo módulo DEVE ser criado exclusivamente dentro do diretório `drafts/` (ex: `drafts/api_draft.py`). Nunca na raiz.
 - **Implementação e Arquivamento (Claude Code/Engenharia):** Ao assumir um rascunho de `drafts/` para transformá-lo em código de produção oficial no core do sistema, o Claude Code DEVE:

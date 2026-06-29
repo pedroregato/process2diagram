@@ -21,8 +21,8 @@ init_session_state()
 
 render_page_header("🛸", "Manifesto de Engenharia", "Blueprint Arquitetural e Governança do P2D")
 
-_manifesto_path = _ROOT / "ENGINEERING_MANIFESTO.md"
+_manifesto_path = _ROOT / "manifestos" / "ENGINEERING_MANIFESTO.md"
 if _manifesto_path.exists():
     st.markdown(_manifesto_path.read_text(encoding="utf-8"))
 else:
-    st.error("Arquivo ENGINEERING_MANIFESTO.md não encontrado na raiz do projeto.")
+    st.error("Arquivo manifestos/ENGINEERING_MANIFESTO.md não encontrado.")

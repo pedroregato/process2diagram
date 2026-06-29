@@ -2,10 +2,10 @@
 
 > **Versão:** 1.0 | **Data:** Junho de 2026 | **Status:** Ativo — leitura obrigatória para todos os agentes e colaboradores.
 
-Este documento é a fonte canônica dos princípios arquiteturais que governam o desenvolvimento do P2D. Ele complementa o `COLLABORATIVE_MANIFESTO.md` (governança de equipe) e o `CLAUDE.md` (restrições técnicas de runtime).
+Este documento é a fonte canônica dos princípios arquiteturais que governam o desenvolvimento do P2D. Ele complementa o `manifestos/COLLABORATIVE_MANIFESTO.md` (governança de equipe), o `manifestos/CONTINUIDADE_ARQUITETURAL.md` (blindagem contra SPOF) e o `CLAUDE.md` (restrições técnicas de runtime).
 
 ---
-
+    
 ## 1. Ecossistema Multi-Agente + Humano
 
 O P2D opera sob um modelo de cooperação especializada entre três papéis:
@@ -200,8 +200,9 @@ Para garantir continuidade entre sessões (agentes e humanos):
 | Arquivo | Propósito |
 |---|---|
 | `CLAUDE.md` | Fonte da verdade — restrições de runtime, estrutura do repositório |
-| `COLLABORATIVE_MANIFESTO.md` | Governança de equipe — papéis, dinâmica de cooperação |
-| `ENGINEERING_MANIFESTO.md` | Este arquivo — princípios arquiteturais e decisões técnicas permanentes |
+| `manifestos/COLLABORATIVE_MANIFESTO.md` | Governança de equipe — papéis, dinâmica de cooperação |
+| `manifestos/ENGINEERING_MANIFESTO.md` | Este arquivo — princípios arquiteturais e decisões técnicas permanentes |
+| `manifestos/CONTINUIDADE_ARQUITETURAL.md` | Blindagem contra SPOF — protocolo de substituição do Arquiteto Sênior |
 | `memory/MEMORY.md` | Índice leve de memória entre sessões (Claude Code) |
 | `memory/project_state.md` | Estado detalhado — versão atual, compliance, migrations, histórico |
 | `claude_guideline/roadmap.md` | Histórico completo de PCs (PC1 em diante) |
