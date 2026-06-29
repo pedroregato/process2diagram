@@ -1,0 +1,26 @@
+{
+  "id": "bpmn_pattern_omg_error_handling",
+  "name": "Tratamento de Exceção Corporativa (Boundary Error)",
+  "category": "Exceção",
+  "description": "Mapeamento canônico da OMG para interceptar falhas em tarefas sem poluir o fluxo feliz com gateways.",
+  "when_to_use": "Use este padrão sempre que a transcrição citar termos como 'se houver erro na integração', 'caso o item falhe', 'se o estoque estiver indisponível' desviando para uma correção.",
+  "common_mistakes": [
+    "Não use gateways XOR imediatamente após a tarefa para checar se ela deu erro; use eventos de borda (boundary events).",
+    "Não conecte o fluxo de erro de volta à mesma tarefa sem uma atividade de correção intermediária."
+  ],
+  "transcript_excerpt": "O sistema tenta realizar a cobrança no cartão de crédito do cliente. Se a cobrança falhar por falta de saldo ou bloqueio, o processo deve desviar imediatamente para notificar o cliente e suspender o serviço.",
+  "ideal_json_output": {
+    "name": "Processo de Cobrança com Captura de Falha",
+    "steps": [
+      { "id": "S01", "title": "Processar Cobrança", "task_type": "serviceTask" },
+      { "id": "S02", "title": "Tratar Falha de Saldo", "task_type": "userTask", "attached_to_ref": "S01", "is_boundary": true, "cancel_activity": true, "boundary_type": "errorEventDefinition" },
+      { "id": "S03", "title": "Liberar Serviço", "task_type": "serviceTask" },
+      { "id": "S04", "title": "Notificar Inadimplência", "task_type": "sendTask" }
+    ],
+    "edges": [
+      { "source": "S01", "target": "S03", "label": "Sucesso" },
+      { "source": "S02", "target": "S04", "label": "Cobrança Falhou" }
+    ],
+    "lanes": ["Sistema"]
+  }
+}

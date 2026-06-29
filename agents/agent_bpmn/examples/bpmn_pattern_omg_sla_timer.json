@@ -1,0 +1,26 @@
+{
+  "id": "bpmn_pattern_omg_sla_timer",
+  "name": "Escalonamento de SLA por Tempo (Non-Interrupting)",
+  "category": "SLA",
+  "description": "Modelo oficial da OMG para monitorar prazos de execução sem interromper a atividade principal do ator.",
+  "when_to_use": "Use este padrão quando houver um prazo limite atrelado a uma tarefa (ex: 'se demorar mais de 2 dias, avise o diretor') mas o operador original deve continuar trabalhando na tarefa.",
+  "common_mistakes": [
+    "Não use gateways de decisão baseados em tempo de forma reativa após a conclusão da tarefa.",
+    "Certifique-se de diferenciar se o timer interrompe a atividade (cancelActivity=true) ou apenas gera um alerta em paralelo."
+  ],
+  "transcript_excerpt": "O analista tem o prazo para revisar o contrato jurídico. Caso essa revisão demore mais de 48 horas, o sistema deve disparar um e-mail de alerta para a gerência, mas o analista mantém o contrato aberto para finalizar.",
+  "ideal_json_output": {
+    "name": "Monitoramento de SLA de Revisão",
+    "steps": [
+      { "id": "R01", "title": "Revisar Contrato Jurídico", "task_type": "userTask" },
+      { "id": "R02", "title": "Alerta de Prazo Estourado", "task_type": "intermediateTimerCatchEvent", "attached_to_ref": "R01", "is_boundary": true, "cancel_activity": false },
+      { "id": "R03", "title": "Notificar Gerência Financeira", "task_type": "sendTask" },
+      { "id": "R04", "title": "Arquivar Contrato", "task_type": "serviceTask" }
+    ],
+    "edges": [
+      { "source": "R01", "target": "R04", "label": "Concluído no Prazo" },
+      { "source": "R02", "target": "R03", "label": "48h Excedidas" }
+    ],
+    "lanes": ["Analista Jurídico", "Sistema"]
+  }
+}

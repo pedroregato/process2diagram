@@ -47,6 +47,8 @@ esta tabela de sinais:
 | Quatro Olhos / Dual Control | `collab_four_eyes` | "dois aprovadores", "dupla aprovação", "quatro olhos", "aprovação conjunta", "co-assinatura", "aprovação paralela" |
 | Motor de Regras / DMN | `business_rule_delegation` | "motor de regras", "engine de decisão", "scoring automático", "tabela de decisão", "DMN", "política automatizada" |
 | Processo Periódico / Batch | `periodic_continuous` | "todo dia", "mensalmente", "processamento noturno", "rotina periódica", "cron", "fechamento mensal", "batch diário" |
+| Tratamento de Exceção (Boundary Error) | `bpmn_pattern_omg_error_handling` | "se houver erro", "caso falhe", "cobrança falhar", "erro na integração", "estoque indisponível", "desviar para correção" |
+| Escalonamento de SLA (Non-Interrupting Timer) | `bpmn_pattern_omg_sla_timer` | "prazo limite", "se demorar mais", "SLA", "escalonar", "alerta sem interromper", "avise o diretor", "continuar trabalhando" |
 
 **Quando um padrão for identificado:**
 1. Use o `ideal_json_output` do padrão (injetado no prompt ou aplicado via conhecimento do padrão) como esqueleto inicial — adapte ao conteúdo real da transcrição.
