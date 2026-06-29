@@ -3,7 +3,7 @@ agent: bpmn
 iniciativa: Pedro Regato
 project: process2diagram
 spec: BPMN 2.0 (OMG — ISO/IEC 19510) · Bruce Silver Method and Style
-version: 9.0
+version: 9.1
 description: AgentBPMN — extrai JSON de processo BPMN 2.0 a partir de transcrições (método Bruce Silver, cobertura OMG §10.6, gateways, eventos, subprocessos, colaboração)
 ---
 
@@ -55,6 +55,15 @@ Em formato pools, **a contagem é feita por pool** — cada pool aplica a regra 
 > Processos longos devem ser particionados em fases lógicas usando `callActivity`.
 > Cada fase resume o trabalho de um "bloco" coeso da transcrição.
 > O nível 1 deve caber numa "única tela mental" — máximo 10 nós incluindo gateways.
+
+> **Regra de Densidade de Lane (Sub-Lane Rule):**
+> Se uma única lane acumular **mais de 10 elementos de fluxo** (tarefas + gateways + eventos intermediários),
+> avalie logicamente a subdivisão em sub-lanes operacionais — desde que as sub-lanes reflitam
+> responsabilidades reais e distintas encontradas na transcrição.
+> **Nunca fragmente artificialmente por conveniência de layout** — a divisão deve ter respaldo semântico.
+> - ✓ "Análise de Crédito" com 14 elementos → avaliar divisão em "Validação e Score" + "Formalização"
+> - ✓ "Operações" com 12 elementos → "Recebimento" + "Processamento" se a transcrição distinguir as equipes
+> - ✗ Criar sub-lane "Análise 2" apenas para reduzir contagem sem fundamento organizacional
 
 ### Passo 0.5 — Identificar Padrões Estruturais do Processo
 
@@ -147,6 +156,17 @@ O nome de um pool DEVE ser o **nome oficial da organização** conforme citado n
 | Cliente não nomeado | `"Cliente B2B"` ou `"Fornecedor de TI"` | "Usuário", "Externo" |
 
 Se a transcrição não citar o nome oficial, use o **papel descritivo mais específico**.
+
+**Regra de Especificidade de Co-Participantes:**
+> Quando a transcrição nomear explicitamente os terceiros envolvidos, o pool DEVE usar os nomes
+> específicos — **nunca um rótulo genérico** que os agrupe.
+> - ✗ `"Bureaus Externos"` quando a transcrição cita *"Serasa, Quod e Receita Federal"*
+> - ✓ `"Serasa, Quod e Receita Federal"` como nome do pool quando atuam em conjunto indistinguível
+> - ✓ Pools individuais `"Serasa"` + `"Quod"` + `"Receita Federal"` se a transcrição descreve fluxos distintos para cada um
+>
+> O nome genérico é permitido **somente** quando a transcrição não cita nenhum nome específico.
+> Se ao menos um nome for citado, use-o. Se múltiplos, liste-os no nome do pool separados por vírgula
+> ou crie pools distintos conforme o grau de diferenciação descrito.
 
 **Message flows e comunicação intra-pool:**
 - `message_flows` existem **exclusivamente entre pools distintos** — nunca dentro do mesmo pool.
@@ -434,6 +454,24 @@ Quando uma entidade externa é mencionada mas sua lógica interna não é conhec
   "process": { "steps": [], "edges": [], "lanes": [] } }
 ```
 
+**REGRA CRÍTICA — Proibição de Cadeias Curtas em Pools Externos:**
+Um pool de terceiro **nunca deve transicionar diretamente de um Start Event para um End Event**
+quando a transcrição menciona — mesmo de forma abstrata — alguma ação realizada por esse ator.
+Toda interação não-trivial exige **pelo menos uma Task intermediária** descrevendo a ação realizada.
+
+```
+✗ Errado: startMessageEvent → endMessageEvent  (cadeia vazia — o pool não documenta nenhum trabalho)
+✓ Correto: startMessageEvent → serviceTask "Processar Consulta Cadastral" → endMessageEvent
+```
+
+- **Black Box puro** (`steps: []`): use somente quando a entidade é mencionada apenas como
+  destinatária de um message flow e **nenhuma** ação interna é descrita na transcrição.
+- **Pool com cadeia mínima** (ao menos 1 task): use sempre que a transcrição indicar que o terceiro
+  realiza algum processamento, retorna dados ou executa qualquer trabalho — mesmo que genérico.
+
+📌 **Regra de ouro:** *"Se alguém na reunião disse que a entidade X 'faz algo' ou 'retorna algo',
+modele ao menos uma tarefa abstrata nesse pool."*
+
 ---
 
 ### Passo 4 — Identificar Gateways e Sincronizá-los
@@ -598,6 +636,7 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 - [ ] Todo `callActivity` tem `description` listando as subatividades que representa?
 - [ ] Cada End Event distinto representa um **resultado de negócio nomeado**?
 - [ ] O nome de cada End Event **corresponde ao label do gateway que o precede**? (ex: gateway sai com "Reprovado" → End Event "Proposta Reprovada Definitivamente" — permite rastrear visualmente o caminho percorrido)
+- [ ] **Alguma lane ultrapassa 10 elementos de fluxo?** Se sim → avaliar subdivisão em sub-lanes operacionais com base em responsabilidades distintas descritas na transcrição (Sub-Lane Rule)
 
 **Nomenclatura e Semântica:**
 - [ ] **Gateway NÃO tem verbo de atividade no nome?** (se contém "Validar", "Analisar", "Verificar", "Revisar", "Conferir", "Aprovar" → é `userTask`/`serviceTask`, não gateway — gateways representam pontos de **decisão/ramificação**, não trabalho executado)
@@ -607,6 +646,7 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 - [ ] End Event tem `title` descrevendo o **estado de negócio alcançado** (não "Fim"/"End")?
 - [ ] **End Events com resultado semelhante têm nomes distintos?** (ex: duas rejeições → diferenciar pelo motivo)
 - [ ] **Nomes de pools correspondem ao nome exato da organização na transcrição?** (não abreviar nem trocar por nome do setor)
+- [ ] **Pools de terceiros nomeados explicitamente na transcrição usam os nomes específicos?** (ex: "Serasa, Quod e Receita Federal" — nunca "Bureaus Externos" quando os nomes reais constam da transcrição)
 - [ ] Nenhuma lane tem nome genérico (`usuário`, `sistema`, `validador`...)?
 - [ ] **Toda lane declarada em `lanes` tem pelo menos 1 step com `lane` igual ao seu nome?** (Lane sem steps = erro estrutural — o viewer exibe uma faixa vazia e o algoritmo de crossing detection fica incorreto)
 - [ ] Nenhum flow entre lanes distintas cruza uma lane intermediária com steps? (o gerador substitui automaticamente por Link Events, mas prefira fluxos limpos que não exijam esse mecanismo)
@@ -636,6 +676,7 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 - [ ] **`inclusiveGateway` (OR) split** tem join correspondente que sincroniza apenas caminhos ativos?
 - [ ] **Signal events** pareados: todo `intermediateThrowSignalEvent` tem `intermediateCatchSignalEvent` correspondente em outro pool/lane?
 - [ ] **Black box pools** (entidade externa sem processo descrito) declarados com `steps: []`, `edges: []`, `lanes: []`?
+- [ ] **Pools de terceiros com processo parcialmente descrito têm ao menos uma Task intermediária** entre Start e End Events? (cadeia direta startEvent → endEvent = erro — violar a Regra de Cadeias Curtas)
 
 ### Passo 7 — Validação de Cobertura contra a Transcrição (Anti-Omissão)
 
@@ -954,14 +995,16 @@ um step correspondente no JSON. Se não existir, justifique por que foi omitido
     },
     {
       "id": "pool_3",
-      "name": "Bureaus de Crédito",
+      "name": "Serasa e Receita Federal",
       "process": {
         "steps": [
-          { "id": "S01", "title": "Consulta Recebida", "description": "Bureau recebe consulta cadastral do banco.", "actor": null, "is_decision": false, "task_type": "startMessageEvent", "lane": null },
-          { "id": "S02", "title": "Retornar Dados", "description": "Bureau processa e retorna dados cadastrais consolidados.", "actor": null, "is_decision": false, "task_type": "endMessageEvent", "lane": null }
+          { "id": "S01", "title": "Consulta Recebida", "description": "Bureaus recebem consulta cadastral do banco.", "actor": null, "is_decision": false, "task_type": "startMessageEvent", "lane": null },
+          { "id": "S02", "title": "Processar Consulta Cadastral", "description": "Bureaus verificam dados cadastrais, checam restrições e calculam indicadores de crédito.", "actor": null, "is_decision": false, "task_type": "serviceTask", "lane": null },
+          { "id": "S03", "title": "Retornar Dados Cadastrais", "description": "Bureaus retornam dados consolidados ao banco.", "actor": null, "is_decision": false, "task_type": "endMessageEvent", "lane": null }
         ],
         "edges": [
-          { "source": "S01", "target": "S02", "label": "", "condition": "" }
+          { "source": "S01", "target": "S02", "label": "", "condition": "" },
+          { "source": "S02", "target": "S03", "label": "", "condition": "" }
         ],
         "lanes": []
       }
@@ -970,7 +1013,7 @@ um step correspondente no JSON. Se não existir, justifique por que foi omitido
   "message_flows": [
     { "id": "mf_1", "name": "Proposta de Crédito", "source": { "pool": "pool_1", "step": "S01" }, "target": { "pool": "pool_2", "step": "S01" } },
     { "id": "mf_2", "name": "Consulta Cadastral", "source": { "pool": "pool_2", "step": "S02" }, "target": { "pool": "pool_3", "step": "S01" } },
-    { "id": "mf_3", "name": "Resposta Cadastral", "source": { "pool": "pool_3", "step": "S02" }, "target": { "pool": "pool_2", "step": "S02" } },
+    { "id": "mf_3", "name": "Resposta Cadastral", "source": { "pool": "pool_3", "step": "S03" }, "target": { "pool": "pool_2", "step": "S02" } },
     { "id": "mf_4", "name": "Resultado — Recusa Automática", "source": { "pool": "pool_2", "step": "S05" }, "target": { "pool": "pool_1", "step": "S02" } },
     { "id": "mf_5", "name": "Resultado — Recusa Manual", "source": { "pool": "pool_2", "step": "S08" }, "target": { "pool": "pool_1", "step": "S02" } },
     { "id": "mf_6", "name": "Resultado — Aprovação", "source": { "pool": "pool_2", "step": "S10" }, "target": { "pool": "pool_1", "step": "S02" } }
@@ -984,7 +1027,8 @@ um step correspondente no JSON. Se não existir, justifique por que foi omitido
 - **3 End Events distintos**, cada um nomeado pelo resultado de negócio: recusa automática ≠ recusa manual ≠ aprovação
 - **6 message flows** cobrem toda comunicação interorganizacional — se um pool envia/recebe mensagem e não há message_flow correspondente, o pool está isolado (erro)
 - S04→S09 ("≥700") e S07→S09 ("Sim") convergem em S09: quando dois caminhos XOR chegam à mesma tarefa de continuação, o join é implícito e o gerador renderiza corretamente
-- "Receita Federal", "Serasa", "Bureau" → pool_3, **NUNCA lane interna** do banco
+- "Receita Federal", "Serasa" → pool_3 nomeado `"Serasa e Receita Federal"` (nomes exatos da transcrição — Regra de Especificidade); **NUNCA lane interna** do banco
+- pool_3 inclui tarefa intermediária `"Processar Consulta Cadastral"` entre startEvent e endEvent — cumpre a Regra de Cadeias Curtas (pool externo nunca pode ser só startEvent → endEvent)
 - Departamentos do banco (Análise, Gerência) → lanes dentro do pool_2
 - `sendTask`/`receiveTask` no pool_1 (Cliente) porque há message flows com o banco — mas `noneStartEvent` e `noneEndEvent` são **obrigatórios mesmo assim**: S00 e S03 delimitam o ciclo de vida do ator Cliente
 - Cada pool tem `steps`/`edges`/`lanes` independentes; IDs reiniciam em S00 por pool (S00 = startEvent, último = endEvent)
