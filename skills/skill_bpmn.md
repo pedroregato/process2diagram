@@ -49,6 +49,8 @@ esta tabela de sinais:
 | Processo Periódico / Batch | `periodic_continuous` | "todo dia", "mensalmente", "processamento noturno", "rotina periódica", "cron", "fechamento mensal", "batch diário" |
 | Tratamento de Exceção (Boundary Error) | `bpmn_pattern_omg_error_handling` | "se houver erro", "caso falhe", "cobrança falhar", "erro na integração", "estoque indisponível", "desviar para correção" |
 | Escalonamento de SLA (Non-Interrupting Timer) | `bpmn_pattern_omg_sla_timer` | "prazo limite", "se demorar mais", "SLA", "escalonar", "alerta sem interromper", "avise o diretor", "continuar trabalhando" |
+| Compensação de Atividade (Compensation) | `bpmn_pattern_omg_compensation` | "desfazer", "reverter", "estornar", "cancelar pagamento já processado", "compensar reserva", "rollback de etapa concluída" |
+| Evento de Sinal Broadcast (Signal) | `bpmn_pattern_omg_signal_event` | "todos os sistemas são notificados", "broadcast", "todos os departamentos ao mesmo tempo", "sinal para múltiplas áreas", "ao mesmo tempo em paralelo" |
 
 **Quando um padrão for identificado:**
 1. Use o `ideal_json_output` do padrão (injetado no prompt ou aplicado via conhecimento do padrão) como esqueleto inicial — adapte ao conteúdo real da transcrição.

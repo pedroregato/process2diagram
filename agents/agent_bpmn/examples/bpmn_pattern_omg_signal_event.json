@@ -1,0 +1,96 @@
+{
+  "id": "bpmn_pattern_omg_signal_event",
+  "name": "Evento de Sinal (Signal Broadcast 1-para-N)",
+  "category": "Sinal",
+  "description": "Padrão OMG §10.6.4 para broadcast de eventos entre processos independentes. Diferente de Message (ponto-a-ponto, destinatário identificado), Signal não tem destinatário — qualquer processo com um signalCatchEvent do mesmo nome reage simultaneamente. Usado para disparar múltiplos subprocessos autônomos a partir de um único evento de negócio.",
+  "when_to_use": "Use quando a transcrição indicar que um evento único aciona múltiplos processos independentes sem que o emissor saiba quem são os receptores — ex: 'ao fechar o pregão, todos os sistemas são notificados', 'quando o diretor aprova, todos os departamentos são avisados ao mesmo tempo', 'ao final do dia, os relatórios de cada área são gerados'.",
+  "common_mistakes": [
+    "Não use Message Event quando não há destinatário específico — Message é ponto-a-ponto (1-para-1) e exige identificação do pool receptor.",
+    "Não confunda Signal com Parallel Gateway: gateway paralelo divide um único fluxo; Signal conecta processos autônomos em pools distintos.",
+    "Não use Signal dentro de um único pool onde sequence flows bastam — Signal é para comunicação entre processos desacoplados.",
+    "Não omita o nome do sinal: emitter e catchers devem referenciar exatamente o mesmo nome de sinal para o motor BPMN correlacionar corretamente."
+  ],
+  "transcript_excerpt": "Quando o Comitê Executivo aprova o orçamento anual, o sinal é transmitido simultaneamente para a área Financeira, para RH e para TI, que iniciam seus próprios processos de planejamento de forma independente.",
+  "ideal_json_output": {
+    "name": "Aprovação de Orçamento com Broadcast de Sinal",
+    "pools": [
+      {
+        "id": "pool_comite",
+        "name": "Comitê Executivo",
+        "process": {
+          "steps": [
+            { "id": "C01", "title": "Orçamento Submetido", "task_type": "noneStartEvent" },
+            { "id": "C02", "title": "Revisar Proposta Orçamentária", "task_type": "userTask", "lane": "Diretoria" },
+            { "id": "C03", "title": "Aprovado pelo Comitê?", "task_type": "exclusiveGateway", "is_decision": true },
+            { "id": "C04", "title": "Emitir Sinal de Aprovação", "task_type": "signalIntermediateThrowEvent", "lane": "Diretoria" },
+            { "id": "C05", "title": "Orçamento Aprovado e Publicado", "task_type": "noneEndEvent" },
+            { "id": "C06", "title": "Solicitar Revisão", "task_type": "userTask", "lane": "Diretoria" }
+          ],
+          "edges": [
+            { "source": "C01", "target": "C02", "label": "" },
+            { "source": "C02", "target": "C03", "label": "" },
+            { "source": "C03", "target": "C04", "label": "Aprovado" },
+            { "source": "C03", "target": "C06", "label": "Reprovado" },
+            { "source": "C04", "target": "C05", "label": "" },
+            { "source": "C06", "target": "C02", "label": "" }
+          ],
+          "lanes": ["Diretoria"],
+          "signal_definitions": [{ "id": "sig_orcamento_aprovado", "name": "OrcamentoAnualAprovado" }]
+        }
+      },
+      {
+        "id": "pool_financeiro",
+        "name": "Área Financeira",
+        "process": {
+          "steps": [
+            { "id": "F01", "title": "Orçamento Aprovado Recebido", "task_type": "signalStartEvent" },
+            { "id": "F02", "title": "Alocar Verbas por Centro de Custo", "task_type": "userTask" },
+            { "id": "F03", "title": "Verbas Alocadas", "task_type": "noneEndEvent" }
+          ],
+          "edges": [
+            { "source": "F01", "target": "F02", "label": "" },
+            { "source": "F02", "target": "F03", "label": "" }
+          ],
+          "lanes": [],
+          "catches_signal": "OrcamentoAnualAprovado"
+        }
+      },
+      {
+        "id": "pool_rh",
+        "name": "Recursos Humanos",
+        "process": {
+          "steps": [
+            { "id": "H01", "title": "Orçamento Aprovado Recebido", "task_type": "signalStartEvent" },
+            { "id": "H02", "title": "Planejar Headcount", "task_type": "userTask" },
+            { "id": "H03", "title": "Planejamento de RH Concluído", "task_type": "noneEndEvent" }
+          ],
+          "edges": [
+            { "source": "H01", "target": "H02", "label": "" },
+            { "source": "H02", "target": "H03", "label": "" }
+          ],
+          "lanes": [],
+          "catches_signal": "OrcamentoAnualAprovado"
+        }
+      },
+      {
+        "id": "pool_ti",
+        "name": "Tecnologia da Informação",
+        "process": {
+          "steps": [
+            { "id": "T01", "title": "Orçamento Aprovado Recebido", "task_type": "signalStartEvent" },
+            { "id": "T02", "title": "Provisionar Investimentos em TI", "task_type": "userTask" },
+            { "id": "T03", "title": "Portfólio de TI Definido", "task_type": "noneEndEvent" }
+          ],
+          "edges": [
+            { "source": "T01", "target": "T02", "label": "" },
+            { "source": "T02", "target": "T03", "label": "" }
+          ],
+          "lanes": [],
+          "catches_signal": "OrcamentoAnualAprovado"
+        }
+      }
+    ],
+    "message_flows": [],
+    "notes": "Não há message_flows entre pools — o sinal 'OrcamentoAnualAprovado' é broadcast. Os três pools receptores iniciam autonomamente ao capturar o mesmo sinal emitido por C04. Cada pool gerencia seu próprio ciclo de vida sem dependência sequencial entre si."
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "id": "bpmn_pattern_omg_compensation",
+  "name": "Compensação de Atividade (Compensation Event)",
+  "category": "Compensação",
+  "description": "Padrão OMG §10.6.5 para desfazer o efeito de uma atividade já concluída quando um passo posterior falha. O handler de compensação é invocado via throwCompensateEvent e está ligado à tarefa original por uma associação de compensação (linha tracejada), não por sequence flow.",
+  "when_to_use": "Use quando a transcrição mencionar 'desfazer', 'reverter', 'estornar', 'cancelar pagamento já processado', 'compensar reserva', 'rollback de etapa concluída' — ou seja, quando a ação de correção se refere a uma tarefa que já terminou com sucesso antes de uma falha posterior.",
+  "common_mistakes": [
+    "Não use um gateway XOR ou fluxo de exceção normal para compensação — a tarefa alvo já foi concluída; gateways roteiam tarefas ainda em andamento.",
+    "Não conecte o compensation handler com sequence flow; a ligação é uma Compensation Association (linha tracejada com seta de compensação).",
+    "Não marque o compensation handler com cancelActivity=true — eventos de compensação são sempre non-interrupting em relação ao fluxo principal.",
+    "Não confunda com boundaryErrorEvent: erro captura falha durante a execução; compensação reverte uma execução que já terminou com sucesso."
+  ],
+  "transcript_excerpt": "O sistema reserva o assento e processa o pagamento. Se a emissão do bilhete aéreo falhar posteriormente, o pagamento deve ser estornado automaticamente e a reserva do assento deve ser cancelada.",
+  "ideal_json_output": {
+    "name": "Processo de Emissão de Bilhete com Compensação",
+    "steps": [
+      { "id": "S01", "title": "Reservar Assento", "task_type": "serviceTask", "lane": "Sistema de Reservas" },
+      { "id": "S02", "title": "Cancelar Reserva", "task_type": "serviceTask", "lane": "Sistema de Reservas", "is_compensation_handler": true, "attached_to_ref": "S01" },
+      { "id": "S03", "title": "Processar Pagamento", "task_type": "serviceTask", "lane": "Sistema de Pagamentos" },
+      { "id": "S04", "title": "Estornar Pagamento", "task_type": "serviceTask", "lane": "Sistema de Pagamentos", "is_compensation_handler": true, "attached_to_ref": "S03" },
+      { "id": "S05", "title": "Emitir Bilhete", "task_type": "serviceTask", "lane": "Sistema de Emissão" },
+      { "id": "S06", "title": "Falha na Emissão", "task_type": "boundaryErrorEvent", "attached_to_ref": "S05", "is_boundary": true, "cancel_activity": true },
+      { "id": "S07", "title": "Compensar Transação", "task_type": "intermediateThrowCompensateEvent", "lane": "Sistema de Emissão" },
+      { "id": "S08", "title": "Bilhete Emitido com Sucesso", "task_type": "noneEndEvent", "lane": "Sistema de Emissão" },
+      { "id": "S09", "title": "Emissão Cancelada e Valores Estornados", "task_type": "noneEndEvent", "lane": "Sistema de Emissão" }
+    ],
+    "edges": [
+      { "source": "S01", "target": "S03", "label": "" },
+      { "source": "S03", "target": "S05", "label": "" },
+      { "source": "S05", "target": "S08", "label": "Sucesso" },
+      { "source": "S06", "target": "S07", "label": "Emissão Falhou" },
+      { "source": "S07", "target": "S09", "label": "" }
+    ],
+    "compensation_associations": [
+      { "source": "S01", "target": "S02" },
+      { "source": "S03", "target": "S04" }
+    ],
+    "lanes": ["Sistema de Reservas", "Sistema de Pagamentos", "Sistema de Emissão"],
+    "notes": "S02 e S04 são compensation handlers: só são chamados quando S07 lança o throwCompensateEvent. A ligação entre task e handler é uma Compensation Association, não sequence flow."
+  }
+}
