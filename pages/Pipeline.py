@@ -461,16 +461,12 @@ else:
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Display deferred messages from completed background agent runs.
-# Rendered before hub so they appear prominently at the top of results.
+# Use st.toast() (floating popup, no widget-tree element) so the hub widget
+# positions don't shift between the polling phase and the completion phase.
+# Shifting positions caused "Bad setIn index N" errors on reconnect.
 for _lvl, _msg in st.session_state.pop("_rr_pending_messages", []):
-    if _lvl == "success":
-        st.success(_msg)
-    elif _lvl == "info":
-        st.info(_msg)
-    elif _lvl == "warning":
-        st.warning(_msg)
-    else:
-        st.error(_msg)
+    _icon = {"success": "✅", "info": "ℹ️", "warning": "⚠️"}.get(_lvl, "❌")
+    st.toast(_msg, icon=_icon)
 
 if "hub" in st.session_state:
     hub = st.session_state.hub
@@ -706,10 +702,19 @@ if "hub" in st.session_state:
         elif tab_id == "communication_noise": render_communication_noise(hub, prefix, suffix)
         elif tab_id == "devtools":     render_dev_tools(hub, st.session_state.show_raw_json)
 
+    # Skip rendering heavy components.html() tabs during background agent reruns.
+    # On each 0.5s polling cycle, sending 3-5MB of bpmn-js HTML through the WebSocket
+    # overwhelms the connection → drop → reconnect → "Bad setIn index N" blank screen.
+    _rr_thr = st.session_state.get("_rr_thread")
+    _is_polling = _rr_thr is not None and _rr_thr.is_alive()
+
     tabs = st.tabs([tab_labels[t] for t in all_tabs])
     for idx, tab_id in enumerate(all_tabs):
         with tabs[idx]:
-            _render_tab(tab_id)
+            if _is_polling and tab_id in ("bpmn", "mermaid", "synthesizer"):
+                st.info("⏳ Aguardando conclusão do agente… o diagrama será exibido ao terminar.")
+            else:
+                _render_tab(tab_id)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HANDLER DE REEXECUÇÃO (ambos os modos)
