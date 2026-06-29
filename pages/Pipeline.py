@@ -649,34 +649,56 @@ if "hub" in st.session_state:
     }
 
     # ── Monta lista única de abas na ordem desejada ───────────────────────────
+    # Virtual-ready flags: pre-include tabs for the currently running background
+    # agent so the tab COUNT is identical across polling + completion + final
+    # render. Without this, a BPMN re-run on a hub without BPMN adds 2 tabs on
+    # the final rerun → Streamlit's delta sends setIn(index=13) to a client
+    # tree with 12 entries → "Bad setIn index N" crash → blank screen.
+    _rr_agent_bg = (
+        st.session_state.get("_rr_agent")
+        if st.session_state.get("_rr_thread") is not None
+        else None
+    )
+    _v_minutes  = hub.minutes.ready          or _rr_agent_bg == "minutes"
+    _v_req      = hub.requirements.ready     or _rr_agent_bg == "requirements"
+    _v_bpmn     = hub.bpmn.ready             or _rr_agent_bg in ("bpmn", "mermaid")
+    _v_synth    = hub.synthesizer.ready      or _rr_agent_bg == "synthesizer"
+    _v_qs       = bool(getattr(hub, 'query_summary', None) and hub.query_summary.ready) or _rr_agent_bg == "query_summarizer"
+    _v_quality  = hub.transcript_quality.ready or _rr_agent_bg == "quality"
+    _v_sbvr     = hub.sbvr.ready             or _rr_agent_bg == "sbvr"
+    _v_bmm      = hub.bmm.ready              or _rr_agent_bg == "bmm"
+    _v_dmn      = bool(getattr(hub, 'dmn', None) and hub.dmn.ready) or _rr_agent_bg == "dmn"
+    _v_arg      = bool(getattr(hub, 'argumentation', None) and hub.argumentation.ready) or _rr_agent_bg == "argumentation"
+    _v_noise    = bool(getattr(hub, 'communication_noise', None) and hub.communication_noise.ready) or _rr_agent_bg == "communication_noise"
+
     all_tabs = []
 
     if hub.transcript_clean or hub.transcript_raw:
         all_tabs.append("transcript")
-    if hub.minutes.ready:
+    if _v_minutes:
         all_tabs.append("minutes")
-    if hub.requirements.ready:
+    if _v_req:
         all_tabs.append("requirements")
-    if hub.bpmn.ready:
+    if _v_bpmn:
         all_tabs.append("bpmn")
         all_tabs.append("mermaid")
-    if hub.synthesizer.ready:
+    if _v_synth:
         all_tabs.append("synthesizer")
-    if getattr(hub, 'query_summary', None) and hub.query_summary.ready:
+    if _v_qs:
         all_tabs.append("query_summary")
     all_tabs.append("export")
 
-    if hub.transcript_quality.ready:
+    if _v_quality:
         all_tabs.append("quality")
-    if hub.sbvr.ready:
+    if _v_sbvr:
         all_tabs.append("sbvr")
-    if hub.bmm.ready:
+    if _v_bmm:
         all_tabs.append("bmm")
-    if getattr(hub, 'dmn', None) and hub.dmn.ready:
+    if _v_dmn:
         all_tabs.append("dmn")
-    if getattr(hub, 'argumentation', None) and hub.argumentation.ready:
+    if _v_arg:
         all_tabs.append("argumentation")
-    if getattr(hub, 'communication_noise', None) and hub.communication_noise.ready:
+    if _v_noise:
         all_tabs.append("communication_noise")
     if hub.validation.ready and hub.validation.n_bpmn_runs > 1:
         all_tabs.append("validation")
