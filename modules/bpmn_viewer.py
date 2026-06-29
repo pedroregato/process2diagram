@@ -434,8 +434,22 @@ def preview_from_xml(xml: str) -> str:
     js, css = _load_bpmn_assets()
 
     if js:
+        # The bpmn-js minified source contains string literals with "</script>"
+        # (it handles XML/SVG and encodes such strings internally).
+        # The HTML parser terminates any <script> block at the FIRST </script>
+        # it encounters — even inside a JS string — truncating bpmn-js at a fixed
+        # position (always line 2491 in srcdoc) and producing:
+        #   SyntaxError: Invalid regular expression: missing /
+        # Fix: replace </script> → <\/script> in the JS source before embedding.
+        # The backslash-escaped form is semantically identical in JS string/regex
+        # context but is invisible to the HTML parser.
+        js_safe = (
+            js
+            .replace("</script>", "<\\/script>")
+            .replace("</SCRIPT>", "<\\/SCRIPT>")
+        )
         # Happy path: assets available inline — no CDN in iframe
-        return _TEMPLATE.format(js_inline=js, css_inline=css, xml_js=xml_js)
+        return _TEMPLATE.format(js_inline=js_safe, css_inline=css, xml_js=xml_js)
     else:
         # Fallback: let the iframe try CDN directly
         return _TEMPLATE_CDN_FALLBACK.format(xml_js=xml_js)
