@@ -468,6 +468,44 @@ for _lvl, _msg in st.session_state.pop("_rr_pending_messages", []):
     _icon = {"success": "✅", "info": "ℹ️", "warning": "⚠️"}.get(_lvl, "❌")
     st.toast(_msg, icon=_icon)
 
+# ── Global setIn crash recovery ───────────────────────────────────────────────
+# Injects a JS error listener into the parent window (the Streamlit React app)
+# that catches "Bad setIn index N" crashes caused by WebSocket drops leaving a
+# stale client widget tree, then navigates to a clean URL for full recovery.
+#
+# Why location.href instead of location.reload():
+#   Streamlit Cloud returns 405 for location.reload() on some app URLs (likely
+#   because the last navigation was recorded as POST). Using
+#   location.href = origin + pathname always issues a clean GET request.
+#
+# Why unconditional / fixed position:
+#   This element must always occupy the same slot in the page widget tree so
+#   it never contributes to tree-count changes that cause setIn errors itself.
+#   It is invisible (height=0) and idempotent (window.__p2d_rec guard).
+import streamlit.components.v1 as _cv1_rec
+_cv1_rec.html("""<script>
+(function(){
+  if (window.__p2d_rec) return;
+  window.__p2d_rec = true;
+  try {
+    var _LS = window.parent.localStorage;
+    var _KEY = '__p2d_rec_ts';
+    // Anti-loop: do not reload more than once per 20 seconds
+    if (Date.now() - parseInt(_LS.getItem(_KEY) || '0') < 20000) return;
+    window.parent.addEventListener('error', function(ev) {
+      if (ev && ev.message && ev.message.indexOf('setIn') !== -1) {
+        _LS.setItem(_KEY, String(Date.now()));
+        setTimeout(function() {
+          var L = window.parent.location;
+          L.href = L.origin + L.pathname;
+        }, 600);
+      }
+    }, true);
+  } catch(e) {}
+})();
+</script>""", height=0)
+# ─────────────────────────────────────────────────────────────────────────────
+
 if "hub" in st.session_state:
     hub = st.session_state.hub
     prefix = st.session_state.prefix
@@ -843,19 +881,7 @@ def _poll_background_agent():
             st.session_state["_rr_pending_messages"] = [
                 ("error", "Reexecução falhou sem retornar resultado.")
             ]
-        # Force a true browser reload instead of st.rerun().
-        # Root cause of blank screen: WebSocket drops during background
-        # execution (server overloaded → _stcore/health 404) leave the
-        # client with a stale cached widget tree. st.rerun() sends
-        # incremental deltas on top of that stale tree → "Bad setIn
-        # index N [0, M]" crash → blank screen.
-        # window.parent.location.reload() forces the client to discard
-        # all cached state and re-fetch the full page — guaranteed match.
-        import streamlit.components.v1 as _cv1_reload
-        _cv1_reload.html(
-            "<script>window.parent.location.reload();</script>",
-            height=0,
-        )
+        st.rerun()  # full-page rerun — global error listener handles any setIn crash
     elif _elapsed > _MAX_RR_SECS:
         st.session_state.pop("_rr_thread", None)
         st.session_state.pop("_rr_task",   None)
