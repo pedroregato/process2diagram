@@ -385,12 +385,25 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def _escape_xml_for_js(xml: str) -> str:
-    """Escape BPMN XML for embedding inside a JS template literal."""
+    """Escape BPMN XML for embedding inside a JS template literal.
+
+    Order matters:
+      1. Backslashes first (must precede other escapes).
+      2. Backtick / $ — template-literal special chars.
+      3. </script> variants — the HTML parser terminates any <script> block at the
+         first </script> it sees, regardless of whether it's inside a JS string.
+         If BPMN XML contains "</script>" in a task label or attribute, it will
+         close the enclosing <script> block mid-parse, producing a SyntaxError in
+         the remaining text (which the browser then tries to parse as JavaScript).
+    """
     return (
         xml
         .replace("\\", "\\\\")
         .replace("`",  "\\`")
         .replace("$",  "\\$")
+        .replace("</script>",  "<\\/script>")
+        .replace("</Script>",  "<\\/Script>")
+        .replace("</SCRIPT>",  "<\\/SCRIPT>")
     )
 
 
