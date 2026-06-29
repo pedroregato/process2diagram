@@ -49,8 +49,8 @@ esta tabela de sinais:
 | Processo Periódico / Batch | `periodic_continuous` | "todo dia", "mensalmente", "processamento noturno", "rotina periódica", "cron", "fechamento mensal", "batch diário" |
 
 **Quando um padrão for identificado:**
-1. Use a estrutura canônica do padrão (canonical_template) como esqueleto inicial.
-2. Aplique as `modeling_rules` do padrão durante **todo** o processo de modelagem.
+1. Use o `ideal_json_output` do padrão (injetado no prompt ou aplicado via conhecimento do padrão) como esqueleto inicial — adapte ao conteúdo real da transcrição.
+2. Evite os erros listados em `common_mistakes` durante **todo** o processo de modelagem.
 3. Registre no `description` raiz: `"Padrão canônico aplicado: <id>"`.
 
 **Quando nenhum padrão se aplicar:**

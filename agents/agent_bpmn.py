@@ -187,10 +187,11 @@ def _load_canonical_patterns() -> dict[str, dict]:
     for _jf in sorted(_PATTERNS_DIR.glob("bpmn_pattern_*.json")):
         try:
             _p = _json.loads(_jf.read_text(encoding="utf-8"))
-            _pid = _p.get("pattern_id")
-            # applies_always=true (style_guide) is not selected here — it's always
-            # referenced in the skill itself; only structural templates are injected.
-            if _pid and not _p.get("applies_always"):
+            # Support both old format (pattern_id) and new format (id).
+            _pid = _p.get("id") or _p.get("pattern_id")
+            # Exclude style-guide entries: they apply always via the skill, not
+            # as selectable structural templates.
+            if _pid and _p.get("category", "").lower() != "estilo" and not _p.get("applies_always"):
                 _PATTERN_CACHE[_pid] = _p
         except Exception:
             pass
@@ -236,18 +237,22 @@ class AgentBPMN(BaseAgent):
         # actual transcript content — not copying it verbatim.
         _pattern = self._select_canonical_pattern(hub.transcript_clean or "")
         if _pattern:
-            _tpl   = _pattern.get("canonical_template") or _pattern.get("real_world_example", {})
-            _rules = _pattern.get("modeling_rules", [])
+            _pid_val   = _pattern.get("id") or _pattern.get("pattern_id", "")
+            _name_val  = _pattern.get("name") or _pattern.get("pattern_name", "")
+            _tpl       = (_pattern.get("ideal_json_output")
+                          or _pattern.get("canonical_template")
+                          or _pattern.get("real_world_example", {}))
+            _rules     = _pattern.get("common_mistakes", _pattern.get("modeling_rules", []))
             _tpl_str   = _json.dumps(_tpl, ensure_ascii=False, indent=2)
             _rules_str = "\n".join(f"  {i+1}. {r}" for i, r in enumerate(_rules))
             user = (
-                f"[GABARITO CANÔNICO: {_pattern['pattern_id']}]\n"
-                f"Padrão detectado: {_pattern['pattern_name']}\n\n"
-                f"Use a estrutura canônica abaixo como ponto de partida e adapte "
+                f"[GABARITO CANÔNICO: {_pid_val}]\n"
+                f"Padrão detectado: {_name_val}\n\n"
+                f"Use o exemplo canônico abaixo como ponto de partida e adapte "
                 f"titles, lanes e edges ao conteúdo real da transcrição "
                 f"(não copie os placeholders literalmente):\n\n"
                 f"{_tpl_str}\n\n"
-                f"Regras obrigatórias deste padrão:\n{_rules_str}\n\n"
+                f"Erros comuns a evitar neste padrão:\n{_rules_str}\n\n"
                 f"---\n\n{user}"
             )
 

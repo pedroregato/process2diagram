@@ -1,136 +1,68 @@
 {
-  "pattern_id": "collab_four_eyes",
-  "pattern_name": "Princípio dos Quatro Olhos (Dual Control)",
-  "version": "1.0",
-  "description": "Aprovação com dois aprovadores independentes em paralelo (parallelGateway split + join). Ambas as aprovações devem ser obtidas antes do prosseguimento. Usado em controles financeiros, compliance, liberação de pagamentos, publicação de políticas, assinatura de contratos de alto valor.",
-  "trigger_signals": [
-    "dois aprovadores",
-    "dupla aprovação",
-    "quatro olhos",
-    "dual control",
-    "aprovação conjunta",
-    "dois signatários",
-    "co-assinatura",
-    "validação cruzada",
-    "aprovação paralela",
-    "dois níveis simultâneos",
-    "precisa de dois OK",
-    "aprovação do gerente E do diretor ao mesmo tempo"
+  "id": "bpmn_pattern_collab_four_eyes",
+  "name": "Aprovação Dupla (Four Eyes Principle)",
+  "category": "Colaboração",
+  "description": "Um processo que requer a aprovação de duas partes distintas antes de prosseguir.",
+  "when_to_use": "Use este padrão quando a transcrição mencionar que uma ação precisa de aprovação de duas pessoas ou grupos diferentes, e a aprovação de ambos é obrigatória.",
+  "common_mistakes": [
+    "Não use um único pool com tarefas em sequência para isso, pois não reflete o paralelismo da espera.",
+    "Não use um único pool com um exclusiveGateway, a menos que a aprovação de um substitua a do outro."
   ],
-  "canonical_template": {
-    "name": "Aprovação com Duplo Controle",
-    "description": "Processo de [ação] exigindo aprovação simultânea e independente de dois atores antes de prosseguir. Implementa o Princípio dos Quatro Olhos (OMG BPMN 2.0).",
-    "process_type": "flat",
-    "steps": [
+  "transcript_excerpt": "O pagamento de fornecedores precisa ser aprovado pelo gerente financeiro e pelo diretor da área. O sistema de pagamentos só libera o valor após receber a confirmação de ambos.",
+  "ideal_json_output": {
+    "name": "Processo de Pagamento com Dupla Aprovação",
+    "pools": [
       {
-        "id": "S01",
-        "title": "Submeter [Objeto] para Aprovação",
-        "description": "Solicitante prepara e submete [objeto] ao fluxo de aprovação dual.",
-        "actor": "[Cargo do Solicitante]",
-        "is_decision": false,
-        "task_type": "userTask",
-        "lane": "[Lane do Solicitante]"
+        "id": "pool_sistema",
+        "name": "Sistema de Pagamentos",
+        "process": {
+          "steps": [
+            { "id": "S01", "title": "Solicitar Pagamento", "task_type": "userTask", "lane": "Solicitante" },
+            { "id": "S02", "title": "Solicitar Aprovações", "task_type": "sendTask", "lane": "Sistema" },
+            { "id": "S03", "title": "Aguardar Aprovações", "task_type": "parallelGateway", "lane": "Sistema" },
+            { "id": "S04", "title": "Receber Aprovação Gerente", "task_type": "intermediateMessageCatchEvent", "lane": "Sistema" },
+            { "id": "S05", "title": "Receber Aprovação Diretor", "task_type": "intermediateMessageCatchEvent", "lane": "Sistema" },
+            { "id": "S06", "title": "Executar Pagamento", "task_type": "serviceTask", "lane": "Sistema" }
+          ],
+          "edges": [
+            { "source": "S01", "target": "S02", "label": "" },
+            { "source": "S02", "target": "S03", "label": "" },
+            { "source": "S03", "target": "S04", "label": "" },
+            { "source": "S03", "target": "S05", "label": "" },
+            { "source": "S04", "target": "S06", "label": "" },
+            { "source": "S05", "target": "S06", "label": "" }
+          ],
+          "lanes": ["Solicitante", "Sistema"]
+        }
       },
       {
-        "id": "S02",
-        "title": "Distribuir para Aprovadores",
-        "description": "Gateway paralelo dispara aprovação simultânea para os dois aprovadores independentes.",
-        "actor": null,
-        "is_decision": false,
-        "task_type": "parallelGateway",
-        "lane": "[Lane do Solicitante]"
+        "id": "pool_gerente",
+        "name": "Gerente Financeiro",
+        "process": {
+          "steps": [
+            { "id": "G01", "title": "Analisar Pagamento", "task_type": "userTask" },
+            { "id": "G02", "title": "Emitir Aprovação", "task_type": "endMessageEvent" }
+          ],
+          "edges": [ { "source": "G01", "target": "G02", "label": "" } ],
+          "lanes": []
+        }
       },
       {
-        "id": "S03",
-        "title": "Aprovar [Objeto] — Aprovador A",
-        "description": "Primeiro aprovador analisa e valida [objeto] de forma independente.",
-        "actor": "[Cargo Aprovador A]",
-        "is_decision": false,
-        "task_type": "userTask",
-        "lane": "[Lane Aprovador A]"
-      },
-      {
-        "id": "S04",
-        "title": "Aprovar [Objeto] — Aprovador B",
-        "description": "Segundo aprovador analisa e valida [objeto] de forma independente.",
-        "actor": "[Cargo Aprovador B]",
-        "is_decision": false,
-        "task_type": "userTask",
-        "lane": "[Lane Aprovador B]"
-      },
-      {
-        "id": "S05",
-        "title": "Sincronizar Aprovações",
-        "description": "Gateway paralelo join — aguarda ambas as aprovações (A e B) antes de liberar o fluxo.",
-        "actor": null,
-        "is_decision": false,
-        "task_type": "parallelGateway",
-        "lane": "[Lane do Solicitante]"
-      },
-      {
-        "id": "S06",
-        "title": "Executar [Ação Autorizada]",
-        "description": "Ação liberada somente após dupla aprovação. Ex: emitir pagamento, assinar contrato.",
-        "actor": "[Cargo Executor]",
-        "is_decision": false,
-        "task_type": "userTask",
-        "lane": "[Lane do Solicitante]"
+        "id": "pool_diretor",
+        "name": "Diretor da Área",
+        "process": {
+          "steps": [
+            { "id": "D01", "title": "Analisar Pagamento", "task_type": "userTask" },
+            { "id": "D02", "title": "Emitir Aprovação", "task_type": "endMessageEvent" }
+          ],
+          "edges": [ { "source": "D01", "target": "D02", "label": "" } ],
+          "lanes": []
+        }
       }
     ],
-    "edges": [
-      { "source": "S01", "target": "S02", "label": "", "condition": "" },
-      { "source": "S02", "target": "S03", "label": "", "condition": "" },
-      { "source": "S02", "target": "S04", "label": "", "condition": "" },
-      { "source": "S03", "target": "S05", "label": "", "condition": "" },
-      { "source": "S04", "target": "S05", "label": "", "condition": "" },
-      { "source": "S05", "target": "S06", "label": "", "condition": "" }
-    ],
-    "lanes": ["[Lane do Solicitante]", "[Lane Aprovador A]", "[Lane Aprovador B]"]
-  },
-  "variant_with_rejection": {
-    "description": "Variante onde cada aprovador pode individualmente rejeitar — adicione exclusiveGateway DENTRO do ramo de cada aprovador, antes do join.",
-    "extra_steps": [
-      {
-        "id": "S03g",
-        "title": "Aprovador A Valida?",
-        "task_type": "exclusiveGateway",
-        "is_decision": true,
-        "lane": "[Lane Aprovador A]",
-        "note": "Inserir após S03. Saídas: 'Sim' → S05 (join), 'Não' → End Event de rejeição."
-      },
-      {
-        "id": "S04g",
-        "title": "Aprovador B Valida?",
-        "task_type": "exclusiveGateway",
-        "is_decision": true,
-        "lane": "[Lane Aprovador B]",
-        "note": "Inserir após S04. Saídas: 'Sim' → S05 (join), 'Não' → End Event de rejeição."
-      }
-    ]
-  },
-  "modeling_rules": [
-    "parallelGateway split DEVE ter exatamente N saídas — uma por aprovador independente. Nunca combine em sequência.",
-    "parallelGateway join DEVE receber TODAS as N entradas antes de ativar o fluxo — é a garantia matemática do dual control.",
-    "NUNCA use exclusiveGateway (XOR) para aprovação paralela — XOR ativa apenas UM caminho, destruindo o dual control.",
-    "Se a rejeição de qualquer aprovador encerra o processo: adicione exclusiveGateway DENTRO de cada ramo (após a tarefa de aprovação) antes do join.",
-    "Em formato pools (aprovadores de organizações distintas): use messageFlow para comunicar a decisão; dentro da mesma org use lanes + sequence flows.",
-    "A lane do split e do join deve ser a mesma (geralmente a lane do solicitante ou do coordenador do processo).",
-    "Título de cada aprovação deve diferenciar os aprovadores: 'Aprovar — Gerente' e 'Aprovar — Diretor', não dois steps com o mesmo nome.",
-    "Se um aprovador pode delegar, modele a delegação como gateway exclusivo dentro do ramo, não como lane separada."
-  ],
-  "anti_patterns": [
-    "ERRADO: dois userTasks em sequência ('Aprovar — Gerente' → 'Aprovar — Diretor') — isso é aprovação serial, não dual control.",
-    "ERRADO: exclusiveGateway com saída 'Aprovador A' e outra 'Aprovador B' — XOR ativa só um, não os dois.",
-    "ERRADO: parallelGateway sem join correspondente — o split sem join não tem semântica de sincronização.",
-    "ERRADO: join com menos entradas que o split — se o split tem 2 saídas, o join DEVE ter 2 entradas."
-  ],
-  "message_flow_extension": {
-    "description": "Quando os dois aprovadores pertencem a organizações distintas (formato pools):",
-    "message_flows_required": [
-      { "from": "pool_solicitante step S01 (sendTask)", "to": "pool_aprovador_a startMessageEvent" },
-      { "from": "pool_solicitante step S01 (sendTask)", "to": "pool_aprovador_b startMessageEvent" },
-      { "from": "pool_aprovador_a endMessageEvent", "to": "pool_solicitante intermediateMessageCatchEvent" },
-      { "from": "pool_aprovador_b endMessageEvent", "to": "pool_solicitante intermediateMessageCatchEvent" }
+    "message_flows": [
+      { "id": "mf_gerente", "name": "Aprovação do Gerente", "source": { "pool": "pool_gerente", "step": "G02" }, "target": { "pool": "pool_sistema", "step": "S04" } },
+      { "id": "mf_diretor", "name": "Aprovação do Diretor", "source": { "pool": "pool_diretor", "step": "D02" }, "target": { "pool": "pool_sistema", "step": "S05" } }
     ]
   }
 }
