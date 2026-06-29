@@ -45,7 +45,19 @@ def render_bpmn(hub, prefix, suffix):
                 else:
                     st.toast("Nenhuma sequência de 2 pontos encontrada.", icon="ℹ️")
 
-        bpmn_html = preview_from_xml(hub.bpmn.bpmn_xml)
+        # During background agent reruns send a ~100-byte loading placeholder instead of
+        # the full 3-5 MB bpmn-js HTML.  components.html() is still called so the widget
+        # tree structure (and all widget indices) stay identical between polling runs and
+        # the final completion run — eliminating "Bad setIn index N" blank-screen crashes.
+        _bpmn_loading = st.session_state.get("_diagram_is_loading", False)
+        bpmn_html = (
+            "<!DOCTYPE html><html><body style='display:flex;align-items:center;"
+            "justify-content:center;height:100vh;background:#f8fafc;"
+            "font-family:sans-serif;color:#64748b'>"
+            "<p>⏳ Aguardando conclusão do agente...</p></body></html>"
+            if _bpmn_loading
+            else preview_from_xml(hub.bpmn.bpmn_xml)
+        )
         components.html(bpmn_html, height=800, scrolling=False)
         if hub.bpmn.lanes:
             st.markdown("**Lanes:** " + ", ".join(hub.bpmn.lanes))
@@ -118,12 +130,28 @@ def render_bpmn(hub, prefix, suffix):
         st.warning("BPMN XML not available")
 
 def render_mermaid(hub, prefix, suffix):
+    import streamlit.components.v1 as _components
     from ui.components.quality_badge import render_quality_badge
     _c1, _c2 = st.columns([8, 2])
     _c1.markdown("### 📊 Mermaid Flowchart")
     with _c2:
         render_quality_badge(hub, "mermaid")
-    render_mermaid_block(hub.bpmn.mermaid, show_code=True, key_suffix="modular_mermaid")
+    if st.session_state.get("_diagram_is_loading", False):
+        # Lightweight placeholder — same widget structure as render_mermaid_block success
+        # path (1 components.html + 1 expander with code) to keep widget tree stable.
+        # Skipping mermaid.ink HTTP fetch during every 0.5s polling rerun.
+        _components.html(
+            "<!DOCTYPE html><html><body style='display:flex;align-items:center;"
+            "justify-content:center;height:100vh;background:#fff;"
+            "font-family:sans-serif;color:#64748b'>"
+            "<p>⏳ Aguardando conclusão do agente...</p></body></html>",
+            height=620,
+            scrolling=False,
+        )
+        with st.expander("📝 Código Mermaid", expanded=False):
+            st.code(hub.bpmn.mermaid or "", language="text")
+    else:
+        render_mermaid_block(hub.bpmn.mermaid, show_code=True, key_suffix="modular_mermaid")
 
 def render_validation(hub):
     val = hub.validation

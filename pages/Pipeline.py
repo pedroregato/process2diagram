@@ -702,19 +702,27 @@ if "hub" in st.session_state:
         elif tab_id == "communication_noise": render_communication_noise(hub, prefix, suffix)
         elif tab_id == "devtools":     render_dev_tools(hub, st.session_state.show_raw_json)
 
-    # Skip rendering heavy components.html() tabs during background agent reruns.
-    # On each 0.5s polling cycle, sending 3-5MB of bpmn-js HTML through the WebSocket
-    # overwhelms the connection → drop → reconnect → "Bad setIn index N" blank screen.
+    # While a background rerun is pending (thread alive OR just finished but hub not yet
+    # updated), flag diagram tabs to render a lightweight placeholder instead of the full
+    # bpmn-js / mermaid-ink / HTML-report payloads (3-5 MB each).
+    #
+    # Key: we check `_rr_thr is not None` (not `.is_alive()`) so the placeholder also
+    # fires on the completion-detection run — the run where the thread just died but
+    # `_rr_thread` is still in session_state before the polling section pops it.
+    # Without this, the full 3-5 MB HTML is sent twice (old hub + new hub), doubling
+    # the risk of WebSocket drop.
+    #
+    # Crucially: tabs still call their full render function — only the content of
+    # components.html() inside each tab is swapped for ~100 bytes of loading HTML.
+    # This keeps the widget TREE STRUCTURE identical across polling and completion runs,
+    # eliminating the "Bad setIn index N" crash that caused the blank screen.
     _rr_thr = st.session_state.get("_rr_thread")
-    _is_polling = _rr_thr is not None and _rr_thr.is_alive()
+    st.session_state["_diagram_is_loading"] = _rr_thr is not None
 
     tabs = st.tabs([tab_labels[t] for t in all_tabs])
     for idx, tab_id in enumerate(all_tabs):
         with tabs[idx]:
-            if _is_polling and tab_id in ("bpmn", "mermaid", "synthesizer"):
-                st.info("⏳ Aguardando conclusão do agente… o diagrama será exibido ao terminar.")
-            else:
-                _render_tab(tab_id)
+            _render_tab(tab_id)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HANDLER DE REEXECUÇÃO (ambos os modos)
