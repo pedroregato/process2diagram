@@ -452,28 +452,32 @@ else:
                         st.error(f"Erro ao salvar: {e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HANDLER DE REEXECUÇÃO — PC112-I
+# HANDLER DE REEXECUÇÃO — PC112-J
 #
 # Fluxo em 2 script runs separadas:
 #   Run 1 (rerun_agent presente):
-#     • st.status() mostra "RUNNING" → fast path (PC112-H) conclui em <1s
+#     • st.spinner() mostra "RUNNING" → fast path (PC112-H) conclui em <1s
+#     • st.spinner().__exit__ auto-limpa o container (delta "empty" enviado)
 #     • hub stored + pending_messages stored → st.rerun() imediato
-#     • Script run curta: WS não cai durante execução (<1s)
+#     • Árvore cliente fica VAZIA antes do st.rerun() → sem race condition
 #   Run 2 (rerun_agent ausente, hub atualizado):
 #     • Pending messages consumidas como toast
 #     • Hub section renderiza normalmente, idêntico ao load inicial
-#     • st.rerun() CONTROLADO pelo Streamlit → árvore sincronizada
-#     • Sem WS drop mid-render → sem setIn
 #
-# Por que st.rerun() é seguro agora:
-#   PC112-F tinha st.rerun() mas o handler ainda chamava o LLM (minutos).
-#   PC112-H adicionou o fast path (<1s). Com handler <1s, o WS nunca cai
-#   durante a Run 1. O rerun é controlado, não fruto de WS drop aleatório.
+# Por que st.status() causava setIn intermitente (PC112-I):
+#   st.status() em state="complete" deixa o widget no tree do cliente.
+#   Quando st.rerun() é chamado em seguida, a Run 2 começa a enviar deltas
+#   do hub para um cliente cujo tree ainda tem o widget "complete" na raiz.
+#   Se a Run 2 tenta inserir elemento em index 1 e o tree tem [0,0] apenas
+#   (só o status widget), o cliente lança "Bad setIn index 1".
+#
+# Por que st.spinner() resolve:
+#   spinner.__exit__ envia delta "empty()" que limpa o container.
+#   Antes do st.rerun() o tree está vazio — Run 2 inicia com folha em branco.
 #
 # Por que PC112-G (sem st.rerun()) falhou:
-#   O hub inteiro (todos os tabs, BPMN viewer, atas em markdown, requisitos)
-#   renderizava na MESMA script run do handler → centenas de deltas → WS
-#   fechava mid-render → cliente com árvore parcial → setIn na reconexão.
+#   O hub inteiro renderizava na MESMA script run do handler → centenas de
+#   deltas → WS fechava mid-render → setIn na reconexão.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Consome mensagens diferidas da run anterior (fail-open).
@@ -500,8 +504,8 @@ if "rerun_agent" in st.session_state:
         else:
             _client_info = get_session_llm_client(st.session_state.selected_provider)
             if _client_info:
-                with st.status(f"⏳ Reprocessando agente **{_agent_name}**…", expanded=True) as _rr_status:
-                    st.write(f"Executando **{_agent_name}**…")
+                # PC112-J: spinner auto-limpa ao sair do bloco → árvore vazia antes do rerun.
+                with st.spinner(f"⏳ Reprocessando agente **{_agent_name}**…"):
                     try:
                         _hub_copy = _copy.copy(_hub)
                         _result_hub, _messages = handle_rerun(
@@ -510,23 +514,13 @@ if "rerun_agent" in st.session_state:
                             st.session_state.provider_cfg,
                             st.session_state.output_language,
                         )
-                        # Armazena hub + mensagens ANTES do rerun.
-                        # O hub renderiza na PRÓXIMA script run (limpa) — não aqui.
                         st.session_state.hub = _result_hub
                         st.session_state["_rr_pending_messages"] = [
                             ("success", f"✅ {_agent_name.capitalize()} re‑executado com sucesso."),
                         ] + list(_messages or [])
-                        _rr_status.update(
-                            label=f"✅ {_agent_name.capitalize()} concluído. Recarregando…",
-                            state="complete",
-                            expanded=False,
-                        )
                     except Exception as _e:
-                        _rr_status.update(label="❌ Erro na reexecução.", state="error", expanded=True)
-                        st.write(f"Erro: {str(_e)}")
                         st.session_state["_rr_pending_messages"] = [("error", f"❌ Erro: {str(_e)}")]
-                # st.rerun() controlado — handler já concluiu (<1s via fast path PC112-H).
-                # Streamlit sincroniza a árvore cliente-servidor de forma limpa.
+                # spinner.__exit__ limpou o container → st.rerun() com árvore vazia → sem setIn.
                 st.rerun()
             else:
                 st.error("Chave de API não encontrada.")
