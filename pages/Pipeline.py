@@ -649,27 +649,17 @@ if "hub" in st.session_state:
     }
 
     # ── Monta lista única de abas na ordem desejada ───────────────────────────
-    # Virtual-ready flags: pre-include tabs for the currently running background
-    # agent so the tab COUNT is identical across polling + completion + final
-    # render. Without this, a BPMN re-run on a hub without BPMN adds 2 tabs on
-    # the final rerun → Streamlit's delta sends setIn(index=13) to a client
-    # tree with 12 entries → "Bad setIn index N" crash → blank screen.
-    _rr_agent_bg = (
-        st.session_state.get("_rr_agent")
-        if st.session_state.get("_rr_thread") is not None
-        else None
-    )
-    _v_minutes  = hub.minutes.ready          or _rr_agent_bg == "minutes"
-    _v_req      = hub.requirements.ready     or _rr_agent_bg == "requirements"
-    _v_bpmn     = hub.bpmn.ready             or _rr_agent_bg in ("bpmn", "mermaid")
-    _v_synth    = hub.synthesizer.ready      or _rr_agent_bg == "synthesizer"
-    _v_qs       = bool(getattr(hub, 'query_summary', None) and hub.query_summary.ready) or _rr_agent_bg == "query_summarizer"
-    _v_quality  = hub.transcript_quality.ready or _rr_agent_bg == "quality"
-    _v_sbvr     = hub.sbvr.ready             or _rr_agent_bg == "sbvr"
-    _v_bmm      = hub.bmm.ready              or _rr_agent_bg == "bmm"
-    _v_dmn      = bool(getattr(hub, 'dmn', None) and hub.dmn.ready) or _rr_agent_bg == "dmn"
-    _v_arg      = bool(getattr(hub, 'argumentation', None) and hub.argumentation.ready) or _rr_agent_bg == "argumentation"
-    _v_noise    = bool(getattr(hub, 'communication_noise', None) and hub.communication_noise.ready) or _rr_agent_bg == "communication_noise"
+    _v_minutes  = hub.minutes.ready
+    _v_req      = hub.requirements.ready
+    _v_bpmn     = hub.bpmn.ready
+    _v_synth    = hub.synthesizer.ready
+    _v_qs       = bool(getattr(hub, 'query_summary', None) and hub.query_summary.ready)
+    _v_quality  = hub.transcript_quality.ready
+    _v_sbvr     = hub.sbvr.ready
+    _v_bmm      = hub.bmm.ready
+    _v_dmn      = bool(getattr(hub, 'dmn', None) and hub.dmn.ready)
+    _v_arg      = bool(getattr(hub, 'argumentation', None) and hub.argumentation.ready)
+    _v_noise    = bool(getattr(hub, 'communication_noise', None) and hub.communication_noise.ready)
 
     all_tabs = []
 
@@ -724,41 +714,7 @@ if "hub" in st.session_state:
         elif tab_id == "communication_noise": render_communication_noise(hub, prefix, suffix)
         elif tab_id == "devtools":     render_dev_tools(hub, st.session_state.show_raw_json)
 
-    import time as _time_hub
-    _rr_thr = st.session_state.get("_rr_thread")
-
-    # ── Frozen tab list ───────────────────────────────────────────────────────
-    # Root cause of "Bad setIn index N" blank screen:
-    #   During polling (thread alive), the tab list is built from the OLD hub.
-    #   On completion, _rr_agent / _rr_thread are popped BEFORE st.rerun() fires,
-    #   so the completion render uses the NEW hub — which may have a DIFFERENT
-    #   tab count (e.g. synthesizer invalidated, validation added by tournament).
-    #   The delta from [polling tree] → [completion tree] references an index
-    #   the client doesn't have → setIn crash → blank screen.
-    #
-    # Fix: freeze the tab list at the START of the first polling cycle. Every
-    # subsequent render (polling + ONE completion render) uses the frozen list.
-    # The completion render therefore has the same tab count as the last polling
-    # render the client actually received — delta is always valid.
-    # After the completion render, frozen list is popped; the next user-triggered
-    # rerun computes fresh tabs from the new hub.
-    if _rr_thr is not None:
-        # Polling: freeze on first cycle, then reuse.
-        if "_frozen_tabs" not in st.session_state:
-            st.session_state["_frozen_tabs"] = list(all_tabs)
-        all_tabs = st.session_state["_frozen_tabs"]
-    elif "_frozen_tabs" in st.session_state:
-        # Completion render: use frozen list exactly once, then release.
-        all_tabs = st.session_state.pop("_frozen_tabs")
-
-    st.session_state["_diagram_is_loading"] = _rr_thr is not None
-
-    # ── Polling status slot — FIXED position in tree (st.empty = 1 slot always)
-    _poll_slot = st.empty()
-    if _rr_thr is not None:
-        _rr_agn = st.session_state.get("_rr_agent", "agente")
-        _rr_ela = int(_time_hub.time() - st.session_state.get("_rr_start", _time_hub.time()))
-        _poll_slot.info(f"⏳ Executando agente **{_rr_agn}**… ({_rr_ela}s / máx 660s)")
+    st.session_state["_diagram_is_loading"] = False
 
     tabs = st.tabs([tab_labels[t] for t in all_tabs])
     for idx, tab_id in enumerate(all_tabs):
@@ -766,117 +722,62 @@ if "hub" in st.session_state:
             _render_tab(tab_id)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HANDLER DE REEXECUÇÃO (ambos os modos)
-# Placed AFTER hub render so the widget tree is fully stable before any
-# st.rerun() fires — prevents setIn widget-tree desync on long agent runs.
+# HANDLER DE REEXECUÇÃO (ambos os modos) — execução síncrona (PC112-F)
+#
+# Por que síncrono em vez de background thread?
+#   Thread em background segura o GIL durante parsing JSON + geração XML →
+#   Tornado não consegue responder health-checks → Streamlit Cloud derruba
+#   o WebSocket → cliente reconecta com árvore de widgets stale → qualquer
+#   st.rerun() subsequente envia delta inválido → "Bad setIn index N" → tela
+#   em branco.
+#
+#   Com execução síncrona: a chamada LLM é I/O puro → GIL liberado → Tornado
+#   serve health-checks → WebSocket permanece vivo → sem estado stale →
+#   crash impossível. O st.spinner() exibe o feedback visual enquanto bloqueia
+#   o script-runner thread (exatamente o mesmo padrão do pipeline principal).
 # ─────────────────────────────────────────────────────────────────────────────
 if "rerun_agent" in st.session_state:
-    import threading as _threading
     import copy as _copy
-    import time as _time
     _agent_name = st.session_state.pop("rerun_agent")
-    # Guard: não inicia novo thread se já existe um em execução
-    _existing = st.session_state.get("_rr_thread")
-    if _existing is not None and _existing.is_alive():
-        _running_agent = st.session_state.get("_rr_agent", _agent_name)
-        st.warning(f"⏳ Agente **{_running_agent}** já está em execução. Aguarde a conclusão.")
-    else:
-        _hub = st.session_state.get("hub")
-        if _hub:
-            # Guard: transcript obrigatório para agentes que processam texto
-            _needs_transcript = _agent_name in ("bpmn", "minutes", "requirements", "sbvr", "bmm", "quality")
-            _has_transcript   = bool(getattr(_hub, "transcript_clean", "") or getattr(_hub, "transcript_raw", ""))
-            if _needs_transcript and not _has_transcript:
-                st.error(
-                    f"⚠️ Transcrição não encontrada no hub. "
-                    f"Para reexecutar **{_agent_name}**, carregue a reunião em Modo B "
-                    f"(a transcrição precisa estar salva no banco) ou execute o pipeline completo."
-                )
+    # Limpa estado legado de execuções em thread (migração PC112-F)
+    for _k in ("_rr_thread", "_rr_task", "_rr_agent", "_rr_start", "_frozen_tabs"):
+        st.session_state.pop(_k, None)
+    _hub = st.session_state.get("hub")
+    if _hub:
+        _needs_transcript = _agent_name in ("bpmn", "minutes", "requirements", "sbvr", "bmm", "quality")
+        _has_transcript   = bool(getattr(_hub, "transcript_clean", "") or getattr(_hub, "transcript_raw", ""))
+        if _needs_transcript and not _has_transcript:
+            st.error(
+                f"⚠️ Transcrição não encontrada no hub. "
+                f"Para reexecutar **{_agent_name}**, carregue a reunião em Modo B "
+                f"(a transcrição precisa estar salva no banco) ou execute o pipeline completo."
+            )
+        else:
+            _client_info = get_session_llm_client(st.session_state.selected_provider)
+            if _client_info:
+                with st.spinner(f"⏳ Reprocessando agente **{_agent_name}**…"):
+                    try:
+                        _hub_copy = _copy.copy(_hub)
+                        _result_hub, _messages = handle_rerun(
+                            _agent_name, _hub_copy,
+                            _client_info,
+                            st.session_state.provider_cfg,
+                            st.session_state.output_language,
+                        )
+                        st.session_state.hub = _result_hub
+                        st.session_state["_rr_pending_messages"] = [
+                            ("success", f"✅ {_agent_name.capitalize()} re‑executado com sucesso.")
+                        ] + [(_lv, _mg) for _lv, _mg in (_messages or [])]
+                    except Exception as _e:
+                        st.session_state["_rr_pending_messages"] = [
+                            ("error", f"Erro na reexecução: {str(_e)}")
+                        ]
+                st.rerun()
             else:
-                _client_info = get_session_llm_client(st.session_state.selected_provider)
-                if _client_info:
-                    _task = {"hub": None, "messages": [], "error": None}
-                    st.session_state["_rr_task"] = _task
-                    st.session_state["_rr_agent"] = _agent_name
-                    st.session_state["_rr_start"] = _time.time()
-                    _pcfg = st.session_state.provider_cfg
-                    _olang = st.session_state.output_language
-                    _hub_copy = _copy.copy(_hub)
-                    def _rr_worker(_t=_task, _a=_agent_name, _h=_hub_copy, _c=_client_info, _p=_pcfg, _o=_olang):
-                        try:
-                            _t["hub"], _t["messages"] = handle_rerun(_a, _h, _c, _p, _o)
-                        except Exception as _e:
-                            _t["error"] = str(_e)
-                    _rr_thread = _threading.Thread(target=_rr_worker, daemon=True)
-                    st.session_state["_rr_thread"] = _rr_thread
-                    _rr_thread.start()
-                    st.rerun()
-                else:
-                    st.error("Chave de API não encontrada.")
-        else:
-            st.error("Nenhuma sessão ativa. Execute o pipeline primeiro.")
-
-# ─────────────────────────────────────────────────────────────────────────────
-# POLLING — sleep-based (replaces @st.fragment)
-#
-# Why not @st.fragment(run_every=2)?
-#   The fragment sends sub-tree deltas every 2s. On WebSocket reconnect, these
-#   sub-tree deltas are applied to whatever partial state the client cached
-#   during the drop, causing "Bad setIn index N" crashes.
-#
-# Why time.sleep(2) + st.rerun() is better:
-#   1. time.sleep() blocks the SCRIPT-RUNNER thread only — Tornado's event loop
-#      is free to serve health-check requests → WebSocket stays alive.
-#   2. Each st.rerun() produces a fresh complete widget tree (not sub-tree
-#      deltas). Combined with _frozen_tabs, the tab count is identical between
-#      every polling render and the completion render → delta is always valid.
-# ─────────────────────────────────────────────────────────────────────────────
-import time as _time
-_rr_thr_poll = st.session_state.get("_rr_thread")
-if _rr_thr_poll is not None:
-    _rr_agent_p = st.session_state.get("_rr_agent", "agente")
-    _rr_task_p  = st.session_state.get("_rr_task", {})
-    _elapsed_p  = int(_time.time() - st.session_state.get("_rr_start", _time.time()))
-    _MAX_P      = 660  # 11 min worst-case (3 retries × 180s long-ctx + buffer)
-
-    if not _rr_thr_poll.is_alive():
-        # Thread finished — save result then rerun for clean completion render.
-        st.session_state.pop("_rr_start",  None)
-        st.session_state.pop("_rr_thread", None)
-        st.session_state.pop("_rr_task",   None)
-        st.session_state.pop("_rr_agent",  None)
-        if _rr_task_p.get("hub") is not None:
-            st.session_state.hub = _rr_task_p["hub"]
-            _msgs_p: list[tuple[str, str]] = [
-                ("success", f"✅ {_rr_agent_p.capitalize()} re‑executado com sucesso.")
-            ]
-            for _lv_p, _mg_p in (_rr_task_p.get("messages") or []):
-                _msgs_p.append((_lv_p, _mg_p))
-            st.session_state["_rr_pending_messages"] = _msgs_p
-        elif _rr_task_p.get("error"):
-            st.session_state["_rr_pending_messages"] = [
-                ("error", f"Erro na reexecução: {_rr_task_p['error']}")
-            ]
-        else:
-            st.session_state["_rr_pending_messages"] = [
-                ("error", "Reexecução falhou sem retornar resultado.")
-            ]
-        st.rerun()
-    elif _elapsed_p > _MAX_P:
-        st.session_state.pop("_rr_thread", None)
-        st.session_state.pop("_rr_task",   None)
-        st.session_state.pop("_rr_agent",  None)
-        st.session_state.pop("_rr_start",  None)
-        st.session_state["_rr_pending_messages"] = [
-            ("error",
-             f"⏱️ Timeout após {_elapsed_p}s aguardando o agente **{_rr_agent_p}**. "
-             "Tente novamente ou mude o provider em ⚙️ Configurações.")
-        ]
-        st.rerun()
+                st.error("Chave de API não encontrada.")
     else:
-        # Still running — yield CPU to Tornado for health checks, then rerun.
-        _time.sleep(2)
-        st.rerun()
+        st.error("Nenhuma sessão ativa. Execute o pipeline primeiro.")
+
 
 # Rodapé
 st.markdown("---")
