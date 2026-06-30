@@ -452,26 +452,31 @@ else:
                         st.error(f"Erro ao salvar: {e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HANDLER DE REEXECUÇÃO — PC112-G
-# Posicionado ANTES da seção de hub para que session_state.hub já esteja
-# atualizado quando o hub section renderizar — sem st.rerun() necessário.
+# HANDLER DE REEXECUÇÃO — PC112-I
 #
-# Por que sem st.rerun()?
-#   PC112-F chamava st.rerun() DEPOIS do hub render. A chamada LLM pode levar
-#   minutos; se o WS caiu nesse período, o cliente reconecta com árvore vazia.
-#   O st.rerun() então envia delta [árvore-antiga → nova-árvore] contra uma
-#   árvore vazia → "Bad setIn index N" → tela branca.
+# Fluxo em 2 script runs separadas:
+#   Run 1 (rerun_agent presente):
+#     • st.status() mostra "RUNNING" → fast path (PC112-H) conclui em <1s
+#     • hub stored + pending_messages stored → st.rerun() imediato
+#     • Script run curta: WS não cai durante execução (<1s)
+#   Run 2 (rerun_agent ausente, hub atualizado):
+#     • Pending messages consumidas como toast
+#     • Hub section renderiza normalmente, idêntico ao load inicial
+#     • st.rerun() CONTROLADO pelo Streamlit → árvore sincronizada
+#     • Sem WS drop mid-render → sem setIn
 #
-# Por que st.status() em vez de st.spinner()?
-#   st.status() envia updates incrementais durante a execução (igual ao pipeline
-#   principal). Isso mantém dados fluindo pelo WebSocket, impedindo que proxies
-#   de nuvem fechem a conexão por inatividade em chamadas longas.
+# Por que st.rerun() é seguro agora:
+#   PC112-F tinha st.rerun() mas o handler ainda chamava o LLM (minutos).
+#   PC112-H adicionou o fast path (<1s). Com handler <1s, o WS nunca cai
+#   durante a Run 1. O rerun é controlado, não fruto de WS drop aleatório.
 #
-# Fluxo: handler executa → hub atualizado em session_state → hub section abaixo
-#        lê o hub já atualizado → árvore completa enviada de uma vez → sem crash.
+# Por que PC112-G (sem st.rerun()) falhou:
+#   O hub inteiro (todos os tabs, BPMN viewer, atas em markdown, requisitos)
+#   renderizava na MESMA script run do handler → centenas de deltas → WS
+#   fechava mid-render → cliente com árvore parcial → setIn na reconexão.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Consome mensagens diferidas deixadas por deploys anteriores (fail-open).
+# Consome mensagens diferidas da run anterior (fail-open).
 for _lvl, _msg in st.session_state.pop("_rr_pending_messages", []):
     _icon = {"success": "✅", "info": "ℹ️", "warning": "⚠️"}.get(_lvl, "❌")
     st.toast(_msg, icon=_icon)
@@ -479,7 +484,7 @@ for _lvl, _msg in st.session_state.pop("_rr_pending_messages", []):
 if "rerun_agent" in st.session_state:
     import copy as _copy
     _agent_name = st.session_state.pop("rerun_agent")
-    # Limpa estado legado de thread/polling (migração PC112-E/F → PC112-G)
+    # Limpa estado legado de thread/polling (migração PC112-E/F → PC112-G/I)
     for _k in ("_rr_thread", "_rr_task", "_rr_agent", "_rr_start", "_frozen_tabs"):
         st.session_state.pop(_k, None)
     _hub = st.session_state.get("hub")
@@ -505,25 +510,28 @@ if "rerun_agent" in st.session_state:
                             st.session_state.provider_cfg,
                             st.session_state.output_language,
                         )
+                        # Armazena hub + mensagens ANTES do rerun.
+                        # O hub renderiza na PRÓXIMA script run (limpa) — não aqui.
                         st.session_state.hub = _result_hub
+                        st.session_state["_rr_pending_messages"] = [
+                            ("success", f"✅ {_agent_name.capitalize()} re‑executado com sucesso."),
+                        ] + list(_messages or [])
                         _rr_status.update(
-                            label=f"✅ {_agent_name.capitalize()} concluído.",
+                            label=f"✅ {_agent_name.capitalize()} concluído. Recarregando…",
                             state="complete",
                             expanded=False,
                         )
-                        st.toast(f"✅ {_agent_name.capitalize()} re‑executado com sucesso.", icon="✅")
-                        for _lv, _mg in (_messages or []):
-                            _icon2 = {"success": "✅", "info": "ℹ️", "warning": "⚠️"}.get(_lv, "❌")
-                            st.toast(_mg, icon=_icon2)
                     except Exception as _e:
                         _rr_status.update(label="❌ Erro na reexecução.", state="error", expanded=True)
                         st.write(f"Erro: {str(_e)}")
-                        st.toast(f"❌ Erro: {str(_e)}", icon="❌")
+                        st.session_state["_rr_pending_messages"] = [("error", f"❌ Erro: {str(_e)}")]
+                # st.rerun() controlado — handler já concluiu (<1s via fast path PC112-H).
+                # Streamlit sincroniza a árvore cliente-servidor de forma limpa.
+                st.rerun()
             else:
                 st.error("Chave de API não encontrada.")
     else:
         st.error("Nenhuma sessão ativa. Execute o pipeline primeiro.")
-# ← sem st.rerun() — hub section abaixo lê session_state.hub já atualizado
 
 if "hub" in st.session_state:
     hub = st.session_state.hub
