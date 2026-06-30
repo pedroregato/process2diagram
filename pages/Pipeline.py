@@ -452,21 +452,78 @@ else:
                         st.error(f"Erro ao salvar: {e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# EXIBIÇÃO DOS RESULTADOS (ambos os modos)
-# Hub renders here — BEFORE the polling block — so the widget tree has the
-# same structure on every Streamlit rerun cycle (polling or not).
-# Without this ordering the polling st.rerun() stopped execution before the
-# hub tabs, causing client/server widget-tree desync after extended polling
-# (symptom: "Bad setIn index N, should be between [0, 0]" → blank screen).
+# HANDLER DE REEXECUÇÃO — PC112-G
+# Posicionado ANTES da seção de hub para que session_state.hub já esteja
+# atualizado quando o hub section renderizar — sem st.rerun() necessário.
+#
+# Por que sem st.rerun()?
+#   PC112-F chamava st.rerun() DEPOIS do hub render. A chamada LLM pode levar
+#   minutos; se o WS caiu nesse período, o cliente reconecta com árvore vazia.
+#   O st.rerun() então envia delta [árvore-antiga → nova-árvore] contra uma
+#   árvore vazia → "Bad setIn index N" → tela branca.
+#
+# Por que st.status() em vez de st.spinner()?
+#   st.status() envia updates incrementais durante a execução (igual ao pipeline
+#   principal). Isso mantém dados fluindo pelo WebSocket, impedindo que proxies
+#   de nuvem fechem a conexão por inatividade em chamadas longas.
+#
+# Fluxo: handler executa → hub atualizado em session_state → hub section abaixo
+#        lê o hub já atualizado → árvore completa enviada de uma vez → sem crash.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Display deferred messages from completed background agent runs.
-# Use st.toast() (floating popup, no widget-tree element) so the hub widget
-# positions don't shift between the polling phase and the completion phase.
-# Shifting positions caused "Bad setIn index N" errors on reconnect.
+# Consome mensagens diferidas deixadas por deploys anteriores (fail-open).
 for _lvl, _msg in st.session_state.pop("_rr_pending_messages", []):
     _icon = {"success": "✅", "info": "ℹ️", "warning": "⚠️"}.get(_lvl, "❌")
     st.toast(_msg, icon=_icon)
+
+if "rerun_agent" in st.session_state:
+    import copy as _copy
+    _agent_name = st.session_state.pop("rerun_agent")
+    # Limpa estado legado de thread/polling (migração PC112-E/F → PC112-G)
+    for _k in ("_rr_thread", "_rr_task", "_rr_agent", "_rr_start", "_frozen_tabs"):
+        st.session_state.pop(_k, None)
+    _hub = st.session_state.get("hub")
+    if _hub:
+        _needs_transcript = _agent_name in ("bpmn", "minutes", "requirements", "sbvr", "bmm", "quality")
+        _has_transcript   = bool(getattr(_hub, "transcript_clean", "") or getattr(_hub, "transcript_raw", ""))
+        if _needs_transcript and not _has_transcript:
+            st.error(
+                f"⚠️ Transcrição não encontrada no hub. "
+                f"Para reexecutar **{_agent_name}**, carregue a reunião em Modo B "
+                f"(a transcrição precisa estar salva no banco) ou execute o pipeline completo."
+            )
+        else:
+            _client_info = get_session_llm_client(st.session_state.selected_provider)
+            if _client_info:
+                with st.status(f"⏳ Reprocessando agente **{_agent_name}**…", expanded=True) as _rr_status:
+                    st.write(f"Executando **{_agent_name}**…")
+                    try:
+                        _hub_copy = _copy.copy(_hub)
+                        _result_hub, _messages = handle_rerun(
+                            _agent_name, _hub_copy,
+                            _client_info,
+                            st.session_state.provider_cfg,
+                            st.session_state.output_language,
+                        )
+                        st.session_state.hub = _result_hub
+                        _rr_status.update(
+                            label=f"✅ {_agent_name.capitalize()} concluído.",
+                            state="complete",
+                            expanded=False,
+                        )
+                        st.toast(f"✅ {_agent_name.capitalize()} re‑executado com sucesso.", icon="✅")
+                        for _lv, _mg in (_messages or []):
+                            _icon2 = {"success": "✅", "info": "ℹ️", "warning": "⚠️"}.get(_lv, "❌")
+                            st.toast(_mg, icon=_icon2)
+                    except Exception as _e:
+                        _rr_status.update(label="❌ Erro na reexecução.", state="error", expanded=True)
+                        st.write(f"Erro: {str(_e)}")
+                        st.toast(f"❌ Erro: {str(_e)}", icon="❌")
+            else:
+                st.error("Chave de API não encontrada.")
+    else:
+        st.error("Nenhuma sessão ativa. Execute o pipeline primeiro.")
+# ← sem st.rerun() — hub section abaixo lê session_state.hub já atualizado
 
 if "hub" in st.session_state:
     hub = st.session_state.hub
@@ -721,62 +778,6 @@ if "hub" in st.session_state:
         with tabs[idx]:
             _render_tab(tab_id)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# HANDLER DE REEXECUÇÃO (ambos os modos) — execução síncrona (PC112-F)
-#
-# Por que síncrono em vez de background thread?
-#   Thread em background segura o GIL durante parsing JSON + geração XML →
-#   Tornado não consegue responder health-checks → Streamlit Cloud derruba
-#   o WebSocket → cliente reconecta com árvore de widgets stale → qualquer
-#   st.rerun() subsequente envia delta inválido → "Bad setIn index N" → tela
-#   em branco.
-#
-#   Com execução síncrona: a chamada LLM é I/O puro → GIL liberado → Tornado
-#   serve health-checks → WebSocket permanece vivo → sem estado stale →
-#   crash impossível. O st.spinner() exibe o feedback visual enquanto bloqueia
-#   o script-runner thread (exatamente o mesmo padrão do pipeline principal).
-# ─────────────────────────────────────────────────────────────────────────────
-if "rerun_agent" in st.session_state:
-    import copy as _copy
-    _agent_name = st.session_state.pop("rerun_agent")
-    # Limpa estado legado de execuções em thread (migração PC112-F)
-    for _k in ("_rr_thread", "_rr_task", "_rr_agent", "_rr_start", "_frozen_tabs"):
-        st.session_state.pop(_k, None)
-    _hub = st.session_state.get("hub")
-    if _hub:
-        _needs_transcript = _agent_name in ("bpmn", "minutes", "requirements", "sbvr", "bmm", "quality")
-        _has_transcript   = bool(getattr(_hub, "transcript_clean", "") or getattr(_hub, "transcript_raw", ""))
-        if _needs_transcript and not _has_transcript:
-            st.error(
-                f"⚠️ Transcrição não encontrada no hub. "
-                f"Para reexecutar **{_agent_name}**, carregue a reunião em Modo B "
-                f"(a transcrição precisa estar salva no banco) ou execute o pipeline completo."
-            )
-        else:
-            _client_info = get_session_llm_client(st.session_state.selected_provider)
-            if _client_info:
-                with st.spinner(f"⏳ Reprocessando agente **{_agent_name}**…"):
-                    try:
-                        _hub_copy = _copy.copy(_hub)
-                        _result_hub, _messages = handle_rerun(
-                            _agent_name, _hub_copy,
-                            _client_info,
-                            st.session_state.provider_cfg,
-                            st.session_state.output_language,
-                        )
-                        st.session_state.hub = _result_hub
-                        st.session_state["_rr_pending_messages"] = [
-                            ("success", f"✅ {_agent_name.capitalize()} re‑executado com sucesso.")
-                        ] + [(_lv, _mg) for _lv, _mg in (_messages or [])]
-                    except Exception as _e:
-                        st.session_state["_rr_pending_messages"] = [
-                            ("error", f"Erro na reexecução: {str(_e)}")
-                        ]
-                st.rerun()
-            else:
-                st.error("Chave de API não encontrada.")
-    else:
-        st.error("Nenhuma sessão ativa. Execute o pipeline primeiro.")
 
 
 # Rodapé
