@@ -468,44 +468,6 @@ for _lvl, _msg in st.session_state.pop("_rr_pending_messages", []):
     _icon = {"success": "✅", "info": "ℹ️", "warning": "⚠️"}.get(_lvl, "❌")
     st.toast(_msg, icon=_icon)
 
-# ── Global setIn crash recovery ───────────────────────────────────────────────
-# Injects a JS error listener into the parent window (the Streamlit React app)
-# that catches "Bad setIn index N" crashes caused by WebSocket drops leaving a
-# stale client widget tree, then navigates to a clean URL for full recovery.
-#
-# Why location.href instead of location.reload():
-#   Streamlit Cloud returns 405 for location.reload() on some app URLs (likely
-#   because the last navigation was recorded as POST). Using
-#   location.href = origin + pathname always issues a clean GET request.
-#
-# Why unconditional / fixed position:
-#   This element must always occupy the same slot in the page widget tree so
-#   it never contributes to tree-count changes that cause setIn errors itself.
-#   It is invisible (height=0) and idempotent (window.__p2d_rec guard).
-import streamlit.components.v1 as _cv1_rec
-_cv1_rec.html("""<script>
-(function(){
-  if (window.__p2d_rec) return;
-  window.__p2d_rec = true;
-  try {
-    var _LS = window.parent.localStorage;
-    var _KEY = '__p2d_rec_ts';
-    // Anti-loop: do not reload more than once per 20 seconds
-    if (Date.now() - parseInt(_LS.getItem(_KEY) || '0') < 20000) return;
-    window.parent.addEventListener('error', function(ev) {
-      if (ev && ev.message && ev.message.indexOf('setIn') !== -1) {
-        _LS.setItem(_KEY, String(Date.now()));
-        setTimeout(function() {
-          var L = window.parent.location;
-          L.href = L.origin + L.pathname;
-        }, 600);
-      }
-    }, true);
-  } catch(e) {}
-})();
-</script>""", height=0)
-# ─────────────────────────────────────────────────────────────────────────────
-
 if "hub" in st.session_state:
     hub = st.session_state.hub
     prefix = st.session_state.prefix
@@ -762,22 +724,41 @@ if "hub" in st.session_state:
         elif tab_id == "communication_noise": render_communication_noise(hub, prefix, suffix)
         elif tab_id == "devtools":     render_dev_tools(hub, st.session_state.show_raw_json)
 
-    # While a background rerun is pending (thread alive OR just finished but hub not yet
-    # updated), flag diagram tabs to render a lightweight placeholder instead of the full
-    # bpmn-js / mermaid-ink / HTML-report payloads (3-5 MB each).
-    #
-    # Key: we check `_rr_thr is not None` (not `.is_alive()`) so the placeholder also
-    # fires on the completion-detection run — the run where the thread just died but
-    # `_rr_thread` is still in session_state before the polling section pops it.
-    # Without this, the full 3-5 MB HTML is sent twice (old hub + new hub), doubling
-    # the risk of WebSocket drop.
-    #
-    # Crucially: tabs still call their full render function — only the content of
-    # components.html() inside each tab is swapped for ~100 bytes of loading HTML.
-    # This keeps the widget TREE STRUCTURE identical across polling and completion runs,
-    # eliminating the "Bad setIn index N" crash that caused the blank screen.
+    import time as _time_hub
     _rr_thr = st.session_state.get("_rr_thread")
+
+    # ── Frozen tab list ───────────────────────────────────────────────────────
+    # Root cause of "Bad setIn index N" blank screen:
+    #   During polling (thread alive), the tab list is built from the OLD hub.
+    #   On completion, _rr_agent / _rr_thread are popped BEFORE st.rerun() fires,
+    #   so the completion render uses the NEW hub — which may have a DIFFERENT
+    #   tab count (e.g. synthesizer invalidated, validation added by tournament).
+    #   The delta from [polling tree] → [completion tree] references an index
+    #   the client doesn't have → setIn crash → blank screen.
+    #
+    # Fix: freeze the tab list at the START of the first polling cycle. Every
+    # subsequent render (polling + ONE completion render) uses the frozen list.
+    # The completion render therefore has the same tab count as the last polling
+    # render the client actually received — delta is always valid.
+    # After the completion render, frozen list is popped; the next user-triggered
+    # rerun computes fresh tabs from the new hub.
+    if _rr_thr is not None:
+        # Polling: freeze on first cycle, then reuse.
+        if "_frozen_tabs" not in st.session_state:
+            st.session_state["_frozen_tabs"] = list(all_tabs)
+        all_tabs = st.session_state["_frozen_tabs"]
+    elif "_frozen_tabs" in st.session_state:
+        # Completion render: use frozen list exactly once, then release.
+        all_tabs = st.session_state.pop("_frozen_tabs")
+
     st.session_state["_diagram_is_loading"] = _rr_thr is not None
+
+    # ── Polling status slot — FIXED position in tree (st.empty = 1 slot always)
+    _poll_slot = st.empty()
+    if _rr_thr is not None:
+        _rr_agn = st.session_state.get("_rr_agent", "agente")
+        _rr_ela = int(_time_hub.time() - st.session_state.get("_rr_start", _time_hub.time()))
+        _poll_slot.info(f"⏳ Executando agente **{_rr_agn}**… ({_rr_ela}s / máx 660s)")
 
     tabs = st.tabs([tab_labels[t] for t in all_tabs])
     for idx, tab_id in enumerate(all_tabs):
@@ -835,68 +816,67 @@ if "rerun_agent" in st.session_state:
         else:
             st.error("Nenhuma sessão ativa. Execute o pipeline primeiro.")
 
-# POLLING — fragment-based: only the fragment element re-renders every 2s,
-# keeping the main page widget tree completely stable during background runs.
-# This eliminates WebSocket flooding (was: full page rerun every 0.5s) and
-# the resulting "Bad setIn index N" crash that caused the blank screen.
+# ─────────────────────────────────────────────────────────────────────────────
+# POLLING — sleep-based (replaces @st.fragment)
+#
+# Why not @st.fragment(run_every=2)?
+#   The fragment sends sub-tree deltas every 2s. On WebSocket reconnect, these
+#   sub-tree deltas are applied to whatever partial state the client cached
+#   during the drop, causing "Bad setIn index N" crashes.
+#
+# Why time.sleep(2) + st.rerun() is better:
+#   1. time.sleep() blocks the SCRIPT-RUNNER thread only — Tornado's event loop
+#      is free to serve health-check requests → WebSocket stays alive.
+#   2. Each st.rerun() produces a fresh complete widget tree (not sub-tree
+#      deltas). Combined with _frozen_tabs, the tab count is identical between
+#      every polling render and the completion render → delta is always valid.
+# ─────────────────────────────────────────────────────────────────────────────
 import time as _time
+_rr_thr_poll = st.session_state.get("_rr_thread")
+if _rr_thr_poll is not None:
+    _rr_agent_p = st.session_state.get("_rr_agent", "agente")
+    _rr_task_p  = st.session_state.get("_rr_task", {})
+    _elapsed_p  = int(_time.time() - st.session_state.get("_rr_start", _time.time()))
+    _MAX_P      = 660  # 11 min worst-case (3 retries × 180s long-ctx + buffer)
 
-@st.fragment(run_every=2)
-def _poll_background_agent():
-    """Polls background agent thread every 2s via fragment (not full-page rerun).
-
-    The fragment element occupies 1 fixed slot in the page widget tree.
-    Only this element updates during polling; all hub tabs remain frozen.
-    When the thread finishes, st.rerun() triggers ONE full-page rerun that
-    picks up the new hub cleanly, with no intermediate widget-tree desync.
-    """
-    _rr_thr = st.session_state.get("_rr_thread")
-    if _rr_thr is None:
-        return  # no background task — fragment is a transparent no-op
-
-    _rr_agent = st.session_state.get("_rr_agent", "agente")
-    _rr_task  = st.session_state.get("_rr_task", {})
-    _elapsed  = int(_time.time() - st.session_state.get("_rr_start", _time.time()))
-    _MAX_RR_SECS = 660  # 11 min — worst case: 3 retries × 180s (long-ctx) + 120s buffer
-
-    if not _rr_thr.is_alive():
-        # Thread done — update session_state and trigger ONE full-page rerun.
+    if not _rr_thr_poll.is_alive():
+        # Thread finished — save result then rerun for clean completion render.
         st.session_state.pop("_rr_start",  None)
         st.session_state.pop("_rr_thread", None)
         st.session_state.pop("_rr_task",   None)
         st.session_state.pop("_rr_agent",  None)
-        if _rr_task.get("hub") is not None:
-            st.session_state.hub = _rr_task["hub"]
-            _pending: list[tuple[str, str]] = [
-                ("success", f"✅ {_rr_agent.capitalize()} re‑executado com sucesso.")
+        if _rr_task_p.get("hub") is not None:
+            st.session_state.hub = _rr_task_p["hub"]
+            _msgs_p: list[tuple[str, str]] = [
+                ("success", f"✅ {_rr_agent_p.capitalize()} re‑executado com sucesso.")
             ]
-            for _lvl, _msg in (_rr_task.get("messages") or []):
-                _pending.append((_lvl, _msg))
-            st.session_state["_rr_pending_messages"] = _pending
-        elif _rr_task.get("error"):
+            for _lv_p, _mg_p in (_rr_task_p.get("messages") or []):
+                _msgs_p.append((_lv_p, _mg_p))
+            st.session_state["_rr_pending_messages"] = _msgs_p
+        elif _rr_task_p.get("error"):
             st.session_state["_rr_pending_messages"] = [
-                ("error", f"Erro na reexecução: {_rr_task['error']}")
+                ("error", f"Erro na reexecução: {_rr_task_p['error']}")
             ]
         else:
             st.session_state["_rr_pending_messages"] = [
                 ("error", "Reexecução falhou sem retornar resultado.")
             ]
-        st.rerun()  # full-page rerun — global error listener handles any setIn crash
-    elif _elapsed > _MAX_RR_SECS:
+        st.rerun()
+    elif _elapsed_p > _MAX_P:
         st.session_state.pop("_rr_thread", None)
         st.session_state.pop("_rr_task",   None)
         st.session_state.pop("_rr_agent",  None)
         st.session_state.pop("_rr_start",  None)
-        st.error(
-            f"⏱️ Timeout após {_elapsed}s aguardando o agente **{_rr_agent}**. "
-            f"O provider pode estar lento ou retornando resposta vazia. "
-            f"Tente novamente ou mude o provider em ⚙️ Configurações."
-        )
+        st.session_state["_rr_pending_messages"] = [
+            ("error",
+             f"⏱️ Timeout após {_elapsed_p}s aguardando o agente **{_rr_agent_p}**. "
+             "Tente novamente ou mude o provider em ⚙️ Configurações.")
+        ]
         st.rerun()
     else:
-        st.info(f"⏳ Executando agente **{_rr_agent}**… aguarde. ({_elapsed}s / máx {_MAX_RR_SECS}s)")
-
-_poll_background_agent()
+        # Still running — yield CPU to Tornado for health checks, then rerun.
+        _time.sleep(2)
+        st.rerun()
 
 # Rodapé
 st.markdown("---")
