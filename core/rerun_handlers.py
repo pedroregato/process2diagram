@@ -77,6 +77,35 @@ def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
                 },
             }
             messages.append(("info", "ℹ️ Diagrama BPMN regenerado a partir da extração anterior (sem nova chamada LLM)."))
+        elif hub.bpmn.steps:
+            # Steps fast path: regenerate XML/Mermaid from already-structured steps.
+            # Triggered when raw_llm_dict is absent (e.g. meeting loaded from DB).
+            # Pure Python — no LLM call, completes in <1s, no Streamlit Cloud timeout risk.
+            agent = AgentBPMN(client_info, provider_cfg)
+            agent._enforce_rules(hub.bpmn, getattr(hub.nlp, "actors", None))
+            try:
+                from modules.bpmn_auto_repair import repair_bpmn
+                report = repair_bpmn(hub.bpmn)
+                hub.bpmn.repair_log = report.repairs
+            except Exception:
+                hub.bpmn.repair_log = []
+            try:
+                from agents.agent_mermaid import MermaidGenerator
+                hub.bpmn.mermaid = MermaidGenerator.generate(hub.bpmn)
+            except Exception:
+                hub.bpmn.mermaid = ""
+            hub.bpmn.bpmn_xml = agent._generate_bpmn_xml(hub.bpmn)
+            try:
+                from modules.bpmn_auto_repair import reformat_bpmn_labels
+                _xml_fmt, _fmt_changes = reformat_bpmn_labels(hub.bpmn.bpmn_xml)
+                if not any(c.startswith("[ERRO]") for c in _fmt_changes):
+                    hub.bpmn.bpmn_xml = _xml_fmt
+            except Exception:
+                pass
+            hub.bpmn.ready = True
+            hub.mark_agent_run("bpmn")
+            hub.bump()
+            messages.append(("info", "ℹ️ Diagrama BPMN regenerado a partir das atividades existentes (sem nova chamada LLM)."))
         else:
             agent = AgentBPMN(client_info, provider_cfg)
             agent._lg_skip_cache = True  # rerun sempre ignora cache semântico
