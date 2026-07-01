@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import re
 import base64
+import hashlib
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 import streamlit.components.v1 as components
 
@@ -43,7 +45,7 @@ def _fetch_svg(mermaid_code: str) -> tuple[str | None, str | None]:
         p = base64.urlsafe_b64encode(mermaid_code.encode("utf-8")).decode("ascii")
         url = f"https://mermaid.ink/svg/{p}"
         req = urllib.request.Request(url, headers={"User-Agent": "Process2Diagram/1.0"})
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:
             svg = resp.read().decode("utf-8")
         if svg and "<svg" in svg.lower():
             return _fix_svg(svg), None
@@ -99,8 +101,21 @@ def render_mermaid_block(
         mermaid_lr = mermaid_text
         default_dir = "td"
 
-    svg_td, err_td = _fetch_svg(mermaid_td)
-    svg_lr, err_lr = _fetch_svg(mermaid_lr)
+    # Cache SVGs in session_state to avoid re-fetching on every Streamlit rerun.
+    # Key is a hash of the mermaid source so cache invalidates when content changes.
+    import streamlit as _st
+    _cache_key = f"_mmsvg_{hashlib.md5(mermaid_text.encode()).hexdigest()}"
+    if _cache_key in _st.session_state:
+        svg_td, svg_lr = _st.session_state[_cache_key]
+        err_td = err_lr = None
+    else:
+        # Fetch both directions in parallel — max blocking = 5s instead of 5s×2=10s.
+        with ThreadPoolExecutor(max_workers=2) as _pool:
+            _fut_td = _pool.submit(_fetch_svg, mermaid_td)
+            _fut_lr = _pool.submit(_fetch_svg, mermaid_lr)
+            svg_td, err_td = _fut_td.result()
+            svg_lr, err_lr = _fut_lr.result()
+        _st.session_state[_cache_key] = (svg_td, svg_lr)
 
     if svg_td or svg_lr:
         svg_td_safe = (svg_td or "<p>Erro ao gerar vertical</p>").replace("</script>", "<\\/script>")

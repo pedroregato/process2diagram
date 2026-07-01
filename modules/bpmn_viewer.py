@@ -22,6 +22,7 @@
 from __future__ import annotations
 import functools
 import urllib.request
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from modules.schema import BpmnProcess
@@ -50,24 +51,25 @@ def _fetch_text(url: str) -> str:
 
 @functools.lru_cache(maxsize=None)
 def _load_bpmn_assets() -> tuple[str, str]:
-    """Fetch bpmn-js JS + CSS in parallel; cached after first call.
+    """Load bpmn-js JS + CSS; cached after first call.
 
-    All 4 URLs are requested concurrently so worst-case blocking is
-    _FETCH_TIMEOUT seconds (not 4×_FETCH_TIMEOUT as in the sequential case).
-    Falls back to CDN when any individual fetch fails.
+    JS: reads from static/bpmn-viewer.production.min.js if present (zero
+    network I/O — eliminates the ~8s blocking internet fetch on first render).
+    Falls back to unpkg CDN fetch when the local file is absent.
+
+    CSS: always fetched from CDN in parallel (3 small files, fast).
+    Falls back to empty string per URL on failure (bpmn-js degrades gracefully).
     """
-    all_urls = [_BPMN_JS_URL] + _CSS_URLS
-    results: dict[str, str] = {}
+    _static_js = Path(__file__).parent.parent / "static" / "bpmn-viewer.production.min.js"
+    if _static_js.exists():
+        js = _static_js.read_text(encoding="utf-8", errors="replace")
+    else:
+        js = _fetch_text(_BPMN_JS_URL)
 
-    def _fetch(url: str) -> tuple[str, str]:
-        return url, _fetch_text(url)
+    with ThreadPoolExecutor(max_workers=len(_CSS_URLS)) as pool:
+        css_parts = list(pool.map(_fetch_text, _CSS_URLS))
 
-    with ThreadPoolExecutor(max_workers=len(all_urls)) as pool:
-        for url, content in pool.map(_fetch, all_urls):
-            results[url] = content
-
-    js  = results.get(_BPMN_JS_URL, "")
-    css = "\n".join(results.get(u, "") for u in _CSS_URLS)
+    css = "\n".join(css_parts)
     return js, css
 
 

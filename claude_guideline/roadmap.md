@@ -4,6 +4,26 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC112-K — Concluído (v5.12 / 2026-06-30) — fix setIn ao carregar reunião: mermaid bloqueante
+
+**Diagnóstico:** `render_mermaid_block()` fazia 2 chamadas HTTP sequenciais para `mermaid.ink`
+(timeout 15s cada = até 30s de bloqueio no thread do script). Na primeira renderização do hub após
+carregar reunião do banco, o WebSocket ficava ocioso durante o bloqueio. Se a conexão caía e o
+cliente reconectava com árvore vazia, o servidor continuava enviando deltas a partir do índice 2+
+→ `Bad 'setIn' index 2 (should be between [0, 0])`.
+
+**Correções:**
+- [x] **`modules/mermaid_renderer.py`**:
+  - Timeout reduzido de 15s → 5s por fetch (fail-fast)
+  - Fetches paralelos via `ThreadPoolExecutor(max_workers=2)` — bloqueio máximo 5s (era 30s)
+  - Cache em `st.session_state` por hash MD5 do mermaid_text — reruns seguintes: 0ms
+- [x] **`modules/bpmn_viewer.py`**:
+  - `_load_bpmn_assets()`: lê `static/bpmn-viewer.production.min.js` se presente → elimina
+    fetch de 500KB do internet na primeira renderização (era ~8s)
+  - CSS ainda fetched do CDN em paralelo (3 arquivos pequenos, rápido)
+
+---
+
 ### PC88 — Concluído (v4.79 / 2026-06-28) — PC83+PC84 compliance nos agentes pipeline restantes
 
 - [x] **`core/output_schemas.py`** — 4 novos schemas Pydantic v2 (fail-open, extra='allow'):
