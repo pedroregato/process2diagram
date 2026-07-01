@@ -222,4 +222,136 @@ Para garantir continuidade entre sessões (agentes e humanos):
 
 ---
 
+## 10. Checklist de Migração para Google Cloud (Fase Preparatória)
+
+> **Status:** Infraestrutura declarativa criada (`Dockerfile`, `infra/`). Migração de runtime pendente.
+> **Referência arquitetural:** `melhorias/migracao-para-google-cloud.md` (plano completo por Antigravity).
+
+### 10.1 — Componentes locais e seus substitutos GCP
+
+| Componente atual (`api.py`) | Substituto GCP | Fase | Status |
+|---|---|---|---|
+| `threading.Lock` (cap global) | **Cloud Tasks** — fila com concurrency limit nativa | 2 | Pendente |
+| `deque` sliding window por key | **Memorystore (Redis)** — rate limiting distribuído | 2 | Pendente |
+| `dict _JOBS` em memória | **Supabase `api_jobs` table** ou **Firestore** com TTL | 2 | Pendente |
+| `ThreadPoolExecutor` local | **Cloud Run** + **Cloud Tasks** (workers separados) | 2 | Pendente |
+| Variáveis de ambiente plaintext | **Secret Manager** — rotação automática, audit trail | 1 | Infraestrutura criada |
+| Deploy manual (`git push`) | **Cloud Build trigger** em `infra/cloudbuild.yaml` | 1 | Infraestrutura criada |
+| Streamlit Cloud (app web) | **Cloud Run** (segundo serviço — `app.py` com Streamlit) | 3 | Pendente |
+| `modules/embeddings.py` (OpenAI) | **Vertex AI Embeddings** (Gemini nativo) | 4 | Pendente |
+| Pasta `agents/agent_bpmn/examples/` (estática) | **Vertex AI Vector Search** (busca semântica dinâmica) | 4 | Pendente |
+
+### 10.2 — threading.Lock → Cloud Tasks (Guia de Migração)
+
+O `threading.Lock` em `api.py` garante que no máximo `MAX_CONCURRENT_PIPELINES=4` pipelines rodem simultaneamente **dentro de uma instância**. Ao escalar para múltiplas instâncias no Cloud Run, o lock perde eficácia — cada instância tem seu próprio contador.
+
+**Padrão de substituição (Fase 2):**
+
+```python
+# ATUAL — local, volátil, não funciona entre instâncias Cloud Run
+MAX_CONCURRENT_PIPELINES = 4
+_active_pipeline_count = 0
+_active_pipeline_lock = threading.Lock()
+
+# FUTURO — Cloud Tasks gerencia concurrency limit globalmente
+from google.cloud import tasks_v2
+
+def enqueue_pipeline(job_id: str, config: dict) -> str:
+    """Enfileira job no Cloud Tasks com max_dispatches_per_second=4."""
+    client = tasks_v2.CloudTasksClient()
+    queue_path = client.queue_path(GCP_PROJECT_ID, CLOUD_TASKS_LOCATION, CLOUD_TASKS_QUEUE)
+    task = {
+        "http_request": {
+            "http_method": tasks_v2.HttpMethod.POST,
+            "url": f"{WORKER_URL}/internal/run",
+            "body": json.dumps({"job_id": job_id, "config": config}).encode(),
+            "headers": {"Content-Type": "application/json"},
+            "oidc_token": {"service_account_email": SERVICE_ACCOUNT},
+        }
+    }
+    response = client.create_task(parent=queue_path, task=task)
+    return response.name
+```
+
+**Configuração da fila (gcloud):**
+```bash
+gcloud tasks queues create p2d-pipeline-queue \
+  --location=us-central1 \
+  --max-dispatches-per-second=4 \
+  --max-concurrent-dispatches=4 \
+  --max-attempts=3 \
+  --min-backoff=10s \
+  --max-backoff=300s
+```
+
+### 10.3 — Checklist de Pré-Condições (Fase 1 — antes do primeiro deploy)
+
+- [ ] Artifact Registry habilitado: `gcloud artifacts repositories create p2d --repository-format=docker --location=us-central1`
+- [ ] Service account criada: `p2d-api-sa@PROJECT_ID.iam.gserviceaccount.com` com roles `roles/secretmanager.secretAccessor` + `roles/run.invoker` + `roles/logging.logWriter`
+- [ ] Secrets criados no Secret Manager: `deepseek-api-key`, `supabase-url`, `supabase-service-key` (ver `infra/cloudrun/env.template.yaml`)
+- [ ] Cloud Build API habilitada: `gcloud services enable cloudbuild.googleapis.com`
+- [ ] Cloud Run API habilitada: `gcloud services enable run.googleapis.com`
+- [ ] Primeira build: `gcloud builds submit . --config infra/cloudbuild.yaml`
+- [ ] Validar liveness probe: `curl https://<SERVICE_URL>/health`
+- [ ] Migrar `.streamlit/secrets.toml` para Secret Manager (nunca deployar `secrets.toml`)
+
+### 10.4 — Princípios de Isolamento mantidos no Cloud Run
+
+Conforme `ENGINEERING_MANIFESTO §3` (Isolamento de Estado):
+
+1. **`WORKERS=1` por instância** — `_JOBS` dict, `_active_pipeline_count` e `_key_windows` são coerentes dentro de 1 worker. Cloud Run escala criando novas instâncias, não novos workers.
+2. **`containerConcurrency=4`** — alinhado com `MAX_CONCURRENT_PIPELINES`; Cloud Run enfileira requests excedentes automaticamente.
+3. **Nenhum `st.session_state`** — `BaseAgent._call_llm()` usa padrão 3 camadas (PC106); `client_info` dict é a única fonte de configuração no contexto API.
+4. **Fail-open preservado** — Secret Manager indisponível não bloqueia a API; `_get_api_supabase()` retorna `None` + `warnings.warn()`.
+
+---
+
+## 11. Fail-Open em Infraestrutura Cloud
+
+> **Origem:** COLLABORATIVE_MANIFESTO v5.11 §5.4 (30/06/2026) — Decisões assinadas pelo Agente 0.
+
+**Princípio:** O Fail-Open do §2 aplica-se integralmente à infraestrutura gerenciada GCP. Nenhuma falha de serviço cloud bloqueia a operação do usuário.
+
+### 11.1 — 4 Camadas de Fallback (precedência top-down)
+
+| Serviço | Falha | Fallback | Comportamento |
+|---|---|---|---|
+| **Secret Manager** | offline / permissão negada | Cache local (24h) → ENV var → modo degradado | `get_secret()` retorna None; caller usa default |
+| **Cloud Tasks** | indisponível / quota excedida | `ThreadPoolExecutor` local síncrono | `enqueue_pipeline()` detecta via `CLOUD_TASKS_QUEUE` ausente |
+| **Cloud SQL / Supabase** | offline / timeout | Retornar `[]` ou `None` | Toda função de `project_store` encapsulada em `try/except` |
+| **Vertex AI / LLM externo** | rate limit / indisponível | DeepSeek → OpenAI → Groq (hierarquia do §4) | `BaseAgent._call_llm()` com retry + provider fallback |
+
+### 11.2 — Regras Mandatórias
+
+- **Toda falha deve ser logada** (`logger.warning`) com contexto suficiente para diagnóstico
+- **Notificação ao Agente 0** para falhas recorrentes (n8n alertas configurados)
+- **Métrica de SLA:** % de requisições atendidas em modo degradado < 5% (target: 0%)
+- **Recuperação automática:** auto-restart de container via Cloud Run health probes (`/health` → `livenessProbe`)
+- **Audit trail:** toda operação de persistência que falha deve emitir `warnings.warn()` (jamais silenciar com `pass`)
+
+### 11.3 — Cloud Tasks vs. threading.Lock (migração de concorrência)
+
+O `threading.Lock` em `api.py` garante isolamento **dentro de uma instância**. Ao escalar para múltiplas instâncias no Cloud Run, perde eficácia — cada instância tem seu próprio contador.
+
+| Componente | Fase 1 (atual) | Fase 2 (futuro) |
+|---|---|---|
+| Concorrência | `threading.Lock` + `_active_pipeline_count` (por instância) | Cloud Tasks `max-concurrent-dispatches=4` (global) |
+| Fila de jobs | `dict _JOBS` em memória (volátil) | Supabase `api_jobs` table ou Firestore com TTL |
+| Executor | `ThreadPoolExecutor` local | Cloud Run workers separados + Cloud Tasks dispatch |
+| Rate limiting | `deque` sliding window (por instância) | Memorystore Redis (distribuído, cross-instance) |
+
+**Implementação atual** (`services/cloud_tasks.py`): detecção automática via `CLOUD_TASKS_QUEUE` env var; Fail-Open total — qualquer erro no Cloud Tasks → fallback síncrono transparente.
+
+```python
+# Auto-detecção em services/cloud_tasks.py
+def _detect_mode() -> CloudTasksMode:
+    return (
+        CloudTasksMode.CLOUD_TASKS
+        if os.environ.get("CLOUD_TASKS_QUEUE", "").strip()
+        else CloudTasksMode.SYNC_FALLBACK
+    )
+```
+
+---
+
 *"Nenhum agente anula o outro. Somamos a capacidade analítica visual com a eficiência bruta de terminal, sob direção humana."*
