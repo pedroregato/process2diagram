@@ -41,9 +41,27 @@ def get_tool_schemas_openai() -> list[dict]:
                 "name": "get_meeting_list",
                 "description": (
                     "Lista todas as reuniões do projeto com número, título, data, "
-                    "e indica se possuem ata e transcrição armazenadas."
+                    "e indica se possuem ata e transcrição armazenadas. "
+                    "Use order_by='date' para listar por data cronológica da reunião "
+                    "(útil quando reuniões foram inseridas fora de ordem no sistema). "
+                    "Use order_by='number' (padrão) para listar por número de entrada."
                 ),
-                "parameters": {"type": "object", "properties": {}, "required": []},
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "order_by": {
+                            "type": "string",
+                            "enum": ["number", "date"],
+                            "description": (
+                                "'number' (padrão) — ordena pelo número de entrada no sistema. "
+                                "'date' — ordena pela data real da reunião (campo meeting_date). "
+                                "Use 'date' quando o usuário pedir por ordem cronológica ou mencionar "
+                                "que reuniões foram inseridas fora de ordem."
+                            ),
+                        }
+                    },
+                    "required": [],
+                },
             },
         },
         {
@@ -4218,15 +4236,22 @@ class AssistantToolExecutor:
   Groq (Llama), Google Gemini, Grok (xAI)
 """
 
-    def get_meeting_list(self) -> str:
-        meetings = self._get_meetings()
+    def get_meeting_list(self, order_by: str = "number") -> str:
+        meetings = list(self._get_meetings())  # copy — don't mutate cache
         if not meetings:
             return "Nenhuma reunião encontrada no projeto."
-        lines = [f"Reuniões do projeto ({len(meetings)} no total):"]
+
+        order_label = "por número de entrada"
+        if order_by == "date":
+            # Sort by meeting_date (ISO string "YYYY-MM-DD"); nulls go to the end
+            meetings.sort(key=lambda m: (m.get("meeting_date") or "9999-99-99"))
+            order_label = "por data da reunião"
+
+        lines = [f"Reuniões do projeto ({len(meetings)} no total) — {order_label}:"]
         for m in meetings:
             n     = m.get("meeting_number", "?")
             title = m.get("title") or "Sem título"
-            date  = m.get("meeting_date") or "—"
+            date  = m.get("meeting_date") or "sem data"
             flags = []
             if m.get("minutes_md"):
                 flags.append("✓ ata")
@@ -4234,6 +4259,12 @@ class AssistantToolExecutor:
                 flags.append("✓ transcrição")
             flag_str = ", ".join(flags) if flags else "✗ sem dados"
             lines.append(f"  Reunião {n}: {title} ({date}) [{flag_str}]")
+
+        if order_by == "date":
+            lines.append(
+                "\nNota: 'Reunião N' é o número de entrada no sistema (ordem de processamento), "
+                "não necessariamente a ordem cronológica."
+            )
         return "\n".join(lines)
 
     def get_meeting_participants(self, meeting_number: int) -> str:
@@ -12307,7 +12338,9 @@ function toggle(el){{
         try:
             dispatch = {
                 "get_system_capabilities":   lambda: self.get_system_capabilities(),
-                "get_meeting_list":         lambda: self.get_meeting_list(),
+                "get_meeting_list":         lambda: self.get_meeting_list(
+                    order_by=tool_input.get("order_by", "number"),
+                ),
                 "get_meeting_participants":  lambda: self.get_meeting_participants(tool_input["meeting_number"]),
                 "get_meeting_decisions":     lambda: self.get_meeting_decisions(tool_input["meeting_number"]),
                 "get_meeting_action_items":  lambda: self.get_meeting_action_items(

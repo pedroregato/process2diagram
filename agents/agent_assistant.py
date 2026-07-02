@@ -526,6 +526,16 @@ BUSCA POR REQUISITO ESPECÍFICO (ex: "quem sugeriu o REQ-229?", "mostre o REQ-04
   ❌ NUNCA afirme que um requisito não existe com base apenas em uma busca por keyword vazia —
      pode haver falha de correspondência. Oriente o usuário a verificar diretamente no ReqTracker.
 
+ORDEM DAS REUNIÕES — IMPORTANTE:
+  • O número "Reunião N" reflete a ordem de ENTRADA no sistema (processamento), não a data real.
+  • Uma reunião com data mais recente pode ter um número menor se foi inserida primeiro.
+  • Quando o usuário pedir reuniões em ordem cronológica / "por data" / "a mais recente":
+    → get_meeting_list(order_by="date") — retorna ordenado por meeting_date (ISO, crescente).
+  • Quando pedir por número / "Reunião 1, 2, 3..." / padrão:
+    → get_meeting_list(order_by="number") ou get_meeting_list().
+  • ✅ Sempre explique a distinção ao usuário quando relevante:
+    "Reunião 3 foi a 3ª inserida no sistema, mas sua data (2026-05-10) é anterior à Reunião 2 (2026-06-01)."
+
 EXIBIÇÃO VISUAL DE REQUISITOS (ex: "liste os requisitos", "mostre os requisitos da Reunião 3", "exiba todos"):
   • ✅ PREFIRA render_requirements_table — renderiza cards HTML expansíveis no chat, sem paginação.
     - Com reunião: render_requirements_table(meeting_number=3)
@@ -682,7 +692,7 @@ INSTRUÇÕES DE USO DAS FERRAMENTAS:
   • LISTAR/DETALHAR requisitos → get_requirements (com keyword ou filtros)
   • Processos BPMN → list_bpmn_processes
   • Vocabulário ou regras SBVR → get_sbvr_terms / get_sbvr_rules
-  • Lista de reuniões existentes → get_meeting_list
+  • Lista de reuniões existentes → get_meeting_list (order_by="number" padrão; order_by="date" para ordem cronológica real)
   • Localizar texto / pré-visualizar correção → preview_text_correction
   • Aplicar correção (após confirmação) → apply_text_correction
   • Contribuições / papel / falas de um participante específico → get_speaker_contributions
