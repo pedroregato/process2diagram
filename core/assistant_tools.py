@@ -3115,6 +3115,38 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "detect_requirement_contradictions",
+                "description": (
+                    "Analisa os requisitos do projeto com IA e identifica pares em possível contradição, "
+                    "explicando a motivação para cada suspeita. "
+                    "USE quando o usuário pedir: 'há requisitos contraditórios?', 'identifique conflitos', "
+                    "'mostre inconsistências nos requisitos', 'quais requisitos se contradizem?'. "
+                    "Renderiza cards HTML expansíveis com: par REQ-A ↔ REQ-B, motivação do conflito, "
+                    "severidade e sugestão de resolução."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Analisar apenas requisitos de uma reunião específica. Omita para analisar todo o projeto.",
+                        },
+                        "req_type": {
+                            "type": "string",
+                            "description": "Filtrar por tipo: 'funcional', 'não-funcional', 'regra de negócio', etc. Opcional.",
+                        },
+                        "max_reqs": {
+                            "type": "integer",
+                            "description": "Máximo de requisitos a analisar (padrão: 80, máx: 120). Reduza se houver timeout.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "generate_ibis_map",
                 "description": (
                     "Gera um Mapa Visual IBIS interativo (grafo Plotly) mostrando questões e alternativas "
@@ -3761,7 +3793,8 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "show_mermaid_diagram":            "consulta",
     "render_mermaid_code":             "consulta",
     "show_metrics":                    "consulta",
-    "render_requirements_table":       "consulta",
+    "render_requirements_table":            "consulta",
+    "detect_requirement_contradictions":    "consulta",
 }
 
 # Ferramentas que exigem perfil administrador
@@ -10956,6 +10989,222 @@ function toggle(el){{
 
     # ── Plantonista / Diagnóstico ─────────────────────────────────────────────
 
+    def detect_requirement_contradictions(
+        self,
+        meeting_number: int | None = None,
+        req_type: str | None = None,
+        max_reqs: int = 80,
+    ) -> str:
+        """Usa LLM para identificar pares de requisitos com possível contradição."""
+        import json
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        max_reqs = max(10, min(int(max_reqs or 80), 120))
+
+        # Resolve meeting_number → UUID para filtro opcional
+        meeting_id_filter: str | None = None
+        meeting_label = ""
+        if meeting_number:
+            try:
+                m_rows = (
+                    db.table("meetings")
+                    .select("id, title")
+                    .eq("project_id", self.project_id)
+                    .eq("meeting_number", int(meeting_number))
+                    .limit(1)
+                    .execute()
+                )
+                if not m_rows.data:
+                    return f"Reunião {meeting_number} não encontrada no projeto."
+                meeting_id_filter = m_rows.data[0]["id"]
+                meeting_label = m_rows.data[0].get("title") or f"Reunião {meeting_number}"
+            except Exception as exc:
+                return f"Erro ao buscar reunião {meeting_number}: {exc}"
+
+        # Busca requisitos
+        try:
+            q = (
+                db.table("requirements")
+                .select("req_number, title, description, req_type, status")
+                .eq("project_id", self.project_id)
+                .not_.in_("status", ["deprecated", "rejected", "cancelled"])
+                .order("req_number")
+                .limit(max_reqs)
+            )
+            if req_type:
+                q = q.eq("req_type", req_type)
+            if meeting_id_filter:
+                q = q.eq("first_meeting_id", meeting_id_filter)
+            rows = q.execute().data or []
+        except Exception as exc:
+            return f"Erro ao acessar requisitos: {exc}"
+
+        if len(rows) < 2:
+            return "Não há requisitos suficientes para análise de contradições (mínimo: 2)."
+
+        ctx = f" da Reunião {meeting_number} — {meeting_label}" if meeting_number else " do projeto"
+        if len(rows) == max_reqs:
+            cap_note = f" (primeiros {max_reqs} requisitos)"
+        else:
+            cap_note = ""
+
+        # Prepara lista compacta para o LLM
+        req_list = [
+            {
+                "id":    f"REQ-{r['req_number']:03d}",
+                "tipo":  r.get("req_type") or "—",
+                "title": r.get("title") or "",
+                "desc":  (r.get("description") or "")[:400],
+            }
+            for r in rows
+        ]
+
+        system_prompt = (
+            "Você é um analista sênior de requisitos. "
+            "Sua tarefa é identificar PARES de requisitos que apresentem possível contradição ou conflito lógico.\n\n"
+            "Tipos de contradição a detectar:\n"
+            "- Negação direta: um exige X e outro proíbe X\n"
+            "- Conflito de regra de negócio: dois requisitos impõem regras incompatíveis para o mesmo cenário\n"
+            "- Inconsistência de prioridade/comportamento: o mesmo sistema age de modos opostos\n"
+            "- Ambiguidade conflitante: termos iguais com semânticas opostas entre requisitos\n\n"
+            "Para CADA par contraditório retorne:\n"
+            "  req_a: ID do primeiro requisito (ex: 'REQ-012')\n"
+            "  req_b: ID do segundo requisito\n"
+            "  motivacao: explicação clara e objetiva do conflito (2-4 frases, sem jargão)\n"
+            "  severidade: 'alta' | 'media' | 'baixa'\n"
+            "  sugestao: como harmonizar os dois requisitos (1-2 frases)\n\n"
+            "Retorne SOMENTE JSON válido no formato:\n"
+            "{\"pares\": [{\"req_a\":\"...\",\"req_b\":\"...\",\"motivacao\":\"...\","
+            "\"severidade\":\"...\",\"sugestao\":\"...\"}]}\n\n"
+            "Se não houver contradições reais, retorne {\"pares\": []}.\n"
+            "Não invente contradições. Só inclua pares com suspeita fundamentada."
+        )
+        user_prompt = (
+            f"Analise os {len(req_list)} requisitos abaixo{ctx}{cap_note} "
+            "e identifique pares em possível contradição:\n\n"
+            + json.dumps(req_list, ensure_ascii=False, indent=2)
+        )
+
+        try:
+            raw = self._llm_call(system_prompt, user_prompt, max_tokens=4000)
+        except Exception as exc:
+            return f"❌ Erro na chamada LLM: {exc}"
+
+        # Parse JSON
+        try:
+            # Strip markdown fences if present
+            raw_clean = raw.strip()
+            if raw_clean.startswith("```"):
+                raw_clean = raw_clean.split("```")[1]
+                if raw_clean.startswith("json"):
+                    raw_clean = raw_clean[4:]
+            data = json.loads(raw_clean)
+            pairs = data.get("pares") or []
+        except Exception:
+            # Fallback: return raw text
+            return f"Análise de contradições{ctx}:\n\n{raw}"
+
+        if not pairs:
+            return (
+                f"✅ Nenhuma contradição detectada entre os {len(rows)} requisitos{ctx}{cap_note}.\n"
+                "Os requisitos analisados parecem consistentes entre si."
+            )
+
+        # Build HTML widget
+        def _esc(s: str) -> str:
+            return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+        def _sev_cls(s: str) -> str:
+            s = (s or "").lower()
+            if s == "alta":
+                return "sev-alta"
+            if s == "media":
+                return "sev-media"
+            return "sev-baixa"
+
+        def _sev_label(s: str) -> str:
+            return {"alta": "Alta", "media": "Média", "baixa": "Baixa"}.get((s or "").lower(), s)
+
+        cards_html = ""
+        for i, p in enumerate(pairs):
+            ra      = _esc(p.get("req_a", ""))
+            rb      = _esc(p.get("req_b", ""))
+            motiv   = _esc(p.get("motivacao", "—"))
+            sev     = (p.get("severidade") or "baixa").lower()
+            sug     = _esc(p.get("sugestao", ""))
+            sev_cls = _sev_cls(sev)
+            sev_lbl = _sev_label(sev)
+            cards_html += (
+                f'<div class="pair-card">'
+                f'<div class="pair-header" onclick="toggle(this)">'
+                f'<span class="pair-ids">{ra} ↔ {rb}</span>'
+                f'<span class="sev-badge {sev_cls}">⚠ {sev_lbl}</span>'
+                f'<span class="toggle-icon">▶</span>'
+                f'</div>'
+                f'<div class="pair-body">'
+                f'<div class="field-label">Motivação do conflito</div>'
+                f'<div class="motiv-box">{motiv}</div>'
+                + (
+                    f'<div class="field-label">Sugestão de resolução</div>'
+                    f'<div class="field-value sug-text">{sug}</div>'
+                    if sug else ""
+                )
+                + f'</div>'
+                f'</div>'
+            )
+
+        summary_line = _esc(
+            f"{len(pairs)} par(es) com possível contradição entre {len(rows)} requisitos{ctx}{cap_note}"
+        )
+
+        html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e0e0e0;margin:0;padding:8px;}}
+.summary{{color:#9ca3af;font-size:12px;margin-bottom:10px;}}
+.pair-card{{border:1px solid #2a2d38;border-radius:6px;margin:6px 0;overflow:hidden;}}
+.pair-header{{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;user-select:none;background:#1a1d24;}}
+.pair-header:hover{{background:#22262f;}}
+.pair-ids{{font-weight:700;font-size:13px;font-family:monospace;flex:1;}}
+.sev-badge{{font-size:11px;padding:2px 8px;border-radius:3px;font-weight:600;flex-shrink:0;}}
+.sev-alta{{background:#7f1d1d;color:#fca5a5;}}
+.sev-media{{background:#78350f;color:#fcd34d;}}
+.sev-baixa{{background:#1e3a5f;color:#93c5fd;}}
+.toggle-icon{{font-size:10px;color:#6b7280;flex-shrink:0;}}
+.pair-body{{padding:12px 14px;display:none;background:#131620;border-top:1px solid #2a2d38;}}
+.pair-body.open{{display:block;}}
+.field-label{{font-size:11px;color:#9ca3af;margin-top:10px;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;}}
+.field-label:first-child{{margin-top:0;}}
+.field-value{{font-size:13px;line-height:1.6;}}
+.motiv-box{{font-size:13px;line-height:1.6;background:#1a1218;border-left:3px solid #f87171;padding:8px 10px;border-radius:3px;color:#fecaca;}}
+.sug-text{{color:#a7f3d0;background:#052e16;border-left:3px solid #16a34a;padding:6px 10px;border-radius:3px;font-size:12px;}}
+</style></head><body>
+<p class="summary">{summary_line}</p>
+{cards_html}
+<script>
+function toggle(el){{
+  var b=el.nextElementSibling,i=el.querySelector('.toggle-icon');
+  if(b.classList.contains('open')){{b.classList.remove('open');i.textContent='▶';}}
+  else{{b.classList.add('open');i.textContent='▼';}}
+}}
+</script>
+</body></html>"""
+
+        import streamlit as st
+        height = min(len(pairs) * 60 + 80, 700)
+        st.session_state.setdefault("_pending_widgets", []).append({
+            "type":  "req_contradictions_html",
+            "html":  html,
+            "count": len(pairs),
+        })
+        return (
+            f"⚠️ Foram identificados **{len(pairs)} par(es)** com possível contradição "
+            f"entre os {len(rows)} requisitos analisados{ctx}{cap_note}. "
+            "Clique em cada par para ver a motivação e sugestão de resolução."
+        )
+
     def sugestoes_plantonista(self) -> str:
         """Briefing proativo do estado atual do projeto sem chamada LLM."""
         from modules.supabase_client import get_supabase_client
@@ -12955,6 +13204,11 @@ function toggle(el){{
                     req_type=tool_input.get("req_type"),
                     status=tool_input.get("status"),
                     title=tool_input.get("title", ""),
+                ),
+                "detect_requirement_contradictions": lambda: self.detect_requirement_contradictions(
+                    meeting_number=tool_input.get("meeting_number"),
+                    req_type=tool_input.get("req_type"),
+                    max_reqs=int(tool_input.get("max_reqs") or 80),
                 ),
                 # ── Plantonista / Diagnóstico
                 "sugestoes_plantonista":  lambda: self.sugestoes_plantonista(),
