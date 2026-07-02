@@ -46,6 +46,40 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+# ── Serviços de infraestrutura (Fail-Open — indisponibilidade não bloqueia startup) ──
+
+try:
+    from services.secret_manager import get_secret as _sm_get_secret  # type: ignore
+    _SECRET_MANAGER_OK = True
+except ImportError:
+    _sm_get_secret = None  # type: ignore
+    _SECRET_MANAGER_OK = False
+
+try:
+    from services.cloud_tasks import (  # type: ignore
+        enqueue_pipeline as _ct_enqueue,
+        CloudTasksMode,
+        active_pipeline_count as _ct_active_count,
+    )
+    _CLOUD_TASKS_OK = True
+except ImportError:
+    _ct_enqueue = None  # type: ignore
+    CloudTasksMode = None  # type: ignore
+    _ct_active_count = lambda: 0  # type: ignore
+    _CLOUD_TASKS_OK = False
+
+
+def _secret(name: str) -> str:
+    """
+    Resolve secret via Secret Manager 4 camadas (Fail-Open):
+      1. GCP Secret Manager  2. Env var  3. st.secrets  4. ""
+    Fallback direto para os.environ quando services/secret_manager não disponível.
+    """
+    if _SECRET_MANAGER_OK and _sm_get_secret:
+        return _sm_get_secret(name) or ""
+    return os.environ.get(name, "") or os.environ.get(name.upper(), "")
+
+
 # ── Mapeamento provider → variável de ambiente da LLM key ─────────────────────
 # O servidor usa chaves próprias (server-side) para cada provedor LLM.
 # Fallback genérico: LLM_API_KEY cobre qualquer provedor não mapeado.
@@ -63,12 +97,12 @@ _PROVIDER_ENV_VARS: dict[str, str] = {
 
 def _get_llm_api_key(provider: str) -> str:
     """
-    Resolve a API key do provedor LLM a partir de variáveis de ambiente.
-    Resolution order: env var específico do provedor → LLM_API_KEY → ""
-    Fail-open: retorna "" se nenhuma variável encontrada (pipeline falhará no LLM call).
+    Resolve a API key do provedor LLM via Secret Manager 4 camadas (Fail-Open).
+    Resolution order: Secret Manager(env_var) → Secret Manager(LLM_API_KEY) → ""
+    Fail-open: retorna "" se não encontrada (pipeline falhará no LLM call).
     """
     env_var = _PROVIDER_ENV_VARS.get(provider, "")
-    key = (env_var and os.environ.get(env_var, "")) or os.environ.get("LLM_API_KEY", "")
+    key = (env_var and _secret(env_var)) or _secret("LLM_API_KEY")
     if not key:
         logger.warning(
             "_get_llm_api_key: nenhuma LLM key encontrada para provider='%s' "
@@ -135,8 +169,10 @@ def _get_api_supabase() -> Any:
         return _api_supabase
     _api_supabase_init = True
     try:
-        url = os.environ["SUPABASE_URL"]
-        key = os.environ["SUPABASE_KEY"]
+        url = _secret("SUPABASE_URL")
+        key = _secret("SUPABASE_KEY")
+        if not url or not key:
+            raise KeyError("SUPABASE_URL/KEY")
         from supabase import create_client  # type: ignore
         _api_supabase = create_client(url, key)
         logger.info("API Supabase client: inicializado")
@@ -351,6 +387,34 @@ class StatusResponse(BaseModel):
     updated_at: float
     error:      Optional[str]
     result:     Optional[dict]
+
+
+# ── Modelos para /api/v1/* ─────────────────────────────────────────────────────
+
+class ProjectCreateRequest(BaseModel):
+    name:        str           = Field(..., min_length=1, max_length=200, description="Nome do projeto.")
+    description: Optional[str] = Field(None, description="Descrição opcional.")
+
+
+class ProjectResponse(BaseModel):
+    id:          str
+    name:        str
+    description: Optional[str] = None
+    created_at:  Optional[str] = None
+
+
+class ProcessResponse(BaseModel):
+    job_id:  str
+    status:  JobStatus = JobStatus.QUEUED
+    mode:    str       = "sync_fallback"   # "cloud_tasks" | "sync_fallback"
+    message: str       = "Pipeline enfileirado. Consulte /status/{job_id}."
+
+
+class InternalRunPayload(BaseModel):
+    """Payload enviado pelo Cloud Tasks para /internal/run."""
+    job_id:     str
+    transcript: str
+    config:     dict = Field(default_factory=dict)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -794,18 +858,271 @@ async def run_pipeline_endpoint(
     # Limpa armazenamento temporário antes de enfileirar
     job.result = None
 
-    # Enfileira na ThreadPool — não bloqueia o event loop
-    loop = asyncio.get_running_loop()
-    loop.run_in_executor(
-        _EXECUTOR,
-        _run_pipeline_sync,
-        config.job_id,
-        transcript_raw,
-        config,
-    )
+    # Usa Cloud Tasks se disponível; fallback síncrono (ThreadPoolExecutor) caso contrário.
+    # A gestão de concorrência (MAX_CONCURRENT_PIPELINES) é feita dentro de _run_pipeline_sync
+    # via _active_pipeline_lock — compatível com ambos os modos.
+    if _CLOUD_TASKS_OK and _ct_enqueue:
+        try:
+            from fastapi import HTTPException as _HTTPEx  # noqa (re-raise 429)
+            _ct_enqueue(
+                job_id    = config.job_id,
+                sync_fn   = _run_pipeline_sync,
+                sync_args = (config.job_id, transcript_raw, config),
+            )
+        except Exception as exc:
+            # Fail-open: qualquer erro no Cloud Tasks → ThreadPoolExecutor local
+            logger.warning("pipeline/run: cloud_tasks falhou (%s) — sync_fallback", exc)
+            loop = asyncio.get_running_loop()
+            loop.run_in_executor(_EXECUTOR, _run_pipeline_sync, config.job_id, transcript_raw, config)
+    else:
+        loop = asyncio.get_running_loop()
+        loop.run_in_executor(_EXECUTOR, _run_pipeline_sync, config.job_id, transcript_raw, config)
 
     logger.info("pipeline/run: job_id=%s provider=%s", config.job_id, config.provider)
     return PipelineRunResponse(job_id=config.job_id)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Endpoints /api/v1/projects  (listagem e criação de projetos)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get(
+    "/api/v1/projects",
+    response_model=list[ProjectResponse],
+    summary="Lista projetos disponíveis",
+    tags=["Projetos"],
+)
+async def list_projects(
+    key_hash: str = Depends(require_api_key),
+) -> list[ProjectResponse]:
+    """
+    Retorna lista de projetos do Supabase (tabela `projects`).
+    Fail-open: retorna [] se Supabase indisponível.
+    """
+    db = _get_api_supabase()
+    if db is None:
+        return []
+    try:
+        resp = (
+            db.table("projects")
+            .select("id, name, description, created_at")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return [ProjectResponse(**row) for row in (resp.data or [])]
+    except Exception as exc:
+        logger.warning("list_projects: Supabase error — %s", exc)
+        return []
+
+
+@app.post(
+    "/api/v1/projects",
+    response_model=ProjectResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Cria novo projeto",
+    tags=["Projetos"],
+)
+async def create_project(
+    req:      ProjectCreateRequest,
+    key_hash: str = Depends(require_api_key),
+) -> ProjectResponse:
+    """
+    Cria um projeto no Supabase (tabela `projects`).
+    Levanta 503 se Supabase não configurado.
+    """
+    db = _get_api_supabase()
+    if db is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Supabase não configurado — impossível criar projeto.",
+        )
+    try:
+        resp = (
+            db.table("projects")
+            .insert({"name": req.name, "description": req.description})
+            .execute()
+        )
+        if not resp.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Supabase não retornou dados após insert.",
+            )
+        return ProjectResponse(**resp.data[0])
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("create_project: erro — %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao criar projeto: {exc}",
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Endpoint /api/v1/process  (upload + pipeline em uma única chamada)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post(
+    "/api/v1/process",
+    response_model=ProcessResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Processa transcrição (upload + pipeline em uma chamada)",
+    tags=["Pipeline"],
+)
+async def process_transcript(
+    text:             Optional[str]        = Form(None),
+    file:             Optional[UploadFile] = File(None),
+    provider:         str                  = Form("DeepSeek"),
+    model:            Optional[str]        = Form(None),
+    run_quality:      bool                 = Form(True),
+    run_bpmn:         bool                 = Form(True),
+    run_minutes:      bool                 = Form(True),
+    run_requirements: bool                 = Form(True),
+    run_sbvr:         bool                 = Form(True),
+    run_bmm:          bool                 = Form(True),
+    run_synthesizer:  bool                 = Form(True),
+    n_bpmn_runs:      int                  = Form(3),
+    use_langgraph:    bool                 = Form(True),
+    output_language:  str                  = Form("Auto-detect"),
+    project_id:       Optional[str]        = Form(None),
+    key_hash:         str                  = Depends(check_rate_limit),
+) -> ProcessResponse:
+    """
+    Endpoint unificado: aceita texto ou arquivo, extrai transcrição e executa
+    o pipeline multiagente diretamente. Suporta Cloud Tasks (se configurado)
+    ou fallback síncrono via ThreadPoolExecutor.
+
+    Equivale a chamar POST /upload seguido de POST /pipeline/run num único request.
+    """
+    # ── Extração do texto ──────────────────────────────────────────────────
+    extracted: str = ""
+    if file is not None:
+        try:
+            from modules.ingest import load_transcript  # type: ignore
+            raw_bytes = await file.read()
+            fake_file = io.BytesIO(raw_bytes)
+            fake_file.name = file.filename or "upload.txt"  # type: ignore[attr-defined]
+            extracted = load_transcript(fake_file) or ""
+        except ImportError:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Módulo 'modules.ingest' não encontrado. Verifique PYTHONPATH.",
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Falha ao extrair texto do arquivo: {exc}",
+            )
+    elif text:
+        extracted = text.strip()
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Forneça 'text' (form field) ou 'file' (upload).",
+        )
+
+    if len(extracted) < 50:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Transcrição muito curta ({len(extracted)} chars). Mínimo: 50 caracteres.",
+        )
+
+    # ── Criar job + config ─────────────────────────────────────────────────
+    job_id = str(uuid.uuid4())
+    _JOBS[job_id] = JobRecord(job_id=job_id)
+
+    cfg = PipelineConfig(
+        job_id           = job_id,
+        provider         = provider,
+        model            = model,
+        run_quality      = run_quality,
+        run_bpmn         = run_bpmn,
+        run_minutes      = run_minutes,
+        run_requirements = run_requirements,
+        run_sbvr         = run_sbvr,
+        run_bmm          = run_bmm,
+        run_synthesizer  = run_synthesizer,
+        n_bpmn_runs      = max(1, min(5, n_bpmn_runs)),
+        use_langgraph    = use_langgraph,
+        output_language  = output_language,
+        project_id       = project_id,
+    )
+
+    # ── Enfileira via Cloud Tasks (com fallback síncrono) ─────────────────
+    mode_used = "sync_fallback"
+    if _CLOUD_TASKS_OK and _ct_enqueue:
+        try:
+            result_mode = _ct_enqueue(
+                job_id    = job_id,
+                sync_fn   = _run_pipeline_sync,
+                sync_args = (job_id, extracted, cfg),
+            )
+            mode_used = result_mode.value if result_mode else "sync_fallback"
+        except Exception as exc:
+            logger.warning("process_transcript: cloud_tasks falhou (%s) — sync_fallback", exc)
+            loop = asyncio.get_running_loop()
+            loop.run_in_executor(_EXECUTOR, _run_pipeline_sync, job_id, extracted, cfg)
+    else:
+        loop = asyncio.get_running_loop()
+        loop.run_in_executor(_EXECUTOR, _run_pipeline_sync, job_id, extracted, cfg)
+
+    logger.info(
+        "api/v1/process: job_id=%s provider=%s mode=%s chars=%d",
+        job_id, provider, mode_used, len(extracted),
+    )
+    return ProcessResponse(
+        job_id  = job_id,
+        mode    = mode_used,
+        message = f"Pipeline enfileirado (modo: {mode_used}). Consulte /status/{job_id}.",
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Endpoint /internal/run  (callback do Cloud Tasks — oculto do schema público)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post("/internal/run", include_in_schema=False)
+async def internal_run(payload: InternalRunPayload) -> dict:
+    """
+    Endpoint interno chamado pelo Cloud Tasks.
+    Executa _run_pipeline_sync de forma síncrona (Cloud Tasks garante retry em 5xx).
+    Não exposto no Swagger — acessível apenas pela fila do Cloud Tasks via OIDC.
+    """
+    job_id     = payload.job_id
+    transcript = payload.transcript
+
+    # Cria ou recupera o job (Cloud Tasks pode tentar novamente em falhas de rede)
+    if job_id not in _JOBS:
+        _JOBS[job_id] = JobRecord(job_id=job_id)
+
+    job = _JOBS[job_id]
+    if job.status == JobStatus.DONE:
+        # Idempotência: já concluído, retorna 200 para o Cloud Tasks não retentar
+        return {"job_id": job_id, "status": "already_done"}
+
+    # Reconstrói PipelineConfig a partir do dict de config do payload
+    try:
+        cfg = PipelineConfig(job_id=job_id, **payload.config)
+    except Exception as exc:
+        logger.error("internal_run: config inválido — %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Payload de config inválido: {exc}",
+        )
+
+    # Execução síncrona — Cloud Tasks aguarda response antes de marcar como done
+    try:
+        _run_pipeline_sync(job_id, transcript, cfg)
+    except Exception as exc:
+        logger.error("internal_run: pipeline falhou — %s", exc, exc_info=True)
+        # Retorna 500 para que o Cloud Tasks tente novamente (retry policy da fila)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Pipeline falhou: {exc}",
+        )
+
+    logger.info("internal_run: job_id=%s concluído", job_id)
+    return {"job_id": job_id, "status": "done"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -838,16 +1155,21 @@ async def get_job_status(job_id: str) -> StatusResponse:
 
 @app.get("/health", tags=["Infra"])
 async def health_check() -> dict:
-    """Liveness probe — verifica Supabase, workers e pipelines ativos."""
+    """Liveness probe — verifica Supabase, Secret Manager, Cloud Tasks e pipelines ativos."""
     supabase_ok = _get_api_supabase() is not None
     with _active_pipeline_lock:
-        active = _active_pipeline_count
+        active_legacy = _active_pipeline_count
+
+    ct_mode = "cloud_tasks" if os.environ.get("CLOUD_TASKS_QUEUE", "").strip() else "sync_fallback"
+    ct_active = _ct_active_count() if _CLOUD_TASKS_OK else 0
 
     return {
         "status":               "ok",
         "version":              "1.0.0",
         "supabase":             "configured" if supabase_ok else "not_configured",
-        "active_pipelines":     active,
+        "secret_manager":       "ok" if _SECRET_MANAGER_OK else "unavailable",
+        "cloud_tasks_mode":     ct_mode,
+        "active_pipelines":     active_legacy + ct_active,
         "max_pipelines":        MAX_CONCURRENT_PIPELINES,
         "queued_jobs":          sum(1 for j in _JOBS.values() if j.status == JobStatus.QUEUED),
         "executor_max_workers": _EXECUTOR._max_workers,
