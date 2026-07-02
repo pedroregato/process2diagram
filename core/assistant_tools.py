@@ -279,6 +279,14 @@ def get_tool_schemas_openai() -> list[dict]:
                             "type": "integer",
                             "description": "Itens por página (padrão 50, máximo 100).",
                         },
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": (
+                                "Filtra requisitos pela reunião de origem (first_meeting_id). "
+                                "Use quando o usuário pedir 'requisitos da Reunião N' ou "
+                                "'o que foi levantado na Reunião N'."
+                            ),
+                        },
                         "count_only": {
                             "type": "boolean",
                             "description": (
@@ -4318,6 +4326,7 @@ class AssistantToolExecutor:
         keyword: str | None = None,
         req_type: str | None = None,
         status: str | None = None,
+        meeting_number: int | None = None,
         page: int = 1,
         page_size: int = 50,
         count_only: bool = False,
@@ -4335,6 +4344,27 @@ class AssistantToolExecutor:
         # Clamp page_size
         page_size = max(1, min(int(page_size or 50), 100))
         page      = max(1, int(page or 1))
+
+        # ── Resolve meeting_number → meeting_id (UUID) ────────────────────────
+        meeting_id_filter: str | None = None
+        meeting_title_hint: str = ""
+        if meeting_number:
+            try:
+                m_rows = (
+                    db.table("meetings")
+                    .select("id, title")
+                    .eq("project_id", self.project_id)
+                    .eq("meeting_number", int(meeting_number))
+                    .limit(1)
+                    .execute()
+                )
+                if m_rows.data:
+                    meeting_id_filter = m_rows.data[0]["id"]
+                    meeting_title_hint = m_rows.data[0].get("title") or ""
+                else:
+                    return f"Reunião {meeting_number} não encontrada no projeto."
+            except Exception as exc:
+                return f"Erro ao buscar reunião {meeting_number}: {exc}"
 
         if keyword:
             # Keyword filtering must be client-side — fetch all matching rows
@@ -4354,6 +4384,8 @@ class AssistantToolExecutor:
                     q = q.eq("req_type", req_type)
                 if status:
                     q = q.eq("status", status)
+                if meeting_id_filter:
+                    q = q.eq("first_meeting_id", meeting_id_filter)
                 result = q.execute()
                 all_rows = result.data or []
             except Exception as exc:
@@ -4396,6 +4428,8 @@ class AssistantToolExecutor:
                     q = q.eq("req_type", req_type)
                 if status:
                     q = q.eq("status", status)
+                if meeting_id_filter:
+                    q = q.eq("first_meeting_id", meeting_id_filter)
                 result = q.execute()
                 rows  = result.data or []
                 total = result.count if result.count is not None else len(rows)
@@ -4403,10 +4437,12 @@ class AssistantToolExecutor:
                 return f"Erro ao acessar requisitos: {exc}"
 
         if not rows:
-            return "Nenhum requisito encontrado com os filtros fornecidos."
+            hint = f" da Reunião {meeting_number}" if meeting_number else ""
+            return f"Nenhum requisito encontrado{hint} com os filtros fornecidos."
 
         total_pages = max(1, -(-total // page_size))  # ceiling division
-        header = f"Requisitos (página {page}/{total_pages} · {len(rows)} de {total} no total):"
+        meeting_ctx = f" — Reunião {meeting_number}" + (f" ({meeting_title_hint})" if meeting_title_hint else "") if meeting_number else ""
+        header = f"Requisitos{meeting_ctx} (página {page}/{total_pages} · {len(rows)} de {total} no total):"
         lines  = [header]
 
         for r in rows:
@@ -12104,11 +12140,13 @@ class AssistantToolExecutor:
                       "get_requirements com keyword, req_type ou page.]"
                     if (not tool_input.get("keyword")
                         and not tool_input.get("page")
+                        and not tool_input.get("meeting_number")
                         and not tool_input.get("count_only"))
                     else self.get_requirements(
                         keyword=tool_input.get("keyword"),
                         req_type=tool_input.get("req_type"),
                         status=tool_input.get("status"),
+                        meeting_number=tool_input.get("meeting_number"),
                         page=int(tool_input.get("page") or 1),
                         page_size=int(tool_input.get("page_size") or 50),
                         count_only=bool(tool_input.get("count_only", False)),

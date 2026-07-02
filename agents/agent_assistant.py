@@ -526,6 +526,11 @@ BUSCA POR REQUISITO ESPECÍFICO (ex: "quem sugeriu o REQ-229?", "mostre o REQ-04
   ❌ NUNCA afirme que um requisito não existe com base apenas em uma busca por keyword vazia —
      pode haver falha de correspondência. Oriente o usuário a verificar diretamente no ReqTracker.
 
+FILTRO POR REUNIÃO (ex: "requisitos da Reunião 3", "o que foi levantado na Reunião 5"):
+  • Chame get_requirements(meeting_number=3) — retorna apenas os requisitos originados nessa reunião.
+  • Combine com outros filtros: get_requirements(meeting_number=3, req_type="funcional").
+  • ✅ Use sempre que o usuário mencionar uma reunião específica ao pedir requisitos.
+
 LISTAGEM PAGINADA (ex: "liste todos os requisitos", "mostre os requisitos funcionais"):
   • get_requirements retorna uma página por vez (padrão 50 itens).
   • O retorno inclui: "página X/Y · N de TOTAL no total".
