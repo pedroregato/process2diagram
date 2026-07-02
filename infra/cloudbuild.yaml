@@ -1,0 +1,76 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# infra/cloudbuild.yaml
+# Cloud Build pipeline — build, push e deploy da API no Cloud Run.
+#
+# Trigger manual:
+#   gcloud builds submit . --config infra/cloudbuild.yaml \
+#     --substitutions=_REGION=us-central1,_SERVICE=process2diagram-api
+#
+# Trigger automático: configurar no console GCP em Cloud Build > Triggers
+#   - Evento: push to main branch
+#   - Config: infra/cloudbuild.yaml
+#
+# Variáveis ($PROJECT_ID e $SHORT_SHA são injetadas automaticamente pelo Cloud Build):
+#   _REGION  — região do Cloud Run e Artifact Registry
+#   _SERVICE — nome do serviço Cloud Run
+#   _REPO    — repositório no Artifact Registry
+# ─────────────────────────────────────────────────────────────────────────────
+
+substitutions:
+  _REGION: us-central1
+  _SERVICE: process2diagram-api
+  _REPO: p2d
+
+steps:
+  # ── 1. Build da imagem Docker ──────────────────────────────────────────────
+  # --cache-from: reutiliza layers da última imagem para acelerar builds.
+  - name: "gcr.io/cloud-builders/docker"
+    id: build
+    args:
+      - build
+      - --tag=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${SHORT_SHA}
+      - --tag=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:latest
+      - --cache-from=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:latest
+      - --build-arg=BUILDKIT_INLINE_CACHE=1
+      - .
+
+  # ── 2. Push para Artifact Registry ────────────────────────────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    id: push
+    waitFor: ["build"]
+    args:
+      - push
+      - --all-tags
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api
+
+  # ── 3. Deploy no Cloud Run ────────────────────────────────────────────────
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk:slim"
+    id: deploy
+    waitFor: ["push"]
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${SHORT_SHA}
+      - --region=${_REGION}
+      - --platform=managed
+      - --no-allow-unauthenticated
+      - --service-account=p2d-api-sa@${PROJECT_ID}.iam.gserviceaccount.com
+      - --cpu=2
+      - --memory=2Gi
+      - --concurrency=4
+      - --timeout=300
+      - --max-instances=10
+      - --execution-environment=gen2
+
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${SHORT_SHA}
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8        # build rápido para imagem com spaCy lg (~560 MB)
+  dynamicSubstitutions: true
+
+timeout: 1800s                     # 30 min: spaCy download pode ser lento

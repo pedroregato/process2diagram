@@ -1,0 +1,60 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# .dockerignore — Process2Diagram API
+# Exclui do contexto de build tudo que não é necessário para api.py.
+# Reduz tamanho do contexto enviado ao Docker daemon e evita vazar secrets.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── VCS ───────────────────────────────────────────────────────────────────────
+.git/
+.gitignore
+.gitattributes
+
+# ── IDE / Dev ─────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# ── Streamlit (superfície da aplicação web — não usada pelo api.py) ───────────
+pages/
+app.py
+.streamlit/
+
+# ── Assets e estáticos ────────────────────────────────────────────────────────
+static/
+assets/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+
+# ── Planejamento / Docs internos ──────────────────────────────────────────────
+claude_guideline/
+manifestos/
+melhorias/
+drafts/
+memory/
+
+# ── Infra (não vai para dentro do container) ──────────────────────────────────
+infra/
+
+# ── Testes ────────────────────────────────────────────────────────────────────
+tests/
+conftest.py
+
+# ── Secrets (NUNCA devem entrar na imagem) ────────────────────────────────────
+secrets.toml
+.env
+*.env
+.env.*
+
+# ── Python virtual envs ───────────────────────────────────────────────────────
+venv/
+.venv/
+env/

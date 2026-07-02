@@ -1,0 +1,129 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# infra/cloudrun/service.yaml
+# Cloud Run Service — definição declarativa para deploy via gcloud CLI.
+#
+# Deploy:
+#   gcloud run services replace infra/cloudrun/service.yaml \
+#     --region=us-central1 --project=<GCP_PROJECT_ID>
+#
+# Substituir antes do deploy:
+#   PROJECT_ID  → ID do projeto GCP
+#   REGION      → região desejada (ex: us-central1, southamerica-east1)
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: process2diagram-api
+  labels:
+    app: process2diagram
+    component: api
+    version: v5
+  annotations:
+    # Tráfego público (restringir para ingress interno + LB em produção)
+    run.googleapis.com/ingress: all
+
+spec:
+  template:
+    metadata:
+      annotations:
+        # ── Autoscaling ───────────────────────────────────────────────────────
+        # minScale=0: scale-to-zero (dev/staging) — custo zero sem tráfego.
+        # Para produção: definir minScale="1" para eliminar cold starts.
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "10"
+
+        # Gen2: melhor performance de CPU + suporte a threading nativo
+        run.googleapis.com/execution-environment: gen2
+
+    spec:
+      # Service account com permissões mínimas (Secret Manager + Logging)
+      serviceAccountName: p2d-api-sa@PROJECT_ID.iam.gserviceaccount.com
+
+      # containerConcurrency=4: alinhado com MAX_CONCURRENT_PIPELINES em api.py.
+      # Fase 2 (Cloud Tasks): aumentar para 10+ quando threading.Lock for removido.
+      containerConcurrency: 4
+
+      # Timeout máximo por request: 300s (pipeline pesado + LLM calls)
+      timeoutSeconds: 300
+
+      containers:
+        - name: p2d-api
+          # Imagem no Artifact Registry — substituir REGION e PROJECT_ID
+          image: REGION-docker.pkg.dev/PROJECT_ID/p2d/api:latest
+
+          ports:
+            - containerPort: 8080
+
+          resources:
+            limits:
+              # 2 vCPU + 2Gi: suficiente para 4 pipelines LLM simultâneos
+              cpu: "2"
+              memory: 2Gi
+
+          env:
+            # ── LLM Providers (via Secret Manager) ───────────────────────────
+            - name: DEEPSEEK_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: deepseek-api-key
+                  key: latest
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: anthropic-api-key
+                  key: latest
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openai-api-key
+                  key: latest
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: groq-api-key
+                  key: latest
+            # GOOGLE_API_KEY removido — Gemini free tier descartado (PC114)
+            - name: XAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: xai-api-key
+                  key: latest
+
+            # ── Supabase ──────────────────────────────────────────────────────
+            - name: SUPABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-url
+                  key: latest
+            - name: SUPABASE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-service-key
+                  key: latest
+
+            # ── Configuração da aplicação ─────────────────────────────────────
+            - name: LOG_LEVEL
+              value: "info"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+
+          # Liveness probe — reinicia o container se /health falhar 3x
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+          # Readiness probe — retira instância do LB enquanto aquece
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
