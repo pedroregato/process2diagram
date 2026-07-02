@@ -137,6 +137,14 @@ process2diagram/
 │   ├── context_analyzer.py     # estimate_tokens(), should_use_long_context(), LONG_CONTEXT_AGENTS
 │   └── llm_telemetry.py        # LLMTelemetry (async Supabase write), run_benchmark_call(), BENCHMARK_TASKS, _telemetry singleton
 │
+├── adapters/
+│   └── langchain_tools.py        # Exposes assistant tools as LangChain-compatible tools
+│
+├── mcp/
+│   ├── google_calendar_server.py # MCP server — Google Calendar tools
+│   ├── integration_guide.html
+│   └── mcp_testing_guide.html
+│
 ├── skills/
 │   ├── skill_bpmn.md             # AgentBPMN system prompt (lowercase)
 │   ├── skill_minutes.md          # AgentMinutes system prompt (lowercase)
@@ -155,10 +163,18 @@ process2diagram/
 │   ├── test_agent_validator.py   # 22 tests
 │   └── test_mermaid_generator.py # 26 tests
 │
-└── claude_guideline/
-    ├── roadmap.md                # PC1–PC11 full history
-    ├── architecture_details.md   # BPMN generator internals, RAG details, ROI-TR formulas
-    └── pitfalls.md               # Known pitfalls with full code examples
+├── claude_guideline/
+│   ├── roadmap.md                # PC1–PC11 full history
+│   ├── architecture_details.md   # BPMN generator internals, RAG details, ROI-TR formulas
+│   └── pitfalls.md               # Known pitfalls with full code examples
+│
+├── notes/                        # Scratch notes, debates, planos de correção — não faz parte do app
+│   ├── ajustes/ · bpmn-ideias/ · commercial/ · corrigir/ · discussions/
+│   └── duvidas/ · erros/ · html-referencia/ · metodologia/ · reference-library/
+│
+└── test-scenarios/               # Execuções de teste ponta-a-ponta salvas para regressão manual
+    ├── cenario-teste-001/
+    └── cenario-teste-002/
 ```
 
 > **Linux / Streamlit Cloud — filesystem is case-sensitive.**
