@@ -473,6 +473,10 @@ with tab_req:
                     st.caption(f'💬 *"{_det_req["source_quote"]}"*')
                 if _det_req.get("status_note"):
                     st.caption(f"📝 {_det_req['status_note']}")
+                if _det_req.get("resolution_notes"):
+                    _impl_date = (_det_req.get("implemented_at") or "")[:10]
+                    _impl_label = f"✅ Solução implementada" + (f" ({_impl_date})" if _impl_date else "")
+                    st.success(f"**{_impl_label}:** {_det_req['resolution_notes']}")
             with _dd2:
                 if _det_req.get("origin") == "documento":
                     st.caption(f"📄 {doc_label(_det_req.get('doc_ref'))}")

@@ -526,6 +526,20 @@ BUSCA POR REQUISITO ESPECÍFICO (ex: "quem sugeriu o REQ-229?", "mostre o REQ-04
   ❌ NUNCA afirme que um requisito não existe com base apenas em uma busca por keyword vazia —
      pode haver falha de correspondência. Oriente o usuário a verificar diretamente no ReqTracker.
 
+REGISTRAR IMPLEMENTAÇÃO DE REQUISITO:
+  • Gatilho: usuário diz que um requisito foi implementado, entregue, desenvolvido, atendido, concluído.
+  • Ferramenta: update_requirement_implementation(req_number=N, resolution_notes="...", new_status="implemented")
+  • resolution_notes DEVE descrever a solução: o que foi desenvolvido, como, onde no sistema.
+  • Se o usuário não fornecer a solução, PERGUNTE antes de chamar a ferramenta.
+  • Para status intermediários: new_status="in_progress" (em desenvolvimento) ou "approved" (aprovado).
+  • ❌ NÃO use update_requirement_status para marcar implementação — faltará o campo resolution_notes.
+  • Após confirmação, diga ao usuário que pode ver a solução no ReqTracker (Artefatos → Requisitos).
+
+STATUS DE REQUISITOS — tabela completa:
+  active=ativo, backlog=pendente triagem, approved=aprovado, in_progress=em desenvolvimento,
+  implemented=implementado, revised=revisado, contradicted=contradição,
+  deprecated=depreciado, rejected=rejeitado, confirmed=confirmado.
+
 ORDEM DAS REUNIÕES — IMPORTANTE:
   • O número "Reunião N" reflete a ordem de ENTRADA no sistema (processamento), não a data real.
   • Uma reunião com data mais recente pode ter um número menor se foi inserida primeiro.
@@ -690,6 +704,8 @@ INSTRUÇÕES DE USO DAS FERRAMENTAS:
   • Falas ou discussões específicas → search_transcript
   • CONTAR requisitos/artefatos → count_artifacts  ← OBRIGATÓRIO para "quantos?"
   • LISTAR/DETALHAR requisitos → get_requirements (com keyword ou filtros)
+  • Marcar requisito como IMPLEMENTADO / registrar solução → update_requirement_implementation
+  • Mudar status de requisito (backlog/approved/in_progress/deprecated...) → update_requirement_status
   • Processos BPMN → list_bpmn_processes
   • Vocabulário ou regras SBVR → get_sbvr_terms / get_sbvr_rules
   • Lista de reuniões existentes → get_meeting_list (order_by="number" padrão; order_by="date" para ordem cronológica real)

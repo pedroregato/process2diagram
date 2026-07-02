@@ -1080,7 +1080,8 @@ def list_requirements_light(project_id: str) -> list[dict]:
             .select(
                 "id, req_number, title, description, req_type, priority, status, "
                 "origin, doc_ref, first_meeting_id, last_meeting_id, "
-                "owner, status_note, cited_by, source_quote, project_id"
+                "owner, status_note, cited_by, source_quote, project_id, "
+                "resolution_notes, implemented_at"
             )
             .eq("project_id", project_id)
             .order("req_number")

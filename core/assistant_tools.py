@@ -908,7 +908,7 @@ def get_tool_schemas_openai() -> list[dict]:
                     "Atualiza o status de um ou mais requisitos do projeto. "
                     "Pode filtrar por número(s) de requisito, tipo, status atual ou reunião de origem. "
                     "USE quando o usuário pedir para mudar, atualizar ou corrigir o status de requisitos. "
-                    "Valores válidos para status: 'active', 'revised', 'contradicted', 'confirmed'. "
+                    "Para marcar como IMPLEMENTADO e registrar a solução, prefira update_requirement_implementation. "
                     "Registra uma nova versão em requirement_versions com change_type='status_change'."
                 ),
                 "parameters": {
@@ -916,8 +916,18 @@ def get_tool_schemas_openai() -> list[dict]:
                     "properties": {
                         "new_status": {
                             "type": "string",
-                            "enum": ["active", "revised", "contradicted", "confirmed"],
-                            "description": "Novo status a aplicar nos requisitos selecionados.",
+                            "enum": [
+                                "active", "backlog", "approved", "in_progress",
+                                "implemented", "revised", "contradicted",
+                                "deprecated", "rejected", "confirmed",
+                            ],
+                            "description": (
+                                "Novo status a aplicar. "
+                                "active=ativo/em vigor, backlog=pendente análise, approved=aprovado, "
+                                "in_progress=em desenvolvimento, implemented=implementado, "
+                                "revised=revisado, contradicted=contradição, "
+                                "deprecated=depreciado, rejected=rejeitado."
+                            ),
                         },
                         "req_numbers": {
                             "type": "array",
@@ -982,6 +992,47 @@ def get_tool_schemas_openai() -> list[dict]:
                         },
                     },
                     "required": ["req_number"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "update_requirement_implementation",
+                "description": (
+                    "Marca um requisito como implementado e registra a solução adotada. "
+                    "USE quando o usuário disser que um requisito foi atendido, desenvolvido, "
+                    "entregue ou resolvido, e quiser documentar como foi implementado. "
+                    "Exemplos: 'O REQ-050 foi implementado — criamos tela de aprovação automática', "
+                    "'Marque o REQ-120 como concluído com a nota: integração via API REST'. "
+                    "Define status='implemented', registra resolution_notes e implemented_at. "
+                    "Cria versão em requirement_versions com change_type='implementation'."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "req_number": {
+                            "type": "integer",
+                            "description": "Número do requisito (ex: 50 para REQ-050).",
+                        },
+                        "resolution_notes": {
+                            "type": "string",
+                            "description": (
+                                "Descrição da solução adotada: o que foi desenvolvido, "
+                                "como foi implementado, qual componente/módulo atende ao requisito. "
+                                "Obrigatório — sem esta informação a implementação não fica rastreável."
+                            ),
+                        },
+                        "new_status": {
+                            "type": "string",
+                            "enum": ["implemented", "in_progress", "approved", "deprecated", "rejected"],
+                            "description": (
+                                "Status a aplicar. Padrão: 'implemented'. "
+                                "Use 'in_progress' se ainda estiver em desenvolvimento mas quiser registrar nota parcial."
+                            ),
+                        },
+                    },
+                    "required": ["req_number", "resolution_notes"],
                 },
             },
         },
@@ -3622,8 +3673,9 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "update_sbvr_term_by_id":       "escrita",
     "add_sbvr_rule":                "escrita",
     "update_sbvr_rule":             "escrita",
-    "update_requirement_status":    "escrita",
-    "update_requirement_text":      "escrita",
+    "update_requirement_status":           "escrita",
+    "update_requirement_text":             "escrita",
+    "update_requirement_implementation":   "escrita",
     # Admin — escrita privilegiada
     "apply_text_correction":        "admin",
     "rename_meeting":               "admin",
@@ -3873,7 +3925,11 @@ class AssistantToolExecutor:
         if not db:
             return "Banco de dados não disponível."
 
-        valid_statuses = {"active", "revised", "contradicted", "confirmed"}
+        valid_statuses = {
+            "active", "backlog", "approved", "in_progress",
+            "implemented", "revised", "contradicted",
+            "deprecated", "rejected", "confirmed",
+        }
         if new_status not in valid_statuses:
             return f"❌ Status inválido: '{new_status}'. Use: {', '.join(sorted(valid_statuses))}."
 
@@ -4076,6 +4132,95 @@ class AssistantToolExecutor:
             + (f"\n• Novo título: {new_title}" if new_title else "")
             + (f"\n• Nova descrição: {(new_description or '')[:200]}" if new_description else "")
             + (f"\n• Nota: {change_note}" if change_note else "")
+        )
+
+    def update_requirement_implementation(
+        self,
+        req_number: int,
+        resolution_notes: str,
+        new_status: str = "implemented",
+    ) -> str:
+        """Marca requisito como implementado e registra a solução adotada."""
+        from modules.supabase_client import get_supabase_client
+        from datetime import datetime, timezone
+        db = get_supabase_client()
+        if not db:
+            return "❌ Supabase não configurado."
+        if not resolution_notes or not resolution_notes.strip():
+            return "❌ resolution_notes é obrigatório para documentar a solução implementada."
+
+        valid = {"implemented", "in_progress", "approved", "deprecated", "rejected"}
+        if new_status not in valid:
+            new_status = "implemented"
+
+        try:
+            rows = (
+                db.table("requirements")
+                .select("id, req_number, title, description, status, priority, req_type, first_meeting_id")
+                .eq("project_id", self.project_id)
+                .eq("req_number", req_number)
+                .execute().data or []
+            )
+        except Exception as exc:
+            return f"❌ Erro ao buscar REQ-{req_number:03d}: {exc}"
+
+        if not rows:
+            return f"❌ REQ-{req_number:03d} não encontrado no projeto."
+
+        row = rows[0]
+        rid = row["id"]
+        now = datetime.now(timezone.utc).isoformat()
+
+        patch = {
+            "status":           new_status,
+            "resolution_notes": resolution_notes.strip(),
+            "implemented_at":   now,
+        }
+        try:
+            db.table("requirements").update(patch).eq("id", rid).execute()
+        except Exception as exc:
+            return f"❌ Erro ao atualizar REQ-{req_number:03d}: {exc}"
+
+        # Registrar versão
+        try:
+            ver_rows = (
+                db.table("requirement_versions")
+                .select("version")
+                .eq("requirement_id", rid)
+                .order("version", desc=True)
+                .limit(1)
+                .execute().data or []
+            )
+            next_ver = (ver_rows[0]["version"] + 1) if ver_rows else 1
+            db.table("requirement_versions").insert({
+                "requirement_id": rid,
+                "meeting_id":     row.get("first_meeting_id"),
+                "version":        next_ver,
+                "title":          row.get("title", ""),
+                "description":    row.get("description"),
+                "status":         new_status,
+                "priority":       row.get("priority"),
+                "req_type":       row.get("req_type"),
+                "change_type":    "implementation",
+                "changed_at":     now,
+                "change_note":    f"Implementação registrada: {resolution_notes.strip()[:200]}",
+            }).execute()
+        except Exception:
+            pass  # versionamento é best-effort
+
+        status_label = {
+            "implemented": "Implementado",
+            "in_progress": "Em Desenvolvimento",
+            "approved":    "Aprovado",
+            "deprecated":  "Depreciado",
+            "rejected":    "Rejeitado",
+        }.get(new_status, new_status)
+
+        return (
+            f"✅ REQ-{req_number:03d} — **{row.get('title', '')}**\n"
+            f"• Status: → **{status_label}**\n"
+            f"• Solução registrada: {resolution_notes.strip()[:300]}\n"
+            f"• Registrado em: {now[:10]}"
         )
 
     @staticmethod
@@ -4462,7 +4607,8 @@ class AssistantToolExecutor:
                     db.table("requirements")
                     .select(
                         "req_number, title, description, req_type, status, priority, "
-                        "source_quote, cited_by, first_meeting_id",
+                        "source_quote, cited_by, first_meeting_id, "
+                        "resolution_notes, implemented_at",
                         count="exact",
                     )
                     .eq("project_id", self.project_id)
@@ -4505,7 +4651,8 @@ class AssistantToolExecutor:
                     db.table("requirements")
                     .select(
                         "req_number, title, description, req_type, status, priority, "
-                        "source_quote, cited_by, first_meeting_id",
+                        "source_quote, cited_by, first_meeting_id, "
+                        "resolution_notes, implemented_at",
                         count="exact",
                     )
                     .eq("project_id", self.project_id)
@@ -4548,6 +4695,8 @@ class AssistantToolExecutor:
                 desc += "..."
             cited   = r.get("cited_by") or ""
             quote   = r.get("source_quote") or ""
+            res     = r.get("resolution_notes") or ""
+            impl_at = (r.get("implemented_at") or "")[:10]
             mtag    = self._fmt_meeting_tag(mlookup.get(r.get("first_meeting_id") or ""))
             meeting_suffix = f" | {mtag}" if mtag else ""
             lines.append(f"• {req_id} [{rtype} | {rstatus} | prioridade: {rprio}{meeting_suffix}]: {title}")
@@ -4559,6 +4708,9 @@ class AssistantToolExecutor:
                     lines.append(f'  > {attr}"{quote}"')
                 elif cited:
                     lines.append(f"  Autor: {cited}")
+            if res:
+                impl_date = f" ({impl_at})" if impl_at else ""
+                lines.append(f"  ✅ Solução{impl_date}: {res[:200]}")
 
         if page < total_pages:
             lines.append(
@@ -10291,7 +10443,8 @@ class AssistantToolExecutor:
                 db.table("requirements")
                 .select(
                     "req_number, title, description, req_type, status, priority, "
-                    "source_quote, cited_by, first_meeting_id"
+                    "source_quote, cited_by, first_meeting_id, "
+                    "resolution_notes, implemented_at"
                 )
                 .eq("project_id", self.project_id)
                 .order("req_number")
@@ -10337,6 +10490,8 @@ class AssistantToolExecutor:
             rdesc  = _esc(r.get("description") or "—")
             rquote = _esc(r.get("source_quote") or "")
             rauthor = _esc(r.get("cited_by") or "")
+            rres   = _esc(r.get("resolution_notes") or "")
+            rimpl  = (r.get("implemented_at") or "")[:10]
             prio_cls = _prio_cls(r.get("priority") or "")
             minfo = mlookup.get(r.get("first_meeting_id") or "")
             mtag  = _esc(self._fmt_meeting_tag(minfo)) if minfo else ""
@@ -10350,6 +10505,12 @@ class AssistantToolExecutor:
                 f'<div class="field-label">Autor</div>'
                 f'<div class="field-value">{rauthor}</div>'
                 if rauthor else ""
+            )
+            impl_label = f"Solução implementada" + (f" ({rimpl})" if rimpl else "")
+            resolution_html = (
+                f'<div class="field-label">{impl_label}</div>'
+                f'<div class="resolution-box">{rres}</div>'
+                if rres else ""
             )
             cards.append(
                 f'<div class="req-card">'
@@ -10365,6 +10526,7 @@ class AssistantToolExecutor:
                 f'<div class="req-body">'
                 f'<div class="field-label">Descrição</div>'
                 f'<div class="field-value">{rdesc}</div>'
+                f'{resolution_html}'
                 f'{quote_html}'
                 f'{author_html}'
                 f'</div>'
@@ -10391,6 +10553,7 @@ body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgro
 .badge-prio-baixa{{background:#1e3a5f;color:#93c5fd;}}
 .badge-status{{background:#064e3b;color:#6ee7b7;}}
 .badge-meeting{{background:#1e1b4b;color:#a5b4fc;}}
+.resolution-box{{background:#052e16;border-left:3px solid #16a34a;padding:6px 10px;border-radius:3px;font-size:12px;line-height:1.5;color:#bbf7d0;}}
 .req-body{{padding:12px 14px;display:none;background:#131620;border-top:1px solid #2a2d38;}}
 .req-body.open{{display:block;}}
 .field-label{{font-size:11px;color:#9ca3af;margin-top:8px;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;}}
@@ -12468,6 +12631,11 @@ function toggle(el){{
                     new_description=tool_input.get("new_description"),
                     new_title=tool_input.get("new_title"),
                     change_note=tool_input.get("change_note"),
+                ),
+                "update_requirement_implementation": lambda: self.update_requirement_implementation(
+                    req_number=int(tool_input["req_number"]),
+                    resolution_notes=tool_input["resolution_notes"],
+                    new_status=tool_input.get("new_status", "implemented"),
                 ),
                 "update_sbvr_term":          lambda: self.update_sbvr_term(
                     tool_input["term"],
