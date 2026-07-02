@@ -1110,6 +1110,12 @@ def _render_message_widgets(widgets: list[dict], msg_idx: int) -> None:
                             value=str(item.get("value", "")),
                             delta=item.get("delta") or None,
                         )
+        elif w_type == "requirements_html":
+            html = widget.get("html", "")
+            count = widget.get("count", 0)
+            if html:
+                height = min(max(count * 48 + 60, 200), 800)
+                _stc.html(html, height=height, scrolling=True)
 
 
 def _export_chat_to_markdown(

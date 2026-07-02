@@ -3011,6 +3011,41 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "render_requirements_table",
+                "description": (
+                    "Renderiza uma tabela interativa de requisitos diretamente no chat (HTML com cards expansíveis). "
+                    "USE quando o usuário pedir para LISTAR, EXIBIR ou VER os requisitos de uma reunião ou do projeto. "
+                    "Cada card mostra: REQ-ID, tipo, prioridade, status e título — clicável para ver descrição completa, "
+                    "fala de origem e autor. Evita paginação e truncamento. "
+                    "PREFIRA esta ferramenta a get_requirements quando o usuário quiser ver os requisitos na íntegra."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Número da reunião para filtrar requisitos. Omita para mostrar todos do projeto.",
+                        },
+                        "req_type": {
+                            "type": "string",
+                            "description": "Filtro por tipo: 'funcional', 'não-funcional', 'negócio', 'regra de negócio', etc. Opcional.",
+                        },
+                        "status": {
+                            "type": "string",
+                            "description": "Filtro por status: 'em aberto', 'aprovado', 'implementado', 'cancelado'. Opcional.",
+                        },
+                        "title": {
+                            "type": "string",
+                            "description": "Título para exibir acima da tabela. Opcional.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "generate_ibis_map",
                 "description": (
                     "Gera um Mapa Visual IBIS interativo (grafo Plotly) mostrando questões e alternativas "
@@ -3656,6 +3691,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "show_mermaid_diagram":            "consulta",
     "render_mermaid_code":             "consulta",
     "show_metrics":                    "consulta",
+    "render_requirements_table":       "consulta",
 }
 
 # Ferramentas que exigem perfil administrador
@@ -4142,7 +4178,7 @@ class AssistantToolExecutor:
     list_kh_entities, list_kh_contradictions, resolve_contradiction, delete_contradiction, list_kh_facts,
     search_ibis_debates, get_ibis_timeline, generate_ibis_map, search_glossary,
     generate_next_agenda, cluster_topic_decisions, read_skill_reference,
-    show_bpmn_diagram, show_mermaid_diagram, show_metrics
+    show_bpmn_diagram, show_mermaid_diagram, show_metrics, render_requirements_table
 
   Escrita (todos os perfis):
     add_sbvr_term, update_sbvr_term, update_sbvr_term_by_id, add_sbvr_rule, update_sbvr_rule,
@@ -10151,6 +10187,165 @@ class AssistantToolExecutor:
         )
         return f"📊 Métricas exibidas — {labels}"
 
+    def render_requirements_table(
+        self,
+        meeting_number: int | None = None,
+        req_type: str | None = None,
+        status: str | None = None,
+        title: str = "",
+    ) -> str:
+        """Fetch all requirements and queue an interactive HTML card table for inline rendering."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        # Resolve meeting_number → UUID
+        meeting_id_filter: str | None = None
+        meeting_label = ""
+        if meeting_number:
+            try:
+                m_rows = (
+                    db.table("meetings")
+                    .select("id, title")
+                    .eq("project_id", self.project_id)
+                    .eq("meeting_number", int(meeting_number))
+                    .limit(1)
+                    .execute()
+                )
+                if not m_rows.data:
+                    return f"Reunião {meeting_number} não encontrada no projeto."
+                meeting_id_filter = m_rows.data[0]["id"]
+                meeting_label = m_rows.data[0].get("title") or f"Reunião {meeting_number}"
+            except Exception as exc:
+                return f"Erro ao buscar reunião {meeting_number}: {exc}"
+
+        # Fetch all requirements (no pagination)
+        try:
+            q = (
+                db.table("requirements")
+                .select(
+                    "req_number, title, description, req_type, status, priority, "
+                    "source_quote, cited_by"
+                )
+                .eq("project_id", self.project_id)
+                .order("req_number")
+                .limit(500)
+            )
+            if req_type:
+                q = q.eq("req_type", req_type)
+            if status:
+                q = q.eq("status", status)
+            if meeting_id_filter:
+                q = q.eq("first_meeting_id", meeting_id_filter)
+            rows = q.execute().data or []
+        except Exception as exc:
+            return f"Erro ao acessar requisitos: {exc}"
+
+        if not rows:
+            hint = f" da Reunião {meeting_number}" if meeting_number else ""
+            return f"Nenhum requisito encontrado{hint} com os filtros fornecidos."
+
+        # Build self-contained HTML
+        def _esc(s: str) -> str:
+            return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+        def _prio_cls(p: str) -> str:
+            p = (p or "").lower()
+            if p in ("alta", "crítica", "critica", "high"):
+                return "prio-alta"
+            if p in ("baixa", "low"):
+                return "prio-baixa"
+            return "prio-media"
+
+        cards = []
+        for r in rows:
+            n      = r.get("req_number")
+            req_id = f"REQ-{n:03d}" if isinstance(n, int) else "REQ-???"
+            rtype  = _esc(r.get("req_type") or "—")
+            rprio  = _esc(r.get("priority") or "—")
+            rst    = _esc(r.get("status") or "—")
+            rtitle = _esc(r.get("title") or "(sem título)")
+            rdesc  = _esc(r.get("description") or "—")
+            rquote = _esc(r.get("source_quote") or "")
+            rauthor = _esc(r.get("cited_by") or "")
+            prio_cls = _prio_cls(r.get("priority") or "")
+            quote_html = (
+                f'<div class="field-label">Fala de origem</div>'
+                f'<div class="source-quote">{rquote}</div>'
+                if rquote else ""
+            )
+            author_html = (
+                f'<div class="field-label">Autor</div>'
+                f'<div class="field-value">{rauthor}</div>'
+                if rauthor else ""
+            )
+            cards.append(
+                f'<div class="req-card">'
+                f'<div class="req-header" onclick="toggle(this)">'
+                f'<span class="req-id">{req_id}</span>'
+                f'<span class="badge badge-type">{rtype}</span>'
+                f'<span class="badge badge-{prio_cls}">{rprio}</span>'
+                f'<span class="badge badge-status">{rst}</span>'
+                f'<span class="req-title">{rtitle}</span>'
+                f'<span class="toggle-icon">▶</span>'
+                f'</div>'
+                f'<div class="req-body">'
+                f'<div class="field-label">Descrição</div>'
+                f'<div class="field-value">{rdesc}</div>'
+                f'{quote_html}'
+                f'{author_html}'
+                f'</div>'
+                f'</div>'
+            )
+
+        ctx = f" — {meeting_label}" if meeting_label else ""
+        if not title:
+            title = f"📋 Requisitos{ctx} ({len(rows)} itens)"
+
+        html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e0e0e0;margin:0;padding:8px;}}
+.summary{{color:#9ca3af;font-size:12px;margin-bottom:8px;}}
+.req-card{{border:1px solid #2a2d38;border-radius:6px;margin:5px 0;overflow:hidden;}}
+.req-header{{display:flex;align-items:center;gap:6px;padding:9px 12px;cursor:pointer;user-select:none;background:#1a1d24;flex-wrap:wrap;}}
+.req-header:hover{{background:#22262f;}}
+.req-id{{font-weight:700;font-size:11px;padding:2px 6px;border-radius:4px;background:#2563eb;color:#fff;flex-shrink:0;}}
+.req-title{{flex:1;font-size:13px;font-weight:500;min-width:120px;}}
+.badge{{font-size:11px;padding:2px 6px;border-radius:3px;flex-shrink:0;}}
+.badge-type{{background:#374151;color:#d1d5db;}}
+.badge-prio-alta{{background:#7f1d1d;color:#fca5a5;}}
+.badge-prio-media{{background:#78350f;color:#fcd34d;}}
+.badge-prio-baixa{{background:#1e3a5f;color:#93c5fd;}}
+.badge-status{{background:#064e3b;color:#6ee7b7;}}
+.req-body{{padding:12px 14px;display:none;background:#131620;border-top:1px solid #2a2d38;}}
+.req-body.open{{display:block;}}
+.field-label{{font-size:11px;color:#9ca3af;margin-top:8px;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;}}
+.field-value{{font-size:13px;line-height:1.6;}}
+.source-quote{{font-style:italic;color:#cbd5e1;background:#1e2030;border-left:3px solid #4b5563;padding:6px 10px;border-radius:3px;font-size:12px;line-height:1.5;}}
+.toggle-icon{{font-size:10px;color:#6b7280;margin-left:auto;flex-shrink:0;}}
+</style></head><body>
+<p class="summary">{_esc(title)}</p>
+{''.join(cards)}
+<script>
+function toggle(el){{
+  var body=el.nextElementSibling;
+  var icon=el.querySelector('.toggle-icon');
+  if(body.classList.contains('open')){{body.classList.remove('open');icon.textContent='▶';}}
+  else{{body.classList.add('open');icon.textContent='▼';}}
+}}
+</script>
+</body></html>"""
+
+        import streamlit as st
+        st.session_state.setdefault("_pending_widgets", []).append({
+            "type":   "requirements_html",
+            "html":   html,
+            "title":  title,
+            "count":  len(rows),
+        })
+        return f"📋 Tabela com {len(rows)} requisito(s){ctx} renderizada no chat. Clique em cada card para ver a descrição completa."
+
     # ── Glossário ─────────────────────────────────────────────────────────────
 
     def search_glossary(self, query: str, tag: str | None = None) -> str:
@@ -12510,6 +12705,12 @@ class AssistantToolExecutor:
                 ),
                 "show_metrics":           lambda: self.show_metrics(
                     items=tool_input["items"],
+                    title=tool_input.get("title", ""),
+                ),
+                "render_requirements_table": lambda: self.render_requirements_table(
+                    meeting_number=tool_input.get("meeting_number"),
+                    req_type=tool_input.get("req_type"),
+                    status=tool_input.get("status"),
                     title=tool_input.get("title", ""),
                 ),
                 # ── Plantonista / Diagnóstico
