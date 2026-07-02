@@ -68,7 +68,16 @@ process2diagram/
 │   ├── lg_pipeline.py            # LGBPMNRunner — LangGraph adaptive BPMN retry
 │   ├── session_state.py          # init_session_state() — all st.session_state defaults
 │   ├── rerun_handlers.py         # handle_rerun() — re-executes a single named agent
-│   ├── assistant_tools.py        # Tool schemas + AssistantToolExecutor
+│   ├── assistant_tools.py        # get_tool_schemas_openai/anthropic/catalog() + AssistantToolExecutor(*mixins) — thin composition root, see core/tools/
+│   ├── tools/                    # AssistantToolExecutor split by domain (PC115) — each file = 1 mixin class + its OpenAI schemas
+│   │   ├── _shared.py                        # _compute_initials, _PT_NAME_PREPS
+│   │   ├── tools_meetings_requirements.py    # meeting queries + requirement text/status updates
+│   │   ├── tools_bpmn_sbvr.py                # BPMN describe/suggest/save/apply + SBVR CRUD
+│   │   ├── tools_meeting_ops_calendar.py     # meeting admin ops (rename/reprocess/roi) + calendar read/create
+│   │   ├── tools_admin_charts_entities.py    # calendar admin, DB integrity, embeddings, charts, entity resolution
+│   │   ├── tools_documents_ibis_diagrams.py  # DocumentManager tools, IBIS, diagram rendering
+│   │   ├── tools_knowledge_requirements2.py  # KnowledgeHub entities/contradictions, requirement merge/diff
+│   │   └── tools_executive_advanced.py       # PC-era synthesis tools (deck, charter, simulação, conformidade...)
 │   ├── chart_config.py           # CHART_PALETTES + DEFAULT_PALETTE (zero-dependency)
 │   ├── cost_model.py             # ModelPricing, AgentTokenProfile, ScenarioConfig, ScenarioResult, PRICING_CATALOG, project_cost()
 │   ├── schema.py                 # Legacy schemas
@@ -374,7 +383,9 @@ Within Assistente mode, sidebar toggle `asst_use_tools`:
 - **Modo A: Tool-use** (default) — LLM calls tools against Supabase directly
 - **Modo B: RAG Clássico** — keyword + semantic vector search fallback
 
-### Tool list (`core/assistant_tools.py`)
+### Tool list (`core/assistant_tools.py` + `core/tools/`)
+
+**PC115 split:** `AssistantToolExecutor` is composed via multiple inheritance from 7 domain mixins in `core/tools/` (see Repository Structure above); `core/assistant_tools.py` itself only holds `__init__`, `execute()` (name→method dispatch dict), and the schema/catalog getters that concatenate each mixin file's `*_SCHEMAS` constant. **To add a new tool:** implement the method on the mixin matching its domain (or `tools_executive_advanced.py` as a default), add its OpenAI schema dict to that same file's `*_SCHEMAS` list, then register the dispatch entry in `AssistantToolExecutor.execute()`. Never add methods directly to `core/assistant_tools.py`.
 
 **Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `get_requirement_history`, `update_requirement_text`, `list_bpmn_processes`, `list_bpmn_versions`, `review_bpmn_diagram`, `describe_bpmn_process`, `suggest_bpmn_corrections`, `get_sbvr_terms`, `get_sbvr_rules`, `update_sbvr_rule`, `update_sbvr_term_by_id`, `get_bmm`, `get_ckf`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`, `get_cache_stats`, `list_meeting_documents`, `get_document_content`, `search_documents`, `get_document_types`, `search_glossary`, `read_skill_reference`, `search_ibis_debates`, `get_ibis_timeline`, `generate_ibis_map`, `list_kh_entities`, `list_kh_contradictions`, `resolve_contradiction`, `delete_contradiction`, `list_kh_facts`, `cluster_topic_decisions`, `generate_next_agenda`, `sugestoes_plantonista`, `diagnostico_projeto`, `reordenar_requisitos`, `vincular_regra_debate`, `mapa_rastreabilidade`, `simular_cenario`, `verificar_conformidade`, `sugerir_processos`, `gerar_deck_executivo`, `gerar_project_charter`.
 
