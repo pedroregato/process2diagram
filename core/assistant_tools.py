@@ -3836,6 +3836,27 @@ class AssistantToolExecutor:
             if m.get("meeting_number") == meeting_number:
                 return m
         return None
+
+    def _meeting_lookup(self) -> dict[str, dict]:
+        """Return {meeting_id_uuid: {number, date, title}} from cached meetings."""
+        return {
+            m["id"]: {
+                "number": m.get("meeting_number"),
+                "date":   (m.get("meeting_date") or "")[:10] or "sem data",
+                "title":  m.get("title") or "",
+            }
+            for m in self._get_meetings()
+            if m.get("id")
+        }
+
+    @staticmethod
+    def _fmt_meeting_tag(info: dict | None) -> str:
+        """Format 'Reunião N (YYYY-MM-DD)' from a lookup entry, or '' if None."""
+        if not info:
+            return ""
+        n    = info.get("number", "?")
+        date = info.get("date") or "sem data"
+        return f"Reunião {n} ({date})"
         
     def update_requirement_status(
         self,
@@ -4441,7 +4462,7 @@ class AssistantToolExecutor:
                     db.table("requirements")
                     .select(
                         "req_number, title, description, req_type, status, priority, "
-                        "source_quote, cited_by",
+                        "source_quote, cited_by, first_meeting_id",
                         count="exact",
                     )
                     .eq("project_id", self.project_id)
@@ -4484,7 +4505,7 @@ class AssistantToolExecutor:
                     db.table("requirements")
                     .select(
                         "req_number, title, description, req_type, status, priority, "
-                        "source_quote, cited_by",
+                        "source_quote, cited_by, first_meeting_id",
                         count="exact",
                     )
                     .eq("project_id", self.project_id)
@@ -4512,6 +4533,9 @@ class AssistantToolExecutor:
         header = f"Requisitos{meeting_ctx} (página {page}/{total_pages} · {len(rows)} de {total} no total):"
         lines  = [header]
 
+        # Build meeting lookup only when listing across meetings (no filter)
+        mlookup = self._meeting_lookup() if not meeting_id_filter else {}
+
         for r in rows:
             n       = r.get("req_number")
             req_id  = f"REQ-{n:03d}" if isinstance(n, int) else "REQ-???"
@@ -4524,7 +4548,9 @@ class AssistantToolExecutor:
                 desc += "..."
             cited   = r.get("cited_by") or ""
             quote   = r.get("source_quote") or ""
-            lines.append(f"• {req_id} [{rtype} | {rstatus} | prioridade: {rprio}]: {title}")
+            mtag    = self._fmt_meeting_tag(mlookup.get(r.get("first_meeting_id") or ""))
+            meeting_suffix = f" | {mtag}" if mtag else ""
+            lines.append(f"• {req_id} [{rtype} | {rstatus} | prioridade: {rprio}{meeting_suffix}]: {title}")
             if desc:
                 lines.append(f"  {desc}")
             if cited or quote:
@@ -5527,7 +5553,11 @@ class AssistantToolExecutor:
             return "Nenhum termo SBVR encontrado."
         lines = [f"Termos SBVR ({len(terms)}):"]
         for t in terms:
-            lines.append(f"• {t.get('term')}: {t.get('definition')}")
+            m = t.get("meetings") or {}
+            n    = m.get("meeting_number")
+            date = (m.get("meeting_date") or "")[:10]
+            mtag = f" [Reunião {n} ({date or 'sem data'})]" if n else ""
+            lines.append(f"• {t.get('term')}{mtag}: {t.get('definition')}")
         return "\n".join(lines)
 
     def get_sbvr_rules(self, keyword: str | None = None) -> str:
@@ -5547,7 +5577,11 @@ class AssistantToolExecutor:
             rule_id   = r.get("rule_id") or ""
             statement = r.get("statement") or ""
             nucleo    = r.get("nucleo_nominal") or ""
-            lines.append(f"• [{rule_id}] {nucleo}: {statement}")
+            m = r.get("meetings") or {}
+            n    = m.get("meeting_number")
+            date = (m.get("meeting_date") or "")[:10]
+            mtag = f" [Reunião {n} ({date or 'sem data'})]" if n else ""
+            lines.append(f"• [{rule_id}]{mtag} {nucleo}: {statement}")
         return "\n".join(lines)
 
     def list_context_files(self) -> str:
@@ -10257,7 +10291,7 @@ class AssistantToolExecutor:
                 db.table("requirements")
                 .select(
                     "req_number, title, description, req_type, status, priority, "
-                    "source_quote, cited_by"
+                    "source_quote, cited_by, first_meeting_id"
                 )
                 .eq("project_id", self.project_id)
                 .order("req_number")
@@ -10289,6 +10323,9 @@ class AssistantToolExecutor:
                 return "prio-baixa"
             return "prio-media"
 
+        # meeting lookup — show per-card only when not filtered to a single meeting
+        mlookup = self._meeting_lookup() if not meeting_id_filter else {}
+
         cards = []
         for r in rows:
             n      = r.get("req_number")
@@ -10301,6 +10338,9 @@ class AssistantToolExecutor:
             rquote = _esc(r.get("source_quote") or "")
             rauthor = _esc(r.get("cited_by") or "")
             prio_cls = _prio_cls(r.get("priority") or "")
+            minfo = mlookup.get(r.get("first_meeting_id") or "")
+            mtag  = _esc(self._fmt_meeting_tag(minfo)) if minfo else ""
+            meeting_badge = f'<span class="badge badge-meeting">{mtag}</span>' if mtag else ""
             quote_html = (
                 f'<div class="field-label">Fala de origem</div>'
                 f'<div class="source-quote">{rquote}</div>'
@@ -10318,6 +10358,7 @@ class AssistantToolExecutor:
                 f'<span class="badge badge-type">{rtype}</span>'
                 f'<span class="badge badge-{prio_cls}">{rprio}</span>'
                 f'<span class="badge badge-status">{rst}</span>'
+                f'{meeting_badge}'
                 f'<span class="req-title">{rtitle}</span>'
                 f'<span class="toggle-icon">▶</span>'
                 f'</div>'
@@ -10349,6 +10390,7 @@ body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgro
 .badge-prio-media{{background:#78350f;color:#fcd34d;}}
 .badge-prio-baixa{{background:#1e3a5f;color:#93c5fd;}}
 .badge-status{{background:#064e3b;color:#6ee7b7;}}
+.badge-meeting{{background:#1e1b4b;color:#a5b4fc;}}
 .req-body{{padding:12px 14px;display:none;background:#131620;border-top:1px solid #2a2d38;}}
 .req-body.open{{display:block;}}
 .field-label{{font-size:11px;color:#9ca3af;margin-top:8px;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;}}
