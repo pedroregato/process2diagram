@@ -3115,6 +3115,149 @@ def get_tool_schemas_openai() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "merge_requirements",
+                "description": (
+                    "Mescla dois ou mais requisitos duplicados em um único requisito, "
+                    "transfere o histórico de versões e marca os absorvidos como deprecated. "
+                    "USE quando o usuário identificar duplicatas e quiser consolidá-las. "
+                    "Exemplos: 'mescle REQ-010 e REQ-025 mantendo o REQ-010', "
+                    "'una os requisitos 10, 25 e 37 no REQ-010'. "
+                    "Ferramenta ADMIN — exige perfil administrador."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "req_numbers": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": "Lista de números de TODOS os requisitos a mesclar (incluindo o que será mantido).",
+                        },
+                        "keep_number": {
+                            "type": "integer",
+                            "description": "Número do requisito que será MANTIDO (os demais serão absorvidos por ele).",
+                        },
+                        "merge_strategy": {
+                            "type": "string",
+                            "enum": ["combine", "longest", "keep_main"],
+                            "description": (
+                                "Como combinar as descrições: "
+                                "'combine' (padrão) = concatena todas; "
+                                "'longest' = mantém a descrição mais longa; "
+                                "'keep_main' = mantém apenas a descrição do requisito principal."
+                            ),
+                        },
+                        "merge_note": {
+                            "type": "string",
+                            "description": "Justificativa para a mesclagem (registrada no histórico). Recomendado.",
+                        },
+                    },
+                    "required": ["req_numbers", "keep_number"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "diff_requirement",
+                "description": (
+                    "Renderiza um diff visual (colorido) entre duas versões de um requisito no chat. "
+                    "USE quando o usuário quiser ver 'o que mudou', 'evolução', 'diferença entre versões'. "
+                    "Mostra texto removido em vermelho e texto adicionado em verde."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "req_number": {
+                            "type": "integer",
+                            "description": "Número do requisito (ex: 42 para REQ-042).",
+                        },
+                        "from_version": {
+                            "type": "integer",
+                            "description": "Versão de origem. Omita para usar a primeira versão disponível.",
+                        },
+                        "to_version": {
+                            "type": "integer",
+                            "description": "Versão de destino. Omita para usar a versão mais recente.",
+                        },
+                    },
+                    "required": ["req_number"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "search_universal",
+                "description": (
+                    "Busca uma query em TODOS os tipos de artefatos de uma vez: "
+                    "transcrições, requisitos, termos SBVR, regras SBVR, debates IBIS e documentos. "
+                    "USE quando o usuário pedir 'busque X em tudo', 'onde aparece X no projeto', "
+                    "'mostre tudo sobre X'. Retorna resultados agrupados por tipo com scores de relevância. "
+                    "Substitui chamar search_transcript + get_requirements + get_sbvr_terms + etc. separadamente."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Tema, termo ou expressão a buscar em todos os artefatos.",
+                        },
+                        "scopes": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": (
+                                "Tipos a buscar. Padrão: todos. "
+                                "Opções: 'transcripts', 'requirements', 'sbvr', 'ibis', 'documents'."
+                            ),
+                        },
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "batch_text_correction",
+                "description": (
+                    "Aplica múltiplas correções de texto (find→replace) em uma única chamada. "
+                    "USE quando o usuário pedir para corrigir várias siglas, nomes ou termos de uma vez. "
+                    "Exemplo: 'troque ODCI por DCI, FDTI por DTI e OSEUITE por SESUITE em todas as transcrições'. "
+                    "Muito mais eficiente que aplicar apply_text_correction uma a uma. "
+                    "Ferramenta ADMIN — exige perfil administrador."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "corrections": {
+                            "type": "array",
+                            "description": "Lista de correções a aplicar em sequência.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "find":    {"type": "string", "description": "Texto a localizar."},
+                                    "replace": {"type": "string", "description": "Texto substituto."},
+                                    "scope":   {
+                                        "type": "string",
+                                        "enum": ["transcripts", "minutes", "requirements", "all"],
+                                        "description": "Escopo da substituição.",
+                                    },
+                                },
+                                "required": ["find", "replace", "scope"],
+                            },
+                        },
+                        "meeting_number": {
+                            "type": "integer",
+                            "description": "Restringir a uma reunião específica (opcional).",
+                        },
+                    },
+                    "required": ["corrections"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "detect_requirement_contradictions",
                 "description": (
                     "Analisa os requisitos do projeto com IA e identifica pares em possível contradição, "
@@ -3795,6 +3938,10 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "show_metrics":                    "consulta",
     "render_requirements_table":            "consulta",
     "detect_requirement_contradictions":    "consulta",
+    "merge_requirements":                   "admin",
+    "diff_requirement":                     "consulta",
+    "search_universal":                     "consulta",
+    "batch_text_correction":                "admin",
 }
 
 # Ferramentas que exigem perfil administrador
@@ -3831,6 +3978,8 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "inserir_secao_ata",
     "mesclar_reunioes",
     "sincronizar_calendario",
+    "merge_requirements",
+    "batch_text_correction",
 })
 
 
@@ -10989,6 +11138,370 @@ function toggle(el){{
 
     # ── Plantonista / Diagnóstico ─────────────────────────────────────────────
 
+    def merge_requirements(
+        self,
+        req_numbers: list[int],
+        keep_number: int,
+        merge_strategy: str = "combine",
+        merge_note: str = "",
+    ) -> str:
+        """Mescla requisitos duplicados: absorve os secundários no principal."""
+        from modules.supabase_client import get_supabase_client
+        from datetime import datetime, timezone
+        db = get_supabase_client()
+        if not db:
+            return "❌ Supabase não configurado."
+        if keep_number not in req_numbers:
+            return f"❌ keep_number ({keep_number}) deve estar em req_numbers."
+        if len(req_numbers) < 2:
+            return "❌ Informe ao menos 2 requisitos para mesclar."
+
+        absorbed = [n for n in req_numbers if n != keep_number]
+
+        # Busca todos os requisitos
+        try:
+            rows = (
+                db.table("requirements")
+                .select("id, req_number, title, description, status, priority, "
+                        "req_type, first_meeting_id, last_meeting_id")
+                .eq("project_id", self.project_id)
+                .in_("req_number", req_numbers)
+                .execute().data or []
+            )
+        except Exception as exc:
+            return f"❌ Erro ao buscar requisitos: {exc}"
+
+        by_num = {r["req_number"]: r for r in rows}
+        missing = [n for n in req_numbers if n not in by_num]
+        if missing:
+            return f"❌ Requisitos não encontrados: {[f'REQ-{n:03d}' for n in missing]}"
+
+        keep_row = by_num[keep_number]
+        keep_id  = keep_row["id"]
+        now      = datetime.now(timezone.utc).isoformat()
+
+        # Mescla descrições
+        if merge_strategy == "keep_main":
+            new_desc = keep_row.get("description") or ""
+        elif merge_strategy == "longest":
+            all_descs = [by_num[n].get("description") or "" for n in req_numbers]
+            new_desc  = max(all_descs, key=len)
+        else:  # combine
+            parts = [keep_row.get("description") or ""]
+            for n in absorbed:
+                d = by_num[n].get("description") or ""
+                if d and d not in parts[0]:
+                    parts.append(f"[Absorvido de REQ-{n:03d}] {d}")
+            new_desc = "\n\n".join(p for p in parts if p)
+
+        # Transfere versões dos absorvidos para o requisito mantido
+        try:
+            ver_q = (
+                db.table("requirement_versions")
+                .select("version")
+                .eq("requirement_id", keep_id)
+                .order("version", desc=True)
+                .limit(1)
+                .execute().data or []
+            )
+            next_ver = (ver_q[0]["version"] + 1) if ver_q else 1
+        except Exception:
+            next_ver = 1
+
+        for n in absorbed:
+            abs_id = by_num[n]["id"]
+            try:
+                abs_vers = (
+                    db.table("requirement_versions")
+                    .select("*")
+                    .eq("requirement_id", abs_id)
+                    .order("version")
+                    .execute().data or []
+                )
+                for v in abs_vers:
+                    payload = {k: v[k] for k in v if k not in ("id", "requirement_id")}
+                    payload["requirement_id"] = keep_id
+                    payload["version"]        = next_ver
+                    payload["change_note"]    = (
+                        f"[Transferido de REQ-{n:03d}] {payload.get('change_note') or ''}"
+                    ).strip()
+                    db.table("requirement_versions").insert(payload).execute()
+                    next_ver += 1
+            except Exception:
+                pass  # best-effort
+
+        # Atualiza descrição do requisito mantido e insere versão de mesclagem
+        try:
+            db.table("requirements").update({
+                "description": new_desc,
+                "updated_at":  now,
+            }).eq("id", keep_id).execute()
+            db.table("requirement_versions").insert({
+                "requirement_id": keep_id,
+                "version":        next_ver,
+                "title":          keep_row.get("title", ""),
+                "description":    new_desc,
+                "status":         keep_row.get("status", "active"),
+                "priority":       keep_row.get("priority"),
+                "req_type":       keep_row.get("req_type"),
+                "change_type":    "merge",
+                "changed_at":     now,
+                "change_note":    merge_note or (
+                    f"Mesclagem de {[f'REQ-{n:03d}' for n in absorbed]}"
+                ),
+            }).execute()
+        except Exception as exc:
+            return f"❌ Erro ao atualizar REQ-{keep_number:03d}: {exc}"
+
+        # Marca absorvidos como deprecated
+        absorbed_labels = []
+        for n in absorbed:
+            abs_id = by_num[n]["id"]
+            try:
+                db.table("requirements").update({
+                    "status":      "deprecated",
+                    "status_note": f"Mesclado em REQ-{keep_number:03d}",
+                    "updated_at":  now,
+                }).eq("id", abs_id).execute()
+                absorbed_labels.append(f"REQ-{n:03d}")
+            except Exception:
+                pass
+
+        return (
+            f"✅ Mesclagem concluída!\n"
+            f"• Mantido: **REQ-{keep_number:03d}** — {keep_row.get('title', '')}\n"
+            f"• Absorvidos (deprecated): {', '.join(absorbed_labels)}\n"
+            f"• Estratégia: {merge_strategy}\n"
+            f"• Histórico de versões transferido\n"
+            + (f"• Nota: {merge_note}" if merge_note else "")
+        )
+
+    def diff_requirement(
+        self,
+        req_number: int,
+        from_version: int | None = None,
+        to_version:   int | None = None,
+    ) -> str:
+        """Renderiza diff visual entre duas versões de um requisito."""
+        import difflib
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "❌ Supabase não configurado."
+
+        # Busca ID do requisito
+        try:
+            rows = (
+                db.table("requirements")
+                .select("id, req_number, title")
+                .eq("project_id", self.project_id)
+                .eq("req_number", req_number)
+                .limit(1)
+                .execute().data or []
+            )
+        except Exception as exc:
+            return f"❌ Erro ao buscar REQ-{req_number:03d}: {exc}"
+        if not rows:
+            return f"❌ REQ-{req_number:03d} não encontrado."
+
+        req_id = rows[0]["id"]
+        title  = rows[0].get("title") or f"REQ-{req_number:03d}"
+
+        # Busca versões
+        try:
+            versions = (
+                db.table("requirement_versions")
+                .select("version, title, description, status, change_type, changed_at, change_note")
+                .eq("requirement_id", req_id)
+                .order("version")
+                .execute().data or []
+            )
+        except Exception as exc:
+            return f"❌ Erro ao buscar versões: {exc}"
+
+        if len(versions) < 2:
+            return f"REQ-{req_number:03d} tem apenas {len(versions)} versão — diff requer ao menos 2."
+
+        ver_map = {v["version"]: v for v in versions}
+        ver_nums = sorted(ver_map.keys())
+
+        from_v = from_version or ver_nums[0]
+        to_v   = to_version   or ver_nums[-1]
+
+        if from_v not in ver_map:
+            return f"❌ Versão {from_v} não encontrada. Versões disponíveis: {ver_nums}"
+        if to_v not in ver_map:
+            return f"❌ Versão {to_v} não encontrada. Versões disponíveis: {ver_nums}"
+        if from_v >= to_v:
+            return f"❌ from_version ({from_v}) deve ser menor que to_version ({to_v})."
+
+        va = ver_map[from_v]
+        vb = ver_map[to_v]
+
+        def _words(text: str) -> list[str]:
+            """Split into words preserving whitespace as separate tokens."""
+            import re
+            return re.split(r"(\s+)", text or "")
+
+        def _build_diff_html(old_text: str, new_text: str) -> str:
+            old_words = _words(old_text)
+            new_words = _words(new_text)
+            sm     = difflib.SequenceMatcher(None, old_words, new_words, autojunk=False)
+            parts  = []
+            for tag, i1, i2, j1, j2 in sm.get_opcodes():
+                if tag == "equal":
+                    parts.append("".join(old_words[i1:i2]).replace("&", "&amp;").replace("<", "&lt;"))
+                elif tag == "replace":
+                    old_chunk = "".join(old_words[i1:i2]).replace("&", "&amp;").replace("<", "&lt;")
+                    new_chunk = "".join(new_words[j1:j2]).replace("&", "&amp;").replace("<", "&lt;")
+                    parts.append(f'<del class="del">{old_chunk}</del><ins class="ins">{new_chunk}</ins>')
+                elif tag == "delete":
+                    chunk = "".join(old_words[i1:i2]).replace("&", "&amp;").replace("<", "&lt;")
+                    parts.append(f'<del class="del">{chunk}</del>')
+                elif tag == "insert":
+                    chunk = "".join(new_words[j1:j2]).replace("&", "&amp;").replace("<", "&lt;")
+                    parts.append(f'<ins class="ins">{chunk}</ins>')
+            return "".join(parts)
+
+        def _esc(s):
+            return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+        title_diff    = _build_diff_html(va.get("title") or "", vb.get("title") or "")
+        desc_diff     = _build_diff_html(va.get("description") or "", vb.get("description") or "")
+        date_a        = (va.get("changed_at") or "")[:10]
+        date_b        = (vb.get("changed_at") or "")[:10]
+        note_b        = _esc(vb.get("change_note") or vb.get("change_type") or "")
+
+        html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e0e0e0;margin:0;padding:10px;}}
+h3{{font-size:14px;margin:0 0 4px;color:#94a3b8;}}
+.meta{{font-size:11px;color:#64748b;margin-bottom:12px;}}
+.field-label{{font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;margin:12px 0 4px;}}
+.diff-box{{font-size:13px;line-height:1.7;background:#131620;padding:10px 12px;border-radius:6px;border:1px solid #2a2d38;white-space:pre-wrap;word-break:break-word;}}
+del.del{{background:#7f1d1d;color:#fca5a5;text-decoration:line-through;border-radius:2px;padding:0 1px;}}
+ins.ins{{background:#14532d;color:#86efac;text-decoration:none;border-radius:2px;padding:0 1px;}}
+.legend{{font-size:11px;color:#6b7280;margin-top:10px;}}
+</style></head><body>
+<h3>REQ-{req_number:03d} — {_esc(title)}</h3>
+<p class="meta">
+  Diff: <strong>v{from_v}</strong> ({date_a or '—'}) → <strong>v{to_v}</strong> ({date_b or '—'})
+  {(' · ' + note_b) if note_b else ''}
+</p>
+<div class="field-label">Título</div>
+<div class="diff-box">{title_diff or '(sem alteração)'}</div>
+<div class="field-label">Descrição</div>
+<div class="diff-box">{desc_diff or '(sem alteração)'}</div>
+<p class="legend">
+  <del class="del">Removido</del> &nbsp; <ins class="ins">Adicionado</ins>
+</p>
+</body></html>"""
+
+        import streamlit as st
+        st.session_state.setdefault("_pending_widgets", []).append({
+            "type": "req_diff_html",
+            "html": html,
+        })
+        return (
+            f"📋 Diff REQ-{req_number:03d} — v{from_v} ({date_a or '?'}) → v{to_v} ({date_b or '?'}) "
+            "renderizado no chat. Vermelho = removido, verde = adicionado."
+        )
+
+    def search_universal(
+        self,
+        query: str,
+        scopes: list[str] | None = None,
+    ) -> str:
+        """Busca uma query em todos os tipos de artefatos e retorna resultados agrupados."""
+        all_scopes = {"transcripts", "requirements", "sbvr", "ibis", "documents"}
+        active = set(scopes) & all_scopes if scopes else all_scopes
+
+        sections: list[str] = [f"## 🔍 Busca Universal: '{query}'\n"]
+        found_any = False
+
+        if "transcripts" in active:
+            result = self.search_transcript(query)
+            if "Nenhum" not in result and "sem palavras-chave" not in result:
+                sections.append(f"### 🎙️ Transcrições\n{result}")
+                found_any = True
+
+        if "requirements" in active:
+            result = self.get_requirements(keyword=query, page_size=10)
+            if "Nenhum" not in result:
+                sections.append(f"### 📋 Requisitos\n{result}")
+                found_any = True
+
+        if "sbvr" in active:
+            terms = self.get_sbvr_terms(keyword=query)
+            rules = self.get_sbvr_rules(keyword=query)
+            sbvr_found = False
+            if "Nenhum" not in terms:
+                sections.append(f"### 📖 Termos SBVR\n{terms}")
+                sbvr_found = True
+            if "Nenhum" not in rules:
+                sections.append(f"### 📖 Regras SBVR\n{rules}")
+                sbvr_found = True
+            if sbvr_found:
+                found_any = True
+
+        if "ibis" in active:
+            result = self.search_ibis_debates(query)
+            if "Nenhum" not in result:
+                sections.append(f"### 🗺️ Debates IBIS\n{result}")
+                found_any = True
+
+        if "documents" in active:
+            result = self.search_documents(query, mode="keyword")
+            if "Nenhum" not in result:
+                sections.append(f"### 📄 Documentos\n{result}")
+                found_any = True
+
+        if not found_any:
+            return f"🔍 Nenhum resultado encontrado para '{query}' em nenhum artefato do projeto."
+
+        return "\n\n---\n\n".join(sections)
+
+    def batch_text_correction(
+        self,
+        corrections: list[dict],
+        meeting_number: int | None = None,
+    ) -> str:
+        """Aplica múltiplas correções find→replace em uma única chamada."""
+        if not corrections:
+            return "❌ Lista de correções vazia."
+
+        summary_lines: list[str] = [
+            f"## Correção em Lote — {len(corrections)} substituição(ões)\n"
+        ]
+        total_changes = 0
+        errors: list[str] = []
+
+        for i, corr in enumerate(corrections, start=1):
+            find    = corr.get("find") or ""
+            replace = corr.get("replace") or ""
+            scope   = corr.get("scope") or "all"
+
+            if not find:
+                errors.append(f"#{i}: 'find' vazio — ignorado.")
+                continue
+
+            result = self.apply_text_correction(find, replace, scope, meeting_number)
+
+            # Count how many ✅ lines are in the result
+            ok_count = result.count("✅")
+            total_changes += ok_count
+
+            summary_lines.append(
+                f"**#{i}** `{find}` → `{replace}` (escopo: {scope})\n"
+                + (f"{result}\n" if result else "  Nenhuma ocorrência encontrada.\n")
+            )
+
+        if errors:
+            summary_lines.append("**Avisos:**\n" + "\n".join(f"- {e}" for e in errors))
+
+        summary_lines.append(f"\n**Total de registros modificados: {total_changes}**")
+        return "\n\n".join(summary_lines)
+
     def detect_requirement_contradictions(
         self,
         meeting_number: int | None = None,
@@ -13285,6 +13798,26 @@ function toggle(el){{
                     default_duration=int(tool_input.get("default_duration", 30)),
                     default_work_start=tool_input.get("default_work_start", "09:00"),
                     default_work_end=tool_input.get("default_work_end", "18:00"),
+                ),
+                # ── Melhorias Proposta-Assistente ────────────────────────────
+                "merge_requirements":     lambda: self.merge_requirements(
+                    req_numbers=tool_input["req_numbers"],
+                    keep_number=int(tool_input["keep_number"]),
+                    merge_strategy=tool_input.get("merge_strategy", "combine"),
+                    merge_note=tool_input.get("merge_note", ""),
+                ),
+                "diff_requirement":       lambda: self.diff_requirement(
+                    req_number=int(tool_input["req_number"]),
+                    from_version=tool_input.get("from_version"),
+                    to_version=tool_input.get("to_version"),
+                ),
+                "search_universal":       lambda: self.search_universal(
+                    query=tool_input["query"],
+                    scopes=tool_input.get("scopes"),
+                ),
+                "batch_text_correction":  lambda: self.batch_text_correction(
+                    corrections=tool_input["corrections"],
+                    meeting_number=tool_input.get("meeting_number"),
                 ),
             }
             if tool_name not in dispatch:

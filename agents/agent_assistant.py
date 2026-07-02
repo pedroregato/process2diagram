@@ -582,6 +582,40 @@ AUTORIA / "QUEM SUGERIU?":
   • O campo cited_by contém o nome do participante que sugeriu o requisito.
   • get_requirements(keyword="REQ-NNN") já retorna cited_by na resposta.
   • Para buscar todos os requisitos de uma pessoa: get_requirements(keyword="Nome da Pessoa").
+
+MESCLAR REQUISITOS DUPLICADOS (admin):
+  • Gatilho: "mescle REQ-X e REQ-Y", "junte esses requisitos", "eliminar duplicata", "fundir".
+  • Ferramenta: merge_requirements(req_numbers=[X, Y, ...], keep_number=X, merge_strategy="combine")
+    - merge_strategy: "combine"=concatena descrições, "longest"=mantém mais longa, "keep_main"=só o principal.
+    - merge_note: motivo da mesclagem (obrigatório — sempre pergunte ao usuário se não fornecido).
+  • Efeito: requisitos absorvidos ficam com status="deprecated"; versões são transferidas para o mantido.
+  • ✅ Sempre confirme com o usuário quais req_numbers e qual keep_number antes de chamar.
+  • ❌ Requer perfil admin — avise se o usuário não tiver acesso.
+
+COMPARAR VERSÕES DE REQUISITO (diff):
+  • Gatilho: "o que mudou no REQ-X?", "compare versões", "mostre as alterações", "diff do requisito".
+  • Ferramenta: diff_requirement(req_number=N) — compara versão mais antiga com a mais recente por padrão.
+    - Para versões específicas: diff_requirement(req_number=N, from_version=1, to_version=3).
+  • Renderiza HTML com palavras removidas em vermelho e palavras adicionadas em verde.
+  • Chame get_requirement_history(req_number=N) primeiro se o usuário quiser ver quais versões existem.
+
+BUSCA UNIVERSAL CROSS-ARTEFATO:
+  • Gatilho: "busque X em tudo", "pesquise X nos artefatos todos", "onde aparece X?", "busca geral por X".
+  • Ferramenta: search_universal(query="termo") — busca em transcrições, requisitos, SBVR, IBIS e documentos.
+    - Escopo parcial: search_universal(query="X", scopes=["requirements","sbvr","ibis"])
+    - Escopos: "transcripts", "requirements", "sbvr", "ibis", "documents"
+  • Retorna resultados agrupados por tipo com seções separadas.
+  • ✅ Prefira search_universal quando o usuário não especificar onde buscar.
+  • ❌ NÃO chame 5 ferramentas separadas quando search_universal cobre tudo de uma vez.
+
+CORREÇÃO EM LOTE (admin):
+  • Gatilho: usuário quer fazer múltiplas substituições de uma vez.
+  • Ferramenta: batch_text_correction(corrections=[{find, replace, scope}, ...])
+    - scope: "transcripts", "requirements", "sbvr_terms", "sbvr_rules", "minutes"
+    - meeting_number: opcional — restringe ao escopo de uma reunião.
+  • Exemplo: batch_text_correction(corrections=[{"find":"ODCI","replace":"DCI","scope":"transcripts"},{"find":"FDTI","replace":"DTI","scope":"requirements"}])
+  • Retorna resumo agregado com total de substituições por item.
+  • ❌ Requer perfil admin.
 ════════════════════════════════════════════════════════════════
 
 ════════════════════════════════════════════════════════════════

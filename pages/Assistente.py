@@ -1122,6 +1122,10 @@ def _render_message_widgets(widgets: list[dict], msg_idx: int) -> None:
             if html:
                 height = min(max(count * 80 + 80, 200), 700)
                 _stc.html(html, height=height, scrolling=True)
+        elif w_type == "req_diff_html":
+            html = widget.get("html", "")
+            if html:
+                _stc.html(html, height=400, scrolling=True)
 
 
 def _export_chat_to_markdown(
