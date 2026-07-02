@@ -84,7 +84,7 @@ class MermaidGenerator:
         node_id = id_prefix + step.id
         label   = cls.sanitize_text(step.title)
         if step.is_decision:
-            return f'{indent}{node_id}{{"{label}"}}'
+            return f'{indent}{node_id}{{{label}}}'
         if step.task_type in _EVENT_TASK_TYPES:
             return f'{indent}{node_id}(("{label}"))'
         return f'{indent}{node_id}["{label}"]'

@@ -870,10 +870,14 @@ class AgentAssistant(BaseAgent):
         bpmn_procs = ds.get("bpmn_processes") or []
         summary_lines.append(f"Processos BPMN: {len(bpmn_procs)}")
 
-        return _SYSTEM_TOOLS_TEMPLATE.format(
-            p2d_guide=p2d_guide,
-            project_name=project_name,
-            data_summary="\n".join(summary_lines),
+        # Use .replace() instead of .format() — the template contains dict literals
+        # like {"[PESSOA:PG]": "..."} (added in PC82) that Python's str.format()
+        # mis-parses as format specs, raising KeyError('"').
+        return (
+            _SYSTEM_TOOLS_TEMPLATE
+            .replace("{p2d_guide}", p2d_guide)
+            .replace("{project_name}", project_name)
+            .replace("{data_summary}", "\n".join(summary_lines))
         )
 
     # ── Tool-use loop — OpenAI-compatible ─────────────────────────────────────

@@ -1548,6 +1548,10 @@ def _generate_bpmn_xml_multi(bpmn: BpmnProcess) -> str:
 
     Message flows are rendered as dashed BPMNEdge entries in the DI section.
     """
+    # Re-assert BPMN namespace prefixes (same reason as generate_bpmn_xml).
+    for _p_gen, _u_gen in _NS.items():
+        ET.register_namespace(_p_gen, _u_gen)
+
     collab_id = "collab_1"
 
     # ── Per-pool bookkeeping ──────────────────────────────────────────────────
@@ -1777,6 +1781,12 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
     """
     if _is_multi_pool(bpmn):
         return _generate_bpmn_xml_multi(bpmn)
+
+    # Re-assert BPMN namespace prefixes. bpmn_auto_repair.py registers ("", bpmn_uri)
+    # globally which overrides the "bpmn" prefix set at module load. If not corrected
+    # here, _make_defs() emits xmlns="" (auto) AND xmlns="" (explicit) → duplicate attr.
+    for _p_gen, _u_gen in _NS.items():
+        ET.register_namespace(_p_gen, _u_gen)
 
     process_id = "process_1"
     lane_assignment = _assign_lanes(bpmn)
