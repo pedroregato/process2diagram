@@ -1675,7 +1675,7 @@ if active_question and not _asst_running:
                     _result_box["response"]     = resp_text
                     _result_box["tokens"]       = tok
                     _result_box["tools_called"] = []
-                    _result_box["error"]        = f"tool-use falhou [{type(_exc).__name__}]: {_exc} (fallback keyword)"
+                    _result_box["error"]        = f"tool-use falhou: {_exc} (fallback keyword)"
                 except Exception as _exc2:
                     _result_box["response"]     = f"❌ Erro ao gerar resposta: {_exc2}"
                     _result_box["tokens"]       = 0
