@@ -438,10 +438,17 @@ else:
                     try:
                         save_meeting_artifacts(_mid, _lhub)
                         if _lhub.bpmn.ready:
+                            # PC117: usa o process_id já resolvido no load (hub.bpmn.db_process_id)
+                            # em vez de deixar save_bpmn_from_hub recorrer ao matching por nome/slug —
+                            # um reprocessamento do agente BPMN pode mudar hub.bpmn.name o suficiente
+                            # para o slug não bater mais, criando um bpmn_processes órfão e deixando
+                            # duas linhas is_current=True para a mesma reunião (diagrama exibido ao
+                            # recarregar fica dependendo de ordenação não garantida).
                             save_bpmn_from_hub(
                                 meeting_id=_mid,
                                 project_id=_pid,
                                 hub=_lhub,
+                                bpmn_process_id=_lhub.bpmn.db_process_id or None,
                             )
                         if _lhub.requirements.ready:
                             save_requirements_from_hub(_mid, _pid, _lhub)

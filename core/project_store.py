@@ -706,22 +706,27 @@ def load_meeting_as_hub(meeting_id: str, project_id: str):
         hub.minutes.ready      = True
 
     # ── BPMN — prefere bpmn_versions (mais recente), fallback meetings.bpmn_xml ─
+    # PC117: se houver mais de uma linha is_current=True para esta reunião (bug
+    # histórico — ver save_bpmn_from_hub), created_at desc garante que a versão
+    # mais recentemente salva vence, nunca uma versão órfã mais antiga.
     bpmn_xml     = ""
     mermaid_code = ""
     proc_name    = ""
+    proc_id      = ""
     try:
         bv_rows = _ok(
             db.table("bpmn_versions")
-            .select("bpmn_xml, mermaid_code, bpmn_processes(name)")
+            .select("process_id, bpmn_xml, mermaid_code, bpmn_processes(name)")
             .eq("meeting_id", meeting_id)
             .eq("is_current", True)
+            .order("created_at", desc=True)
             .limit(1)
             .execute()
         )
         if not bv_rows:
             bv_rows = _ok(
                 db.table("bpmn_versions")
-                .select("bpmn_xml, mermaid_code, bpmn_processes(name)")
+                .select("process_id, bpmn_xml, mermaid_code, bpmn_processes(name)")
                 .eq("meeting_id", meeting_id)
                 .order("version", desc=True)
                 .limit(1)
@@ -731,6 +736,7 @@ def load_meeting_as_hub(meeting_id: str, project_id: str):
             bpmn_xml     = (bv_rows[0].get("bpmn_xml")     or "").strip()
             mermaid_code = (bv_rows[0].get("mermaid_code") or "").strip()
             proc_name    = ((bv_rows[0].get("bpmn_processes") or {}).get("name") or "").strip()
+            proc_id      = (bv_rows[0].get("process_id") or "").strip()
     except Exception:
         pass
 
@@ -743,6 +749,7 @@ def load_meeting_as_hub(meeting_id: str, project_id: str):
         hub.bpmn.mermaid  = mermaid_code
         hub.bpmn.name     = proc_name or (m.get("title") or "")
         hub.bpmn.ready    = True
+        hub.bpmn.db_process_id = proc_id
 
     # ── Requisitos ────────────────────────────────────────────────────────────
     try:

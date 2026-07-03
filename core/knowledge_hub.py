@@ -106,6 +106,7 @@ class BPMNModel:
     process_outcomes: list[str] = field(default_factory=list)  # End Event titles per outcome
     process_type: str = ""               # "flat" | "hierarchical" | "collaboration" (optional, LLM-supplied)
     process_description_md: str = ""     # Natural language description of the process (AgentBPMN or reviewer)
+    db_process_id: str = ""              # bpmn_processes.id this diagram is versioned under (set by load_meeting_as_hub; PC117)
 
     def to_process(self):
         """Bridge to legacy schema.Process for diagram generators."""
@@ -918,6 +919,10 @@ class KnowledgeHub:
         # ── PC82: Tier-2 PII name_map in SessionMetadata ─────────────────────
         if not hasattr(hub.meta, 'name_map'):
             hub.meta.name_map = {}
+
+        # ── PC117: db_process_id in BPMNModel ─────────────────────────────────
+        if not hasattr(hub.bpmn, 'db_process_id'):
+            hub.bpmn.db_process_id = ""
 
         return hub
 
