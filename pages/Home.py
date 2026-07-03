@@ -636,7 +636,7 @@ except Exception as _cal_exc:
     st.caption(f"📅 Agenda indisponível: {_cal_exc}")
 
 # ── Rodapé ────────────────────────────────────────────────────────────────────
-_APP_VERSION = "v4.31"
+_APP_VERSION = "v5.14"
 st.markdown(
     f'<div class="home-footer">'
     f'Process2Diagram {_APP_VERSION} &nbsp;·&nbsp; Multi-agent process intelligence platform'

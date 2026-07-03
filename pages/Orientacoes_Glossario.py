@@ -89,7 +89,7 @@ def _build_glossary_html() -> str:
 
     total = len(GLOSSARY_ENTRIES)
     n_cats = len(TAG_META)
-    version = "v4.24"
+    version = "v5.14"
 
     return f"""<!DOCTYPE html>
 <html lang="pt-BR">

@@ -2,7 +2,7 @@
 
 > Converta transcrições de reuniões em diagramas de processo, documentação estruturada e inteligência de negócio — automaticamente, com uma plataforma multi-agente LLM.
 
-**Versão atual:** v4.16 · **Deploy:** Streamlit Cloud · **Python:** 3.13
+**Versão atual:** v5.14 · **Deploy:** Streamlit Cloud · **Python:** 3.13
 
 ---
 

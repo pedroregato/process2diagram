@@ -4,6 +4,37 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC117 — Concluído (v5.14 / 2026-07-03) — fix diagrama BPMN volta ao anterior após reprocessar + salvar (Modo B)
+
+**Diagnóstico:** No Modo B (Reunião Existente), o botão "Salvar" chamava `save_bpmn_from_hub()` sem `bpmn_process_id`, caindo sempre na resolução por `slug(hub.bpmn.name)`. Reprocessar o agente BPMN pode mudar o nome inferido do processo o suficiente para o slug não bater mais com o processo já vinculado à reunião — criando um `bpmn_processes` órfão e uma segunda linha `is_current=True` para a mesma reunião. `load_meeting_as_hub()` fazia `.limit(1)` sem `ORDER BY`, então qual das duas linhas "current" voltava ao recarregar era não-determinístico. Diagnóstico em produção: **14 de 32 reuniões com `bpmn_versions` duplicadas em `is_current=True`** (uma com 4 linhas).
+
+- [x] **`core/knowledge_hub.py`** — `BPMNModel.db_process_id` (novo campo) + guard em `migrate()`
+- [x] **`core/project_store.py`** — `load_meeting_as_hub()` popula `db_process_id`; query de BPMN ganha `ORDER BY created_at DESC` antes do `LIMIT 1` (hardening — neutraliza o sintoma mesmo para as 14 reuniões já afetadas, sem migração de dados)
+- [x] **`pages/Pipeline.py`** — Modo B passa `bpmn_process_id=hub.bpmn.db_process_id` explicitamente ao salvar, eliminando a resolução por slug para reuniões com processo já conhecido
+- [x] 345/345 testes passando
+
+### PC116 — Plano (não implementado, 2026-07-02) — BPMN Studio
+
+Plano de melhoria em `melhorias/bpmn-studio.md`: gerar BPMN 2.0 + Mermaid a partir de descrição de processo em texto livre (fora do fluxo de reunião), com opção de salvar versionado e vincular a uma reunião existente; caminho inverso (BPMN → descrição textual). Levantamento técnico já identifica reaproveitamento de `AgentBPMN` via hub sintético e um bloqueador real de schema (`bpmn_versions.meeting_id` `NOT NULL` — impede salvar sem reunião vinculada).
+
+### PC115 — Concluído (v5.14 / 2026-07-02) — split de core/assistant_tools.py em 7 módulos por domínio
+
+`core/assistant_tools.py` (13.827 linhas) dividido: `AssistantToolExecutor` passa a herdar de 7 mixins em `core/tools/` (tools_meetings_requirements, tools_bpmn_sbvr, tools_meeting_ops_calendar, tools_admin_charts_entities, tools_documents_ibis_diagrams, tools_knowledge_requirements2, tools_executive_advanced), cada um com seus métodos + schemas OpenAI (`*_SCHEMAS`) correspondentes. Arquivo principal caiu para ~830 linhas (só `__init__`, `execute()` dispatch, e getters de schema/catálogo). Split feito por script (AST-driven), não manual. Efeito colateral: removidos 2 métodos mortos (`rename_meeting`/`batch_rename_meetings` definidos duas vezes na mesma classe — a segunda definição sempre sobrescrevia a primeira silenciosamente).
+
+- [x] Reorganização de pastas da raiz (`notes/`, `test-scenarios/`) + limpeza de `.pyc` versionados e worktree órfão
+- [x] Exportação HTML da conversa do Assistente passa a incluir diagramas BPMN/Mermaid e demais widgets A2UI (antes só texto + gráficos Plotly)
+- [x] Generalização de material comercial (`static/apresentacao-geral.html`, `outputs/apresentacao_executiva_p2d.html` — ex-FGV) para uso com qualquer cliente
+
+### PC113–PC114 — Concluído (v5.13 / 2026-06-30 a 2026-07-01) — Infraestrutura Google Cloud + Governança v5.11
+
+PC113: `Dockerfile` multi-stage (builder + runtime, Python 3.13-slim, spaCy lg baked, non-root), `.dockerignore`, `infra/cloudrun/service.yaml` (Cloud Run declarativo, Secret Manager, probes), `infra/cloudrun/env.template.yaml`, `infra/cloudbuild.yaml` (CI/CD: build → push Artifact Registry → deploy Cloud Run).
+
+PC114: API Google Cloud completa — Secret Manager 4 camadas, Cloud Tasks com fallback síncrono, endpoints `/api/v1/projects` + `/api/v1/process` + `/internal/run`, `Dockerfile` usando `requirements.api.txt`, 345 testes passando.
+
+Governança v5.11: `COLLABORATIVE_MANIFESTO.md` assinado por 5 agentes (30/06/2026) — n8n formalizado como Agente 4, modelo de negócio definido (Starter/Pro/Enterprise), hierarquia LLM com custos reais BRL.
+
+---
+
 ### PC112-K — Concluído (v5.12 / 2026-06-30) — fix setIn ao carregar reunião: mermaid bloqueante
 
 **Diagnóstico:** `render_mermaid_block()` fazia 2 chamadas HTTP sequenciais para `mermaid.ink`

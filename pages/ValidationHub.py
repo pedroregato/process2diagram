@@ -547,4 +547,4 @@ with tab_bpmn:
 
 # ── Rodapé ────────────────────────────────────────────────────────────────────
 st.markdown("---")
-st.caption("Process2Diagram v4.30 — Validação de Artefatos")
+st.caption("Process2Diagram v5.14 — Validação de Artefatos")

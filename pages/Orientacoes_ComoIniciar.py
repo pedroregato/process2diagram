@@ -471,7 +471,7 @@ st.markdown(tips_html, unsafe_allow_html=True)
 st.markdown(
     "<div style='margin-top:2rem;padding-top:.8rem;border-top:1px solid #1A3050;"
     "text-align:center;font-size:.68rem;color:#3A5070;letter-spacing:.04em'>"
-    "Process2Diagram v4.17 &nbsp;·&nbsp; Guia de Inicio Rapido"
+    "Process2Diagram v5.14 &nbsp;·&nbsp; Guia de Inicio Rapido"
     "</div>",
     unsafe_allow_html=True,
 )

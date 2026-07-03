@@ -791,4 +791,4 @@ if "hub" in st.session_state:
 
 # Rodapé
 st.markdown("---")
-st.caption("Process2Diagram v4.13 — Arquitetura Multi‑Agente Modular")
+st.caption("Process2Diagram v5.14 — Arquitetura Multi‑Agente Modular")

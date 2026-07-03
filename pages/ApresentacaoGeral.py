@@ -407,7 +407,7 @@ st.markdown("""
     <span class="g-tag green">Sem instalação local para usuários finais</span>
   </div>
   <p style="text-align:center;font-size:14px;color:var(--muted);margin-top:24px;">
-    pedro.regato@gmail.com &nbsp;·&nbsp; Process2Diagram v4.32 &nbsp;·&nbsp; Streamlit Cloud
+    pedro.regato@gmail.com &nbsp;·&nbsp; Process2Diagram v5.14 &nbsp;·&nbsp; Streamlit Cloud
   </p>
 </div>
 """, unsafe_allow_html=True)
