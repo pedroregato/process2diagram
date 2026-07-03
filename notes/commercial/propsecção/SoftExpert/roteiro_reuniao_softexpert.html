@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roteiro — Reunião SoftExpert</title>
+<style>
+  :root {
+    --bg:     #060E1C;
+    --navy:   #0B1F3A;
+    --navy2:  #112848;
+    --line:   #1E3456;
+    --gold:   #C9973A;
+    --gold2:  #E8B84B;
+    --white:  #F4F6FA;
+    --muted:  #8A9BC4;
+    --green:  #2ECC71;
+    --amber:  #E0A030;
+    --red:    #E74C3C;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: 'Segoe UI', Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--white);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  body { padding: 24px 16px 140px; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+
+  /* Header */
+  header { margin-bottom: 28px; }
+  .eyebrow {
+    font-size: 11px; font-weight: 700; letter-spacing: 2.5px;
+    color: var(--gold); text-transform: uppercase; margin-bottom: 8px;
+  }
+  h1 { font-size: 28px; margin: 0 0 6px; line-height: 1.2; }
+  .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 16px; }
+  .meta-row {
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  }
+  .meta-row input {
+    background: var(--navy2); border: 1px solid var(--line);
+    color: var(--white); border-radius: 6px; padding: 8px 10px;
+    font-size: 13px; font-family: var(--sans);
+  }
+  .meta-row input::placeholder { color: var(--muted); }
+  .save-hint { font-size: 11px; color: var(--muted); }
+
+  /* Section titles */
+  section { margin-bottom: 34px; }
+  .sec-title {
+    display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px;
+  }
+  .sec-title h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--gold2); margin: 0; }
+  .sec-title .line { flex: 1; height: 1px; background: var(--line); }
+
+  /* Agenda / timer */
+  .timer-card {
+    background: var(--navy); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px;
+  }
+  .timer-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .clock { font-family: var(--mono); font-size: 34px; font-weight: 600; letter-spacing: 1px; }
+  .timer-buttons button {
+    background: var(--navy2); border: 1px solid var(--line); color: var(--white);
+    padding: 8px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; margin-left: 8px;
+    transition: background .15s, color .15s;
+  }
+  .timer-buttons button:hover { background: var(--gold); color: var(--navy); border-color: var(--gold); }
+  .timer-buttons button:focus-visible { outline: 2px solid var(--gold2); outline-offset: 2px; }
+
+  .track { position: relative; margin-top: 22px; height: 6px; background: var(--navy2); border-radius: 4px; }
+  .track-fill { position: absolute; left: 0; top: 0; height: 100%; width: 0%; background: linear-gradient(90deg, var(--gold), var(--gold2)); border-radius: 4px; transition: width .3s linear; }
+
+  .stages { display: flex; margin-top: 14px; gap: 6px; }
+  .stage {
+    flex: 1; min-width: 0; padding: 10px 10px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--navy2);
+    transition: border-color .2s, background .2s;
+  }
+  .stage.active { border-color: var(--gold); background: #1a2f52; }
+  .stage.done { opacity: .5; }
+  .stage .n { font-size: 10px; color: var(--gold2); font-weight: 700; letter-spacing: 1px; }
+  .stage .t { font-size: 12px; margin-top: 3px; line-height: 1.3; }
+  .stage .m { font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+  /* Q&A accordion */
+  details {
+    background: var(--navy); border: 1px solid var(--line); border-radius: 10px;
+    margin-bottom: 10px; overflow: hidden;
+  }
+  summary {
+    list-style: none; cursor: pointer; padding: 14px 16px;
+    display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary:focus-visible { outline: 2px solid var(--gold2); outline-offset: -2px; }
+  summary .chev { margin-left: auto; color: var(--muted); transition: transform .2s; font-size: 12px; }
+  details[open] summary .chev { transform: rotate(90deg); }
+  .tier-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .tier-green { background: var(--green); }
+  .tier-amber { background: var(--amber); }
+  .tier-red { background: var(--red); }
+  .answer { padding: 0 16px 16px 35px; font-size: 13.5px; color: #C9D3EA; line-height: 1.6; }
+  .tier-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700;
+    padding: 2px 8px; border-radius: 20px; margin-left: auto;
+  }
+  .tier-label.tier-green { background: rgba(46,204,113,.15); color: var(--green); }
+  .tier-label.tier-amber { background: rgba(224,160,48,.18); color: var(--amber); }
+  .tier-label.tier-red { background: rgba(231,76,60,.15); color: var(--red); }
+  summary .qtext { flex: 1; }
+
+  .legend { display: flex; gap: 18px; margin-bottom: 14px; flex-wrap: wrap; }
+  .legend span { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+
+  /* Checklist */
+  .checklist { background: var(--navy); border: 1px solid var(--line); border-radius: 10px; padding: 6px 16px; }
+  .check-item {
+    display: flex; align-items: center; gap: 10px; padding: 11px 0;
+    border-bottom: 1px solid var(--line); font-size: 13.5px;
+  }
+  .check-item:last-child { border-bottom: none; }
+  .check-item input { width: 17px; height: 17px; accent-color: var(--gold); flex-shrink: 0; }
+  .check-item label { cursor: pointer; }
+  .check-item.checked label { color: var(--muted); text-decoration: line-through; }
+
+  /* Sticky rescue bar */
+  .rescue {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    background: rgba(6,14,28,.97); backdrop-filter: blur(6px);
+    border-top: 1px solid var(--line); padding: 14px 16px;
+    z-index: 50;
+  }
+  .rescue-inner { max-width: 760px; margin: 0 auto; display: flex; gap: 14px; align-items: center; }
+  .rescue-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--red); font-weight: 700; white-space: nowrap; }
+  .rescue-text { font-family: var(--mono); font-size: 12.5px; color: var(--white); line-height: 1.4; flex: 1; }
+  .rescue button {
+    background: var(--gold); color: var(--navy); border: none; border-radius: 6px;
+    padding: 10px 14px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;
+    transition: background .15s;
+  }
+  .rescue button:hover { background: var(--gold2); }
+  .rescue button:focus-visible { outline: 2px solid var(--white); outline-offset: 2px; }
+  .rescue button.copied { background: var(--green); color: var(--navy); }
+
+  @media (max-width: 560px) {
+    .clock { font-size: 26px; }
+    .stages { flex-wrap: wrap; }
+    .stage { min-width: 45%; }
+    .rescue-inner { flex-direction: column; align-items: stretch; }
+    .rescue-label { text-align: center; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Process2Diagram · Referência de reunião</div>
+    <h1>Fernando Camargo — CPO, SoftExpert</h1>
+    <div class="subtitle">Objetivo: gerar interesse em parceria (integração, licenciamento ou co-venda com o SE Suite) sem expor arquitetura proprietária.</div>
+    <div class="meta-row">
+      <input id="meetingWhen" type="text" placeholder="Data e horário da call (ex: segunda 06/07, 14h)">
+      <span class="save-hint" id="saveHint"></span>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-title"><h2>Cronômetro da conversa</h2><div class="line"></div></div>
+    <div class="timer-card">
+      <div class="timer-top">
+        <div class="clock" id="clock">00:00</div>
+        <div class="timer-buttons">
+          <button id="startBtn">Iniciar</button>
+          <button id="resetBtn">Zerar</button>
+        </div>
+      </div>
+      <div class="track"><div class="track-fill" id="trackFill"></div></div>
+      <div class="stages" id="stages"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-title"><h2>Perguntas prováveis</h2><div class="line"></div></div>
+    <div class="legend">
+      <span><span class="tier-dot tier-green"></span> pode responder livremente</span>
+      <span><span class="tier-dot tier-amber"></span> responder com cautela</span>
+      <span><span class="tier-dot tier-red"></span> redirecionar para NDA</span>
+    </div>
+    <div id="qaList"></div>
+  </section>
+
+  <section>
+    <div class="sec-title"><h2>Checklist — antes da call</h2><div class="line"></div></div>
+    <div class="checklist" id="checklistPre"></div>
+  </section>
+
+  <section>
+    <div class="sec-title"><h2>Checklist — depois da call</h2><div class="line"></div></div>
+    <div class="checklist" id="checklistPost"></div>
+  </section>
+
+</div>
+
+<div class="rescue">
+  <div class="rescue-inner">
+    <div class="rescue-label">Se a pergunta for demais</div>
+    <div class="rescue-text" id="rescueText">"Essa é a camada que protegemos como segredo comercial — posso aprofundar assim que tivermos o NDA assinado e uma conversa mais estruturada sobre o formato de parceria."</div>
+    <button id="copyBtn">Copiar frase</button>
+  </div>
+</div>
+
+<script>
+  // ---------- Data ----------
+  const STAGES = [
+    { n: '1', t: 'Contexto e dor de mercado', m: '3 min', at: 0 },
+    { n: '2', t: 'Demonstração de valor / outputs', m: '5 min', at: 3 },
+    { n: '3', t: 'Arquitetura em alto nível — pare aqui sem NDA', m: '3 min', at: 8 },
+    { n: '4', t: 'Diferencial vs. resumo (Fathom etc.)', m: '2 min', at: 11 },
+    { n: '5', t: 'Proposta de parceria', m: '5 min', at: 13 },
+  ];
+  const TOTAL_MIN = 18;
+
+  const QA = [
+    { tier: 'red', q: 'Como funciona por trás dos panos? Qual a stack?',
+      a: 'É uma pipeline multiagente: cada agente é especializado em um artefato — BPMN, ata, requisitos, SBVR, BMM, DMN — rodando em paralelo com fallback entre 8 provedores de LLM, o que dá resiliência e controle de custo. Como cada agente é orientado e como validamos qualidade automaticamente é onde está nosso diferencial — prefiro entrar nesse nível com um NDA em vigor.' },
+    { tier: 'red', q: 'Vocês usam RAG? Como é o pipeline de ingestão?',
+      a: 'Sim, há uma camada de grafo de conhecimento e RAG que acumula contexto entre reuniões — é o que permite o assistente responder coisas como "como esse requisito evoluiu entre reuniões". A arquitetura de ingestão específica é parte do que protegemos como segredo comercial.' },
+    { tier: 'green', q: 'Como vocês garantem qualidade do BPMN gerado? Isso não é sabidamente difícil com LLM?',
+      a: 'Exatamente, é o principal desafio do mercado. Temos um sistema de validação determinística — sem LLM — que audita cada diagrama contra as regras formais da notação BPMN 2.0 antes de entregar, com métricas de qualidade visíveis na interface. Isso é uma das razões pelas quais conseguimos formalismo de verdade, não só "BPMN aproximado".' },
+    { tier: 'green', q: 'Isso é só um wrapper de prompt engineering em cima de um modelo, certo?',
+      a: 'Prompt é uma parte pequena do sistema. A maior parte do trabalho é orquestração determinística — validação, auto-correção, controle de qualidade por agente — que não depende do modelo generativo estar "inspirado". É isso que torna o output confiável o suficiente para virar artefato de governança, e não um resumo bonito.' },
+    { tier: 'green', q: 'Vocês têm código proprietário registrado? Patente?',
+      a: 'Software não é patenteável no Brasil — a proteção é por direito autoral (registro no INPI) combinado com segredo comercial para a lógica de orquestração e os prompts.' },
+    { tier: 'amber', q: 'Qual o modelo de negócio hoje? Quantos clientes?',
+      a: 'Compartilhar em nível agregado (ex: "X clientes em piloto", modelo SaaS por reunião processada), sem abrir contratos específicos ou números exatos de receita.' },
+    { tier: 'red', q: 'Podemos ver o código / repositório?',
+      a: 'Prefiro manter o código fechado nesta fase — mas posso fazer uma demonstração ao vivo do produto funcionando, o que é mais relevante para avaliar o valor do que o código em si.' },
+    { tier: 'amber', q: 'Vocês pensariam em ser adquiridos / eu poderia contratar você?',
+      a: 'Estou aberto a conversar sobre os formatos que fizerem sentido para os dois lados — hoje o foco é [licenciamento / parceria de integração / o que fizer sentido]. Podemos explorar com mais detalhe se houver interesse real dos dois lados.' },
+  ];
+
+  const PRE = [
+    'NDA enviado ao Fernando',
+    'Apresentação em PDF enviada',
+    'Horário e link da call confirmados',
+    'Roteiro de respostas revisado',
+  ];
+  const POST = [
+    'Resumo por e-mail dos próximos passos enviado',
+    'Nenhum material técnico adicional enviado sem NDA assinado',
+    'Decisões e próximos passos registrados',
+  ];
+
+  // ---------- Storage helpers ----------
+  async function storeGet(key) {
+    try { const r = await window.storage.get(key, false); return r ? JSON.parse(r.value) : null; }
+    catch (e) { return null; }
+  }
+  async function storeSet(key, value) {
+    try { await window.storage.set(key, JSON.stringify(value), false); } catch (e) {}
+  }
+
+  // ---------- Render stages ----------
+  const stagesEl = document.getElementById('stages');
+  STAGES.forEach((s, i) => {
+    const d = document.createElement('div');
+    d.className = 'stage';
+    d.id = 'stage-' + i;
+    d.innerHTML = `<div class="n">Etapa ${s.n}</div><div class="t">${s.t}</div><div class="m">${s.m}</div>`;
+    stagesEl.appendChild(d);
+  });
+
+  function updateStages(elapsedMin) {
+    STAGES.forEach((s, i) => {
+      const el = document.getElementById('stage-' + i);
+      const next = STAGES[i + 1] ? STAGES[i + 1].at : TOTAL_MIN;
+      el.classList.toggle('active', elapsedMin >= s.at && elapsedMin < next);
+      el.classList.toggle('done', elapsedMin >= next);
+    });
+  }
+
+  // ---------- Timer ----------
+  let seconds = 0, running = false, timerId = null;
+  const clockEl = document.getElementById('clock');
+  const fillEl = document.getElementById('trackFill');
+  const startBtn = document.getElementById('startBtn');
+
+  function render() {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    clockEl.textContent = m + ':' + s;
+    const pct = Math.min(100, (seconds / (TOTAL_MIN * 60)) * 100);
+    fillEl.style.width = pct + '%';
+    updateStages(seconds / 60);
+  }
+
+  startBtn.addEventListener('click', () => {
+    running = !running;
+    startBtn.textContent = running ? 'Pausar' : 'Continuar';
+    if (running) {
+      timerId = setInterval(() => { seconds++; render(); }, 1000);
+    } else {
+      clearInterval(timerId);
+    }
+  });
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    seconds = 0; running = false; clearInterval(timerId);
+    startBtn.textContent = 'Iniciar'; render();
+  });
+  render();
+
+  // ---------- Q&A ----------
+  const qaList = document.getElementById('qaList');
+  const tierLabelText = { green: 'livre', amber: 'cautela', red: 'redirecionar' };
+  QA.forEach(item => {
+    const det = document.createElement('details');
+    det.innerHTML = `
+      <summary>
+        <span class="tier-dot tier-${item.tier}"></span>
+        <span class="qtext">${item.q}</span>
+        <span class="tier-label tier-${item.tier}">${tierLabelText[item.tier]}</span>
+        <span class="chev">▶</span>
+      </summary>
+      <div class="answer">${item.a}</div>
+    `;
+    qaList.appendChild(det);
+  });
+
+  // ---------- Checklists ----------
+  function buildChecklist(containerId, items, storageKey) {
+    const container = document.getElementById(containerId);
+    storeGet(storageKey).then(saved => {
+      const state = saved || {};
+      items.forEach((label, i) => {
+        const row = document.createElement('div');
+        row.className = 'check-item' + (state[i] ? ' checked' : '');
+        const cbId = storageKey + '-' + i;
+        row.innerHTML = `<input type="checkbox" id="${cbId}" ${state[i] ? 'checked' : ''}><label for="${cbId}">${label}</label>`;
+        container.appendChild(row);
+        row.querySelector('input').addEventListener('change', (e) => {
+          state[i] = e.target.checked;
+          row.classList.toggle('checked', e.target.checked);
+          storeSet(storageKey, state);
+        });
+      });
+    });
+  }
+  buildChecklist('checklistPre', PRE, 'softexpert-checklist-pre');
+  buildChecklist('checklistPost', POST, 'softexpert-checklist-post');
+
+  // ---------- Meeting metadata ----------
+  const whenInput = document.getElementById('meetingWhen');
+  const saveHint = document.getElementById('saveHint');
+  storeGet('softexpert-meeting-when').then(v => { if (v) whenInput.value = v; });
+  let saveTimeout;
+  whenInput.addEventListener('input', () => {
+    clearTimeout(saveTimeout);
+    saveHint.textContent = '';
+    saveTimeout = setTimeout(async () => {
+      await storeSet('softexpert-meeting-when', whenInput.value);
+      saveHint.textContent = 'salvo';
+      setTimeout(() => saveHint.textContent = '', 1500);
+    }, 500);
+  });
+
+  // ---------- Rescue phrase copy ----------
+  const copyBtn = document.getElementById('copyBtn');
+  const rescueText = document.getElementById('rescueText').textContent;
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(rescueText.replace(/^"|"$/g, ''));
+      copyBtn.textContent = 'Copiado ✓';
+      copyBtn.classList.add('copied');
+      setTimeout(() => { copyBtn.textContent = 'Copiar frase'; copyBtn.classList.remove('copied'); }, 1800);
+    } catch (e) {
+      copyBtn.textContent = 'Selecione o texto';
+    }
+  });
+</script>
+</body>
+</html>
