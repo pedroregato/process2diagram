@@ -1158,12 +1158,94 @@ def _export_chat_to_markdown(
     return "\n".join(lines)
 
 
+def _render_widget_export_html(widget: dict) -> str:
+    """Render one A2UI widget (BPMN, Mermaid, metrics, generated HTML tables) as a
+    self-contained HTML block for the chat HTML export. Mirrors _render_message_widgets
+    but produces static markup instead of Streamlit components."""
+    w_type = widget.get("type")
+    title = widget.get("title", "")
+    title_html = f'<div class="widget-title">{_html_escape(title)}</div>' if title else ""
+
+    if w_type == "bpmn":
+        xml = widget.get("xml", "")
+        if not xml:
+            return ""
+        try:
+            from modules.bpmn_viewer import preview_from_xml
+            doc = preview_from_xml(xml)
+        except Exception as _e:
+            return f'<div class="widget-wrap">{title_html}<p class="widget-error">Não foi possível renderizar o BPMN: {_html_escape(str(_e))}</p></div>'
+        return (
+            f'<div class="widget-wrap">{title_html}'
+            f'<iframe class="widget-iframe widget-iframe-bpmn" '
+            f'srcdoc="{_html_escape_attr(doc)}"></iframe></div>'
+        )
+
+    if w_type == "mermaid":
+        code = widget.get("code", "")
+        if not code:
+            return ""
+        try:
+            from modules.mermaid_renderer import _fetch_svg
+            svg, err = _fetch_svg(code)
+        except Exception as _e:
+            svg, err = None, str(_e)
+        if not svg:
+            return f'<div class="widget-wrap">{title_html}<p class="widget-error">Não foi possível gerar o diagrama Mermaid: {_html_escape(err or "erro desconhecido")}</p></div>'
+        return f'<div class="widget-wrap">{title_html}<div class="widget-mermaid">{svg}</div></div>'
+
+    if w_type == "metrics":
+        items = widget.get("items") or []
+        if not items:
+            return ""
+        cards = "".join(
+            '<div class="metric-card">'
+            f'<div class="metric-value">{_html_escape(str(item.get("value", "")))}</div>'
+            f'<div class="metric-label">{_html_escape(str(item.get("label", "")))}</div>'
+            + (f'<div class="metric-delta">{_html_escape(str(item.get("delta")))}</div>' if item.get("delta") else "")
+            + "</div>"
+            for item in items
+        )
+        return f'<div class="widget-wrap">{title_html}<div class="metric-row">{cards}</div></div>'
+
+    if w_type in ("requirements_html", "req_contradictions_html", "req_diff_html"):
+        html = widget.get("html", "")
+        if not html:
+            return ""
+        count = widget.get("count", 0)
+        if w_type == "requirements_html":
+            height = min(max(count * 48 + 60, 200), 800)
+        elif w_type == "req_contradictions_html":
+            height = min(max(count * 80 + 80, 200), 700)
+        else:
+            height = 400
+        return (
+            f'<div class="widget-wrap">{title_html}'
+            f'<iframe class="widget-iframe" style="height:{height}px;" '
+            f'srcdoc="{_html_escape_attr(html)}"></iframe></div>'
+        )
+
+    if w_type == "transcript":
+        content = widget.get("content", "")
+        if not content:
+            return ""
+        wc = len(content.split())
+        return (
+            f'<div class="widget-wrap">{title_html}'
+            f'<details class="widget-transcript"><summary>Transcrição ({wc:,} palavras)</summary>'
+            f'<pre>{_html_escape(content)}</pre></details></div>'
+        )
+
+    return ""
+
+
 def _export_chat_to_html(
     messages: list[dict],
     project_name: str,
     provider: str,
 ) -> str:
-    """Build a self-contained HTML export of the conversation, including Plotly charts."""
+    """Build a self-contained HTML export of the conversation, including Plotly charts
+    and A2UI widgets (BPMN diagrams, Mermaid diagrams, metric cards, generated tables)."""
     import json
     from datetime import datetime as _dt
 
@@ -1183,6 +1265,7 @@ def _export_chat_to_html(
         role = msg["role"]
         content = msg.get("content", "")
         charts = msg.get("charts") or []
+        widgets = msg.get("widgets") or []
         tools = msg.get("tools_used") or []
 
         if role == "user":
@@ -1218,11 +1301,13 @@ def _export_chat_to_html(
     }})();
   </script>
 </div>"""
+            widget_html = "".join(_render_widget_export_html(w) for w in widgets)
             blocks.append(f"""
 <div class="msg msg-assistant">
   <div class="msg-label">Assistente <span class="provider-label">{_html_escape(provider)}</span>{tool_badge}</div>
   <div class="msg-body md-content" data-md="{_html_escape_attr(content)}">{_html_escape(content)}</div>
   {chart_html}
+  {widget_html}
 </div>""")
 
     body = "\n".join(blocks)
@@ -1316,6 +1401,41 @@ def _export_chat_to_html(
   .msg-body hr {{ border: none; border-top: 1px solid #1A2E48; margin: .8rem 0; }}
   .chart-wrap {{ margin-top: .8rem; }}
   .plotly-chart {{ width: 100%; min-height: 380px; }}
+  .widget-wrap {{ margin-top: .8rem; }}
+  .widget-title {{
+    font-size: .78rem; font-weight: 700; color: #C97B1A;
+    margin-bottom: .4rem; text-transform: uppercase; letter-spacing: .04em;
+  }}
+  .widget-iframe {{
+    width: 100%; border: 1px solid #1A2E48; border-radius: 8px;
+    background: #fff;
+  }}
+  .widget-iframe-bpmn {{ height: 520px; }}
+  .widget-mermaid {{
+    background: #fff; border: 1px solid #1A2E48; border-radius: 8px;
+    padding: .8rem; overflow-x: auto;
+  }}
+  .widget-mermaid svg {{ width: 100%; height: auto; max-height: 600px; }}
+  .widget-error {{ color: #F59B9B; font-size: .82rem; }}
+  .metric-row {{
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: .6rem;
+  }}
+  .metric-card {{
+    background: #0B1E3D; border: 1px solid #1A2E48; border-radius: 8px;
+    padding: .7rem .9rem; text-align: center;
+  }}
+  .metric-value {{ font-size: 1.3rem; font-weight: 800; color: #FAFAF8; }}
+  .metric-label {{ font-size: .7rem; color: #7A8EA8; margin-top: .15rem; }}
+  .metric-delta {{ font-size: .72rem; color: #C97B1A; margin-top: .2rem; }}
+  .widget-transcript summary {{
+    cursor: pointer; color: #60A5FA; font-size: .82rem; margin-top: .4rem;
+  }}
+  .widget-transcript pre {{
+    background: #050D1A; border: 1px solid #1A2E48; border-radius: 8px;
+    padding: .8rem 1rem; margin-top: .5rem; white-space: pre-wrap;
+    max-height: 420px; overflow-y: auto; color: #B0C4DE; font-size: .78rem;
+  }}
   .page-footer {{
     text-align: center; font-size: .70rem; color: #4A6A8A;
     padding: 1.5rem; border-top: 1px solid #1A2E48; margin-top: 2rem;
