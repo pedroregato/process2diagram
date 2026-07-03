@@ -1,6 +1,6 @@
 # pages/SobreP2D.py
 # ─────────────────────────────────────────────────────────────────────────────
-# Sobre o Process2Diagram — design fiel à apresentação executiva (FGV)
+# Sobre o Process2Diagram — design fiel à apresentação executiva
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
@@ -195,7 +195,7 @@ st.markdown("""
     <span class="tag gold">Grafo de Conhecimento</span>
     <span class="tag green">Auditoria</span>
     <span class="tag gray">Multi-LLM</span>
-    <span class="tag gray">Supabase + pgvector</span>
+    <span class="tag gray">Busca Semântica Avançada</span>
   </div>
   <div class="watermark">P2D v5.14</div>
 </div>
@@ -268,7 +268,7 @@ st.markdown(f"""
         </div>
       </div>
       <div class="divider"></div>
-      <p style="font-size:14px;color:var(--muted);margin-top:0;">pedro.regato@gmail.com &nbsp;·&nbsp; P2D v5.14 &nbsp;·&nbsp; Streamlit Cloud</p>
+      <p style="font-size:14px;color:var(--muted);margin-top:0;">pedro.regato@gmail.com &nbsp;·&nbsp; P2D v5.14</p>
     </div>
   </div>
 </div>
@@ -324,26 +324,18 @@ st.markdown("""
   <div class="label">O que é o Process2Diagram</div>
   <h2>Da transcrição ao artefato formal — em minutos</h2>
   <p style="margin-top:14px; max-width:680px;">
-    O P2D é um pipeline de múltiplos agentes LLM encadeados que processa transcrições
+    O P2D é um pipeline de inteligência artificial multi-agente que processa transcrições
     de reuniões e gera automaticamente todos os artefatos de análise de processos exigidos
     por frameworks de governança corporativa.
   </p>
   <div class="pipeline" style="margin-top:24px;">
     <div class="pipe-step">📄 Transcrição</div>
     <span class="pipe-arrow">→</span>
-    <div class="pipe-step">🔬 Qualidade</div>
+    <div class="pipe-step highlight">🤖 IA Multi-Agente</div>
     <span class="pipe-arrow">→</span>
-    <div class="pipe-step">🧹 Pré-proc.</div>
+    <div class="pipe-step highlight">📐 Diagramas e Documentos Formais</div>
     <span class="pipe-arrow">→</span>
-    <div class="pipe-step">🔍 NLP / NER</div>
-    <span class="pipe-arrow">→</span>
-    <div class="pipe-step highlight">📐 AgentBPMN</div>
-    <span class="pipe-arrow">→</span>
-    <div class="pipe-step">📋 Ata + Req.</div>
-    <span class="pipe-arrow">→</span>
-    <div class="pipe-step">📖 SBVR + BMM</div>
-    <span class="pipe-arrow">→</span>
-    <div class="pipe-step highlight">🧠 KnowledgeHub</div>
+    <div class="pipe-step highlight">🧠 Base de Conhecimento</div>
   </div>
   <div class="cols-3" style="margin-top:26px;">
     <div class="card gold-border">
@@ -353,8 +345,8 @@ st.markdown("""
     </div>
     <div class="card">
       <h3>Processamento</h3>
-      <p>8 agentes especializados em sequência e paralelo, com retry adaptativo
-      via LangGraph e torneio multi-pass para BPMN.</p>
+      <p>Múltiplos agentes de IA especializados, com verificação automática de
+      qualidade e revisão adaptativa até atingir o padrão exigido.</p>
     </div>
     <div class="card gold-border">
       <h3>Output</h3>
@@ -374,7 +366,7 @@ st.markdown("""
   <div class="cols-3" style="margin-top:22px;">
     <div class="card">
       <h3>📐 BPMN 2.0</h3>
-      <p>Diagrama com lanes, gateways e eventos. Visualizador bpmn-js embutido
+      <p>Diagrama com lanes, gateways e eventos. Visualizador embutido
       com pan, zoom, editor visual e histórico de versões.</p>
     </div>
     <div class="card">
@@ -408,9 +400,9 @@ st.markdown("""
       pronto para enviar a stakeholders sem instalação.</p>
     </div>
     <div class="card">
-      <h3>💬 Assistente RAG</h3>
-      <p>Chat com 90+ ferramentas de consulta ao banco —
-      tool-use ou RAG clássico com pgvector.</p>
+      <h3>💬 Assistente Conversacional</h3>
+      <p>Chat inteligente com busca semântica em todo
+      o histórico de reuniões.</p>
     </div>
     <div class="card">
       <h3>🕸️ Grafo de Conhecimento</h3>
@@ -552,9 +544,9 @@ st.markdown("""
         modelos e selecione o perfil ideal por agente antes de processar.</p>
       </div>
       <div class="card">
-        <h3>Cache Semântico</h3>
-        <p>Respostas cacheadas via SHA-256 no Supabase — evita chamadas
-        duplicadas e reduz custo em reprocessamentos.</p>
+        <h3>Cache Inteligente</h3>
+        <p>Respostas de reprocessamentos idênticos são reaproveitadas — evita chamadas
+        duplicadas e reduz custo.</p>
       </div>
       <div class="card">
         <h3>Long Context</h3>
