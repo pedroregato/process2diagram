@@ -92,7 +92,9 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 42px;   /* leave room for toolbar */
   background: #f8fafc;
+  cursor: grab;
 }}
+#bpmn-container.grabbing {{ cursor: grabbing; }}
 
 #toolbar {{
   position: fixed; bottom: 0; left: 0; right: 0;
@@ -175,10 +177,17 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
 
 <script>
 (function() {{
+  // Snapshot of the pristine (pre-render) document — used by the "Janela" button.
+  // Captured BEFORE bpmn-js touches #bpmn-container so the popup gets a fresh
+  // container to import into, instead of one already holding rendered SVG/defs
+  // from this window (duplicate element/marker ids there broke the popup).
+  const _pristineHtml = '<!DOCTYPE html>' + document.documentElement.outerHTML;
+
   const xml     = `{xml_js}`;
   const loading = document.getElementById('loading');
   const errDiv  = document.getElementById('err');
   const zoomLbl = document.getElementById('zoom-label');
+  const container = document.getElementById('bpmn-container');
 
   // ── Instantiate viewer ──────────────────────────────────────────────────
   const viewer = new BpmnJS({{
@@ -267,12 +276,48 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
   document.getElementById('btn-up').onclick    = function() {{ safePan(0,  PAN_STEP); }};
   document.getElementById('btn-down').onclick  = function() {{ safePan(0, -PAN_STEP); }};
   document.getElementById('btn-new').onclick   = function() {{
-    var html='<!DOCTYPE html>'+document.documentElement.outerHTML;
-    var blob=new Blob([html],{{type:'text/html;charset=utf-8'}});
+    var blob=new Blob([_pristineHtml],{{type:'text/html;charset=utf-8'}});
     var url=URL.createObjectURL(blob);
     var w=(window.top||window).open(url,'_blank');
     if(!w)window.open(url,'_blank');
   }};
+
+  // ── Mouse wheel zoom (zooms toward the cursor position) ─────────────────
+  container.addEventListener('wheel', function(e) {{
+    e.preventDefault();
+    try {{
+      const canvas = viewer.get('canvas');
+      const rect   = container.getBoundingClientRect();
+      const center = {{ x: e.clientX - rect.left, y: e.clientY - rect.top }};
+      const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      const newZoom = Math.min(Math.max(canvas.zoom() * factor, 0.1), 5);
+      canvas.zoom(newZoom, center);
+      refreshLabel();
+    }} catch(_) {{}}
+  }}, {{ passive: false }});
+
+  // ── Drag-to-pan (click and drag with the mouse) ──────────────────────────
+  let _dragging = false, _dragX = 0, _dragY = 0;
+  container.addEventListener('mousedown', function(e) {{
+    _dragging = true;
+    _dragX = e.clientX;
+    _dragY = e.clientY;
+    container.classList.add('grabbing');
+  }});
+  window.addEventListener('mousemove', function(e) {{
+    if (!_dragging) return;
+    try {{
+      const dx = e.clientX - _dragX;
+      const dy = e.clientY - _dragY;
+      _dragX = e.clientX;
+      _dragY = e.clientY;
+      viewer.get('canvas').scroll({{ dx: dx, dy: dy }});
+    }} catch(_) {{}}
+  }});
+  window.addEventListener('mouseup', function() {{
+    _dragging = false;
+    container.classList.remove('grabbing');
+  }});
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
   window.addEventListener('keydown', function(e) {{
@@ -302,7 +347,8 @@ _TEMPLATE_CDN_FALLBACK = """\
 <style>
 * {{ margin:0; padding:0; box-sizing:border-box; }}
 body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
-#bpmn-container {{ position:absolute; top:0; left:0; right:0; bottom:42px; background:#f8fafc; }}
+#bpmn-container {{ position:absolute; top:0; left:0; right:0; bottom:42px; background:#f8fafc; cursor:grab; }}
+#bpmn-container.grabbing {{ cursor:grabbing; }}
 #toolbar {{
   position:fixed; bottom:0; left:0; right:0; height:40px;
   display:flex; align-items:center; gap:4px; padding:0 8px;
@@ -343,7 +389,9 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
 <script src="https://unpkg.com/bpmn-js@17/dist/bpmn-viewer.production.min.js"></script>
 <script>
 (function(){{
+  const _pristineHtml = '<!DOCTYPE html>' + document.documentElement.outerHTML;
   const xml = `{xml_js}`;
+  const container = document.getElementById('bpmn-container');
   const viewer = new BpmnJS({{ container:'#bpmn-container', keyboard:{{bindTo:window}} }});
   function refreshLabel(){{ try{{ document.getElementById('zoom-label').textContent = Math.round(viewer.get('canvas').zoom()*100)+'%'; }}catch(_){{}} }}
   function fitView(){{ try{{ var c=viewer.get('canvas'),vb=c.viewbox(),inn=vb&&vb.inner,outer=vb&&vb.outer; if(inn&&outer&&isFinite(inn.width)&&isFinite(inn.height)&&isFinite(outer.width)&&isFinite(outer.height)&&inn.width>0&&inn.height>0&&outer.width>0&&outer.height>0){{c.zoom('fit-viewport');}}else{{c.zoom(0.75);}} refreshLabel(); }}catch(_){{try{{viewer.get('canvas').zoom(0.75);}}catch(__){{}}}} }}
@@ -365,12 +413,40 @@ body, html {{ width:100%; height:100%; overflow:hidden; background:#f8fafc; }}
   document.getElementById('btn-up').onclick=function(){{ safePan(0,PS); }};
   document.getElementById('btn-down').onclick=function(){{ safePan(0,-PS); }};
   document.getElementById('btn-new').onclick=function(){{
-    var html='<!DOCTYPE html>'+document.documentElement.outerHTML;
-    var blob=new Blob([html],{{type:'text/html;charset=utf-8'}});
+    var blob=new Blob([_pristineHtml],{{type:'text/html;charset=utf-8'}});
     var url=URL.createObjectURL(blob);
     var w=(window.top||window).open(url,'_blank');
     if(!w)window.open(url,'_blank');
   }};
+  container.addEventListener('wheel',function(e){{
+    e.preventDefault();
+    try{{
+      var c=viewer.get('canvas');
+      var rect=container.getBoundingClientRect();
+      var center={{x:e.clientX-rect.left,y:e.clientY-rect.top}};
+      var factor=e.deltaY<0?1.1:1/1.1;
+      var newZoom=Math.min(Math.max(c.zoom()*factor,0.1),5);
+      c.zoom(newZoom,center);
+      refreshLabel();
+    }}catch(_){{}}
+  }},{{passive:false}});
+  var _dragging=false,_dragX=0,_dragY=0;
+  container.addEventListener('mousedown',function(e){{
+    _dragging=true; _dragX=e.clientX; _dragY=e.clientY;
+    container.classList.add('grabbing');
+  }});
+  window.addEventListener('mousemove',function(e){{
+    if(!_dragging)return;
+    try{{
+      var dx=e.clientX-_dragX, dy=e.clientY-_dragY;
+      _dragX=e.clientX; _dragY=e.clientY;
+      viewer.get('canvas').scroll({{dx:dx,dy:dy}});
+    }}catch(_){{}}
+  }});
+  window.addEventListener('mouseup',function(){{
+    _dragging=false;
+    container.classList.remove('grabbing');
+  }});
   window.addEventListener('keydown',function(e){{
     if(e.key==='0'){{fitView();e.preventDefault();}}
     if(e.key==='ArrowLeft'){{safePan(PS,0);e.preventDefault();}}

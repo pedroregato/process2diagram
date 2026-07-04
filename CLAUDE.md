@@ -355,7 +355,7 @@ Entry point: `generate_mermaid(model: BPMNModel) -> str`.
 
 ## BPMN Viewer (`modules/bpmn_viewer.py`)
 
-bpmn-js 17 injected inline (server-side asset fetch + `lru_cache`, no CDN). `canvas.zoom('fit-viewport')` deferred via `setTimeout(fn, 150)` — prevents SVGMatrix non-finite error on zero-dimension container. CDN fallback when server-side fetch fails.
+bpmn-js 17 injected inline (server-side asset fetch + `lru_cache`, no CDN). `canvas.zoom('fit-viewport')` deferred via `setTimeout(fn, 150)` — prevents SVGMatrix non-finite error on zero-dimension container. CDN fallback when server-side fetch fails. Mouse wheel zoom (toward cursor position via `canvas.zoom(scale, {x,y})`) and click-drag pan (via `canvas.scroll()`) bound directly on `#bpmn-container`, matching `mermaid_renderer.py`'s interaction model. "↗ Janela" button opens a pristine pre-render snapshot of the document (captured before `importXML()` runs) — using the post-render `outerHTML` here left stale rendered SVG/marker ids in the container the popup's own `importXML()` call then collided with.
 
 > Full implementation notes + JS pattern: `claude_guideline/pitfalls.md §bpmn-js fit-viewport`
 

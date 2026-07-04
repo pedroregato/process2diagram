@@ -4,6 +4,15 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC116-C — Concluído (v5.15 / 2026-07-03) — BPMN Viewer: zoom com roda do mouse + arrasto + fix do botão "Janela"
+
+**Pedido do usuário:** a área do diagrama BPMN deveria ter as mesmas funcionalidades de mouse que o diagrama Mermaid já tem (zoom com a roda, arrasto com clique+arraste), e o botão "↗ Janela" abria uma nova aba onde os botões da toolbar não respondiam.
+
+- [x] `modules/bpmn_viewer.py` — zoom com roda do mouse (`wheel` listener em `#bpmn-container`, `canvas.zoom(scale, {x,y})` centrado no cursor) e arrasto com clique (`mousedown`/`mousemove`/`mouseup`, `canvas.scroll()`) — mesmo modelo de interação do `mermaid_renderer.py`. Aplicado nos dois templates (`_TEMPLATE` e `_TEMPLATE_CDN_FALLBACK`).
+- [x] Fix do botão "Janela": a causa provável era capturar `document.documentElement.outerHTML` **depois** do bpmn-js já ter renderizado o SVG no container — a nova aba reexecuta o script e chama `importXML()` de novo sobre um container que já contém elementos/marcadores SVG com os mesmos ids (colisão). Corrigido capturando um snapshot do documento **antes** de qualquer renderização (`_pristineHtml`, no topo do script) e usando esse snapshot no popup.
+- [x] Verificado por inspeção de código + renderização funcional dos dois templates via `.format()` (sem erros de chave/placeholder); sem browser automatizado disponível neste ambiente para clique real — pendente de confirmação do usuário em produção.
+- [x] 345/345 testes passando
+
 ### PC116-B — Concluído (v5.15 / 2026-07-03) — resiliência da geração no BPMN Studio (retry de tentativa completa)
 
 **Achado em uso real:** primeiro teste com a descrição de processo complexa do guia (`Orientacoes_BpmnStudio.py`, 2 organizações + paralelismo + 2 decisões com loop-back) falhou: `[bpmn] Failed after 3 attempts. Last error: ValueError("Incomplete BPMN: pool 'Contratante' has 20 steps but 0 edges — sequence flows missing.")`. Causa: o pipeline normal tem duas redes de segurança que o BPMN Studio v1 ("modo simples", por decisão deliberada do plano original) não tem — torneio `n_bpmn_runs=3` + LangGraph adaptativo (até 5 tentativas). O Studio dependia só do retry interno do `AgentBPMN` (3 tentativas), que reforça a MESMA correção sobre a MESMA extração — se o modelo fica preso num padrão de falha, as 3 tentativas falham identicamente (exatamente o que aconteceu).
