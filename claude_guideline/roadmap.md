@@ -4,6 +4,15 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC119-B — Concluído (v5.15 / 2026-07-04) — fix real: botão "Descartar" do BpmnEditor.py
+
+**Confirmação do achado colateral do PC119:** o botão "🗑️ Descartar" (`pages/BpmnEditor.py`, então linhas 328-332) tinha exatamente a mesma forma de bug corrigida no BPMN Studio — `st.session_state["bpme_paste_xml"] = ""` executado **depois** do `st.text_area(key="bpme_paste_xml", ...)` já instanciado no mesmo rerun (linha 242), o que o Streamlit proíbe (`StreamlitAPIException`).
+
+- [x] Fix: reaproveita a flag `_bpme_reset_fields` que **já existe** no arquivo (lido no topo do script, linhas 54-55, criado originalmente só para o fluxo de "Salvar") — o botão Descartar agora seta essa mesma flag em vez de escrever direto na chave do widget.
+- [x] Efeito colateral (desejável): descartar agora também limpa o campo de notas (`bpme_notes`), já que a flag reaproveitada limpa os dois campos — antes só a versão de Salvar fazia isso.
+- [x] Verificado com `streamlit.testing.v1.AppTest`: mockando `bpmn_tables_exist`/`list_bpmn_processes`/`list_bpmn_versions` (sem Supabase real), reproduzido o fluxo completo — colar XML editado → clicar Descartar → sem exceção, `_bpme_captured_xml` removido, campo de texto limpo. Antes do fix, esse mesmo teste reproduzia o `StreamlitAPIException` (confirmado indiretamente pela reprodução idêntica no BPMN Studio, mesma forma de código).
+- [x] 375/375 testes automatizados inalterados (mudança restrita a uma página Streamlit, sem cobertura de teste unitário nesse nível).
+
 ### PC119 — Concluído (v5.15 / 2026-07-04) — BPMN Studio: diagrama editável na aba Gerar
 
 **Pedido do usuário:** poder editar a apresentação do diagrama enquanto o BPMN Studio processa a descrição — útil para corrigir manualmente os problemas encontrados nesta mesma sessão (gateway ausente, message flow faltando, título duplicado) sem precisar regenerar do zero.

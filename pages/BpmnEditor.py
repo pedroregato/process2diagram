@@ -328,7 +328,11 @@ with col_preview:
 with col_discard:
     if captured_xml and st.button("🗑️ Descartar", use_container_width=True, key="bpme_discard_btn"):
         st.session_state.pop("_bpme_captured_xml", None)
-        st.session_state["bpme_paste_xml"] = ""
+        # bpme_paste_xml's widget has already been instantiated earlier in
+        # this same rerun (the text_area above, line ~242) — writing to its
+        # session_state key directly here raises StreamlitAPIException.
+        # Defer the clear to the top-of-script flag instead (line 54-55).
+        st.session_state["_bpme_reset_fields"] = True
         st.rerun()
 
 # ── Prévia ────────────────────────────────────────────────────────────────────
