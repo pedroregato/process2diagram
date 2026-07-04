@@ -58,6 +58,7 @@ process2diagram/
 │   ├── Orientacoes_Glossario.py     # Glossário interativo (components.v1.html — busca + filtros + índice alfabético)
 │   ├── Orientacoes_Arquiteturas.py  # Arquiteturas do sistema
 │   ├── Orientacoes_CKF.py           # Guia CKF
+│   ├── Orientacoes_BpmnStudio.py    # Guia BPMN Studio — passo a passo + exemplo de descrição complexa (multi-pool)
 │   ├── BatchRunner.py            # Batch pipeline (Manutenção)
 │   ├── BpmnBackfill.py           # Backfill BPMN XML (Manutenção)
 │   ├── TranscriptBackfill.py     # Backfill transcript embeddings (Manutenção)
@@ -233,7 +234,7 @@ AgentRequirements┘
 | **Pipeline** | Pipeline.py, Diagramas.py, BpmnEditor.py, BpmnStudio.py | Todos |
 | **Análise** | Assistente.py, Artefatos.py, ValidationHub.py, MeetingROI.py, DocumentManager.py, CostBenefitScenarios.py | Todos |
 | **Sistema** | Settings.py, CostEstimator.py, LLMBenchmark.py [+ MasterAdmin.py, DatabaseOverview.py] | Todos [admin extra] |
-| **Ajuda** | ComoIniciar, Assistente (tool guide), Glossário, Arquiteturas, CKF | Todos |
+| **Ajuda** | ComoIniciar, Assistente (tool guide), Glossário, Arquiteturas, CKF, BpmnStudio (guia) | Todos |
 | **Manutenção** | BatchRunner.py, BpmnBackfill.py, MinutesBackfill.py, TranscriptBackfill.py | Admin only |
 
 `app.py` renders no content — only calls `st.navigation(pages).run()`. Groups rebuilt every rerun (menu updates immediately after login).
