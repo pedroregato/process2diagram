@@ -98,6 +98,14 @@ def generate_bpmn_from_description(
 
     validator = AgentValidator()
     agent = AgentBPMN(client_info, provider_cfg)
+    # PC118: the tournament's whole premise is N *independent* samples. Without
+    # this, every iteration after the first computes the exact same cache hash
+    # (same system+user prompt, same model) and gets the identical cached
+    # completion back — "n_runs=3" silently degrades to scoring one candidate
+    # three times. _lg_skip_cache is the existing bypass BaseAgent._call_llm()
+    # already honors for LangGraph retry attempts; reusing it here forces a
+    # fresh API call on every tournament pass.
+    agent._lg_skip_cache = True
 
     candidates: list[tuple] = []
     last_error: Exception | None = None

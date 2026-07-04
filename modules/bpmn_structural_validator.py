@@ -9,6 +9,10 @@
 #   - XOR gateway outgoing edges missing labels
 #   - AND/OR split without a corresponding join
 #   - Gateway with a single outgoing edge (redundant decision)
+#   - Dead-end node when an explicit end event already exists elsewhere (PC118)
+#   - Level-1 node count over the Bruce Silver density limit (PC118)
+#   - Single-participant "collaboration" that still uses sendTask/receiveTask
+#     to fake a second organization (PC118)
 #
 # Public API:
 #   validate_bpmn_structure(model: BPMNModel) -> list[BPMNIssue]
@@ -55,9 +59,47 @@ def validate_bpmn_structure(model: "BPMNModel") -> list[BPMNIssue]:
     try:
         issues = _run_checks(model)
         issues += _check_message_flow_balance(model)
+        issues += _check_single_pool_choreography(model)
         return issues
     except Exception:
         return []
+
+
+# Event types that legitimately close a path — a sink typed as one of these
+# is a normal process ending, never a dead end.
+_END_EVENT_TYPES = {"noneEndEvent", "endMessageEvent", "errorEndEvent", "endEvent", "end"}
+
+
+def _check_single_pool_choreography(model: "BPMNModel") -> list[BPMNIssue]:
+    """
+    Check 11 — Single-participant collaboration faking a second organization.
+
+    A `<collaboration>` with exactly one declared participant that still uses
+    sendTask/receiveTask is modeling an external actor's interaction (send/
+    receive a message) without ever declaring that actor as its own pool.
+    Method & Style (skill_bpmn.md, Passo 1): "sendTask e receiveTask são
+    exclusivos do formato pools — nunca use em processo flat de pool único."
+    A one-participant collaboration is, for this purpose, a single pool.
+    """
+    if not getattr(model, "is_collaboration", False):
+        return []
+    pools = getattr(model, "pool_models", []) or []
+    if len(pools) != 1:
+        return []
+
+    issues: list[BPMNIssue] = []
+    for s in pools[0].steps:
+        if s.task_type in ("sendTask", "receiveTask"):
+            issues.append(BPMNIssue(
+                "error", s.id,
+                f"'{s.title}' ({s.id}) is a {s.task_type} inside a single-"
+                f"participant collaboration — this simulates a second "
+                f"organization without declaring its pool. Add the "
+                f"counterpart as an explicit second participant with "
+                f"message_flows (Method & Style: sendTask/receiveTask are "
+                f"exclusive to true multi-pool collaboration)",
+            ))
+    return issues
 
 
 # Task types that are valid message senders in a collaboration
@@ -288,5 +330,39 @@ def _run_checks(model: "BPMNModel") -> list[BPMNIssue]:
                     f"target must be intermediateTimerCatchEvent, "
                     f"intermediateMessageCatchEvent, or receiveTask "
                     f"(OMG BPMN 2.0 §13.2.1)"))
+
+    # ── Check 9: Dead-end node (explicit end event exists elsewhere) ─────────
+    # A sink (no outgoing edge) is normal by itself — this model's terminal
+    # step is commonly left untyped and the generator appends a synthetic end
+    # event after it. But once the model DOES declare an explicit end event
+    # (proving it distinguishes end states deliberately), any OTHER sink that
+    # isn't itself an end event is a silently dropped path — the generator's
+    # synthetic-end injection only fires when NO end event is present at all,
+    # so this node never gets a closing event and the process appears to just
+    # stop (Method & Style, Passo 5 — a devolution must loop back, not vanish).
+    has_explicit_end = any(s.task_type in _END_EVENT_TYPES for s in model.steps)
+    if has_explicit_end:
+        for s in model.steps:
+            if s.task_type in _END_EVENT_TYPES:
+                continue
+            if incoming[s.id] and not outgoing[s.id]:
+                issues.append(BPMNIssue("error", s.id,
+                    f"'{s.title}' ({s.id}) is a dead end — receives flow but has "
+                    f"no outgoing sequence flow, and this process already has an "
+                    f"explicit end event elsewhere. Route it back to the task "
+                    f"that originated the correction, or give it its own end "
+                    f"event naming the outcome reached"))
+
+    # ── Check 10: Level-1 density (Bruce Silver Method — max 10 nodes) ───────
+    _DENSITY_LIMIT = 10
+    n_nodes = len(model.steps)
+    if n_nodes > _DENSITY_LIMIT:
+        excess = n_nodes - _DENSITY_LIMIT
+        severity = "error" if excess > 5 else "warning"
+        issues.append(BPMNIssue(severity, None,
+            f"Level-1 node count ({n_nodes}) exceeds the Bruce Silver density "
+            f"limit ({_DENSITY_LIMIT}) by {excess} — group cohesive phases into "
+            f"callActivity so the flow fits one 'mental screen' (Method & Style, "
+            f"Passo 0.1)"))
 
     return issues

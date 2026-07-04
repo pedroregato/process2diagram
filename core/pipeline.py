@@ -42,6 +42,13 @@ def run_pipeline(hub, config, progress_callback):
 
         validator = AgentValidator()
         agent_bpmn = AgentBPMN(client_info, provider_cfg)
+        # PC118: force a fresh API call on every tournament pass — without this,
+        # attempts 2..N compute the same cache hash as attempt 1 (identical
+        # system+user prompt) and replay its cached completion, so n_bpmn_runs>1
+        # silently scores one candidate N times instead of sampling N independent
+        # ones. _lg_skip_cache is the existing bypass BaseAgent._call_llm() already
+        # honors for LangGraph retry attempts.
+        agent_bpmn._lg_skip_cache = True
         candidates = []
         for i in range(n_bpmn_runs):
             progress_callback("BPMN Agent", f"pass {i+1}/{n_bpmn_runs}…")

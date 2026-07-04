@@ -204,13 +204,13 @@ class TestSemantic:
         assert sc.n_semantic_violations == 1
 
     def test_multiple_gateway_verbs_cumulate(self, validator):
-        # Two gateways with activity verbs → 2 × 2.5 = 5.0 penalty → score 5.0
+        # Two gateways with activity verbs → 2 × 4.0 = 8.0 penalty → score 2.0
         gw1 = step("gw1", "Validar Documento",  task_type="exclusiveGateway")
         gw2 = step("gw2", "Analisar Proposta",  task_type="exclusiveGateway")
         m = model(gw1, gw2)
         sc = validator.score(m, "transcript", WEIGHTS_SEM_ONLY)
         assert sc.n_semantic_violations == 2
-        assert sc.semantic == pytest.approx(5.0, rel=0.01)
+        assert sc.semantic == pytest.approx(2.0, rel=0.01)
 
     def test_four_gateway_verb_violations_score_zero(self, validator):
         steps_list = [

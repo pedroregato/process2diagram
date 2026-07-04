@@ -201,6 +201,88 @@ class TestCollaborationValidation:
         assert validate_bpmn_structure(m) == []
 
 
+# ── Check 9: Dead-end node (explicit end event exists elsewhere) ─────────────
+
+class TestDeadEndNode:
+    def test_untyped_terminal_step_no_explicit_end_is_not_flagged(self):
+        # No step is typed as an end event anywhere — this is the common flat
+        # convention (generator injects a synthetic "Fim" after the sink).
+        m = model(step("a", "A"), step("b", "B"), step("c", "C"),
+                  edges=[edge("a", "b"), edge("b", "c")])
+        assert not any("dead end" in i.message.lower() for i in validate_bpmn_structure(m))
+
+    def test_sink_alongside_explicit_end_is_dead_end_error(self):
+        gw = step("gw", "Proposta Aprovada?", is_decision=True, task_type="exclusiveGateway")
+        end = step("end", "Processo Encerrado", task_type="noneEndEvent")
+        reopen = step("reopen", "Reabrir Concorrência")
+        m = model(step("a", "A"), gw, end, reopen,
+                  edges=[edge("a", "gw"), edge("gw", "end", "Aprovada"),
+                         edge("gw", "reopen", "Nenhuma aprovada")])
+        issues = validate_bpmn_structure(m)
+        assert any(i.severity == "error" and i.element_id == "reopen"
+                   and "dead end" in i.message.lower() for i in issues)
+
+    def test_explicit_end_event_itself_not_flagged(self):
+        end = step("end", "Processo Encerrado", task_type="noneEndEvent")
+        m = model(step("a", "A"), end, edges=[edge("a", "end")])
+        assert not any("dead end" in i.message.lower() for i in validate_bpmn_structure(m))
+
+
+# ── Check 10: Level-1 density (Bruce Silver max 10 nodes) ────────────────────
+
+class TestDensityLimit:
+    def test_ten_or_fewer_nodes_no_density_issue(self):
+        steps = [step(f"s{i}", f"Step {i}") for i in range(10)]
+        edges = [edge(f"s{i}", f"s{i+1}") for i in range(9)]
+        m = model(*steps, edges=edges)
+        assert not any("density" in i.message.lower() for i in validate_bpmn_structure(m))
+
+    def test_over_limit_is_warning(self):
+        steps = [step(f"s{i}", f"Step {i}") for i in range(13)]  # +3 over limit
+        edges = [edge(f"s{i}", f"s{i+1}") for i in range(12)]
+        m = model(*steps, edges=edges)
+        issues = validate_bpmn_structure(m)
+        assert any(i.severity == "warning" and "density" in i.message.lower() for i in issues)
+
+    def test_far_over_limit_is_error(self):
+        steps = [step(f"s{i}", f"Step {i}") for i in range(20)]  # +10 over limit
+        edges = [edge(f"s{i}", f"s{i+1}") for i in range(19)]
+        m = model(*steps, edges=edges)
+        issues = validate_bpmn_structure(m)
+        assert any(i.severity == "error" and "density" in i.message.lower() for i in issues)
+
+
+# ── Check 11: Single-participant collaboration faking a second org ───────────
+
+class TestSinglePoolChoreography:
+    def test_single_pool_with_send_receive_task_is_error(self):
+        p1 = pool("p1", "Contratante",
+                  steps=[step("a", "A"), step("send", "Enviar Termo", task_type="sendTask"),
+                         step("recv", "Aguardar Proposta", task_type="receiveTask")],
+                  edges=[edge("a", "send"), edge("send", "recv")])
+        m = collab(p1)
+        issues = validate_bpmn_structure(m)
+        errors_found = [i for i in issues if i.severity == "error"]
+        assert any(i.element_id == "send" for i in errors_found)
+        assert any(i.element_id == "recv" for i in errors_found)
+
+    def test_two_pools_with_send_receive_task_not_flagged(self):
+        p1 = pool("p1", "Contratante",
+                  steps=[step("send", "Enviar Termo", task_type="sendTask")], edges=[])
+        p2 = pool("p2", "TechAdvisor Ltda",
+                  steps=[step("recv", "Receber Termo", task_type="receiveTask")], edges=[])
+        m = collab(p1, p2)
+        issues = validate_bpmn_structure(m)
+        assert not any(i.element_id in ("send", "recv") for i in issues)
+
+    def test_single_pool_without_send_receive_task_not_flagged(self):
+        p1 = pool("p1", "Contratante",
+                  steps=[step("a", "A"), step("b", "B")], edges=[edge("a", "b")])
+        m = collab(p1)
+        issues = validate_bpmn_structure(m)
+        assert not any("single-participant" in i.message.lower() for i in issues)
+
+
 # ── Never raises ───────────────────────────────────────────────────────────────
 
 class TestSafety:

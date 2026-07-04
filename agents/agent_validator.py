@@ -236,8 +236,12 @@ class AgentValidator:
         Score 0-10 based on BPMN naming conventions (Bruce Silver Level 1).
 
         Violations detected (penalty per occurrence):
-          -2.5  Gateway title starts with an activity verb
+          -4.0  Gateway title starts with an activity verb
                 ("Validar Contrato" as exclusiveGateway → should be userTask)
+                (PC118: raised from -2.5 — a single occurrence used to survive
+                a tournament with a merely-good-not-perfect score elsewhere;
+                this is an explicit "never" rule in skill_bpmn.md and should
+                dominate the semantic dimension almost by itself)
           -2.0  Non-gateway/event task title ends with "?"
                 ("Documento Válido?" as userTask → should be exclusiveGateway)
           -1.0  Start event with generic name ("Início", "Start", …)
@@ -254,7 +258,7 @@ class AgentValidator:
 
             if s.task_type in _GATEWAY_TYPES:
                 if first_word in _ACTIVITY_VERBS:
-                    penalty += 2.5
+                    penalty += 4.0
                     n_violations += 1
 
             elif s.task_type in _EVENT_TYPES:
