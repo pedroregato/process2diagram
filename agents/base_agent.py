@@ -375,13 +375,27 @@ class BaseAgent(ABC):
         tokens_in  = resp.usage.prompt_tokens     if resp.usage else 0
         tokens_out = resp.usage.completion_tokens if resp.usage else 0
         content = resp.choices[0].message.content if resp.choices else None
+        finish_reason = (resp.choices[0].finish_reason if resp.choices else "no_choices")
         if not content or not content.strip():
-            finish_reason = (resp.choices[0].finish_reason if resp.choices else "no_choices")
             raise ValueError(
                 f"[{self.name}] LLM retornou conteúdo vazio "
                 f"(finish_reason={finish_reason!r}, model={model!r}). "
                 f"Possíveis causas: filtro de conteúdo, contexto muito longo, "
                 f"ou instabilidade do provider."
+            )
+        # A non-empty response truncated at the token limit is NOT safe to
+        # treat as successful for structured (JSON) output: json_repair can
+        # silently "fix" the cut-off text into something parseable while
+        # entire sections (e.g. a whole BPMN pool) are simply missing —
+        # no exception, no empty content, just quietly incomplete data. Only
+        # the empty-content case above used to be checked, which is why
+        # telemetry showed calls maxing out output_tokens repeatedly without
+        # ever tripping the long-context retry escalation below.
+        if finish_reason == "length":
+            raise ValueError(
+                f"[{self.name}] LLM truncou a resposta antes de completar "
+                f"(finish_reason='length', model={model!r}, output_tokens={tokens_out}). "
+                f"O conteúdo pode parecer válido mas estar incompleto."
             )
         return content, tokens_in, tokens_out
 
@@ -414,6 +428,16 @@ class BaseAgent(ABC):
         )
         tokens_in  = msg.usage.input_tokens  if msg.usage else 0
         tokens_out = msg.usage.output_tokens if msg.usage else 0
+        # Anthropic's equivalent of OpenAI's finish_reason='length' — see the
+        # comment in _call_openai for why a non-empty truncated response is
+        # not safe to treat as successful. Same marker string ("finish_reason
+        # ='length'") so _call_with_retry's escalation check catches both.
+        if msg.stop_reason == "max_tokens":
+            raise ValueError(
+                f"[{self.name}] LLM truncou a resposta antes de completar "
+                f"(finish_reason='length', model={model!r}, output_tokens={tokens_out}). "
+                f"O conteúdo pode parecer válido mas estar incompleto."
+            )
         return msg.content[0].text, tokens_in, tokens_out
 
     # ── JSON parsing ──────────────────────────────────────────────────────────

@@ -4,6 +4,18 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC118-E — Concluído (v5.15 / 2026-07-04) — detecção de truncamento mesmo com conteúdo não-vazio
+
+**Achado do usuário:** "melhor de 1 execuções" (em vez de 3) e um diagrama voltando a ser pool única com sendTask/receiveTask — parecia regressão do PC118. Investigação via consulta direta a `llm_telemetry` (banco local, `psycopg2`): **26 das últimas 30 chamadas do agente `bpmn` bateram exatamente em 8192 tokens de saída** (o teto do DeepSeek), e `long_context` nunca foi `True` em nenhuma — a escalada do PC118-D nunca disparou.
+
+**Causa raiz:** PC118-D só detecta truncamento quando o conteúdo retornado vem **vazio** (`finish_reason='length'` + `content=""`). Mas o padrão real observado é outro: a resposta vem **truncada no meio de um valor não-vazio** (ex: `{"steps": [...` cortado no meio do array) — `_parse_json()`'s fallback via `json_repair` "conserta" esse JSON cortado fechando chaves/colchetes automaticamente, produzindo um objeto sintaticamente válido mas **faltando seções inteiras** (ex: a segunda pool inteira nunca chegou a ser escrita). Isso nunca lança exceção — parece uma chamada bem-sucedida, e por isso nunca aparece como `is_error=True` na telemetria nem aciona a escalada.
+
+- [x] `agents/base_agent.py::_call_openai` — agora verifica `finish_reason == "length"` **incondicionalmente** (não só quando o conteúdo está vazio); levanta o mesmo tipo de erro que já alimenta a escalada do PC118-D.
+- [x] `agents/base_agent.py::_call_anthropic` — equivalente para Claude: `stop_reason == "max_tokens"`. Usa a mesma string `"finish_reason='length'"` na mensagem para reaproveitar a checagem existente em `_call_with_retry` sem duplicar lógica.
+- [x] 5 testes novos: `_call_openai`/`_call_anthropic` reais (SDK mockado) levantam erro com conteúdo não-vazio truncado e não levantam em conclusão normal; integração confirmando que a nova mensagem de erro aciona a mesma escalada do PC118-D.
+- [x] 380/380 testes passando (5 novos)
+- **REGRA DERIVADA:** ao adicionar uma proteção contra "resposta vazia", verificar também o caso "resposta não-vazia mas incompleta" — para saída estruturada (JSON), truncamento é truncamento independente de o conteúdo parecer não-vazio; `finish_reason`/`stop_reason` é o sinal confiável, não a checagem de vazio-ou-não. Telemetria com contagem de tokens de saída (`output_tokens`) é o instrumento certo para detectar esse padrão — um valor repetidamente igual ao teto configurado é o sintoma, mesmo sem nenhum erro registrado.
+
 ### PC119-B — Concluído (v5.15 / 2026-07-04) — fix real: botão "Descartar" do BpmnEditor.py
 
 **Confirmação do achado colateral do PC119:** o botão "🗑️ Descartar" (`pages/BpmnEditor.py`, então linhas 328-332) tinha exatamente a mesma forma de bug corrigida no BPMN Studio — `st.session_state["bpme_paste_xml"] = ""` executado **depois** do `st.text_area(key="bpme_paste_xml", ...)` já instanciado no mesmo rerun (linha 242), o que o Streamlit proíbe (`StreamlitAPIException`).
