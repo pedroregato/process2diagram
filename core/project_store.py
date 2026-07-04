@@ -1554,7 +1554,7 @@ def get_bpmn_process(process_id: str) -> dict | None:
 def _find_or_create_bpmn_process(
     project_id: str,
     process_name: str,
-    first_meeting_id: str,
+    first_meeting_id: str | None,
 ) -> dict | None:
     """Localiza um processo pelo slug ou cria um novo (Opção A — automático)."""
     from modules.text_utils import process_slug
@@ -1608,7 +1608,7 @@ def list_bpmn_versions(process_id: str) -> list[dict]:
 
 
 def save_bpmn_from_hub(
-    meeting_id: str,
+    meeting_id: str | None,
     project_id: str,
     hub,
     bpmn_process_id: str | None = None,
@@ -1620,6 +1620,9 @@ def save_bpmn_from_hub(
       1. ``bpmn_process_id`` fornecido → usa o processo existente (Opção B).
       2. ``bpmn_process_override_name`` fornecido → cria processo com esse nome.
       3. Nenhum → slug normalizado de ``hub.bpmn.name`` (Opção A automática).
+
+    ``meeting_id=None`` salva um processo/versão sem reunião vinculada (BPMN Studio) —
+    ``bpmn_versions.meeting_id`` é nullable desde a migração PC116.
 
     Retorna o ``process_id`` salvo, ou ``None`` em caso de erro / BPMN ausente.
     """
@@ -1663,12 +1666,13 @@ def save_bpmn_from_hub(
             "is_current":    True,
         }).execute()
 
-        # Atualiza metadados do processo
-        db.table("bpmn_processes").update({
-            "version_count":   version,
-            "last_meeting_id": meeting_id,
-            "updated_at":      "NOW()",
-        }).eq("id", pid).execute()
+        # Atualiza metadados do processo. last_meeting_id só é sobrescrito quando
+        # meeting_id é fornecido — uma versão salva sem reunião (BPMN Studio) não
+        # deve apagar o vínculo de uma reunião associada anteriormente.
+        _process_update = {"version_count": version, "updated_at": "NOW()"}
+        if meeting_id:
+            _process_update["last_meeting_id"] = meeting_id
+        db.table("bpmn_processes").update(_process_update).eq("id", pid).execute()
 
         return pid
     except Exception:

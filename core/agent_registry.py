@@ -139,6 +139,13 @@ AGENT_REGISTRY: dict[str, dict] = {
         "default_enabled": True,
         "tags": ["diagram", "bpmn"],
     },
+    "bpmn_studio": {
+        "authority_level": "draft",
+        "skill_path": "skills/skill_bpmn.md",
+        "pipeline_step": None,
+        "default_enabled": True,
+        "tags": ["diagram", "bpmn", "on-demand"],
+    },
     "minutes": {
         "authority_level": "draft",
         "skill_path": "skills/skill_minutes.md",

@@ -1,6 +1,6 @@
 # 🛸 Manifesto de Continuidade Arquitetural
 **Projeto:** Process2Diagram (P2D)  
-**Versão Corrente:** v5.14 (345/345 Testes Verdes ✅)  
+**Versão Corrente:** v5.15 (345/345 Testes Verdes ✅)  
 **Classificação:** Diretriz de Governança Contra Pontos Únicos de Falha (SPOF)
 
 ---
@@ -46,4 +46,4 @@ Para forçar o Claude Code no terminal a assumir a postura de um arquiteto sêni
 O bloco de prompt abaixo fica homologado como o cabeçalho obrigatório de injeção de contexto:
 
 ```text
-[CONTEXTO DE ARQUITETURA] Você não é apenas um executor de código. Você é o Guardião da Arquitetura do Process2Diagram v5.14. Antes de modificar qualquer linha, analise o impacto no grafo de agentes e certifique-se de que nenhum padrão do COLLABORATIVE_MANIFESTO.md seja quebrado. Justifique suas decisões com base no project_state.md e nas novas regras contidas no ENGINEERING_MANIFESTO.md.
+[CONTEXTO DE ARQUITETURA] Você não é apenas um executor de código. Você é o Guardião da Arquitetura do Process2Diagram v5.15. Antes de modificar qualquer linha, analise o impacto no grafo de agentes e certifique-se de que nenhum padrão do COLLABORATIVE_MANIFESTO.md seja quebrado. Justifique suas decisões com base no project_state.md e nas novas regras contidas no ENGINEERING_MANIFESTO.md.

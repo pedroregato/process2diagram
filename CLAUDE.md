@@ -12,7 +12,7 @@
 - **Outputs:** BPMN 2.0 XML, Mermaid flowchart, meeting minutes (Markdown / Word / PDF), requirements analysis (JSON/Markdown), executive HTML report, interactive requirements mind map
 - **Deploy:** Streamlit Cloud — auto-deploy on push to `main` branch (`github.com/pedroregato/process2diagram`)
 - **Dev environment:** PyCharm on Windows; Python 3.13
-- **Current version:** v5.14
+- **Current version:** v5.15
 
 Supported LLM providers: DeepSeek V4 Flash (default), DeepSeek V4 Pro, DeepSeek V4 Flash (Thinking), Claude (Anthropic), OpenAI, Groq, Google Gemini, Grok (xAI).
 
@@ -42,6 +42,7 @@ process2diagram/
 │   ├── Pipeline.py               # Main pipeline — dual-mode (Nova transcrição / Reunião existente)
 │   ├── Diagramas.py              # Full-screen diagram viewer (BPMN, Mermaid, Mind Map)
 │   ├── BpmnEditor.py             # BPMN editor — bpmn-js Modeler, version history, Supabase save
+│   ├── BpmnStudio.py             # BPMN Studio (PC116) — descrição → BPMN+Mermaid (sem reunião) + BPMN → descrição
 │   ├── Assistente.py             # RAG assistant — conversational Q&A over transcripts
 │   ├── Artefatos.py              # Central de Artefatos — 12 abas: req, mind map, contradições, histórico, reuniões, SBVR, BPMN, DMN, IBIS, rastreabilidade, ruídos, comparar
 │   ├── KnowledgeGraph.py         # Knowledge graph — pyvis physics (Obsidian-like), entity/contradiction viz, timeline heatmap, JSON-LD export
@@ -97,12 +98,14 @@ process2diagram/
 │   ├── agent_synthesizer.py      # Executive HTML report synthesis
 │   ├── agent_validator.py        # Pure Python BPMN quality scorer (no LLM)
 │   ├── agent_document_analyzer.py  # On-demand: cross-references a document vs meeting artifacts
-│   └── agent_document_extractor.py # On-demand: extracts req/SBVR/BMM/DMN artifacts from a document
+│   ├── agent_document_extractor.py # On-demand: extracts req/SBVR/BMM/DMN artifacts from a document
+│   └── agent_bpmn_studio.py      # On-demand (PC116): generate_bpmn_from_description() — hub sintético + AgentBPMN, sem reunião
 │
 ├── modules/
 │   ├── config.py                 # LLM provider registry — add new providers here
 │   ├── session_security.py       # API keys in st.session_state only
 │   ├── bpmn_generator.py         # BPMN 2.0 XML generator (absolute coordinates)
+│   ├── bpmn_describer.py         # BPMN XML → descrição textual (PC116) — describe_bpmn_from_xml(), sem I/O
 │   ├── bpmn_viewer.py            # bpmn-js 17 viewer (server-side assets, no CDN)
 │   ├── bpmn_editor.py            # bpmn-js Modeler HTML template
 │   ├── bpmn_auto_repair.py       # repair_bpmn() — 4-pass deterministic repair
@@ -227,7 +230,7 @@ AgentRequirements┘
 | Group | Pages | Visibility |
 |---|---|---|
 | **Início** | Home.py (default) | Todos |
-| **Pipeline** | Pipeline.py, Diagramas.py, BpmnEditor.py | Todos |
+| **Pipeline** | Pipeline.py, Diagramas.py, BpmnEditor.py, BpmnStudio.py | Todos |
 | **Análise** | Assistente.py, Artefatos.py, ValidationHub.py, MeetingROI.py, DocumentManager.py, CostBenefitScenarios.py | Todos |
 | **Sistema** | Settings.py, CostEstimator.py, LLMBenchmark.py [+ MasterAdmin.py, DatabaseOverview.py] | Todos [admin extra] |
 | **Ajuda** | ComoIniciar, Assistente (tool guide), Glossário, Arquiteturas, CKF | Todos |

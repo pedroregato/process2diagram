@@ -658,7 +658,7 @@ st.markdown("""
 st.markdown("""
 <div style="margin-top: 2.5rem; padding: 1rem 1.2rem;
   border-top: 1px solid #1A3050; font-size: .72rem; color: #4A5E78; line-height: 1.6;">
-  <strong style="color:#6A7E98">Process2Diagram v5.14</strong> &nbsp;·&nbsp;
+  <strong style="color:#6A7E98">Process2Diagram v5.15</strong> &nbsp;·&nbsp;
   Arquitetura de segurança documentada conforme LGPD Lei 13.709/2018 &nbsp;·&nbsp;
   Para dúvidas de conformidade ou solicitação de relatório de auditoria, contate o
   responsável pelo tratamento de dados do seu contexto organizacional. &nbsp;·&nbsp;

@@ -4,6 +4,20 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC116 — Concluído (v5.15 / 2026-07-03) — BPMN Studio
+
+Plano em `melhorias/bpmn-studio.md` implementado: nova página `pages/BpmnStudio.py` (grupo Pipeline) com dois modos —
+
+- **Gerar** (descrição → BPMN + Mermaid): `agents/agent_bpmn_studio.py::generate_bpmn_from_description()` monta um `KnowledgeHub` sintético (`transcript_clean = descrição`), roda `NLPChunker` opcionalmente e reaproveita `AgentBPMN` sem alteração — não é um agente novo, é um wrapper fino. Salva via `save_bpmn_from_hub()` com vínculo a reunião opcional (selectbox) ou como processo autônomo.
+- **Descrever** (BPMN → descrição textual): lógica de `AssistantToolExecutor.describe_bpmn_process()` extraída para `modules/bpmn_describer.py::describe_bpmn_from_xml()` — pura, sem acesso a banco, funciona com qualquer XML colado ou salvo. `describe_bpmn_process()` passou a delegar para essa função (refatoração verificada byte-a-byte idêntica ao comportamento anterior).
+
+**Migração de schema necessária e aplicada:** `bpmn_versions.meeting_id` era `NOT NULL`, impossibilitando salvar uma versão sem reunião vinculada — bloqueador real identificado no plano. `setup/supabase_migration_bpmn_studio.sql` (`ALTER TABLE ... DROP NOT NULL`) executada em produção. `save_bpmn_from_hub()` e `_find_or_create_bpmn_process()` aceitam `meeting_id=None`; guard adicionado para não sobrescrever `last_meeting_id` com `None` ao salvar uma versão sem reunião.
+
+- [x] `core/agent_registry.py` — entrada `bpmn_studio` on-demand (`pipeline_step: None`, `authority_level: "draft"`, reaproveita `skills/skill_bpmn.md`)
+- [x] `app.py` — página registrada no grupo Pipeline
+- [x] Verificação ponta-a-ponta com chamada LLM mockada na fronteira de rede (sem chave de API real disponível fora da sessão Streamlit ao vivo): hub sintético → NLPChunker → AgentBPMN → XML/Mermaid válidos → encadeado com sucesso em `describe_bpmn_from_xml()`
+- [x] 345/345 testes passando
+
 ### PC117 — Concluído (v5.14 / 2026-07-03) — fix diagrama BPMN volta ao anterior após reprocessar + salvar (Modo B)
 
 **Diagnóstico:** No Modo B (Reunião Existente), o botão "Salvar" chamava `save_bpmn_from_hub()` sem `bpmn_process_id`, caindo sempre na resolução por `slug(hub.bpmn.name)`. Reprocessar o agente BPMN pode mudar o nome inferido do processo o suficiente para o slug não bater mais com o processo já vinculado à reunião — criando um `bpmn_processes` órfão e uma segunda linha `is_current=True` para a mesma reunião. `load_meeting_as_hub()` fazia `.limit(1)` sem `ORDER BY`, então qual das duas linhas "current" voltava ao recarregar era não-determinístico. Diagnóstico em produção: **14 de 32 reuniões com `bpmn_versions` duplicadas em `is_current=True`** (uma com 4 linhas).

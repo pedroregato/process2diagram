@@ -59,6 +59,7 @@ pages = {
         st.Page("pages/Pipeline.py",    title="Processar Transcrição", icon="🚀"),
         st.Page("pages/Diagramas.py",   title="Diagramas",             icon="📐"),
         st.Page("pages/BpmnEditor.py",  title="Editor BPMN",           icon="✏️"),
+        st.Page("pages/BpmnStudio.py",  title="BPMN Studio",           icon="🏗️"),
     ],
     "Análise": [
         st.Page("pages/ContextHealth.py",     title="Saúde do Contexto",     icon="🏥"),

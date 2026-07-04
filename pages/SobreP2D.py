@@ -197,7 +197,7 @@ st.markdown("""
     <span class="tag gray">Multi-LLM</span>
     <span class="tag gray">Busca Semântica Avançada</span>
   </div>
-  <div class="watermark">P2D v5.14</div>
+  <div class="watermark">P2D v5.15</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -268,7 +268,7 @@ st.markdown(f"""
         </div>
       </div>
       <div class="divider"></div>
-      <p style="font-size:14px;color:var(--muted);margin-top:0;">pedro.regato@gmail.com &nbsp;·&nbsp; P2D v5.14</p>
+      <p style="font-size:14px;color:var(--muted);margin-top:0;">pedro.regato@gmail.com &nbsp;·&nbsp; P2D v5.15</p>
     </div>
   </div>
 </div>
