@@ -251,6 +251,33 @@ class TestDensityLimit:
         issues = validate_bpmn_structure(m)
         assert any(i.severity == "error" and "density" in i.message.lower() for i in issues)
 
+    def test_penalty_scales_with_excess_magnitude(self):
+        # PC118-C: a pool 12 nodes over the limit must cost noticeably more
+        # than one only 3 over — not the same flat -2.5.
+        def _mk(n):
+            steps = [step(f"s{i}", f"Step {i}") for i in range(n)]
+            edges = [edge(f"s{i}", f"s{i+1}") for i in range(n - 1)]
+            return model(*steps, edges=edges)
+
+        mild = _mk(13)    # +3 over
+        severe = _mk(22)  # +12 over
+
+        def _density_errors(issues):
+            return sum(1 for i in issues if i.severity == "error"
+                       and "density" in i.message.lower())
+
+        assert _density_errors(validate_bpmn_structure(severe)) > _density_errors(validate_bpmn_structure(mild))
+
+    def test_twelve_over_yields_two_error_blocks(self):
+        steps = [step(f"s{i}", f"Step {i}") for i in range(22)]  # +12 over limit
+        edges = [edge(f"s{i}", f"s{i+1}") for i in range(21)]
+        m = model(*steps, edges=edges)
+        issues = validate_bpmn_structure(m)
+        density_errors = [i for i in issues if i.severity == "error" and "density" in i.message.lower()]
+        density_warnings = [i for i in issues if i.severity == "warning" and "density" in i.message.lower()]
+        assert len(density_errors) == 2   # 12 // 5 = 2 full blocks
+        assert len(density_warnings) == 1  # remainder of 2
+
 
 # ── Check 11: Single-participant collaboration faking a second org ───────────
 
@@ -369,6 +396,49 @@ class TestMessageFlowCoverage:
         m = collab(p1)
         issues = validate_bpmn_structure(m)
         assert not any("no message_flow referencing" in i.message.lower() for i in issues)
+
+
+# ── Check 14: Duplicate task title across pools ───────────────────────────────
+
+class TestDuplicateTaskTitleAcrossPools:
+    def test_identical_title_across_two_pools_is_warning(self):
+        p1 = pool("p1", "Contratante",
+                  steps=[step("a", "Definir Escopo Detalhado")], edges=[])
+        p2 = pool("p2", "TechAdvisor Ltda",
+                  steps=[step("b", "Definir Escopo Detalhado")], edges=[])
+        m = collab(p1, p2)
+        issues = validate_bpmn_structure(m)
+        assert any(i.severity == "warning" and "verbatim" in i.message.lower()
+                   for i in issues)
+
+    def test_case_and_whitespace_insensitive_match(self):
+        p1 = pool("p1", "Contratante",
+                  steps=[step("a", "  Definir Escopo Detalhado  ")], edges=[])
+        p2 = pool("p2", "TechAdvisor Ltda",
+                  steps=[step("b", "definir escopo detalhado")], edges=[])
+        m = collab(p1, p2)
+        assert any("verbatim" in i.message.lower() for i in validate_bpmn_structure(m))
+
+    def test_different_titles_not_flagged(self):
+        p1 = pool("p1", "Contratante", steps=[step("a", "Definir Escopo")], edges=[])
+        p2 = pool("p2", "TechAdvisor Ltda", steps=[step("b", "Planejar Cronograma")], edges=[])
+        m = collab(p1, p2)
+        assert not any("verbatim" in i.message.lower() for i in validate_bpmn_structure(m))
+
+    def test_same_title_within_single_pool_not_flagged(self):
+        p1 = pool("p1", "Contratante",
+                  steps=[step("a", "Revisar Documento"), step("b", "Revisar Documento")],
+                  edges=[])
+        m = collab(p1)
+        assert not any("verbatim" in i.message.lower() for i in validate_bpmn_structure(m))
+
+    def test_events_and_gateways_excluded_from_duplicate_check(self):
+        p1 = pool("p1", "Contratante",
+                  steps=[step("a", "Processo Encerrado", task_type="noneEndEvent")], edges=[])
+        p2 = pool("p2", "TechAdvisor Ltda",
+                  steps=[step("b", "Processo Encerrado", task_type="noneEndEvent")], edges=[])
+        m = collab(p1, p2)
+        assert not any("verbatim" in i.message.lower() for i in validate_bpmn_structure(m))
 
 
 # ── Never raises ───────────────────────────────────────────────────────────────

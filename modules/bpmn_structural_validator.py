@@ -18,6 +18,10 @@
 #     matching split gateway (PC118-B)
 #   - sendTask/receiveTask with no message_flow referencing it, in a genuine
 #     multi-pool collaboration (PC118-B)
+#   - Level-1 density penalty now scales with how far over the limit the pool
+#     is, instead of a flat error/warning (PC118-C)
+#   - Identical task title duplicated across 2+ distinct pools — likely
+#     duplicated responsibility (PC118-C)
 #
 # Public API:
 #   validate_bpmn_structure(model: BPMNModel) -> list[BPMNIssue]
@@ -66,9 +70,55 @@ def validate_bpmn_structure(model: "BPMNModel") -> list[BPMNIssue]:
         issues += _check_message_flow_balance(model)
         issues += _check_single_pool_choreography(model)
         issues += _check_message_flow_coverage(model)
+        issues += _check_duplicate_task_titles_across_pools(model)
         return issues
     except Exception:
         return []
+
+
+def _check_duplicate_task_titles_across_pools(model: "BPMNModel") -> list[BPMNIssue]:
+    """
+    Check 14 — identical task title duplicated across 2+ distinct pools.
+
+    A non-event, non-gateway step title (case-insensitive, trimmed) repeated
+    verbatim in more than one participant's process often signals accidentally
+    duplicated responsibility — both organizations extracted as performing the
+    same activity, when the source usually assigns it to exactly one side.
+    Warning only, never error: mirrored actions across organizations are
+    sometimes legitimate (e.g. both sides "Assinar Contrato" on their own
+    copy), so this needs a human's judgment, not an automatic rejection.
+    """
+    if not getattr(model, "is_collaboration", False):
+        return []
+    pools = getattr(model, "pool_models", []) or []
+    if len(pools) < 2:
+        return []
+
+    _skip_types = _EVENT_TYPES | _GATEWAY_TYPES
+    title_pools: dict[str, set[str]] = {}
+    title_first_step: dict[str, tuple[str, str]] = {}
+    for pool in pools:
+        for s in pool.steps:
+            if s.task_type in _skip_types:
+                continue
+            key = s.title.strip().lower()
+            if not key:
+                continue
+            title_pools.setdefault(key, set()).add(pool.name)
+            title_first_step.setdefault(key, (s.id, s.title))
+
+    issues: list[BPMNIssue] = []
+    for key, pool_names in title_pools.items():
+        if len(pool_names) > 1:
+            step_id, original_title = title_first_step[key]
+            issues.append(BPMNIssue(
+                "warning", step_id,
+                f"'{original_title}' appears verbatim in {len(pool_names)} "
+                f"different pools ({', '.join(sorted(pool_names))}) — verify "
+                f"this isn't duplicated responsibility; the source usually "
+                f"assigns each activity to a single organization",
+            ))
+    return issues
 
 
 def _check_message_flow_coverage(model: "BPMNModel") -> list[BPMNIssue]:
@@ -402,16 +452,30 @@ def _run_checks(model: "BPMNModel") -> list[BPMNIssue]:
                     f"event naming the outcome reached"))
 
     # ── Check 10: Level-1 density (Bruce Silver Method — max 10 nodes) ───────
+    # PC118-C: a flat error/warning didn't distinguish "2 nodes over" from
+    # "12 nodes over" — both cost the same flat -2.5, letting a badly bloated
+    # candidate score close enough to a mildly-over one to win a tournament on
+    # noise. Penalty now scales: one "error" per full block of 5 excess nodes,
+    # plus a trailing "warning" for the remainder — so a pool twice as bloated
+    # costs roughly twice as much.
     _DENSITY_LIMIT = 10
+    _DENSITY_BLOCK = 5
     n_nodes = len(model.steps)
-    if n_nodes > _DENSITY_LIMIT:
-        excess = n_nodes - _DENSITY_LIMIT
-        severity = "error" if excess > 5 else "warning"
-        issues.append(BPMNIssue(severity, None,
+    excess = n_nodes - _DENSITY_LIMIT
+    if excess > 0:
+        full_blocks = excess // _DENSITY_BLOCK
+        remainder = excess % _DENSITY_BLOCK
+        _msg = (
             f"Level-1 node count ({n_nodes}) exceeds the Bruce Silver density "
             f"limit ({_DENSITY_LIMIT}) by {excess} — group cohesive phases into "
             f"callActivity so the flow fits one 'mental screen' (Method & Style, "
-            f"Passo 0.1)"))
+            f"Passo 0.1)"
+        )
+        for i in range(full_blocks):
+            suffix = f" [{i + 1}/{full_blocks}]" if full_blocks > 1 else ""
+            issues.append(BPMNIssue("error", None, _msg + suffix))
+        if remainder:
+            issues.append(BPMNIssue("warning", None, _msg))
 
     # ── Check 12: Implicit AND/OR split (fan-out without a matching gateway) ─
     # A plain node (task, callActivity, event) with ≥2 outgoing edges is a
