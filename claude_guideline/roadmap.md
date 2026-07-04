@@ -4,6 +4,15 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC116-D — Concluído (v5.15 / 2026-07-04) — BPMN Studio ganha o mesmo torneio + AgentValidator do pipeline principal
+
+**Achado do usuário:** ao inspecionar o XML gerado para a descrição complexa do guia, duas organizações citadas nominalmente ("Contratante" e "TechAdvisor Ltda") viraram só uma pool — a interação com a segunda foi representada via sendTask/receiveTask dentro do mesmo pool, sem o segundo participante que `skill_bpmn.md` (Regra 3 — Especificidade de Co-Participantes) exige para terceiros nomeados. Um sub-ciclo detalhado no texto (validar relatório → corrigir se incompleto → aprovar → pagar) foi colapsado num único `callActivity` opaco. A pergunta do usuário — "estamos usando o mesmo rigor... as mesmas ferramentas?" — expôs que a resposta era não: PC116-B (`max_attempts`) só reiniciava a mesma chamada única do zero em caso de EXCEÇÃO; não havia comparação de qualidade entre execuções alternativas, então uma extração "válida mas estruturalmente pobre" (sem lançar exceção) passava direto, sem chance de ser substituída por uma melhor.
+
+- [x] `agents/agent_bpmn_studio.py::generate_bpmn_from_description()` — substitui o retry simples pelo MESMO mecanismo de `core/pipeline.py` quando `n_bpmn_runs > 1` (o caminho padrão do pipeline, já que `n_bpmn_runs=3` por default): roda `n_runs` execuções independentes do `AgentBPMN`, pontua cada uma com `AgentValidator` (granularidade, tipo de tarefa, gateways, estrutural, semântica) e retorna a de maior `.weighted`. Uma execução que lança exceção é descartada do torneio sem abortar as demais.
+- [x] `pages/BpmnStudio.py` — lê `st.session_state.n_bpmn_runs`/`bpmn_weights` (mesmas chaves do pipeline principal, não uma config paralela) e exibe o score da versão vencedora após gerar.
+- [x] Verificado com dois cenários mockados: torneio de 3 execuções com qualidades propositalmente diferentes confirma que a de maior `.weighted` é sempre a retornada (não a primeira, não a última — a de maior score); tolerância a falha parcial (1 de 3 execuções lança exceção) confirma que o torneio completa normalmente com as 2 restantes em vez de abortar.
+- [x] 345/345 testes passando
+
 ### PC116-C — Concluído (v5.15 / 2026-07-03) — BPMN Viewer: zoom com roda do mouse + arrasto + fix do botão "Janela"
 
 **Pedido do usuário:** a área do diagrama BPMN deveria ter as mesmas funcionalidades de mouse que o diagrama Mermaid já tem (zoom com a roda, arrasto com clique+arraste), e o botão "↗ Janela" abria uma nova aba onde os botões da toolbar não respondiam.

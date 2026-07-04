@@ -97,7 +97,8 @@ with tab_gerar:
             if not client_info:
                 st.error("Chave de API não encontrada para o provedor selecionado.")
             else:
-                with st.spinner("Gerando BPMN e Mermaid…"):
+                n_runs = st.session_state.get("n_bpmn_runs", 3)
+                with st.spinner(f"Gerando BPMN e Mermaid — torneio de {n_runs} execuções…"):
                     try:
                         hub = generate_bpmn_from_description(
                             description.strip(),
@@ -105,6 +106,8 @@ with tab_gerar:
                             st.session_state.provider_cfg,
                             run_nlp=run_nlp,
                             output_language=st.session_state.output_language,
+                            n_runs=n_runs,
+                            bpmn_weights=st.session_state.get("bpmn_weights"),
                         )
                         if not hub.bpmn.ready:
                             st.error("Não foi possível gerar um diagrama a partir desta descrição.")
@@ -117,6 +120,15 @@ with tab_gerar:
     hub = st.session_state.get("_bpmns_hub")
     if hub is not None and hub.bpmn.ready:
         st.markdown("---")
+        _score = getattr(hub.validation, "bpmn_score", None)
+        if _score:
+            st.caption(
+                f"🏆 Melhor de {hub.validation.n_bpmn_runs} execuções (torneio) — "
+                f"score {_score.weighted:.1f}/10 "
+                f"(granularidade {_score.granularity:.1f} · tipo de tarefa {_score.task_type:.1f} · "
+                f"gateways {_score.gateways:.1f} · estrutural {_score.structural:.1f} · "
+                f"semântica {_score.semantic:.1f})"
+            )
         tab_bpmn, tab_mermaid = st.tabs(["📐 Diagrama BPMN", "📊 Mermaid"])
         with tab_bpmn:
             components.html(preview_from_xml(hub.bpmn.bpmn_xml), height=500, scrolling=False)
