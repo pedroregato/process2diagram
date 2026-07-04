@@ -107,6 +107,11 @@ class BPMNModel:
     process_type: str = ""               # "flat" | "hierarchical" | "collaboration" (optional, LLM-supplied)
     process_description_md: str = ""     # Natural language description of the process (AgentBPMN or reviewer)
     db_process_id: str = ""              # bpmn_processes.id this diagram is versioned under (set by load_meeting_as_hub; PC117)
+    # PC120: on-demand detail sub-diagrams for callActivity elements — keyed by
+    # the callActivity's `id` in this model's own XML (e.g. "p1_S01"). Populated
+    # in session_state before save; persisted to bpmn_callactivity_diagrams only
+    # once the parent diagram itself has a bpmn_versions.id to attach to.
+    detail_diagrams: dict[str, "BPMNModel"] = field(default_factory=dict)
 
     def to_process(self):
         """Bridge to legacy schema.Process for diagram generators."""
@@ -923,6 +928,10 @@ class KnowledgeHub:
         # ── PC117: db_process_id in BPMNModel ─────────────────────────────────
         if not hasattr(hub.bpmn, 'db_process_id'):
             hub.bpmn.db_process_id = ""
+
+        # ── PC120: detail_diagrams (on-demand callActivity detail) ───────────
+        if not hasattr(hub.bpmn, 'detail_diagrams'):
+            hub.bpmn.detail_diagrams = {}
 
         return hub
 

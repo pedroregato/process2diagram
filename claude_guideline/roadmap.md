@@ -4,6 +4,17 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC120 — Em andamento (v5.15 / 2026-07-04) — fundação de banco para diagramas de detalhe por callActivity
+
+**Objetivo:** próxima evolução do BPMN Studio — gerar, sob demanda, um diagrama BPMN detalhado para cada `callActivity` (hoje opaca, só com `documentation` em texto listando subatividades). Decisão de arquitetura (validada com o usuário e uma segunda análise cruzada): geração **sob demanda** (não expansão automática de todas as fases) + diagramas **separados** por fase (bpmn-js não faz drill-down nativo de `calledElement` → outro `<process>`).
+
+**Etapa 1 concluída — fundação (migration + modelo):**
+- [x] `setup/supabase_migration_bpmn_callactivity_diagrams.sql` — nova tabela `bpmn_callactivity_diagrams`: `bpmn_version_id` (FK → `bpmn_versions.id`, `ON DELETE CASCADE`), `element_id`/`element_name`/`pool_name` (identifica a callActivity no XML pai), `source_description` (documentation usada como entrada do agente, para auditoria/regeneração), `bpmn_xml`/`mermaid_code`/`bpmn_score`, `is_current` + índice único parcial em `(bpmn_version_id, element_id) WHERE is_current` — mesmo padrão de versionamento de `bpmn_versions`, permite regenerar um detalhamento insatisfatório sem perder histórico. **Migration executada em produção** via psycopg2 local.
+- [x] `core/knowledge_hub.py::BPMNModel.detail_diagrams: dict[str, BPMNModel]` — cache em memória (session_state) dos detalhamentos gerados antes de salvar, chaveado pelo `id` da callActivity; guard em `KnowledgeHub.migrate()`.
+- [x] 380/380 testes passando (mudança aditiva, sem regressão).
+- [ ] **Pendente (próxima etapa):** funções CRUD em `core/project_store.py` (save/list por `bpmn_version_id`), botão "Detalhar" na UI do BPMN Studio, e o prompt/wiring que alimenta a `documentation` da callActivity no `AgentBPMN` (reaproveitando `generate_bpmn_from_description`).
+- **Nota de design (para a próxima etapa):** ao contrário da recomendação de uma segunda análise externa ("não preencher `calledElement`, deixar vestigial"), a decisão é preencher `calledElement` no XML pai apontando para o `id` do `<process>` detalhado quando o wiring do gerador for implementado — custo zero, preserva conformidade/portabilidade OMG mesmo que o bpmn-js embarcado não use isso para navegação hoje. Ainda não implementado nesta etapa (só a fundação de banco/modelo).
+
 ### PC118-E — Concluído (v5.15 / 2026-07-04) — detecção de truncamento mesmo com conteúdo não-vazio
 
 **Achado do usuário:** "melhor de 1 execuções" (em vez de 3) e um diagrama voltando a ser pool única com sendTask/receiveTask — parecia regressão do PC118. Investigação via consulta direta a `llm_telemetry` (banco local, `psycopg2`): **26 das últimas 30 chamadas do agente `bpmn` bateram exatamente em 8192 tokens de saída** (o teto do DeepSeek), e `long_context` nunca foi `True` em nenhuma — a escalada do PC118-D nunca disparou.
