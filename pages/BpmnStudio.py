@@ -120,6 +120,8 @@ with tab_gerar:
         tab_bpmn, tab_mermaid = st.tabs(["📐 Diagrama BPMN", "📊 Mermaid"])
         with tab_bpmn:
             components.html(preview_from_xml(hub.bpmn.bpmn_xml), height=500, scrolling=False)
+            with st.expander("📝 Código BPMN (XML)", expanded=False):
+                st.code(hub.bpmn.bpmn_xml, language="xml")
         with tab_mermaid:
             render_mermaid_block(hub.bpmn.mermaid, show_code=True, key_suffix="bpmns", height=500)
 
