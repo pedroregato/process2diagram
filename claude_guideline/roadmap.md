@@ -4,6 +4,14 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC116-B — Concluído (v5.15 / 2026-07-03) — resiliência da geração no BPMN Studio (retry de tentativa completa)
+
+**Achado em uso real:** primeiro teste com a descrição de processo complexa do guia (`Orientacoes_BpmnStudio.py`, 2 organizações + paralelismo + 2 decisões com loop-back) falhou: `[bpmn] Failed after 3 attempts. Last error: ValueError("Incomplete BPMN: pool 'Contratante' has 20 steps but 0 edges — sequence flows missing.")`. Causa: o pipeline normal tem duas redes de segurança que o BPMN Studio v1 ("modo simples", por decisão deliberada do plano original) não tem — torneio `n_bpmn_runs=3` + LangGraph adaptativo (até 5 tentativas). O Studio dependia só do retry interno do `AgentBPMN` (3 tentativas), que reforça a MESMA correção sobre a MESMA extração — se o modelo fica preso num padrão de falha, as 3 tentativas falham identicamente (exatamente o que aconteceu).
+
+- [x] `agents/agent_bpmn_studio.py::generate_bpmn_from_description()` — novo parâmetro `max_attempts=2`: reinicia a chamada inteira ao `AgentBPMN` do zero (pedido "limpo", sem o histórico da correção que não funcionou) em vez de só confiar no retry interno. Cada tentativa opera sobre `copy.copy(hub)` — isola estado parcial de tentativas malsucedidas.
+- [x] Verificado com dois cenários mockados na fronteira de rede: (1) 1ª tentativa completa falha 3/3 identicamente (reproduz o bug relatado), 2ª tentativa sucede — `hub.bpmn.ready=True`; (2) todas as tentativas falham — levanta a exceção da última tentativa normalmente, sem mascarar erro real.
+- [x] 345/345 testes passando
+
 ### PC116 — Concluído (v5.15 / 2026-07-03) — BPMN Studio
 
 Plano em `melhorias/bpmn-studio.md` implementado: nova página `pages/BpmnStudio.py` (grupo Pipeline) com dois modos —
