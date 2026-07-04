@@ -13,6 +13,11 @@
 #   - Level-1 node count over the Bruce Silver density limit (PC118)
 #   - Single-participant "collaboration" that still uses sendTask/receiveTask
 #     to fake a second organization (PC118)
+#   - Implicit parallel/inclusive split — a plain node fans out into branches
+#     that reconverge at an explicit AND/OR join, without itself being a
+#     matching split gateway (PC118-B)
+#   - sendTask/receiveTask with no message_flow referencing it, in a genuine
+#     multi-pool collaboration (PC118-B)
 #
 # Public API:
 #   validate_bpmn_structure(model: BPMNModel) -> list[BPMNIssue]
@@ -60,9 +65,52 @@ def validate_bpmn_structure(model: "BPMNModel") -> list[BPMNIssue]:
         issues = _run_checks(model)
         issues += _check_message_flow_balance(model)
         issues += _check_single_pool_choreography(model)
+        issues += _check_message_flow_coverage(model)
         return issues
     except Exception:
         return []
+
+
+def _check_message_flow_coverage(model: "BPMNModel") -> list[BPMNIssue]:
+    """
+    Check 13 — sendTask/receiveTask with no message_flow at all.
+
+    In a genuine multi-pool collaboration, every sendTask that initiates
+    contact with another pool — and every receiveTask that waits on one —
+    must be covered by a message_flow (skill_bpmn.md, Passo 6 checklist:
+    "todo sendTask/endMessageEvent num pool que inicia contato com outro
+    pool deve ter message_flow correspondente — pool sem message_flow =
+    pool isolado, erro"). `_check_message_flow_balance` above only validates
+    the *typing* of message flows that already exist; this checks *coverage*.
+    """
+    if not getattr(model, "is_collaboration", False):
+        return []
+    pools = getattr(model, "pool_models", []) or []
+    if len(pools) < 2:
+        return []
+
+    mf_list = getattr(model, "message_flows_data", []) or []
+    sources = {getattr(mf, "source_step", None) for mf in mf_list}
+    targets = {getattr(mf, "target_step", None) for mf in mf_list}
+
+    issues: list[BPMNIssue] = []
+    for pool in pools:
+        for s in pool.steps:
+            if s.task_type == "sendTask" and s.id not in sources:
+                issues.append(BPMNIssue(
+                    "error", s.id,
+                    f"'{s.title}' ({s.id}) is a sendTask with no message_flow "
+                    f"referencing it as source — this interaction with the "
+                    f"other pool isn't modeled",
+                ))
+            elif s.task_type == "receiveTask" and s.id not in targets:
+                issues.append(BPMNIssue(
+                    "error", s.id,
+                    f"'{s.title}' ({s.id}) is a receiveTask with no message_flow "
+                    f"referencing it as target — this interaction with the "
+                    f"other pool isn't modeled",
+                ))
+    return issues
 
 
 # Event types that legitimately close a path — a sink typed as one of these
@@ -364,5 +412,48 @@ def _run_checks(model: "BPMNModel") -> list[BPMNIssue]:
             f"limit ({_DENSITY_LIMIT}) by {excess} — group cohesive phases into "
             f"callActivity so the flow fits one 'mental screen' (Method & Style, "
             f"Passo 0.1)"))
+
+    # ── Check 12: Implicit AND/OR split (fan-out without a matching gateway) ─
+    # A plain node (task, callActivity, event) with ≥2 outgoing edges is a
+    # legitimate implicit XOR join/split in this method — but if ≥2 of those
+    # branches reconverge at an explicit parallelGateway/inclusiveGateway
+    # (proving AND/OR semantics were intended for this fan-out), the fan-out
+    # itself must be an explicit gateway of the same type. A join without a
+    # matching split is the mirror image of Check 5 (split without a join).
+    step_by_id_c12 = {s.id: s for s in model.steps}
+    for s in model.steps:
+        if s.task_type in _GATEWAY_TYPES:
+            continue
+        out_edges = outgoing[s.id]
+        if len(out_edges) < 2:
+            continue
+
+        join_hit_count: dict[str, int] = {}
+        for e in out_edges:
+            seen: set[str] = set()
+            queue = [e.target]
+            while queue:
+                n = queue.pop()
+                if n in seen:
+                    continue
+                seen.add(n)
+                for e2 in outgoing.get(n, []):
+                    queue.append(e2.target)
+            for node_id in seen:
+                node = step_by_id_c12.get(node_id)
+                if (node and node.task_type in ("parallelGateway", "inclusiveGateway")
+                        and len(incoming.get(node_id, [])) > 1):
+                    join_hit_count[node_id] = join_hit_count.get(node_id, 0) + 1
+
+        for join_id, count in join_hit_count.items():
+            if count >= 2:
+                join_step = step_by_id_c12[join_id]
+                issues.append(BPMNIssue("error", s.id,
+                    f"'{s.title}' ({s.id}) fans out into {len(out_edges)} branches "
+                    f"without a gateway, but they reconverge at the "
+                    f"{join_step.task_type} join '{join_step.title}' ({join_id}) — "
+                    f"this implicit split should itself be an explicit gateway of "
+                    f"the same type (Method & Style, Passo 4 — Split/Join "
+                    f"Synchronization)"))
 
     return issues

@@ -37,6 +37,11 @@ def pool(pool_id, name, steps, edges=None, lanes=None):
     )
 
 
+def message_flow(id, source_pool, source_step, target_pool, target_step, name=""):
+    return BPMNMessageFlow(id=id, source_pool=source_pool, source_step=source_step,
+                            target_pool=target_pool, target_step=target_step, name=name)
+
+
 def collab(*pools, message_flows=None, name="collab"):
     return BPMNModel(
         name=name,

@@ -6,7 +6,7 @@ No LLM calls; pure graph-theory logic.
 
 import pytest
 from modules.bpmn_structural_validator import validate_bpmn_structure, BPMNIssue
-from tests.conftest import step, edge, model, pool, collab
+from tests.conftest import step, edge, model, pool, collab, message_flow
 
 
 def severities(issues):
@@ -271,7 +271,8 @@ class TestSinglePoolChoreography:
                   steps=[step("send", "Enviar Termo", task_type="sendTask")], edges=[])
         p2 = pool("p2", "TechAdvisor Ltda",
                   steps=[step("recv", "Receber Termo", task_type="receiveTask")], edges=[])
-        m = collab(p1, p2)
+        mf = message_flow("mf1", "p1", "send", "p2", "recv")
+        m = collab(p1, p2, message_flows=[mf])
         issues = validate_bpmn_structure(m)
         assert not any(i.element_id in ("send", "recv") for i in issues)
 
@@ -281,6 +282,93 @@ class TestSinglePoolChoreography:
         m = collab(p1)
         issues = validate_bpmn_structure(m)
         assert not any("single-participant" in i.message.lower() for i in issues)
+
+
+# ── Check 12: Implicit AND/OR split (fan-out without a matching gateway) ─────
+
+class TestImplicitSplit:
+    def test_plain_task_fanning_into_and_join_is_error(self):
+        # "Responder Concorrência" (callActivity) fans into two branches that
+        # both converge at an explicit parallelGateway join — the fan-out
+        # itself should have been a parallelGateway split.
+        fanout = step("resp", "Responder Concorrência", task_type="callActivity")
+        a = step("a", "Planejar Cronograma")
+        b = step("b", "Receber Escopo", task_type="receiveTask")
+        join = step("join", "Iniciar Execução", task_type="parallelGateway")
+        after = step("after", "Executar Consultoria", task_type="callActivity")
+        m = model(fanout, a, b, join, after,
+                  edges=[edge("resp", "a"), edge("resp", "b"),
+                         edge("a", "join"), edge("b", "join"),
+                         edge("join", "after")])
+        issues = validate_bpmn_structure(m)
+        assert any(i.severity == "error" and i.element_id == "resp"
+                   and "reconverge" in i.message.lower() for i in issues)
+
+    def test_plain_task_fanning_into_two_end_events_not_flagged(self):
+        # Two branches converging on distinct plain end events is a normal
+        # implicit XOR pattern — not everything that fans out is an AND split.
+        fanout = step("gw", "Resultado", task_type="userTask")
+        e1 = step("e1", "Aprovado", task_type="noneEndEvent")
+        e2 = step("e2", "Rejeitado", task_type="noneEndEvent")
+        m = model(fanout, e1, e2,
+                  edges=[edge("gw", "e1"), edge("gw", "e2")])
+        assert not any("reconverge" in i.message.lower()
+                       for i in validate_bpmn_structure(m))
+
+    def test_gateway_fanning_into_join_not_flagged(self):
+        # The fan-out node is itself already a parallelGateway — Check 5
+        # covers this, Check 12 must not double-flag it.
+        split = step("split", "Fork", task_type="parallelGateway")
+        a = step("a", "A")
+        b = step("b", "B")
+        join = step("join", "Join", task_type="parallelGateway")
+        m = model(step("s", "Start"), split, a, b, join,
+                  edges=[edge("s", "split"), edge("split", "a"), edge("split", "b"),
+                         edge("a", "join"), edge("b", "join")])
+        assert not any(i.element_id == "split" and "reconverge" in i.message.lower()
+                       for i in validate_bpmn_structure(m))
+
+
+# ── Check 13: sendTask/receiveTask without a message_flow ────────────────────
+
+class TestMessageFlowCoverage:
+    def test_sendtask_without_message_flow_is_error(self):
+        p1 = pool("p1", "Contratante",
+                  steps=[step("send", "Enviar Escopo", task_type="sendTask")], edges=[])
+        p2 = pool("p2", "TechAdvisor Ltda",
+                  steps=[step("other", "Outra Tarefa")], edges=[])
+        m = collab(p1, p2)
+        issues = validate_bpmn_structure(m)
+        assert any(i.severity == "error" and i.element_id == "send"
+                   and "message_flow" in i.message.lower() for i in issues)
+
+    def test_receivetask_without_message_flow_is_error(self):
+        p1 = pool("p1", "Contratante", steps=[step("other", "Outra Tarefa")], edges=[])
+        p2 = pool("p2", "TechAdvisor Ltda",
+                  steps=[step("recv", "Receber Escopo", task_type="receiveTask")], edges=[])
+        m = collab(p1, p2)
+        issues = validate_bpmn_structure(m)
+        assert any(i.severity == "error" and i.element_id == "recv"
+                   and "message_flow" in i.message.lower() for i in issues)
+
+    def test_covered_send_receive_pair_not_flagged(self):
+        p1 = pool("p1", "Contratante",
+                  steps=[step("send", "Enviar Escopo", task_type="sendTask")], edges=[])
+        p2 = pool("p2", "TechAdvisor Ltda",
+                  steps=[step("recv", "Receber Escopo", task_type="receiveTask")], edges=[])
+        mf = message_flow("mf1", "p1", "send", "p2", "recv")
+        m = collab(p1, p2, message_flows=[mf])
+        issues = validate_bpmn_structure(m)
+        assert not any(i.element_id in ("send", "recv") for i in issues)
+
+    def test_single_pool_not_checked_for_coverage(self):
+        # Single-pool collaboration is already handled by Check 11 — Check 13
+        # must not pile on a second error for the same sendTask.
+        p1 = pool("p1", "Contratante",
+                  steps=[step("send", "Enviar Escopo", task_type="sendTask")], edges=[])
+        m = collab(p1)
+        issues = validate_bpmn_structure(m)
+        assert not any("no message_flow referencing" in i.message.lower() for i in issues)
 
 
 # ── Never raises ───────────────────────────────────────────────────────────────
