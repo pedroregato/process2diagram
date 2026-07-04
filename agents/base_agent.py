@@ -216,6 +216,14 @@ class BaseAgent(ABC):
             )
         except Exception:
             use_long_ctx = False
+        # _force_long_context is set by _call_with_retry() after a
+        # finish_reason='length' failure — the input-length heuristic above
+        # only estimates INPUT size, but a truncation proves the OUTPUT budget
+        # was too small regardless of input length (e.g. AgentBPMN's dense
+        # collaboration JSON for a short-but-structurally-rich description).
+        # Escalating to the provider's own long_context_max_tokens on retry
+        # avoids repeating the identical truncation for the full retry budget.
+        use_long_ctx = use_long_ctx or getattr(self, "_force_long_context", False)
 
         if use_long_ctx:
             system = inject_long_context_instruction(system, True)
@@ -482,6 +490,13 @@ class BaseAgent(ABC):
             except (ValueError, KeyError, UnicodeEncodeError) as exc:
                 last_error = exc
                 if attempt < self.max_retries:
+                    # A length-truncated output ("finish_reason='length'") is a
+                    # token-budget problem, not a formatting problem — the
+                    # generic "return only valid JSON" hint below does nothing
+                    # for it and the retry would truncate identically. Escalate
+                    # to the provider's long-context token budget instead.
+                    if "finish_reason='length'" in str(exc):
+                        self._force_long_context = True
                     # repr() gives an ASCII-safe representation of the error,
                     # avoiding re-injection of non-ASCII chars into the next prompt.
                     hint = repr(str(exc))[:300]
