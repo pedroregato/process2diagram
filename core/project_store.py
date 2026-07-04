@@ -1766,6 +1766,87 @@ def get_bpmn_version(version_id: str) -> dict | None:
         return None
 
 
+def get_current_bpmn_version_id(process_id: str) -> str | None:
+    """Retorna o id da versão atual (is_current=True) de um processo BPMN."""
+    db = _db()
+    if not db:
+        return None
+    try:
+        rows = _ok(
+            db.table("bpmn_versions")
+            .select("id")
+            .eq("process_id", process_id)
+            .eq("is_current", True)
+            .limit(1)
+            .execute()
+        )
+        return rows[0]["id"] if rows else None
+    except Exception:
+        return None
+
+
+def save_bpmn_callactivity_diagram(
+    bpmn_version_id: str,
+    element_id: str,
+    element_name: str,
+    bpmn_xml: str,
+    pool_name: str = "",
+    source_description: str = "",
+    mermaid_code: str = "",
+    bpmn_score: dict | None = None,
+    created_by: str = "",
+) -> bool:
+    """Persiste um diagrama de detalhe de callActivity (PC120).
+
+    Desmarca ``is_current`` em qualquer detalhamento anterior do mesmo
+    ``(bpmn_version_id, element_id)`` e insere um novo com ``is_current=True``
+    — mesmo padrão de versionamento de ``bpmn_versions``: regenerar um
+    detalhamento insatisfatório não apaga o histórico.
+    """
+    if not bpmn_xml or not bpmn_xml.strip():
+        return False
+    db = _db()
+    if not db:
+        return False
+    try:
+        db.table("bpmn_callactivity_diagrams").update({"is_current": False}) \
+            .eq("bpmn_version_id", bpmn_version_id).eq("element_id", element_id).execute()
+        db.table("bpmn_callactivity_diagrams").insert({
+            "bpmn_version_id":    bpmn_version_id,
+            "element_id":         element_id,
+            "element_name":       element_name,
+            "pool_name":          pool_name or None,
+            "source_description": source_description or None,
+            "bpmn_xml":           bpmn_xml.strip(),
+            "mermaid_code":       mermaid_code or None,
+            "bpmn_score":         bpmn_score,
+            "is_current":         True,
+            "created_by":         created_by or None,
+        }).execute()
+        return True
+    except Exception:
+        return False
+
+
+def list_bpmn_callactivity_diagrams(bpmn_version_id: str) -> list[dict]:
+    """Retorna os detalhamentos atuais (is_current=True) de callActivity de
+    uma versão BPMN. Fail-open: [] se Supabase indisponível ou erro."""
+    db = _db()
+    if not db:
+        return []
+    try:
+        return _ok(
+            db.table("bpmn_callactivity_diagrams")
+            .select("*")
+            .eq("bpmn_version_id", bpmn_version_id)
+            .eq("is_current", True)
+            .order("element_id")
+            .execute()
+        )
+    except Exception:
+        return []
+
+
 def delete_bpmn_version(version_id: str) -> dict:
     """
     Exclui uma versão BPMN pelo ID.

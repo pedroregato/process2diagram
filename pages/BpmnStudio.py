@@ -10,6 +10,8 @@
 from __future__ import annotations
 
 import sys
+import xml.etree.ElementTree as ET
+from dataclasses import asdict
 from datetime import datetime as _dt
 from pathlib import Path
 
@@ -25,6 +27,7 @@ from ui.project_selector import require_active_project
 from ui.components.page_header import render_page_header
 from modules.session_security import get_session_llm_client
 from modules.bpmn_editor import editor_from_xml
+from modules.bpmn_viewer import preview_from_xml
 from modules.mermaid_renderer import render_mermaid_block
 from modules.bpmn_describer import describe_bpmn_from_xml
 from agents.agent_bpmn_studio import generate_bpmn_from_description
@@ -33,6 +36,8 @@ from core.project_store import (
     list_bpmn_processes,
     list_meetings,
     save_bpmn_from_hub,
+    get_current_bpmn_version_id,
+    save_bpmn_callactivity_diagram,
 )
 
 apply_auth_gate()
@@ -256,6 +261,7 @@ with tab_gerar:
                 bpmn_process_override_name=override_name,
             )
             if pid:
+                hub.bpmn.db_process_id = pid  # habilita salvar detalhamentos de callActivity
                 st.success(
                     f"✅ Processo salvo com sucesso"
                     + (f" — vinculado à reunião selecionada." if selected_meeting_id else " — sem reunião vinculada.")
@@ -263,6 +269,133 @@ with tab_gerar:
                 st.page_link("pages/BpmnEditor.py", label="→ Abrir no Editor BPMN")
             else:
                 st.error("❌ Erro ao salvar. Verifique a conexão com o banco de dados.")
+
+        # ═════════════════════════════════════════════════════════════════════
+        # DETALHAR UMA FASE (callActivity) — PC120
+        # ═════════════════════════════════════════════════════════════════════
+        st.markdown("---")
+        st.markdown("#### 🔍 Detalhar uma fase (callActivity)")
+        st.caption(
+            "Gera um diagrama BPMN separado e detalhado para uma fase específica, "
+            "usando a descrição já registrada nela como entrada — mesmo mecanismo "
+            "de geração da aba principal (torneio de execuções)."
+        )
+
+        def _extract_call_activities(xml_str: str) -> list[dict]:
+            _NS = "{http://www.omg.org/spec/BPMN/20100524/MODEL}"
+            try:
+                root = ET.fromstring(xml_str)
+            except ET.ParseError:
+                return []
+            pool_by_process: dict[str, str] = {}
+            for collab in root.findall(f"{_NS}collaboration"):
+                for part in collab.findall(f"{_NS}participant"):
+                    ref = part.get("processRef")
+                    if ref:
+                        pool_by_process[ref] = part.get("name", "")
+            items: list[dict] = []
+            for proc in root.findall(f"{_NS}process"):
+                proc_id = proc.get("id")
+                pool_name = pool_by_process.get(proc_id, "")
+                for el in proc.findall(f"{_NS}callActivity"):
+                    doc_el = el.find(f"{_NS}documentation")
+                    items.append({
+                        "id": el.get("id"),
+                        "name": el.get("name") or el.get("id"),
+                        "documentation": (doc_el.text or "").strip() if doc_el is not None else "",
+                        "pool_name": pool_name,
+                    })
+            return items
+
+        _call_activities = _extract_call_activities(_active_xml)
+        if not _call_activities:
+            st.caption("Nenhuma fase (callActivity) neste diagrama para detalhar.")
+        else:
+            _ca_labels = [
+                f"{ca['name']} — {ca['pool_name']}" if ca["pool_name"] else ca["name"]
+                for ca in _call_activities
+            ]
+            _ca_idx = st.selectbox(
+                "Fase para detalhar",
+                range(len(_call_activities)),
+                format_func=lambda i: _ca_labels[i],
+                key="bpmns_detail_ca_sel",
+            )
+            _selected_ca = _call_activities[_ca_idx]
+
+            if st.button(f"🔍 Detalhar '{_selected_ca['name']}'", key="bpmns_detail_generate_btn"):
+                if not _selected_ca["documentation"]:
+                    st.error("Esta fase não tem descrição suficiente para detalhar.")
+                else:
+                    detail_client_info = get_session_llm_client(st.session_state.selected_provider)
+                    if not detail_client_info:
+                        st.error("Chave de API não encontrada para o provedor selecionado.")
+                    else:
+                        with st.spinner(f"Detalhando '{_selected_ca['name']}'…"):
+                            try:
+                                detail_hub = generate_bpmn_from_description(
+                                    _selected_ca["documentation"],
+                                    detail_client_info,
+                                    st.session_state.provider_cfg,
+                                    run_nlp=run_nlp,
+                                    output_language=st.session_state.output_language,
+                                    n_runs=st.session_state.get("n_bpmn_runs", 3),
+                                    bpmn_weights=st.session_state.get("bpmn_weights"),
+                                )
+                                if not detail_hub.bpmn.ready:
+                                    st.error("Não foi possível detalhar esta fase.")
+                                else:
+                                    hub.bpmn.detail_diagrams[_selected_ca["id"]] = detail_hub.bpmn
+                                    _dmeta = st.session_state.setdefault("_bpmns_detail_meta", {})
+                                    _score = detail_hub.validation.bpmn_score
+                                    _dmeta[_selected_ca["id"]] = {
+                                        "name": _selected_ca["name"],
+                                        "pool_name": _selected_ca["pool_name"],
+                                        "documentation": _selected_ca["documentation"],
+                                        "score": asdict(_score) if _score else None,
+                                    }
+                                    st.success(f"✅ Detalhamento de '{_selected_ca['name']}' gerado.")
+                            except Exception as exc:
+                                st.error(f"❌ Erro ao detalhar: {exc}")
+
+        if hub.bpmn.detail_diagrams:
+            st.markdown("##### Fases já detalhadas nesta sessão")
+            _detail_meta = st.session_state.get("_bpmns_detail_meta", {})
+            for _element_id, _detail_model in hub.bpmn.detail_diagrams.items():
+                _meta = _detail_meta.get(_element_id, {})
+                _label = _meta.get("name", _element_id)
+                with st.expander(f"📎 {_label}", expanded=False):
+                    _dscore = _meta.get("score")
+                    if _dscore:
+                        st.caption(f"Score do torneio: {_dscore['weighted']:.1f}/10")
+                    components.html(preview_from_xml(_detail_model.bpmn_xml), height=350, scrolling=False)
+                    # st.expander não pode ser aninhado (CLAUDE.md — Known Pitfalls);
+                    # este expander de detalhamento já está dentro do de cima.
+                    st.caption("📝 Código BPMN (XML)")
+                    st.code(_detail_model.bpmn_xml, language="xml")
+
+                    if not hub.bpmn.db_process_id:
+                        st.caption("⏳ Salve o diagrama principal (acima) antes de salvar este detalhamento.")
+                    elif st.button(f"💾 Salvar detalhamento de '{_label}'", key=f"bpmns_save_detail_{_element_id}"):
+                        _version_id = get_current_bpmn_version_id(hub.bpmn.db_process_id)
+                        if not _version_id:
+                            st.error("Não foi possível localizar a versão atual do processo salvo.")
+                        else:
+                            ok = save_bpmn_callactivity_diagram(
+                                bpmn_version_id=_version_id,
+                                element_id=_element_id,
+                                element_name=_label,
+                                bpmn_xml=_detail_model.bpmn_xml,
+                                pool_name=_meta.get("pool_name", ""),
+                                source_description=_meta.get("documentation", ""),
+                                mermaid_code=_detail_model.mermaid,
+                                bpmn_score=_dscore,
+                                created_by=st.session_state.get("_usuario_login", ""),
+                            )
+                            if ok:
+                                st.success("✅ Detalhamento salvo.")
+                            else:
+                                st.error("❌ Erro ao salvar o detalhamento.")
 
 # ═════════════════════════════════════════════════════════════════════════════
 # ABA DESCREVER — BPMN → descrição textual
