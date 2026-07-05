@@ -62,7 +62,16 @@ _GENERIC_START_NAMES = {
     "início", "inicio", "start", "começar", "iniciar",
     "início do processo", "inicio do processo",
 }
-_GENERIC_END_NAMES = {"fim", "end", "encerrar", "terminar", "fim do processo"}
+_GENERIC_END_NAMES = {
+    "fim", "end", "encerrar", "terminar", "fim do processo",
+    # "processo" as the subject (not the specific business outcome) is the
+    # tell — "Contrato Encerrado e Arquivado" is fine, "Processo Encerrado"
+    # isn't (PC123: found in a real generated diagram, slipped past the
+    # exact-match set above since "encerrado"/"concluído" are conjugated
+    # forms, not literal matches for "encerrar"/"terminar").
+    "processo encerrado", "processo concluído", "processo concluido",
+    "processo finalizado", "processo terminado",
+}
 
 
 # ── Scorer ────────────────────────────────────────────────────────────────────

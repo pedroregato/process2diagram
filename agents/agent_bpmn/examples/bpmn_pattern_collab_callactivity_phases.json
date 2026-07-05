@@ -2,7 +2,7 @@
   "id": "bpmn_pattern_collab_callactivity_phases",
   "name": "Colaboração Multi-Pool com Fases via CallActivity",
   "category": "Colaboração",
-  "trigger_signals": ["contrato de prestação de serviços", "fornecedor externo", "consultoria contratada", "relatórios mensais", "reabrir concorrência", "avaliação final do fornecedor", "encerramento do contrato"],
+  "trigger_signals": ["fornecedor", "consultoria", "prestação de serviços", "prestador de serviços", "terceirizada", "terceirização", "relatório mensal", "relatórios mensais", "concorrência", "avaliação final", "encerramento do contrato", "fim do contrato"],
   "description": "Processo de contratação e execução continuada com uma organização externa nomeada (fornecedor, consultoria, prestador de serviços): negociação, formalização e execução de longo prazo com entregas recorrentes. Cada lado é uma pool própria; cada fase de negócio (negociar, iniciar, executar, encerrar) vira um callActivity — nunca uma sequência flat de tarefas granulares no nível 1.",
   "when_to_use": "Use quando a transcrição descrever uma relação contratual entre duas organizações distintas (contratante e um fornecedor/consultoria nomeados) que passa por várias fases de negócio distintas — negociação, formalização, execução recorrente, encerramento — cada uma com detalhe suficiente para estourar o limite de 10 nós se modelada de forma flat.",
   "common_mistakes": [

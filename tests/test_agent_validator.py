@@ -187,7 +187,7 @@ class TestSemantic:
             step("s",  "Solicitação Recebida",  task_type="noneStartEvent"),
             step("t1", "Validar Documento",     task_type="userTask"),
             step("gw", "Documento Válido?",     task_type="exclusiveGateway"),
-            step("e",  "Processo Concluído",    task_type="noneEndEvent"),
+            step("e",  "Documento Registrado",  task_type="noneEndEvent"),
             edges=[],
         )
         sc = validator.score(m, "transcript", WEIGHTS_SEM_ONLY)
@@ -239,6 +239,24 @@ class TestSemantic:
 
     def test_generic_end_event_penalized(self, validator):
         e = step("e", "Fim", task_type="noneEndEvent")
+        m = model(e)
+        sc = validator.score(m, "transcript", WEIGHTS_SEM_ONLY)
+        assert sc.semantic < 10.0
+        assert sc.n_semantic_violations == 1
+
+    def test_processo_encerrado_penalized(self, validator):
+        # PC123: "Processo Encerrado" slipped past the old blacklist —
+        # "encerrado"/"concluído" are conjugated forms, not literal matches
+        # for "encerrar"/"terminar". "processo" as the subject (not the
+        # actual business outcome) is the generic tell.
+        e = step("e", "Processo Encerrado", task_type="noneEndEvent")
+        m = model(e)
+        sc = validator.score(m, "transcript", WEIGHTS_SEM_ONLY)
+        assert sc.semantic < 10.0
+        assert sc.n_semantic_violations == 1
+
+    def test_processo_concluido_penalized(self, validator):
+        e = step("e", "Processo Concluído", task_type="noneEndEvent")
         m = model(e)
         sc = validator.score(m, "transcript", WEIGHTS_SEM_ONLY)
         assert sc.semantic < 10.0

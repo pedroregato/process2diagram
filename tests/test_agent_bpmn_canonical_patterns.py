@@ -72,6 +72,42 @@ class TestSelectCanonicalPattern:
         assert result is not None
         assert result.get("id") == "bpmn_pattern_collab_callactivity_phases"
 
+    def test_collab_callactivity_phases_matches_varied_natural_phrasing(self):
+        # PC123 regression: the original trigger_signals were near-exact
+        # phrases lifted from prior OUTPUT vocabulary ("reabrir concorrência",
+        # "avaliação final do fornecedor") — 2 of 3 plausible, naturally
+        # phrased INPUT descriptions of this exact scenario scored 0 hits
+        # against them (verb conjugation / word order differences broke the
+        # substring match). These transcripts intentionally avoid the exact
+        # phrasing used in the pattern's own transcript_excerpt.
+        transcripts = [
+            (
+                "A empresa contratante precisa contratar uma consultoria especializada "
+                "em transformação digital. O departamento de compras abre uma "
+                "solicitação, elabora um termo de referência e envia para fornecedores "
+                "pré-qualificados, como a TechAdvisor Ltda. Após receber as propostas, "
+                "a empresa analisa e aprova uma, ou reabre a concorrência se nenhuma "
+                "for aceita. Uma vez aprovada, o jurídico elabora o contrato e envia "
+                "para assinatura da consultoria. Depois de assinado, o gerente do "
+                "projeto define o escopo e o cronograma junto com o fornecedor. A "
+                "execução ocorre com entregas mensais de relatórios, que são validados "
+                "pelo gerente; se houver problemas, retornam para correção; se "
+                "aprovados, o financeiro processa o pagamento e notifica o fornecedor. "
+                "Isso se repete até a última entrega, quando é feita uma avaliação "
+                "final do fornecedor e a documentação é arquivada."
+            ),
+            (
+                "Contratação de consultoria de TI com uma empresa terceirizada. "
+                "Processo de RFP, análise de propostas, assinatura de contrato, "
+                "execução com entregas periódicas e encerramento com avaliação de "
+                "desempenho do parceiro."
+            ),
+        ]
+        for transcript in transcripts:
+            result = AgentBPMN._select_canonical_pattern(transcript)
+            assert result is not None, f"no pattern matched: {transcript[:60]}..."
+            assert result.get("id") == "bpmn_pattern_collab_callactivity_phases"
+
     def test_collab_callactivity_phases_ideal_output_has_two_pools(self):
         patterns = _load_canonical_patterns()
         pattern = patterns["bpmn_pattern_collab_callactivity_phases"]
