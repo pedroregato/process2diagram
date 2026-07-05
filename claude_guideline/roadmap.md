@@ -4,6 +4,15 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC125 — Concluído (v5.15 / 2026-07-05) — contador de tempo real durante a geração no BPMN Studio
+
+**Contexto:** mesmo com "Passes de Otimização" reduzido para 1 (PC124), o usuário reportou que a espera ainda parecia longa sem nenhum feedback de quanto tempo realmente estava passando — o `st.spinner()` anterior só mostra um ícone girando, sem contagem.
+
+- [x] `pages/BpmnStudio.py::_run_with_live_timer()` — nova função auxiliar: roda a chamada de geração (`generate_bpmn_from_description`) num `ThreadPoolExecutor(max_workers=1)` enquanto a thread principal atualiza um placeholder (`st.empty()`) com os segundos decorridos a cada 1s. Mesmo padrão de segurança já usado em produção para Ata+Requisitos em paralelo (`agents/orchestrator.py`) — só que aqui com 1 worker, unicamente para manter a UI respondendo enquanto a chamada real roda em background. Propaga a exceção original via `Future.result()`, preservando o tratamento de erro existente.
+- [x] Aplicado nos dois pontos que chamam `generate_bpmn_from_description` na página: botão principal "🧩 Gerar BPMN" e "🔍 Detalhar uma fase" (PC120).
+- [x] Verificado com `AppTest` (LLM mockado): os dois fluxos completam sem exceção, com a thread em background sendo corretamente aguardada e o resultado repassado ao script principal.
+- [x] 396/396 testes automatizados inalterados.
+
 ### PC124 — Concluído (v5.15 / 2026-07-05) — controle de "Passes de Otimização" visível onde a espera acontece
 
 **Contexto:** usuário com apresentação no dia seguinte notou que o torneio de 3 execuções ficou mais lento (consequência esperada e correta do PC118-D — não tem mais atalho de cache mascarando 2 das 3 chamadas). Procurando reduzir para 1 passe, não encontrou o controle — ele existe em `pages/Settings.py` (aba Preferências → "🔄 Pipeline BPMN") e também escondido dentro do accordion fechado "⚙️ Configuração Avançada" na barra lateral do Pipeline, nenhum dos dois visível a partir de onde a espera realmente acontece.

@@ -10,7 +10,9 @@
 from __future__ import annotations
 
 import sys
+import time
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from datetime import datetime as _dt
 from pathlib import Path
@@ -41,6 +43,26 @@ from core.project_store import (
 )
 
 apply_auth_gate()
+
+
+def _run_with_live_timer(status, label: str, fn, *args, **kwargs):
+    """Runs fn(*args, **kwargs) in a background thread while updating a
+    st.empty() placeholder with elapsed seconds every second, so a long LLM
+    call (tournament runs regularly take 1-2 min per pass) doesn't look
+    frozen. Mirrors the ThreadPoolExecutor(max_workers=N) pattern already
+    used for Minutes+Requirements in agents/orchestrator.py — same safety
+    properties, just a single worker here so the main thread stays free to
+    repaint the UI. Re-raises fn's exception via Future.result().
+    """
+    start = time.time()
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(fn, *args, **kwargs)
+        while not future.done():
+            elapsed = time.time() - start
+            status.info(f"⏱️ {label} — {elapsed:.0f}s")
+            time.sleep(1)
+    return future.result()
+
 
 render_page_header(
     "🏗️", "BPMN Studio",
@@ -122,28 +144,32 @@ with tab_gerar:
                 st.error("Chave de API não encontrada para o provedor selecionado.")
             else:
                 n_runs = st.session_state.get("n_bpmn_runs", 3)
-                with st.spinner(f"Gerando BPMN e Mermaid — torneio de {n_runs} execuções…"):
-                    try:
-                        hub = generate_bpmn_from_description(
-                            description.strip(),
-                            client_info,
-                            st.session_state.provider_cfg,
-                            run_nlp=run_nlp,
-                            output_language=st.session_state.output_language,
-                            n_runs=n_runs,
-                            bpmn_weights=st.session_state.get("bpmn_weights"),
-                        )
-                        if not hub.bpmn.ready:
-                            st.error("Não foi possível gerar um diagrama a partir desta descrição.")
-                        else:
-                            st.session_state["_bpmns_hub"] = hub
-                            st.session_state["_bpmns_proc_name"] = hub.bpmn.name or "Processo"
-                            # New generation — discard any manual edit left over
-                            # from a previous diagram (mirrors pages/BpmnEditor.py).
-                            st.session_state.pop("_bpmns_edited_xml", None)
-                            st.session_state["bpmns_paste_xml"] = ""
-                    except Exception as exc:
-                        st.error(f"❌ Erro ao gerar BPMN: {exc}")
+                _status = st.empty()
+                try:
+                    hub = _run_with_live_timer(
+                        _status, f"Gerando BPMN e Mermaid — torneio de {n_runs} execuções…",
+                        generate_bpmn_from_description,
+                        description.strip(),
+                        client_info,
+                        st.session_state.provider_cfg,
+                        run_nlp=run_nlp,
+                        output_language=st.session_state.output_language,
+                        n_runs=n_runs,
+                        bpmn_weights=st.session_state.get("bpmn_weights"),
+                    )
+                    _status.empty()
+                    if not hub.bpmn.ready:
+                        st.error("Não foi possível gerar um diagrama a partir desta descrição.")
+                    else:
+                        st.session_state["_bpmns_hub"] = hub
+                        st.session_state["_bpmns_proc_name"] = hub.bpmn.name or "Processo"
+                        # New generation — discard any manual edit left over
+                        # from a previous diagram (mirrors pages/BpmnEditor.py).
+                        st.session_state.pop("_bpmns_edited_xml", None)
+                        st.session_state["bpmns_paste_xml"] = ""
+                except Exception as exc:
+                    _status.empty()
+                    st.error(f"❌ Erro ao gerar BPMN: {exc}")
 
     hub = st.session_state.get("_bpmns_hub")
     if hub is not None and hub.bpmn.ready:
@@ -343,32 +369,36 @@ with tab_gerar:
                     if not detail_client_info:
                         st.error("Chave de API não encontrada para o provedor selecionado.")
                     else:
-                        with st.spinner(f"Detalhando '{_selected_ca['name']}'…"):
-                            try:
-                                detail_hub = generate_bpmn_from_description(
-                                    _selected_ca["documentation"],
-                                    detail_client_info,
-                                    st.session_state.provider_cfg,
-                                    run_nlp=run_nlp,
-                                    output_language=st.session_state.output_language,
-                                    n_runs=st.session_state.get("n_bpmn_runs", 3),
-                                    bpmn_weights=st.session_state.get("bpmn_weights"),
-                                )
-                                if not detail_hub.bpmn.ready:
-                                    st.error("Não foi possível detalhar esta fase.")
-                                else:
-                                    hub.bpmn.detail_diagrams[_selected_ca["id"]] = detail_hub.bpmn
-                                    _dmeta = st.session_state.setdefault("_bpmns_detail_meta", {})
-                                    _score = detail_hub.validation.bpmn_score
-                                    _dmeta[_selected_ca["id"]] = {
-                                        "name": _selected_ca["name"],
-                                        "pool_name": _selected_ca["pool_name"],
-                                        "documentation": _selected_ca["documentation"],
-                                        "score": asdict(_score) if _score else None,
-                                    }
-                                    st.success(f"✅ Detalhamento de '{_selected_ca['name']}' gerado.")
-                            except Exception as exc:
-                                st.error(f"❌ Erro ao detalhar: {exc}")
+                        _detail_status = st.empty()
+                        try:
+                            detail_hub = _run_with_live_timer(
+                                _detail_status, f"Detalhando '{_selected_ca['name']}'…",
+                                generate_bpmn_from_description,
+                                _selected_ca["documentation"],
+                                detail_client_info,
+                                st.session_state.provider_cfg,
+                                run_nlp=run_nlp,
+                                output_language=st.session_state.output_language,
+                                n_runs=st.session_state.get("n_bpmn_runs", 3),
+                                bpmn_weights=st.session_state.get("bpmn_weights"),
+                            )
+                            _detail_status.empty()
+                            if not detail_hub.bpmn.ready:
+                                st.error("Não foi possível detalhar esta fase.")
+                            else:
+                                hub.bpmn.detail_diagrams[_selected_ca["id"]] = detail_hub.bpmn
+                                _dmeta = st.session_state.setdefault("_bpmns_detail_meta", {})
+                                _score = detail_hub.validation.bpmn_score
+                                _dmeta[_selected_ca["id"]] = {
+                                    "name": _selected_ca["name"],
+                                    "pool_name": _selected_ca["pool_name"],
+                                    "documentation": _selected_ca["documentation"],
+                                    "score": asdict(_score) if _score else None,
+                                }
+                                st.success(f"✅ Detalhamento de '{_selected_ca['name']}' gerado.")
+                        except Exception as exc:
+                            _detail_status.empty()
+                            st.error(f"❌ Erro ao detalhar: {exc}")
 
         if hub.bpmn.detail_diagrams:
             st.markdown("##### Fases já detalhadas nesta sessão")
