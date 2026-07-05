@@ -9,9 +9,9 @@ from core.knowledge_hub import (
 
 # ── Factory helpers ───────────────────────────────────────────────────────────
 
-def step(id, title, *, task_type="userTask", is_decision=False, lane=None):
+def step(id, title, *, task_type="userTask", is_decision=False, lane=None, description=""):
     return BPMNStep(id=id, title=title, task_type=task_type,
-                    is_decision=is_decision, lane=lane)
+                    is_decision=is_decision, lane=lane, description=description)
 
 
 def edge(src, tgt, label=""):

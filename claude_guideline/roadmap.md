@@ -4,6 +4,15 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC132 — Concluído (v5.15 / 2026-07-05) — gateway sem `<documentation>` em diagramas de colaboração (multi-pool)
+
+**Achado:** usuário perguntou se o algoritmo preenche `<documentation>` nos elementos BPMN gerados. Varredura de todos os pontos de construção de `BpmnElement(...)` em `agents/agent_bpmn.py` confirmou: sim, para tarefas/callActivity/subProcess/eventos intermediários, em ambos os caminhos (pool único e colaboração) — exceto um: `_build_pool_elements()` (caminho multi-pool) tinha um branch dedicado para `step.is_decision` (exclusiveGateway) que nunca passava `documentation=step.description`, diferente dos branches de evento e de tarefa logo ao lado, que já passavam. No caminho de pool único esse problema não existe — lá gateway e tarefa reaproveitam o mesmo código. Resultado: um mesmo processo modelado como colaboração perdia silenciosamente o critério de decisão documentado pela LLM no gateway, mesmo quando o skill instrui explicitamente a documentá-lo.
+
+- [x] `agents/agent_bpmn.py::_build_pool_elements()` — branch `elif step.is_decision:` agora inclui `documentation=step.description or ""`, igualando aos outros dois branches.
+- [x] `tests/conftest.py::step()` — parâmetro `description=""` adicionado ao factory (aditivo, não quebra chamadas existentes).
+- [x] `tests/test_agent_bpmn_multipool_documentation.py` (novo, 2 testes) — confirma que um gateway com `description` num modelo de colaboração agora produz `<documentation>` na tag do `exclusiveGateway`; guarda de regressão confirmando que o caminho de pool único (que já funcionava) continua funcionando.
+- [x] 411/411 testes automatizados passando (409 + 2 novos).
+
 ### PC131 — Concluído (v5.15 / 2026-07-05) — Heuristic 5 (far lane-span) + guidance de consolidação de decisão em callActivity
 
 **Contexto:** revisão de um processo real de 6 lanes ("Governança de IA", 14 etapas). Antes de reportar qualquer coisa como bug, reconstruí o modelo do jeito CORRETO — como ele existia em `hub.bpmn.steps` no momento em que o torneio pontuou, sem os elementos `lnk_throw_*`/`lnk_catch_*` sintéticos que só existem dentro da string XML final (`_apply_link_events()` escreve em `bpmn.elements`, uma estrutura efêmera de `_generate_bpmn_xml()`, nunca em `hub.bpmn`) — evitando reportar "dead end"/"fan-in" como bugs de scoring que na verdade nunca acontecem no pipeline real (esses eram artefatos da minha primeira reconstrução, feita a partir do XML final por engano). Score real do torneio: **8.9/10** (não os 4.9-6.9 da reconstrução errada). Dois achados sobreviveram à verificação:

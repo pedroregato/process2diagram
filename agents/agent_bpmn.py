@@ -1182,6 +1182,7 @@ def _build_pool_elements(pm: BPMNPoolData, prefix: str, BpmnElement) -> list:
                 type="exclusiveGateway",
                 lane=step.lane,
                 actor=step.actor,
+                documentation=step.description or "",
             ))
         else:
             el_type = _TASK_TYPE_MAP.get(step.task_type, "userTask")
