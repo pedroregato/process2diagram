@@ -29,7 +29,6 @@ from ui.project_selector import require_active_project
 from ui.components.page_header import render_page_header
 from modules.session_security import get_session_llm_client
 from modules.bpmn_editor import editor_from_xml
-from modules.bpmn_viewer import preview_from_xml
 from modules.mermaid_renderer import render_mermaid_block
 from modules.bpmn_describer import describe_bpmn_from_xml
 from agents.agent_bpmn_studio import generate_bpmn_from_description
@@ -90,6 +89,14 @@ with _col_change:
 # lines 54-55, which exists for the exact same reason).
 if st.session_state.pop("_bpmns_reset_paste", False):
     st.session_state["bpmns_paste_xml"] = ""
+
+# Same pattern for detail-diagram paste-back widgets (PC128) — dynamic key per
+# callActivity element_id, so the sweep scans for pending flags instead of a
+# single fixed key.
+for _k in list(st.session_state.keys()):
+    if _k.startswith("_bpmns_detail_reset_paste__") and st.session_state.pop(_k, False):
+        _eid = _k[len("_bpmns_detail_reset_paste__"):]
+        st.session_state[f"bpmns_detail_paste_xml__{_eid}"] = ""
 
 tab_gerar, tab_descrever = st.tabs(["🧩 Gerar", "📖 Descrever"])
 
@@ -187,17 +194,44 @@ with tab_gerar:
                 f"gateways {_score.gateways:.1f} · estrutural {_score.structural:.1f} · "
                 f"semântica {_score.semantic:.1f}){_time_suffix}"
             )
-        tab_bpmn, tab_mermaid = st.tabs(["📐 Diagrama BPMN", "📊 Mermaid"])
+        # Lê o XML colado ANTES de renderizar as abas, para refletir a edição na
+        # mesma passagem (mesmo padrão de pages/BpmnEditor.py) e para que a aba
+        # Detalhamento também enxergue o XML já editado ao extrair as fases.
+        _pasted = st.session_state.get("bpmns_paste_xml", "").strip()
+        if _pasted and ("<bpmn" in _pasted or "<?xml" in _pasted or "<definitions" in _pasted):
+            st.session_state["_bpmns_edited_xml"] = _pasted
+
+        _edited_xml = st.session_state.get("_bpmns_edited_xml")
+        _active_xml = _edited_xml or hub.bpmn.bpmn_xml
+
+        def _extract_call_activities(xml_str: str) -> list[dict]:
+            _NS = "{http://www.omg.org/spec/BPMN/20100524/MODEL}"
+            try:
+                root = ET.fromstring(xml_str)
+            except ET.ParseError:
+                return []
+            pool_by_process: dict[str, str] = {}
+            for collab in root.findall(f"{_NS}collaboration"):
+                for part in collab.findall(f"{_NS}participant"):
+                    ref = part.get("processRef")
+                    if ref:
+                        pool_by_process[ref] = part.get("name", "")
+            items: list[dict] = []
+            for proc in root.findall(f"{_NS}process"):
+                proc_id = proc.get("id")
+                pool_name = pool_by_process.get(proc_id, "")
+                for el in proc.findall(f"{_NS}callActivity"):
+                    doc_el = el.find(f"{_NS}documentation")
+                    items.append({
+                        "id": el.get("id"),
+                        "name": el.get("name") or el.get("id"),
+                        "documentation": (doc_el.text or "").strip() if doc_el is not None else "",
+                        "pool_name": pool_name,
+                    })
+            return items
+
+        tab_bpmn, tab_mermaid, tab_detail = st.tabs(["📐 Diagrama BPMN", "📊 Mermaid", "🔍 Detalhamento"])
         with tab_bpmn:
-            # Lê o XML colado ANTES de renderizar o editor, para refletir a
-            # edição na mesma passagem (mesmo padrão de pages/BpmnEditor.py).
-            _pasted = st.session_state.get("bpmns_paste_xml", "").strip()
-            if _pasted and ("<bpmn" in _pasted or "<?xml" in _pasted or "<definitions" in _pasted):
-                st.session_state["_bpmns_edited_xml"] = _pasted
-
-            _edited_xml = st.session_state.get("_bpmns_edited_xml")
-            _active_xml = _edited_xml or hub.bpmn.bpmn_xml
-
             st.info(
                 "**Como editar:** ajuste o diagrama na paleta à esquerda, clique "
                 "**📋 Exportar XML** na barra do editor, copie o conteúdo da caixa "
@@ -240,6 +274,155 @@ with tab_gerar:
                 st.code(_active_xml, language="xml")
         with tab_mermaid:
             render_mermaid_block(hub.bpmn.mermaid, show_code=True, key_suffix="bpmns", height=500)
+        with tab_detail:
+            st.caption(
+                "Gera um diagrama BPMN separado e detalhado para uma fase específica, "
+                "usando a descrição já registrada nela como entrada — mesmo mecanismo "
+                "de geração da aba principal (torneio de execuções)."
+            )
+
+            _call_activities = _extract_call_activities(_active_xml)
+            if not _call_activities:
+                st.caption("Nenhuma fase (callActivity) neste diagrama para detalhar.")
+            else:
+                _ca_labels = [
+                    f"{ca['name']} — {ca['pool_name']}" if ca["pool_name"] else ca["name"]
+                    for ca in _call_activities
+                ]
+                _ca_idx = st.selectbox(
+                    "Fase para detalhar",
+                    range(len(_call_activities)),
+                    format_func=lambda i: _ca_labels[i],
+                    key="bpmns_detail_ca_sel",
+                )
+                _selected_ca = _call_activities[_ca_idx]
+
+                if st.button(f"🔍 Detalhar '{_selected_ca['name']}'", key="bpmns_detail_generate_btn"):
+                    if not _selected_ca["documentation"]:
+                        st.error("Esta fase não tem descrição suficiente para detalhar.")
+                    else:
+                        detail_client_info = get_session_llm_client(st.session_state.selected_provider)
+                        if not detail_client_info:
+                            st.error("Chave de API não encontrada para o provedor selecionado.")
+                        else:
+                            _detail_status = st.empty()
+                            _detail_start = time.time()
+                            try:
+                                detail_hub = _run_with_live_timer(
+                                    _detail_status, f"Detalhando '{_selected_ca['name']}'…",
+                                    generate_bpmn_from_description,
+                                    _selected_ca["documentation"],
+                                    detail_client_info,
+                                    st.session_state.provider_cfg,
+                                    run_nlp=run_nlp,
+                                    output_language=st.session_state.output_language,
+                                    n_runs=st.session_state.get("n_bpmn_runs", 3),
+                                    bpmn_weights=st.session_state.get("bpmn_weights"),
+                                    is_phase_detail=True,
+                                )
+                                _detail_status.empty()
+                                if not detail_hub.bpmn.ready:
+                                    st.error("Não foi possível detalhar esta fase.")
+                                else:
+                                    hub.bpmn.detail_diagrams[_selected_ca["id"]] = detail_hub.bpmn
+                                    _dmeta = st.session_state.setdefault("_bpmns_detail_meta", {})
+                                    _score_d = detail_hub.validation.bpmn_score
+                                    _dmeta[_selected_ca["id"]] = {
+                                        "name": _selected_ca["name"],
+                                        "pool_name": _selected_ca["pool_name"],
+                                        "documentation": _selected_ca["documentation"],
+                                        "seconds": time.time() - _detail_start,
+                                        "score": asdict(_score_d) if _score_d else None,
+                                    }
+                                    # Novo detalhamento gerado — descarta edição manual
+                                    # anterior para essa mesma fase, se houver.
+                                    st.session_state.pop(f"_bpmns_detail_edited_xml__{_selected_ca['id']}", None)
+                                    st.session_state[f"bpmns_detail_paste_xml__{_selected_ca['id']}"] = ""
+                                    st.success(f"✅ Detalhamento de '{_selected_ca['name']}' gerado.")
+                            except Exception as exc:
+                                _detail_status.empty()
+                                st.error(f"❌ Erro ao detalhar: {exc}")
+
+            if hub.bpmn.detail_diagrams:
+                st.markdown("##### Fases já detalhadas nesta sessão")
+                _detail_meta = st.session_state.get("_bpmns_detail_meta", {})
+                for _element_id, _detail_model in hub.bpmn.detail_diagrams.items():
+                    _meta = _detail_meta.get(_element_id, {})
+                    _label = _meta.get("name", _element_id)
+                    with st.expander(f"📎 {_label}", expanded=False):
+                        _dscore = _meta.get("score")
+                        _dseconds = _meta.get("seconds")
+                        if _dscore:
+                            _dtime_suffix = f" · ⏱️ {_dseconds:.0f}s" if _dseconds is not None else ""
+                            st.caption(f"Score do torneio: {_dscore['weighted']:.1f}/10{_dtime_suffix}")
+
+                        _d_paste_key = f"bpmns_detail_paste_xml__{_element_id}"
+                        _d_edited_key = f"_bpmns_detail_edited_xml__{_element_id}"
+
+                        _d_pasted = st.session_state.get(_d_paste_key, "").strip()
+                        if _d_pasted and ("<bpmn" in _d_pasted or "<?xml" in _d_pasted or "<definitions" in _d_pasted):
+                            st.session_state[_d_edited_key] = _d_pasted
+
+                        _d_edited_xml = st.session_state.get(_d_edited_key)
+                        _d_active_xml = _d_edited_xml or _detail_model.bpmn_xml
+
+                        components.html(editor_from_xml(_d_active_xml, height=400), height=400 + 260, scrolling=False)
+
+                        _col_d_paste, _col_d_discard = st.columns([4, 1])
+                        with _col_d_paste:
+                            st.text_area(
+                                "📋 XML editado — cole aqui o conteúdo exportado pelo editor acima",
+                                height=120,
+                                key=_d_paste_key,
+                                placeholder='<?xml version="1.0" encoding="UTF-8"?>\n<definitions ...',
+                            )
+                        with _col_d_discard:
+                            st.write("")
+                            st.write("")
+                            if st.button(
+                                "↩️ Descartar",
+                                key=f"bpmns_detail_discard_{_element_id}",
+                                disabled=not _d_edited_xml,
+                                use_container_width=True,
+                                help="Volta a exibir e salvar a versão gerada originalmente pelo agente.",
+                            ):
+                                st.session_state.pop(_d_edited_key, None)
+                                st.session_state[f"_bpmns_detail_reset_paste__{_element_id}"] = True
+                                st.rerun()
+
+                        if _d_edited_xml:
+                            st.caption(
+                                "✏️ Exibindo a versão editada manualmente — o **Salvar** "
+                                "abaixo grava esta versão, não a gerada originalmente pelo agente."
+                            )
+
+                        # st.expander não pode ser aninhado (CLAUDE.md — Known Pitfalls);
+                        # este bloco de código já está dentro do expander de cima.
+                        st.caption("📝 Código BPMN (XML)")
+                        st.code(_d_active_xml, language="xml")
+
+                        if not hub.bpmn.db_process_id:
+                            st.caption("⏳ Salve o diagrama principal (aba 💾 Salvar) antes de salvar este detalhamento.")
+                        elif st.button(f"💾 Salvar detalhamento de '{_label}'", key=f"bpmns_save_detail_{_element_id}"):
+                            _version_id = get_current_bpmn_version_id(hub.bpmn.db_process_id)
+                            if not _version_id:
+                                st.error("Não foi possível localizar a versão atual do processo salvo.")
+                            else:
+                                ok = save_bpmn_callactivity_diagram(
+                                    bpmn_version_id=_version_id,
+                                    element_id=_element_id,
+                                    element_name=_label,
+                                    bpmn_xml=_d_active_xml,
+                                    pool_name=_meta.get("pool_name", ""),
+                                    source_description=_meta.get("documentation", ""),
+                                    mermaid_code=_detail_model.mermaid,
+                                    bpmn_score=_dscore,
+                                    created_by=st.session_state.get("_usuario_login", ""),
+                                )
+                                if ok:
+                                    st.success("✅ Detalhamento salvo.")
+                                else:
+                                    st.error("❌ Erro ao salvar o detalhamento.")
 
         st.markdown("#### 💾 Salvar")
         col_name, col_meeting = st.columns(2)
@@ -311,142 +494,6 @@ with tab_gerar:
                 st.page_link("pages/BpmnEditor.py", label="→ Abrir no Editor BPMN")
             else:
                 st.error("❌ Erro ao salvar. Verifique a conexão com o banco de dados.")
-
-        # ═════════════════════════════════════════════════════════════════════
-        # DETALHAR UMA FASE (callActivity) — PC120
-        # ═════════════════════════════════════════════════════════════════════
-        st.markdown("---")
-        st.markdown("#### 🔍 Detalhar uma fase (callActivity)")
-        st.caption(
-            "Gera um diagrama BPMN separado e detalhado para uma fase específica, "
-            "usando a descrição já registrada nela como entrada — mesmo mecanismo "
-            "de geração da aba principal (torneio de execuções)."
-        )
-
-        def _extract_call_activities(xml_str: str) -> list[dict]:
-            _NS = "{http://www.omg.org/spec/BPMN/20100524/MODEL}"
-            try:
-                root = ET.fromstring(xml_str)
-            except ET.ParseError:
-                return []
-            pool_by_process: dict[str, str] = {}
-            for collab in root.findall(f"{_NS}collaboration"):
-                for part in collab.findall(f"{_NS}participant"):
-                    ref = part.get("processRef")
-                    if ref:
-                        pool_by_process[ref] = part.get("name", "")
-            items: list[dict] = []
-            for proc in root.findall(f"{_NS}process"):
-                proc_id = proc.get("id")
-                pool_name = pool_by_process.get(proc_id, "")
-                for el in proc.findall(f"{_NS}callActivity"):
-                    doc_el = el.find(f"{_NS}documentation")
-                    items.append({
-                        "id": el.get("id"),
-                        "name": el.get("name") or el.get("id"),
-                        "documentation": (doc_el.text or "").strip() if doc_el is not None else "",
-                        "pool_name": pool_name,
-                    })
-            return items
-
-        _call_activities = _extract_call_activities(_active_xml)
-        if not _call_activities:
-            st.caption("Nenhuma fase (callActivity) neste diagrama para detalhar.")
-        else:
-            _ca_labels = [
-                f"{ca['name']} — {ca['pool_name']}" if ca["pool_name"] else ca["name"]
-                for ca in _call_activities
-            ]
-            _ca_idx = st.selectbox(
-                "Fase para detalhar",
-                range(len(_call_activities)),
-                format_func=lambda i: _ca_labels[i],
-                key="bpmns_detail_ca_sel",
-            )
-            _selected_ca = _call_activities[_ca_idx]
-
-            if st.button(f"🔍 Detalhar '{_selected_ca['name']}'", key="bpmns_detail_generate_btn"):
-                if not _selected_ca["documentation"]:
-                    st.error("Esta fase não tem descrição suficiente para detalhar.")
-                else:
-                    detail_client_info = get_session_llm_client(st.session_state.selected_provider)
-                    if not detail_client_info:
-                        st.error("Chave de API não encontrada para o provedor selecionado.")
-                    else:
-                        _detail_status = st.empty()
-                        _detail_start = time.time()
-                        try:
-                            detail_hub = _run_with_live_timer(
-                                _detail_status, f"Detalhando '{_selected_ca['name']}'…",
-                                generate_bpmn_from_description,
-                                _selected_ca["documentation"],
-                                detail_client_info,
-                                st.session_state.provider_cfg,
-                                run_nlp=run_nlp,
-                                output_language=st.session_state.output_language,
-                                n_runs=st.session_state.get("n_bpmn_runs", 3),
-                                bpmn_weights=st.session_state.get("bpmn_weights"),
-                                is_phase_detail=True,
-                            )
-                            _detail_status.empty()
-                            if not detail_hub.bpmn.ready:
-                                st.error("Não foi possível detalhar esta fase.")
-                            else:
-                                hub.bpmn.detail_diagrams[_selected_ca["id"]] = detail_hub.bpmn
-                                _dmeta = st.session_state.setdefault("_bpmns_detail_meta", {})
-                                _score = detail_hub.validation.bpmn_score
-                                _dmeta[_selected_ca["id"]] = {
-                                    "name": _selected_ca["name"],
-                                    "pool_name": _selected_ca["pool_name"],
-                                    "documentation": _selected_ca["documentation"],
-                                    "seconds": time.time() - _detail_start,
-                                    "score": asdict(_score) if _score else None,
-                                }
-                                st.success(f"✅ Detalhamento de '{_selected_ca['name']}' gerado.")
-                        except Exception as exc:
-                            _detail_status.empty()
-                            st.error(f"❌ Erro ao detalhar: {exc}")
-
-        if hub.bpmn.detail_diagrams:
-            st.markdown("##### Fases já detalhadas nesta sessão")
-            _detail_meta = st.session_state.get("_bpmns_detail_meta", {})
-            for _element_id, _detail_model in hub.bpmn.detail_diagrams.items():
-                _meta = _detail_meta.get(_element_id, {})
-                _label = _meta.get("name", _element_id)
-                with st.expander(f"📎 {_label}", expanded=False):
-                    _dscore = _meta.get("score")
-                    _dseconds = _meta.get("seconds")
-                    if _dscore:
-                        _dtime_suffix = f" · ⏱️ {_dseconds:.0f}s" if _dseconds is not None else ""
-                        st.caption(f"Score do torneio: {_dscore['weighted']:.1f}/10{_dtime_suffix}")
-                    components.html(preview_from_xml(_detail_model.bpmn_xml), height=350, scrolling=False)
-                    # st.expander não pode ser aninhado (CLAUDE.md — Known Pitfalls);
-                    # este expander de detalhamento já está dentro do de cima.
-                    st.caption("📝 Código BPMN (XML)")
-                    st.code(_detail_model.bpmn_xml, language="xml")
-
-                    if not hub.bpmn.db_process_id:
-                        st.caption("⏳ Salve o diagrama principal (acima) antes de salvar este detalhamento.")
-                    elif st.button(f"💾 Salvar detalhamento de '{_label}'", key=f"bpmns_save_detail_{_element_id}"):
-                        _version_id = get_current_bpmn_version_id(hub.bpmn.db_process_id)
-                        if not _version_id:
-                            st.error("Não foi possível localizar a versão atual do processo salvo.")
-                        else:
-                            ok = save_bpmn_callactivity_diagram(
-                                bpmn_version_id=_version_id,
-                                element_id=_element_id,
-                                element_name=_label,
-                                bpmn_xml=_detail_model.bpmn_xml,
-                                pool_name=_meta.get("pool_name", ""),
-                                source_description=_meta.get("documentation", ""),
-                                mermaid_code=_detail_model.mermaid,
-                                bpmn_score=_dscore,
-                                created_by=st.session_state.get("_usuario_login", ""),
-                            )
-                            if ok:
-                                st.success("✅ Detalhamento salvo.")
-                            else:
-                                st.error("❌ Erro ao salvar o detalhamento.")
 
 # ═════════════════════════════════════════════════════════════════════════════
 # ABA DESCREVER — BPMN → descrição textual
