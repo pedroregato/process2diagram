@@ -27,6 +27,7 @@ import streamlit.components.v1 as components
 from ui.auth_gate import apply_auth_gate
 from ui.project_selector import require_active_project
 from ui.components.page_header import render_page_header
+from ui.components.copy_button import copy_button
 from modules.session_security import get_session_llm_client
 from modules.bpmn_editor import editor_from_xml
 from modules.bpmn_viewer import pretty_print_xml
@@ -272,7 +273,9 @@ with tab_gerar:
                 )
 
             with st.expander("📝 Código BPMN (XML)", expanded=False):
-                st.code(pretty_print_xml(_active_xml), language="xml")
+                _pretty_active_xml = pretty_print_xml(_active_xml)
+                st.code(_pretty_active_xml, language="xml")
+                copy_button(_pretty_active_xml, key="bpmns_main_xml", label="📋 Copiar XML", compact=True)
         with tab_mermaid:
             render_mermaid_block(hub.bpmn.mermaid, show_code=True, key_suffix="bpmns", height=500)
         with tab_detail:
@@ -400,7 +403,10 @@ with tab_gerar:
                         # st.expander não pode ser aninhado (CLAUDE.md — Known Pitfalls);
                         # este bloco de código já está dentro do expander de cima.
                         st.caption("📝 Código BPMN (XML)")
-                        st.code(pretty_print_xml(_d_active_xml), language="xml")
+                        _pretty_d_xml = pretty_print_xml(_d_active_xml)
+                        st.code(_pretty_d_xml, language="xml")
+                        copy_button(_pretty_d_xml, key=f"bpmns_detail_xml_{_element_id}",
+                                    label="📋 Copiar XML", compact=True)
 
                         if not hub.bpmn.db_process_id:
                             st.caption("⏳ Salve o diagrama principal (aba 💾 Salvar) antes de salvar este detalhamento.")

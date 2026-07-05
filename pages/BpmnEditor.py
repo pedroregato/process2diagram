@@ -40,6 +40,7 @@ from core.project_store import (
     list_bpmn_callactivity_diagrams,
 )
 from ui.project_selector import require_active_project
+from ui.components.copy_button import copy_button
 from modules.bpmn_editor import editor_from_xml
 from modules.bpmn_viewer import preview_from_xml, pretty_print_xml
 
@@ -171,7 +172,10 @@ if _saved_details:
             if _d_xml:
                 components.html(preview_from_xml(_d_xml), height=350, scrolling=False)
                 st.caption("📝 Código BPMN (XML)")
-                st.code(pretty_print_xml(_d_xml), language="xml")
+                _pretty_saved_xml = pretty_print_xml(_d_xml)
+                st.code(_pretty_saved_xml, language="xml")
+                copy_button(_pretty_saved_xml, key=f"bpme_saved_detail_xml_{_d.get('id', _i)}",
+                            label="📋 Copiar XML", compact=True)
 
 # ── Reconversão Method & Style v7.0 ──────────────────────────────────────────
 with st.expander("🔄 Reconverter com Method & Style v7.0", expanded=False):
@@ -372,4 +376,6 @@ if st.session_state.get("bpme_show_preview") and captured_xml:
 
 # ── XML da versão base (referência) ──────────────────────────────────────────
 with st.expander("📄 XML da versão selecionada (referência)", expanded=False):
-    st.code(pretty_print_xml(base_xml), language="xml")
+    _pretty_base_xml = pretty_print_xml(base_xml)
+    st.code(_pretty_base_xml, language="xml")
+    copy_button(_pretty_base_xml, key="bpme_base_xml", label="📋 Copiar XML", compact=True)
