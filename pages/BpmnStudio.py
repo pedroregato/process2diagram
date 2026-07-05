@@ -145,6 +145,7 @@ with tab_gerar:
             else:
                 n_runs = st.session_state.get("n_bpmn_runs", 3)
                 _status = st.empty()
+                _gen_start = time.time()
                 try:
                     hub = _run_with_live_timer(
                         _status, f"Gerando BPMN e Mermaid — torneio de {n_runs} execuções…",
@@ -163,6 +164,7 @@ with tab_gerar:
                     else:
                         st.session_state["_bpmns_hub"] = hub
                         st.session_state["_bpmns_proc_name"] = hub.bpmn.name or "Processo"
+                        st.session_state["_bpmns_gen_seconds"] = time.time() - _gen_start
                         # New generation — discard any manual edit left over
                         # from a previous diagram (mirrors pages/BpmnEditor.py).
                         st.session_state.pop("_bpmns_edited_xml", None)
@@ -175,13 +177,15 @@ with tab_gerar:
     if hub is not None and hub.bpmn.ready:
         st.markdown("---")
         _score = getattr(hub.validation, "bpmn_score", None)
+        _gen_seconds = st.session_state.get("_bpmns_gen_seconds")
         if _score:
+            _time_suffix = f" · ⏱️ {_gen_seconds:.0f}s" if _gen_seconds is not None else ""
             st.caption(
                 f"🏆 Melhor de {hub.validation.n_bpmn_runs} execuções (torneio) — "
                 f"score {_score.weighted:.1f}/10 "
                 f"(granularidade {_score.granularity:.1f} · tipo de tarefa {_score.task_type:.1f} · "
                 f"gateways {_score.gateways:.1f} · estrutural {_score.structural:.1f} · "
-                f"semântica {_score.semantic:.1f})"
+                f"semântica {_score.semantic:.1f}){_time_suffix}"
             )
         tab_bpmn, tab_mermaid = st.tabs(["📐 Diagrama BPMN", "📊 Mermaid"])
         with tab_bpmn:
@@ -370,6 +374,7 @@ with tab_gerar:
                         st.error("Chave de API não encontrada para o provedor selecionado.")
                     else:
                         _detail_status = st.empty()
+                        _detail_start = time.time()
                         try:
                             detail_hub = _run_with_live_timer(
                                 _detail_status, f"Detalhando '{_selected_ca['name']}'…",
@@ -393,6 +398,7 @@ with tab_gerar:
                                     "name": _selected_ca["name"],
                                     "pool_name": _selected_ca["pool_name"],
                                     "documentation": _selected_ca["documentation"],
+                                    "seconds": time.time() - _detail_start,
                                     "score": asdict(_score) if _score else None,
                                 }
                                 st.success(f"✅ Detalhamento de '{_selected_ca['name']}' gerado.")
@@ -408,8 +414,10 @@ with tab_gerar:
                 _label = _meta.get("name", _element_id)
                 with st.expander(f"📎 {_label}", expanded=False):
                     _dscore = _meta.get("score")
+                    _dseconds = _meta.get("seconds")
                     if _dscore:
-                        st.caption(f"Score do torneio: {_dscore['weighted']:.1f}/10")
+                        _dtime_suffix = f" · ⏱️ {_dseconds:.0f}s" if _dseconds is not None else ""
+                        st.caption(f"Score do torneio: {_dscore['weighted']:.1f}/10{_dtime_suffix}")
                     components.html(preview_from_xml(_detail_model.bpmn_xml), height=350, scrolling=False)
                     # st.expander não pode ser aninhado (CLAUDE.md — Known Pitfalls);
                     # este expander de detalhamento já está dentro do de cima.

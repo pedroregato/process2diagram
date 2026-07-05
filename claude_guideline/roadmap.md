@@ -4,6 +4,10 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC125-B — Concluído (v5.15 / 2026-07-05) — tempo total exibido após a geração
+
+Usuário pediu onde ver o tempo que a geração levou — o contador do PC125 desaparece ao concluir (`_status.empty()`), sem deixar registro. Fix: tempo total (`time.time()` antes/depois da chamada) persistido em `st.session_state` e exibido na legenda do score — "🏆 Melhor de N execuções... · ⏱️ Xs" — tanto na geração principal quanto no detalhamento de fase (PC120). Verificado com `AppTest`: legenda renderiza com o sufixo de tempo corretamente. 396/396 testes inalterados.
+
 ### PC125 — Concluído (v5.15 / 2026-07-05) — contador de tempo real durante a geração no BPMN Studio
 
 **Contexto:** mesmo com "Passes de Otimização" reduzido para 1 (PC124), o usuário reportou que a espera ainda parecia longa sem nenhum feedback de quanto tempo realmente estava passando — o `st.spinner()` anterior só mostra um ícone girando, sem contagem.
