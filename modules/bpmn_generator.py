@@ -252,6 +252,37 @@ def _detect_crossings(flows, shapes, lane_assignment=None, pool=None):
             if tgt_shape[0] < src_shape[0]:
                 crossing_ids.add(f.id)
 
+    # ── Heuristic 5: far lane-span (≥2 intermediate lanes skipped) ────────────
+    # Heuristic 2 only flags a lane-skipping flow when the skipped lanes have
+    # elements inside the flow's own column range — deliberately, to avoid
+    # converting harmless jumps over genuinely empty lane strips. But a FORWARD
+    # flow whose skipped lanes' elements all sit in an earlier column range
+    # (a coincidence of layout order, not a guarantee of harmlessness) slips
+    # through that check even while spanning most of the pool's height —
+    # e.g. a decision in the last lane routing straight back up to the second
+    # lane, past 3 untouched lanes in between. Real case (PC131): a Comitê
+    # (lane 6) decision approving straight back to EGAI (lane 2) skipped
+    # Segurança/Jurídico/Arquitetura (lanes 3-5) without tripping heuristic 2,
+    # because those lanes' own elements were positioned in an earlier column.
+    # Bruce Silver Method treats any jump over ≥2 intermediate lanes as poor
+    # style regardless of column overlap — so this heuristic flags it
+    # unconditionally, independent of Heuristics 2-4.
+    if lane_assignment and pool and pool.lanes:
+        lane_index_5 = {lane.id: idx for idx, lane in enumerate(pool.lanes)}
+        for f in candidate_flows:
+            if f.id in crossing_ids:
+                continue   # already flagged
+            src_lid = lane_assignment.get(f.source)
+            tgt_lid = lane_assignment.get(f.target)
+            if not src_lid or not tgt_lid or src_lid == tgt_lid:
+                continue
+            si = lane_index_5.get(src_lid, -1)
+            ti = lane_index_5.get(tgt_lid, -1)
+            if si < 0 or ti < 0:
+                continue
+            if abs(si - ti) >= 3:   # ≥2 intermediate lanes skipped
+                crossing_ids.add(f.id)
+
     return crossing_ids
 
 

@@ -3,7 +3,7 @@ agent: bpmn
 iniciativa: Pedro Regato
 project: process2diagram
 spec: BPMN 2.0 (OMG — ISO/IEC 19510) · Bruce Silver Method and Style
-version: 10.1
+version: 10.2
 description: AgentBPMN — extrai JSON de processo BPMN 2.0 a partir de transcrições (método Bruce Silver, cobertura OMG §10.6, gateways, eventos, subprocessos, colaboração)
 ---
 
@@ -229,6 +229,11 @@ A contagem (> 10) é um sinal de alerta, não uma regra mecânica. Use `callActi
 2. Pode ser **compreendido isoladamente** sem contexto do restante do fluxo.
 3. Tem **lógica interna complexa** que polui o nível 1 se expandida.
 4. Poderia ser **executado por outro ator ou terceirizado** sem impacto no fluxo principal.
+5. **É uma decisão (gateway) cujos ramos reconvergem antes do fluxo continuar** — quando o mesmo ator avalia, decide e trata AMBOS os desfechos (ex: aprovar direto / reprovar e mitigar) e o resultado da decisão não muda quem processa o próximo passo de nível 1, o gateway inteiro — condição, os dois ramos e o ponto de reconvergência — cabe dentro de um único `callActivity`. O nível 1 só precisa mostrar "avaliação feita", não como ela foi decidida por dentro.
+
+   *Exemplo (achado real, PC131 — processo de governança de IA com 6 lanes):* um bloco `Classificar Risco → Avaliar Preliminarmente → gateway "Risco Aceitável?" → (Sim: Consolidar Recomendações) / (Não: Definir Restrições → Consolidar Recomendações)` ocupava 5 nós de nível 1 só para decidir e convergir num único resultado (o Dossiê de Governança), sempre processado pelo mesmo ator (EGAI). Deveria ter sido modelado como **1** `callActivity` — "Avaliar e Classificar Risco" — com a lógica de decisão (critérios, ramos, mitigadores) descrita em `description`. Mesmo raciocínio se aplica a "Revisão do Comitê" + seu gateway de decisão quando ambos pertencem ao mesmo ator e só o resultado final (aprovar/aprovar com restrições/ajustar/rejeitar) importa no nível 1.
+
+   **Não aplique este critério quando o resultado da decisão determina o PRÓXIMO ATOR/lane** (ex: uma aprovação que roteia para pools/lanes diferentes conforme o resultado) — nesse caso o gateway deve permanecer visível no nível 1, pois a bifurcação organizacional é exatamente o que o diagrama precisa comunicar.
 
 **NUNCA use `callActivity` apenas para reduzir a contagem de atividades** — se 12 atividades formam um único fluxo linear coeso, prefira o modelo flat e reveja se não há gateways ou paralelos que permitam consolidar.
 
@@ -669,6 +674,7 @@ Quando houver devolução para correção, o fluxo de retorno deve apontar para 
 
 **Hierarquia e Densidade (Bruce Silver Level 1):**
 - [ ] O nível 1 tem ≤ 10 nós? Se não → reagrupar usando `callActivity`
+- [ ] Algum gateway de nível 1 tem ambos os ramos reconvergindo no mesmo ator sem mudar quem processa o próximo passo? Se sim → dobre o gateway inteiro (condição + ramos + reconvergência) dentro de um único `callActivity` (Passo 2, critério 5)
 - [ ] Todo `callActivity` tem `description` listando as subatividades que representa?
 - [ ] Cada End Event distinto representa um **resultado de negócio nomeado**?
 - [ ] O nome de cada End Event **corresponde ao label do gateway que o precede**? (ex: gateway sai com "Reprovado" → End Event "Proposta Reprovada Definitivamente" — permite rastrear visualmente o caminho percorrido)
