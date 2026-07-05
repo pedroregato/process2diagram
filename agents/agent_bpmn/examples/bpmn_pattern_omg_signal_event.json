@@ -2,6 +2,7 @@
   "id": "bpmn_pattern_omg_signal_event",
   "name": "Evento de Sinal (Signal Broadcast 1-para-N)",
   "category": "Sinal",
+  "trigger_signals": ["todos os sistemas são notificados", "broadcast", "todos os departamentos ao mesmo tempo", "sinal para múltiplas áreas", "ao mesmo tempo em paralelo"],
   "description": "Padrão OMG §10.6.4 para broadcast de eventos entre processos independentes. Diferente de Message (ponto-a-ponto, destinatário identificado), Signal não tem destinatário — qualquer processo com um signalCatchEvent do mesmo nome reage simultaneamente. Usado para disparar múltiplos subprocessos autônomos a partir de um único evento de negócio.",
   "when_to_use": "Use quando a transcrição indicar que um evento único aciona múltiplos processos independentes sem que o emissor saiba quem são os receptores — ex: 'ao fechar o pregão, todos os sistemas são notificados', 'quando o diretor aprova, todos os departamentos são avisados ao mesmo tempo', 'ao final do dia, os relatórios de cada área são gerados'.",
   "common_mistakes": [

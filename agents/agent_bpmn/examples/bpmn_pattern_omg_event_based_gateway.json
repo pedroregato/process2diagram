@@ -2,6 +2,7 @@
   "id": "bpmn_pattern_omg_event_based_gateway",
   "name": "Event-Based Gateway (Corrida Competitiva de Eventos)",
   "category": "Gateway",
+  "trigger_signals": ["aguarda confirmação ou cancelamento ou prazo", "primeiro que responder", "quem confirmar primeiro", "espera por múltiplos eventos alternativos"],
   "description": "Padrão OMG §10.6.3: o processo aguarda simultaneamente por múltiplos eventos alternativos e prossegue pelo caminho cujo evento ocorrer primeiro, cancelando a espera pelos demais. Diferente do exclusiveGateway (que decide com base em dados já conhecidos), o eventBasedGateway decide com base em qual evento externo chega primeiro.",
   "when_to_use": "Use quando a transcrição indicar espera por múltiplos eventos alternativos e mutuamente exclusivos — ex: 'aguarda confirmação de pagamento ou cancelamento pelo cliente ou expiração de prazo', 'o processo segue pelo primeiro que responder', 'quem confirmar primeiro define o caminho'.",
   "common_mistakes": [

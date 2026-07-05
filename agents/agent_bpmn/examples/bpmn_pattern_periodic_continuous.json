@@ -2,6 +2,7 @@
   "id": "bpmn_pattern_periodic_continuous",
   "name": "Processos Periódicos vs. Contínuos",
   "category": "Estrutura",
+  "trigger_signals": ["todo dia", "mensalmente", "processamento noturno", "rotina periódica", "cron", "fechamento mensal", "batch diário"],
   "description": "Modelagem de um cenário onde um processo é contínuo e outro é periódico.",
   "when_to_use": "Use este padrão quando a transcrição distinguir claramente entre um fluxo principal contínuo e uma atividade que ocorre em intervalos regulares (ex: no final do mês).",
   "common_mistakes": [

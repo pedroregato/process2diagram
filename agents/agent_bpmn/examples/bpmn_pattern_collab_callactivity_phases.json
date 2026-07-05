@@ -1,0 +1,80 @@
+{
+  "id": "bpmn_pattern_collab_callactivity_phases",
+  "name": "Colaboração Multi-Pool com Fases via CallActivity",
+  "category": "Colaboração",
+  "trigger_signals": ["contrato de prestação de serviços", "fornecedor externo", "consultoria contratada", "relatórios mensais", "reabrir concorrência", "avaliação final do fornecedor", "encerramento do contrato"],
+  "description": "Processo de contratação e execução continuada com uma organização externa nomeada (fornecedor, consultoria, prestador de serviços): negociação, formalização e execução de longo prazo com entregas recorrentes. Cada lado é uma pool própria; cada fase de negócio (negociar, iniciar, executar, encerrar) vira um callActivity — nunca uma sequência flat de tarefas granulares no nível 1.",
+  "when_to_use": "Use quando a transcrição descrever uma relação contratual entre duas organizações distintas (contratante e um fornecedor/consultoria nomeados) que passa por várias fases de negócio distintas — negociação, formalização, execução recorrente, encerramento — cada uma com detalhe suficiente para estourar o limite de 10 nós se modelada de forma flat.",
+  "common_mistakes": [
+    "Não deixe os steps de negociação e execução soltos no nível 1 — agrupe por fase de negócio em callActivity (ex: 'Contratar Consultoria', 'Executar Consultoria'); um pool com >10 nós no nível 1 viola a Regra de Densidade Cognitiva.",
+    "Não colapse a segunda organização citada nominalmente num sendTask/receiveTask dentro do MESMO pool — declare-a como participant própria, com seus próprios callActivity e Start/End Events explícitos. Uma collaboration com 1 participante só usando sendTask/receiveTask é um erro estrutural grave.",
+    "Não deixe callActivity sem `description` — é o texto usado depois para detalhar a fase sob demanda; sem ele, o detalhamento fica sem informação nenhuma para trabalhar.",
+    "Não duplique a mesma responsabilidade nas duas pools (ex: 'Definir Escopo' e 'Planejar Cronograma' aparecendo idênticas nos dois lados) — cada atividade pertence a um único lado, conforme a transcrição descrever.",
+    "Nunca use Link Events no nível 1 para os loops de execução (ex: ciclo mensal de relatório/pagamento) — se o loop estiver bem encapsulado dentro do callActivity de execução, ele nunca precisa aparecer como aresta cross-lane no diagrama principal.",
+    "Não modele cada troca de mensagem interna às fases (proposta, contrato, escopo, relatório) individualmente se elas já estão descritas dentro da documentation de um callActivity — modele como message_flow explícito apenas os pontos de transição ENTRE fases."
+  ],
+  "transcript_excerpt": "A empresa identifica a necessidade de contratar uma consultoria especializada em transformação digital. O Departamento de Compras abre a solicitação, elabora o termo de referência e encaminha a fornecedores pré-qualificados, incluindo a TechAdvisor Ltda. Após receber e analisar as propostas, se nenhuma for aprovada a concorrência é reaberta; se aprovada, o contrato é elaborado e enviado para assinatura da TechAdvisor. Com o contrato assinado, o Gerente do Projeto define o escopo detalhado e comunica à TechAdvisor, que planeja o cronograma e inicia a execução. A execução ocorre em ciclos mensais: a TechAdvisor entrega um relatório, o Gerente do Projeto valida — devolvendo para correção se necessário — aprova e processa o pagamento, notificando a TechAdvisor. Isso se repete até o fim do contrato, quando é feita a avaliação final do fornecedor e a documentação é arquivada.",
+  "ideal_json_output": {
+    "name": "Contratação e Execução de Consultoria Externa",
+    "pools": [
+      {
+        "id": "pool_contratante",
+        "name": "Contratante",
+        "process": {
+          "steps": [
+            { "id": "S00", "title": "Necessidade de Consultoria Identificada", "task_type": "noneStartEvent", "lane": "Departamento de Compras" },
+            { "id": "S01", "title": "Contratar Consultoria", "task_type": "callActivity", "lane": "Departamento de Compras",
+              "description": "Fase de contratação: abrir solicitação, elaborar termo de referência, encaminhar a fornecedores, receber e analisar propostas, aprovar ou reabrir concorrência, elaborar e enviar contrato." },
+            { "id": "S02", "title": "Iniciar Projeto", "task_type": "callActivity", "lane": "Gerente do Projeto",
+              "description": "Receber contrato assinado, definir escopo detalhado e comunicar à consultoria contratada." },
+            { "id": "S03", "title": "Executar Consultoria", "task_type": "callActivity", "lane": "Gerente do Projeto",
+              "description": "Fase de execução mensal: receber relatórios, validar, devolver para correção se necessário, aprovar e processar pagamento, notificar fornecedor. Repetir até o final do contrato." },
+            { "id": "S04", "title": "Encerrar Contrato", "task_type": "callActivity", "lane": "Gerente do Projeto",
+              "description": "Realizar avaliação final do fornecedor e arquivar documentação no sistema de gestão de contratos." },
+            { "id": "S05", "title": "Contrato Encerrado e Arquivado", "task_type": "noneEndEvent", "lane": "Gerente do Projeto" }
+          ],
+          "edges": [
+            { "source": "S00", "target": "S01", "label": "" },
+            { "source": "S01", "target": "S02", "label": "" },
+            { "source": "S02", "target": "S03", "label": "" },
+            { "source": "S03", "target": "S04", "label": "contrato finalizado" },
+            { "source": "S04", "target": "S05", "label": "" }
+          ],
+          "lanes": ["Departamento de Compras", "Gerente do Projeto"]
+        }
+      },
+      {
+        "id": "pool_fornecedor",
+        "name": "Nome real do fornecedor citado na transcrição",
+        "process": {
+          "steps": [
+            { "id": "P01", "title": "Termo de Referência Recebido", "task_type": "startMessageEvent", "lane": "Consultor Responsável" },
+            { "id": "P02", "title": "Responder Concorrência", "task_type": "callActivity", "lane": "Consultor Responsável",
+              "description": "Analisar termo de referência e enviar proposta técnica e comercial." },
+            { "id": "P03", "title": "Assinar Contrato", "task_type": "callActivity", "lane": "Consultor Responsável",
+              "description": "Receber contrato, assinar e devolver assinado." },
+            { "id": "P04", "title": "Planejar e Executar", "task_type": "callActivity", "lane": "Consultor Responsável",
+              "description": "Após escopo definido, planejar cronograma e iniciar execução da consultoria com entregas mensais de relatórios e correções conforme validação." },
+            { "id": "P05", "title": "Consultoria Concluída", "task_type": "noneEndEvent", "lane": "Consultor Responsável" }
+          ],
+          "edges": [
+            { "source": "P01", "target": "P02", "label": "" },
+            { "source": "P02", "target": "P03", "label": "" },
+            { "source": "P03", "target": "P04", "label": "" },
+            { "source": "P04", "target": "P05", "label": "" }
+          ],
+          "lanes": ["Consultor Responsável"]
+        }
+      }
+    ],
+    "message_flows": [
+      { "id": "mf_1", "name": "Termo de Referência", "source": { "pool": "pool_contratante", "step": "S01" }, "target": { "pool": "pool_fornecedor", "step": "P01" } },
+      { "id": "mf_2", "name": "Proposta Técnica e Comercial", "source": { "pool": "pool_fornecedor", "step": "P02" }, "target": { "pool": "pool_contratante", "step": "S01" } },
+      { "id": "mf_3", "name": "Contrato para Assinatura", "source": { "pool": "pool_contratante", "step": "S01" }, "target": { "pool": "pool_fornecedor", "step": "P03" } },
+      { "id": "mf_4", "name": "Contrato Assinado", "source": { "pool": "pool_fornecedor", "step": "P03" }, "target": { "pool": "pool_contratante", "step": "S02" } },
+      { "id": "mf_5", "name": "Escopo Definido", "source": { "pool": "pool_contratante", "step": "S02" }, "target": { "pool": "pool_fornecedor", "step": "P04" } },
+      { "id": "mf_6", "name": "Relatório Mensal e Notificações de Pagamento", "source": { "pool": "pool_fornecedor", "step": "P04" }, "target": { "pool": "pool_contratante", "step": "S03" } }
+    ],
+    "notes": "Nível 1 do pool Contratante tem 6 nós (2 eventos + 4 callActivity); o do fornecedor tem 5 (2 eventos + 3 callActivity) — ambos bem abaixo do limite de 10. Os message_flows conectam-se aos callActivity de fase (não a tarefas internas, que ficam invisíveis dentro da description) porque esse é o nível de abstração do diagrama principal — os detalhes de cada troca (proposta, contrato, escopo, relatório) ficam descritos na documentation da fase correspondente, e podem ser expandidos depois via detalhamento sob demanda de cada callActivity."
+  }
+}

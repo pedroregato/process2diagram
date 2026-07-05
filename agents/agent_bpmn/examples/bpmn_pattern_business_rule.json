@@ -2,6 +2,7 @@
   "id": "bpmn_pattern_business_rule",
   "name": "Decisão com Regras de Negócio",
   "category": "Decisão",
+  "trigger_signals": ["motor de regras", "engine de decisão", "scoring automático", "tabela de decisão", "dmn", "política automatizada"],
   "description": "Um processo que depende de regras de negócio complexas para tomar uma decisão.",
   "when_to_use": "Use este padrão quando a transcrição mencionar que a decisão depende de regras, critérios, políticas ou cálculos complexos que seriam extensos em um gateway.",
   "common_mistakes": [

@@ -2,6 +2,7 @@
   "id": "bpmn_pattern_omg_error_handling",
   "name": "Tratamento de Exceção Corporativa (Boundary Error)",
   "category": "Exceção",
+  "trigger_signals": ["se houver erro", "caso falhe", "cobrança falhar", "erro na integração", "estoque indisponível", "desviar para correção"],
   "description": "Mapeamento canônico da OMG para interceptar falhas em tarefas sem poluir o fluxo feliz com gateways.",
   "when_to_use": "Use este padrão sempre que a transcrição citar termos como 'se houver erro na integração', 'caso o item falhe', 'se o estoque estiver indisponível' desviando para uma correção.",
   "common_mistakes": [

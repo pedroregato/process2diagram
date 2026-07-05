@@ -3,7 +3,7 @@ agent: bpmn
 iniciativa: Pedro Regato
 project: process2diagram
 spec: BPMN 2.0 (OMG — ISO/IEC 19510) · Bruce Silver Method and Style
-version: 10.0
+version: 10.1
 description: AgentBPMN — extrai JSON de processo BPMN 2.0 a partir de transcrições (método Bruce Silver, cobertura OMG §10.6, gateways, eventos, subprocessos, colaboração)
 ---
 
@@ -44,15 +44,16 @@ esta tabela de sinais:
 
 | Padrão | ID | Sinais mínimos na transcrição (≥ 2 hits) |
 |---|---|---|
-| Quatro Olhos / Dual Control | `collab_four_eyes` | "dois aprovadores", "dupla aprovação", "quatro olhos", "aprovação conjunta", "co-assinatura", "aprovação paralela" |
-| Motor de Regras / DMN | `business_rule_delegation` | "motor de regras", "engine de decisão", "scoring automático", "tabela de decisão", "DMN", "política automatizada" |
-| Processo Periódico / Batch | `periodic_continuous` | "todo dia", "mensalmente", "processamento noturno", "rotina periódica", "cron", "fechamento mensal", "batch diário" |
+| Quatro Olhos / Dual Control | `bpmn_pattern_collab_four_eyes` | "dois aprovadores", "dupla aprovação", "quatro olhos", "aprovação conjunta", "co-assinatura", "aprovação paralela" |
+| Motor de Regras / DMN | `bpmn_pattern_business_rule` | "motor de regras", "engine de decisão", "scoring automático", "tabela de decisão", "DMN", "política automatizada" |
+| Processo Periódico / Batch | `bpmn_pattern_periodic_continuous` | "todo dia", "mensalmente", "processamento noturno", "rotina periódica", "cron", "fechamento mensal", "batch diário" |
 | Tratamento de Exceção (Boundary Error) | `bpmn_pattern_omg_error_handling` | "se houver erro", "caso falhe", "cobrança falhar", "erro na integração", "estoque indisponível", "desviar para correção" |
 | Escalonamento de SLA (Non-Interrupting Timer) | `bpmn_pattern_omg_sla_timer` | "prazo limite", "se demorar mais", "SLA", "escalonar", "alerta sem interromper", "avise o diretor", "continuar trabalhando" |
 | Compensação de Atividade (Compensation) | `bpmn_pattern_omg_compensation` | "desfazer", "reverter", "estornar", "cancelar pagamento já processado", "compensar reserva", "rollback de etapa concluída" |
 | Evento de Sinal Broadcast (Signal) | `bpmn_pattern_omg_signal_event` | "todos os sistemas são notificados", "broadcast", "todos os departamentos ao mesmo tempo", "sinal para múltiplas áreas", "ao mesmo tempo em paralelo" |
 | Event-Based Gateway (Corrida Competitiva) | `bpmn_pattern_omg_event_based_gateway` | "aguarda confirmação ou cancelamento ou prazo", "primeiro que responder", "quem confirmar primeiro", "espera por múltiplos eventos alternativos" |
 | Sub-Processo / Call Activity (Hierarquia) | `bpmn_pattern_omg_subprocess` | "durante a fase de", "etapa de", "processo de onboarding", "agrupamento de tarefas", "processo reutilizável", "mais de 5 atividades internas" |
+| Colaboração Multi-Pool com Fases via CallActivity | `bpmn_pattern_collab_callactivity_phases` | "contrato de prestação de serviços", "fornecedor externo", "consultoria contratada", "relatórios mensais", "reabrir concorrência", "avaliação final do fornecedor", "encerramento do contrato" |
 
 **Quando um padrão for identificado:**
 1. Use o `ideal_json_output` do padrão (injetado no prompt ou aplicado via conhecimento do padrão) como esqueleto inicial — adapte ao conteúdo real da transcrição.

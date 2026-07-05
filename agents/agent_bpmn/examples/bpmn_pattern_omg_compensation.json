@@ -2,6 +2,7 @@
   "id": "bpmn_pattern_omg_compensation",
   "name": "Compensação de Atividade (Compensation Event)",
   "category": "Compensação",
+  "trigger_signals": ["desfazer", "reverter", "estornar", "cancelar pagamento já processado", "compensar reserva", "rollback de etapa concluída"],
   "description": "Padrão OMG §10.6.5 para desfazer o efeito de uma atividade já concluída quando um passo posterior falha. O handler de compensação é invocado via throwCompensateEvent e está ligado à tarefa original por uma associação de compensação (linha tracejada), não por sequence flow.",
   "when_to_use": "Use quando a transcrição mencionar 'desfazer', 'reverter', 'estornar', 'cancelar pagamento já processado', 'compensar reserva', 'rollback de etapa concluída' — ou seja, quando a ação de correção se refere a uma tarefa que já terminou com sucesso antes de uma falha posterior.",
   "common_mistakes": [

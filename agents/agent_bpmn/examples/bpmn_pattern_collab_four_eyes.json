@@ -2,6 +2,7 @@
   "id": "bpmn_pattern_collab_four_eyes",
   "name": "Aprovação Dupla (Four Eyes Principle)",
   "category": "Colaboração",
+  "trigger_signals": ["dois aprovadores", "dupla aprovação", "quatro olhos", "aprovação conjunta", "co-assinatura", "aprovação paralela"],
   "description": "Um processo que requer a aprovação de duas partes distintas antes de prosseguir.",
   "when_to_use": "Use este padrão quando a transcrição mencionar que uma ação precisa de aprovação de duas pessoas ou grupos diferentes, e a aprovação de ambos é obrigatória.",
   "common_mistakes": [

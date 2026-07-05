@@ -2,6 +2,7 @@
   "id": "bpmn_pattern_omg_sla_timer",
   "name": "Escalonamento de SLA por Tempo (Non-Interrupting)",
   "category": "SLA",
+  "trigger_signals": ["prazo limite", "se demorar mais", "sla", "escalonar", "alerta sem interromper", "avise o diretor", "continuar trabalhando"],
   "description": "Modelo oficial da OMG para monitorar prazos de execução sem interromper a atividade principal do ator.",
   "when_to_use": "Use este padrão quando houver um prazo limite atrelado a uma tarefa (ex: 'se demorar mais de 2 dias, avise o diretor') mas o operador original deve continuar trabalhando na tarefa.",
   "common_mistakes": [

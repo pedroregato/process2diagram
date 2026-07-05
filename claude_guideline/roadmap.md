@@ -4,6 +4,19 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC121 — Concluído (v5.15 / 2026-07-04) — fix real: mecanismo de padrão canônico (PC111) nunca funcionou + novo padrão collab_callactivity_phases
+
+**Contexto:** usuário trouxe uma proposta externa de "prompt rígido" (nomes, IDs e coordenadas fixas) pra forçar sempre o mesmo diagrama de 2 pools + callActivity que tinha ficado bom. Proposta rejeitada — LLM não controla coordenadas nem IDs (isso é o gerador determinístico); um prompt fixo por cenário não generaliza. Alternativa: usar o mecanismo de padrões canônicos já existente (PC111), que é exatamente pra isso.
+
+**Achado ao investigar como adicionar o novo padrão:** nenhum dos 9 arquivos `agents/agent_bpmn/examples/bpmn_pattern_*.json` tinha o campo `trigger_signals` que `AgentBPMN._select_canonical_pattern()` usa pra decidir qual gabarito injetar (`hits = sum(1 for s in pattern.get("trigger_signals", []) ...)`— sempre `0` pra todo mundo). **O mecanismo inteiro de injeção automática de few-shot (Passo 0 do skill, "[GABARITO CANÔNICO: ...]") estava morto desde que foi implementado** — a LLM só conhecia os padrões pela tabela textual do skill (auto-seleção manual), nunca recebia o `ideal_json_output` de verdade injetado no prompt. Zero teste cobria isso.
+
+- [x] Adicionado `trigger_signals` aos 9 arquivos de padrão existentes, usando os mesmos sinais já documentados na tabela do Passo 0 do skill (fonte de verdade já existia, só não tinha sido copiada pro JSON).
+- [x] Novo padrão `bpmn_pattern_collab_callactivity_phases.json` — colaboração multi-pool (contratante + fornecedor/consultoria nomeados) com fases de negócio via `callActivity`, baseado no diagrama real que funcionou bem nesta conversa (contratação → início → execução mensal → encerramento). `ideal_json_output` no formato `pools` (2 participantes, 6 message_flows, 7 callActivity com `description` obrigatória).
+- [x] `skill_bpmn.md` v10.1 — nova linha na tabela de sinais do Passo 0; corrigidos 3 IDs que estavam divergentes entre a tabela (`collab_four_eyes`, `business_rule_delegation`, `periodic_continuous`) e o `id` real do arquivo JSON (`bpmn_pattern_collab_four_eyes` etc.) — divergência que fazia a LLM registrar um ID errado em `"Padrão canônico aplicado: <id>"` na seleção manual.
+- [x] 10 testes novos (`tests/test_agent_bpmn_canonical_patterns.py`) — regressão específica para o bug (todo padrão precisa ter `trigger_signals` não-vazio), matching correto por transcrição sintética para 3 padrões incluindo o novo, e `build_prompt()` realmente injetando o marcador `[GABARITO CANÔNICO: ...]`.
+- [x] 390/390 testes passando (10 novos).
+- **REGRA DERIVADA:** um mecanismo de seleção automática (few-shot, feature flag, roteamento) que depende de um campo específico em dados externos (aqui, JSON de exemplo) precisa de um teste que force pelo menos um caso real a *de fato selecionar* algo — sem isso, um campo nunca preenchido em nenhum arquivo passa despercebido indefinidamente, porque o código "funciona" (não lança exceção, só nunca faz o que deveria).
+
 ### PC120 — Concluído (v5.15 / 2026-07-04) — diagramas de detalhe sob demanda por callActivity
 
 **Objetivo:** evolução do BPMN Studio — gerar, sob demanda, um diagrama BPMN detalhado para cada `callActivity` (antes opaca, só com `documentation` em texto listando subatividades). Decisão de arquitetura (validada com o usuário e uma segunda análise cruzada): geração **sob demanda** (não expansão automática de todas as fases) + diagramas **separados** por fase (bpmn-js não faz drill-down nativo de `calledElement` → outro `<process>`).

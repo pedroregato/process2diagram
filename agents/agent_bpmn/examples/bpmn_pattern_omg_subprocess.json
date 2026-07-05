@@ -2,6 +2,7 @@
   "id": "bpmn_pattern_omg_subprocess",
   "name": "Sub-Processo e Call Activity (Agrupamento Hierárquico)",
   "category": "Hierarquia",
+  "trigger_signals": ["durante a fase de", "etapa de", "processo de onboarding", "agrupamento de tarefas", "processo reutilizável", "mais de 5 atividades internas"],
   "description": "Padrão OMG §10.3: agrupa atividades relacionadas em uma unidade colapsável. subProcess = lógica embutida no mesmo diagrama (visível ao expandir); callActivity = referência a processo reutilizável definido separadamente. Ambos aceitam boundaryEvents sobre o grupo inteiro. Use quando um grupo com mais de 5 atividades polui o fluxo principal ou quando a mesma sequência se repete em múltiplos processos.",
   "when_to_use": "Use subProcess quando a transcrição agrupa etapas sob um nome de fase ('durante a análise de crédito', 'no processo de onboarding', 'etapa de homologação') com mais de 4 atividades internas. Use callActivity quando a mesma fase aparece em múltiplos processos distintos e deve ser mantida em um único lugar.",
   "common_mistakes": [
