@@ -5,6 +5,7 @@
 # Public API:
 #   generate_bpmn_preview(bpmn: BpmnProcess) -> str   (HTML string)
 #   preview_from_xml(xml: str)              -> str   (HTML string, raw XML in)
+#   pretty_print_xml(xml_str: str)          -> str   (reindented XML, display-only)
 #
 # Rendering strategy
 # ──────────────────
@@ -483,6 +484,35 @@ def _escape_xml_for_js(xml: str) -> str:
         .replace("</Script>",  "<\\/Script>")
         .replace("</SCRIPT>",  "<\\/SCRIPT>")
     )
+
+
+def pretty_print_xml(xml_str: str) -> str:
+    """Reindent a BPMN XML string for readability in st.code() display boxes.
+
+    Display-only (PC133) — never persisted and never fed back into
+    hub.bpmn.bpmn_xml. The generator emits XML on a single continuous line
+    (xml.etree.ElementTree.write() adds no whitespace between tags), which
+    is fine for storage/bpmn-js/DB but unreadable when shown as text to a
+    human. Fail-open: returns the original string unchanged if parsing
+    fails, since a raw one-line XML is still more useful than none.
+    """
+    if not xml_str or not xml_str.strip():
+        return xml_str
+    try:
+        import xml.dom.minidom as _minidom
+        parsed = _minidom.parseString(xml_str.encode("utf-8"))
+        pretty = parsed.toprettyxml(indent="  ")
+        # minidom scatters whitespace-only text nodes as blank lines between
+        # every tag — strip them without touching real indentation. It also
+        # drops encoding="UTF-8" from the declaration line — re-attach the
+        # original one so the displayed text matches what was generated.
+        lines = [ln for ln in pretty.split("\n") if ln.strip()]
+        stripped = xml_str.lstrip()
+        if lines and lines[0].startswith("<?xml") and stripped.startswith("<?xml"):
+            lines[0] = stripped[:stripped.index("?>") + 2]
+        return "\n".join(lines)
+    except Exception:
+        return xml_str
 
 
 def preview_from_xml(xml: str) -> str:

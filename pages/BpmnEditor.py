@@ -41,7 +41,7 @@ from core.project_store import (
 )
 from ui.project_selector import require_active_project
 from modules.bpmn_editor import editor_from_xml
-from modules.bpmn_viewer import preview_from_xml
+from modules.bpmn_viewer import preview_from_xml, pretty_print_xml
 
 apply_auth_gate()
 
@@ -171,7 +171,7 @@ if _saved_details:
             if _d_xml:
                 components.html(preview_from_xml(_d_xml), height=350, scrolling=False)
                 st.caption("📝 Código BPMN (XML)")
-                st.code(_d_xml, language="xml")
+                st.code(pretty_print_xml(_d_xml), language="xml")
 
 # ── Reconversão Method & Style v7.0 ──────────────────────────────────────────
 with st.expander("🔄 Reconverter com Method & Style v7.0", expanded=False):
@@ -372,4 +372,4 @@ if st.session_state.get("bpme_show_preview") and captured_xml:
 
 # ── XML da versão base (referência) ──────────────────────────────────────────
 with st.expander("📄 XML da versão selecionada (referência)", expanded=False):
-    st.code(base_xml, language="xml")
+    st.code(pretty_print_xml(base_xml), language="xml")

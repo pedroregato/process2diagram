@@ -4,6 +4,16 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC133 — Concluído (v5.15 / 2026-07-05) — XML formatado (indentado) nas caixas de código
+
+**Contexto:** usuário reportou que os blocos `st.code(xml, language="xml")` no BPMN Studio e no Editor BPMN mostravam o XML numa única linha contínua, difícil de ler. Causa: `xml.etree.ElementTree.write()` (usado por `modules/bpmn_generator.py`) não insere espaço/quebra entre tags — comportamento correto para armazenamento/bpmn-js/banco, mas ruim para leitura humana em texto puro.
+
+- [x] `modules/bpmn_viewer.py::pretty_print_xml(xml_str)` — novo utilitário **somente de exibição** (nunca grava de volta em `hub.bpmn.bpmn_xml` nem é persistido): usa `xml.dom.minidom` para reindentar, remove as linhas em branco que o `toprettyxml()` espalha entre toda tag, e reanexa a declaração XML original (minidom descarta `encoding="UTF-8"` da declaração por padrão). Fail-open: retorna a string original se o parse falhar.
+- [x] Aplicado nos 4 pontos que exibem XML BPMN em `st.code()`: `pages/BpmnStudio.py` (diagrama principal + detalhamento de fase) e `pages/BpmnEditor.py` (detalhamentos salvos + XML da versão selecionada).
+- [x] `tests/test_bpmn_viewer_pretty_print.py` (novo, 9 testes) — quebras de linha inseridas, ids/documentation preservados, sem linhas em branco, indentação presente, string vazia/XML malformado tratados sem exceção, declaração original com encoding preservada, resultado ainda é XML válido.
+- [x] Verificado com `AppTest` ponta-a-ponta: os dois blocos de código do BPMN Studio (principal + detalhamento) saem com múltiplas linhas, sem exceção.
+- [x] 420/420 testes automatizados passando (411 + 9 novos).
+
 ### PC132 — Concluído (v5.15 / 2026-07-05) — gateway sem `<documentation>` em diagramas de colaboração (multi-pool)
 
 **Achado:** usuário perguntou se o algoritmo preenche `<documentation>` nos elementos BPMN gerados. Varredura de todos os pontos de construção de `BpmnElement(...)` em `agents/agent_bpmn.py` confirmou: sim, para tarefas/callActivity/subProcess/eventos intermediários, em ambos os caminhos (pool único e colaboração) — exceto um: `_build_pool_elements()` (caminho multi-pool) tinha um branch dedicado para `step.is_decision` (exclusiveGateway) que nunca passava `documentation=step.description`, diferente dos branches de evento e de tarefa logo ao lado, que já passavam. No caminho de pool único esse problema não existe — lá gateway e tarefa reaproveitam o mesmo código. Resultado: um mesmo processo modelado como colaboração perdia silenciosamente o critério de decisão documentado pela LLM no gateway, mesmo quando o skill instrui explicitamente a documentá-lo.

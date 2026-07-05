@@ -29,6 +29,7 @@ from ui.project_selector import require_active_project
 from ui.components.page_header import render_page_header
 from modules.session_security import get_session_llm_client
 from modules.bpmn_editor import editor_from_xml
+from modules.bpmn_viewer import pretty_print_xml
 from modules.mermaid_renderer import render_mermaid_block
 from modules.bpmn_describer import describe_bpmn_from_xml
 from agents.agent_bpmn_studio import generate_bpmn_from_description
@@ -271,7 +272,7 @@ with tab_gerar:
                 )
 
             with st.expander("📝 Código BPMN (XML)", expanded=False):
-                st.code(_active_xml, language="xml")
+                st.code(pretty_print_xml(_active_xml), language="xml")
         with tab_mermaid:
             render_mermaid_block(hub.bpmn.mermaid, show_code=True, key_suffix="bpmns", height=500)
         with tab_detail:
@@ -399,7 +400,7 @@ with tab_gerar:
                         # st.expander não pode ser aninhado (CLAUDE.md — Known Pitfalls);
                         # este bloco de código já está dentro do expander de cima.
                         st.caption("📝 Código BPMN (XML)")
-                        st.code(_d_active_xml, language="xml")
+                        st.code(pretty_print_xml(_d_active_xml), language="xml")
 
                         if not hub.bpmn.db_process_id:
                             st.caption("⏳ Salve o diagrama principal (aba 💾 Salvar) antes de salvar este detalhamento.")
