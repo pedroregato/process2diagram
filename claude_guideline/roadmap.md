@@ -4,6 +4,16 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC124 — Concluído (v5.15 / 2026-07-05) — controle de "Passes de Otimização" visível onde a espera acontece
+
+**Contexto:** usuário com apresentação no dia seguinte notou que o torneio de 3 execuções ficou mais lento (consequência esperada e correta do PC118-D — não tem mais atalho de cache mascarando 2 das 3 chamadas). Procurando reduzir para 1 passe, não encontrou o controle — ele existe em `pages/Settings.py` (aba Preferências → "🔄 Pipeline BPMN") e também escondido dentro do accordion fechado "⚙️ Configuração Avançada" na barra lateral do Pipeline, nenhum dos dois visível a partir de onde a espera realmente acontece.
+
+- [x] `pages/BpmnStudio.py` — `select_slider` "Passes de Otimização" adicionado na aba Gerar, logo acima do botão "🧩 Gerar BPMN". Mesma chave `st.session_state["n_bpmn_runs"]` das outras duas cópias — sem novo estado, só nova superfície. A seção "🔍 Detalhar uma fase" (PC120) herda automaticamente, já que lê a mesma chave.
+- [x] `pages/Pipeline.py` — mesmo controle adicionado no corpo principal da página (Modo Nova Transcrição), visível quando "Arquiteto BPMN" está ativo, em vez de só dentro do accordion da barra lateral.
+- [x] Levantamento de escopo: existe um 3º lugar que produz BPMN via LLM — `pages/BpmnEditor.py` "🔄 Reconverter com Method & Style v7.0" — mas esse roda o `AgentBPMN` uma única vez, sem torneio nenhum implementado. Dar a ele essa opção exigiria construir a lógica de torneio ali (não é só expor UI). Adiado — usuário sem tempo de validar lógica nova de geração na véspera de uma apresentação; revisitar depois.
+- [x] Verificado com `AppTest`: novo slider renderiza (`select_slider` com key `bpmns_n_runs_slider`), sem exceção, fluxo completo (gerar → detalhar → salvar) continua funcionando.
+- [x] 396/396 testes automatizados inalterados (mudança de UI em 2 páginas, sem lógica nova).
+
 ### PC123 — Concluído (v5.15 / 2026-07-04) — sinais canônicos frágeis demais + gap de nome genérico de fim
 
 **Diagnóstico solicitado pelo usuário** antes de decidir entre recalibrar sinais (opção 2) ou construir correção determinística pós-geração (opção 4): testei `_select_canonical_pattern()` contra 3 descrições naturais e plausíveis do mesmo cenário de consultoria — **2 das 3 pontuaram 0 hits** contra os `trigger_signals` do PC121. Causa: os sinais eram frases quase exatas tiradas do vocabulário de SAÍDA de gerações anteriores ("reabrir concorrência", "avaliação final do fornecedor"), sensíveis a conjugação verbal e ordem de palavras — não capturavam o conceito, só a frase literal.

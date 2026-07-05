@@ -103,6 +103,21 @@ if pipeline_mode == _MODE_NEW:
     render_project_selector()
     render_bpmn_process_selector()
 
+    # ── Torneio BPMN — visível aqui perto da ação, não só na barra lateral ────
+    if st.session_state.run_bpmn:
+        _n_runs_pipeline = st.select_slider(
+            "🔄 Passes de Otimização do BPMN (torneio de execuções)",
+            options=[1, 3, 5],
+            value=st.session_state.get("n_bpmn_runs", 3),
+            key="pipeline_n_runs_slider",
+            help="Cada passe é uma geração independente da LLM; o melhor dos N é "
+                 "escolhido por score de qualidade (AgentValidator). Mais passes = "
+                 "melhor comparação, mais tempo de espera (~1-2 min por passe). "
+                 "Reduza para 1 quando velocidade importa mais que o torneio de "
+                 "qualidade — mesma configuração usada no BPMN Studio.",
+        )
+        st.session_state["n_bpmn_runs"] = _n_runs_pipeline
+
     # ── Botão Nova Transcrição — aparece quando resultados já estão na tela ──
     if "hub" in st.session_state:
         _nc_col, _ = st.columns([1, 5])

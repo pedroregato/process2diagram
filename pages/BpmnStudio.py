@@ -100,6 +100,18 @@ with tab_gerar:
         help="Roda uma análise leve (spaCy, sem chamada a LLM) antes da geração para "
              "melhorar a nomeação de lanes/organizações.",
     )
+    _n_runs_selected = st.select_slider(
+        "Passes de Otimização (torneio de execuções)",
+        options=[1, 3, 5],
+        value=st.session_state.get("n_bpmn_runs", 3),
+        key="bpmns_n_runs_slider",
+        help="Cada passe é uma geração independente da LLM; o melhor dos N é escolhido "
+             "por score de qualidade (AgentValidator). Mais passes = melhor comparação, "
+             "mais tempo de espera (~1-2 min por passe). Reduza para 1 quando velocidade "
+             "importa mais que o torneio de qualidade — a mesma configuração vale para o "
+             "Pipeline principal e para o detalhamento de fases abaixo.",
+    )
+    st.session_state["n_bpmn_runs"] = _n_runs_selected
 
     if st.button("🧩 Gerar BPMN", type="primary", key="bpmns_generate_btn"):
         if not description or len(description.strip()) < 20:
