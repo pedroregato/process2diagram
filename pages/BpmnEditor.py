@@ -37,6 +37,7 @@ from core.project_store import (
     save_bpmn_new_version,
     bpmn_tables_exist,
     load_meeting_as_hub,
+    list_bpmn_callactivity_diagrams,
 )
 from ui.project_selector import require_active_project
 from modules.bpmn_editor import editor_from_xml
@@ -145,6 +146,32 @@ if st.session_state.get("_bpme_version_key") != _version_key:
     st.session_state.pop("_bpme_captured_xml", None)
     st.session_state["bpme_paste_xml"]   = ""
     st.session_state["_bpme_version_key"] = _version_key
+
+# ── Detalhamentos de fases (callActivity) salvos para esta versão (PC129) ─────
+# bpmn_callactivity_diagrams.bpmn_version_id é estável por versão — ao contrário
+# de "Salvar como" novo processo no BpmnStudio, aqui a versão já está fixada
+# (selecionada acima), então os element_id gravados sempre correspondem ao XML
+# desta versão específica. list_bpmn_callactivity_diagrams() existe desde o
+# PC120 mas nunca era chamada em lugar nenhum do app — os detalhamentos ficavam
+# gravados no banco (relação bpmn_version_id → bpmn_versions.id corretamente
+# amarrada) mas invisíveis fora de uma consulta SQL direta.
+_saved_details = list_bpmn_callactivity_diagrams(selected_version["id"])
+if _saved_details:
+    with st.expander(f"🔍 Detalhamentos de fases salvos ({len(_saved_details)})", expanded=False):
+        for _i, _d in enumerate(_saved_details):
+            if _i > 0:
+                st.markdown("---")
+            _dlabel = _d.get("element_name") or _d.get("element_id")
+            _dpool = _d.get("pool_name")
+            st.markdown(f"**📎 {_dlabel}**" + (f" — {_dpool}" if _dpool else ""))
+            _dscore = _d.get("bpmn_score") or {}
+            if _dscore.get("weighted") is not None:
+                st.caption(f"Score do torneio: {_dscore['weighted']:.1f}/10")
+            _d_xml = _d.get("bpmn_xml") or ""
+            if _d_xml:
+                components.html(preview_from_xml(_d_xml), height=350, scrolling=False)
+                st.caption("📝 Código BPMN (XML)")
+                st.code(_d_xml, language="xml")
 
 # ── Reconversão Method & Style v7.0 ──────────────────────────────────────────
 with st.expander("🔄 Reconverter com Method & Style v7.0", expanded=False):

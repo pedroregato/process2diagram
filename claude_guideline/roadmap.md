@@ -4,6 +4,14 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC129 — Concluído (v5.15 / 2026-07-05) — detalhamentos de fase salvos ficam visíveis no BpmnEditor
+
+**Achado:** usuário perguntou se a relação processo-pai ↔ detalhamentos já estava garantida no banco. Confirmado que o schema (`bpmn_callactivity_diagrams.bpmn_version_id NOT NULL REFERENCES bpmn_versions(id) ON DELETE CASCADE`, PC120) está correto e a escrita (`save_bpmn_callactivity_diagram`) já amarra corretamente à versão atual. Porém `list_bpmn_callactivity_diagrams()` — a função de leitura, também escrita no PC120 — nunca era chamada em lugar nenhum do app (confirmado via grep no repositório inteiro). Resultado: a relação era **write-only** da perspectiva da UI — detalhamentos salvos ficavam invisíveis assim que a sessão do BpmnStudio terminava, recuperáveis só via SQL direto.
+
+- [x] `pages/BpmnEditor.py` — nova seção "🔍 Detalhamentos de fases salvos (N)" logo após a seleção de processo/versão: chama `list_bpmn_callactivity_diagrams(selected_version["id"])` e renderiza cada detalhamento (nome da fase, pool, score do torneio, diagrama via `preview_from_xml`, código XML). Local escolhido porque `selected_version["id"]` já é estável e conhecido ali — ao contrário de uma regeneração no BpmnStudio, onde os `element_id` de callActivity mudam a cada novo run do LLM e não haveria correspondência confiável com detalhamentos de uma versão anterior.
+- [x] **Decisão explícita de escopo:** avaliada a mesma reidratação dentro de `pages/BpmnStudio.py` (segunda opção citada na proposta original) e descartada por análise de fluxo real — BpmnStudio.py hoje não tem NENHUM caminho para "reabrir um processo já salvo" (o hub só existe a partir de uma geração fresca na sessão atual); sem esse recurso mais amplo (fora de escopo desta correção), uma reidratação ali nunca teria uma versão salva para encontrar. Sinalizado ao usuário como feature separada, não implementada.
+- [x] Verificado com `AppTest` (Supabase mockado): abrir uma versão com detalhamento salvo mostra a seção corretamente (nome da fase, pool, score); nenhuma exceção. 405/405 testes automatizados inalterados (mudança de UI, sem lógica de agente nova).
+
 ### PC128 — Concluído (v5.15 / 2026-07-05) — detalhamento de fase editável + aba própria "Detalhamento"
 
 **Contexto:** usuário confirmou o fix do PC127 com um caso real (score 7.5/10 — detalhamento single-pool correto de "Contratar Fornecedor") e pediu duas melhorias de UX: (1) o diagrama de detalhamento deve ser editável como o principal (PC119 só cobria o diagrama-pai); (2) uma aba própria "Detalhamento" deve aparecer assim que "Gerar BPMN" for bem-sucedido, em vez do detalhamento viver numa seção solta abaixo do botão "Salvar".
