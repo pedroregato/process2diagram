@@ -99,6 +99,79 @@ class TestLengthTruncationEscalation:
         assert data == {"ok": True}
         assert calls == [False, True]
 
+    def test_empty_content_failure_backs_off_before_retry(self):
+        # PC122: a genuinely empty completion (finish_reason='length', zero
+        # output tokens) matches transient provider instability, not a budget
+        # problem — retry should pause briefly instead of firing immediately.
+        agent = _DummyAgent(_CLIENT_INFO, _PROVIDER_CFG)
+        hub = KnowledgeHub.new()
+
+        calls = []
+
+        def _fake_call_openai(self, system, user, api_key, model, timeout=60, long_context=False):
+            calls.append(long_context)
+            if len(calls) == 1:
+                raise ValueError(
+                    "[dummy] LLM retornou conteúdo vazio "
+                    "(finish_reason='length', model='fake-model')."
+                )
+            return '{"ok": true}', 100, 200
+
+        with patch.object(BaseAgent, "_call_openai", _fake_call_openai), \
+             patch("agents.base_agent.time.sleep") as mock_sleep:
+            data = agent._call_with_retry("system", "user", hub)
+
+        assert data == {"ok": True}
+        # Other background activity (async telemetry, Supabase client
+        # internals) may also call time.sleep with unrelated durations in
+        # this environment — assert our specific 2s backoff fired, not that
+        # it was the only sleep call.
+        from unittest.mock import call
+        assert call(2) in mock_sleep.call_args_list
+
+    def test_non_empty_truncation_does_not_back_off(self):
+        # The non-empty truncation message (PC118-E) escalates the token
+        # budget — no need for a delay, it's not the transient-instability case.
+        agent = _DummyAgent(_CLIENT_INFO, _PROVIDER_CFG)
+        hub = KnowledgeHub.new()
+
+        calls = []
+
+        def _fake_call_openai(self, system, user, api_key, model, timeout=60, long_context=False):
+            calls.append(long_context)
+            if len(calls) == 1:
+                raise ValueError(
+                    "[dummy] LLM truncou a resposta antes de completar "
+                    "(finish_reason='length', model='fake-model', output_tokens=8192)."
+                )
+            return '{"ok": true}', 100, 200
+
+        with patch.object(BaseAgent, "_call_openai", _fake_call_openai), \
+             patch("agents.base_agent.time.sleep") as mock_sleep:
+            agent._call_with_retry("system", "user", hub)
+
+        from unittest.mock import call
+        assert call(2) not in mock_sleep.call_args_list
+
+    def test_malformed_json_does_not_back_off(self):
+        agent = _DummyAgent(_CLIENT_INFO, _PROVIDER_CFG)
+        hub = KnowledgeHub.new()
+
+        calls = []
+
+        def _fake_call_openai(self, system, user, api_key, model, timeout=60, long_context=False):
+            calls.append(long_context)
+            if len(calls) == 1:
+                return "not json at all, no braces", 100, 50
+            return '{"ok": true}', 100, 200
+
+        with patch.object(BaseAgent, "_call_openai", _fake_call_openai), \
+             patch("agents.base_agent.time.sleep") as mock_sleep:
+            agent._call_with_retry("system", "user", hub)
+
+        from unittest.mock import call
+        assert call(2) not in mock_sleep.call_args_list
+
     def test_all_attempts_truncated_raises_after_max_retries(self):
         agent = _DummyAgent(_CLIENT_INFO, _PROVIDER_CFG)
         hub = KnowledgeHub.new()
@@ -109,7 +182,8 @@ class TestLengthTruncationEscalation:
                 "(finish_reason='length', model='fake-model')."
             )
 
-        with patch.object(BaseAgent, "_call_openai", _always_truncated):
+        with patch.object(BaseAgent, "_call_openai", _always_truncated), \
+             patch("agents.base_agent.time.sleep"):
             try:
                 agent._call_with_retry("system", "user", hub)
                 assert False, "expected RuntimeError"

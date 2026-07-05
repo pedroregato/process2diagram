@@ -4,6 +4,16 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC122 — Concluído (v5.15 / 2026-07-04) — backoff antes de retry após conteúdo vazio do provedor
+
+**Achado do usuário:** falha "Failed after 3 attempts... conteúdo vazio (finish_reason='length')" reapareceu logo após o PC121. Antes de mudar código, investiguei se o padrão canônico novo (que injeta um JSON de exemplo grande no prompt) era a causa — descartado: o push do PC121 foi às 00:55 UTC, e as duas chamadas bem-sucedidas mais recentes na telemetria (23:43 e 00:12 UTC) são anteriores ao push; `input_tokens` ficou estável em ~20-21k em toda a sessão, sem salto após o deploy.
+
+- **Evidência a favor de instabilidade transitória do provedor:** chamadas com tamanho de prompt idêntico tiveram sucesso poucos minutos antes da falha reportada, uma delas com só 4784 tokens de saída (bem abaixo do teto) — não é um padrão de "sempre falha com esse prompt", é intermitente.
+- [x] `agents/base_agent.py::_call_with_retry` — quando o erro é especificamente conteúdo **vazio** (zero tokens, não truncamento parcial do PC118-E), aguarda 2s antes da próxima tentativa. Não se aplica a truncamento não-vazio (que já escala o orçamento, não precisa de espera) nem a erro de parsing comum (retry imediato já funciona bem para isso).
+- [x] 3 testes novos: backoff dispara só para conteúdo vazio, não dispara para truncamento não-vazio nem para JSON malformado. Testes usam `call(2) in mock_sleep.call_args_list` em vez de `assert_called_once`/`assert_not_called` — outras atividades em background (telemetria assíncrona, cliente Supabase) também chamam `time.sleep` com durações não relacionadas nesse ambiente de teste, e o mock de `agents.base_agent.time.sleep` intercepta o módulo `time` inteiro, não só as chamadas do próprio código.
+- [x] 393/393 testes passando (3 novos).
+- **Pendente:** ainda não há confirmação definitiva se é 100% instabilidade do provedor ou se há algum gatilho reproduzível — o backoff é uma mitigação razoável para o cenário mais provável (evidenciado pela telemetria), não uma correção de causa raiz confirmada. Se o erro persistir com alta frequência mesmo com o backoff, vale considerar fallback automático para outro provedor/modelo após N falhas totais.
+
 ### PC121 — Concluído (v5.15 / 2026-07-04) — fix real: mecanismo de padrão canônico (PC111) nunca funcionou + novo padrão collab_callactivity_phases
 
 **Contexto:** usuário trouxe uma proposta externa de "prompt rígido" (nomes, IDs e coordenadas fixas) pra forçar sempre o mesmo diagrama de 2 pools + callActivity que tinha ficado bom. Proposta rejeitada — LLM não controla coordenadas nem IDs (isso é o gerador determinístico); um prompt fixo por cenário não generaliza. Alternativa: usar o mecanismo de padrões canônicos já existente (PC111), que é exatamente pra isso.

@@ -521,6 +521,17 @@ class BaseAgent(ABC):
                     # to the provider's long-context token budget instead.
                     if "finish_reason='length'" in str(exc):
                         self._force_long_context = True
+                    # A genuinely EMPTY completion (not just truncated — zero
+                    # output tokens) with finish_reason='length' is not a
+                    # budget problem: telemetry shows calls with the identical
+                    # prompt size succeeding seconds apart, including with far
+                    # fewer output tokens than the cap. This pattern matches a
+                    # transient provider-side hiccup rather than something our
+                    # prompt/budget controls — retrying immediately repeats the
+                    # same bad luck. A brief pause gives the instability a
+                    # chance to clear before the next attempt.
+                    if "retornou conteúdo vazio" in str(exc):
+                        time.sleep(2)
                     # repr() gives an ASCII-safe representation of the error,
                     # avoiding re-injection of non-ASCII chars into the next prompt.
                     hint = repr(str(exc))[:300]
