@@ -40,6 +40,15 @@ _SPECIFIC_TASK_TYPES = {
     "serviceTask", "businessRuleTask", "scriptTask",
     "manualTask", "sendTask", "receiveTask",
 }
+# callActivity/subProcess represent an entire business PHASE, not a concrete
+# unit of work — evaluating them with the same SERVICE_KW/MANUAL_KW keyword
+# heuristic used for granular tasks is a category error: their description
+# text describes what happens INSIDE the phase, not the phase container's
+# own "type". PC126: found a real diagram where a callActivity got penalized
+# to 3.0 ("should have been serviceTask") because its description mentioned
+# "processar pagamento" — exactly the kind of correctly-hierarchical diagram
+# skill_bpmn.md Passo 2 asks for.
+_ABSTRACTION_TASK_TYPES = {"callActivity", "subProcess", "eventSubProcess"}
 
 # Keyword heuristics for task-type validation
 _SERVICE_KW  = {"sistema", "automático", "automaticamente", "processa", "gera",
@@ -150,8 +159,10 @@ class AgentValidator:
         Score 0-10 based on task_type specificity.
         - Specific type that matches title keywords → 10
         - Specific type even without keyword match  →  7 (valid but not verified)
-        - userTask when keyword suggests specific   →  3 (missed opportunity)
-        - userTask when appropriate                 →  6 (neutral)
+        - callActivity/subProcess, documented        →  8 (correct phase abstraction)
+        - callActivity/subProcess, undocumented       →  5 (valid but missing description)
+        - userTask when keyword suggests specific    →  3 (missed opportunity)
+        - userTask when appropriate                  →  6 (neutral)
         """
         tasks = [s for s in steps
                  if s.task_type not in _EVENT_TYPES | _GATEWAY_TYPES]
@@ -163,7 +174,14 @@ class AgentValidator:
             text = (t.title + " " + t.description).lower()
             tt = t.task_type
 
-            if tt in _SPECIFIC_TASK_TYPES:
+            if tt in _ABSTRACTION_TASK_TYPES:
+                # PC126: a phase container's description text describes what
+                # happens INSIDE the phase — matching SERVICE_KW/MANUAL_KW
+                # against it is a category error, not evidence the type is
+                # wrong. Score on whether it documents its scope (required by
+                # skill_bpmn.md Passo 2), never on vocabulary.
+                total += 8.0 if t.description.strip() else 5.0
+            elif tt in _SPECIFIC_TASK_TYPES:
                 if tt == "serviceTask"       and any(k in text for k in _SERVICE_KW):
                     total += 10.0
                 elif tt == "manualTask"      and any(k in text for k in _MANUAL_KW):

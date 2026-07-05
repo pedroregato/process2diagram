@@ -4,6 +4,16 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC126 — Concluído (v5.15 / 2026-07-05) — callActivity/subProcess deixam de ser penalizados como tarefa granular no scorer
+
+**Achado:** com a recalibração dos padrões canônicos (PC123) já produzindo diagramas hierárquicos de verdade (`callActivity` bem usado, message flows completos, nomes específicos), a dimensão `tipo de tarefa` do torneio pontuava só 4.3-4.6/10 num diagrama estruturalmente perfeito (`estrutural 10.0`, `semântica 10.0`). Causa: `_score_tasktype` avalia `callActivity` pela mesma heurística de palavras-chave (`_SERVICE_KW`/`_MANUAL_KW`) usada para tarefas granulares — a `description` de uma fase descreve o que acontece **dentro** dela ("processar pagamento", "notificar fornecedor"), não o tipo do container em si. Isso penalizava a `callActivity` como se "devesse ter sido" `serviceTask` (3.0), exatamente o padrão que o PC121/123 foram construídos para incentivar.
+
+- [x] Nova constante `_ABSTRACTION_TASK_TYPES = {"callActivity", "subProcess", "eventSubProcess"}` em `agents/agent_validator.py`.
+- [x] `_score_tasktype` — esses tipos agora pontuam **8.0 se documentados, 5.0 se não** (nunca via matching de palavra-chave) — recompensa a boa prática de documentação exigida pelo skill (Passo 2) sem aplicar uma heurística de tarefa granular a um container de fase.
+- [x] **Nota sobre uma segunda análise externa recebida junto com a aprovação:** o pseudocódigo sugerido tinha um bug real — `score = 0.0  # neutro` (0.0 não é neutro, é a pior nota possível; teria piorado o problema). Não implementado dessa forma — os valores reais usados (8.0/5.0) preservam a lógica de keyword matching já existente para os demais tipos, que o pseudocódigo também descartava incorretamente.
+- [x] Verificado com o cenário real reportado pelo usuário: score de `tipo de tarefa` subiu de 4.6 para 8.0 na reconstrução exata do diagrama.
+- [x] 4 testes novos, incluindo regressão explícita (diagrama hierárquico não pode mais perder para um flat equivalente nesta dimensão). 400/400 testes passando.
+
 ### PC125-B — Concluído (v5.15 / 2026-07-05) — tempo total exibido após a geração
 
 Usuário pediu onde ver o tempo que a geração levou — o contador do PC125 desaparece ao concluir (`_status.empty()`), sem deixar registro. Fix: tempo total (`time.time()` antes/depois da chamada) persistido em `st.session_state` e exibido na legenda do score — "🏆 Melhor de N execuções... · ⏱️ Xs" — tanto na geração principal quanto no detalhamento de fase (PC120). Verificado com `AppTest`: legenda renderiza com o sufixo de tempo corretamente. 396/396 testes inalterados.

@@ -6,7 +6,7 @@ No LLM calls; pure heuristic scoring.
 
 import pytest
 from agents.agent_validator import AgentValidator
-from core.knowledge_hub import BPMNValidationScore
+from core.knowledge_hub import BPMNValidationScore, BPMNStep
 from tests.conftest import step, edge, model
 
 
@@ -102,6 +102,50 @@ class TestTaskType:
         m = model(step("s", "Start", task_type="noneStartEvent"))
         sc = validator.score(m, "transcript", WEIGHTS_TYPE_ONLY)
         assert sc.task_type == 5.0
+
+    def test_documented_callactivity_scores_eight_not_penalized_by_keywords(self, validator):
+        # PC126: a real diagram had a callActivity penalized to 3.0 ("should
+        # have been serviceTask") because its documentation mentioned
+        # "processar pagamento" — a category error, since the description
+        # text describes what happens INSIDE the phase, not the phase
+        # container's own type.
+        t = BPMNStep(id="t", title="Executar Consultoria", task_type="callActivity",
+                     description="Receber relatórios, processar pagamento e notificar fornecedor.")
+        m = model(t)
+        sc = validator.score(m, "transcript", WEIGHTS_TYPE_ONLY)
+        assert sc.task_type == 8.0
+
+    def test_undocumented_callactivity_scores_five(self, validator):
+        t = BPMNStep(id="t", title="Executar Consultoria", task_type="callActivity", description="")
+        m = model(t)
+        sc = validator.score(m, "transcript", WEIGHTS_TYPE_ONLY)
+        assert sc.task_type == 5.0
+
+    def test_documented_subprocess_scores_eight(self, validator):
+        t = BPMNStep(id="t", title="Análise Cadastral", task_type="subProcess",
+                     description="Verifica CPF, consulta Serasa, valida renda.")
+        m = model(t)
+        sc = validator.score(m, "transcript", WEIGHTS_TYPE_ONLY)
+        assert sc.task_type == 8.0
+
+    def test_hierarchical_diagram_no_longer_loses_to_flat_on_tasktype(self, validator):
+        # Regression for the actual scenario reported: a well-modeled
+        # hierarchical diagram (callActivity phases) must not score worse on
+        # task_type than an equivalent flat diagram whose granular tasks
+        # merely dodge the service/manual keyword lists.
+        hierarchical = model(
+            BPMNStep(id="a", title="Executar Consultoria", task_type="callActivity",
+                     description="Receber relatórios, processar pagamento e notificar fornecedor."),
+            BPMNStep(id="b", title="Encerrar Contrato", task_type="callActivity",
+                     description="Avaliação final e arquivamento."),
+        )
+        flat_neutral = model(
+            step("a", "Revisar Relatório", task_type="userTask"),
+            step("b", "Arquivar Documento", task_type="userTask"),
+        )
+        sc_hier = validator.score(hierarchical, "transcript", WEIGHTS_TYPE_ONLY)
+        sc_flat = validator.score(flat_neutral, "transcript", WEIGHTS_TYPE_ONLY)
+        assert sc_hier.task_type >= sc_flat.task_type
 
 
 # ── Gateways dimension ────────────────────────────────────────────────────────
