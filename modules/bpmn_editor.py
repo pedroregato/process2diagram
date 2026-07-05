@@ -141,11 +141,37 @@ _EDITOR_TEMPLATE = """\
     }} catch(_) {{}}
   }}
 
+  // Same guard already used in modules/bpmn_viewer.py — calling
+  // canvas.zoom('fit-viewport') before the iframe container has computed
+  // dimensions (outerW/H = 0) produces scale = diagramW/0 = Infinity,
+  // which bpmn-js's internal SVGMatrix.scale() rejects as non-finite.
+  // Became far more likely once multiple Modeler instances render on the
+  // same page at once (PC128 — one per phase detail diagram).
+  function fitView() {{
+    try {{
+      var canvas = modeler.get('canvas');
+      var vb     = canvas.viewbox();
+      var inn    = vb && vb.inner;
+      var outer  = vb && vb.outer;
+      if (inn && outer &&
+          isFinite(inn.width) && isFinite(inn.height) &&
+          isFinite(outer.width) && isFinite(outer.height) &&
+          inn.width > 0 && inn.height > 0 &&
+          outer.width > 0 && outer.height > 0) {{
+        canvas.zoom('fit-viewport', 'auto');
+      }} else {{
+        canvas.zoom(0.75);
+      }}
+    }} catch(_) {{
+      try {{ modeler.get('canvas').zoom(0.75); }} catch(__) {{}}
+    }}
+    updateZoomLabel();
+  }}
+
   modeler.importXML(xml)
     .then(() => {{
       loading.style.display = 'none';
-      modeler.get('canvas').zoom('fit-viewport', 'auto');
-      updateZoomLabel();
+      setTimeout(fitView, 150);
       try {{ modeler.get('eventBus').on('canvas.viewbox.changed', updateZoomLabel); }} catch(_) {{}}
     }})
     .catch(err => {{
@@ -163,7 +189,7 @@ _EDITOR_TEMPLATE = """\
   }};
 
   document.getElementById('btn-fit').onclick = function() {{
-    try {{ modeler.get('canvas').zoom('fit-viewport', 'auto'); }} catch(_) {{}}
+    fitView();
   }};
 
   document.getElementById('btn-undo').onclick = function() {{

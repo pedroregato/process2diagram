@@ -4,6 +4,15 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC130 — Concluído (v5.15 / 2026-07-05) — SVGMatrix non-finite no editor bpmn-js (Modeler)
+
+**Achado:** usuário reportou "❌ Erro ao carregar BPMN: Failed to execute 'scale' on 'SVGMatrix': The provided float value is non-finite." ao usar a aba Detalhamento (PC128). Esse é exatamente o pitfall já documentado no CLAUDE.md ("bpmn-js SVGMatrix non-finite"), mas o fix (deferir `canvas.zoom('fit-viewport')` via `setTimeout` com guarda de dimensões finitas) só havia sido aplicado em `modules/bpmn_viewer.py` (visualizador somente-leitura) — nunca em `modules/bpmn_editor.py` (Modeler editável), que chamava `canvas.zoom('fit-viewport', 'auto')` de forma síncrona logo após `importXML().then()`. O PC128 passou a renderizar múltiplas instâncias do Modeler na mesma página (diagrama principal + uma por detalhamento salvo) — aumentando bastante a chance de algum iframe ainda não ter dimensões computadas no momento do zoom.
+
+- [x] `modules/bpmn_editor.py` — nova função `fitView()` (mesmo guard de `bpmn_viewer.py`: só chama `zoom('fit-viewport')` se `viewbox().inner`/`.outer` tiverem width/height finitos e > 0; caso contrário usa `zoom(0.75)` como fallback seguro). Chamada via `setTimeout(fitView, 150)` dentro do `.then()` de `importXML()`, e reaproveitada pelo botão "⊞ Ajustar" (antes chamava `zoom('fit-viewport')` direto).
+- [x] Verificado que o HTML gerado por `editor_from_xml()` contém `setTimeout(fitView, 150)` e a definição de `fitView()` uma única vez.
+- [x] 405/405 testes automatizados inalterados (mudança isolada em template JS, sem lógica Python nova).
+- **REGRA DERIVADA:** ao aplicar um fix de robustez num componente (viewer), verificar se existe um componente irmão com o mesmo padrão JS (editor) que precisa do mesmo fix — não basta corrigir onde o bug foi originalmente visto; `bpmn_viewer.py` e `bpmn_editor.py` compartilham a mesma chamada `canvas.zoom('fit-viewport')` mas divergiram silenciosamente por anos até uma mudança de UI (PC128) aumentar a superfície de exposição do lado não corrigido.
+
 ### PC129 — Concluído (v5.15 / 2026-07-05) — detalhamentos de fase salvos ficam visíveis no BpmnEditor
 
 **Achado:** usuário perguntou se a relação processo-pai ↔ detalhamentos já estava garantida no banco. Confirmado que o schema (`bpmn_callactivity_diagrams.bpmn_version_id NOT NULL REFERENCES bpmn_versions(id) ON DELETE CASCADE`, PC120) está correto e a escrita (`save_bpmn_callactivity_diagram`) já amarra corretamente à versão atual. Porém `list_bpmn_callactivity_diagrams()` — a função de leitura, também escrita no PC120 — nunca era chamada em lugar nenhum do app (confirmado via grep no repositório inteiro). Resultado: a relação era **write-only** da perspectiva da UI — detalhamentos salvos ficavam invisíveis assim que a sessão do BpmnStudio terminava, recuperáveis só via SQL direto.
