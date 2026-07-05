@@ -235,7 +235,10 @@ class AgentBPMN(BaseAgent):
         # (minimum 2 signal hits).  The template is prepended to the user prompt
         # so the LLM uses it as a structural starting point, adapting to the
         # actual transcript content — not copying it verbatim.
-        _pattern = self._select_canonical_pattern(hub.transcript_clean or "")
+        _pattern = (
+            None if getattr(self, "_skip_canonical_pattern", False)
+            else self._select_canonical_pattern(hub.transcript_clean or "")
+        )
         if _pattern:
             _pid_val   = _pattern.get("id") or _pattern.get("pattern_id", "")
             _name_val  = _pattern.get("name") or _pattern.get("pattern_name", "")
@@ -296,9 +299,32 @@ class AgentBPMN(BaseAgent):
         _transcript_lower = (hub.transcript_clean or "").lower()
         _kw_hits = sum(1 for kw in _COLLAB_KEYWORDS if kw in _transcript_lower)
         _nlp_orgs = len(hub.nlp.actors) if (hub.nlp and hub.nlp.actors) else 0
-        _collaboration_expected = _nlp_orgs >= 2 or _kw_hits >= 2
+        # PC127: phase-detail calls (BpmnStudio "Detalhar uma fase") set
+        # _force_single_pool because the input is one callActivity's own
+        # documentation, not a full process description — it already belongs
+        # to a single actor in the parent diagram. Vocabulary like "fornecedor"
+        # or "concorrência" in that text describes what the phase deals with,
+        # not a second organisation to model as its own pool; without this
+        # guard the same keyword/NLP heuristics that correctly detect real
+        # collaborations fire here too and make the detail hallucinate a full
+        # multi-pool process around the phase.
+        _force_single_pool = getattr(self, "_force_single_pool", False)
+        _collaboration_expected = (not _force_single_pool) and (_nlp_orgs >= 2 or _kw_hits >= 2)
 
-        if _collaboration_expected:
+        if _force_single_pool:
+            system += (
+                "\n\n## MANDATORY FORMAT — SINGLE-ACTOR PHASE DETAIL\n\n"
+                "This text describes the INTERNAL steps of a single phase that "
+                "already belongs to ONE organisation/actor within a larger "
+                "process — it is not a full process description. Even if it "
+                "mentions a counterparty, supplier or contract, do NOT create "
+                "additional pools/participants for them — that organisation is "
+                "already modelled elsewhere in the parent diagram. "
+                "You MUST use the flat single-actor format: "
+                "{\"name\": \"...\", \"steps\": [...], \"edges\": [...], \"lanes\": [...]}. "
+                "NEVER use the pools/collaboration format here."
+            )
+        elif _collaboration_expected:
             system += (
                 "\n\n## MANDATORY FORMAT — COLLABORATION\n\n"
                 "This transcript involves legally distinct organisations exchanging messages. "
@@ -324,6 +350,11 @@ class AgentBPMN(BaseAgent):
             "\n\nIMPORTANT CORRECTION: Your previous response was truncated or malformed. "
             "Return ONLY valid JSON. "
             + (
+                "This is a single-actor phase detail — you MUST use the flat "
+                "single-actor format: "
+                "{\"name\": ..., \"steps\": [...], \"edges\": [...], \"lanes\": [...]}. "
+                "NEVER switch to pools/collaboration format."
+                if _force_single_pool else
                 "This transcript involves multiple organisations — you MUST use the "
                 "multi-pool collaboration format: "
                 "{\"name\": ..., \"pools\": [...], \"message_flows\": [...]}. "

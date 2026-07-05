@@ -42,6 +42,7 @@ def generate_bpmn_from_description(
     output_language: str = "Auto-detect",
     n_runs: int = 3,
     bpmn_weights: dict | None = None,
+    is_phase_detail: bool = False,
 ) -> KnowledgeHub:
     """Gera um BPMNModel (XML + Mermaid) a partir de uma descrição de processo em texto livre.
 
@@ -78,6 +79,18 @@ def generate_bpmn_from_description(
         bpmn_weights: pesos por dimensão para o ``AgentValidator``, mesmo
             formato/default de ``st.session_state.bpmn_weights``. ``None`` usa
             pesos iguais (5) em todas as dimensões.
+        is_phase_detail: True quando ``description`` é a ``documentation`` de UM
+            callActivity do processo pai ("Detalhar uma fase"), não uma
+            descrição de processo completa (PC127). Esse texto já pertence a um
+            único ator/pool no diagrama pai — vocabulário de negócio como
+            "fornecedor" ou "concorrência" nele descreve o QUE a fase trata, não
+            uma segunda organização a modelar. Sem esta flag, a mesma detecção
+            de colaboração (`_COLLAB_KEYWORDS`) e o casamento de padrão canônico
+            (`_select_canonical_pattern`) — ambos calibrados para descrições de
+            processo inteiras — disparam em cima do texto curto da fase e fazem
+            o detalhamento alucinar um novo processo de 2 pools em vez de
+            detalhar os passos internos daquela única fase. Quando True,
+            desativa os dois mecanismos e força o formato flat de ator único.
 
     Retorna o ``KnowledgeHub`` vencedor do torneio, com ``hub.bpmn`` populado e
     ``hub.validation.bpmn_score``/``bpmn_candidates`` preenchidos (mesma
@@ -106,6 +119,9 @@ def generate_bpmn_from_description(
     # already honors for LangGraph retry attempts; reusing it here forces a
     # fresh API call on every tournament pass.
     agent._lg_skip_cache = True
+    if is_phase_detail:
+        agent._skip_canonical_pattern = True
+        agent._force_single_pool = True
 
     candidates: list[tuple] = []
     last_error: Exception | None = None

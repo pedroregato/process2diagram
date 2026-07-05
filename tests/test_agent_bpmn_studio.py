@@ -111,3 +111,58 @@ class TestTournamentCacheBypass:
                 assert False, "expected RuntimeError"
             except RuntimeError as exc:
                 assert "boom" in str(exc)
+
+
+class TestPhaseDetailFlag:
+    """
+    PC127 regression: "Detalhar uma fase" passes a single callActivity's
+    documentation (not a full process description) into the exact same
+    generate_bpmn_from_description() used for the main generation. That short
+    text often contains collaboration vocabulary ("fornecedor", "concorrência")
+    that legitimately describes what the phase deals with — but the process-
+    level canonical-pattern/collaboration heuristics can't tell that apart from
+    a real multi-org process description, and hallucinate a brand new 2-pool
+    process around the one phase instead of detailing its internal steps.
+    is_phase_detail=True must flip the two flags AgentBPMN.run()/build_prompt()
+    check to suppress both mechanisms.
+    """
+
+    def test_is_phase_detail_sets_flags_on_agent_instance(self):
+        captured_flags = {}
+
+        def _fake_run(self, hub, output_language="Auto-detect"):
+            captured_flags["skip_canonical_pattern"] = getattr(self, "_skip_canonical_pattern", False)
+            captured_flags["force_single_pool"] = getattr(self, "_force_single_pool", False)
+            hub.bpmn = BPMNModel(name="detail", steps=[], edges=[])
+            return hub
+
+        with patch.object(AgentBPMN, "run", _fake_run), \
+             patch("agents.agent_bpmn_studio.AgentValidator.score") as mock_score:
+            mock_score.return_value = BPMNValidationScore(weighted=5.0)
+            generate_bpmn_from_description(
+                "Receber relatórios do fornecedor, validar e aprovar pagamento.",
+                _CLIENT_INFO, _PROVIDER_CFG,
+                run_nlp=False, n_runs=1, is_phase_detail=True,
+            )
+
+        assert captured_flags == {"skip_canonical_pattern": True, "force_single_pool": True}
+
+    def test_default_call_leaves_flags_unset(self):
+        captured_flags = {}
+
+        def _fake_run(self, hub, output_language="Auto-detect"):
+            captured_flags["skip_canonical_pattern"] = getattr(self, "_skip_canonical_pattern", False)
+            captured_flags["force_single_pool"] = getattr(self, "_force_single_pool", False)
+            hub.bpmn = BPMNModel(name="main", steps=[], edges=[])
+            return hub
+
+        with patch.object(AgentBPMN, "run", _fake_run), \
+             patch("agents.agent_bpmn_studio.AgentValidator.score") as mock_score:
+            mock_score.return_value = BPMNValidationScore(weighted=5.0)
+            generate_bpmn_from_description(
+                "Processo completo de contratação de fornecedor.",
+                _CLIENT_INFO, _PROVIDER_CFG,
+                run_nlp=False, n_runs=1,
+            )
+
+        assert captured_flags == {"skip_canonical_pattern": False, "force_single_pool": False}

@@ -142,3 +142,84 @@ class TestBuildPromptInjectsPattern:
         system, user = AgentBPMN.build_prompt(agent, hub, "Auto-detect")
         assert "[GABARITO CANÔNICO: bpmn_pattern_collab_callactivity_phases]" in user
         assert "pool_contratante" in user
+
+    def test_skip_canonical_pattern_flag_suppresses_gabarito_injection(self):
+        # PC127: "Detalhar uma fase" sets _skip_canonical_pattern=True because
+        # the input is one callActivity's documentation, not a full process
+        # description — the same collaboration vocabulary that correctly
+        # triggers the pattern for a whole transcript must NOT inject a
+        # brand-new 2-pool GABARITO on top of a single phase's text.
+        from unittest.mock import MagicMock
+        from core.knowledge_hub import KnowledgeHub
+
+        agent = MagicMock(spec=AgentBPMN)
+        agent._skill = "SKILL PLACEHOLDER {output_language}"
+        agent._language_instruction = AgentBPMN._language_instruction
+        agent._select_canonical_pattern = AgentBPMN._select_canonical_pattern
+        agent._skip_canonical_pattern = True
+
+        hub = KnowledgeHub.new()
+        hub.transcript_clean = (
+            "Firmamos um contrato de prestação de serviços com um fornecedor "
+            "externo. A consultoria contratada envia relatórios mensais até o "
+            "encerramento do contrato, quando fazemos a avaliação final do fornecedor."
+        )
+
+        system, user = AgentBPMN.build_prompt(agent, hub, "Auto-detect")
+        assert "GABARITO CANÔNICO" not in user
+
+
+class TestForceSinglePoolGuard:
+    """PC127: run()'s proactive collaboration-format mandate must be
+    suppressed when _force_single_pool is set on the agent instance."""
+
+    @staticmethod
+    def _run_and_capture_system_prompt(agent_flags: dict, transcript: str) -> str:
+        from unittest.mock import MagicMock
+        from core.knowledge_hub import KnowledgeHub, BPMNModel
+
+        agent = AgentBPMN.__new__(AgentBPMN)
+        for k, v in agent_flags.items():
+            setattr(agent, k, v)
+        agent.max_retries = 0
+        agent._skill = "SKILL PLACEHOLDER {output_language}"
+        agent._ensure_utf8 = lambda s: s
+
+        hub = KnowledgeHub.new()
+        hub.transcript_clean = transcript
+
+        captured = {}
+
+        def _fake_call_llm(system, user, hub):
+            captured["system"] = system
+            return "{}"
+
+        def _fake_parse_json(raw):
+            return {"name": "x", "steps": [{"id": "s1", "name": "A", "task_type": "userTask"}], "edges": []}
+
+        agent._call_llm = _fake_call_llm
+        agent._parse_json = _fake_parse_json
+        agent._build_model = lambda data: BPMNModel(name=data["name"], steps=[], edges=[])
+
+        agent.run(hub, "Auto-detect")
+        return captured["system"]
+
+    def test_force_single_pool_suppresses_collaboration_mandate(self):
+        transcript = (
+            "Receber relatórios do fornecedor externo, validar e devolver para "
+            "correção se necessário, aprovar e processar pagamento, notificar "
+            "fornecedor. Repetir até o final do contrato."
+        )
+        system = self._run_and_capture_system_prompt({"_force_single_pool": True}, transcript)
+        assert "MANDATORY FORMAT — COLLABORATION" not in system
+        assert "MANDATORY FORMAT — SINGLE-ACTOR PHASE DETAIL" in system
+
+    def test_without_flag_same_transcript_triggers_collaboration_mandate(self):
+        transcript = (
+            "Receber relatórios do fornecedor externo, validar e devolver para "
+            "correção se necessário, aprovar e processar pagamento, notificar "
+            "fornecedor. Repetir até o final do contrato."
+        )
+        system = self._run_and_capture_system_prompt({}, transcript)
+        assert "MANDATORY FORMAT — COLLABORATION" in system
+        assert "MANDATORY FORMAT — SINGLE-ACTOR PHASE DETAIL" not in system

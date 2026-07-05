@@ -386,6 +386,7 @@ with tab_gerar:
                                 output_language=st.session_state.output_language,
                                 n_runs=st.session_state.get("n_bpmn_runs", 3),
                                 bpmn_weights=st.session_state.get("bpmn_weights"),
+                                is_phase_detail=True,
                             )
                             _detail_status.empty()
                             if not detail_hub.bpmn.ready:
