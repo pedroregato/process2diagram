@@ -46,6 +46,15 @@ def _trim_history(history: list[dict]) -> list[dict]:
     """
     Keep only the last _MAX_HISTORY_TURNS user+assistant pairs AND
     truncate each individual message to _MAX_HISTORY_MSG_CHARS.
+
+    Always rebuilds a clean {"role", "content"} dict — history messages as
+    stored by pages/Assistente.py carry UI-only extra keys ("charts",
+    "tools_used", "tables", "widgets") for rendering. Forwarding those keys
+    unchanged into the LLM API payload previously crashed the request
+    encoder with "Object of type datetime is not JSON serializable" whenever
+    an earlier turn's "charts" held a Plotly figure with raw datetime values
+    (e.g. a Gantt chart) — the OpenAI/Anthropic SDKs don't strip unknown
+    keys before serializing the request body.
     """
     if not history:
         return []
@@ -56,8 +65,7 @@ def _trim_history(history: list[dict]) -> list[dict]:
         c = msg.get("content", "")
         if isinstance(c, str) and len(c) > _MAX_HISTORY_MSG_CHARS:
             c = c[:_MAX_HISTORY_MSG_CHARS] + " [… truncado]"
-            msg = {**msg, "content": c}
-        result.append(msg)
+        result.append({"role": msg.get("role", "user"), "content": c})
     return result
 
 

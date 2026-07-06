@@ -4,6 +4,17 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC148 — Concluído (v5.15 / 2026-07-06) — "datetime not JSON serializable" também na chamada de chat (não só no export)
+
+**Contexto:** usuário reportou o mesmo erro de PC146 (`Object of type datetime is not JSON serializable`), desta vez numa pergunta sem nenhuma relação com gráficos — *"O que precisa ser feito para que tenhamos um cronograma do projeto?"* — tanto no caminho principal de tool-use quanto no fallback de busca por keyword.
+
+- **Causa (raiz diferente de PC146):** `pages/Assistente.py` guarda em `st.session_state["assistant_history"]` o dict completo de cada turno, incluindo chaves só-de-UI (`charts`, `tools_used`, `tables`, `widgets`) — por exemplo, o figure Plotly de um Gantt gerado em um turno ANTERIOR da mesma conversa (que embute objetos `datetime.datetime` crus, ver PC146). `agents/agent_assistant.py::_trim_history()` repassava esses dicts praticamente inalterados (só reconstruía o dict ao truncar `content`, preservando as demais chaves via `{**msg, ...}`) — então `charts` entrava direto na lista `messages` passada para `client.chat.completions.create(messages=...)`, tanto em `chat()` quanto em `chat_with_tools()`. O SDK da OpenAI/Anthropic não descarta chaves desconhecidas antes de serializar o corpo da requisição — o `datetime` de um Gantt gerado ANTES quebrava a codificação de QUALQUER pergunta seguinte, mesmo sem relação com gráficos.
+- **Correção:** `_trim_history()` agora sempre reconstrói um dict limpo `{"role", "content"}`, descartando qualquer chave extra, independente do ramo de truncamento. Corrige os dois caminhos (`chat()` e `chat_with_tools()`) de uma vez, já que ambos chamam a mesma função.
+- [x] 5 testes novos (`test_agent_assistant_trim_history.py`): chaves `charts`/`tables`/`widgets` descartadas, `role`/`content` preservados, truncamento de conteúdo longo ainda funciona e ainda descarta chaves extra, e reprodução exata do cenário de produção — histórico com um Gantt chart anterior serializado com sucesso via `json.dumps()` (o que o SDK faz internamente).
+- [x] 567/567 testes automatizados passando (562 + 5 novos).
+
+---
+
 ### PC147 — Concluído (v5.15 / 2026-07-06) — legendas dos gráficos ainda ilegíveis após PC145: `st.plotly_chart` sobrescrevia o tema
 
 **Contexto:** usuário confirmou (novo print) que a legenda continuava de baixo contraste mesmo após PC145 ter definido `legend.font.color` explicitamente no figure dict.
