@@ -131,6 +131,13 @@ AGENT_REGISTRY: dict[str, dict] = {
         "default_enabled": False,
         "tags": ["analysis", "on-demand"],
     },
+    "bpmn_analyst": {
+        "authority_level": "read",
+        "skill_path": "skills/skill_bpmn_analyst.md",
+        "pipeline_step": None,
+        "default_enabled": True,
+        "tags": ["diagram", "bpmn", "on-demand", "assistant"],
+    },
     # ── Draft — persists artefacts to Supabase ────────────────────────────
     "bpmn": {
         "authority_level": "draft",

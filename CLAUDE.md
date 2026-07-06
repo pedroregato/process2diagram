@@ -100,7 +100,8 @@ process2diagram/
 │   ├── agent_validator.py        # Pure Python BPMN quality scorer (no LLM)
 │   ├── agent_document_analyzer.py  # On-demand: cross-references a document vs meeting artifacts
 │   ├── agent_document_extractor.py # On-demand: extracts req/SBVR/BMM/DMN artifacts from a document
-│   └── agent_bpmn_studio.py      # On-demand (PC116): generate_bpmn_from_description() — hub sintético + AgentBPMN, sem reunião
+│   ├── agent_bpmn_studio.py      # On-demand (PC116): generate_bpmn_from_description() — hub sintético + AgentBPMN, sem reunião
+│   └── agent_bpmn_analyst.py     # On-demand (PC135): answer(process_name, bpmn_xml, question) — free-form Q&A over an existing BPMN diagram
 │
 ├── modules/
 │   ├── config.py                 # LLM provider registry — add new providers here
@@ -166,6 +167,7 @@ process2diagram/
 │   ├── skill_bmm.md
 │   ├── skill_document_analyzer.md   # DocumentAnalyzerAgent — cross-reference analysis
 │   ├── skill_document_extractor.md  # DocumentExtractorAgent — artifact extraction from docs
+│   ├── skill_bpmn_analyst.md     # AgentBPMNAnalyst — free-form Q&A over an existing BPMN diagram
 │   ├── SKILL_REQUIREMENTS.md     # uppercase — git-tracked name
 │   └── SKILL_SYNTHESIZER.md      # uppercase — git-tracked name
 │
@@ -391,9 +393,9 @@ Within Assistente mode, sidebar toggle `asst_use_tools`:
 
 **PC115 split:** `AssistantToolExecutor` is composed via multiple inheritance from 7 domain mixins in `core/tools/` (see Repository Structure above); `core/assistant_tools.py` itself only holds `__init__`, `execute()` (name→method dispatch dict), and the schema/catalog getters that concatenate each mixin file's `*_SCHEMAS` constant. **To add a new tool:** implement the method on the mixin matching its domain (or `tools_executive_advanced.py` as a default), add its OpenAI schema dict to that same file's `*_SCHEMAS` list, then register the dispatch entry in `AssistantToolExecutor.execute()`. Never add methods directly to `core/assistant_tools.py`.
 
-**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `get_requirement_history`, `update_requirement_text`, `list_bpmn_processes`, `list_bpmn_versions`, `review_bpmn_diagram`, `describe_bpmn_process`, `suggest_bpmn_corrections`, `get_sbvr_terms`, `get_sbvr_rules`, `update_sbvr_rule`, `update_sbvr_term_by_id`, `get_bmm`, `get_ckf`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`, `get_cache_stats`, `list_meeting_documents`, `get_document_content`, `search_documents`, `get_document_types`, `search_glossary`, `read_skill_reference`, `search_ibis_debates`, `get_ibis_timeline`, `generate_ibis_map`, `list_kh_entities`, `list_kh_contradictions`, `resolve_contradiction`, `delete_contradiction`, `list_kh_facts`, `cluster_topic_decisions`, `generate_next_agenda`, `sugestoes_plantonista`, `diagnostico_projeto`, `reordenar_requisitos`, `vincular_regra_debate`, `mapa_rastreabilidade`, `simular_cenario`, `verificar_conformidade`, `sugerir_processos`, `gerar_deck_executivo`, `gerar_project_charter`.
+**Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `get_requirement_history`, `update_requirement_text`, `list_bpmn_processes`, `list_bpmn_versions`, `review_bpmn_diagram`, `describe_bpmn_process`, `ask_bpmn_diagram`, `generate_bpmn_diagram`, `suggest_bpmn_corrections`, `get_sbvr_terms`, `get_sbvr_rules`, `update_sbvr_rule`, `update_sbvr_term_by_id`, `get_bmm`, `get_ckf`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`, `get_cache_stats`, `list_meeting_documents`, `get_document_content`, `search_documents`, `get_document_types`, `search_glossary`, `read_skill_reference`, `search_ibis_debates`, `get_ibis_timeline`, `generate_ibis_map`, `list_kh_entities`, `list_kh_contradictions`, `resolve_contradiction`, `delete_contradiction`, `list_kh_facts`, `cluster_topic_decisions`, `generate_next_agenda`, `sugestoes_plantonista`, `diagnostico_projeto`, `reordenar_requisitos`, `vincular_regra_debate`, `mapa_rastreabilidade`, `simular_cenario`, `verificar_conformidade`, `sugerir_processos`, `gerar_deck_executivo`, `gerar_project_charter`.
 
-**Admin only (`is_admin()`):** `get_database_integrity`, `fix_missing_llm_provider`, `generate_meeting_embeddings`, `reprocess_meeting_full`, `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`, `delete_entity`, `resolve_entity_ambiguity`, `clear_llm_cache`, `delete_bpmn_version`, `save_bpmn_revision`, `apply_bpmn_corrections`, `inserir_secao_ata`, `mesclar_reunioes`, `sincronizar_calendario`, write/generate tools.
+**Admin only (`is_admin()`):** `get_database_integrity`, `fix_missing_llm_provider`, `generate_meeting_embeddings`, `reprocess_meeting_full`, `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`, `delete_entity`, `resolve_entity_ambiguity`, `clear_llm_cache`, `delete_bpmn_version`, `save_bpmn_revision`, `save_generated_bpmn`, `apply_bpmn_corrections`, `inserir_secao_ata`, `mesclar_reunioes`, `sincronizar_calendario`, write/generate tools.
 
 Detalhes de parâmetros e comportamento por grupo de ferramentas: `claude_guideline/architecture_details.md §Tool list`.
 

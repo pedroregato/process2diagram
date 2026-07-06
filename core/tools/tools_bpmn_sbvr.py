@@ -37,6 +37,103 @@ BPMN_SBVR_SCHEMAS: list[dict] = [
             {
                 "type": "function",
                 "function": {
+                    "name": "ask_bpmn_diagram",
+                    "description": (
+                        "Responde a uma pergunta livre sobre um diagrama BPMN já armazenado, via análise LLM "
+                        "(AgentBPMNAnalyst) — não apenas a descrição estruturada fixa de describe_bpmn_process. "
+                        "Use para perguntas específicas como: 'Descreva o subprocesso X', 'Quem aprova o contrato?', "
+                        "'O que acontece se a proposta for reprovada?', 'Essa fase tem alguma decisão automatizada?'. "
+                        "Quando a pergunta for sobre uma fase (callActivity) que já tem detalhamento salvo "
+                        "(ver BpmnEditor), a resposta usa os passos internos reais dessa fase, não apenas o resumo. "
+                        "Use list_bpmn_processes para descobrir os nomes disponíveis."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "process_name": {
+                                "type": "string",
+                                "description": "Nome (ou parte do nome) do processo BPMN sobre o qual perguntar",
+                            },
+                            "question": {
+                                "type": "string",
+                                "description": "Pergunta em linguagem natural sobre o processo",
+                            },
+                        },
+                        "required": ["process_name", "question"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "generate_bpmn_diagram",
+                    "description": (
+                        "Gera um novo diagrama BPMN 2.0 a partir da transcrição de uma reunião existente OU de "
+                        "uma descrição de processo em texto livre — mesmo mecanismo de geração do BPMN Studio "
+                        "(torneio de execuções + AgentValidator). NÃO salva automaticamente — retorna o XML "
+                        "gerado, uma descrição estruturada e o score de qualidade para revisão. "
+                        "Use quando o usuário pedir: 'Gere um BPMN para a Reunião N', 'Crie um diagrama a partir "
+                        "desta descrição: ...', 'Monte o fluxo BPMN deste processo'. "
+                        "Após o usuário confirmar que o resultado está bom, use save_generated_bpmn para persistir."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "meeting_number": {
+                                "type": "integer",
+                                "description": "Número da reunião cuja transcrição será usada como base (opcional se description for informado)",
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Descrição do processo em texto livre — usada quando não há reunião de referência (opcional se meeting_number for informado)",
+                            },
+                            "n_runs": {
+                                "type": "integer",
+                                "description": "Número de execuções independentes do torneio de qualidade (1-3). Padrão 1 — mais execuções melhoram a qualidade mas custam mais tempo/tokens.",
+                            },
+                        },
+                        "required": [],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "save_generated_bpmn",
+                    "description": (
+                        "Salva um diagrama BPMN gerado por generate_bpmn_diagram no projeto — cria um processo "
+                        "novo, ou uma nova versão se já existir um processo com o mesmo nome. "
+                        "Use APENAS depois que o usuário confirmar explicitamente que quer salvar o diagrama "
+                        "apresentado por generate_bpmn_diagram. "
+                        "Admin only."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "process_name": {
+                                "type": "string",
+                                "description": "Nome do processo a salvar",
+                            },
+                            "bpmn_xml": {
+                                "type": "string",
+                                "description": "XML BPMN 2.0 completo retornado por generate_bpmn_diagram",
+                            },
+                            "mermaid_code": {
+                                "type": "string",
+                                "description": "Código Mermaid correspondente (opcional)",
+                            },
+                            "meeting_number": {
+                                "type": "integer",
+                                "description": "Número da reunião de referência para vincular esta versão (opcional)",
+                            },
+                        },
+                        "required": ["process_name", "bpmn_xml"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "suggest_bpmn_corrections",
                     "description": (
                         "A partir das violações detectadas por review_bpmn_diagram, gera um plano de correção "
@@ -550,6 +647,176 @@ class _BpmnSbvrToolsMixin:
             current["bpmn_xml"],
             process_name=proc["name"],
             version=current.get("version", "?"),
+        )
+
+    def _resolve_llm_agent_config(self) -> tuple[dict, dict] | None:
+        """Build (client_info, provider_cfg) for instantiating a BaseAgent
+        subclass from self.llm_config. Returns None when incomplete —
+        callers should surface a clear error instead of instantiating an
+        agent that will fail on its first _call_llm()."""
+        api_key = self.llm_config.get("api_key", "")
+        provider_cfg = self.llm_config.get("provider_cfg") or {}
+        if not api_key or not provider_cfg.get("client_type"):
+            return None
+        return {"api_key": api_key}, provider_cfg
+
+    def ask_bpmn_diagram(self, process_name: str, question: str) -> str:
+        """Responde a uma pergunta livre sobre um diagrama BPMN via AgentBPMNAnalyst (LLM)."""
+        from core.project_store import (
+            list_bpmn_processes, list_bpmn_versions,
+            get_current_bpmn_version_id, list_bpmn_callactivity_diagrams,
+        )
+        from agents.agent_bpmn_analyst import AgentBPMNAnalyst
+
+        procs = list_bpmn_processes(self.project_id)
+        name_lower = process_name.lower().strip()
+        matches = [p for p in procs if name_lower in (p.get("name") or "").lower()]
+        if not matches:
+            return f"Processo '{process_name}' não encontrado. Use list_bpmn_processes para ver os disponíveis."
+        if len(matches) > 1:
+            return "Múltiplos processos:\n" + "\n".join(f"  • {p['name']}" for p in matches)
+
+        proc = matches[0]
+        versions = list_bpmn_versions(proc["id"])
+        current = next((v for v in versions if v.get("is_current")), versions[0] if versions else None)
+        if not current or not current.get("bpmn_xml"):
+            return f"Processo '{proc['name']}' não possui XML BPMN armazenado."
+
+        # Detalhamentos de fase salvos (PC120/PC129) cujo nome apareça na
+        # pergunta — dá ao analista os passos internos reais da fase, em vez
+        # de apenas a documentation resumida do diagrama principal.
+        detail_context = ""
+        try:
+            version_id = current.get("id") or get_current_bpmn_version_id(proc["id"])
+            details = list_bpmn_callactivity_diagrams(version_id) if version_id else []
+            q_lower = question.lower()
+            relevant = [
+                d for d in details
+                if (d.get("element_name") or "").strip()
+                and d["element_name"].lower() in q_lower
+            ]
+            detail_context = "\n\n".join(
+                f"### Detalhamento de '{d.get('element_name')}'\n```xml\n{d.get('bpmn_xml', '')}\n```"
+                for d in relevant
+            )
+        except Exception:
+            detail_context = ""
+
+        agent_cfg = self._resolve_llm_agent_config()
+        if not agent_cfg:
+            return "❌ Configuração de LLM não disponível para consultar o diagrama."
+        client_info, provider_cfg = agent_cfg
+
+        agent = AgentBPMNAnalyst(client_info, provider_cfg)
+        return agent.answer(
+            process_name=proc["name"],
+            bpmn_xml=current["bpmn_xml"],
+            question=question,
+            detail_context=detail_context,
+        )
+
+    def generate_bpmn_diagram(
+        self,
+        meeting_number: int | None = None,
+        description: str | None = None,
+        n_runs: int = 1,
+    ) -> str:
+        """Gera um novo diagrama BPMN a partir de uma transcrição existente ou
+        de uma descrição livre — mesmo torneio do BPMN Studio. Não salva."""
+        from agents.agent_bpmn_studio import generate_bpmn_from_description
+        from modules.bpmn_describer import describe_bpmn_from_xml
+
+        if meeting_number is not None:
+            mtg = self._find_meeting(meeting_number)
+            if not mtg:
+                return f"Reunião {meeting_number} não encontrada."
+            text = (mtg.get("transcript_clean") or mtg.get("transcript_raw") or "").strip()
+            if not text:
+                return f"Reunião {meeting_number} não possui transcrição armazenada."
+            source_label = f"Reunião {meeting_number} — {mtg.get('title', '') or 'sem título'}"
+        elif description and description.strip():
+            text = description.strip()
+            source_label = "descrição fornecida"
+        else:
+            return "Informe meeting_number (reunião existente) ou description (texto livre) para gerar o diagrama."
+
+        if len(text.split()) < 15:
+            return "Texto de origem muito curto para gerar um diagrama confiável (mínimo ~15 palavras)."
+
+        agent_cfg = self._resolve_llm_agent_config()
+        if not agent_cfg:
+            return "❌ Configuração de LLM não disponível para gerar o diagrama."
+        client_info, provider_cfg = agent_cfg
+
+        n_runs = max(1, min(int(n_runs or 1), 3))  # cap de custo — sem permitir abuso via chat
+        try:
+            hub = generate_bpmn_from_description(
+                text, client_info, provider_cfg,
+                run_nlp=True, n_runs=n_runs,
+            )
+        except Exception as exc:
+            return f"❌ Erro ao gerar o diagrama: {exc}"
+
+        if not hub.bpmn.ready or not hub.bpmn.bpmn_xml:
+            return "Não foi possível gerar um diagrama a partir deste texto."
+
+        score = hub.validation.bpmn_score
+        score_line = (
+            f"**Score do torneio:** {score.weighted:.1f}/10 "
+            f"(granularidade {score.granularity:.1f} · tipo de tarefa {score.task_type:.1f} · "
+            f"gateways {score.gateways:.1f} · estrutural {score.structural:.1f} · "
+            f"semântica {score.semantic:.1f})\n\n"
+            if score else ""
+        )
+        description_md = describe_bpmn_from_xml(hub.bpmn.bpmn_xml, process_name=hub.bpmn.name)
+
+        return (
+            f"# Diagrama gerado a partir de: {source_label}\n\n"
+            f"**Nome sugerido:** {hub.bpmn.name}\n\n"
+            f"{score_line}"
+            f"{description_md}\n\n"
+            "---\n"
+            "Para salvar este diagrama no projeto, confirme com o usuário e chame "
+            "`save_generated_bpmn` com `process_name` e o `bpmn_xml` abaixo.\n\n"
+            f"```xml\n{hub.bpmn.bpmn_xml}\n```"
+        )
+
+    def save_generated_bpmn(
+        self,
+        process_name: str,
+        bpmn_xml: str,
+        mermaid_code: str = "",
+        meeting_number: int | None = None,
+    ) -> str:
+        """Salva um diagrama gerado por generate_bpmn_diagram — cria um novo
+        processo, ou uma nova versão se já existir um com o mesmo nome."""
+        from core.project_store import save_bpmn_from_hub
+        from core.knowledge_hub import KnowledgeHub
+
+        if not bpmn_xml or not bpmn_xml.strip():
+            return "❌ XML BPMN vazio — gere o diagrama com generate_bpmn_diagram primeiro."
+        if not process_name or not process_name.strip():
+            return "❌ Informe um nome para o processo."
+
+        meeting_id = None
+        if meeting_number is not None:
+            mtg = self._find_meeting(meeting_number)
+            if mtg:
+                meeting_id = mtg["id"]
+
+        hub = KnowledgeHub.new()
+        hub.bpmn.name = process_name.strip()
+        hub.bpmn.bpmn_xml = bpmn_xml.strip()
+        hub.bpmn.mermaid = mermaid_code or ""
+        hub.bpmn.ready = True
+
+        pid = save_bpmn_from_hub(meeting_id=meeting_id, project_id=self.project_id, hub=hub)
+        if not pid:
+            return f"❌ Erro ao salvar o diagrama '{process_name}'."
+
+        return (
+            f"✅ Diagrama '{process_name}' salvo com sucesso"
+            + (f" — vinculado à Reunião {meeting_number}." if meeting_id else " — sem reunião vinculada.")
         )
 
     def suggest_bpmn_corrections(self, process_name: str) -> str:

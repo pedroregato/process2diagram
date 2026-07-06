@@ -4,6 +4,31 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC135 — Concluído (v5.15 / 2026-07-05) — Assistente ganha poderes de gerar e interpretar diagramas BPMN
+
+**Pedido do usuário:** "Crie funcionalidades (tools) para dar poderes ao assistente de gerar um diagrama como base numa transcrição. Crie também um agente capaz de interpretar e analisar um diagrama BPMN, [...] responder: 'Descreva o subprocesso Contratar Consultoria' dentre outras perguntas."
+
+**Novo agente — `agents/agent_bpmn_analyst.py::AgentBPMNAnalyst`** (on-demand, `skills/skill_bpmn_analyst.md`, registrado em `AGENT_REGISTRY` como `read`):
+- [x] `answer(process_name, bpmn_xml, question, detail_context, output_language)` — mesmo padrão de `AgentBPMNReviewer.review()`/`DocumentAnalyzerAgent.analyze()`: resposta em texto livre (Markdown leve), não JSON — `_call_llm` chamado diretamente.
+- [x] `_strip_diagram_interchange(xml_str)` — remove `<bpmndi:BPMNDiagram>` (coordenadas visuais, zero valor semântico) antes de enviar ao LLM, reduzindo tokens sem perder nenhuma informação relevante para responder perguntas. Registra namespaces canônicos antes de reserializar — evita mangling `ns0:`.
+- [x] Skill instrui: localizar o elemento pelo nome (tolerante a acentuação/plural), descrever via `documentation` + posição no fluxo (predecessor/sucessor) + lane/pool; nunca inventar elementos inexistentes; usar detalhamento de fase já salvo (PC120/PC129) quando disponível em vez de só o resumo.
+
+**3 novas ferramentas do assistente** (`core/tools/tools_bpmn_sbvr.py`):
+- [x] `ask_bpmn_diagram(process_name, question)` — não-admin. Resolve o processo, busca detalhamentos de fase salvos cujo nome apareça na pergunta (via `list_bpmn_callactivity_diagrams` na versão atual) e injeta como contexto extra, chama `AgentBPMNAnalyst`.
+- [x] `generate_bpmn_diagram(meeting_number=None, description=None, n_runs=1)` — não-admin. Reaproveita `generate_bpmn_from_description()` (mesmo torneio do BPMN Studio) a partir da transcrição de uma reunião existente OU de texto livre. `n_runs` limitado a 1-3 (proteção de custo via chat). **Não salva automaticamente** — retorna nome sugerido, score do torneio, descrição estruturada e o XML completo, instruindo o uso de `save_generated_bpmn` após confirmação do usuário (mesmo padrão de dois passos já usado por `suggest_bpmn_corrections`→`save_bpmn_revision` e `preview_text_correction`→`apply_text_correction` — o XML trafega no próprio texto de retorno da tool, sem depender de estado entre turnos, já que uma nova instância de `AssistantToolExecutor` é criada a cada turno).
+- [x] `save_generated_bpmn(process_name, bpmn_xml, mermaid_code="", meeting_number=None)` — **admin only**. Usa `save_bpmn_from_hub()` (mesma função do BPMN Studio) com um `KnowledgeHub` mínimo — cria processo novo OU nova versão de um existente com o mesmo nome, via `_find_or_create_bpmn_process` já implementado em `project_store.py`.
+- [x] Registro completo: schemas em `BPMN_SBVR_SCHEMAS`, dispatch em `AssistantToolExecutor.execute()`, `save_generated_bpmn` em `_ADMIN_TOOLS`, categorias em `_TOOL_CATEGORIES` (`ask_bpmn_diagram`/`generate_bpmn_diagram` → consulta, `save_generated_bpmn` → admin). CLAUDE.md `§Tool list` atualizado.
+- [x] **Achado colateral (não corrigido, fora de escopo):** `apply_bpmn_corrections` instancia `AgentBPMNReviewer()` sem argumentos — `BaseAgent.__init__` exige `client_info`/`provider_cfg`, então essa chamada levantaria `TypeError` em produção. Bug pré-existente, não introduzido nesta sessão; corrigido o padrão correto (`self.llm_config.get("api_key")`/`self.llm_config.get("provider_cfg")` → novo helper `_resolve_llm_agent_config()`) nas 3 ferramentas novas, mas `apply_bpmn_corrections` em si não foi tocado — sinalizado ao usuário para decisão futura.
+- [x] 37 testes novos (`test_agent_bpmn_analyst.py` — 12, `test_tools_bpmn_generation_analysis.py` — 25): DI-stripping, montagem de prompt, resposta via LLM mockado, resolução de processo/versão, contexto de detalhamento por nome, geração a partir de reunião/descrição, cap de `n_runs`, salvamento (novo processo e nova versão), gate admin no dispatch. 458/458 testes automatizados passando.
+
+### PC134 — Concluído (v5.15 / 2026-07-05) — botão de copiar XML restaurado
+
+**Achado:** usuário reportou que a reformatação em múltiplas linhas do PC133 fez desaparecer o botão de copiar o texto do XML. As 4 caixas `st.code(xml, language="xml")` nunca tiveram um botão de copiar explícito próprio — o PC133 só trocou o conteúdo exibido, mas isso deixou mais evidente a ausência de uma forma fácil de copiar o XML inteiro de um bloco agora multi-linha.
+
+- [x] Reaproveitado `ui/components/copy_button.py::copy_button()` (já usado em outras páginas do app) ao lado dos 4 blocos de código XML: `pages/BpmnStudio.py` (diagrama principal + detalhamento de fase) e `pages/BpmnEditor.py` (detalhamentos salvos + XML da versão selecionada). Copia a versão já formatada (pretty-printed) exibida na tela.
+- [x] Verificado com `AppTest` ponta-a-ponta: nenhuma exceção após adicionar os botões nos 2 fluxos do BPMN Studio e do BpmnEditor.
+- [x] 420/420 testes automatizados inalterados (mudança de UI, sem lógica nova).
+
 ### PC133 — Concluído (v5.15 / 2026-07-05) — XML formatado (indentado) nas caixas de código
 
 **Contexto:** usuário reportou que os blocos `st.code(xml, language="xml")` no BPMN Studio e no Editor BPMN mostravam o XML numa única linha contínua, difícil de ler. Causa: `xml.etree.ElementTree.write()` (usado por `modules/bpmn_generator.py`) não insere espaço/quebra entre tags — comportamento correto para armazenamento/bpmn-js/banco, mas ruim para leitura humana em texto puro.

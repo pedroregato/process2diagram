@@ -84,6 +84,9 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "list_bpmn_processes":          "consulta",
     "review_bpmn_diagram":          "consulta",
     "describe_bpmn_process":        "consulta",
+    "ask_bpmn_diagram":             "consulta",
+    "generate_bpmn_diagram":        "consulta",
+    "save_generated_bpmn":          "admin",
     "suggest_bpmn_corrections":     "consulta",
     "save_bpmn_revision":           "admin",
     "apply_bpmn_corrections":       "admin",
@@ -249,6 +252,7 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "delete_entity",
     "delete_bpmn_version",
     "save_bpmn_revision",
+    "save_generated_bpmn",
     "apply_bpmn_corrections",
     "clear_llm_cache",
     "inserir_secao_ata",
@@ -368,6 +372,21 @@ class AssistantToolExecutor(
                 ),
                 "describe_bpmn_process":     lambda: self.describe_bpmn_process(
                     process_name=tool_input["process_name"],
+                ),
+                "ask_bpmn_diagram":          lambda: self.ask_bpmn_diagram(
+                    process_name=tool_input["process_name"],
+                    question=tool_input["question"],
+                ),
+                "generate_bpmn_diagram":     lambda: self.generate_bpmn_diagram(
+                    meeting_number=tool_input.get("meeting_number"),
+                    description=tool_input.get("description"),
+                    n_runs=tool_input.get("n_runs", 1),
+                ),
+                "save_generated_bpmn":       lambda: self.save_generated_bpmn(
+                    process_name=tool_input["process_name"],
+                    bpmn_xml=tool_input["bpmn_xml"],
+                    mermaid_code=tool_input.get("mermaid_code", ""),
+                    meeting_number=tool_input.get("meeting_number"),
                 ),
                 "suggest_bpmn_corrections":  lambda: self.suggest_bpmn_corrections(
                     process_name=tool_input["process_name"],
