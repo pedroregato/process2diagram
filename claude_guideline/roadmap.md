@@ -4,6 +4,20 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC141 — Concluído (v5.15 / 2026-07-06) — 4 ferramentas investigativas propostas pelo próprio assistente
+
+**Contexto:** ao final da investigação do bug de duplicação (PC140), o assistente propôs 4 novas ferramentas que teriam acelerado seu próprio diagnóstico — ele só tinha `get_requirements` (paginado, 50/página) para inspecionar centenas de requisitos. Avaliadas e implementadas as 4, todas em `core/tools/tools_meetings_requirements.py`, todas não-admin, escopadas por `meeting_number` → `first_meeting_id` (mesmo padrão de resolução já usado por `get_requirements`):
+
+- [x] **`sample_requirements(meeting_number, sample_size=20, seed=None)`** — amostra aleatória (não paginada) via `random.Random(seed).sample()`; `sample_size` limitado ao total disponível e a 100.
+- [x] **`analyze_requirement_quality(meeting_number)`** — relatório determinístico (sem custo de LLM): tamanho médio de título/descrição, palavras mais frequentes nos títulos (stopwords PT/EN removidas), proporção requisitos/100-palavras-da-transcrição com alerta de super-granularidade acima de 2,5/100.
+- [x] **`map_transcript_to_requirements(meeting_number)`** — divide a transcrição em parágrafos (fallback para sentenças se não houver quebra de parágrafo) e usa o `source_quote` de cada requisito (campo já obrigatório e instruído em `SKILL_REQUIREMENTS.md`) para contar quantos requisitos cada trecho gerou — substring match direto, com fallback de sobreposição de palavras (Jaccard-like) quando o trecho não bate literalmente.
+- [x] **`cluster_similar_requirements(meeting_number, threshold=0.85, max_requirements=200)`** — a "ferramenta matadora" proposta: embeddings via `modules/embeddings.py::embed_batch()` (infraestrutura já existente — coluna `requirements.embedding vector(768)` no schema, nunca antes usada por nenhum código) + clusterização gulosa por similaridade de cosseno (implementada em Python puro — `_cosine_similarity()` — para não adicionar dependência de numpy só para isso). Limite de 200 requisitos por chamada protege contra custo excessivo de API de embedding; acima disso, sugere `sample_requirements` primeiro.
+- [x] Registro completo: schemas em `MEETINGS_REQUIREMENTS_SCHEMAS`, dispatch em `AssistantToolExecutor.execute()`, categoria "consulta" (não-admin, mesmo padrão de `describe_bpmn_process`/`ask_bpmn_diagram` apesar do custo real de embedding em `cluster_similar_requirements`). CLAUDE.md `§Tool list` atualizado.
+- [x] 26 testes novos (`test_tools_requirement_investigation.py`): resolução de reunião, amostra reprodutível via seed, relatório de qualidade com/sem alerta de granularidade, mapeamento de trechos com correspondência exata e por sobreposição, similaridade de cosseno (idêntico/ortogonal/vetor-zero), clusterização agrupando vetores similares e mantendo dissimilares separados, limite de custo por chamada, erro claro quando o provedor de embedding não está configurado, gate de dispatch (nenhuma das 4 é admin-only).
+- [x] 512/512 testes automatizados passando (486 + 26 novos).
+
+---
+
 ### PC140 — Concluído (v5.15 / 2026-07-06) — reconciliador de requisitos duplicava reunião inteira a cada reprocessamento
 
 **Achado:** após o PC139 revelar que AURORA tinha 2466 requisitos reais (não 1000 truncados), o usuário pediu para investigar se o número fazia sentido. Um segundo assistente (mesma sessão de chat) ofereceu uma hipótese alternativa — "super-granularidade": o pipeline teria fragmentado cada requisito em dezenas de micro-requisitos (ex: "validar CPF" virando 5 REQs separados), não duplicação literal. **Essa hipótese foi checada e refutada com evidência direta:** consulta ao banco mostrou apenas **47 títulos distintos** em 2466 linhas — e para o título mais repetido (123 ocorrências), a `description` era **100% idêntica** em todas as 123 linhas, criadas em rajadas ao longo de 8 dias diferentes (18/06 a 30/06), com um único dia (30/06) gerando 1000 linhas em ~8 minutos. Fragmentação geraria títulos/descrições DIFERENTES por micro-requisito — o padrão observado só é possível com duplicação literal via reprocessamento repetido.

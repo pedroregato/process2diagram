@@ -80,6 +80,10 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "search_transcript":            "consulta",
     "count_artifacts":              "consulta",
     "get_requirements":             "consulta",
+    "sample_requirements":          "consulta",
+    "analyze_requirement_quality":  "consulta",
+    "map_transcript_to_requirements": "consulta",
+    "cluster_similar_requirements": "consulta",
     "get_bpmn_execution_log":       "consulta",
     "list_bpmn_processes":          "consulta",
     "review_bpmn_diagram":          "consulta",
@@ -364,6 +368,22 @@ class AssistantToolExecutor(
                         page_size=int(tool_input.get("page_size") or 50),
                         count_only=bool(tool_input.get("count_only", False)),
                     )
+                ),
+                "sample_requirements":       lambda: self.sample_requirements(
+                    meeting_number=tool_input["meeting_number"],
+                    sample_size=int(tool_input.get("sample_size") or 20),
+                    seed=tool_input.get("seed"),
+                ),
+                "analyze_requirement_quality": lambda: self.analyze_requirement_quality(
+                    meeting_number=tool_input["meeting_number"],
+                ),
+                "map_transcript_to_requirements": lambda: self.map_transcript_to_requirements(
+                    meeting_number=tool_input["meeting_number"],
+                ),
+                "cluster_similar_requirements": lambda: self.cluster_similar_requirements(
+                    meeting_number=tool_input["meeting_number"],
+                    threshold=float(tool_input.get("threshold") or 0.85),
+                    max_requirements=int(tool_input.get("max_requirements") or 200),
                 ),
                 "get_bpmn_execution_log":    lambda: self.get_bpmn_execution_log(),
                 "list_bpmn_processes":       lambda: self.list_bpmn_processes(),

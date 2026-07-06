@@ -9,6 +9,16 @@ from core.chart_config import CHART_PALETTES, DEFAULT_PALETTE
 from core.tools._shared import _compute_initials
 
 
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Pure-Python cosine similarity — avoids adding numpy just for this."""
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = sum(x * x for x in a) ** 0.5
+    norm_b = sum(x * x for x in b) ** 0.5
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
 MEETINGS_REQUIREMENTS_SCHEMAS: list[dict] = [
             {
                 "type": "function",
@@ -243,6 +253,113 @@ MEETINGS_REQUIREMENTS_SCHEMAS: list[dict] = [
                             },
                         },
                         "required": [],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "sample_requirements",
+                    "description": (
+                        "Retorna uma amostra ALEATÓRIA de requisitos de uma reunião — mais rápido e barato "
+                        "que paginar com get_requirements quando o objetivo é avaliar qualidade/granularidade "
+                        "geral, não ler todos os itens. Use quando o usuário pedir para 'dar uma olhada', "
+                        "'ver um exemplo', 'avaliar o padrão' dos requisitos de uma reunião."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "meeting_number": {
+                                "type": "integer",
+                                "description": "Número da reunião cujos requisitos serão amostrados",
+                            },
+                            "sample_size": {
+                                "type": "integer",
+                                "description": "Quantos requisitos incluir na amostra (padrão 20, máximo 100)",
+                            },
+                            "seed": {
+                                "type": "integer",
+                                "description": "Semente aleatória opcional, para amostra reprodutível",
+                            },
+                        },
+                        "required": ["meeting_number"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "analyze_requirement_quality",
+                    "description": (
+                        "Gera um relatório estatístico sobre a granularidade dos requisitos de uma reunião: "
+                        "tamanho médio de título/descrição, palavras mais frequentes nos títulos, e proporção "
+                        "requisitos-por-100-palavras da transcrição (sinaliza super-granularidade quando alta). "
+                        "Use para diagnosticar rapidamente se uma reunião produziu requisitos "
+                        "excessivamente fragmentados, sem precisar ler item por item."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "meeting_number": {
+                                "type": "integer",
+                                "description": "Número da reunião a analisar",
+                            },
+                        },
+                        "required": ["meeting_number"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "map_transcript_to_requirements",
+                    "description": (
+                        "Divide a transcrição de uma reunião em trechos/parágrafos e conta quantos requisitos "
+                        "cada trecho gerou (via source_quote de cada requisito) — revela ONDE exatamente um "
+                        "possível oversplitting está ocorrendo (trechos técnicos específicos vs. distribuição "
+                        "uniforme). Use para localizar a origem de uma super-granularidade já detectada."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "meeting_number": {
+                                "type": "integer",
+                                "description": "Número da reunião a mapear",
+                            },
+                        },
+                        "required": ["meeting_number"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "cluster_similar_requirements",
+                    "description": (
+                        "Agrupa requisitos de uma reunião por similaridade semântica (embeddings) — revela "
+                        "'famílias' de requisitos que dizem essencialmente a mesma coisa com palavras "
+                        "diferentes (ex: 'validar CPF' / 'CPF deve ser validado' → mesmo cluster). "
+                        "Use para detectar duplicação semântica ou consolidar requisitos redundantes. "
+                        "Custa uma chamada de API de embedding por requisito — limitado a 200 por chamada "
+                        "por padrão; para reuniões maiores, combine com sample_requirements primeiro."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "meeting_number": {
+                                "type": "integer",
+                                "description": "Número da reunião cujos requisitos serão clusterizados",
+                            },
+                            "threshold": {
+                                "type": "number",
+                                "description": "Similaridade de cosseno mínima para agrupar no mesmo cluster (0.5–0.99, padrão 0.85)",
+                            },
+                            "max_requirements": {
+                                "type": "integer",
+                                "description": "Limite de requisitos processados nesta chamada (padrão 200, protege contra custo excessivo)",
+                            },
+                        },
+                        "required": ["meeting_number"],
                     },
                 },
             },
@@ -1451,6 +1568,250 @@ class _MeetingsRequirementsToolsMixin:
                 f"\n[Há mais requisitos. Chame get_requirements(page={page + 1}) para continuar.]"
             )
 
+        return "\n".join(lines)
+
+    # ── Investigative tools (PC141) ───────────────────────────────────────────
+    # 4 tools proposed by the assistant itself after investigating a real
+    # duplication incident (PC140) with only paginated get_requirements calls.
+    # All operate on ONE meeting's requirements (via first_meeting_id) and
+    # avoid full-table pagination for diagnostic/quality questions.
+
+    def _requirements_for_meeting(self, meeting_number: int, fields: str) -> tuple[dict | None, list[dict], str]:
+        """Shared resolution: meeting_number -> (meeting_dict, requirement_rows, error_message).
+        error_message is non-empty (and the other two are None/[]) on failure."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return None, [], "Banco de dados não disponível."
+        mtg = self._find_meeting(meeting_number)
+        if not mtg:
+            return None, [], f"Reunião {meeting_number} não encontrada."
+        try:
+            rows = (
+                db.table("requirements")
+                .select(fields)
+                .eq("project_id", self.project_id)
+                .eq("first_meeting_id", mtg["id"])
+                .order("req_number")
+                .execute()
+                .data or []
+            )
+        except Exception as exc:
+            return None, [], f"Erro ao acessar requisitos: {exc}"
+        if not rows:
+            return None, [], f"Nenhum requisito encontrado para a Reunião {meeting_number}."
+        return mtg, rows, ""
+
+    def sample_requirements(
+        self,
+        meeting_number: int,
+        sample_size: int = 20,
+        seed: int | None = None,
+    ) -> str:
+        """Amostra aleatória (não paginada) de requisitos de uma reunião."""
+        import random
+
+        mtg, rows, err = self._requirements_for_meeting(
+            meeting_number, "req_number, title, description, req_type, priority, status"
+        )
+        if err:
+            return err
+
+        sample_size = max(1, min(int(sample_size or 20), len(rows), 100))
+        rng = random.Random(seed) if seed is not None else random.Random()
+        sample = sorted(rng.sample(rows, sample_size), key=lambda r: r.get("req_number") or 0)
+
+        lines = [f"Amostra aleatória de {sample_size} de {len(rows)} requisito(s) — Reunião {meeting_number}:"]
+        for r in sample:
+            n = r.get("req_number")
+            req_id = f"REQ-{n:03d}" if isinstance(n, int) else "REQ-???"
+            desc = (r.get("description") or "")[:120]
+            lines.append(
+                f"• {req_id} [{r.get('req_type') or '—'} | {r.get('priority') or '—'} | {r.get('status') or '—'}] "
+                f"{r.get('title') or ''} — {desc}"
+            )
+        return "\n".join(lines)
+
+    def analyze_requirement_quality(self, meeting_number: int) -> str:
+        """Relatório estatístico de granularidade dos requisitos de uma reunião."""
+        import re
+        from collections import Counter
+
+        mtg, rows, err = self._requirements_for_meeting(meeting_number, "title, description")
+        if err:
+            return err
+
+        transcript = (mtg.get("transcript_clean") or mtg.get("transcript_raw") or "")
+        n_words_transcript = len(transcript.split())
+
+        titles = [r.get("title") or "" for r in rows]
+        descs = [r.get("description") or "" for r in rows]
+        avg_title_len = sum(len(t) for t in titles) / len(titles)
+        avg_desc_len = sum(len(d) for d in descs) / len(descs) if descs else 0.0
+
+        _STOPWORDS = {
+            "o", "a", "os", "as", "de", "do", "da", "dos", "das", "que", "e",
+            "para", "com", "em", "um", "uma", "deve", "sistema", "ser", "no",
+            "na", "ao", "aos", "às", "se", "por", "the", "of", "to", "and",
+        }
+        words = re.findall(r"\w+", " ".join(titles).lower())
+        words = [w for w in words if w not in _STOPWORDS and len(w) > 2]
+        common = Counter(words).most_common(10)
+
+        ratio_per_100 = (len(rows) / n_words_transcript * 100) if n_words_transcript else 0.0
+        # ~1 req per 40 words (2.5/100) is already dense for a well-scoped
+        # extraction; above that is a red flag for over-fragmentation.
+        alert = ratio_per_100 > 2.5
+
+        lines = [
+            f"# Qualidade dos Requisitos — Reunião {meeting_number}",
+            f"Total de requisitos: {len(rows)}",
+            f"Palavras na transcrição: {n_words_transcript}",
+            f"Proporção: {ratio_per_100:.2f} requisitos por 100 palavras"
+            + (" ⚠️ possível super-granularidade" if alert else ""),
+            f"Tamanho médio do título: {avg_title_len:.0f} caracteres",
+            f"Tamanho médio da descrição: {avg_desc_len:.0f} caracteres",
+            "",
+            "Palavras mais frequentes nos títulos: "
+            + (", ".join(f"{w} ({n})" for w, n in common) if common else "—"),
+        ]
+        return "\n".join(lines)
+
+    def map_transcript_to_requirements(self, meeting_number: int) -> str:
+        """Mapeia trechos da transcrição para a contagem de requisitos gerados por trecho."""
+        import re
+
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+        mtg = self._find_meeting(meeting_number)
+        if not mtg:
+            return f"Reunião {meeting_number} não encontrada."
+        transcript = (mtg.get("transcript_clean") or mtg.get("transcript_raw") or "").strip()
+        if not transcript:
+            return f"Reunião {meeting_number} não possui transcrição armazenada."
+
+        _, rows, err = self._requirements_for_meeting(meeting_number, "req_number, title, source_quote")
+        if err:
+            return err
+
+        paragraphs = [p.strip() for p in re.split(r"\n\s*\n", transcript) if p.strip()]
+        if len(paragraphs) < 2:
+            # Transcript has no blank-line paragraph breaks — fall back to sentences.
+            paragraphs = [p.strip() for p in re.split(r"(?<=[.!?])\s+", transcript) if p.strip()]
+        if not paragraphs:
+            return f"Não foi possível dividir a transcrição da Reunião {meeting_number} em trechos."
+
+        counts = [0] * len(paragraphs)
+        unmatched = 0
+        for r in rows:
+            quote = (r.get("source_quote") or "").strip()
+            if not quote:
+                unmatched += 1
+                continue
+            quote_lower = quote.lower()
+            quote_words = set(re.findall(r"\w+", quote_lower))
+            best_idx, best_score = None, 0.0
+            for i, p in enumerate(paragraphs):
+                p_lower = p.lower()
+                if quote_lower in p_lower:
+                    best_idx, best_score = i, 1.0
+                    break
+                p_words = set(re.findall(r"\w+", p_lower))
+                if quote_words and p_words:
+                    overlap = len(quote_words & p_words) / len(quote_words)
+                    if overlap > best_score:
+                        best_score, best_idx = overlap, i
+            if best_idx is not None and best_score >= 0.5:
+                counts[best_idx] += 1
+            else:
+                unmatched += 1
+
+        ranked = sorted(range(len(paragraphs)), key=lambda i: counts[i], reverse=True)
+        avg = sum(counts) / len(counts) if counts else 0.0
+
+        lines = [
+            f"# Mapa Transcrição → Requisitos — Reunião {meeting_number}",
+            f"{len(paragraphs)} trecho(s) identificado(s), {len(rows)} requisito(s), "
+            f"média {avg:.1f} requisito(s)/trecho.",
+        ]
+        if unmatched:
+            lines.append(f"{unmatched} requisito(s) sem correspondência clara de trecho.")
+        lines.append("")
+        shown = 0
+        for i in ranked:
+            if counts[i] == 0 or shown >= 10:
+                break
+            flag = " ⚠️ possível oversplitting" if counts[i] > max(3, avg * 2) else ""
+            excerpt = paragraphs[i][:150] + ("..." if len(paragraphs[i]) > 150 else "")
+            lines.append(f'📄 "{excerpt}"\n   → {counts[i]} requisito(s){flag}')
+            shown += 1
+        return "\n".join(lines)
+
+    def cluster_similar_requirements(
+        self,
+        meeting_number: int,
+        threshold: float = 0.85,
+        max_requirements: int = 200,
+    ) -> str:
+        """Agrupa requisitos de uma reunião por similaridade semântica (embeddings)."""
+        from modules.embeddings import embed_batch, get_active_embedding_params
+
+        mtg, rows, err = self._requirements_for_meeting(meeting_number, "req_number, title, description")
+        if err:
+            return err
+
+        max_requirements = max(1, int(max_requirements or 200))
+        if len(rows) > max_requirements:
+            return (
+                f"Reunião {meeting_number} tem {len(rows)} requisitos — acima do limite de "
+                f"{max_requirements} por chamada (protege contra custo excessivo de embeddings). "
+                f"Use sample_requirements para uma amostra, ou aumente max_requirements explicitamente."
+            )
+
+        try:
+            provider, api_key = get_active_embedding_params()
+        except RuntimeError as exc:
+            return f"❌ {exc}"
+
+        texts = [f"{r.get('title') or ''} {r.get('description') or ''}".strip() for r in rows]
+        try:
+            vectors = embed_batch(texts, api_key, provider)
+        except Exception as exc:
+            return f"❌ Erro ao gerar embeddings: {exc}"
+
+        threshold = max(0.5, min(float(threshold or 0.85), 0.99))
+        clusters: list[dict] = []
+        for row, vec in zip(rows, vectors):
+            best_idx, best_sim = None, -1.0
+            for i, c in enumerate(clusters):
+                sim = _cosine_similarity(vec, c["centroid"])
+                if sim > best_sim:
+                    best_sim, best_idx = sim, i
+            if best_idx is not None and best_sim >= threshold:
+                clusters[best_idx]["members"].append(row)
+            else:
+                clusters.append({"centroid": vec, "members": [row]})
+
+        clusters.sort(key=lambda c: len(c["members"]), reverse=True)
+        multi = [c for c in clusters if len(c["members"]) > 1]
+
+        lines = [
+            f"# Clusterização de Requisitos — Reunião {meeting_number}",
+            f"{len(rows)} requisito(s) → {len(clusters)} cluster(s) (threshold={threshold:.2f}).",
+            f"{len(multi)} cluster(s) com mais de 1 requisito (possíveis duplicatas/redundâncias).",
+            "",
+        ]
+        shown = 0
+        for c in clusters:
+            if len(c["members"]) <= 1 or shown >= 15:
+                continue
+            members = c["members"]
+            titles = "; ".join(f"REQ-{m['req_number']:03d} {m['title']}" for m in members[:5])
+            extra = f" (+{len(members) - 5})" if len(members) > 5 else ""
+            lines.append(f"🧬 Cluster de {len(members)}: {titles}{extra}")
+            shown += 1
         return "\n".join(lines)
 
     def _count_artifacts(
