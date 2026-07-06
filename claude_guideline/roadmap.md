@@ -4,6 +4,15 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC139 — Concluído (v5.15 / 2026-07-06) — contagens de KPI truncadas em 1000 (limite padrão do PostgREST)
+
+**Achado:** logo após o PC138, usuário reportou que o Projeto AURORA mostrava exatamente 1000 requisitos. Consulta direta ao banco revelou: AURORA tem **2466** requisitos reais (não é bug de filtro — o escopo por `project_id` do PC138 estava correto). Causa: `get_domain_stats()`/`get_context_stats()` (e `get_global_stats()`) contavam via `len(_ok(query.execute()))` — isso só conta as linhas efetivamente **transferidas** na resposta, e o PostgREST/Supabase limita respostas a 1000 linhas por padrão quando não há paginação explícita. Qualquer tabela com mais de 1000 linhas correspondentes ao filtro sempre reportaria exatamente 1000, mascarado como se fosse a contagem real.
+
+- [x] `core/project_store.py` — nova função auxiliar `_exact_count(db, table, filters)`: usa `count="exact"` + `.limit(1)` (padrão já usado em outro lugar do módulo, ex. contagem de `transcript_chunks`) — pede ao PostgREST para computar o agregado real no servidor, transferindo apenas 1 linha de dado. `get_domain_stats()`, `get_context_stats()` e `get_global_stats()` migradas para usar esse helper em vez de `len(_ok(...))`.
+- [x] `tests/test_project_store_scoped_stats.py` — fake client do Supabase atualizado para simular fielmente o comportamento real: `.data` sempre limitado a 1000 linhas (ou ao `.limit()` explícito), mas `.count` (quando `count="exact"` é pedido) sempre reflete o total verdadeiro. Nova classe `TestExactCountBeyondPostgrestDefaultCap` (4 testes) reproduz o cenário exato do bug (2466 requisitos) e confirma que `get_context_stats()`/`get_domain_stats()` reportam o número real, não 1000.
+- [x] 481/481 testes automatizados passando (477 + 4 novos).
+- **Observação para o usuário (não corrigida, fora de escopo):** 2466 requisitos a partir de apenas 4 reuniões é um número atipicamente alto — pode ser um dataset de teste/carga deliberado, ou sintoma de um problema de duplicação na reconciliação de requisitos (`AgentReqReconciler`). Não investigado nesta correção — sinalizado para decisão do usuário se vale a pena auditar.
+
 ### PC138 — Concluído (v5.15 / 2026-07-06) — KPIs da Central de Operações misturavam dados de outros domínios
 
 **Achado:** usuário reportou que, com o Projeto AURORA (domínio p2d) ativo, a Central de Operações mostrava 8 contextos, 32 reuniões, 51 processos e 2 documentos — mas o domínio p2d só tem 4 contextos reais. Causa: `pages/Home.py::_load_stats()` chamava `get_global_stats()`, que conta linhas em `contexts`/`meetings`/`requirements`/`bpmn_processes`/`meeting_documents` **sem nenhum filtro** (todos os tenants do banco inteiro) — e exibia esse total como se fosse o número do domínio ativo. Único chamador da função no código todo; o bug estava 100% no uso, não na função em si (que faz exatamente o que o nome diz).

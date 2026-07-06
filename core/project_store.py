@@ -2512,6 +2512,30 @@ def retrieve_data_summary(project_id: str) -> dict:
     return summary
 
 
+def _exact_count(db, table: str, filters: dict | None = None) -> int:
+    """Returns the TRUE row count matching filters, immune to Supabase/
+    PostgREST's default 1000-row response cap.
+
+    PC139: len(_ok(query.execute())) only counts the rows actually
+    TRANSFERRED in the response — capped at 1000 by default — so any table
+    with more matching rows than that silently under-reports (a domain
+    with 2466 real requirements displayed exactly "1000"). count="exact"
+    combined with .limit(1) asks PostgREST to compute the real aggregate
+    count server-side while fetching only 1 row of data — same pattern
+    already used elsewhere in this module (see get_transcript_chunk_stats
+    and similar). Values in `filters` that are list/tuple/set use .in_();
+    everything else uses .eq().
+    """
+    q = db.table(table).select("id", count="exact")
+    for col, val in (filters or {}).items():
+        if isinstance(val, (list, tuple, set)):
+            q = q.in_(col, list(val))
+        else:
+            q = q.eq(col, val)
+    resp = q.limit(1).execute()
+    return resp.count or 0
+
+
 def get_domain_stats(tenant_id: str | None) -> dict:
     """Retorna contagens agregadas de todos os contextos (projetos) de UM
     domínio/tenant — nunca mistura dados de outros tenants.
@@ -2548,19 +2572,19 @@ def get_domain_stats(tenant_id: str | None) -> dict:
     if not project_ids:
         return base
     try:
-        base["n_meetings"] = len(_ok(db.table("meetings").select("id").in_("project_id", project_ids).execute()))
+        base["n_meetings"] = _exact_count(db, "meetings", {"project_id": project_ids})
     except Exception:
         pass
     try:
-        base["n_reqs"] = len(_ok(db.table("requirements").select("id").in_("project_id", project_ids).execute()))
+        base["n_reqs"] = _exact_count(db, "requirements", {"project_id": project_ids})
     except Exception:
         pass
     try:
-        base["n_bpmn_procs"] = len(_ok(db.table("bpmn_processes").select("id").in_("project_id", project_ids).execute()))
+        base["n_bpmn_procs"] = _exact_count(db, "bpmn_processes", {"project_id": project_ids})
     except Exception:
         pass
     try:
-        base["n_documents"] = len(_ok(db.table("meeting_documents").select("id").in_("project_id", project_ids).execute()))
+        base["n_documents"] = _exact_count(db, "meeting_documents", {"project_id": project_ids})
     except Exception:
         pass
     return base
@@ -2586,20 +2610,20 @@ def get_context_stats(project_id: str | None) -> dict:
     if not db:
         return base
     try:
-        base["n_meetings"] = len(_ok(db.table("meetings").select("id").eq("project_id", project_id).execute()))
+        base["n_meetings"] = _exact_count(db, "meetings", {"project_id": project_id})
         base["available"]  = True
     except Exception:
         return base
     try:
-        base["n_reqs"] = len(_ok(db.table("requirements").select("id").eq("project_id", project_id).execute()))
+        base["n_reqs"] = _exact_count(db, "requirements", {"project_id": project_id})
     except Exception:
         pass
     try:
-        base["n_bpmn_procs"] = len(_ok(db.table("bpmn_processes").select("id").eq("project_id", project_id).execute()))
+        base["n_bpmn_procs"] = _exact_count(db, "bpmn_processes", {"project_id": project_id})
     except Exception:
         pass
     try:
-        base["n_documents"] = len(_ok(db.table("meeting_documents").select("id").eq("project_id", project_id).execute()))
+        base["n_documents"] = _exact_count(db, "meeting_documents", {"project_id": project_id})
     except Exception:
         pass
     return base
@@ -2625,21 +2649,21 @@ def get_global_stats() -> dict:
     if not db:
         return base
     try:
-        base["n_projects"] = len(_ok(db.table("contexts").select("id").execute()))
-        base["n_meetings"] = len(_ok(db.table("meetings").select("id").execute()))
+        base["n_projects"] = _exact_count(db, "contexts")
+        base["n_meetings"] = _exact_count(db, "meetings")
         base["available"]  = True
     except Exception:
         return base
     try:
-        base["n_reqs"] = len(_ok(db.table("requirements").select("id").execute()))
+        base["n_reqs"] = _exact_count(db, "requirements")
     except Exception:
         pass
     try:
-        base["n_bpmn_procs"] = len(_ok(db.table("bpmn_processes").select("id").execute()))
+        base["n_bpmn_procs"] = _exact_count(db, "bpmn_processes")
     except Exception:
         pass
     try:
-        base["n_documents"] = len(_ok(db.table("meeting_documents").select("id").execute()))
+        base["n_documents"] = _exact_count(db, "meeting_documents")
     except Exception:
         pass
     return base

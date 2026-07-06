@@ -1,24 +1,35 @@
 # tests/test_project_store_scoped_stats.py
 """
-Tests for core/project_store.py::get_domain_stats() / get_context_stats()
-(PC138).
+Tests for core/project_store.py::get_domain_stats() / get_context_stats() /
+_exact_count() (PC138 + PC139).
 
-Regression guard for a real bug found 2026-07-06: pages/Home.py showed
-get_global_stats() (every tenant, every project, no filter at all) as if it
-were the active domain's numbers. A domain with 4 real contexts displayed
-"8 contexts" because the count silently included another tenant's contexts
-too. get_domain_stats()/get_context_stats() must never leak rows belonging
-to a different tenant/project.
+Regression guard for two real bugs found 2026-07-06:
+  1. (PC138) pages/Home.py showed get_global_stats() (every tenant, every
+     project, no filter at all) as if it were the active domain's numbers.
+     A domain with 4 real contexts displayed "8 contexts" because the count
+     silently included another tenant's contexts too.
+  2. (PC139) even after scoping the query correctly, a project with 2466
+     real requirements displayed exactly "1000" — len(_ok(query.execute()))
+     only counts rows actually TRANSFERRED, capped at Supabase/PostgREST's
+     default 1000-row response limit. Fixed with count="exact" + .limit(1),
+     which asks PostgREST to compute the real aggregate server-side.
+
+The fake Supabase client below mimics this exact behavior: .data is capped
+at 1000 rows (like the real API), but .count (when count="exact" is
+requested) always reflects the TRUE filtered total.
 """
 
 from unittest.mock import patch
 
-from core.project_store import get_domain_stats, get_context_stats
+from core.project_store import get_domain_stats, get_context_stats, _exact_count
+
+_POSTGREST_DEFAULT_ROW_CAP = 1000
 
 
 class _FakeResponse:
-    def __init__(self, data):
+    def __init__(self, data, count=None):
         self.data = data
+        self.count = count
 
 
 class _FakeQuery:
@@ -27,8 +38,12 @@ class _FakeQuery:
         self._data_by_table = data_by_table
         self._calls = calls
         self._filters: list[tuple] = []
+        self._count_exact = False
+        self._limit: int | None = None
 
-    def select(self, *args, **kwargs):
+    def select(self, *args, count=None, **kwargs):
+        if count == "exact":
+            self._count_exact = True
         return self
 
     def eq(self, col, val):
@@ -39,6 +54,10 @@ class _FakeQuery:
         self._filters.append(("in", col, list(vals)))
         return self
 
+    def limit(self, n):
+        self._limit = n
+        return self
+
     def execute(self):
         self._calls.append((self._table_name, list(self._filters)))
         rows = self._data_by_table.get(self._table_name, [])
@@ -47,7 +66,13 @@ class _FakeQuery:
                 rows = [r for r in rows if r.get(col) == val]
             elif ftype == "in":
                 rows = [r for r in rows if r.get(col) in val]
-        return _FakeResponse(rows)
+        true_count = len(rows)
+        # Mirrors the real PostgREST default: data payload capped at 1000
+        # rows regardless of the true match count; an explicit .limit()
+        # caps it further still.
+        data_cap = self._limit if self._limit is not None else _POSTGREST_DEFAULT_ROW_CAP
+        capped_rows = rows[:data_cap]
+        return _FakeResponse(capped_rows, count=true_count if self._count_exact else None)
 
 
 class _FakeDB:
@@ -175,3 +200,39 @@ class TestGetContextStats:
         with patch("core.project_store._db", return_value=None):
             stats = get_context_stats("p2d-ctx-0")
         assert stats["available"] is False
+
+
+class TestExactCountBeyondPostgrestDefaultCap:
+    """PC139: a project with more matching rows than PostgREST's default
+    1000-row response limit must still report the TRUE count, not 1000."""
+
+    def _db_with_many_requirements(self, n_requirements: int):
+        data = {
+            "contexts": [{"id": "aurora", "tenant_id": "tenant-p2d"}],
+            "meetings": [{"id": f"m{i}", "project_id": "aurora"} for i in range(4)],
+            "requirements": [{"id": f"r{i}", "project_id": "aurora"} for i in range(n_requirements)],
+            "bpmn_processes": [],
+            "meeting_documents": [],
+        }
+        return _FakeDB(data)
+
+    def test_exact_count_exceeds_1000_row_cap(self):
+        db = self._db_with_many_requirements(2466)
+        assert _exact_count(db, "requirements", {"project_id": "aurora"}) == 2466
+
+    def test_get_context_stats_reports_true_count_above_cap(self):
+        with patch("core.project_store._db", side_effect=lambda: self._db_with_many_requirements(2466)):
+            stats = get_context_stats("aurora")
+        assert stats["n_reqs"] == 2466, "must report the real total, not the 1000-row PostgREST default cap"
+
+    def test_get_domain_stats_reports_true_count_above_cap(self):
+        with patch("core.project_store._db", side_effect=lambda: self._db_with_many_requirements(2466)):
+            stats = get_domain_stats("tenant-p2d")
+        assert stats["n_reqs"] == 2466
+
+    def test_old_len_of_data_pattern_would_have_undercounted(self):
+        """Sanity check that the fake DB genuinely reproduces the bug shape
+        (data capped at 1000) so the regression above is meaningful."""
+        db = self._db_with_many_requirements(2466)
+        resp = db.table("requirements").select("id").eq("project_id", "aurora").execute()
+        assert len(resp.data) == 1000
