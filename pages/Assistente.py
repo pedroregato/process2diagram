@@ -548,7 +548,11 @@ def _render_analyst_report(report, project_id: str) -> None:
             try:
                 import plotly.graph_objects as go
                 fig = go.Figure(chart_dict)
-                st.plotly_chart(fig, use_container_width=True)
+                # theme=None: keep our explicit dark-navy styling from _dark_layout()
+                # (incl. legend font color) — Streamlit's default "streamlit" theme
+                # otherwise overrides text colors, which is what made legend labels
+                # low-contrast even though the figure itself already set them.
+                st.plotly_chart(fig, use_container_width=True, theme=None)
             except Exception:
                 pass
 
@@ -1571,7 +1575,10 @@ for i, msg in enumerate(history):
                 try:
                     import plotly.graph_objects as go
                     fig = go.Figure(fig_dict)
-                    st.plotly_chart(fig, use_container_width=True, key=f"chart_{i}_{ci}")
+                    # theme=None: see comment at the other st.plotly_chart call site
+                    # above — Streamlit's default theme overrides our explicit dark
+                    # styling (legend font color included) otherwise.
+                    st.plotly_chart(fig, use_container_width=True, theme=None, key=f"chart_{i}_{ci}")
                 except Exception as _chart_err:
                     st.caption(f"⚠️ Não foi possível renderizar o gráfico: {_chart_err}")
             # Render tables attached to this assistant message

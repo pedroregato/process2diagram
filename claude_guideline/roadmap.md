@@ -4,6 +4,16 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC147 — Concluído (v5.15 / 2026-07-06) — legendas dos gráficos ainda ilegíveis após PC145: `st.plotly_chart` sobrescrevia o tema
+
+**Contexto:** usuário confirmou (novo print) que a legenda continuava de baixo contraste mesmo após PC145 ter definido `legend.font.color` explicitamente no figure dict.
+
+- **Causa:** `st.plotly_chart(figure_or_data, use_container_width, *, theme='streamlit', ...)` — o parâmetro `theme` do Streamlit é **`'streamlit'` por padrão**, e nesse modo o componente sobrescreve a formatação visual do figure (incl. cor de fonte) com o tema do próprio app Streamlit, ignorando a estilização explícita que já estava correta no dict (confirmada em PC145 via testes que inspecionavam o dict cru — que nunca passa pelo componente de renderização real, por isso o bug não aparecia nos testes). As duas chamadas `st.plotly_chart(...)` em `pages/Assistente.py` (linha ~551, relatório de análise autônoma; linha ~1578, histórico do chat) nunca passavam `theme=`, então caíam no default.
+- **Correção:** `theme=None` adicionado às duas chamadas — instrui o Streamlit a respeitar integralmente o layout do figure (incluindo a correção de PC145), sem overlay do tema padrão.
+- **Verificação:** suíte completa (562/562) sem regressão + boot sanity check do app (`streamlit run` respondendo HTTP 200). Não foi possível confirmar visualmente em navegador neste ambiente (sem Playwright/driver de browser instalado) — a correção se apoia no comportamento documentado do parâmetro `theme` do Streamlit, não em captura de tela.
+
+---
+
 ### PC146 — Concluído (v5.15 / 2026-07-06) — export de HTML do Assistente derrubava a página inteira com gráfico de Gantt
 
 **Contexto:** produção reportou `TypeError: Object of type datetime is not JSON serializable` derrubando a página inteira do Assistente (crash não capturado no nível do módulo, não apenas do gráfico), em `pages/Assistente.py:1287` dentro de `_export_chat_to_html()`.
