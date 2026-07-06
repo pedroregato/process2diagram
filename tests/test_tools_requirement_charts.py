@@ -136,6 +136,49 @@ class TestGenerateRequirementsChartBugfix:
         assert "Gráfico gerado" in result
 
 
+class TestGenerateRequirementsChartPriorityColors:
+    """PC150: the priority->color dict was keyed by capitalized Portuguese
+    ("Alta"/"Média"/"Baixa") while requirements.priority stores lowercase
+    English ("low"/"medium"/"high") — every lookup missed and fell back to
+    the same gray for every bar, regardless of actual priority."""
+
+    def test_english_priorities_get_distinct_colors(self):
+        ex = _executor()
+        english_reqs = [
+            {"req_type": "functional", "priority": "medium", "first_meeting_id": "m1", "project_id": "proj-1"},
+            {"req_type": "functional", "priority": "high", "first_meeting_id": "m1", "project_id": "proj-1"},
+            {"req_type": "non_functional", "priority": "high", "first_meeting_id": "m1", "project_id": "proj-1"},
+        ]
+        with patch("modules.supabase_client.get_supabase_client",
+                   return_value=_patched_db(reqs=english_reqs)):
+            ex.generate_requirements_chart(group_by="both")
+        colors = {t["name"]: t["marker"]["color"] for t in ex._pending_charts[0]["data"]}
+        assert colors["high"] == "#ef4444"
+        assert colors["medium"] == "#C97B1A"
+        assert colors["high"] != colors["medium"]
+        assert "#64748b" not in colors.values()
+
+    def test_portuguese_lowercase_priorities_also_get_distinct_colors(self):
+        # _REQS fixture uses lowercase Portuguese ("alta"/"média"/"baixa")
+        ex = _executor()
+        with patch("modules.supabase_client.get_supabase_client", return_value=_patched_db()):
+            ex.generate_requirements_chart(group_by="priority")
+        colors = dict(zip(
+            [t for t in ex._pending_charts[0]["data"][0]["x"]],
+            ex._pending_charts[0]["data"][0]["marker"]["color"],
+        ))
+        assert colors["alta"] == "#ef4444"
+        assert colors["média"] == "#C97B1A"
+        assert colors["baixa"] == "#10b981"
+
+    def test_unknown_priority_falls_back_to_gray(self):
+        ex = _executor()
+        reqs = [{"req_type": "functional", "priority": "urgentíssimo", "first_meeting_id": "m1", "project_id": "proj-1"}]
+        with patch("modules.supabase_client.get_supabase_client", return_value=_patched_db(reqs=reqs)):
+            ex.generate_requirements_chart(group_by="priority")
+        assert ex._pending_charts[0]["data"][0]["marker"]["color"][0] == "#64748b"
+
+
 class TestGenerateMeetingsTimelineBugfix:
     """PC142: requirements-per-meeting bars were always zero because the
     query filtered on the nonexistent meeting_number column."""

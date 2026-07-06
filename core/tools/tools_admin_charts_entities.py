@@ -1419,7 +1419,17 @@ class _AdminChartsEntitiesToolsMixin:
 
         _req_types = ["Funcional", "Não-Funcional", "Regra de Negócio", "Restrição", "Interface", "Desempenho"]
         _TYPE_COLORS = {t: self._palette[i % len(self._palette)] for i, t in enumerate(_req_types)}
-        _PRIO_COLORS = {"Alta": "#ef4444", "Média": "#C97B1A", "Baixa": "#10b981"}  # semantic, kept fixed
+        # PC150: keyed by normalized (lowercased) priority — the requirements table
+        # stores English values ("low"/"medium"/"high"), but this dict only had
+        # capitalized Portuguese keys ("Alta"/"Média"/"Baixa"), so every lookup
+        # missed and fell back to the same gray default for every bar.
+        _PRIO_COLORS = {
+            "alta": "#ef4444", "high": "#ef4444",
+            "média": "#C97B1A", "media": "#C97B1A", "medium": "#C97B1A",
+            "baixa": "#10b981", "low": "#10b981",
+        }
+        def _prio_color(label: str) -> str:
+            return _PRIO_COLORS.get((label or "").strip().lower(), "#64748b")
 
         suffix = f" — Reunião {meeting_number}" if meeting_number else ""
         n_total = len(rows)
@@ -1428,7 +1438,7 @@ class _AdminChartsEntitiesToolsMixin:
             counts = Counter(r.get("priority") or "Não definida" for r in rows)
             labels = list(counts.keys())
             values = list(counts.values())
-            colors = [_PRIO_COLORS.get(lb, "#64748b") for lb in labels]
+            colors = [_prio_color(lb) for lb in labels]
             fig = go.Figure(go.Bar(
                 x=labels, y=values, marker_color=colors,
                 text=values, textposition="outside",
@@ -1450,7 +1460,7 @@ class _AdminChartsEntitiesToolsMixin:
                     name=prio,
                     x=all_types,
                     y=[type_prio.get(t, Counter()).get(prio, 0) for t in all_types],
-                    marker_color=_PRIO_COLORS.get(prio, "#64748b"),
+                    marker_color=_prio_color(prio),
                 ))
             fig = go.Figure(data=traces)
             fig.update_layout(barmode="stack")

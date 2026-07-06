@@ -4,6 +4,17 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC150 — Concluído (v5.15 / 2026-07-06) — barras de prioridade sempre cinza no gráfico "Requisitos por Tipo e Prioridade"
+
+**Contexto:** usuário reportou (print) que as barras empilhadas de "medium" e "high" apareciam ambas na mesma cor cinza, apesar da legenda distinguir as duas categorias corretamente.
+
+- **Causa:** `_PRIO_COLORS` em `generate_requirements_chart()` (`core/tools/tools_admin_charts_entities.py`) era um dict fixo com chaves capitalizadas em português (`"Alta"`, `"Média"`, `"Baixa"`), mas a coluna `requirements.priority` no banco guarda valores em inglês minúsculo (`"low"`/`"medium"`/`"high"` — confirmado pelo texto exato da legenda no print). Toda chamada `_PRIO_COLORS.get(prio, "#64748b")` não encontrava a chave e caía no cinza padrão, para QUALQUER prioridade — por isso "medium" e "high" (e "low", se presente) sempre ficavam idênticas.
+- **Correção:** novo helper `_prio_color(label)` normaliza o rótulo (`.strip().lower()`) antes de consultar um dict expandido com chaves em português E inglês (`"alta"/"high"` → vermelho, `"média"/"media"/"medium"` → âmbar, `"baixa"/"low"` → verde), reutilizado nos dois pontos que antes acessavam `_PRIO_COLORS` diretamente (`group_by="priority"` e `group_by="both"`).
+- [x] 3 testes novos (`TestGenerateRequirementsChartPriorityColors`): prioridades em inglês (o cenário exato do bug) recebendo cores distintas e nenhuma caindo no cinza, prioridades em português minúsculo (fixture já existente no arquivo, nunca antes verificada quanto à cor) também corretas, e prioridade desconhecida ainda caindo no cinza de fallback como esperado.
+- [x] 572/572 testes automatizados passando (569 + 3 novos).
+
+---
+
 ### PC149 — Concluído (v5.15 / 2026-07-06) — barras do Gantt invisíveis (título/eixos/legendas corretos, mas sem barras)
 
 **Contexto:** usuário reportou (print) o gráfico de Gantt renderizando título, eixo Y (nomes das fases) e eixo X (datas) corretamente, mas **sem nenhuma barra visível** na área do gráfico.
