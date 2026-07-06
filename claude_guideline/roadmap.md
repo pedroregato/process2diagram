@@ -4,6 +4,23 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC140 — Concluído (v5.15 / 2026-07-06) — reconciliador de requisitos duplicava reunião inteira a cada reprocessamento
+
+**Achado:** após o PC139 revelar que AURORA tinha 2466 requisitos reais (não 1000 truncados), o usuário pediu para investigar se o número fazia sentido. Um segundo assistente (mesma sessão de chat) ofereceu uma hipótese alternativa — "super-granularidade": o pipeline teria fragmentado cada requisito em dezenas de micro-requisitos (ex: "validar CPF" virando 5 REQs separados), não duplicação literal. **Essa hipótese foi checada e refutada com evidência direta:** consulta ao banco mostrou apenas **47 títulos distintos** em 2466 linhas — e para o título mais repetido (123 ocorrências), a `description` era **100% idêntica** em todas as 123 linhas, criadas em rajadas ao longo de 8 dias diferentes (18/06 a 30/06), com um único dia (30/06) gerando 1000 linhas em ~8 minutos. Fragmentação geraria títulos/descrições DIFERENTES por micro-requisito — o padrão observado só é possível com duplicação literal via reprocessamento repetido.
+
+**Causa raiz confirmada em `agents/agent_req_reconciler.py::run()`:**
+```python
+existing = [r for r in list_requirements(project_id)
+            if r.get("last_meeting_id") != meeting_id]
+```
+`existing` é buscado UMA vez, ANTES do laço salvar qualquer requisito da rodada atual — portanto jamais poderia conter um "auto-match" da rodada em curso. A única coisa que esse filtro podia excluir eram requisitos criados por uma execução ANTERIOR da MESMA reunião. Resultado: toda vez que uma reunião era reprocessada, os requisitos que ELA MESMA criou da primeira vez ficavam fora do pool de candidatos — garantindo que 100% dos itens fossem classificados "novo" e duplicados integralmente, reunião após reunião, reprocessamento após reprocessamento.
+
+- [x] `agents/agent_req_reconciler.py` — filtro removido; `existing = list_requirements(project_id)` considera TODOS os requisitos do projeto como candidatos, sempre.
+- [x] `tests/test_agent_req_reconciler.py` (novo, 5 testes) — regressão direta: requisito com `last_meeting_id` igual à reunião sendo reprocessada agora é corretamente reconhecido como candidato (gera `add_requirement_version`, não `save_new_requirement`); requisitos de outras reuniões continuam funcionando; requisito genuinamente novo ainda cria linha nova; projeto sem histórico ainda cria linha nova.
+- [x] **Limpeza de dados do Projeto AURORA (autorizada explicitamente pelo usuário):** dry-run confirmou 47 linhas canônicas (menor `req_number` por título) + 2419 duplicatas exatas (soma bate 100% com os 2466 originais). Antes de remover, o `status` da linha canônica foi promovido para o mais avançado visto entre as duplicatas do mesmo título (contradicted > revised > active, em 10 títulos onde reconciliações corretas entre reuniões diferentes já haviam gerado sinais reais de revisão/contradição) — nenhum sinal genuíno foi perdido. Executado dentro de uma transação com rollback automático em caso de discrepância na contagem esperada. Resultado: **47 requisitos** (24/12/6/5 por R1-R4), `requirement_versions` caiu de 2478 para **59** (histórico real preservado), nenhum outro projeto do banco foi tocado (total geral: 3854 → 1435, exatamente os 2419 removidos).
+- [x] 486/486 testes automatizados passando (481 + 5 novos).
+- **REGRA DERIVADA:** ao buscar candidatos para reconciliação/deduplicação, nunca filtrar a lista de "já existentes" por um campo que a PRÓPRIA operação em curso vai atualizar (aqui, `last_meeting_id`) — se o filtro só pode excluir itens gravados por uma execução ANTERIOR da mesma operação, ele nunca protege contra nada no caminho feliz e SEMPRE quebra o caminho de reprocessamento.
+
 ### PC139 — Concluído (v5.15 / 2026-07-06) — contagens de KPI truncadas em 1000 (limite padrão do PostgREST)
 
 **Achado:** logo após o PC138, usuário reportou que o Projeto AURORA mostrava exatamente 1000 requisitos. Consulta direta ao banco revelou: AURORA tem **2466** requisitos reais (não é bug de filtro — o escopo por `project_id` do PC138 estava correto). Causa: `get_domain_stats()`/`get_context_stats()` (e `get_global_stats()`) contavam via `len(_ok(query.execute()))` — isso só conta as linhas efetivamente **transferidas** na resposta, e o PostgREST/Supabase limita respostas a 1000 linhas por padrão quando não há paginação explícita. Qualquer tabela com mais de 1000 linhas correspondentes ao filtro sempre reportaria exatamente 1000, mascarado como se fosse a contagem real.

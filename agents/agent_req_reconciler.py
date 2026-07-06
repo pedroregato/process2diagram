@@ -111,11 +111,18 @@ class AgentReqReconciler(BaseAgent):
         if not new_reqs:
             return {}
 
-        # Requisitos já existentes no projeto (excluindo a reunião atual)
-        existing = [
-            r for r in list_requirements(project_id)
-            if r.get("last_meeting_id") != meeting_id
-        ]
+        # PC140: TODOS os requisitos já persistidos no projeto são candidatos —
+        # nunca excluir por last_meeting_id. `existing` é buscado UMA vez, ANTES
+        # deste laço salvar qualquer item da rodada atual, então jamais conteria
+        # um "auto-match" da própria rodada em curso; a exclusão anterior
+        # (`last_meeting_id != meeting_id`) só podia excluir requisitos criados
+        # por uma execução ANTERIOR desta mesma reunião — ou seja, toda vez que
+        # uma reunião era reprocessada, os requisitos que ELA MESMA criou da
+        # primeira vez ficavam de fora do pool de candidatos, garantindo que
+        # 100% dos itens fossem classificados como "novo" e duplicados
+        # integralmente a cada reprocessamento (achado real: 2466 linhas para
+        # apenas 47 requisitos distintos, reprocessados repetidas vezes).
+        existing = list_requirements(project_id)
 
         counts: dict[str, int] = {
             "new": 0, "confirmed": 0, "revised": 0, "contradicted": 0
