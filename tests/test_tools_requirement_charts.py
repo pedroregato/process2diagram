@@ -150,6 +150,29 @@ class TestGenerateMeetingsTimelineBugfix:
         assert list(req_trace["y"]) == [2, 2]
 
 
+class TestDarkLayoutLegendContrast:
+    """PC145: legend text had no explicit font color set, only the top-level
+    layout font — reported by the user as low-contrast/unreadable legend
+    labels against the dark background. _dark_layout() must set an explicit
+    legend.font.color so it can never fail to inherit."""
+
+    def test_legend_font_color_is_explicit(self):
+        ex = _executor()
+        ex.generate_custom_chart(chart_type="bar", title="T", labels=["a"], values=[1], series_name="S")
+        legend = ex._pending_charts[0]["layout"]["legend"]
+        assert legend["font"]["color"] == "#FAFAF8"
+
+    def test_legend_font_color_survives_downstream_legend_overrides(self):
+        """generate_requirements_heatmap etc. call _dark_layout() then set
+        additional legend keys — those must merge, not wipe out font."""
+        ex = _executor()
+        with patch("modules.supabase_client.get_supabase_client", return_value=_patched_db()):
+            ex.generate_requirements_flow_chart()
+        legend = ex._pending_charts[0]["layout"].get("legend", {})
+        if legend:
+            assert legend.get("font", {}).get("color") == "#FAFAF8"
+
+
 class TestGenerateCustomChartHeatmap:
     def test_heatmap_without_z_matrix_errors(self):
         ex = _executor()

@@ -4,6 +4,17 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC145 — Concluído (v5.15 / 2026-07-06) — baixo contraste no texto das legendas dos gráficos do Assistente
+
+**Contexto:** usuário reportou (com print) legendas praticamente ilegíveis nos gráficos gerados pelo Assistente — texto escuro/de baixo contraste sobre o fundo azul-marinho escuro do tema.
+
+- **Causa:** `_dark_layout()` (`core/tools/tools_admin_charts_entities.py:1385`, único método compartilhado por todas as ferramentas de gráfico via composição de mixins — inclusive as de IBIS em `tools_documents_ibis_diagrams.py`) definia `font=dict(color="#FAFAF8", ...)` apenas no nível raiz do layout, e `legend=dict(bgcolor=..., bordercolor=..., borderwidth=1)` sem um `font` próprio — a cor do texto da legenda dependia de herança implícita do template Plotly, que nem sempre se propaga de forma confiável para `legend.font` em todos os contextos de renderização.
+- **Correção:** `font=dict(color="#FAFAF8", size=12)` adicionado explicitamente dentro de `legend=dict(...)`. Como `fig.update_layout()` faz merge recursivo (não substitui o dict inteiro), ferramentas que depois sobrescrevem só `orientation`/`yanchor`/`y`/`xanchor`/`x` da legenda (ex: `get_ibis_timeline`) preservam o `font` já definido — correção única no helper compartilhado corrige todas as ~13 ferramentas de gráfico de uma vez.
+- [x] 2 testes novos (`TestDarkLayoutLegendContrast` em `test_tools_requirement_charts.py`): cor explícita da fonte da legenda, e sobrevivência do `font` após um override parcial de legenda downstream (Sankey).
+- [x] 558/558 testes automatizados passando (556 + 2 novos).
+
+---
+
 ### PC144 — Concluído (v5.15 / 2026-07-06) — vazamento de tags DSML no chat + roteamento errado "encaminhamentos" → decisões
 
 **Contexto:** usuário relatou que o prompt *"Mostre os encaminhamentos por responsável em gráfico"* — o exemplo canônico documentado para `generate_action_items_chart` (inclusive na página PC143 recém-criada) — resultou em texto bruto de tool-call vazando no chat (`<｜｜DSML｜｜invoke name="get_meeting_decisions">...`) em vez de um gráfico. Dois bugs distintos, ambos corrigidos:

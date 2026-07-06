@@ -1391,7 +1391,10 @@ class _AdminChartsEntitiesToolsMixin:
             font=dict(color="#FAFAF8", size=12),
             xaxis=dict(gridcolor="#1A3050", zerolinecolor="#1A3050"),
             yaxis=dict(gridcolor="#1A3050", zerolinecolor="#1A3050"),
-            legend=dict(bgcolor="#0F2040", bordercolor="#1A3050", borderwidth=1),
+            legend=dict(
+                bgcolor="#0F2040", bordercolor="#1A3050", borderwidth=1,
+                font=dict(color="#FAFAF8", size=12),
+            ),
             margin=dict(t=60, b=50, l=50, r=20),
         )
 
