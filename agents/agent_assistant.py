@@ -135,7 +135,8 @@ def _trim_msgs_if_needed(msgs: list[dict]) -> list[dict]:
 #
 # We match both ASCII pipe | (U+007C) and fullwidth ｜ (U+FF5C) to be safe.
 
-_P = r'[|\uff5c]'   # matches both pipe variants in a character class
+_P = r'[|\uff5c]+'   # matches a run of one-or-more pipe-variant chars (some
+                      # responses double the delimiter: "<\uff5c\uff5cDSML\uff5c\uff5cinvoke...>")
 
 _DSML_DETECT_RE = re.compile(_P + r'DSML' + _P)   # quick presence check
 _DSML_INVOKE_RE = re.compile(
@@ -180,7 +181,7 @@ def _strip_dsml(content: str) -> str:
     at the first DSML tag position reliably isolates the human-readable part.
     Any residual stray tags are removed in a second pass.
     """
-    m = re.search(r'<[|\uff5c]DSML[|\uff5c]', content)
+    m = re.search(r'<[|\uff5c]+DSML[|\uff5c]+', content)
     if m:
         content = content[:m.start()].rstrip()
     # Remove any stray DSML tags that may remain
@@ -761,7 +762,9 @@ INSTRUÇÕES DE USO DAS FERRAMENTAS:
 - Use as ferramentas disponíveis para obter dados precisos antes de responder.
 - Estratégia recomendada por tipo de pergunta:
   • Participantes de uma reunião → get_meeting_participants
-  • Decisões ou ações de uma reunião → get_meeting_decisions / get_meeting_action_items
+  • Decisões / deliberações formais de uma reunião (texto) → get_meeting_decisions
+  • Itens de ação / "encaminhamentos" / tarefas de uma reunião (texto) → get_meeting_action_items
+    ATENÇÃO: "encaminhamentos" = itens de ação, NUNCA decisões — não confunda os dois.
   • Visão geral de uma reunião → get_meeting_summary
   • Falas ou discussões específicas → search_transcript
   • CONTAR requisitos/artefatos → count_artifacts  ← OBRIGATÓRIO para "quantos?"
@@ -795,6 +798,22 @@ INSTRUÇÕES DE USO DAS FERRAMENTAS:
   • Horários livres / disponibilidade para reunião → calendar_suggest_time
   • Agendar reunião / follow-up / criar evento → calendar_create_event (admin)
   • Transferir itens de ação de uma reunião para o calendário → calendar_schedule_action_items (admin)
+- SE O PEDIDO MENCIONAR EXPLICITAMENTE "gráfico"/"visualize"/"mostre em barras"/"plote"/
+  "Sankey"/"treemap"/"heatmap"/"radar"/"Gantt"/"cronograma", SEMPRE prefira a ferramenta
+  generate_*_chart / generate_ibis_map / get_ibis_timeline correspondente — NUNCA a
+  ferramenta de dados crus (texto) equivalente:
+  • Requisitos por tipo/prioridade em gráfico → generate_requirements_chart
+  • Reuniões ao longo do tempo em gráfico → generate_meetings_timeline
+  • Ações/encaminhamentos/tarefas por responsável ou status em gráfico → generate_action_items_chart
+  • ROI-TR de reuniões em gráfico → generate_roi_chart
+  • Fluxo/Sankey/Treemap/Sunburst de requisitos (tipo→prioridade→status) → generate_requirements_flow_chart
+  • Mapa de calor / heatmap cruzado reunião × tipo/prioridade/status → generate_requirements_heatmap
+  • Gráfico de bolhas de requisitos por reunião → generate_requirements_bubble_chart
+  • Evolução/saldo/waterfall de requisitos ativos → generate_requirements_waterfall
+  • Radar/teia comparando reuniões → generate_meeting_radar_chart
+  • Cronograma/Gantt do projeto → generate_gantt_chart
+  • Evolução temporal ou mapa visual de debates IBIS → get_ibis_timeline / generate_ibis_map
+  • Qualquer outro gráfico não coberto acima → generate_custom_chart
 - Você pode encadear múltiplas ferramentas quando necessário.
 - Após obter os dados, sintetize uma resposta clara e objetiva.
 

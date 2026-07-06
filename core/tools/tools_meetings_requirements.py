@@ -73,7 +73,11 @@ MEETINGS_REQUIREMENTS_SCHEMAS: list[dict] = [
                 "type": "function",
                 "function": {
                     "name": "get_meeting_decisions",
-                    "description": "Retorna as decisões formais tomadas em uma reunião específica.",
+                    "description": (
+                        "Retorna as decisões formais (deliberações) tomadas em uma reunião "
+                        "específica. NÃO use para 'encaminhamentos', 'itens de ação' ou "
+                        "'tarefas com responsável' — isso é get_meeting_action_items."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -91,8 +95,10 @@ MEETINGS_REQUIREMENTS_SCHEMAS: list[dict] = [
                 "function": {
                     "name": "get_meeting_action_items",
                     "description": (
-                        "Retorna os itens de ação (tarefas) definidos em uma reunião. "
-                        "Pode filtrar por responsável."
+                        "Retorna os itens de ação — também chamados de 'encaminhamentos' ou "
+                        "'tarefas' — definidos em uma reunião. Pode filtrar por responsável. "
+                        "Use para 'encaminhamentos', 'itens de ação', 'tarefas atribuídas' "
+                        "(diferente de get_meeting_decisions, que é para deliberações formais)."
                     ),
                     "parameters": {
                         "type": "object",

@@ -377,9 +377,14 @@ ADMIN_CHARTS_ENTITIES_SCHEMAS: list[dict] = [
                     "name": "generate_action_items_chart",
                     "description": (
                         "Gera um gráfico com o status dos itens de ação (pendentes, em andamento, concluídos) "
-                        "e/ou distribuição por responsável. "
+                        "e/ou distribuição por responsável. Itens de ação também são chamados de "
+                        "'encaminhamentos' ou 'tarefas'. "
+                        "USE para QUALQUER pedido de 'gráfico'/'visualize'/'mostre' sobre ações, "
+                        "encaminhamentos ou tarefas — inclusive 'encaminhamentos por responsável' — "
+                        "em vez de get_meeting_decisions ou get_meeting_action_items (que retornam "
+                        "apenas texto, sem gráfico). "
                         "USE para: 'gráfico de ações', 'status das tarefas', 'quem tem mais ações pendentes', "
-                        "'itens de ação por responsável'."
+                        "'itens de ação por responsável', 'encaminhamentos por responsável em gráfico'."
                     ),
                     "parameters": {
                         "type": "object",

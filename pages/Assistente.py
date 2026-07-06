@@ -991,8 +991,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-_DSML_SAFETY_RE = re.compile(r'<[|\uff5c]DSML[|\uff5c][^>]*>.*?<[|\uff5c]DSML[|\uff5c][^>]*>', re.DOTALL)
-_DSML_CUT_RE    = re.compile(r'<[|\uff5c]DSML[|\uff5c]')
+_DSML_SAFETY_RE = re.compile(r'<[|\uff5c]+DSML[|\uff5c]+[^>]*>.*?<[|\uff5c]+DSML[|\uff5c]+[^>]*>', re.DOTALL)
+_DSML_CUT_RE    = re.compile(r'<[|\uff5c]+DSML[|\uff5c]+')
 
 
 def _clean_response(text: str) -> str:
