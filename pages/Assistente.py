@@ -1248,6 +1248,7 @@ def _export_chat_to_html(
     and A2UI widgets (BPMN diagrams, Mermaid diagrams, metric cards, generated tables)."""
     import json
     from datetime import datetime as _dt
+    from plotly.utils import PlotlyJSONEncoder
 
     ts = _dt.now().strftime("%Y-%m-%d %H:%M")
 
@@ -1284,7 +1285,10 @@ def _export_chat_to_html(
             chart_html = ""
             for ci, chart_dict in enumerate(charts):
                 div_id = f"chart_{turn}_{ci}"
-                chart_json = json.dumps(chart_dict)
+                try:
+                    chart_json = json.dumps(chart_dict, cls=PlotlyJSONEncoder)
+                except (TypeError, ValueError):
+                    continue  # skip a chart that still can't be serialized rather than crash the whole export
                 chart_html += f"""
 <div class="chart-wrap">
   <div id="{div_id}" class="plotly-chart"></div>

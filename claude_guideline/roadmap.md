@@ -4,6 +4,17 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC146 — Concluído (v5.15 / 2026-07-06) — export de HTML do Assistente derrubava a página inteira com gráfico de Gantt
+
+**Contexto:** produção reportou `TypeError: Object of type datetime is not JSON serializable` derrubando a página inteira do Assistente (crash não capturado no nível do módulo, não apenas do gráfico), em `pages/Assistente.py:1287` dentro de `_export_chat_to_html()`.
+
+- **Causa:** `generate_gantt_chart()` (`core/tools/tools_admin_charts_entities.py`, PC142) guarda objetos `datetime.datetime` crus no campo `base` de cada barra (`go.Bar(..., base=[p["start"]], ...)`) — válido para o Plotly, mas `_export_chat_to_html()` serializava cada `chart_dict` com `json.dumps(chart_dict)` puro (stdlib), que não sabe lidar com `datetime`. A renderização inline no chat (`st.plotly_chart(go.Figure(fig_dict), ...)`, duas ocorrências em `pages/Assistente.py`) já era protegida por `try/except` — só o caminho de exportação HTML, sem proteção nenhuma, quebrava a página inteira.
+- **Correção:** `json.dumps(chart_dict, cls=plotly.utils.PlotlyJSONEncoder)` — o encoder nativo do Plotly já sabe serializar `datetime`/`numpy`/`pandas`, tornando a correção genérica para qualquer ferramenta de gráfico atual ou futura, não só o Gantt. Adicionado também `try/except (TypeError, ValueError): continue` ao redor da serialização de cada gráfico — um gráfico que ainda assim falhar é pulado individualmente em vez de derrubar a exportação inteira (e as demais mensagens da conversa).
+- [x] 4 testes novos (`test_assistente_html_export.py`): reprodução exata do crash de produção (Gantt com datetime), validação de que o JSON embutido no HTML é válido, resiliência a um gráfico genuinamente não serializável (pulado, resto da exportação intacto), e um gráfico normal ainda funcionando sem regressão.
+- [x] 562/562 testes automatizados passando (558 + 4 novos).
+
+---
+
 ### PC145 — Concluído (v5.15 / 2026-07-06) — baixo contraste no texto das legendas dos gráficos do Assistente
 
 **Contexto:** usuário reportou (com print) legendas praticamente ilegíveis nos gráficos gerados pelo Assistente — texto escuro/de baixo contraste sobre o fundo azul-marinho escuro do tema.
