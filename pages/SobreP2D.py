@@ -1,6 +1,8 @@
 # pages/SobreP2D.py
 # ─────────────────────────────────────────────────────────────────────────────
-# Sobre o Process2Diagram — design fiel à apresentação executiva
+# Sobre o Process2Diagram — autor, filosofia do produto e aprofundamento técnico
+# (CKF, Multi-LLM). Estatísticas de mercado, ROI e a lista completa de
+# artefatos vivem em pages/ApresentacaoGeral.py — não duplicar aqui (PC136).
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
@@ -232,39 +234,25 @@ st.markdown(f"""
           transforma conversa em governança</em>.
         </p>
       </div>
-      <h3 style="margin-bottom:14px;">Valor concreto para a organização que adotar o P2D</h3>
+      <h3 style="margin-bottom:14px;">O que orienta o desenvolvimento</h3>
+      <p style="margin-bottom:20px;">
+        Rigor metodológico — BPMN 2.0, IEEE 830, SBVR, DMN, BMM, todos padrões formais
+        OMG/IEEE — aplicado com o mesmo cuidado dedicado a cada linha de prompt de IA.
+        Não se trata de gerar diagramas bonitos; trata-se de gerar artefatos que resistem
+        a uma auditoria.
+      </p>
       <div class="cols-2" style="gap:12px;">
-        <div>
-          <div class="roi-row">
-            <div class="roi-label"><span>⏱️ Formalização de processos</span><span style="color:var(--gold2);">−90%</span></div>
-            <div class="roi-bar-bg"><div class="roi-bar" style="width:90%"></div></div>
-          </div>
-          <div class="roi-row">
-            <div class="roi-label"><span>🔁 Retrabalho por falta de documentação</span><span style="color:var(--gold2);">−35%</span></div>
-            <div class="roi-bar-bg"><div class="roi-bar" style="width:35%"></div></div>
-          </div>
-          <div class="roi-row">
-            <div class="roi-label"><span>🚀 Onboarding de novos membros</span><span style="color:var(--gold2);">+80%</span></div>
-            <div class="roi-bar-bg"><div class="roi-bar" style="width:80%"></div></div>
-          </div>
-          <div class="roi-row">
-            <div class="roi-label"><span>📐 Cobertura de artefatos por reunião</span><span style="color:var(--gold2);">+320%</span></div>
-            <div class="roi-bar-bg"><div class="roi-bar" style="width:95%"></div></div>
-          </div>
+        <div class="card" style="padding:14px 16px;">
+          <p style="font-size:14px;">🧠 <strong style="color:var(--white);">Memória corporativa persistente</strong><br>Conhecimento não se perde quando pessoas saem — fica indexado e consultável.</p>
         </div>
-        <div style="display:flex;flex-direction:column;gap:10px;">
-          <div class="card" style="padding:14px 16px;">
-            <p style="font-size:14px;">🧠 <strong style="color:var(--white);">Memória corporativa persistente</strong><br>Conhecimento não se perde quando pessoas saem — fica indexado e consultável.</p>
-          </div>
-          <div class="card" style="padding:14px 16px;">
-            <p style="font-size:14px;">⚖️ <strong style="color:var(--white);">Governança e compliance</strong><br>Trilha de auditoria completa: decisão → requisito → processo → regra DMN.</p>
-          </div>
-          <div class="card" style="padding:14px 16px;">
-            <p style="font-size:14px;">🎯 <strong style="color:var(--white);">Reuniões mais eficientes</strong><br>Pauta gerada automaticamente a partir de pendências reais — sem repetição.</p>
-          </div>
-          <div class="card" style="padding:14px 16px;">
-            <p style="font-size:14px;">🔍 <strong style="color:var(--white);">Detecção proativa de riscos</strong><br>Contradições identificadas antes de virarem problemas em produção.</p>
-          </div>
+        <div class="card" style="padding:14px 16px;">
+          <p style="font-size:14px;">⚖️ <strong style="color:var(--white);">Governança e compliance</strong><br>Trilha de auditoria completa: decisão → requisito → processo → regra DMN.</p>
+        </div>
+        <div class="card" style="padding:14px 16px;">
+          <p style="font-size:14px;">🎯 <strong style="color:var(--white);">Reuniões mais eficientes</strong><br>Pauta gerada automaticamente a partir de pendências reais — sem repetição.</p>
+        </div>
+        <div class="card" style="padding:14px 16px;">
+          <p style="font-size:14px;">🔍 <strong style="color:var(--white);">Detecção proativa de riscos</strong><br>Contradições identificadas antes de virarem problemas em produção.</p>
         </div>
       </div>
       <div class="divider"></div>
@@ -275,50 +263,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-# ── SLIDE 3 — O PARADOXO ──────────────────────────────────────────────────────
-st.markdown("""
-<div class="slide-card">
-  <div class="label">O paradoxo corporativo</div>
-  <h2>O ativo mais caro da empresa é o menos documentado</h2>
-  <p style="margin-top:14px; max-width:700px;">
-    Reuniões executivas concentram as decisões mais estratégicas de uma organização.
-    São o momento onde estratégia vira compromisso, onde requisitos são definidos,
-    onde processos são redesenhados. E, paradoxalmente, onde o conhecimento mais evapora.
-  </p>
-  <div class="cols-4">
-    <div class="stat">
-      <div class="number">71%</div>
-      <div class="unit">das decisões</div>
-      <div class="desc">estratégicas nascem em reuniões corporativas</div>
-    </div>
-    <div class="stat">
-      <div class="number">R$&nbsp;8.2k</div>
-      <div class="unit">por hora</div>
-      <div class="desc">custo médio de 1h de reunião executiva no Brasil</div>
-    </div>
-    <div class="stat">
-      <div class="number">2,3h</div>
-      <div class="unit">por dia</div>
-      <div class="desc">tempo médio de executivos em reuniões (Harvard)</div>
-    </div>
-    <div class="stat">
-      <div class="number">67%</div>
-      <div class="unit">do conhecimento</div>
-      <div class="desc">gerado em reuniões nunca é formalizado (Gartner)</div>
-    </div>
-  </div>
-  <div class="card red-border" style="margin-top:24px;">
-    <p style="color:#F59B9B; font-weight:600; font-size:16px;">
-      ⚠️ Uma organização com 50 executivos que se reúnem 2h/dia gasta
-      <strong style="color:var(--white);">R$ 3,5 milhões/ano em reuniões</strong> —
-      e documenta menos de <strong style="color:var(--white);">33% do conhecimento gerado</strong>.
-    </p>
-  </div>
-</div>
-""", unsafe_allow_html=True)
-
-
-# ── SLIDE 4 — O QUE É ────────────────────────────────────────────────────────
+# ── SLIDE 3 — O QUE É ────────────────────────────────────────────────────────
 st.markdown("""
 <div class="slide-card">
   <div class="label">O que é o Process2Diagram</div>
@@ -358,63 +303,25 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ── SLIDE 5 — CAPACIDADES ─────────────────────────────────────────────────────
+# ── SLIDE 4 — CTA PARA LISTA COMPLETA DE ARTEFATOS ────────────────────────────
 st.markdown("""
-<div class="slide-card">
+<div class="slide-card" style="text-align:center;">
   <div class="label">Capacidades</div>
-  <h2>12 artefatos gerados automaticamente</h2>
-  <div class="cols-3" style="margin-top:22px;">
-    <div class="card">
-      <h3>📐 BPMN 2.0</h3>
-      <p>Diagrama com lanes, gateways e eventos. Visualizador embutido
-      com pan, zoom, editor visual e histórico de versões.</p>
-    </div>
-    <div class="card">
-      <h3>📋 Ata de Reunião</h3>
-      <p>Minuta estruturada com participantes, pauta, decisões e encaminhamentos.
-      Exportável em Markdown, Word (.docx) e PDF.</p>
-    </div>
-    <div class="card">
-      <h3>📝 Requisitos IEEE 830</h3>
-      <p>Extração estruturada com código, tipo, prioridade e rastreabilidade
-      por reunião. Rastreados ao longo do projeto.</p>
-    </div>
-    <div class="card">
-      <h3>📖 Vocabulário SBVR</h3>
-      <p>Termos de negócio e regras formais no padrão OMG SBVR —
-      base para governança e compliance.</p>
-    </div>
-    <div class="card">
-      <h3>🎯 Modelo BMM</h3>
-      <p>Visão, missão, objetivos, estratégias e políticas no padrão OMG BMM —
-      alinha processos à estratégia corporativa.</p>
-    </div>
-    <div class="card">
-      <h3>⚖️ Tabelas DMN</h3>
-      <p>Regras de negócio no padrão OMG DMN 1.4 com DRD topológico e
-      renderizador dark-theme embutido.</p>
-    </div>
-    <div class="card">
-      <h3>📄 Relatório Executivo</h3>
-      <p>Síntese HTML auto-contido com métricas e destaques —
-      pronto para enviar a stakeholders sem instalação.</p>
-    </div>
-    <div class="card">
-      <h3>💬 Assistente Conversacional</h3>
-      <p>Chat inteligente com busca semântica em todo
-      o histórico de reuniões.</p>
-    </div>
-    <div class="card">
-      <h3>🕸️ Grafo de Conhecimento</h3>
-      <p>Entidades, contradições e fatos indexados de múltiplas reuniões —
-      visualização Obsidian com física pyvis.</p>
-    </div>
-  </div>
+  <h2>12 artefatos formais gerados automaticamente por reunião</h2>
+  <p style="margin-top:14px; max-width:640px; margin-left:auto; margin-right:auto;">
+    BPMN 2.0 · Mermaid · Ata Word/PDF · Requisitos IEEE 830 · SBVR · BMM ·
+    DMN · Mapa de Requisitos · Relatório Executivo · Grafo de Conhecimento ·
+    Assistente Conversacional · CKF atualizado.
+  </p>
+  <p style="margin-top:10px; color:var(--muted);">
+    A lista completa, com descrição de cada artefato, está na Apresentação Geral ↓
+  </p>
 </div>
 """, unsafe_allow_html=True)
+st.page_link("pages/ApresentacaoGeral.py", label="→ Ver os 12 artefatos em detalhe na Apresentação Geral", icon="🎯")
 
 
-# ── SLIDE 6 — CKF ────────────────────────────────────────────────────────────
+# ── SLIDE 5 — CKF ────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="slide-card">
   <div class="label">Context Knowledge File — Memória Institucional</div>
@@ -477,7 +384,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ── SLIDE 7 — PROVEDORES LLM ──────────────────────────────────────────────────
+# ── SLIDE 6 — PROVEDORES LLM ──────────────────────────────────────────────────
 st.markdown("""
 <div class="slide-card">
   <div class="label">Infraestrutura de IA</div>

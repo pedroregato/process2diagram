@@ -1,6 +1,8 @@
 # pages/ApresentacaoGeral.py
 # ─────────────────────────────────────────────────────────────────────────────
-# Apresentação Geral do P2D — pitch deck para empresas
+# Apresentação Geral do P2D — pitch deck para empresas. Dono único das
+# estatísticas de mercado, ROI e da lista completa de 12 artefatos — não
+# duplicar em pages/SobreP2D.py (autor + aprofundamento técnico) (PC136).
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
@@ -224,7 +226,8 @@ st.markdown("""
       associado a cada projeto. Alimentado manualmente pelo usuário e enriquecido
       automaticamente após cada reunião, ele fornece contexto organizacional a todos os
       agentes — tornando as análises mais precisas a cada ciclo.
-      O sistema <em style="color:var(--gold2);">aprende o negócio do cliente</em> ao longo do tempo.</p>
+      O sistema <em style="color:var(--gold2);">aprende o negócio do cliente</em> ao longo do tempo.
+      <em style="color:var(--muted);">Ciclo evolutivo completo em "Sobre o P2D".</em></p>
     </div>
     <div class="box">
       <h3>📐 BPMN 2.0 com qualidade auditável</h3>
@@ -246,11 +249,13 @@ st.markdown("""
       <p>Cada agente pode usar o provedor de IA mais adequado ao seu papel, entre os
       principais do mercado. <strong style="color:var(--white);">Cenários de
       Custo-Benefício</strong> comparam combinações antes de processar. Cache
-      inteligente elimina chamadas duplicadas e reduz custo em reprocessamentos.</p>
+      inteligente elimina chamadas duplicadas e reduz custo em reprocessamentos.
+      <em style="color:var(--muted);">Tabela completa de provedores em "Sobre o P2D".</em></p>
     </div>
   </div>
 </div>
 """, unsafe_allow_html=True)
+st.page_link("pages/SobreP2D.py", label="→ Aprofundar CKF e Multi-LLM em Sobre o P2D", icon="ℹ️")
 
 
 # ── SLIDE 5 — ARTEFATOS ───────────────────────────────────────────────────────

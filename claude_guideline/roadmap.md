@@ -4,6 +4,16 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC136 — Concluído (v5.15 / 2026-07-05) — elimina duplicação entre "Sobre o P2D" e "Apresentação Geral"
+
+**Achado:** usuário perguntou se as duas páginas do grupo "Início" deveriam ser fundidas. Confirmado: mesmo sistema visual (CSS quase clonado, só com nomes de classe diferentes), as mesmas 4 estatísticas do "paradoxo" (71%/R$8,2k/2,3h/67%), o mesmo diagrama de pipeline de 4 passos e as mesmas 5 métricas de ROI apareciam nas duas páginas. Em vez de fundir num scroll único (perderia a função de navegação de cada página), redistribuído por propósito.
+
+- [x] `pages/SobreP2D.py` — slimmed para "autor + filosofia + aprofundamento técnico": removido o slide "O Paradoxo" (idêntico a "O Problema" da Apresentação Geral); removidos os 5 ROI bars do slide do Criador, substituídos por um parágrafo curto de filosofia sem números (os 4 cards qualitativos de valor foram mantidos — não duplicavam nada); slide "Capacidades" (9 cards parciais) substituído por um resumo compacto + `st.page_link` real para a lista completa de 12 artefatos na Apresentação Geral. Mantidos: Capa, Criador (revisado), O que é o P2D, CKF (aprofundamento único), Multi-LLM/Provedores (aprofundamento único).
+- [x] `pages/ApresentacaoGeral.py` — vira dono único de todas as estatísticas/ROI/pipeline/lista de artefatos. Slide "Diferenciais" ganhou menções cruzadas ("aprofundamento em Sobre o P2D") nos cards de CKF e Multi-LLM + `st.page_link` real para "Sobre o P2D".
+- [x] Comentários de cabeçalho de ambos os arquivos atualizados declarando explicitamente qual página é dona de qual conteúdo, para evitar reintrodução da duplicação em manutenções futuras.
+- [x] Verificado com `AppTest`: as duas páginas renderizam sem exceção após a reestruturação.
+- [x] 458/458 testes automatizados inalterados (mudança de conteúdo/UI, sem lógica nova).
+
 ### PC135 — Concluído (v5.15 / 2026-07-05) — Assistente ganha poderes de gerar e interpretar diagramas BPMN
 
 **Pedido do usuário:** "Crie funcionalidades (tools) para dar poderes ao assistente de gerar um diagrama como base numa transcrição. Crie também um agente capaz de interpretar e analisar um diagrama BPMN, [...] responder: 'Descreva o subprocesso Contratar Consultoria' dentre outras perguntas."
