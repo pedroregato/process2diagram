@@ -151,33 +151,64 @@ def run_pipeline(hub, config, progress_callback):
                 progress_callback("Atualizador CKF", "skipped")
 
     # ── Knowledge extraction (non-fatal, post-pipeline) ───────────────────────
-    _kh_meeting_id = config.get("meeting_id")
-    _kh_project_id = config.get("project_id")
-    _run_kh = config.get("run_knowledge_extractor", True)
-
-    if _run_kh:
-        try:
-            progress_callback("Knowledge Hub", "running")
-            from agents.agent_knowledge_extractor import AgentKnowledgeExtractor
-            _kh_agent = AgentKnowledgeExtractor(client_info, provider_cfg)
-            _kh_agent.run(
-                hub, output_lang,
-                meeting_id=_kh_meeting_id,
-                project_id=_kh_project_id,
-            )
-            progress_callback("Knowledge Hub", "done")
-        except Exception:
-            progress_callback("Knowledge Hub", "skipped")
-
-        # ── Cross-meeting contradiction detection (non-fatal) ─────────────────
-        if _kh_project_id and _kh_meeting_id:
-            try:
-                progress_callback("Detecção de Contradições", "running")
-                from agents.agent_contradiction_detector import AgentContradictionDetector
-                _cd_agent = AgentContradictionDetector(client_info, provider_cfg)
-                _cd_agent.run_for_meeting(_kh_project_id, _kh_meeting_id)
-                progress_callback("Detecção de Contradições", "done")
-            except Exception:
-                progress_callback("Detecção de Contradições", "skipped")
+    # PC137: only runs here when meeting_id is already known at call time
+    # (batch/backfill/reprocess flows that operate on an existing meeting).
+    # Callers that create the meeting AFTER running the pipeline — e.g.
+    # "Nova Transcrição" in pages/Pipeline.py, or the new-file path in
+    # core/batch_pipeline.py — must NOT rely on this internal call: at this
+    # point config["meeting_id"] doesn't exist yet, so firing it here would
+    # silently write kh_entities/kh_processes with meeting_id=None, making
+    # Knowledge Graph correlations permanently impossible for those rows
+    # (confirmed root cause of a real project — see roadmap PC137). Those
+    # callers must invoke run_knowledge_extraction() themselves once the
+    # real meeting_id exists.
+    if config.get("run_knowledge_extractor", True) and config.get("meeting_id"):
+        run_knowledge_extraction(
+            hub, client_info, provider_cfg, output_lang,
+            meeting_id=config.get("meeting_id"),
+            project_id=config.get("project_id"),
+            progress_callback=progress_callback,
+        )
 
     return hub
+
+
+def run_knowledge_extraction(hub, client_info, provider_cfg, output_lang,
+                              meeting_id, project_id, progress_callback):
+    """
+    Runs AgentKnowledgeExtractor + cross-meeting contradiction detection for
+    one meeting. Non-fatal — failures are reported via progress_callback and
+    swallowed, never raised.
+
+    meeting_id MUST be a real, already-persisted meeting UUID: entities and
+    processes are linked to meetings via this id (kh_entities.meeting_ids,
+    kh_processes.meeting_ids) — the field pages/KnowledgeGraph.py uses to
+    compute entity↔process and entity↔entity correlation edges. Call this
+    only after the meeting row exists in Supabase (PC137).
+    """
+    if not meeting_id:
+        progress_callback("Knowledge Hub", "skipped")
+        return
+
+    try:
+        progress_callback("Knowledge Hub", "running")
+        from agents.agent_knowledge_extractor import AgentKnowledgeExtractor
+        _kh_agent = AgentKnowledgeExtractor(client_info, provider_cfg)
+        _kh_agent.run(
+            hub, output_lang,
+            meeting_id=meeting_id,
+            project_id=project_id,
+        )
+        progress_callback("Knowledge Hub", "done")
+    except Exception:
+        progress_callback("Knowledge Hub", "skipped")
+
+    if project_id:
+        try:
+            progress_callback("Detecção de Contradições", "running")
+            from agents.agent_contradiction_detector import AgentContradictionDetector
+            _cd_agent = AgentContradictionDetector(client_info, provider_cfg)
+            _cd_agent.run_for_meeting(project_id, meeting_id)
+            progress_callback("Detecção de Contradições", "done")
+        except Exception:
+            progress_callback("Detecção de Contradições", "skipped")

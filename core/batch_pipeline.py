@@ -315,7 +315,7 @@ class BatchPipeline:
             create_meeting, save_transcript, save_meeting_artifacts, save_meeting_tokens,
             save_sbvr_from_hub, save_bpmn_from_hub, log_batch_file, is_file_processed,
         )
-        from core.pipeline import run_pipeline
+        from core.pipeline import run_pipeline, run_knowledge_extraction
         from core.knowledge_hub import KnowledgeHub
 
         fhash = file_hash(content)
@@ -384,6 +384,17 @@ class BatchPipeline:
                 getattr(hub.meta, "total_tokens_used", 0),
                 getattr(hub.meta, "llm_provider", ""),
             )
+
+            # Knowledge Hub extraction (PC137) — must run AFTER create_meeting()
+            # so entities/processes are linked to a real meeting_id; running it
+            # earlier inside run_pipeline() always saw meeting_id=None here.
+            if agents_config.get("run_knowledge_extractor", True):
+                run_knowledge_extraction(
+                    hub, self.client_info, self.provider_cfg, self.output_language,
+                    meeting_id=meeting_id,
+                    project_id=project_id,
+                    progress_callback=lambda *_: None,
+                )
 
             n_terms, n_rules = 0, 0
             if getattr(hub, "sbvr", None) and hub.sbvr.ready:

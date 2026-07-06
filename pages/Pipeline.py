@@ -19,7 +19,7 @@ from ui.auth_gate import apply_auth_gate
 from ui.sidebar import render_sidebar
 from ui.input_area import render_input_area
 from ui.project_selector import render_project_selector, render_bpmn_process_selector
-from core.pipeline import run_pipeline
+from core.pipeline import run_pipeline, run_knowledge_extraction
 from core.rerun_handlers import handle_rerun
 from core.project_store import (
     create_meeting, save_transcript, save_meeting_artifacts,
@@ -265,6 +265,21 @@ if pipeline_mode == _MODE_NEW:
                     st.session_state.current_meeting_id = meeting_id
                     save_transcript(meeting_id, hub)
                     save_meeting_artifacts(meeting_id, hub)
+
+                    # Knowledge Hub extraction (PC137) — must run AFTER create_meeting()
+                    # so entities/processes are linked to a real meeting_id. Running it
+                    # earlier, inside run_pipeline(), always saw meeting_id=None here
+                    # (the meeting doesn't exist yet at that point), which silently
+                    # broke Knowledge Graph correlations for every new meeting.
+                    if st.session_state.get("run_knowledge_extractor", True):
+                        with st.spinner("🧠 Extraindo conhecimento (entidades, processos, fatos)..."):
+                            run_knowledge_extraction(
+                                hub, client_info, st.session_state.provider_cfg,
+                                st.session_state.output_language,
+                                meeting_id=meeting_id,
+                                project_id=st.session_state.project_id,
+                                progress_callback=lambda *_: None,
+                            )
 
                     # LGPD audit — log pipeline run (async, fail-open)
                     try:
