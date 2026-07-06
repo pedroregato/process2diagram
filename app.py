@@ -82,6 +82,7 @@ pages = {
         st.Page("pages/Orientacoes_Arquiteturas.py", title="Arquiteturas",  icon="🏗️"),
         st.Page("pages/Orientacoes_CKF.py",          title="Guia CKF",      icon="🧠"),
         st.Page("pages/Orientacoes_BpmnStudio.py",   title="Guia BPMN Studio", icon="🧩"),
+        st.Page("pages/Orientacoes_Graficos.py",     title="Gráficos & Visualizações", icon="📈"),
         st.Page("pages/Capacitacao.py",              title="Curso Corporativo",    icon="🎓"),
         st.Page("pages/Orientacoes_Manifesto.py",    title="Manifesto de Engenharia", icon="🛸"),
     ],
