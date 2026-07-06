@@ -4,6 +4,18 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC149 — Concluído (v5.15 / 2026-07-06) — barras do Gantt invisíveis (título/eixos/legendas corretos, mas sem barras)
+
+**Contexto:** usuário reportou (print) o gráfico de Gantt renderizando título, eixo Y (nomes das fases) e eixo X (datas) corretamente, mas **sem nenhuma barra visível** na área do gráfico.
+
+- **Causa:** `generate_gantt_chart()` usava `x=[duration_days]` (um inteiro de contagem de dias) como comprimento da barra, com `base=[start_date]` e `xaxis.type="date"`. Em um eixo do tipo data, o Plotly interpreta o valor numérico do comprimento da barra em **milissegundos** (sua unidade interna para eixos de data) — um `x=7` (7 dias) virava uma barra de 7 milissegundos, um traço imperceptível a qualquer nível de zoom. Testado e confirmado experimentalmente antes de corrigir.
+- **Tentativa intermediária descartada:** trocar para `datetime.timedelta(days=duration_days)` corrige a renderização (Plotly converte `timedelta` corretamente), mas reintroduz exatamente a classe de bug de PC146/148 — `PlotlyJSONEncoder` (usado no export HTML) **não** tem um encoder para `datetime.timedelta`, então o gráfico voltaria a quebrar a exportação com `TypeError: Object of type timedelta is not JSON serializable`. Confirmado testando o encoder diretamente antes de adotar essa abordagem.
+- **Correção final:** `x=[duration_days * 86_400_000]` — duração em milissegundos como `int` puro: correta para o eixo de data (matemática verificada: `base + timedelta(milliseconds=x)` reproduz exatamente a data de fim informada) e nativamente serializável em JSON, sem depender de nenhum encoder especial.
+- [x] 2 testes novos (`test_bar_length_is_in_milliseconds_not_raw_days`, `test_bar_base_plus_length_lands_on_end_date` em `test_tools_requirement_charts.py`): comprimento da barra em ms confirmado, e reconstrução da data de fim a partir de `base + x` batendo exatamente com o valor informado.
+- [x] 569/569 testes automatizados passando (567 + 2 novos).
+
+---
+
 ### PC148 — Concluído (v5.15 / 2026-07-06) — "datetime not JSON serializable" também na chamada de chat (não só no export)
 
 **Contexto:** usuário reportou o mesmo erro de PC146 (`Object of type datetime is not JSON serializable`), desta vez numa pergunta sem nenhuma relação com gráficos — *"O que precisa ser feito para que tenhamos um cronograma do projeto?"* — tanto no caminho principal de tool-use quanto no fallback de busca por keyword.

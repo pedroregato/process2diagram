@@ -326,6 +326,25 @@ class TestGenerateGanttChart:
         assert "Gantt" in result
         assert len(ex._pending_charts[0]["data"]) == 2
 
+    def test_bar_length_is_in_milliseconds_not_raw_days(self):
+        """PC149: bars were invisible in production — x was a raw day-count int
+        on a date-typed axis, which Plotly interprets as MILLISECONDS (an
+        imperceptibly thin sliver). Bar length must be duration_days * 86_400_000."""
+        ex = _executor()
+        phases = [{"name": "Fase 1", "start": "2026-03-01", "end": "2026-03-08"}]  # 7 days
+        ex.generate_gantt_chart(title="Cronograma", phases=phases)
+        trace = ex._pending_charts[0]["data"][0]
+        assert trace["x"][0] == 7 * 86_400_000
+
+    def test_bar_base_plus_length_lands_on_end_date(self):
+        from datetime import datetime, timedelta
+        ex = _executor()
+        phases = [{"name": "Fase 1", "start": "2026-03-08", "end": "2026-04-05"}]  # 28 days
+        ex.generate_gantt_chart(title="Cronograma", phases=phases)
+        trace = ex._pending_charts[0]["data"][0]
+        end = trace["base"][0] + timedelta(milliseconds=trace["x"][0])
+        assert end == datetime(2026, 4, 5)
+
     def test_no_phases(self):
         ex = _executor()
         result = ex.generate_gantt_chart(title="Cronograma", phases=[])

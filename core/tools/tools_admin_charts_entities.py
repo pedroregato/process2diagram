@@ -2071,6 +2071,8 @@ class _AdminChartsEntitiesToolsMixin:
         import plotly.graph_objects as go
         from datetime import datetime as _dt
 
+        _MS_PER_DAY = 86_400_000
+
         if not phases:
             return "Nenhuma fase informada — forneça ao menos uma fase com name/start/end."
 
@@ -2096,8 +2098,14 @@ class _AdminChartsEntitiesToolsMixin:
         fig = go.Figure()
         for p in parsed:
             duration_days = max((p["end"] - p["start"]).days, 1)
+            # x is the bar LENGTH on a date-typed axis, which Plotly interprets in
+            # milliseconds (its internal unit for date axes) — a plain day-count
+            # int renders as an imperceptibly thin sliver (interpreted as ms, not
+            # days). datetime.timedelta renders correctly but isn't JSON-
+            # serializable even by PlotlyJSONEncoder (see PC146/148) — plain
+            # milliseconds is both correct and JSON-safe.
             fig.add_trace(go.Bar(
-                x=[duration_days], y=[p["name"]], base=[p["start"]],
+                x=[duration_days * _MS_PER_DAY], y=[p["name"]], base=[p["start"]],
                 orientation="h",
                 marker_color=_STATUS_COLORS.get(p["status"], self._palette[0]),
                 name=p["status"], showlegend=False,
