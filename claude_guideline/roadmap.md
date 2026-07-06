@@ -4,6 +4,30 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC142 — Concluído (v5.15 / 2026-07-06) — 6 novos tipos de gráfico + correções em ferramentas existentes de visualização
+
+**Contexto:** o assistente propôs um "repertório visual" mais rico para apresentações executivas (Gantt, Sankey, Treemap/Sunburst, Heatmap cruzado, Bolhas, Waterfall, Radar), listando o que já tinha (barras/linha/IBIS) vs o que não conseguia gerar. Avaliadas e implementadas todas em `core/tools/tools_admin_charts_entities.py`, todas não-admin, categoria "grafico":
+
+- [x] **`generate_requirements_flow_chart(view, meeting_number=None)`** — Sankey (Tipo→Prioridade→Status) via `go.Sankey`, ou Treemap/Sunburst (`branchvalues="total"`) da mesma hierarquia.
+- [x] **`generate_requirements_heatmap(dimension)`** — matriz Reunião × (Tipo|Prioridade|Status) montada automaticamente do banco (sem exigir que o LLM monte a matriz manualmente, ao contrário de `generate_custom_chart`).
+- [x] **`generate_requirements_bubble_chart()`** — X=reunião, Y=prioridade média (1-3), tamanho=volume de requisitos.
+- [x] **`generate_requirements_waterfall()`** — evolução cumulativa líquida de requisitos ativos por reunião (`status in {contradicted, deprecated}` conta como saída).
+- [x] **`generate_meeting_radar_chart(meeting_numbers=None)`** — radar comparando 2-6 reuniões em Decisões/Ações/Requisitos/Participantes (contagens brutas, não normalizadas).
+- [x] **`generate_gantt_chart(title, phases)`** — cronograma a partir de fases fornecidas explicitamente (sem modelo nativo de planejamento com datas); `go.Bar` horizontal com `base=start`.
+- [x] Helper compartilhado `_requirements_with_meeting_numbers(meeting_number=None)` — resolve `meeting_number` via `first_meeting_id` (join em memória contra `_get_meetings()`), reutilizado pelas 5 ferramentas acima que precisam de granularidade por reunião.
+
+**Bugs pré-existentes encontrados e corrigidos durante a implementação:**
+- `generate_requirements_chart(meeting_number=N)` filtrava diretamente com `.eq("meeting_number", N)` na tabela `requirements` — essa coluna nunca existiu lá (só `first_meeting_id`, um UUID de `meetings.id`); toda chamada com `meeting_number` falhava silenciosamente com "Erro ao buscar requisitos". Corrigido reusando `_requirements_with_meeting_numbers()`.
+- `generate_meetings_timeline` tinha o mesmo bug — as barras de "requisitos por reunião" sempre mostravam zero.
+- `generate_custom_chart` anunciava `chart_type="heatmap"` no schema/descrição mas não tinha implementação — caía silenciosamente no `bar` default. Adicionados parâmetros `z_matrix`/`y_axis_labels` + branch real.
+- `generate_meetings_timeline._extract_actions` — regex `r"Ações|Action Items.*?\n(.*?)..."` sem agrupar a alternação: `|` tem precedência mais baixa que o resto do padrão, então ao casar a variante "Ações" (cabeçalho padrão em português) o `group(1)` não existia, lançando `AttributeError` em produção. Corrigido para `r"(?:Ações|Action Items).*?\n(.*?)..."`.
+- Bug análogo introduzido pela própria implementação desta rodada: `generate_meeting_radar_chart`'s `_count_section()` assumia `group(1)` como o conteúdo da seção, mas os padrões de cabeçalho passados por decisões/ações (`r"Decis(ões|oes)"`, `r"(Ações|Acoes|Action Items)"`) já continham seus próprios grupos de captura, deslocando o índice — decisões e ações sempre contavam 0. Corrigido para sempre pegar o último grupo (`section.group(section.re.groups)`), imune a grupos internos no `header_pattern`.
+- [x] Registro completo: schemas em `ADMIN_CHARTS_ENTITIES_SCHEMAS`, dispatch em `AssistantToolExecutor.execute()` (incl. `z_matrix`/`y_axis_labels` no dispatch existente de `generate_custom_chart`), categoria "grafico" em `_TOOL_CATEGORIES`, nenhuma em `_ADMIN_TOOLS`. CLAUDE.md `§Tool list` atualizado.
+- [x] 33 testes novos (`test_tools_requirement_charts.py`): helper de resolução de meeting_number, os 2 bugfixes de `meeting_number` inexistente, o bugfix do heatmap em `generate_custom_chart`, cada uma das 6 novas ferramentas (views do flow chart, dimensões do heatmap, contagem de bolhas, waterfall com saldo líquido, radar com mínimo de 2 reuniões e eixos corretos, Gantt com ordenação por data e validação de datas), wiring de dispatch, ausência de admin-gate.
+- [x] 545/545 testes automatizados passando (512 + 33 novos).
+
+---
+
 ### PC141 — Concluído (v5.15 / 2026-07-06) — 4 ferramentas investigativas propostas pelo próprio assistente
 
 **Contexto:** ao final da investigação do bug de duplicação (PC140), o assistente propôs 4 novas ferramentas que teriam acelerado seu próprio diagnóstico — ele só tinha `get_requirements` (paginado, 50/página) para inspecionar centenas de requisitos. Avaliadas e implementadas as 4, todas em `core/tools/tools_meetings_requirements.py`, todas não-admin, escopadas por `meeting_number` → `first_meeting_id` (mesmo padrão de resolução já usado por `get_requirements`):

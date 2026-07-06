@@ -462,8 +462,160 @@ ADMIN_CHARTS_ENTITIES_SCHEMAS: list[dict] = [
                                 "type": "string",
                                 "description": "Nome da série de dados (opcional).",
                             },
+                            "z_matrix": {
+                                "type": "array",
+                                "items": {"type": "array", "items": {"type": "number"}},
+                                "description": (
+                                    "Obrigatório quando chart_type='heatmap' — matriz 2D de valores "
+                                    "(uma lista por linha). 'labels' vira os rótulos das colunas (eixo X) "
+                                    "e 'y_axis_labels' os rótulos das linhas (eixo Y)."
+                                ),
+                            },
+                            "y_axis_labels": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Rótulos do eixo Y — usado apenas com chart_type='heatmap'.",
+                            },
                         },
                         "required": ["chart_type", "title", "labels", "values"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "generate_requirements_flow_chart",
+                    "description": (
+                        "Visualiza a hierarquia Tipo → Prioridade → Status dos requisitos como Sankey "
+                        "(fluxo), Treemap (blocos) ou Sunburst (anéis concêntricos) — mostra em um único "
+                        "gráfico como os requisitos se distribuem e onde estão os gargalos, sem precisar "
+                        "de 3 gráficos de barra separados. Use quando o usuário pedir para 'visualizar o "
+                        "fluxo dos requisitos', 'ver a distribuição hierárquica' ou pedir Sankey/Treemap/Sunburst."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "view": {
+                                "type": "string",
+                                "enum": ["sankey", "treemap", "sunburst"],
+                                "description": "Tipo de visualização. Padrão: sankey.",
+                            },
+                            "meeting_number": {
+                                "type": "integer",
+                                "description": "Restringe aos requisitos de uma única reunião (opcional — padrão: todo o projeto)",
+                            },
+                        },
+                        "required": [],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "generate_requirements_heatmap",
+                    "description": (
+                        "Gera um mapa de calor cruzado Reunião × Tipo/Prioridade/Status de requisitos — "
+                        "a matriz é montada automaticamente a partir do banco, sem necessidade de informar "
+                        "cada valor manualmente (diferente de generate_custom_chart). Use para responder "
+                        "'qual reunião teve mais requisitos de tipo X' ou revelar concentração por reunião."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "dimension": {
+                                "type": "string",
+                                "enum": ["req_type", "priority", "status"],
+                                "description": "Dimensão cruzada com reunião no eixo Y. Padrão: req_type.",
+                            },
+                        },
+                        "required": [],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "generate_requirements_bubble_chart",
+                    "description": (
+                        "Gráfico de bolhas: eixo X = reunião, eixo Y = prioridade média (1=baixa, 2=média, "
+                        "3=alta), tamanho da bolha = quantidade de requisitos. Mostra 3 dimensões num único "
+                        "gráfico compacto — ideal para status reports com pouco espaço."
+                    ),
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "generate_requirements_waterfall",
+                    "description": (
+                        "Gráfico de cascata (waterfall) mostrando a evolução cumulativa de requisitos "
+                        "ativos ao longo das reuniões do projeto — quantos foram adicionados em cada "
+                        "reunião e quantos saíram de 'active' (contradicted/deprecated), até o saldo final. "
+                        "Use para responder 'como o total de requisitos evoluiu ao longo do projeto'."
+                    ),
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "generate_meeting_radar_chart",
+                    "description": (
+                        "Gráfico radar (teia) comparando reuniões em 4 dimensões (contagens brutas): "
+                        "Decisões, Ações, Requisitos e Participantes — substitui 4 gráficos de barra "
+                        "separados. Use para comparar a 'densidade' de várias reuniões de uma só vez."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "meeting_numbers": {
+                                "type": "array",
+                                "items": {"type": "integer"},
+                                "description": "Números das reuniões a comparar (2 a 6). Se omitido, usa todas as reuniões do projeto (até 6).",
+                            },
+                        },
+                        "required": [],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "generate_gantt_chart",
+                    "description": (
+                        "Gera um cronograma (Gantt) a partir de fases/marcos fornecidos explicitamente — "
+                        "o sistema não tem um modelo nativo de planejamento com datas, então o usuário (ou "
+                        "o LLM em nome dele) deve informar cada fase com início e fim. Use quando o usuário "
+                        "pedir um cronograma, roadmap ou timeline de fases do projeto."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "title": {
+                                "type": "string",
+                                "description": "Título do cronograma (ex: 'Cronograma do Projeto AURORA')",
+                            },
+                            "phases": {
+                                "type": "array",
+                                "description": "Lista de fases/marcos do cronograma",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {"type": "string", "description": "Nome da fase/marco"},
+                                        "start": {"type": "string", "description": "Data de início (YYYY-MM-DD)"},
+                                        "end": {"type": "string", "description": "Data de fim (YYYY-MM-DD)"},
+                                        "status": {
+                                            "type": "string",
+                                            "enum": ["planejado", "em_andamento", "concluído", "atrasado"],
+                                            "description": "Status da fase (opcional, padrão 'planejado')",
+                                        },
+                                    },
+                                    "required": ["name", "start", "end"],
+                                },
+                            },
+                        },
+                        "required": ["title", "phases"],
                     },
                 },
             },
@@ -1243,28 +1395,19 @@ class _AdminChartsEntitiesToolsMixin:
         group_by: str = "type",
         meeting_number: int | None = None,
     ) -> str:
-        """Bar chart of requirements grouped by type and/or priority."""
-        from modules.supabase_client import get_supabase_client
+        """Bar chart of requirements grouped by type and/or priority.
+
+        PC142: previously filtered with .eq("meeting_number", meeting_number)
+        directly on the requirements table — that column doesn't exist there
+        (only first_meeting_id, a meetings.id UUID), so every call with
+        meeting_number set silently failed with "Erro ao buscar requisitos".
+        """
         import plotly.graph_objects as go
         from collections import Counter
 
-        client = get_supabase_client()
-        if client is None:
-            return "Supabase não configurado."
-        try:
-            q = (
-                client.table("requirements")
-                .select("req_type, priority")
-                .eq("project_id", self.project_id)
-            )
-            if meeting_number:
-                q = q.eq("meeting_number", meeting_number)
-            rows = q.execute().data or []
-        except Exception as e:
-            return f"Erro ao buscar requisitos: {e}"
-
-        if not rows:
-            return "Nenhum requisito encontrado para gerar o gráfico."
+        rows, err = self._requirements_with_meeting_numbers(meeting_number)
+        if err:
+            return err
 
         _req_types = ["Funcional", "Não-Funcional", "Regra de Negócio", "Restrição", "Interface", "Desempenho"]
         _TYPE_COLORS = {t: self._palette[i % len(self._palette)] for i, t in enumerate(_req_types)}
@@ -1336,15 +1479,11 @@ class _AdminChartsEntitiesToolsMixin:
         if not meetings:
             return "Nenhuma reunião encontrada."
 
-        try:
-            reqs_resp = (
-                client.table("requirements")
-                .select("meeting_number")
-                .eq("project_id", self.project_id)
-                .execute()
-            )
-            req_rows = reqs_resp.data or []
-        except Exception:
+        # PC142: requirements has no meeting_number column (only first_meeting_id,
+        # a meetings.id UUID) — this previously always returned zero requirements
+        # per meeting. Resolve meeting_number via the shared helper instead.
+        req_rows, _req_err = self._requirements_with_meeting_numbers()
+        if _req_err:
             req_rows = []
 
         from collections import Counter, defaultdict
@@ -1369,7 +1508,11 @@ class _AdminChartsEntitiesToolsMixin:
             if not minutes_md:
                 return 0
             import re
-            act_section = re.search(r"Ações|Action Items.*?\n(.*?)(?:\n##|\Z)", minutes_md, re.DOTALL | re.IGNORECASE)
+            # PC142: '|' has lower precedence than the rest of the pattern, so the
+            # un-grouped "Ações|Action Items.*?\n(.*?)..." matched bare "Ações" with
+            # no group(1) whenever minutes used the Portuguese header, raising
+            # AttributeError on .splitlines(). Wrap the alternation explicitly.
+            act_section = re.search(r"(?:Ações|Action Items).*?\n(.*?)(?:\n##|\Z)", minutes_md, re.DOTALL | re.IGNORECASE)
             if act_section:
                 return len([ln for ln in act_section.group(1).splitlines() if ln.strip().startswith("-")])
             return 0
@@ -1546,15 +1689,45 @@ class _AdminChartsEntitiesToolsMixin:
         x_label: str = "",
         y_label: str = "",
         series_name: str = "",
+        z_matrix: list[list[float]] | None = None,
+        y_axis_labels: list[str] | None = None,
     ) -> str:
-        """Render a custom chart from LLM-provided data."""
+        """Render a custom chart from LLM-provided data.
+
+        PC142: chart_type='heatmap' was listed in the schema/description but
+        had no implementation — it silently fell through to the 'bar'
+        default (labels/values are 1-D and can never represent a matrix
+        anyway). z_matrix/y_axis_labels make the promised capability real.
+        """
         import plotly.graph_objects as go
 
         colors = [self._palette[i % len(self._palette)] for i in range(len(labels))]
 
         ct = chart_type.lower()
         try:
-            if ct == "pie":
+            if ct == "heatmap":
+                if not z_matrix:
+                    return (
+                        "Erro: chart_type='heatmap' requer o parâmetro z_matrix (matriz 2D de "
+                        "valores) — 'labels'/'values' sozinhos não representam uma matriz. Para a "
+                        "matriz Reunião × Tipo/Prioridade/Status de requisitos já pronta, use "
+                        "generate_requirements_heatmap em vez desta ferramenta."
+                    )
+                fig = go.Figure(go.Heatmap(
+                    z=z_matrix, x=labels, y=y_axis_labels or None,
+                    colorscale="YlOrRd",
+                    text=z_matrix, texttemplate="%{text}",
+                ))
+                self._dark_layout(fig, title)
+                if x_label:
+                    fig.update_xaxes(title_text=x_label)
+                if y_label:
+                    fig.update_yaxes(title_text=y_label)
+                self._pending_charts.append(fig.to_dict())
+                n_rows = len(z_matrix)
+                n_cols = len(z_matrix[0]) if z_matrix else 0
+                return f"📊 Heatmap '{title}' gerado ({n_rows}×{n_cols})."
+            elif ct == "pie":
                 trace = go.Pie(
                     labels=labels, values=values,
                     marker=dict(colors=colors),
@@ -1597,6 +1770,336 @@ class _AdminChartsEntitiesToolsMixin:
             return f"📊 Gráfico '{title}' ({chart_type}) gerado com {len(labels)} categorias."
         except Exception as e:
             return f"Erro ao gerar gráfico personalizado: {e}"
+
+    # ── New chart tools (PC142) ────────────────────────────────────────────────
+    # Proposed by the assistant after investigating the requirements
+    # duplication incident (PC140/141) with a limited visual repertoire.
+
+    def _requirements_with_meeting_numbers(self, meeting_number: int | None = None) -> tuple[list[dict], str]:
+        """Fetch project requirements (req_type/priority/status) enriched with
+        meeting_number resolved from first_meeting_id.
+
+        requirements has NO meeting_number column (only first_meeting_id, a
+        meetings.id UUID) — a prior chart (generate_requirements_chart) filtered
+        directly on '.eq("meeting_number", ...)', which always raised (caught
+        silently) since that column doesn't exist. Fixed here and reused by
+        every new chart that needs a per-meeting breakdown.
+        """
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if db is None:
+            return [], "Supabase não configurado."
+
+        meeting_id_filter = None
+        if meeting_number is not None:
+            mtg = self._find_meeting(meeting_number)
+            if not mtg:
+                return [], f"Reunião {meeting_number} não encontrada."
+            meeting_id_filter = mtg["id"]
+
+        try:
+            q = (
+                db.table("requirements")
+                .select("req_type, priority, status, first_meeting_id")
+                .eq("project_id", self.project_id)
+            )
+            if meeting_id_filter:
+                q = q.eq("first_meeting_id", meeting_id_filter)
+            rows = q.execute().data or []
+        except Exception as exc:
+            return [], f"Erro ao buscar requisitos: {exc}"
+
+        if not rows:
+            return [], "Nenhum requisito encontrado."
+
+        mlookup = {m["id"]: m.get("meeting_number") for m in self._get_meetings()}
+        for r in rows:
+            r["meeting_number"] = mlookup.get(r.get("first_meeting_id"))
+        return rows, ""
+
+    def generate_requirements_flow_chart(
+        self,
+        view: str = "sankey",
+        meeting_number: int | None = None,
+    ) -> str:
+        """Sankey / Treemap / Sunburst of the Type -> Priority -> Status hierarchy."""
+        import plotly.graph_objects as go
+        from collections import Counter
+
+        rows, err = self._requirements_with_meeting_numbers(meeting_number)
+        if err:
+            return err
+
+        def _label(v, fallback):
+            return (v or fallback).strip() or fallback
+
+        types = [_label(r.get("req_type"), "Outro") for r in rows]
+        prios = [_label(r.get("priority"), "Não definida") for r in rows]
+        stats = [_label(r.get("status"), "active") for r in rows]
+
+        suffix = f" — Reunião {meeting_number}" if meeting_number else ""
+        view = (view or "sankey").lower()
+
+        if view == "sankey":
+            type_prio = Counter(zip(types, prios))
+            prio_status = Counter(zip(prios, stats))
+            all_types = sorted(set(types))
+            all_prios = sorted(set(prios))
+            all_status = sorted(set(stats))
+            nodes = all_types + all_prios + all_status
+            idx = {n: i for i, n in enumerate(nodes)}
+            node_colors = [self._palette[i % len(self._palette)] for i in range(len(nodes))]
+
+            src, tgt, val = [], [], []
+            for (t, p), n in type_prio.items():
+                src.append(idx[t]); tgt.append(idx[p]); val.append(n)
+            for (p, s), n in prio_status.items():
+                src.append(idx[p]); tgt.append(idx[s]); val.append(n)
+
+            fig = go.Figure(go.Sankey(
+                node=dict(label=nodes, color=node_colors, pad=15, thickness=18,
+                          line=dict(color="#0A1A32", width=0.5)),
+                link=dict(source=src, target=tgt, value=val),
+            ))
+            self._dark_layout(fig, f"Fluxo de Requisitos — Tipo → Prioridade → Status{suffix}")
+        elif view in ("treemap", "sunburst"):
+            labels_all, parents_all, values_all = ["Requisitos"], [""], [len(rows)]
+            for t in sorted(set(types)):
+                labels_all.append(t); parents_all.append("Requisitos")
+                values_all.append(types.count(t))
+            for (t, p), n in Counter(zip(types, prios)).items():
+                key = f"{t}·{p}"
+                labels_all.append(key); parents_all.append(t); values_all.append(n)
+            for (t, p, s), n in Counter(zip(types, prios, stats)).items():
+                labels_all.append(f"{t}·{p}·{s}")
+                parents_all.append(f"{t}·{p}")
+                values_all.append(n)
+
+            trace_cls = go.Treemap if view == "treemap" else go.Sunburst
+            fig = go.Figure(trace_cls(
+                labels=labels_all, parents=parents_all, values=values_all,
+                branchvalues="total",
+                marker=dict(colors=[self._palette[i % len(self._palette)] for i in range(len(labels_all))]),
+            ))
+            title_kind = "Treemap" if view == "treemap" else "Sunburst"
+            self._dark_layout(fig, f"{title_kind} de Requisitos — Tipo → Prioridade → Status{suffix}")
+        else:
+            return f"view inválida: '{view}' — use 'sankey', 'treemap' ou 'sunburst'."
+
+        self._pending_charts.append(fig.to_dict())
+        return f"📊 {view.capitalize()} gerado: {len(rows)} requisito(s){suffix}."
+
+    def generate_requirements_heatmap(self, dimension: str = "req_type") -> str:
+        """Cross heatmap: Meeting x (req_type | priority | status)."""
+        import plotly.graph_objects as go
+        from collections import Counter
+
+        dimension = dimension if dimension in ("req_type", "priority", "status") else "req_type"
+        rows, err = self._requirements_with_meeting_numbers()
+        if err:
+            return err
+
+        meetings = sorted({r["meeting_number"] for r in rows if r.get("meeting_number") is not None})
+        if not meetings:
+            return "Nenhum requisito vinculado a uma reunião identificável."
+        cats = sorted({(r.get(dimension) or "—") for r in rows})
+
+        counts = Counter((r["meeting_number"], r.get(dimension) or "—") for r in rows if r.get("meeting_number") is not None)
+        z = [[counts.get((m, c), 0) for c in cats] for m in meetings]
+
+        fig = go.Figure(go.Heatmap(
+            z=z, x=cats, y=[f"Reunião {m}" for m in meetings],
+            colorscale="YlOrRd", text=z, texttemplate="%{text}",
+        ))
+        dim_label = {"req_type": "Tipo", "priority": "Prioridade", "status": "Status"}[dimension]
+        self._dark_layout(fig, f"Requisitos por Reunião × {dim_label}")
+        self._pending_charts.append(fig.to_dict())
+        return f"📊 Heatmap gerado: {len(meetings)} reunião(ões) × {len(cats)} categoria(s) de {dim_label.lower()}."
+
+    def generate_requirements_bubble_chart(self) -> str:
+        """Bubble chart: X=meeting, Y=avg priority (1-3), size=requirement count."""
+        import plotly.graph_objects as go
+        from collections import defaultdict
+
+        rows, err = self._requirements_with_meeting_numbers()
+        if err:
+            return err
+
+        _PRIO_SCORE = {"baixa": 1, "média": 2, "media": 2, "alta": 3, "low": 1, "medium": 2, "high": 3}
+        by_meeting: dict[int, list] = defaultdict(list)
+        for r in rows:
+            n = r.get("meeting_number")
+            if n is not None:
+                by_meeting[n].append(_PRIO_SCORE.get((r.get("priority") or "").strip().lower(), 2))
+
+        if not by_meeting:
+            return "Nenhum requisito vinculado a uma reunião identificável."
+
+        meetings = sorted(by_meeting.keys())
+        avg_prio = [sum(by_meeting[m]) / len(by_meeting[m]) for m in meetings]
+        counts = [len(by_meeting[m]) for m in meetings]
+        max_count = max(counts) or 1
+        sizes = [12 + 40 * (c / max_count) for c in counts]
+
+        fig = go.Figure(go.Scatter(
+            x=[f"Reunião {m}" for m in meetings], y=avg_prio, mode="markers+text",
+            text=[str(c) for c in counts], textposition="middle center",
+            marker=dict(size=sizes, color=self._palette[0], opacity=0.75,
+                        line=dict(color="#0A1A32", width=1)),
+        ))
+        fig.update_yaxes(title_text="Prioridade média (1=baixa, 3=alta)", range=[0.5, 3.5])
+        self._dark_layout(fig, "Requisitos por Reunião — Prioridade Média × Volume")
+        self._pending_charts.append(fig.to_dict())
+        return f"📊 Bubble chart gerado: {len(meetings)} reunião(ões)."
+
+    def generate_requirements_waterfall(self) -> str:
+        """Cumulative net active-requirement evolution across meetings."""
+        import plotly.graph_objects as go
+        from collections import defaultdict
+
+        rows, err = self._requirements_with_meeting_numbers()
+        if err:
+            return err
+
+        _INACTIVE = {"contradicted", "deprecated"}
+        added: dict[int, int] = defaultdict(int)
+        removed: dict[int, int] = defaultdict(int)
+        for r in rows:
+            n = r.get("meeting_number")
+            if n is None:
+                continue
+            added[n] += 1
+            if (r.get("status") or "").strip().lower() in _INACTIVE:
+                removed[n] += 1
+
+        meetings = sorted(added.keys())
+        if not meetings:
+            return "Nenhum requisito vinculado a uma reunião identificável."
+
+        x, y, measure, text = [], [], [], []
+        for m in meetings:
+            net = added[m] - removed[m]
+            x.append(f"Reunião {m}")
+            y.append(net)
+            measure.append("relative")
+            text.append(f"+{added[m]}" + (f" -{removed[m]}" if removed[m] else ""))
+        x.append("Total")
+        y.append(0)
+        measure.append("total")
+        text.append("")
+
+        fig = go.Figure(go.Waterfall(
+            x=x, y=y, measure=measure, text=text, textposition="outside",
+            increasing=dict(marker=dict(color="#10b981")),
+            decreasing=dict(marker=dict(color="#ef4444")),
+            totals=dict(marker=dict(color=self._palette[0])),
+        ))
+        self._dark_layout(fig, "Evolução Cumulativa de Requisitos Ativos")
+        self._pending_charts.append(fig.to_dict())
+        return f"📊 Waterfall gerado: {len(meetings)} reunião(ões)."
+
+    def generate_meeting_radar_chart(self, meeting_numbers: list[int] | None = None) -> str:
+        """Radar comparing meetings across Decisions / Actions / Requirements / Participants."""
+        import re
+        import plotly.graph_objects as go
+
+        meetings = self._get_meetings()
+        if not meetings:
+            return "Nenhuma reunião encontrada."
+        if meeting_numbers:
+            wanted = set(meeting_numbers)
+            meetings = [m for m in meetings if m.get("meeting_number") in wanted]
+        else:
+            meetings = meetings[:6]
+        if not meetings:
+            return "Nenhuma reunião encontrada com os números informados."
+        if len(meetings) < 2:
+            return "É necessário pelo menos 2 reuniões para comparar no radar."
+        if len(meetings) > 6:
+            meetings = meetings[:6]
+
+        def _count_section(md: str, header_pattern: str) -> int:
+            # header_pattern may itself contain capturing groups (e.g. "Decis(ões|oes)"),
+            # which would shift the content group's index — always take the LAST
+            # group (the trailing content capture) rather than assuming group(1).
+            if not md:
+                return 0
+            section = re.search(header_pattern + r".*?\n(.*?)(?:\n##|\Z)", md, re.DOTALL | re.IGNORECASE)
+            if not section:
+                return 0
+            content = section.group(section.re.groups)
+            return len([ln for ln in content.splitlines() if ln.strip().startswith("-")])
+
+        def _count_participants(md: str) -> int:
+            return _count_section(md, r"Participantes")
+
+        reqs_rows, _ = self._requirements_with_meeting_numbers()
+        from collections import Counter
+        req_counts = Counter(r["meeting_number"] for r in reqs_rows if r.get("meeting_number") is not None)
+
+        axes = ["Decisões", "Ações", "Requisitos", "Participantes"]
+        traces = []
+        for i, m in enumerate(meetings):
+            md = m.get("minutes_md") or ""
+            decisions = _count_section(md, r"Decis(ões|oes)")
+            actions = _count_section(md, r"(Ações|Acoes|Action Items)")
+            n_reqs = req_counts.get(m.get("meeting_number"), 0)
+            participants = _count_participants(md)
+            values = [decisions, actions, n_reqs, participants]
+            traces.append(go.Scatterpolar(
+                r=values + [values[0]], theta=axes + [axes[0]],
+                fill="toself", name=f"Reunião {m.get('meeting_number')}",
+                line=dict(color=self._palette[i % len(self._palette)]),
+            ))
+
+        fig = go.Figure(data=traces)
+        fig.update_layout(polar=dict(radialaxis=dict(visible=True, gridcolor="#1A3050")))
+        self._dark_layout(fig, "Comparativo de Reuniões — Radar")
+        self._pending_charts.append(fig.to_dict())
+        return f"📊 Radar gerado comparando {len(meetings)} reunião(ões)."
+
+    def generate_gantt_chart(self, title: str, phases: list[dict]) -> str:
+        """Gantt chart from explicitly supplied phases (no native scheduling data model exists)."""
+        import plotly.graph_objects as go
+        from datetime import datetime as _dt
+
+        if not phases:
+            return "Nenhuma fase informada — forneça ao menos uma fase com name/start/end."
+
+        _STATUS_COLORS = {
+            "planejado": "#64748b", "em_andamento": "#3b82f6",
+            "concluído": "#10b981", "concluido": "#10b981", "atrasado": "#ef4444",
+        }
+
+        parsed = []
+        for p in phases:
+            try:
+                start = _dt.fromisoformat(str(p["start"])[:10])
+                end = _dt.fromisoformat(str(p["end"])[:10])
+            except (KeyError, ValueError) as exc:
+                return f"Data inválida na fase '{p.get('name', '?')}': {exc}"
+            parsed.append({
+                "name": p.get("name", "Fase"),
+                "start": start, "end": end,
+                "status": (p.get("status") or "planejado").strip().lower(),
+            })
+        parsed.sort(key=lambda p: p["start"])
+
+        fig = go.Figure()
+        for p in parsed:
+            duration_days = max((p["end"] - p["start"]).days, 1)
+            fig.add_trace(go.Bar(
+                x=[duration_days], y=[p["name"]], base=[p["start"]],
+                orientation="h",
+                marker_color=_STATUS_COLORS.get(p["status"], self._palette[0]),
+                name=p["status"], showlegend=False,
+                text=f"{p['start'].date()} → {p['end'].date()}",
+                textposition="inside",
+            ))
+        fig.update_layout(barmode="overlay", xaxis=dict(type="date"))
+        self._dark_layout(fig, title)
+        self._pending_charts.append(fig.to_dict())
+        return f"📊 Gantt '{title}' gerado com {len(parsed)} fase(s)."
 
     def _populate_roster(self, args: dict) -> str:
         """Extract participant names from minutes_md and pre-populate the project roster."""
