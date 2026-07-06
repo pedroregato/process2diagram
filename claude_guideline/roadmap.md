@@ -4,6 +4,17 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC138 — Concluído (v5.15 / 2026-07-06) — KPIs da Central de Operações misturavam dados de outros domínios
+
+**Achado:** usuário reportou que, com o Projeto AURORA (domínio p2d) ativo, a Central de Operações mostrava 8 contextos, 32 reuniões, 51 processos e 2 documentos — mas o domínio p2d só tem 4 contextos reais. Causa: `pages/Home.py::_load_stats()` chamava `get_global_stats()`, que conta linhas em `contexts`/`meetings`/`requirements`/`bpmn_processes`/`meeting_documents` **sem nenhum filtro** (todos os tenants do banco inteiro) — e exibia esse total como se fosse o número do domínio ativo. Único chamador da função no código todo; o bug estava 100% no uso, não na função em si (que faz exatamente o que o nome diz).
+
+- [x] `core/project_store.py` — duas novas funções: `get_domain_stats(tenant_id)` (soma contextos/reuniões/requisitos/processos/documentos de **um único tenant**, via `contexts.tenant_id` → lista de `project_id`s → `IN`) e `get_context_stats(project_id)` (mesmas contagens para **um único contexto**). Ambas fail-closed: `tenant_id`/`project_id` ausente retorna zeros, nunca cai para dado de outro escopo. `get_global_stats()` mantida (uso correto seria um painel de superadmin cross-tenant, ex. MasterAdmin.py), docstring atualizada avisando para não reutilizá-la em página escopada por domínio/contexto.
+- [x] `pages/Home.py` — KPIs viram duas linhas, conforme sugestão do usuário: **"Totais do domínio"** (5 cards: Contextos/Reuniões/Requisitos/Processos/Documentos, sempre visível) e **"Totais do contexto ativo"** (4 cards, sem "Contextos" — não faz sentido nesse nível —, só aparece quando há um contexto ativo selecionado). `_render_kpi_row()` refatorado para indexar ícone/cor por chave de KPI (dict), não por posição — a linha de 4 itens não podia deslocar os ícones das linhas de 5 (bug que apareceria na primeira versão da implementação, pego antes do commit).
+- [x] `modules/i18n.py` — novas chaves `kpi_row_domain`/`kpi_row_context` em PT e EN.
+- [x] `tests/test_project_store_scoped_stats.py` (novo, 11 testes) — cenário replica o bug real: 2 tenants com 4 contextos cada, confirma que `get_domain_stats()` de um tenant nunca soma os 4 contextos/reuniões/requisitos do outro; `get_context_stats()` isola por projeto mesmo dentro do mesmo tenant; ambas fail-closed com `None`/sem DB.
+- [x] Verificado com `AppTest`: as duas linhas renderizam com os valores corretos e nenhuma exceção.
+- [x] 477/477 testes automatizados passando (466 + 11 novos).
+
 ### PC137 — Concluído (v5.15 / 2026-07-06) — Grafo de Conhecimento sem correlações: meeting_id=None na extração do Knowledge Hub
 
 **Achado:** usuário reportou que o Projeto AURORA não exibia correlações no Grafo de Conhecimento. Consulta direta ao banco (psycopg2) confirmou: as 57 entidades e os 14 processos do projeto tinham `meeting_ids = {}` (vazio) e `first_seen_meeting_id`/`last_seen_meeting_id = NULL` — sem essa ligação, `_build_pyvis_graph()` nunca encontra interseção de reuniões entre entidades/processos, então nenhuma aresta é desenhada, mesmo com dados presentes.

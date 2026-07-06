@@ -2512,8 +2512,104 @@ def retrieve_data_summary(project_id: str) -> dict:
     return summary
 
 
+def get_domain_stats(tenant_id: str | None) -> dict:
+    """Retorna contagens agregadas de todos os contextos (projetos) de UM
+    domínio/tenant — nunca mistura dados de outros tenants.
+
+    PC138: pages/Home.py mostrava get_global_stats() (todos os tenants do
+    banco, sem filtro nenhum) como se fossem os números do domínio ativo —
+    um projeto de um domínio com 4 contextos via "8 contextos" porque a
+    contagem incluía contextos de outros domínios também.
+
+    tenant_id=None (ou Supabase indisponível) retorna zeros — fail-closed,
+    nunca cai de volta para os dados de outro domínio.
+    Sempre retorna um dict com chaves definidas — nunca lança exceção.
+    """
+    base: dict = {
+        "n_projects":   0,
+        "n_meetings":   0,
+        "n_reqs":       0,
+        "n_bpmn_procs": 0,
+        "n_documents":  0,
+        "available":    False,
+    }
+    if not tenant_id:
+        return base
+    db = _db()
+    if not db:
+        return base
+    try:
+        ctx_rows = _ok(db.table("contexts").select("id").eq("tenant_id", tenant_id).execute())
+        project_ids = [c["id"] for c in ctx_rows]
+        base["n_projects"] = len(project_ids)
+        base["available"]  = True
+    except Exception:
+        return base
+    if not project_ids:
+        return base
+    try:
+        base["n_meetings"] = len(_ok(db.table("meetings").select("id").in_("project_id", project_ids).execute()))
+    except Exception:
+        pass
+    try:
+        base["n_reqs"] = len(_ok(db.table("requirements").select("id").in_("project_id", project_ids).execute()))
+    except Exception:
+        pass
+    try:
+        base["n_bpmn_procs"] = len(_ok(db.table("bpmn_processes").select("id").in_("project_id", project_ids).execute()))
+    except Exception:
+        pass
+    try:
+        base["n_documents"] = len(_ok(db.table("meeting_documents").select("id").in_("project_id", project_ids).execute()))
+    except Exception:
+        pass
+    return base
+
+
+def get_context_stats(project_id: str | None) -> dict:
+    """Retorna contagens (reuniões, requisitos, processos BPMN, documentos)
+    de UM único contexto (projeto) — nunca mistura dados de outros contextos.
+
+    project_id=None (ou Supabase indisponível) retorna zeros — fail-closed.
+    Sempre retorna um dict com chaves definidas — nunca lança exceção.
+    """
+    base: dict = {
+        "n_meetings":   0,
+        "n_reqs":       0,
+        "n_bpmn_procs": 0,
+        "n_documents":  0,
+        "available":    False,
+    }
+    if not project_id:
+        return base
+    db = _db()
+    if not db:
+        return base
+    try:
+        base["n_meetings"] = len(_ok(db.table("meetings").select("id").eq("project_id", project_id).execute()))
+        base["available"]  = True
+    except Exception:
+        return base
+    try:
+        base["n_reqs"] = len(_ok(db.table("requirements").select("id").eq("project_id", project_id).execute()))
+    except Exception:
+        pass
+    try:
+        base["n_bpmn_procs"] = len(_ok(db.table("bpmn_processes").select("id").eq("project_id", project_id).execute()))
+    except Exception:
+        pass
+    try:
+        base["n_documents"] = len(_ok(db.table("meeting_documents").select("id").eq("project_id", project_id).execute()))
+    except Exception:
+        pass
+    return base
+
+
 def get_global_stats() -> dict:
-    """Retorna contagens globais (todos os projetos) para o dashboard inicial.
+    """Retorna contagens globais (todos os projetos, todos os domínios) —
+    uso restrito a paineis de superadmin (ex.: MasterAdmin.py); NÃO usar em
+    páginas escopadas por domínio/contexto (ver get_domain_stats /
+    get_context_stats — PC138).
 
     Sempre retorna um dict com chaves definidas — nunca lança exceção.
     """

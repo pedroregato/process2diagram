@@ -25,7 +25,7 @@ import streamlit as st
 from ui.auth_gate import apply_auth_gate
 from modules.auth import is_admin
 from modules.i18n import t
-from core.project_store import get_global_stats, list_recent_meetings, list_contexts, list_meetings_quality
+from core.project_store import get_domain_stats, get_context_stats, list_recent_meetings, list_contexts, list_meetings_quality
 
 apply_auth_gate()
 
@@ -286,45 +286,84 @@ else:
     st.info(t("no_context_found"))
 
 # ── 2. KPIs ───────────────────────────────────────────────────────────────────
+# PC138: cada linha escopada explicitamente — domínio (tenant) ou contexto
+# (projeto) — nunca o banco inteiro. get_global_stats() (todos os tenants,
+# sem filtro) era mostrado aqui como se fossem os números do domínio ativo.
 @st.cache_data(ttl=60, show_spinner=False)
-def _load_stats():
-    return get_global_stats()
+def _load_domain_stats(tenant_id: str | None):
+    return get_domain_stats(tenant_id)
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_context_stats(project_id: str | None):
+    return get_context_stats(project_id)
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_recent(project_id: str | None = None):
     return list_recent_meetings(limit=6, project_id=project_id)
 
-stats  = _load_stats()
-recent = _load_recent(_ap_id)
+domain_stats  = _load_domain_stats(st.session_state.get("_tenant_id"))
+context_stats = _load_context_stats(_ap_id) if _ap_id else None
+recent        = _load_recent(_ap_id)
 
 def _fmt(n: int, available: bool) -> str:
     return str(n) if available else "—"
 
-_KPI_ACCENTS = ["#C97B1A", "#3b82f6", "#10b981", "#8b5cf6", "#ec4899"]
-_KPI_ICONS   = ["📁", "🗓️", "📝", "📐", "📄"]
-_KPI_DATA    = [
-    ("n_projects",   t("kpi_contexts")),
-    ("n_meetings",   t("kpi_meetings")),
-    ("n_reqs",       t("kpi_requirements")),
-    ("n_bpmn_procs", t("kpi_bpmn")),
-    ("n_documents",  t("kpi_documents")),
-]
+# Chaveado por KPI (não por posição) — a linha de contexto omite "n_projects"
+# e não pode deslocar os ícones/cores das colunas seguintes (PC138).
+_KPI_ACCENTS = {
+    "n_projects":   "#C97B1A",
+    "n_meetings":   "#3b82f6",
+    "n_reqs":       "#10b981",
+    "n_bpmn_procs": "#8b5cf6",
+    "n_documents":  "#ec4899",
+}
+_KPI_ICONS = {
+    "n_projects":   "📁",
+    "n_meetings":   "🗓️",
+    "n_reqs":       "📝",
+    "n_bpmn_procs": "📐",
+    "n_documents":  "📄",
+}
 
-cols = st.columns(5)
-for col, (key, label), accent, icon in zip(cols, _KPI_DATA, _KPI_ACCENTS, _KPI_ICONS):
-    val = _fmt(stats.get(key, 0), stats.get("available", False))
-    with col:
-        st.markdown(
-            f'<div class="kpi-card" style="--kpi-accent:{accent}">'
-            f'<div class="kpi-icon">{icon}</div>'
-            f'<div class="kpi-num">{val}</div>'
-            f'<div class="kpi-lbl">{label}</div>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
+def _render_kpi_row(kpi_data: list[tuple[str, str]], stats: dict) -> None:
+    cols = st.columns(len(kpi_data))
+    for col, (key, label) in zip(cols, kpi_data):
+        val = _fmt(stats.get(key, 0), stats.get("available", False))
+        with col:
+            st.markdown(
+                f'<div class="kpi-card" style="--kpi-accent:{_KPI_ACCENTS[key]}">'
+                f'<div class="kpi-icon">{_KPI_ICONS[key]}</div>'
+                f'<div class="kpi-num">{val}</div>'
+                f'<div class="kpi-lbl">{label}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
-if not stats["available"]:
+st.caption(f"🌐 {t('kpi_row_domain')}" + (f" — {domain_slug}" if domain_slug else ""))
+_render_kpi_row(
+    [
+        ("n_projects",   t("kpi_contexts")),
+        ("n_meetings",   t("kpi_meetings")),
+        ("n_reqs",       t("kpi_requirements")),
+        ("n_bpmn_procs", t("kpi_bpmn")),
+        ("n_documents",  t("kpi_documents")),
+    ],
+    domain_stats,
+)
+if not domain_stats["available"]:
     st.caption(t("kpi_unavailable"))
+
+if context_stats is not None:
+    st.caption(f"📁 {t('kpi_row_context')} — {_ap_name}")
+    _render_kpi_row(
+        [
+            ("n_meetings",   t("kpi_meetings")),
+            ("n_reqs",       t("kpi_requirements")),
+            ("n_bpmn_procs", t("kpi_bpmn")),
+            ("n_documents",  t("kpi_documents")),
+        ],
+        context_stats,
+    )
 
 # ── 3. Fluxo de trabalho ──────────────────────────────────────────────────────
 st.markdown(f'<div class="section-hdr">{t("workflow_title")}</div>', unsafe_allow_html=True)
