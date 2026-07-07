@@ -644,81 +644,121 @@ def list_meetings_without_transcript(project_id: str) -> list[dict]:
         return []
 
 
-def save_meeting_artifacts(meeting_id: str, hub) -> bool:
+def save_meeting_artifacts(meeting_id: str, hub) -> dict:
     """Persiste os artefatos gerados pelo pipeline na reunião.
 
-    Divide o save em três chamadas independentes para evitar estouro do limite
-    de payload do PostgREST (~512 KB):
-      1. Metadados leves + BPMN + Mermaid + Ata  (nunca falha por tamanho)
-      2. Relatório HTML executivo                 (grande; falha isolada)
+    PC153: cada grupo de campos é gravado em uma chamada UPDATE isolada e
+    independente — antes, tudo (BPMN + Ata + BMM + DMN + Argumentação +
+    Ruído + Tempos) ia num único payload; se qualquer campo estourasse o
+    limite de payload do PostgREST (~512 KB) ou desse erro de serialização,
+    o UPDATE inteiro falhava e TODOS os campos ficavam vazios, silenciosamente
+    (o caller nem verificava o retorno). Isolando por grupo, uma falha em um
+    campo pesado (ex.: BPMN muito grande) não derruba os demais, e o caller
+    consegue saber exatamente qual grupo falhou.
+
     As transcrições NÃO são salvas aqui — use save_transcript() separadamente.
+
+    Retorna um dict:
+        {"ok": bool, "failed": list[str], "saved": list[str]}
+    "ok" é True somente se TODOS os grupos aplicáveis (hub.<campo>.ready)
+    foram persistidos com sucesso. "failed" lista os nomes dos grupos que
+    falharam (para exibir ao usuário quais dados não foram salvos).
     """
+    result: dict[str, Any] = {"ok": True, "failed": [], "saved": []}
+
     db = _db()
     if not db:
-        return False
+        result["ok"] = False
+        result["failed"].append("supabase_indisponivel")
+        return result
 
-    # ── Chamada 1: metadados + artefatos leves ────────────────────────────────
-    try:
-        payload1: dict[str, Any] = {
-            "llm_provider": getattr(hub.meta, "llm_provider", None) if hasattr(hub, "meta") else None,
-            "total_tokens": getattr(hub.meta, "total_tokens_used", 0) if hasattr(hub, "meta") else 0,
-        }
-        if hasattr(hub, "bpmn") and hub.bpmn.ready:
-            payload1["bpmn_xml"]     = hub.bpmn.bpmn_xml
-            payload1["mermaid_code"] = hub.bpmn.mermaid
-        if hasattr(hub, "minutes") and hub.minutes.ready:
-            payload1["minutes_md"] = hub.minutes.minutes_md or ""
-            import json as _json
-            _m = hub.minutes
-            for _field in ("assumptions", "open_questions", "risks_identified", "dependencies", "stakeholder_needs"):
-                _val = getattr(_m, _field, None)
-                if _val:
-                    payload1[_field] = _json.dumps(_val, ensure_ascii=False)
-        if hasattr(hub, "bmm") and hub.bmm.ready:
-            import json, dataclasses
-            try:
-                payload1["bmm_json"] = json.dumps(dataclasses.asdict(hub.bmm))
-            except Exception:
-                pass
-        if hasattr(hub, "dmn") and hub.dmn.ready:
-            import json as _json_dmn, dataclasses as _dc_dmn
-            try:
-                payload1["dmn_json"] = _json_dmn.dumps(_dc_dmn.asdict(hub.dmn))
-            except Exception:
-                pass
-        if hasattr(hub, "argumentation") and hub.argumentation.ready:
-            import json as _json_arg, dataclasses as _dc_arg
-            try:
-                payload1["argumentation_json"] = _json_arg.dumps(_dc_arg.asdict(hub.argumentation))
-            except Exception:
-                pass
-        if hasattr(hub, "communication_noise") and hub.communication_noise.ready:
-            import json as _json_cn, dataclasses as _dc_cn
-            try:
-                payload1["communication_noise_json"] = _json_cn.dumps(_dc_cn.asdict(hub.communication_noise))
-            except Exception:
-                pass
-        if hasattr(hub, "meeting_time") and hub.meeting_time.ready:
-            import json as _json2
-            _mt = hub.meeting_time
-            if _mt.duration_minutes is not None:
-                payload1["duration_minutes"] = _mt.duration_minutes
-            if _mt.speaker_times:
-                payload1["speaker_times"] = _json2.dumps(_mt.speaker_times, ensure_ascii=False)
-        db.table("meetings").update(payload1).eq("id", meeting_id).execute()
-    except Exception:
-        return False
-
-    # ── Chamada 2: relatório HTML (pesado — falha não bloqueia) ───────────────
-    if hasattr(hub, "synthesizer") and hub.synthesizer.ready:
+    def _update(group: str, payload: dict[str, Any]) -> None:
+        """Executa um UPDATE isolado; registra sucesso/falha em `result`."""
+        if not payload:
+            return
         try:
-            db.table("meetings").update(
-                {"report_html": hub.synthesizer.html}
-            ).eq("id", meeting_id).execute()
+            db.table("meetings").update(payload).eq("id", meeting_id).execute()
+            result["saved"].append(group)
         except Exception:
-            pass   # HTML indisponível mas o restante foi salvo
+            result["ok"] = False
+            result["failed"].append(group)
 
-    return True
+    # ── Grupo 0: metadados leves (sempre tentado, nunca falha por tamanho) ────
+    _update("metadados", {
+        "llm_provider": getattr(hub.meta, "llm_provider", None) if hasattr(hub, "meta") else None,
+        "total_tokens": getattr(hub.meta, "total_tokens_used", 0) if hasattr(hub, "meta") else 0,
+    })
+
+    # ── Grupo 1: BPMN + Mermaid ────────────────────────────────────────────────
+    if hasattr(hub, "bpmn") and hub.bpmn.ready:
+        _update("bpmn", {
+            "bpmn_xml":     hub.bpmn.bpmn_xml,
+            "mermaid_code": hub.bpmn.mermaid,
+        })
+
+    # ── Grupo 2: Ata (minutes) ─────────────────────────────────────────────────
+    if hasattr(hub, "minutes") and hub.minutes.ready:
+        import json as _json
+        _m = hub.minutes
+        _payload_minutes: dict[str, Any] = {"minutes_md": _m.minutes_md or ""}
+        for _field in ("assumptions", "open_questions", "risks_identified", "dependencies", "stakeholder_needs"):
+            _val = getattr(_m, _field, None)
+            if _val:
+                _payload_minutes[_field] = _json.dumps(_val, ensure_ascii=False)
+        _update("ata", _payload_minutes)
+
+    # ── Grupo 3: BMM ───────────────────────────────────────────────────────────
+    if hasattr(hub, "bmm") and hub.bmm.ready:
+        import json as _json_bmm, dataclasses as _dc_bmm
+        try:
+            _update("bmm", {"bmm_json": _json_bmm.dumps(_dc_bmm.asdict(hub.bmm))})
+        except Exception:
+            result["ok"] = False
+            result["failed"].append("bmm")
+
+    # ── Grupo 4: DMN ───────────────────────────────────────────────────────────
+    if hasattr(hub, "dmn") and hub.dmn.ready:
+        import json as _json_dmn, dataclasses as _dc_dmn
+        try:
+            _update("dmn", {"dmn_json": _json_dmn.dumps(_dc_dmn.asdict(hub.dmn))})
+        except Exception:
+            result["ok"] = False
+            result["failed"].append("dmn")
+
+    # ── Grupo 5: Argumentação (IBIS) ───────────────────────────────────────────
+    if hasattr(hub, "argumentation") and hub.argumentation.ready:
+        import json as _json_arg, dataclasses as _dc_arg
+        try:
+            _update("argumentacao", {"argumentation_json": _json_arg.dumps(_dc_arg.asdict(hub.argumentation))})
+        except Exception:
+            result["ok"] = False
+            result["failed"].append("argumentacao")
+
+    # ── Grupo 6: Ruído de comunicação ──────────────────────────────────────────
+    if hasattr(hub, "communication_noise") and hub.communication_noise.ready:
+        import json as _json_cn, dataclasses as _dc_cn
+        try:
+            _update("ruido_comunicacao", {"communication_noise_json": _json_cn.dumps(_dc_cn.asdict(hub.communication_noise))})
+        except Exception:
+            result["ok"] = False
+            result["failed"].append("ruido_comunicacao")
+
+    # ── Grupo 7: Tempos de reunião / fala ──────────────────────────────────────
+    if hasattr(hub, "meeting_time") and hub.meeting_time.ready:
+        import json as _json2
+        _mt = hub.meeting_time
+        _payload_time: dict[str, Any] = {}
+        if _mt.duration_minutes is not None:
+            _payload_time["duration_minutes"] = _mt.duration_minutes
+        if _mt.speaker_times:
+            _payload_time["speaker_times"] = _json2.dumps(_mt.speaker_times, ensure_ascii=False)
+        _update("tempos", _payload_time)
+
+    # ── Grupo 8: Relatório HTML executivo (pesado; falha não bloqueia os demais) ──
+    if hasattr(hub, "synthesizer") and hub.synthesizer.ready:
+        _update("relatorio_html", {"report_html": hub.synthesizer.html})
+
+    return result
 
 
 def load_meeting_as_hub(meeting_id: str, project_id: str):
