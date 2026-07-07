@@ -1084,5 +1084,7 @@ Todo `endMessageEvent` e todo `sendTask` em qualquer pool DEVE ter uma entrada c
 `endMessageEvent` sem `message_flow` de saída = evento mudo (não comunica nada = erro de coreografia).
 Conte: N `endMessageEvent` + N `sendTask` que iniciam comunicação → deve haver N entradas em `message_flows` cobrindo-os.
 
+**Output language:** {output_language}
+
 Retorne **APENAS o JSON valido** resultante da analise da transcricao fornecida.
 Sem texto antes ou depois. Sem markdown fora do bloco de codigo. Sem explicacoes.
