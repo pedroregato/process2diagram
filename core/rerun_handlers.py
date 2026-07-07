@@ -30,8 +30,9 @@ def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
             # Fast path: regenerate XML/Mermaid from stored extraction data (no LLM call).
             # Avoids calling DeepSeek from a background thread, which returns empty responses.
             agent = AgentBPMN(client_info, provider_cfg)
-            hub.bpmn = agent._build_model(hub.bpmn.raw_llm_dict)
-            hub.bpmn.raw_llm_dict = hub.bpmn.raw_llm_dict  # preserve
+            _raw_dict = hub.bpmn.raw_llm_dict  # save BEFORE hub.bpmn is reassigned below
+            hub.bpmn = agent._build_model(_raw_dict)
+            hub.bpmn.raw_llm_dict = _raw_dict  # actually preserve it on the new model
             agent._enforce_rules(hub.bpmn, getattr(hub.nlp, "actors", None))
             try:
                 from modules.bpmn_auto_repair import repair_bpmn, reformat_bpmn_labels
