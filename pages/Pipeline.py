@@ -264,8 +264,34 @@ if pipeline_mode == _MODE_NEW:
                 if meeting:
                     meeting_id = meeting["id"]
                     st.session_state.current_meeting_id = meeting_id
-                    save_transcript(meeting_id, hub)
-                    save_meeting_artifacts(meeting_id, hub)
+
+                    # PC153: os retornos de save_transcript()/save_meeting_artifacts()
+                    # eram descartados — ambas seguem o padrão fail-open do projeto
+                    # (qualquer exceção vira `return False` silenciosamente), então uma
+                    # falha (ex.: payload > limite do PostgREST) passava despercebida:
+                    # a linha em `meetings` existia, mas os artefatos (transcrição,
+                    # BPMN, ata etc.) ficavam vazios, e o usuário ainda via o toast de
+                    # sucesso no fim do bloco. Agora os retornos são checados e
+                    # exibidos explicitamente.
+                    _transcript_ok = save_transcript(meeting_id, hub)
+                    _artifacts_result = save_meeting_artifacts(meeting_id, hub)
+                    _artifacts_ok = _artifacts_result.get("ok", False)
+                    _artifacts_failed = _artifacts_result.get("failed", [])
+
+                    if not _transcript_ok:
+                        st.warning(
+                            "⚠️ A transcrição não foi salva no banco de dados "
+                            "(a reunião foi criada, mas ficará sem transcrição "
+                            "armazenada). Você pode tentar reprocessar."
+                        )
+                    if not _artifacts_ok:
+                        _failed_label = ", ".join(_artifacts_failed) if _artifacts_failed else "desconhecido"
+                        st.warning(
+                            f"⚠️ Alguns artefatos não foram salvos no banco de dados "
+                            f"(grupo(s) com falha: **{_failed_label}**). Os demais "
+                            f"campos foram persistidos normalmente — você pode tentar "
+                            f"salvar novamente na tela de reunião carregada."
+                        )
 
                     # Knowledge Hub extraction (PC137) — must run AFTER create_meeting()
                     # so entities/processes are linked to a real meeting_id. Running it
@@ -496,7 +522,13 @@ else:
             if st.button(t("save_back"), key="btn_save_back"):
                 with st.spinner("Salvando..."):
                     try:
-                        save_meeting_artifacts(_mid, _lhub)
+                        _artifacts_result = save_meeting_artifacts(_mid, _lhub)
+                        if not _artifacts_result.get("ok", False):
+                            _failed_label = ", ".join(_artifacts_result.get("failed", [])) or "desconhecido"
+                            st.warning(
+                                f"⚠️ Alguns artefatos não foram salvos "
+                                f"(grupo(s) com falha: **{_failed_label}**)."
+                            )
                         if _lhub.bpmn.ready:
                             # PC117: usa o process_id já resolvido no load (hub.bpmn.db_process_id)
                             # em vez de deixar save_bpmn_from_hub recorrer ao matching por nome/slug —
