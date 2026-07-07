@@ -134,4 +134,4 @@ Return ONLY valid JSON with this exact schema — no markdown, no explanation, n
 - `decisions_referenced.status` must be one of: confirmed | conflicts | new | partial
 - `temporal_analysis` is mandatory; infer document date from headers, footers, or metadata if present
 - Analyze ONLY what is in the provided text — do not invent content
-- Output language must match the `output_language` instruction at the end of the user message
+- **Output language:** {output_language}
