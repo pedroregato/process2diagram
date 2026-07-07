@@ -93,6 +93,30 @@ MEETINGS_REQUIREMENTS_SCHEMAS: list[dict] = [
             {
                 "type": "function",
                 "function": {
+                    "name": "get_meeting_processing_history",
+                    "description": (
+                        "Retorna o histórico de processamento de uma reunião: quando ela foi "
+                        "processada pela primeira vez e cada reprocessamento posterior (completo "
+                        "ou de um agente específico), com data efetiva, tokens e sucesso/erro. "
+                        "Use para 'quantas vezes essa reunião foi processada/reprocessada', "
+                        "'quando essa reunião foi processada de verdade' (útil quando a data "
+                        "registrada da reunião parece não bater com o processamento real)."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "meeting_number": {
+                                "type": "integer",
+                                "description": "Número da reunião",
+                            },
+                        },
+                        "required": ["meeting_number"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "get_meeting_action_items",
                     "description": (
                         "Retorna os itens de ação — também chamados de 'encaminhamentos' ou "
@@ -1341,6 +1365,39 @@ class _MeetingsRequirementsToolsMixin:
             ]
             content = "\n".join(filtered) if filtered else content
         return f"{header}\nItens de Ação:\n{content}"
+
+    def get_meeting_processing_history(self, meeting_number: int) -> str:
+        """History of every processing/reprocessing event for a meeting (PC152)."""
+        m = self._find_meeting(meeting_number)
+        if not m:
+            return f"Reunião {meeting_number} não encontrada."
+        title = m.get("title") or f"Reunião {meeting_number}"
+        header = f"Reunião {meeting_number} — {title}"
+
+        from core.project_store import get_meeting_processing_history
+        rows = get_meeting_processing_history(m["id"])
+        if not rows:
+            return (
+                f"{header}\nNenhum registro de processamento encontrado — a tabela de "
+                "histórico foi introduzida depois desta reunião ter sido processada, ou "
+                "o processamento ainda não foi registrado."
+            )
+
+        _type_label = {
+            "new": "Processamento inicial",
+            "reprocess_full": "Reprocessamento completo",
+            "reprocess_agent": "Reprocessamento de agente",
+        }
+        lines = [f"{header}\nHistórico de processamento ({len(rows)} evento(s)):"]
+        for r in rows:
+            ts = (r.get("processed_at") or "")[:19].replace("T", " ")
+            label = _type_label.get(r.get("processing_type"), r.get("processing_type") or "?")
+            if r.get("processing_type") == "reprocess_agent" and r.get("agent_name"):
+                label += f" ({r['agent_name']})"
+            status = "✅" if r.get("success", True) else f"❌ {r.get('error_message') or 'erro'}"
+            tokens = r.get("total_tokens") or 0
+            lines.append(f"  - {ts} — {label} — {status}" + (f" — {tokens:,} tokens" if tokens else ""))
+        return "\n".join(lines)
 
     def get_meeting_summary(self, meeting_number: int) -> str:
         m = self._find_meeting(meeting_number)

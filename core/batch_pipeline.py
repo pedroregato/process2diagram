@@ -314,6 +314,7 @@ class BatchPipeline:
         from core.project_store import (
             create_meeting, save_transcript, save_meeting_artifacts, save_meeting_tokens,
             save_sbvr_from_hub, save_bpmn_from_hub, log_batch_file, is_file_processed,
+            log_meeting_processing,
         )
         from core.pipeline import run_pipeline, run_knowledge_extraction
         from core.knowledge_hub import KnowledgeHub
@@ -412,6 +413,13 @@ class BatchPipeline:
 
             log_batch_file(project_id, meeting_id, filename, fhash,
                            "done", req_counts, n_terms, n_rules, "")
+            log_meeting_processing(
+                meeting_id=meeting_id,
+                project_id=project_id,
+                processing_type="new",
+                llm_provider=getattr(hub.meta, "llm_provider", ""),
+                total_tokens=getattr(hub.meta, "total_tokens_used", 0),
+            )
 
             return FileResult(
                 filename=filename,
@@ -443,7 +451,7 @@ class BatchPipeline:
         """
         from core.project_store import (
             save_meeting_artifacts, save_meeting_tokens,
-            save_sbvr_from_hub, save_bpmn_from_hub,
+            save_sbvr_from_hub, save_bpmn_from_hub, log_meeting_processing,
         )
         from core.pipeline import run_pipeline
         from core.knowledge_hub import KnowledgeHub
@@ -502,6 +510,11 @@ class BatchPipeline:
         try:
             hub = run_pipeline(hub, pipeline_config, lambda *_: None)
         except Exception as exc:
+            log_meeting_processing(
+                meeting_id=meeting_id, project_id=project_id,
+                processing_type="reprocess_full", success=False,
+                error_message=str(exc)[:500],
+            )
             return FileResult(filename=title, status="failed", error=str(exc))
 
         try:
@@ -525,6 +538,14 @@ class BatchPipeline:
                 reconciler = AgentReqReconciler(self.client_info, self.provider_cfg)
                 req_counts = reconciler.run(hub, project_id, meeting_id, self.output_language)
 
+            log_meeting_processing(
+                meeting_id=meeting_id,
+                project_id=project_id,
+                processing_type="reprocess_full",
+                llm_provider=getattr(hub.meta, "llm_provider", ""),
+                total_tokens=getattr(hub.meta, "total_tokens_used", 0),
+            )
+
             return FileResult(
                 filename=title,
                 status="done",
@@ -536,6 +557,11 @@ class BatchPipeline:
             )
 
         except Exception as exc:
+            log_meeting_processing(
+                meeting_id=meeting_id, project_id=project_id,
+                processing_type="reprocess_full", success=False,
+                error_message=str(exc)[:500],
+            )
             return FileResult(filename=title, status="failed", error=str(exc))
 
     # ── Helpers ───────────────────────────────────────────────────────────────

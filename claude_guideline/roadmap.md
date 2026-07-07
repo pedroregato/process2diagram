@@ -4,6 +4,20 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC152 — Concluído (v5.15 / 2026-07-07) — tabela auxiliar de histórico de processamento de reuniões
+
+**Contexto:** após o PC151 (perda silenciosa de dados de pipeline), o usuário pediu uma tabela auxiliar registrando a data efetiva de cada processamento de transcrição — incluindo reprocessamentos — para saber quantas vezes e quando cada reunião foi processada.
+
+- Nova tabela `meeting_processing_log` (migration `setup/supabase_migration_meeting_processing_log.sql`, executada em produção): `meeting_id`/`project_id` (FK cascade), `processing_type` (`new`|`reprocess_full`|`reprocess_agent`, `CHECK` constraint), `agent_name` (só para `reprocess_agent`), `llm_provider`, `total_tokens`, `success`, `error_message`, `processed_at`.
+- `core/project_store.py`: `log_meeting_processing()` (fail-open, insert), `get_meeting_processing_history(meeting_id)` (histórico ordenado, mais recente primeiro), `count_meeting_processings(meeting_id)` (`count="exact"` + `.limit(1)`, imune ao cap de 1000 linhas do PostgREST — mesmo padrão de `_exact_count()`/PC139).
+- Hookado nos 4 caminhos de processamento reais do sistema: `pages/Pipeline.py` Modo A (`processing_type=new`, logo após `create_meeting()`+saves bem-sucedidos — mesmo bloco corrigido no PC151) e rerun de agente único (`processing_type=reprocess_agent`, `agent_name=<agente>`, resolvendo `meeting_id`/`project_id` de Modo A ou B); `core/batch_pipeline.py::_run_one()` (`processing_type=new`) e `_reprocess_one()` (`processing_type=reprocess_full`, inclusive registrando falhas — `meeting_id` já existe antes do pipeline rodar nesse caminho, ao contrário de `_run_one`).
+- Nova ferramenta do Assistente `get_meeting_processing_history(meeting_number)` (`core/tools/tools_meetings_requirements.py`, categoria "consulta", não-admin) — responde "quantas vezes essa reunião foi processada" e "quando foi processada de verdade" (útil quando a data registrada da reunião não bate com o processamento real, como no cenário do PC151).
+- [x] 17 testes novos (`test_meeting_processing_log.py`): helpers de `project_store` (fail-open, payload correto, contagem por reunião), formatação da tool (não encontrada, sem histórico, múltiplos eventos, evento com falha), wiring de dispatch/categoria.
+- [x] Migration executada e validada em produção com insert+count+rollback real (sem dado de teste permanente deixado no banco).
+- [x] 595/595 testes automatizados passando (578 + 17 novos).
+
+---
+
 ### PC151 — Concluído (v5.15 / 2026-07-06) — reuniões processadas mas NUNCA salvas no banco (perda de dados silenciosa)
 
 **Contexto:** usuário reportou que duas transcrições novas carregadas para o projeto SDEA (reuniões esperadas #29/#30, datas 01/07 e 02/07/2026) não apareciam para o Assistente. Investigação com evidência real (psycopg2 direto em produção) revelou algo muito mais grave que um campo de data errado:

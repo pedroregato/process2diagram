@@ -74,6 +74,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "get_meeting_participants":     "consulta",
     "get_meeting_decisions":        "consulta",
     "get_meeting_action_items":     "consulta",
+    "get_meeting_processing_history": "consulta",
     "get_meeting_summary":          "consulta",
     "compare_meeting_transcripts":  "consulta",
     "show_meeting_transcript":      "consulta",
@@ -341,6 +342,9 @@ class AssistantToolExecutor(
                 "get_meeting_action_items":  lambda: self.get_meeting_action_items(
                     tool_input["meeting_number"],
                     tool_input.get("responsible"),
+                ),
+                "get_meeting_processing_history": lambda: self.get_meeting_processing_history(
+                    tool_input["meeting_number"],
                 ),
                 "get_meeting_summary":       lambda: self.get_meeting_summary(tool_input["meeting_number"]),
                 "search_transcript":         lambda: self.search_transcript(

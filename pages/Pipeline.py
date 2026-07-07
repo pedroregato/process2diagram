@@ -25,6 +25,7 @@ from core.project_store import (
     create_meeting, save_transcript, save_meeting_artifacts,
     save_sbvr_from_hub, save_bpmn_from_hub, save_requirements_from_hub,
     list_contexts as list_projects, list_meetings, load_meeting_as_hub,
+    log_meeting_processing,
 )
 from agents.agent_req_reconciler import AgentReqReconciler
 from modules.supabase_client import supabase_configured
@@ -356,6 +357,14 @@ if pipeline_mode == _MODE_NEW:
                         parts.append(f"{counts['confirmed']} confirmado(s)")
                     summary = " · ".join(parts) if parts else f"{total} requisito(s)"
                     st.toast(f"💾 Reunião salva · {summary}", icon="✅")
+
+                    log_meeting_processing(
+                        meeting_id=meeting_id,
+                        project_id=st.session_state.project_id,
+                        processing_type="new",
+                        llm_provider=getattr(hub.meta, "llm_provider", ""),
+                        total_tokens=getattr(hub.meta, "total_tokens_used", 0),
+                    )
                 else:
                     # create_meeting() is fail-open by design (returns None on any
                     # error) — PC151: this branch used to not exist at all, so a
@@ -576,6 +585,24 @@ if "rerun_agent" in st.session_state:
                         st.session_state["_rr_pending_messages"] = [
                             ("success", f"✅ {_agent_name.capitalize()} re‑executado com sucesso."),
                         ] + list(_messages or [])
+
+                        _rr_meeting_id = (
+                            st.session_state.get("current_meeting_id")
+                            or st.session_state.get("_loaded_meeting_id")
+                        )
+                        _rr_project_id = (
+                            st.session_state.get("project_id")
+                            or st.session_state.get("_loaded_project_id")
+                        )
+                        if _rr_meeting_id and _rr_project_id:
+                            log_meeting_processing(
+                                meeting_id=_rr_meeting_id,
+                                project_id=_rr_project_id,
+                                processing_type="reprocess_agent",
+                                agent_name=_agent_name,
+                                llm_provider=getattr(_result_hub.meta, "llm_provider", ""),
+                                total_tokens=getattr(_result_hub.meta, "total_tokens_used", 0),
+                            )
                     except Exception as _e:
                         st.session_state["_rr_pending_messages"] = [("error", f"❌ Erro: {str(_e)}")]
                 # spinner.__exit__ limpou o container → st.rerun() com árvore vazia → sem setIn.

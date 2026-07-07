@@ -484,6 +484,81 @@ def save_meeting_tokens(meeting_id: str, total_tokens: int, llm_provider: str) -
         return False
 
 
+# ── Histórico de processamento (PC152) ────────────────────────────────────────
+
+def log_meeting_processing(
+    meeting_id: str,
+    project_id: str,
+    processing_type: str = "new",
+    agent_name: str | None = None,
+    llm_provider: str | None = None,
+    total_tokens: int = 0,
+    success: bool = True,
+    error_message: str | None = None,
+) -> bool:
+    """Registra um evento de processamento (novo ou reprocessamento) de uma reunião.
+
+    processing_type: "new" | "reprocess_full" | "reprocess_agent".
+    agent_name só é relevante para "reprocess_agent".
+    """
+    db = _db()
+    if not db:
+        return False
+    try:
+        db.table("meeting_processing_log").insert({
+            "meeting_id": meeting_id,
+            "project_id": project_id,
+            "processing_type": processing_type,
+            "agent_name": agent_name,
+            "llm_provider": llm_provider,
+            "total_tokens": total_tokens,
+            "success": success,
+            "error_message": error_message,
+        }).execute()
+        return True
+    except Exception:
+        return False
+
+
+def get_meeting_processing_history(meeting_id: str) -> list[dict]:
+    """Retorna o histórico de processamento de uma reunião, mais recente primeiro."""
+    db = _db()
+    if not db:
+        return []
+    try:
+        return _ok(
+            db.table("meeting_processing_log")
+            .select("*")
+            .eq("meeting_id", meeting_id)
+            .order("processed_at", desc=True)
+            .execute()
+        )
+    except Exception:
+        return []
+
+
+def count_meeting_processings(meeting_id: str) -> int:
+    """Conta quantas vezes uma reunião foi processada (novo + reprocessamentos).
+
+    Usa count="exact" + .limit(1) — imune ao limite padrão de 1000 linhas do
+    PostgREST (mesmo padrão de _exact_count(), ver PC139).
+    """
+    db = _db()
+    if not db:
+        return 0
+    try:
+        resp = (
+            db.table("meeting_processing_log")
+            .select("id", count="exact")
+            .eq("meeting_id", meeting_id)
+            .limit(1)
+            .execute()
+        )
+        return resp.count or 0
+    except Exception:
+        return 0
+
+
 def update_meeting_title(meeting_id: str, new_title: str) -> bool:
     """Atualiza o título de uma reunião pelo seu ID."""
     db = _db()
