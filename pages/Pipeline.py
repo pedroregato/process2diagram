@@ -356,8 +356,29 @@ if pipeline_mode == _MODE_NEW:
                         parts.append(f"{counts['confirmed']} confirmado(s)")
                     summary = " · ".join(parts) if parts else f"{total} requisito(s)"
                     st.toast(f"💾 Reunião salva · {summary}", icon="✅")
+                else:
+                    # create_meeting() is fail-open by design (returns None on any
+                    # error) — PC151: this branch used to not exist at all, so a
+                    # failed save was 100% invisible: the pipeline results still
+                    # rendered from `hub` in session_state, giving no indication
+                    # that nothing was persisted to the database.
+                    st.error(
+                        "❌ Não foi possível salvar esta reunião no banco de dados — "
+                        "os resultados acima **não foram persistidos**. Verifique se "
+                        "o contexto ainda está corretamente confirmado acima e tente "
+                        "processar novamente."
+                    )
             except Exception as e:
                 st.warning(f"⚠️ Erro ao salvar no Supabase: {e}")
+        elif supabase_configured():
+            # project_confirmed is False — persistence was skipped entirely.
+            # PC151: previously silent; the LLM pipeline above still runs (real
+            # cost incurred) with no indication that nothing will be saved.
+            st.warning(
+                "⚠️ Nenhum contexto confirmado — os resultados acima **não foram "
+                "salvos** no banco de dados. Confirme um contexto na seção "
+                "'Contexto / Reunião' acima e processe novamente para persistir."
+            )
 
         # FIX: st.rerun() removido — causava re-avaliação do file_uploader
         # que apagava o hub do session_state antes de renderizar as abas.

@@ -4,6 +4,25 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC151 — Concluído (v5.15 / 2026-07-06) — reuniões processadas mas NUNCA salvas no banco (perda de dados silenciosa)
+
+**Contexto:** usuário reportou que duas transcrições novas carregadas para o projeto SDEA (reuniões esperadas #29/#30, datas 01/07 e 02/07/2026) não apareciam para o Assistente. Investigação com evidência real (psycopg2 direto em produção) revelou algo muito mais grave que um campo de data errado:
+
+- `MAX(meetings.created_at)` em **toda** a base = 2026-06-30 — nenhuma reunião nova em nenhum projeto nos últimos dias.
+- `llm_telemetry` mostrava **duas execuções completas do pipeline** no dia do relato (23:07–23:15 e 23:33–23:39 UTC — bpmn, minutes, requirements, sbvr, bmm, dmn, argumentation, synthesizer, todos com sucesso) — ou seja, o pipeline rodou de verdade, com custo real de LLM, mas nada foi persistido.
+
+**Causa raiz:** `ui/project_selector.py::_init()` roda em TODO rerender de `pages/Pipeline.py` (via `render_project_selector()`, chamada antes da lógica do botão "Processar Transcrição" — na MESMA execução de script). Seu bloco de sincronização comparava `active_project_id` (setado em outro lugar, ex.: Home.py) contra o `project_id` já confirmado do Pipeline em TODA execução — não só quando `active_project_id` de fato mudava. Sempre que o usuário confirmava deliberadamente um projeto DIFERENTE no seletor local do Pipeline daquele que por acaso estava "ativo" alhures, essa discrepância persistia em todo rerender seguinte e reacionava o reset a cada vez — revertendo silenciosamente `project_id`/`project_confirmed` de volta ao projeto ativo obsoleto, inclusive na MESMA execução que processa a transcrição. Como o bloco de persistência em `Pipeline.py` é condicionado a `if supabase_configured() and project_confirmed:` sem nenhum `else`, o pipeline de LLM roda normalmente (não depende dessa flag) mas `create_meeting()`/`save_*` são pulados silenciosamente — zero erro, zero aviso, resultados aparecem normalmente na tela (vêm de `hub` em `session_state`, não do banco) dando a falsa impressão de sucesso completo.
+- Bug reproduzido e confirmado com um script mínimo antes de corrigir: confirmar "SDEA" com "AURORA" como projeto ativo, chamar `_init()` de novo (simulando o rerender do clique em Processar) — `project_id` voltava sozinho para `aurora-id` e `project_confirmed` para `False`.
+
+**Correção:**
+- `ui/project_selector.py::_init()` — novo estado `_last_seen_active_pid` rastreia o último valor visto de `active_project_id`; o reset de `project_confirmed` agora só dispara quando esse valor **muda de fato** (evento real de "usuário trocou de contexto no Home.py"), não mais toda vez que ele simplesmente difere da escolha já confirmada no Pipeline.
+- `pages/Pipeline.py` — adicionado `else` quando `create_meeting()` retorna `None` (mostra `st.error()` claro: resultados NÃO foram persistidos) e `elif` quando `project_confirmed` é `False` (mostra `st.warning()`: nada foi salvo, confirme o contexto e processe novamente). Antes, ambos os casos eram 100% silenciosos.
+- [x] 6 testes novos (`test_project_selector_confirmed_reset.py`): confirmação de um projeto diferente do ativo sobrevive a múltiplos reruns subsequentes (inclusive com `active_project_id=None`), troca genuína de projeto ativo ainda reseta corretamente, alternância A→B→A reseta em cada transição real.
+- [x] 578/578 testes automatizados passando (572 + 6 novos).
+- **Ação pendente do usuário:** as duas transcrições de 01/07 e 02/07 do projeto SDEA precisam ser reprocessadas — o trabalho de LLM já foi pago mas nada foi persistido; com o fix, confirmar o projeto e processar deve salvar corretamente desta vez.
+
+---
+
 ### PC150 — Concluído (v5.15 / 2026-07-06) — barras de prioridade sempre cinza no gráfico "Requisitos por Tipo e Prioridade"
 
 **Contexto:** usuário reportou (print) que as barras empilhadas de "medium" e "high" apareciam ambas na mesma cor cinza, apesar da legenda distinguir as duas categorias corretamente.

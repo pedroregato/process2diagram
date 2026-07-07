@@ -49,16 +49,30 @@ def _init():
             st.session_state[key] = default
 
     # ── Sync active_project_id (Central de Operações) → project context ──────
-    # When the user changes the working context in Home.py, reset project_confirmed
-    # so Pipeline.py shows the selector pre-filled with the new context.
+    # Reset project_confirmed ONLY on a genuine CHANGE of active_project_id
+    # (tracked via _last_seen_active_pid) — this function runs on every rerun
+    # of Pipeline.py, including the very same rerun that processes the
+    # transcript. The previous comparison (active_pid != project_id, without
+    # tracking whether active_pid itself had changed) fired on EVERY rerun
+    # whenever the user deliberately confirmed a DIFFERENT project inside
+    # Pipeline's own selector than whatever happened to be "active" in
+    # Home.py — silently reverting project_id/project_confirmed right back
+    # to the stale active project on the next script pass (e.g. the "Processar
+    # Transcrição" click itself), so create_meeting()/save_* were skipped with
+    # zero error shown even though the LLM pipeline had already run (PC151 —
+    # confirmed in production: 2 full pipeline runs in llm_telemetry, 0 new
+    # rows in meetings).
     active_pid = st.session_state.get("active_project_id")
-    if active_pid and active_pid != st.session_state.get("project_id"):
-        st.session_state["project_id"]        = active_pid
-        st.session_state["project_name"]      = st.session_state.get("active_project_name", "")
-        st.session_state["project_confirmed"] = False
-        st.session_state["current_meeting_id"] = None
-        # Clear cached selectbox value so it re-renders with the active project
-        st.session_state.pop("proj_sel", None)
+    last_seen_active_pid = st.session_state.get("_last_seen_active_pid")
+    if active_pid != last_seen_active_pid:
+        st.session_state["_last_seen_active_pid"] = active_pid
+        if active_pid and active_pid != st.session_state.get("project_id"):
+            st.session_state["project_id"]        = active_pid
+            st.session_state["project_name"]      = st.session_state.get("active_project_name", "")
+            st.session_state["project_confirmed"] = False
+            st.session_state["current_meeting_id"] = None
+            # Clear cached selectbox value so it re-renders with the active project
+            st.session_state.pop("proj_sel", None)
 
 
 def render_context_selector() -> None:
