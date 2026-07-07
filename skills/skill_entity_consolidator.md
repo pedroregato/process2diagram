@@ -112,3 +112,4 @@ Retorne APENAS JSON válido:
 4. Se não houver duplicatas, retorne `{"merge_groups": [], "notes": "Nenhuma duplicata identificada"}`
 5. Retorne APENAS o JSON — sem markdown wrapper, sem comentários
 6. Máximo 50 grupos de fusão por chamada; priorize os de maior `occurrence_count`
+7. **Output language:** {output_language} — aplica-se aos campos de texto livre (`reason`, `notes`); `keep_name` deve refletir o nome já usado nas transcrições, não ser traduzido
