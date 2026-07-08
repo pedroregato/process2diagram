@@ -499,6 +499,22 @@ else:
         if loaded_hub is None:
             st.error("Falha ao carregar a reunião. Verifique o banco de dados.")
             st.stop()
+
+        # PC160 — melhorias/templates-ata-por-contexto.md: modelo de ata do
+        # contexto ativo também vale para reunião existente carregada (Modo
+        # B), não só para transcrição nova. Fail-open.
+        try:
+            from core.project_store import get_active_ata_template
+            _ata_tpl = get_active_ata_template(selected_proj_id)
+            if _ata_tpl:
+                loaded_hub.ata_template_markdown = _ata_tpl.get("template_markdown") or ""
+                loaded_hub.ata_template_spec = {
+                    "accent_color": (_ata_tpl.get("style_spec") or {}).get("accent_color"),
+                    "assets": _ata_tpl.get("assets") or [],
+                }
+        except Exception:
+            pass
+
         st.session_state.hub = loaded_hub
         st.session_state["_loaded_meeting_id"] = selected_meet_id
         st.session_state["_loaded_project_id"] = selected_proj_id

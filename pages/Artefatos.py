@@ -678,6 +678,21 @@ with tab_meet:
     if not meetings:
         st.info("Nenhuma reunião registrada para este projeto.")
     else:
+        # PC160 — melhorias/templates-ata-por-contexto.md: modelo de ata
+        # ativo do contexto, carregado uma vez para todas as reuniões da
+        # aba (não por reunião). Fail-open: None quando não configurado.
+        _atatpl_spec = None
+        try:
+            from core.project_store import get_active_ata_template
+            _atatpl_active = get_active_ata_template(project_id)
+            if _atatpl_active:
+                _atatpl_spec = {
+                    "accent_color": (_atatpl_active.get("style_spec") or {}).get("accent_color"),
+                    "assets": _atatpl_active.get("assets") or [],
+                }
+        except Exception:
+            pass
+
         for m in meetings:
             num   = m.get("meeting_number", "?")
             title = m.get("title", "")
@@ -753,7 +768,7 @@ with tab_meet:
                             )
                             st.download_button(
                                 "⬇️ Ata (.docx)",
-                                data=_minutes_to_docx(_mm),
+                                data=_minutes_to_docx(_mm, template_spec=_atatpl_spec),
                                 file_name=f"ata_reuniao_{num}_{_date_suffix}.docx",
                                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                                 key=f"dl_minutes_docx_{m['id']}",
