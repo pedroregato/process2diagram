@@ -33,7 +33,7 @@ def render(hub, prefix, suffix):
             key="export_minutes_md"
         )
         try:
-            from modules.minutes_exporter import to_docx, to_pdf
+            from modules.minutes_exporter import to_docx, to_pdf, to_html
             st.download_button(
                 "⬇️ .docx",
                 data=to_docx(hub.minutes),
@@ -45,6 +45,13 @@ def render(hub, prefix, suffix):
                 data=to_pdf(hub.minutes),
                 file_name=make_filename("minutes", "pdf", prefix, suffix),
                 key="export_minutes_pdf"
+            )
+            st.download_button(
+                "⬇️ .html",
+                data=to_html(hub.minutes).encode("utf-8"),
+                file_name=make_filename("minutes", "html", prefix, suffix),
+                mime="text/html",
+                key="export_minutes_html"
             )
         except Exception:
             pass

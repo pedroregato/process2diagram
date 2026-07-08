@@ -265,6 +265,33 @@ if pipeline_mode == _MODE_NEW:
                     meeting_id = meeting["id"]
                     st.session_state.current_meeting_id = meeting_id
 
+                    # PC155: gera o HTML da Ata Interativa ANTES do save de artefatos
+                    # abaixo — precisa rodar aqui (não depois) para que
+                    # save_meeting_artifacts() capture hub.minutes.ata_html no grupo
+                    # "ata" já na primeira gravação, em vez de só na tela (sem
+                    # persistir) como acontecia antes do PC155.
+                    if hub.minutes.ready:
+                        try:
+                            from modules.ata_engine_generator import generate_ata_html
+                            from datetime import date as _d
+                            _mtg_date = st.session_state.get("meeting_date") or _d.today()
+                            if isinstance(_mtg_date, str):
+                                from datetime import date as _date
+                                try:
+                                    _mtg_date = _date.fromisoformat(_mtg_date)
+                                except ValueError:
+                                    _mtg_date = _d.today()
+                            hub.minutes.ata_html = generate_ata_html(
+                                minutes      = hub.minutes,
+                                project_id   = st.session_state.get("project_id", ""),
+                                meeting_id   = meeting_id,
+                                project_slug = _ata_slug,
+                                meeting_date = _mtg_date,
+                                local        = "Videoconferência",
+                            )
+                        except Exception as _ata_err:
+                            hub.minutes.ata_html_error = str(_ata_err)
+
                     # PC153: os retornos de save_transcript()/save_meeting_artifacts()
                     # eram descartados — ambas seguem o padrão fail-open do projeto
                     # (qualquer exceção vira `return False` silenciosamente), então uma
@@ -323,29 +350,6 @@ if pipeline_mode == _MODE_NEW:
                         )
                     except Exception:
                         pass
-
-                    if hub.minutes.ready:
-                        try:
-                            from modules.ata_engine_generator import generate_ata_html
-                            from datetime import date as _d
-                            _mtg_date = st.session_state.get("meeting_date") or _d.today()
-                            if isinstance(_mtg_date, str):
-                                from datetime import date as _date
-                                try:
-                                    _mtg_date = _date.fromisoformat(_mtg_date)
-                                except ValueError:
-                                    _mtg_date = _d.today()
-                            hub.minutes.ata_html = generate_ata_html(
-                                minutes      = hub.minutes,
-                                project_id   = st.session_state.get("project_id", ""),
-                                meeting_id   = meeting_id,
-                                project_slug = _ata_slug,
-                                meeting_date = _mtg_date,
-                                local        = "Videoconferência",
-                            )
-                            st.session_state.hub = hub
-                        except Exception:
-                            pass
 
                     if hub.requirements.ready:
                         save_requirements_from_hub(meeting_id, st.session_state.project_id, hub)

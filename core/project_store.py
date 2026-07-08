@@ -705,6 +705,11 @@ def save_meeting_artifacts(meeting_id: str, hub) -> dict:
             _val = getattr(_m, _field, None)
             if _val:
                 _payload_minutes[_field] = _json.dumps(_val, ensure_ascii=False)
+        # PC155: persiste o HTML da Ata Interativa (ATA Engine) — antes só
+        # existia em memória e se perdia em qualquer reload (Modo B/Assistente).
+        _ata_html = getattr(_m, "ata_html", "")
+        if _ata_html:
+            _payload_minutes["ata_html"] = _ata_html
         _update("ata", _payload_minutes)
 
     # ── Grupo 3: BMM ───────────────────────────────────────────────────────────
@@ -788,7 +793,7 @@ def load_meeting_as_hub(meeting_id: str, project_id: str):
         db.table("meetings")
         .select(
             "id, title, meeting_date, meeting_number, "
-            "transcript_clean, transcript_raw, minutes_md, "
+            "transcript_clean, transcript_raw, minutes_md, ata_html, "
             "bpmn_xml, mermaid_code, report_html, bmm_json, "
             "dmn_json, argumentation_json, communication_noise_json, "
             "total_tokens, llm_provider"
@@ -819,6 +824,11 @@ def load_meeting_as_hub(meeting_id: str, project_id: str):
         hub.minutes.title      = m.get("title") or ""
         hub.minutes.date       = str(m.get("meeting_date") or "")
         hub.minutes.ready      = True
+        # PC155: HTML da Ata Interativa persistido — vazio para reuniões
+        # processadas antes da coluna existir ou cuja geração falhou/não
+        # rodou (ata_html_error fica vazio de propósito; a UI oferece um
+        # botão de regeneração manual quando campos estruturados existem).
+        hub.minutes.ata_html   = (m.get("ata_html") or "").strip()
 
     # ── BPMN — prefere bpmn_versions (mais recente), fallback meetings.bpmn_xml ─
     # PC117: se houver mais de uma linha is_current=True para esta reunião (bug

@@ -23,6 +23,17 @@ def render(hub, prefix, suffix):
             file_name=make_filename("minutes", "md", prefix, suffix),
             key="minutes_md_raw",
         )
+        try:
+            from modules.minutes_exporter import to_html
+            st.download_button(
+                "⬇️ .html",
+                data=to_html(m).encode("utf-8"),
+                file_name=make_filename("minutes", "html", prefix, suffix),
+                mime="text/html",
+                key="minutes_html_raw",
+            )
+        except Exception:
+            pass
         return
 
     st.markdown(f"## {m.title}")
@@ -97,6 +108,43 @@ def render(hub, prefix, suffix):
             )
     elif ata_err:
         st.warning(f"Nao foi possivel gerar a ata interativa: {ata_err}")
+    elif _has_structured:
+        # PC155: sem HTML salvo (reunião antiga sem a coluna preenchida, ou
+        # ata_html ficou desatualizado após um rerun do agente de Ata) mas
+        # os campos estruturados estão presentes no hub — regeneração manual
+        # é possível (ATA Engine é puro Python, sem chamada de LLM).
+        st.caption("Ata Interativa ainda não gerada para esta versão da ata.")
+        if st.button("🔄 Gerar Ata Interativa", key="btn_regen_ata_html"):
+            try:
+                from modules.ata_engine_generator import generate_ata_html
+                from datetime import date as _d
+                _mtg_date = _d.today()
+                if m.date:
+                    try:
+                        _mtg_date = _d.fromisoformat(str(m.date)[:10])
+                    except ValueError:
+                        pass
+                _slug = (prefix or "p2d_").rstrip("_").lower() or "p2d"
+                m.ata_html = generate_ata_html(
+                    minutes      = m,
+                    project_id   = st.session_state.get("project_id", ""),
+                    meeting_id   = st.session_state.get("current_meeting_id", ""),
+                    project_slug = _slug,
+                    meeting_date = _mtg_date,
+                    local        = m.location or "Videoconferência",
+                )
+                m.ata_html_error = ""
+                st.session_state["hub"] = hub
+                _mid = st.session_state.get("current_meeting_id", "")
+                if _mid:
+                    try:
+                        from core.project_store import save_meeting_artifacts
+                        save_meeting_artifacts(_mid, hub)
+                    except Exception:
+                        pass  # regenerado na tela mesmo se o save falhar
+                st.rerun()
+            except Exception as _exc:
+                st.error(f"Falha ao gerar a ata interativa: {_exc}")
 
     st.markdown("### Export Minutes")
     md_content = AgentMinutes.to_markdown(m)
@@ -125,6 +173,17 @@ def render(hub, prefix, suffix):
             data=to_pdf(m),
             file_name=make_filename("minutes", "pdf", prefix, suffix),
             key="minutes_pdf"
+        )
+    except Exception:
+        pass
+    try:
+        from modules.minutes_exporter import to_html
+        st.download_button(
+            "⬇️ .html",
+            data=to_html(m).encode("utf-8"),
+            file_name=make_filename("minutes", "html", prefix, suffix),
+            mime="text/html",
+            key="minutes_html"
         )
     except Exception:
         pass

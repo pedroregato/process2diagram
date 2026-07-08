@@ -1,9 +1,12 @@
 # modules/minutes_exporter.py
 # ─────────────────────────────────────────────────────────────────────────────
-# Export MinutesModel to Word (.docx) and PDF.
+# Export MinutesModel to Word (.docx), PDF, and standalone HTML.
 #
-# to_docx(minutes) → bytes   — python-docx
-# to_pdf(minutes)  → bytes   — fpdf2 (pure Python, Latin-1 covers Portuguese)
+# to_docx(minutes) → bytes  — python-docx
+# to_pdf(minutes)  → bytes  — fpdf2 (pure Python, Latin-1 covers Portuguese)
+# to_html(minutes) → str    — self-contained HTML, no CDN dependency; falls
+#                              back to parsing minutes_md when structured
+#                              fields are empty (meeting loaded from DB)
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
@@ -423,3 +426,264 @@ def to_pdf(minutes: "MinutesModel") -> bytes:
         pdf.ln(3)
 
     return bytes(pdf.output())
+
+
+# ── HTML ──────────────────────────────────────────────────────────────────────
+#
+# Self-contained HTML (inline CSS, no CDN dependency) so the exported file
+# opens correctly offline / via file://. Always available: renders the
+# structured fields when present, or falls back to parsing minutes_md when
+# a meeting was loaded from the DB with only the raw markdown persisted
+# (structured fields — participants/agenda/summary/decisions/action_items —
+# are not stored as separate columns, only minutes_md is).
+
+_HTML_CSS = """
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    background: #F4F7FB;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    color: #1e293b;
+  }
+  .page { max-width: 820px; margin: 0 auto; padding: 32px 24px 56px; }
+  .card {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(11,30,61,0.08);
+    padding: 28px 32px;
+    margin-bottom: 20px;
+  }
+  .title { text-align: center; color: #0B1E3D; font-size: 26px; font-weight: 700; margin: 0 0 8px; }
+  .meta { text-align: center; color: #64748B; font-size: 13px; margin: 0; }
+  .meta span + span::before { content: " · "; }
+  h2.section-title {
+    text-transform: uppercase;
+    font-size: 12px; letter-spacing: 0.04em; font-weight: 700;
+    color: #2E7FD9;
+    border-bottom: 1px solid #2E7FD9;
+    padding-bottom: 6px;
+    margin: 0 0 12px;
+  }
+  ul.plain { margin: 0; padding-left: 20px; }
+  ul.plain li { margin-bottom: 4px; }
+  ol.plain { margin: 0; padding-left: 20px; }
+  ol.plain li { margin-bottom: 4px; }
+  .topic { color: #0B1E3D; font-weight: 700; margin: 14px 0 2px; }
+  .topic:first-child { margin-top: 0; }
+  p.body-text { margin: 0 0 10px; line-height: 1.5; }
+  table.actions { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.actions th {
+    background: #0B1E3D; color: #fff; text-align: left;
+    padding: 8px 10px; font-weight: 600;
+  }
+  table.actions td { padding: 8px 10px; border-bottom: 1px solid #E2E8F0; }
+  table.actions tr:last-child td { border-bottom: none; }
+  .prio { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .prio-high   { background: #FDECD8; color: #C9791A; }
+  .prio-normal { background: #DCEAFB; color: #2E7FD9; }
+  .prio-low    { background: #DBF0E6; color: #1A7F5A; }
+  .next-meeting { color: #0B1E3D; font-size: 14px; }
+  .footer { text-align: center; color: #64748B; font-size: 11px; font-style: italic; margin-top: 8px; }
+  /* Markdown-fallback rendering (minutes_md-only, no structured fields) */
+  .min-h3 { color: #0B1E3D; font-size: 18px; margin: 18px 0 8px; }
+  .min-h4 { color: #0B1E3D; font-size: 15px; margin: 14px 0 6px; }
+  .min-h5 { color: #2E7FD9; font-size: 13px; margin: 10px 0 4px; }
+  table.minutes-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0 14px; }
+  table.minutes-table td { padding: 6px 10px; border: 1px solid #E2E8F0; }
+"""
+
+
+def _md_to_html_fallback(md: str) -> str:
+    """
+    Minimal Markdown -> HTML converter, used only when a meeting was loaded
+    from the DB without structured minutes fields (only minutes_md persisted).
+    Handles: | table | rows, #/##/### headers, -/* bullets, 1. numbered
+    lists, blank-line paragraph breaks, and inline **bold**/*italic*.
+    """
+    import html as _html_lib
+    import re
+
+    lines = (md or "").splitlines()
+    out: list[str] = []
+    in_ul = False
+    in_table = False
+
+    def close_ul() -> None:
+        nonlocal in_ul
+        if in_ul:
+            out.append("</ul>")
+            in_ul = False
+
+    def close_table() -> None:
+        nonlocal in_table
+        if in_table:
+            out.append("</tbody></table>")
+            in_table = False
+
+    def inline(text: str) -> str:
+        text = _html_lib.escape(text)
+        text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+        text = re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
+        return text
+
+    for line in lines:
+        stripped = line.rstrip()
+
+        if stripped.startswith("|"):
+            close_ul()
+            cells = [c.strip() for c in stripped.strip("|").split("|")]
+            if all(re.match(r"^[-:]+$", c) for c in cells if c):
+                continue
+            if not in_table:
+                out.append('<table class="minutes-table"><tbody>')
+                in_table = True
+            tds = "".join(f"<td>{inline(c)}</td>" for c in cells)
+            out.append(f"<tr>{tds}</tr>")
+            continue
+
+        close_table()
+
+        if stripped.startswith("### "):
+            close_ul()
+            out.append(f'<h5 class="min-h5">{inline(stripped[4:])}</h5>')
+        elif stripped.startswith("## "):
+            close_ul()
+            out.append(f'<h4 class="min-h4">{inline(stripped[3:])}</h4>')
+        elif stripped.startswith("# "):
+            close_ul()
+            out.append(f'<h3 class="min-h3">{inline(stripped[2:])}</h3>')
+        elif re.match(r"^[-*] ", stripped):
+            if not in_ul:
+                out.append('<ul class="plain">')
+                in_ul = True
+            out.append(f"<li>{inline(stripped[2:])}</li>")
+        elif re.match(r"^\d+\. ", stripped):
+            close_ul()
+            out.append(f"<li>{inline(re.sub(r'^\\d+\\. ', '', stripped))}</li>")
+        elif not stripped:
+            close_ul()
+        else:
+            close_ul()
+            out.append(f'<p class="body-text">{inline(stripped)}</p>')
+
+    close_ul()
+    close_table()
+    return "\n".join(out)
+
+
+def to_html(minutes: "MinutesModel") -> str:
+    """
+    Generate a self-contained HTML document from MinutesModel. Returns a
+    full HTML string (not bytes) — always available regardless of whether
+    structured fields (agenda/summary/decisions/action_items) are populated
+    or the meeting only has raw minutes_md (loaded from DB without
+    structured data). Same navy/accent palette as to_docx()/to_pdf().
+    """
+    import html as _html_lib
+
+    def esc(s: object) -> str:
+        return _html_lib.escape(str(s or ""))
+
+    title = esc(minutes.title or "Ata de Reunião")
+
+    meta_parts = []
+    if minutes.date:
+        meta_parts.append(f"<span>Data: {esc(minutes.date)}</span>")
+    if minutes.location:
+        meta_parts.append(f"<span>Local/Modalidade: {esc(minutes.location)}</span>")
+    meta_parts.append(f"<span>Gerado em: {esc(_now())}</span>")
+    meta_html = "".join(meta_parts)
+
+    has_structured = bool(
+        minutes.participants or minutes.agenda or minutes.summary
+        or minutes.decisions or minutes.action_items
+    )
+
+    sections: list[str] = []
+
+    if has_structured:
+        if minutes.participants:
+            items = "".join(f"<li>{esc(p)}</li>" for p in minutes.participants)
+            sections.append(
+                f'<div class="card"><h2 class="section-title">Participantes</h2>'
+                f'<ul class="plain">{items}</ul></div>'
+            )
+        if minutes.agenda:
+            items = "".join(f"<li>{esc(a)}</li>" for a in minutes.agenda)
+            sections.append(
+                f'<div class="card"><h2 class="section-title">Pauta</h2>'
+                f'<ol class="plain">{items}</ol></div>'
+            )
+        if minutes.summary:
+            blocks = []
+            for block in minutes.summary:
+                topic = esc(block.get("topic", ""))
+                content = esc(block.get("content", ""))
+                if topic:
+                    blocks.append(f'<div class="topic">{topic}</div>')
+                if content:
+                    blocks.append(f'<p class="body-text">{content}</p>')
+            sections.append(
+                f'<div class="card"><h2 class="section-title">Resumo da Reunião</h2>'
+                f'{"".join(blocks)}</div>'
+            )
+        if minutes.decisions:
+            items = "".join(f"<li>{esc(d)}</li>" for d in minutes.decisions)
+            sections.append(
+                f'<div class="card"><h2 class="section-title">Decisões Tomadas</h2>'
+                f'<ul class="plain">{items}</ul></div>'
+            )
+        if minutes.action_items:
+            rows = []
+            for ai in minutes.action_items:
+                prio_class = {"high": "prio-high", "normal": "prio-normal", "low": "prio-low"}.get(
+                    ai.priority, "prio-normal"
+                )
+                rows.append(
+                    "<tr>"
+                    f'<td><span class="prio {prio_class}">{esc(_prio_label(ai.priority))}</span></td>'
+                    f"<td>{esc(ai.task)}</td>"
+                    f"<td>{esc(ai.responsible)}</td>"
+                    f'<td>{esc(ai.deadline or "—")}</td>'
+                    f'<td>{esc(ai.raised_by or "—")}</td>'
+                    "</tr>"
+                )
+            sections.append(
+                f'<div class="card"><h2 class="section-title">'
+                f"Encaminhamentos / Action Items ({len(minutes.action_items)})</h2>"
+                '<table class="actions"><thead><tr>'
+                "<th>Prioridade</th><th>Tarefa</th><th>Responsável</th>"
+                "<th>Prazo</th><th>Levantado por</th>"
+                f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+            )
+        if minutes.next_meeting:
+            sections.append(
+                f'<div class="card"><h2 class="section-title">Próxima Reunião</h2>'
+                f'<p class="next-meeting">{esc(minutes.next_meeting)}</p></div>'
+            )
+    else:
+        # Loaded from DB without structured fields — parse the raw markdown.
+        body = _md_to_html_fallback(getattr(minutes, "minutes_md", ""))
+        sections.append(f'<div class="card">{body}</div>')
+
+    body_html = "\n".join(sections)
+
+    return f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<style>{_HTML_CSS}</style>
+</head>
+<body>
+<div class="page">
+  <div class="card">
+    <p class="title">{title}</p>
+    <p class="meta">{meta_html}</p>
+  </div>
+  {body_html}
+  <p class="footer">Documento gerado automaticamente por Process2Diagram — {esc(_now())}</p>
+</div>
+</body>
+</html>"""
