@@ -20,6 +20,7 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] 20 testes novos (`tests/test_ata_template_engine.py`): extração de esqueleto Markdown, detecção de cor de destaque (presente/ausente), extração de logo do header, `to_docx()` com/sem `template_spec` (cor aplicada, cor malformada não quebra, logo inserido), CRUD completo via Supabase mockado, injeção de template no prompt do `AgentMinutes`.
 - [x] 642/642 testes automatizados passando.
 - **Lição de teste registrada**: `core/project_store.py` importa `get_supabase_client` uma única vez no topo do módulo (diferente dos mixins de `core/tools/*.py`, que importam localmente dentro de cada função) — mockar exige `patch("core.project_store._db", ...)`, não `patch("modules.supabase_client.get_supabase_client", ...)` (que não intercepta nada e deixa a chamada real vazar para a API do Supabase).
+- **Gap encontrado e corrigido no teste manual em produção (mesmo dia)**: `hub.ata_template_spec` só era carregado no fluxo "Nova transcrição" de `pages/Pipeline.py` — reunião existente carregada via `load_meeting_as_hub()` (Modo B) e o botão "⬇️ Ata (.docx)" da Central de Artefatos nunca aplicavam cor/logo do modelo ativo, mesmo reprocessando o agente Ata (a estrutura de seções seguia o template porque isso é injeção de prompt, mas o `.docx` exportado saía sem estilo). Corrigido carregando `get_active_ata_template()` também após `load_meeting_as_hub()` em `pages/Pipeline.py`, e em `pages/Artefatos.py` (aba Reuniões) — consulta única por aba, fora do loop de reuniões, não por reunião individual.
 
 ---
 
