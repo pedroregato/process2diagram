@@ -4,6 +4,22 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC162 — Concluído (v5.15 / 2026-07-08) — Onda 2 de melhorias do Assistente (3 tools + 3 bugs reais adicionais)
+
+**Contexto:** continuação de PC161 — `melhorias/avaliacao-proposta-assistente-20260708.md` priorizou 9 propostas em 3 ondas por esforço/reaproveitamento. Onda 1 (3 quick wins) concluída em PC161; esta entrada cobre a Onda 2 (esforço moderado).
+
+- **`gerar_release_notes(meeting_number_inicio, meeting_number_fim)`** (`core/tools/tools_executive_advanced.py`) — consolida todas as mudanças de `requirement_versions` entre 2 reuniões-marco, agrupadas por `change_type`, e sintetiza em prosa via 1 chamada LLM (mesmo padrão de `gerar_deck_executivo`/`gerar_project_charter` — dados agregados em Python, só a redação final via LLM).
+- **`analisar_tendencias(top_n=5)`** (`core/tools/tools_knowledge_requirements2.py`) — sem LLM: requisitos mais instáveis (mais versões em `requirement_versions`), temas IBIS mais debatidos (ranking por nº de alternativas via `_load_ibis_questions()`, já existente), contradições por severidade/status (`kh_contradictions`). Decisão explícita de escopo: **não** inclui ranking de "participante com contribuições mais contestadas" (proposta original) — nenhuma tabela liga uma contradição/revisão a um autor específico; aproximar isso a partir de texto livre arriscaria fabricação. Documentado no docstring da tool e coberto por um teste dedicado (`test_never_ranks_participants`).
+- **`estimar_risco_requisito(req_number=None, top_n=10)`** (`core/tools/tools_meetings_requirements.py`) — score 0-100 por requisito via fórmula heurística ponderada e transparente: nº de revisões (instabilidade), contradição sinalizada em alguma versão, ausência de `source_quote` (rastreabilidade fraca), descrição curta/vaga (heurística simples de ambiguidade — não NLP), prioridade alta sem status avançado. Sempre mostra os fatores que compuseram o score, nunca um número isolado — evita a aparência de julgamento definitivo de uma heurística simples.
+- **3 bugs reais adicionais achados verificando o schema real via `psycopg2` direto antes de codificar** (mesmo método que já tinha pego 2 bugs no fechamento do PC161):
+  - `diff_requirement()` (`core/tools/tools_knowledge_requirements2.py`) selecionava `status, changed_at, change_note` de `requirement_versions` — nenhuma dessas colunas existe (as reais são `change_summary`/`created_at`; `status` vive em `requirements`, não em `requirement_versions`). 100% quebrado em produção, confirmado com uma chamada real contra o Supabase antes e depois do fix.
+  - `verificar_rastreabilidade_obrigatoria()` (código do próprio PC161, do dia anterior) consultava uma tabela `argumentation_questions` que **não existe** — IBIS vive como JSON em `meetings.argumentation_json`, lido via `_load_ibis_questions()` (helper já compartilhado por `search_ibis_debates`/`get_ibis_timeline`). O gap de IBIS sempre reportava 0 silenciosamente. Corrigido para usar o helper certo; teste de regressão adicionado com um fake DB que **explode** se qualquer tabela fora da lista de tabelas reais for consultada diretamente.
+- [x] 16 testes novos (`tests/test_gerar_release_notes.py`, `tests/test_analisar_tendencias.py`, `tests/test_estimar_risco_requisito.py`) + testes de regressão para os 3 bugs achados (`tests/test_diff_requirement_columns.py`, atualização de `tests/test_verificar_rastreabilidade_obrigatoria.py`).
+- [x] 701/701 testes automatizados passando.
+- **Onda 3 (Importador de Planilha, Workflow de Aprovação sem notificação) fica para quando houver demanda — ver avaliação completa em `melhorias/avaliacao-proposta-assistente-20260708.md`.**
+
+---
+
 ### PC161 — Concluído (v5.15 / 2026-07-08) — Onda 1 de melhorias do Assistente (avaliação + 3 tools novas + 2 bugs reais corrigidos)
 
 **Contexto:** o próprio Assistente propôs 18 novas ferramentas em `melhorias/proposta-assistente-20260708.md` (auto-sugestão). Antes de implementar qualquer coisa, foi feita uma avaliação de viabilidade completa (`melhorias/avaliacao-proposta-assistente-20260708.md`) contra o catálogo real de ~140 tools em `core/tools/*.py` — achado: 6 das 18 propostas já existiam sob outro nome, 3 exigiam mudança de arquitetura (cross-project query, hoje `AssistantToolExecutor` opera só 1 `project_id` por vez), e 9 valiam construir. Priorizadas por reaproveitamento de infraestrutura já testada, não por frente temática.
