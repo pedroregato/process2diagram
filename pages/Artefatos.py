@@ -23,6 +23,7 @@ from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured
 from modules.text_utils import rule_keyword_pt
 from modules.reqtracker_exporter import to_html as export_html, to_pdf as export_pdf
+from services.export_service import format_date_suffix
 from core.project_store import (
     list_meetings, list_requirements, list_requirements_light,
     list_requirement_versions, list_contradictions,
@@ -721,21 +722,45 @@ with tab_meet:
                 if minutes_md:
                     st.markdown("---")
                     toggle_key = f"_show_minutes_{m['id']}"
-                    col_btn, col_dl = st.columns([2, 1])
+                    # PC159: sufixo de data é o da REUNIÃO, não o dia do
+                    # download — dá pra identificar de qual reunião é o
+                    # arquivo só pelo nome, mesmo baixado meses depois.
+                    _date_suffix = format_date_suffix(m.get("meeting_date"))
+                    col_btn, col_dl_md, col_dl_docx = st.columns([2, 1, 1])
                     with col_btn:
                         label = "🙈 Ocultar Ata" if st.session_state.get(toggle_key) else "📄 Ver Ata Completa"
                         if st.button(label, key=f"btn_minutes_{m['id']}", use_container_width=True):
                             st.session_state[toggle_key] = not st.session_state.get(toggle_key, False)
                             st.rerun()
-                    with col_dl:
+                    with col_dl_md:
                         st.download_button(
-                            "⬇️ Download Ata (.md)",
+                            "⬇️ Ata (.md)",
                             data=minutes_md.encode("utf-8"),
-                            file_name=f"ata_reuniao_{num}.md",
+                            file_name=f"ata_reuniao_{num}_{_date_suffix}.md",
                             mime="text/markdown",
                             key=f"dl_minutes_{m['id']}",
                             use_container_width=True,
                         )
+                    with col_dl_docx:
+                        try:
+                            from modules.minutes_exporter import to_docx as _minutes_to_docx
+                            from core.knowledge_hub import MinutesModel as _MinutesModel
+                            _mm = _MinutesModel(
+                                title=m.get("title") or f"Reunião {num}",
+                                date=str(m.get("meeting_date") or ""),
+                                minutes_md=minutes_md,
+                                ready=True,
+                            )
+                            st.download_button(
+                                "⬇️ Ata (.docx)",
+                                data=_minutes_to_docx(_mm),
+                                file_name=f"ata_reuniao_{num}_{_date_suffix}.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                key=f"dl_minutes_docx_{m['id']}",
+                                use_container_width=True,
+                            )
+                        except Exception as _exc:
+                            st.caption(f"⚠️ Word indisponível: {_exc}")
                     if st.session_state.get(toggle_key):
                         st.markdown(minutes_md)
                 else:

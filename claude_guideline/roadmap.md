@@ -4,6 +4,19 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC159 — Concluído (v5.15 / 2026-07-08) — Download Ata em Word na Central de Artefatos + nomes de arquivo com data da reunião
+
+**Contexto:** pedido direto do usuário — na Central de Artefatos, aba Reuniões, só havia "Download Ata (.md)"; pediu para incluir Word também. Segundo ponto: nomes de arquivo gerados eram genéricos (`{projeto}_minutes{data do download}.html`) — usar a **data da reunião** em vez da data em que o export foi pedido.
+
+- **`services/export_service.py::format_date_suffix(raw_date) -> str`** — normaliza data de reunião (DD/MM/AAAA do LLM, ISO do banco, ou `datetime.date`) para sufixo `AAAA-MM-DD` seguro em nome de arquivo; cai para hoje quando `raw_date` está vazio.
+- **`pages/Pipeline.py`** — chokepoint único onde `suffix` é definido para TODOS os exports da sessão viva (`make_filename`, 33 pontos de chamada em `ui/tabs/*.py`) passou a derivar de `hub.minutes.date` (ou `st.session_state.meeting_date` como fallback) em vez de `date.today()` — afeta ata, BPMN, requisitos, SBVR, DMN, argumentação e relatório executivo, em todos os formatos (md/docx/pdf/html/json/bpmn/mmd), de uma vez.
+- **`pages/Artefatos.py`** (aba Reuniões) — botão **"⬇️ Ata (.docx)"** adicionado ao lado do `.md` existente (agora renomeado "⬇️ Ata (.md)"); ambos usam `format_date_suffix(m.get("meeting_date"))` no nome (`ata_reuniao_{num}_{AAAA-MM-DD}.ext`).
+- **Bug latente corrigido no caminho**: `modules/minutes_exporter.py::to_docx()` não tinha fallback pra `minutes_md` (só `to_html()` tinha, do PC155) — uma reunião carregada do banco (sem campos estruturados, que é exatamente o caso da aba Reuniões) geraria um Word quase vazio (só título/data). Adicionado `_render_markdown_docx()`, espelhando `_md_to_html_fallback()`: headers `#`/`##`/`###`, bullets, listas numeradas, tabelas markdown, parágrafos — tudo renderizado como conteúdo real do Word.
+- [x] 11 testes novos (`tests/test_pc159_meeting_date_naming.py`): `format_date_suffix` com todos os formatos de entrada (BR, ISO, ISO timestamp, `date` object, vazio→hoje), fallback markdown→docx produz conteúdo real (não noqueado por dados estruturados quando ambos coexistem), doc vazio não quebra.
+- [x] 622/622 testes automatizados passando.
+
+---
+
 ### PC158 — Concluído (v5.15 / 2026-07-08) — botão "Nova" reabre Contexto/Reunião em branco
 
 **Contexto:** pedido direto do usuário — na tela "Processar Transcrição" (modo Nova transcrição), o botão de limpar resultados existente ("🆕 Nova Transcrição") não tocava em título/data da reunião nem reabria o formulário "Contexto / Reunião" — só limpava a transcrição/hub, deixando o contexto anterior confirmado.

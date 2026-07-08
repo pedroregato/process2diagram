@@ -29,6 +29,83 @@ def _prio_label(p: str) -> str:
     return {"high": "Alta", "normal": "Normal", "low": "Baixa"}.get(p, p.capitalize())
 
 
+def _render_markdown_docx(doc, md: str, navy, accent) -> None:
+    """
+    Minimal Markdown -> docx renderer, used only when a meeting was loaded
+    from the DB without structured minutes fields (only minutes_md
+    persisted) — mirrors to_html()'s _md_to_html_fallback so the Word
+    export isn't a near-empty stub in that case. Handles: #/##/### headers,
+    -/* bullets, 1. numbered lists, | table | rows, blank-line paragraph
+    breaks, plain paragraphs. Inline **bold**/*italic* markers are
+    stripped (not rendered as bold/italic runs — not worth per-token
+    splitting for a fallback path).
+    """
+    import re
+    from docx.shared import Pt
+
+    def _strip_inline(text: str) -> str:
+        text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+        text = re.sub(r"\*(.+?)\*", r"\1", text)
+        return text
+
+    lines = (md or "").splitlines()
+    table_rows: list[list[str]] = []
+
+    def _flush_table() -> None:
+        nonlocal table_rows
+        if not table_rows:
+            return
+        n_cols = max(len(r) for r in table_rows)
+        table = doc.add_table(rows=0, cols=n_cols)
+        table.style = "Table Grid"
+        for row in table_rows:
+            cells = table.add_row().cells
+            for i in range(n_cols):
+                cells[i].text = row[i] if i < len(row) else ""
+                for para in cells[i].paragraphs:
+                    for run in para.runs:
+                        run.font.size = Pt(10)
+        doc.add_paragraph()
+        table_rows = []
+
+    for line in lines:
+        stripped = line.rstrip()
+
+        if stripped.startswith("|"):
+            cells = [c.strip() for c in stripped.strip("|").split("|")]
+            if all(re.match(r"^[-:]+$", c) for c in cells if c):
+                continue  # separator row
+            table_rows.append([_strip_inline(c) for c in cells])
+            continue
+        _flush_table()
+
+        if stripped.startswith("### "):
+            p = doc.add_paragraph()
+            r = p.add_run(_strip_inline(stripped[4:]))
+            r.bold = True; r.font.size = Pt(12); r.font.color.rgb = accent
+        elif stripped.startswith("## "):
+            p = doc.add_paragraph()
+            r = p.add_run(_strip_inline(stripped[3:]))
+            r.bold = True; r.font.size = Pt(14); r.font.color.rgb = navy
+        elif stripped.startswith("# "):
+            p = doc.add_paragraph()
+            r = p.add_run(_strip_inline(stripped[2:]))
+            r.bold = True; r.font.size = Pt(16); r.font.color.rgb = navy
+        elif re.match(r"^[-*] ", stripped):
+            p = doc.add_paragraph(style="List Bullet")
+            p.add_run(_strip_inline(stripped[2:])).font.size = Pt(11)
+        elif re.match(r"^\d+\. ", stripped):
+            p = doc.add_paragraph(style="List Number")
+            p.add_run(_strip_inline(re.sub(r"^\d+\.\s*", "", stripped))).font.size = Pt(11)
+        elif not stripped:
+            continue
+        else:
+            p = doc.add_paragraph()
+            p.add_run(_strip_inline(stripped)).font.size = Pt(11)
+
+    _flush_table()
+
+
 # ── Word (.docx) ──────────────────────────────────────────────────────────────
 
 def to_docx(minutes: "MinutesModel") -> bytes:
@@ -111,6 +188,18 @@ def to_docx(minutes: "MinutesModel") -> bytes:
     def _body(text: str) -> None:
         p = doc.add_paragraph(text)
         p.paragraph_format.space_after = Pt(4)
+
+    # ── Markdown fallback ─────────────────────────────────────────────────────
+    # Meeting loaded from DB without structured fields (only minutes_md
+    # persisted) — render the raw markdown instead of an empty document.
+    # The structured sections below are all no-ops in this case (their
+    # `if minutes.xxx:` guards see empty lists), so no early return needed.
+    _has_structured = bool(
+        minutes.participants or minutes.agenda or minutes.summary
+        or minutes.decisions or minutes.action_items
+    )
+    if not _has_structured and getattr(minutes, "minutes_md", ""):
+        _render_markdown_docx(doc, minutes.minutes_md, NAVY, ACCENT)
 
     # ── Participants ──────────────────────────────────────────────────────────
     if minutes.participants:

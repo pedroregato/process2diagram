@@ -661,7 +661,17 @@ if "rerun_agent" in st.session_state:
 if "hub" in st.session_state:
     hub = st.session_state.hub
     prefix = st.session_state.prefix
-    suffix = st.session_state.suffix
+    # PC159: nome de arquivo usa a data da REUNIÃO, não a data em que o
+    # download foi pedido — hub.minutes.date é a fonte mais confiável (vem
+    # preenchida tanto no Modo A recém-processado quanto no Modo B carregado
+    # do banco, ver load_meeting_as_hub); cai para meeting_date da sessão e,
+    # por fim, para a data de hoje quando nenhuma das duas está disponível.
+    from services.export_service import format_date_suffix
+    _meeting_date_raw = (
+        getattr(getattr(hub, "minutes", None), "date", "")
+        or st.session_state.get("meeting_date")
+    )
+    suffix = format_date_suffix(_meeting_date_raw)
 
     # ── Cache hit indicator ───────────────────────────────────────────────────
     _hits = getattr(getattr(hub, "meta", None), "cache_hits", 0)
