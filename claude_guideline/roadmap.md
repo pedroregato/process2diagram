@@ -4,6 +4,20 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC156 — Concluído (v5.15 / 2026-07-08) — correção de termo com grafia errada agora cobre o SBVR
+
+**Contexto:** usuário perguntou se havia funcionalidade para corrigir um termo/sigla com grafia errada trazida pela transcrição (ex: "SASEP" quando o correto é "SACEP") de forma consistente em todos os artefatos onde o termo aparece — incluindo o vocabulário SBVR. Investigação (Explore agent) confirmou: `apply_text_correction`/`preview_text_correction`/`batch_text_correction` já cobriam transcrição/ata/requisitos, mas o `scope` não tinha opção `"sbvr"`, e as ferramentas dedicadas de SBVR (`update_sbvr_term`/`update_sbvr_term_by_id`) só editavam `definition`/`category` — nenhuma tinha parâmetro para renomear `sbvr_terms.term` em si.
+
+- **`core/tools/tools_bpmn_sbvr.py`:**
+  - `update_sbvr_term()` e `update_sbvr_term_by_id()` ganharam parâmetro `new_term` — renomeia o termo SBVR, com checagem de duplicidade (`.ilike`) antes de aplicar, recusando o rename se já existir outro termo com o mesmo nome no projeto.
+  - `preview_text_correction()`/`apply_text_correction()` ganharam `scope="sbvr"` (e `scope="all"` passou a incluir SBVR) — busca/substitui em `sbvr_terms.term`, `sbvr_terms.definition` e `sbvr_rules.statement`.
+- **`core/tools/tools_knowledge_requirements2.py`:** enum de `scope` em `batch_text_correction` atualizado para incluir `"sbvr"` (a implementação já delega pra `apply_text_correction`, sem mudança de lógica).
+- **`core/assistant_tools.py`:** dispatch de `update_sbvr_term`/`update_sbvr_term_by_id` atualizado para repassar `new_term`.
+- [x] 12 testes novos (`tests/test_tools_sbvr_term_rename.py`): rename com sucesso, rejeição de nome duplicado, termo não encontrado, rename combinado com outros campos, preview/apply com `scope="sbvr"` tocando termo+definição+regra, `scope="all"` cobrindo SBVR, `scope="sbvr"` isolado não tocando `meetings`/`requirements`.
+- [x] 607/607 testes automatizados passando.
+
+---
+
 ### PC155 — Concluído (v5.15 / 2026-07-07) — export de ata em HTML sob demanda + persistência da Ata Interativa
 
 **Contexto:** pedido direto do usuário — "criar funcionalidade para exportar uma ata de reunião em HTML". Pesquisa prévia (Explore agent) revelou que já existia um export HTML — a "Ata Interativa" via ATA Engine (`modules/ata_engine_generator.py::generate_ata_html()`) — mas gerado só em memória durante o pipeline, sem coluna no banco para persistir; reuniões carregadas do banco (Modo B) nunca exibiam o botão. Perguntado ao usuário qual abordagem seguir (export simples sempre disponível vs. corrigir a Ata Interativa vs. as duas) — escolheu as duas.

@@ -391,8 +391,8 @@ KNOWLEDGE_REQUIREMENTS2_SCHEMAS: list[dict] = [
                                         "replace": {"type": "string", "description": "Texto substituto."},
                                         "scope":   {
                                             "type": "string",
-                                            "enum": ["transcripts", "minutes", "requirements", "all"],
-                                            "description": "Escopo da substituição.",
+                                            "enum": ["transcripts", "minutes", "requirements", "sbvr", "all"],
+                                            "description": "Escopo da substituição ('sbvr' = termos e regras do vocabulário SBVR).",
                                         },
                                     },
                                     "required": ["find", "replace", "scope"],

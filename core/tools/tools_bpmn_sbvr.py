@@ -347,16 +347,25 @@ BPMN_SBVR_SCHEMAS: list[dict] = [
                 "function": {
                     "name": "update_sbvr_term",
                     "description": (
-                        "Atualiza um termo SBVR existente: definição, categoria e/ou origem. "
+                        "Atualiza um termo SBVR existente: nome, definição, categoria e/ou origem. "
                         "USE quando o usuário pedir para alterar a origem de um termo para 'Assistente', "
-                        "ou para corrigir a definição/categoria de um termo já cadastrado."
+                        "para corrigir a definição/categoria de um termo já cadastrado, ou para renomear "
+                        "um termo com grafia errada (ex: erro de transcrição — 'SASEP' deveria ser 'SACEP'). "
+                        "Se falhar por haver termos homônimos, use update_sbvr_term_by_id."
                     ),
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "term": {
                                 "type": "string",
-                                "description": "Nome do termo a atualizar (ex: 'DCI')",
+                                "description": "Nome atual do termo a atualizar (ex: 'DCI')",
+                            },
+                            "new_term": {
+                                "type": "string",
+                                "description": (
+                                    "Novo nome do termo, para corrigir grafia/renomear (opcional — "
+                                    "omita para manter o nome atual). Falha se já existir um termo com esse nome."
+                                ),
                             },
                             "definition": {
                                 "type": "string",
@@ -448,6 +457,7 @@ BPMN_SBVR_SCHEMAS: list[dict] = [
                         "Atualiza um termo SBVR pelo seu UUID — necessário quando há múltiplos termos "
                         "com o mesmo nome (ex: 3 entradas de 'Identificador do Documento'). "
                         "USE quando o usuário quiser atualizar um termo específico identificado pelo ID, "
+                        "renomear um termo com grafia errada quando há homônimos, "
                         "ou quando update_sbvr_term falhou por haver mais de um termo com o mesmo nome. "
                         "Para obter o ID de um termo, use get_sbvr_terms primeiro."
                     ),
@@ -458,9 +468,16 @@ BPMN_SBVR_SCHEMAS: list[dict] = [
                                 "type": "string",
                                 "description": "UUID do termo SBVR a atualizar",
                             },
+                            "new_term": {
+                                "type": "string",
+                                "description": (
+                                    "Novo nome do termo, para corrigir grafia/renomear (opcional). "
+                                    "Falha se já existir outro termo com esse nome no projeto."
+                                ),
+                            },
                             "new_definition": {
                                 "type": "string",
-                                "description": "Nova definição do termo (opcional se apenas category for alterada)",
+                                "description": "Nova definição do termo (opcional se apenas category/term for alterada)",
                             },
                             "new_category": {
                                 "type": "string",
@@ -476,9 +493,14 @@ BPMN_SBVR_SCHEMAS: list[dict] = [
                 "function": {
                     "name": "preview_text_correction",
                     "description": (
-                        "Localiza e pré-visualiza onde um texto ocorre nos dados do projeto (transcrições, atas, requisitos). "
-                        "USE SEMPRE esta ferramenta primeiro quando o usuário pedir para substituir/trocar/corrigir um termo. "
-                        "Retorna contagem de ocorrências e trechos de contexto. Somente-leitura — não modifica dados."
+                        "Localiza e pré-visualiza onde um texto ocorre nos dados do projeto (transcrições, atas, "
+                        "requisitos, vocabulário SBVR — termos e regras). "
+                        "USE SEMPRE esta ferramenta primeiro quando o usuário pedir para substituir/trocar/corrigir um termo "
+                        "(ex: erro de grafia/transcrição como 'SASEP' que deveria ser 'SACEP'). "
+                        "Retorna contagem de ocorrências e trechos de contexto. Somente-leitura — não modifica dados. "
+                        "Nota: se o termo errado estiver cadastrado como nome de termo SBVR (não só no texto), "
+                        "a correção do NOME do termo em si precisa de update_sbvr_term/update_sbvr_term_by_id — "
+                        "apply_text_correction com scope='sbvr' já corrige o nome do termo e sua definição."
                     ),
                     "parameters": {
                         "type": "object",
@@ -493,15 +515,16 @@ BPMN_SBVR_SCHEMAS: list[dict] = [
                             },
                             "scope": {
                                 "type": "string",
-                                "enum": ["transcripts", "minutes", "requirements", "all"],
+                                "enum": ["transcripts", "minutes", "requirements", "sbvr", "all"],
                                 "description": (
                                     "Onde buscar: 'transcripts' (transcrições), 'minutes' (atas), "
-                                    "'requirements' (requisitos), 'all' (tudo)"
+                                    "'requirements' (requisitos), 'sbvr' (termos e regras do vocabulário SBVR), "
+                                    "'all' (tudo, incluindo sbvr)"
                                 ),
                             },
                             "meeting_number": {
                                 "type": "integer",
-                                "description": "Limitar a busca a uma reunião específica (opcional; não aplicável a 'requirements')",
+                                "description": "Limitar a busca a uma reunião específica (opcional; não aplicável a 'requirements'/'sbvr')",
                             },
                         },
                         "required": ["find_text", "replace_text", "scope"],
@@ -513,7 +536,8 @@ BPMN_SBVR_SCHEMAS: list[dict] = [
                 "function": {
                     "name": "apply_text_correction",
                     "description": (
-                        "Aplica substituição de texto nos dados armazenados no Supabase. "
+                        "Aplica substituição de texto nos dados armazenados no Supabase — incluindo, com "
+                        "scope='sbvr' ou 'all', o NOME e a DEFINIÇÃO de termos SBVR e o enunciado de regras SBVR. "
                         "ATENÇÃO: esta operação modifica dados permanentemente. "
                         "NUNCA chame esta ferramenta sem antes apresentar o preview ao usuário e "
                         "receber confirmação explícita ('sim', 'confirmar', 'pode alterar', 'aplique', 'execute')."
@@ -531,15 +555,16 @@ BPMN_SBVR_SCHEMAS: list[dict] = [
                             },
                             "scope": {
                                 "type": "string",
-                                "enum": ["transcripts", "minutes", "requirements", "all"],
+                                "enum": ["transcripts", "minutes", "requirements", "sbvr", "all"],
                                 "description": (
                                     "Onde aplicar: 'transcripts' (transcrições), 'minutes' (atas), "
-                                    "'requirements' (requisitos), 'all' (tudo)"
+                                    "'requirements' (requisitos), 'sbvr' (termos e regras do vocabulário SBVR), "
+                                    "'all' (tudo, incluindo sbvr)"
                                 ),
                             },
                             "meeting_number": {
                                 "type": "integer",
-                                "description": "Limitar a uma reunião específica (opcional; não aplicável a 'requirements')",
+                                "description": "Limitar a uma reunião específica (opcional; não aplicável a 'requirements'/'sbvr')",
                             },
                         },
                         "required": ["find_text", "replace_text", "scope"],
@@ -1307,11 +1332,12 @@ class _BpmnSbvrToolsMixin:
     def update_sbvr_term(
         self,
         term: str,
+        new_term: str | None = None,
         definition: str | None = None,
         category: str | None = None,
         origin: str = "assistente",
     ) -> str:
-        """Update an existing SBVR term's definition, category, and/or origin label."""
+        """Update an existing SBVR term's name, definition, category, and/or origin label."""
         from modules.supabase_client import get_supabase_client
         db = get_supabase_client()
         if not db:
@@ -1328,8 +1354,27 @@ class _BpmnSbvrToolsMixin:
 
         if not rows:
             return f"❌ Termo '{term}' não encontrado no vocabulário SBVR do projeto."
+        if len(rows) > 1:
+            return (
+                f"❌ Há {len(rows)} termos homônimos '{term}' no projeto — "
+                "use update_sbvr_term_by_id com o ID específico (veja get_sbvr_terms)."
+            )
 
         patch: dict = {}
+        if new_term and new_term.strip() and new_term.strip().lower() != term.strip().lower():
+            try:
+                dup = db.table("sbvr_terms").select("id") \
+                    .eq("project_id", self.project_id) \
+                    .ilike("term", new_term.strip()) \
+                    .execute().data or []
+            except Exception as exc:
+                return f"❌ Erro ao verificar duplicidade: {exc}"
+            if dup:
+                return (
+                    f"❌ Já existe um termo '{new_term}' no vocabulário SBVR do projeto — "
+                    "não é possível renomear para um nome duplicado."
+                )
+            patch["term"] = new_term.strip()
         if definition:
             patch["definition"] = definition.strip()
         if category:
@@ -1347,6 +1392,8 @@ class _BpmnSbvrToolsMixin:
             try:
                 db.table("sbvr_terms").update(p).eq("id", rows[0]["id"]).execute()
                 updated_fields = []
+                if "term" in p:
+                    updated_fields.append(f"nome do termo → '{p['term']}'")
                 if "definition" in p:
                     updated_fields.append("definição")
                 if "category" in p:
@@ -1468,6 +1515,7 @@ class _BpmnSbvrToolsMixin:
     def update_sbvr_term_by_id(
         self,
         term_id: str,
+        new_term: str | None = None,
         new_definition: str | None = None,
         new_category: str | None = None,
     ) -> str:
@@ -1476,15 +1524,6 @@ class _BpmnSbvrToolsMixin:
         db = get_supabase_client()
         if not db:
             return "❌ Supabase não configurado."
-
-        patch: dict = {}
-        if new_definition:
-            patch["definition"] = new_definition.strip()
-        if new_category:
-            patch["category"] = new_category.strip()
-
-        if not patch:
-            return "❌ Nenhum campo para atualizar. Informe new_definition e/ou new_category."
 
         try:
             rows = (
@@ -1500,9 +1539,37 @@ class _BpmnSbvrToolsMixin:
             return f"❌ Termo com ID '{term_id}' não encontrado."
 
         term_name = rows[0].get("term", "—")
+
+        patch: dict = {}
+        if new_term and new_term.strip() and new_term.strip().lower() != (term_name or "").strip().lower():
+            try:
+                dup = db.table("sbvr_terms").select("id") \
+                    .eq("project_id", self.project_id) \
+                    .ilike("term", new_term.strip()) \
+                    .execute().data or []
+            except Exception as exc:
+                return f"❌ Erro ao verificar duplicidade: {exc}"
+            if dup:
+                return (
+                    f"❌ Já existe um termo '{new_term}' no vocabulário SBVR do projeto — "
+                    "não é possível renomear para um nome duplicado."
+                )
+            patch["term"] = new_term.strip()
+        if new_definition:
+            patch["definition"] = new_definition.strip()
+        if new_category:
+            patch["category"] = new_category.strip()
+
+        if not patch:
+            return "❌ Nenhum campo para atualizar. Informe new_term, new_definition e/ou new_category."
+
         try:
             db.table("sbvr_terms").update(patch).eq("id", term_id.strip()).execute()
-            fields = (["definição"] if new_definition else []) + (["categoria"] if new_category else [])
+            fields = (
+                ([f"nome do termo → '{patch['term']}'"] if "term" in patch else [])
+                + (["definição"] if new_definition else [])
+                + (["categoria"] if new_category else [])
+            )
             return (
                 f"✅ Termo '{term_name}' (ID: {term_id[:8]}…) atualizado!\n"
                 f"• Campos alterados: {', '.join(fields)}"
@@ -1626,9 +1693,48 @@ class _BpmnSbvrToolsMixin:
                         f'  "{snippet}"'
                     )
 
+        # ── SBVR vocabulary (terms + rules) ─────────────────────────────────
+        if scope in ("sbvr", "all"):
+            try:
+                term_rows = (
+                    db.table("sbvr_terms")
+                    .select("id, term, definition")
+                    .eq("project_id", self.project_id)
+                    .execute().data or []
+                )
+                rule_rows = (
+                    db.table("sbvr_rules")
+                    .select("rule_id, statement")
+                    .eq("project_id", self.project_id)
+                    .execute().data or []
+                )
+            except Exception as exc:
+                return f"Erro ao acessar vocabulário SBVR: {exc}"
+
+            for t in term_rows:
+                for fld, label in (("term", "termo"), ("definition", "definição")):
+                    text = t.get(fld) or ""
+                    count = text.count(find_text)
+                    if count == 0:
+                        continue
+                    total_occurrences += count
+                    results.append(
+                        f"• Termo SBVR '{t.get('term','?')}' [{label}]: {count} ocorrência(s)"
+                    )
+            for r in rule_rows:
+                text = r.get("statement") or ""
+                count = text.count(find_text)
+                if count == 0:
+                    continue
+                total_occurrences += count
+                results.append(
+                    f"• Regra SBVR {r.get('rule_id','?')} [enunciado]: {count} ocorrência(s)"
+                )
+
         if total_occurrences == 0:
             scope_label = {"transcripts": "transcrições", "minutes": "atas",
-                           "requirements": "requisitos", "all": "todos os dados"}.get(scope, scope)
+                           "requirements": "requisitos", "sbvr": "vocabulário SBVR",
+                           "all": "todos os dados"}.get(scope, scope)
             return (
                 f'Nenhuma ocorrência de "{find_text}" encontrada em {scope_label}.'
             )
@@ -1736,6 +1842,63 @@ class _BpmnSbvrToolsMixin:
                     updated_records.append(f"✅ {req_id} (campos: {', '.join(patch.keys())})")
                 except Exception as exc:
                     errors.append(f"❌ {req_id}: {exc}")
+
+        # ── SBVR vocabulary (terms + rules) ─────────────────────────────────
+        if scope in ("sbvr", "all"):
+            try:
+                term_rows = (
+                    db.table("sbvr_terms")
+                    .select("id, term, definition")
+                    .eq("project_id", self.project_id)
+                    .execute().data or []
+                )
+            except Exception as exc:
+                return f"Erro ao acessar termos SBVR: {exc}"
+
+            for t in term_rows:
+                tid = t["id"]
+                patch: dict = {}
+                old_term = t.get("term") or ""
+                if find_text in old_term:
+                    patch["term"] = old_term.replace(find_text, replace_text)
+                val = t.get("definition") or ""
+                if find_text in val:
+                    patch["definition"] = val.replace(find_text, replace_text)
+                if not patch:
+                    continue
+                try:
+                    db.table("sbvr_terms").update(patch).eq("id", tid).execute()
+                    label = patch.get("term", old_term)
+                    updated_records.append(
+                        f"✅ Termo SBVR '{label}' (campos: {', '.join(patch.keys())})"
+                    )
+                except Exception as exc:
+                    errors.append(f"❌ Termo SBVR '{old_term}': {exc}")
+
+            try:
+                rule_rows = (
+                    db.table("sbvr_rules")
+                    .select("id, rule_id, statement")
+                    .eq("project_id", self.project_id)
+                    .execute().data or []
+                )
+            except Exception as exc:
+                return f"Erro ao acessar regras SBVR: {exc}"
+
+            for r in rule_rows:
+                ruid = r["id"]
+                statement = r.get("statement") or ""
+                if find_text not in statement:
+                    continue
+                try:
+                    db.table("sbvr_rules").update(
+                        {"statement": statement.replace(find_text, replace_text)}
+                    ).eq("id", ruid).execute()
+                    updated_records.append(
+                        f"✅ Regra SBVR {r.get('rule_id','?')} (campo: statement)"
+                    )
+                except Exception as exc:
+                    errors.append(f"❌ Regra SBVR {r.get('rule_id','?')}: {exc}")
 
         if not updated_records and not errors:
             return (
