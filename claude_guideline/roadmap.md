@@ -4,6 +4,19 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC155 — Concluído (v5.15 / 2026-07-07) — export de ata em HTML sob demanda + persistência da Ata Interativa
+
+**Contexto:** pedido direto do usuário — "criar funcionalidade para exportar uma ata de reunião em HTML". Pesquisa prévia (Explore agent) revelou que já existia um export HTML — a "Ata Interativa" via ATA Engine (`modules/ata_engine_generator.py::generate_ata_html()`) — mas gerado só em memória durante o pipeline, sem coluna no banco para persistir; reuniões carregadas do banco (Modo B) nunca exibiam o botão. Perguntado ao usuário qual abordagem seguir (export simples sempre disponível vs. corrigir a Ata Interativa vs. as duas) — escolheu as duas.
+
+- **`modules/minutes_exporter.py::to_html(minutes) -> str`** — novo export sob demanda, mesmo padrão de `to_docx()`/`to_pdf()` já existentes (mesma paleta navy `#0B1E3D`/accent `#2E7FD9`). Renderiza campos estruturados (participantes, pauta, resumo, decisões, tabela de action items) quando presentes; fallback para parse de `minutes_md` (markdown→HTML) quando a reunião foi carregada do banco sem dados estruturados — um caso que nem `.docx`/`.pdf` cobrem hoje. Botão `.html` adicionado em `ui/tabs/minutes_tab.py` (nos dois branches, incluindo o de fallback) e `ui/tabs/export_tab.py`.
+- **Persistência da Ata Interativa:** nova coluna `meetings.ata_html` (migration `setup/supabase_migration_minutes_ata_html.sql`, executada e validada em produção). `core/project_store.py::save_meeting_artifacts()`/`load_meeting_as_hub()` passaram a persistir/recarregar o campo.
+- **Bug real corrigido no caminho:** `pages/Pipeline.py` gerava `ata_html` via `generate_ata_html()` DEPOIS de `save_meeting_artifacts()` já ter rodado — o valor gerado nunca era capturado na primeira gravação, só ficava disponível na tela até o próximo reload apagar tudo. Reordenado: geração agora roda logo após `meeting_id` ser conhecido, antes dos saves.
+- **Botão manual "🔄 Gerar Ata Interativa"** em `minutes_tab.py` — aparece quando há dados estruturados no hub mas `ata_html` está ausente (reunião antiga sem a coluna preenchida, ou rerun do agente de Ata que zera o campo). Gera e persiste na hora, sem precisar rodar o pipeline inteiro de novo (ATA Engine é puro Python, sem chamada de LLM).
+- **Limite reconhecido explicitamente:** não é possível regenerar a Ata Interativa automaticamente para reuniões antigas cujo hub só tem `minutes_md` (campos estruturados nunca foram persistidos como dados separados) — o botão de regeneração só aparece quando há dado estruturado de verdade disponível; para esses casos o `to_html()` sob demanda (que processa o markdown puro) é a alternativa correta.
+- [x] 595/595 testes automatizados passando.
+
+---
+
 ### PC154 — Concluído (v5.15 / 2026-07-07) — labels de BPMN não quebravam linha no bpmn-js (pré-wrap em Python)
 
 **Contexto:** queixa recorrente do usuário — labels de atividade "não centralizados" nas caixinhas do diagrama BPMN gerado via pipeline. Investigação por leitura direta do código-fonte do bpmn-js/diagram-js (GitHub, não por memória) em duas etapas:
