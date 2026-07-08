@@ -42,6 +42,20 @@ def _render_markdown_docx(doc, md: str, navy, accent) -> None:
     """
     import re
     from docx.shared import Pt
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+
+    def _section_border(paragraph, color) -> None:
+        pPr = paragraph._p.get_or_add_pPr()
+        pBdr = OxmlElement("w:pBdr")
+        bottom = OxmlElement("w:bottom")
+        bottom.set(qn("w:val"), "single")
+        bottom.set(qn("w:sz"), "4")
+        bottom.set(qn("w:space"), "4")
+        bottom.set(qn("w:color"), str(color))
+        pBdr.append(bottom)
+        pPr.append(pBdr)
+        paragraph.paragraph_format.space_after = Pt(4)
 
     def _strip_inline(text: str) -> str:
         text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
@@ -87,6 +101,7 @@ def _render_markdown_docx(doc, md: str, navy, accent) -> None:
             p = doc.add_paragraph()
             r = p.add_run(_strip_inline(stripped[3:]))
             r.bold = True; r.font.size = Pt(14); r.font.color.rgb = navy
+            _section_border(p, accent)
         elif stripped.startswith("# "):
             p = doc.add_paragraph()
             r = p.add_run(_strip_inline(stripped[2:]))
@@ -212,7 +227,7 @@ def to_docx(minutes: "MinutesModel", template_spec: dict | None = None) -> bytes
         bottom.set(qn("w:val"), "single")
         bottom.set(qn("w:sz"), "4")
         bottom.set(qn("w:space"), "4")
-        bottom.set(qn("w:color"), "2E7FD9")
+        bottom.set(qn("w:color"), str(ACCENT))
         pBdr.append(bottom)
         pPr.append(pBdr)
         h.paragraph_format.space_after = Pt(4)

@@ -215,6 +215,48 @@ class TestToDocxTemplateSpec:
         doc = Document(BytesIO(data))  # must not raise
         assert isinstance(data, bytes) and len(data) > 0
 
+    def _section_border_color(self, paragraph) -> str | None:
+        from docx.oxml.ns import qn
+        pPr = paragraph._p.pPr
+        if pPr is None:
+            return None
+        pBdr = pPr.find(qn("w:pBdr"))
+        if pBdr is None:
+            return None
+        bottom = pBdr.find(qn("w:bottom"))
+        return bottom.get(qn("w:color")) if bottom is not None else None
+
+    def test_section_border_follows_accent_override_in_structured_path(self):
+        """PC160-D: the bottom-border separator drawn under each structured
+        section heading was hardcoded to the app's default blue regardless
+        of template_spec — found comparing a user's real reference .docx
+        against the ata it exported (no separator color match at all)."""
+        m = MinutesModel(title="Reunião", date="2026-07-08", decisions=["Decisão 1"], ready=True)
+        data = to_docx(m, template_spec={"accent_color": "#1F4E79", "assets": []})
+        doc = Document(BytesIO(data))
+        heading = next(p for p in doc.paragraphs if p.text.strip().upper() == "DECISÕES TOMADAS")
+        assert self._section_border_color(heading) == "1F4E79"
+
+    def test_section_border_follows_accent_override_in_markdown_fallback_path(self):
+        """Same fix, other rendering path: a meeting loaded from the DB with
+        only minutes_md (no structured fields — the exact case of a
+        reunião existente / Central de Artefatos download) rendered no
+        separator line at all under '##' section headings."""
+        md = "# Reunião\n\n## Participantes\n\n- Fulano\n\n## Pauta\n\n1. Item\n"
+        m = MinutesModel(title="Reunião", date="2026-07-08", minutes_md=md, ready=True)
+        data = to_docx(m, template_spec={"accent_color": "#1F4E79", "assets": []})
+        doc = Document(BytesIO(data))
+        heading = next(p for p in doc.paragraphs if p.text.strip() == "Participantes")
+        assert self._section_border_color(heading) == "1F4E79"
+
+    def test_section_border_default_color_without_template_spec(self):
+        md = "# Reunião\n\n## Participantes\n\n- Fulano\n"
+        m = MinutesModel(title="Reunião", date="2026-07-08", minutes_md=md, ready=True)
+        data = to_docx(m)
+        doc = Document(BytesIO(data))
+        heading = next(p for p in doc.paragraphs if p.text.strip() == "Participantes")
+        assert self._section_border_color(heading) == "2E7FD9"
+
 
 class _FakeQuery:
     def __init__(self, rows, table_name, log):
