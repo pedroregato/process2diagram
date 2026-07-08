@@ -4,6 +4,16 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC158 — Concluído (v5.15 / 2026-07-08) — botão "Nova" reabre Contexto/Reunião em branco
+
+**Contexto:** pedido direto do usuário — na tela "Processar Transcrição" (modo Nova transcrição), o botão de limpar resultados existente ("🆕 Nova Transcrição") não tocava em título/data da reunião nem reabria o formulário "Contexto / Reunião" — só limpava a transcrição/hub, deixando o contexto anterior confirmado.
+
+- `pages/Pipeline.py` — botão renomeado para **"🆕 Nova"** e sua lista de limpeza expandida: além de `hub`/`curated_clean`/`pp_result`/`_last_uploaded_file`/`current_meeting_id`/`transcript_text` (já existente), agora também limpa `project_confirmed` (reabre o expander "📁 Contexto / Reunião"), `meeting_title`/`meeting_date` (valores confirmados) + `meeting_title_input`/`meeting_date_input` (estado dos widgets — sem isso o formulário reaberto mostraria o título antigo "grudado"), `proj_sel`, e o processo BPMN vinculado (`bpmn_process_id`/`bpmn_process_override_name`/`bpmn_process_display`/`bpmn_proc_sel`).
+- [x] Verificado end-to-end via `streamlit.testing.v1.AppTest` (não só leitura de código): simulado contexto confirmado com título/data antigos + hub presente, clique no botão, confirmado que TODOS os campos voltam ao estado limpo e que o expander "📁 Contexto / Reunião — obrigatório para salvar resultados" está de fato visível na tela após o clique.
+- [x] 611/611 testes automatizados passando (suite completa, sem teste dedicado novo — mudança é um ajuste localizado de UI já coberto pela verificação AppTest ad-hoc).
+
+---
+
 ### PC157 — Concluído (v5.15 / 2026-07-08) — loops de correção nunca mais viram Link Events invisíveis
 
 **Contexto:** implementação de `melhorias/event-links-aprimoramento.md` (agora arquivado), plano que pedia uma heurística objetiva pra decidir entre seta explícita e Link Event, com uma regra central: loops de correção/retrabalho (ex: "não aprovada" voltando pro passo anterior) devem **sempre** ser seta visível, nunca Link Event, independente da distância.

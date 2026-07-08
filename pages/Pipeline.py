@@ -119,13 +119,23 @@ if pipeline_mode == _MODE_NEW:
         )
         st.session_state["n_bpmn_runs"] = _n_runs_pipeline
 
-    # ── Botão Nova Transcrição — aparece quando resultados já estão na tela ──
+    # ── Botão Nova — aparece quando resultados já estão na tela ──────────────
+    # Limpa transcrição/resultados E reabre "Contexto / Reunião" (título/data
+    # em branco) para uma reunião genuinamente nova, em vez de deixar o
+    # título/data da reunião anterior "grudados" no formulário reaberto.
     if "hub" in st.session_state:
         _nc_col, _ = st.columns([1, 5])
-        if _nc_col.button("🆕 Nova Transcrição", key="btn_nova_transcricao",
-                          help="Limpa a transcrição atual e os resultados para processar uma nova"):
+        if _nc_col.button("🆕 Nova", key="btn_nova_transcricao",
+                          help="Limpa a transcrição, os resultados e o título/data da reunião "
+                               "para processar uma nova reunião do zero"):
             for _k in ["hub", "curated_clean", "pp_result",
-                       "_last_uploaded_file", "current_meeting_id"]:
+                       "_last_uploaded_file", "current_meeting_id",
+                       # Contexto / Reunião — reabre o formulário em branco
+                       "project_confirmed", "meeting_title", "meeting_date",
+                       "meeting_title_input", "meeting_date_input", "proj_sel",
+                       # Processo BPMN vinculado — reseta junto (nova reunião)
+                       "bpmn_process_id", "bpmn_process_override_name",
+                       "bpmn_process_display", "bpmn_proc_sel"]:
                 st.session_state.pop(_k, None)
             st.session_state["transcript_text"] = ""
             st.rerun()
