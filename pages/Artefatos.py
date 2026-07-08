@@ -689,6 +689,7 @@ with tab_meet:
                 _atatpl_spec = {
                     "accent_color": (_atatpl_active.get("style_spec") or {}).get("accent_color"),
                     "assets": _atatpl_active.get("assets") or [],
+                    "sections": (_atatpl_active.get("style_spec") or {}).get("sections") or [],
                 }
         except Exception:
             pass

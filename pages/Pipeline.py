@@ -193,6 +193,7 @@ if pipeline_mode == _MODE_NEW:
                     hub.ata_template_spec = {
                         "accent_color": (_ata_tpl.get("style_spec") or {}).get("accent_color"),
                         "assets": _ata_tpl.get("assets") or [],
+                        "sections": (_ata_tpl.get("style_spec") or {}).get("sections") or [],
                     }
             except Exception:
                 pass
@@ -511,6 +512,7 @@ else:
                 loaded_hub.ata_template_spec = {
                     "accent_color": (_ata_tpl.get("style_spec") or {}).get("accent_color"),
                     "assets": _ata_tpl.get("assets") or [],
+                    "sections": (_ata_tpl.get("style_spec") or {}).get("sections") or [],
                 }
         except Exception:
             pass

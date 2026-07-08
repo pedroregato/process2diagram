@@ -23,7 +23,7 @@ from unittest.mock import patch, MagicMock
 from docx import Document
 from docx.shared import Cm, Pt, RGBColor
 
-from core.knowledge_hub import MinutesModel
+from core.knowledge_hub import MinutesModel, ActionItem
 from modules.ata_template_engine import extract_template_from_docx, apply_template_to_docx
 from modules.minutes_exporter import to_docx
 
@@ -89,6 +89,54 @@ def _build_pseudo_heading_docx(accent_hex: str = "1F4E79") -> bytes:
     return buf.getvalue()
 
 
+def _add_table(doc, columns: list[str]) -> None:
+    table = doc.add_table(rows=1, cols=len(columns))
+    for i, c in enumerate(columns):
+        table.rows[0].cells[i].text = c
+
+
+def _build_fgv_like_reference_docx() -> bytes:
+    """
+    One example of a real-world template shape (not the only one this
+    feature must support — see _build_alternative_reference_docx for a
+    deliberately different one): 'Participantes' as a 3-column table
+    (Nome/E-mail/Unidade), 'Encaminhamentos' as a 3-column table
+    (Ação/Responsável/Data), 'Decisões' as a plain bullet list.
+    """
+    doc = Document()
+    doc.add_paragraph("Ata de Reunião", style="Heading 1")
+    doc.add_paragraph("Participantes", style="Heading 2")
+    _add_table(doc, ["Nome", "E-mail", "Unidade"])
+    doc.add_paragraph("Decisões", style="Heading 2")
+    doc.add_paragraph("Alguma decisão", style="List Bullet")
+    doc.add_paragraph("Encaminhamentos", style="Heading 2")
+    _add_table(doc, ["Ação", "Responsável", "Data"])
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def _build_alternative_reference_docx() -> bytes:
+    """
+    A SECOND, deliberately different template — proves the feature follows
+    ANY reference shape, not just the FGV one: participants as a plain
+    list (no table), a 'Riscos' table with a column no _COLUMN_FIELD_
+    PATTERNS entry recognizes (degrades to list), and 'Next Steps' as a
+    table with English/mismatched column names (partial column match).
+    """
+    doc = Document()
+    doc.add_paragraph("Weekly Status Report", style="Heading 1")
+    doc.add_paragraph("Presentes", style="Heading 2")
+    doc.add_paragraph("Alguém", style="List Bullet")
+    doc.add_paragraph("Riscos Identificados", style="Heading 2")
+    _add_table(doc, ["Descrição"])
+    doc.add_paragraph("Next Steps", style="Heading 2")
+    _add_table(doc, ["Tarefa", "Owner", "Due"])
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
 class TestExtractTemplateFromDocx:
     def test_markdown_skeleton_follows_heading_order(self):
         ref = _build_reference_docx()
@@ -129,7 +177,8 @@ class TestExtractTemplateFromDocx:
         doc.save(buf)
         template_markdown, style_spec, assets = extract_template_from_docx(buf.getvalue())
         assert template_markdown == ""
-        assert style_spec == {"accent_color": None}
+        assert style_spec["accent_color"] is None
+        assert style_spec["sections"] == []
         assert assets == []
 
     def test_pseudo_heading_fallback_when_no_word_heading_style_used(self):
@@ -167,6 +216,81 @@ class TestExtractTemplateFromDocx:
         doc.save(buf)
         template_markdown, _, _ = extract_template_from_docx(buf.getvalue())
         assert template_markdown == "# Título Real"
+
+
+class TestExtractSections:
+    """PC160 Fase 2 — per-section shape (table/list/paragraph + columns),
+    driven purely by what's actually in each reference .docx (never assumes
+    any particular section name or column set — see _build_alternative_
+    reference_docx for proof the same code handles a totally different
+    template shape)."""
+
+    def test_table_section_detected_with_columns_in_document_order(self):
+        ref = _build_fgv_like_reference_docx()
+        _, style_spec, _ = extract_template_from_docx(ref)
+        participantes = next(s for s in style_spec["sections"] if s["heading_text"] == "Participantes")
+        assert participantes["content_kind"] == "table"
+        assert participantes["columns"] == ["Nome", "E-mail", "Unidade"]
+
+    def test_list_section_detected(self):
+        ref = _build_fgv_like_reference_docx()
+        _, style_spec, _ = extract_template_from_docx(ref)
+        decisoes = next(s for s in style_spec["sections"] if s["heading_text"] == "Decisões")
+        assert decisoes["content_kind"] == "list"
+
+    def test_paragraph_section_detected(self):
+        doc = Document()
+        doc.add_paragraph("Ata", style="Heading 1")
+        doc.add_paragraph("Introdução", style="Heading 2")
+        doc.add_paragraph("Texto corrido, sem marcador de lista.")
+        buf = BytesIO()
+        doc.save(buf)
+        _, style_spec, _ = extract_template_from_docx(buf.getvalue())
+        intro = next(s for s in style_spec["sections"] if s["heading_text"] == "Introdução")
+        assert intro["content_kind"] == "paragraph"
+
+    def test_heading_without_content_before_next_heading_is_empty(self):
+        doc = Document()
+        doc.add_paragraph("Ata", style="Heading 1")
+        doc.add_paragraph("Vazio", style="Heading 2")
+        doc.add_paragraph("Próximo", style="Heading 2")
+        doc.add_paragraph("conteúdo aqui", style="List Bullet")
+        buf = BytesIO()
+        doc.save(buf)
+        _, style_spec, _ = extract_template_from_docx(buf.getvalue())
+        vazio = next(s for s in style_spec["sections"] if s["heading_text"] == "Vazio")
+        assert vazio["content_kind"] == "empty"
+
+    def test_sections_preserve_document_heading_order(self):
+        ref = _build_fgv_like_reference_docx()
+        _, style_spec, _ = extract_template_from_docx(ref)
+        headings = [s["heading_text"] for s in style_spec["sections"]]
+        assert headings == ["Ata de Reunião", "Participantes", "Decisões", "Encaminhamentos"]
+
+    def test_table_without_readable_header_reports_empty_columns(self):
+        doc = Document()
+        doc.add_paragraph("Ata", style="Heading 1")
+        doc.add_paragraph("Participantes", style="Heading 2")
+        table = doc.add_table(rows=1, cols=2)  # header row left blank
+        buf = BytesIO()
+        doc.save(buf)
+        _, style_spec, _ = extract_template_from_docx(buf.getvalue())
+        participantes = next(s for s in style_spec["sections"] if s["heading_text"] == "Participantes")
+        assert participantes["content_kind"] == "table"
+        assert participantes["columns"] == []
+
+    def test_second_different_template_shape_also_extracted_correctly(self):
+        """The alternative template (participants as list, English/mixed
+        column names) is extracted with the SAME code path — no branch
+        specific to the FGV shape."""
+        ref = _build_alternative_reference_docx()
+        _, style_spec, _ = extract_template_from_docx(ref)
+        by_heading = {s["heading_text"]: s for s in style_spec["sections"]}
+        assert by_heading["Presentes"]["content_kind"] == "list"
+        assert by_heading["Riscos Identificados"]["content_kind"] == "table"
+        assert by_heading["Riscos Identificados"]["columns"] == ["Descrição"]
+        assert by_heading["Next Steps"]["content_kind"] == "table"
+        assert by_heading["Next Steps"]["columns"] == ["Tarefa", "Owner", "Due"]
 
 
 class TestApplyTemplateToDocx:
@@ -256,6 +380,139 @@ class TestToDocxTemplateSpec:
         doc = Document(BytesIO(data))
         heading = next(p for p in doc.paragraphs if p.text.strip() == "Participantes")
         assert self._section_border_color(heading) == "2E7FD9"
+
+
+def _template_spec_from_docx(ref_bytes: bytes) -> dict:
+    """Runs the real extraction (not a hand-built dict) so these tests
+    exercise the same end-to-end path used in production."""
+    _, style_spec, assets = extract_template_from_docx(ref_bytes)
+    return {
+        "accent_color": style_spec.get("accent_color"),
+        "assets": assets,
+        "sections": style_spec.get("sections") or [],
+    }
+
+
+class TestRenderTemplatedSections:
+    """PC160 Fase 2 — to_docx() follows the reference doc's own per-section
+    shape (table/list/paragraph). Every assertion here must hold for BOTH
+    reference templates (_build_fgv_like_reference_docx and
+    _build_alternative_reference_docx) wherever relevant, to keep the
+    feature honest about not being hardcoded to one template's shape."""
+
+    def test_participants_render_as_table_matching_template_columns(self):
+        template_spec = _template_spec_from_docx(_build_fgv_like_reference_docx())
+        m = MinutesModel(title="Reunião", date="2026-07-08",
+                          participants=["Fulano de Tal (FT)"], ready=True)
+        data = to_docx(m, template_spec=template_spec)
+        doc = Document(BytesIO(data))
+        table = next(t for t in doc.tables if [c.text for c in t.rows[0].cells] == ["Nome", "E-mail", "Unidade"])
+        row = table.rows[1].cells
+        assert row[0].text == "Fulano de Tal (FT)"
+        assert row[1].text == "—"  # never a fabricated e-mail
+        assert row[2].text == "—"
+
+    def test_action_items_use_template_columns_not_app_default(self):
+        template_spec = _template_spec_from_docx(_build_fgv_like_reference_docx())
+        m = MinutesModel(
+            title="Reunião", date="2026-07-08",
+            action_items=[ActionItem(task="Enviar relatório", responsible="Fulano",
+                                      deadline="10/07/2026", priority="high", raised_by="FT")],
+            ready=True,
+        )
+        data = to_docx(m, template_spec=template_spec)
+        doc = Document(BytesIO(data))
+        table = next(t for t in doc.tables if [c.text for c in t.rows[0].cells] == ["Ação", "Responsável", "Data"])
+        assert [c.text for c in table.rows[1].cells] == ["Enviar relatório", "Fulano", "10/07/2026"]
+        # the app's own default 5-column shape (with "Prioridade") must NOT
+        # also appear — the template's 3-column shape fully replaces it.
+        assert not any("Prioridade" in [c.text for c in t.rows[0].cells] for t in doc.tables)
+
+    def test_field_without_matching_template_section_still_falls_back_to_default(self):
+        template_spec = _template_spec_from_docx(_build_fgv_like_reference_docx())
+        m = MinutesModel(title="Reunião", date="2026-07-08",
+                          next_meeting="15/07/2026 às 10h", ready=True)
+        data = to_docx(m, template_spec=template_spec)
+        doc = Document(BytesIO(data))
+        assert any("15/07/2026 às 10h" in p.text for p in doc.paragraphs)
+
+    def test_duplicate_heading_renders_field_only_once(self):
+        doc = Document()
+        doc.add_paragraph("Ata", style="Heading 1")
+        doc.add_paragraph("Parte 1", style="Heading 2")
+        doc.add_paragraph("Participantes", style="Heading 2")
+        doc.add_paragraph("um item", style="List Bullet")
+        doc.add_paragraph("Parte 2", style="Heading 2")
+        doc.add_paragraph("Participantes", style="Heading 2")
+        doc.add_paragraph("outro item", style="List Bullet")
+        buf = BytesIO()
+        doc.save(buf)
+        template_spec = _template_spec_from_docx(buf.getvalue())
+
+        m = MinutesModel(title="Reunião", date="2026-07-08",
+                          participants=["Fulano", "Beltrano"], ready=True)
+        data = to_docx(m, template_spec=template_spec)
+        doc_out = Document(BytesIO(data))
+        occurrences = [p for p in doc_out.paragraphs if p.text.strip() == "PARTICIPANTES"]
+        assert len(occurrences) == 1
+
+    def test_unmatched_heading_skipped_without_error(self):
+        doc = Document()
+        doc.add_paragraph("Ata", style="Heading 1")
+        doc.add_paragraph("Xyzzy Não Reconhecido", style="Heading 2")
+        doc.add_paragraph("algo", style="List Bullet")
+        buf = BytesIO()
+        doc.save(buf)
+        template_spec = _template_spec_from_docx(buf.getvalue())
+
+        m = MinutesModel(title="Reunião", date="2026-07-08", decisions=["Decisão real"], ready=True)
+        data = to_docx(m, template_spec=template_spec)  # must not raise
+        doc_out = Document(BytesIO(data))
+        assert any("Decisão real" in p.text for p in doc_out.paragraphs)
+        assert not any("XYZZY" in p.text.upper() for p in doc_out.paragraphs)
+
+    def test_table_field_without_column_patterns_degrades_to_list(self):
+        template_spec = _template_spec_from_docx(_build_alternative_reference_docx())
+        m = MinutesModel(title="Reunião", date="2026-07-08",
+                          risks_identified=["Atraso no fornecedor"], ready=True)
+        data = to_docx(m, template_spec=template_spec)
+        doc = Document(BytesIO(data))
+        # risks_identified has no _COLUMN_FIELD_PATTERNS entry, so even
+        # though the template showed "Riscos Identificados" as a table,
+        # rendering must degrade to a bullet list rather than guessing columns.
+        assert not any(t.rows and t.rows[0].cells[0].text == "Descrição" for t in doc.tables)
+        assert any("Atraso no fornecedor" in p.text for p in doc.paragraphs)
+
+    def test_alternative_template_participants_as_list_not_table(self):
+        template_spec = _template_spec_from_docx(_build_alternative_reference_docx())
+        m = MinutesModel(title="Reunião", date="2026-07-08",
+                          participants=["Fulano"], ready=True)
+        data = to_docx(m, template_spec=template_spec)
+        doc = Document(BytesIO(data))
+        assert doc.tables == []  # participants had no table in this template
+        assert any(p.text.strip() == "Fulano" for p in doc.paragraphs)
+
+    def test_no_sections_key_matches_pre_existing_behavior(self):
+        m = MinutesModel(title="Reunião", date="2026-07-08",
+                          participants=["Fulano"], ready=True)
+        with_empty_sections = to_docx(m, template_spec={"accent_color": None, "assets": [], "sections": []})
+        without_key_at_all = to_docx(m, template_spec={"accent_color": None, "assets": []})
+        assert with_empty_sections == without_key_at_all
+
+
+class TestApplyTemplateToDocxSections:
+    def test_apply_template_forwards_sections_to_to_docx(self):
+        style_spec = {
+            "accent_color": "#1F4E79",
+            "sections": [{"heading_text": "Participantes", "level": 2,
+                          "content_kind": "table", "columns": ["Nome", "E-mail", "Unidade"]}],
+        }
+        m = MinutesModel(title="Reunião", date="2026-07-08",
+                          participants=["Fulano"], ready=True)
+        data = apply_template_to_docx(m, style_spec=style_spec, assets=[])
+        doc = Document(BytesIO(data))
+        table = next(t for t in doc.tables if [c.text for c in t.rows[0].cells] == ["Nome", "E-mail", "Unidade"])
+        assert table.rows[1].cells[0].text == "Fulano"
 
 
 class _FakeQuery:

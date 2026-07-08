@@ -102,6 +102,125 @@ def _dominant_heading_color(doc, heading_paragraphs: list[tuple[object, int]] | 
     return "#" + counts.most_common(1)[0][0]
 
 
+def _iter_body_blocks(doc) -> list[tuple[str, object]]:
+    """
+    ('paragraph' | 'table', wrapped python-docx object) pairs in real
+    document order. doc.paragraphs and doc.tables are two SEPARATE lists
+    with no relative order between them — this is the only way to know
+    "this table came right after that heading".
+    """
+    from docx.oxml.ns import qn
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
+
+    blocks: list[tuple[str, object]] = []
+    for child in doc.element.body.iterchildren():
+        if child.tag == qn("w:p"):
+            blocks.append(("paragraph", Paragraph(child, doc)))
+        elif child.tag == qn("w:tbl"):
+            blocks.append(("table", Table(child, doc)))
+    return blocks
+
+
+def _is_list_paragraph(paragraph) -> bool:
+    style_name = (paragraph.style.name or "").strip().lower()
+    if style_name in ("list bullet", "list number", "list paragraph"):
+        return True
+    pPr = paragraph._p.pPr
+    return pPr is not None and pPr.numPr is not None
+
+
+def _table_header_texts(table) -> list[str]:
+    """Cell texts of the table's first row, stripped — best-effort column
+    names, whether or not that row is visually 'header-styled'."""
+    if not table.rows:
+        return []
+    return [cell.text.strip() for cell in table.rows[0].cells]
+
+
+def _extract_sections(doc, heading_paragraphs: list[tuple[object, int]]) -> list[dict]:
+    """
+    One entry per heading, in document order:
+      {"heading_text": str, "level": int,
+       "content_kind": "table" | "list" | "paragraph" | "empty",
+       "columns": list[str] | None}
+
+    content_kind/columns are derived from every block found between this
+    heading and the next heading (blank spacer paragraphs don't count):
+    a table anywhere in the section wins (uses the FIRST table's header
+    row — matches the common case of a single table per section, and
+    avoids misclassifying a section as "paragraph" just because it opens
+    with an introductory sentence before the table); otherwise a
+    bullet/numbered-list paragraph makes it "list"; otherwise any other
+    non-blank paragraph makes it "paragraph". A table with no readable
+    header row (blank/ambiguous first row) reports columns=[] — callers
+    degrade to list rendering in that case rather than inventing column
+    names.
+    """
+    if not heading_paragraphs:
+        return []
+
+    heading_ids = {id(p._p) for p, _ in heading_paragraphs}
+    level_by_id = {id(p._p): lvl for p, lvl in heading_paragraphs}
+    text_by_id = {id(p._p): p.text.strip() for p, _ in heading_paragraphs}
+
+    blocks = _iter_body_blocks(doc)
+
+    sections: list[dict] = []
+    current: dict | None = None
+    section_blocks: list[tuple[str, object]] = []
+
+    def _finalize(section: dict, s_blocks: list[tuple[str, object]]) -> dict:
+        table = next((obj for kind, obj in s_blocks if kind == "table"), None)
+        if table is not None:
+            columns = _table_header_texts(table)
+            section["content_kind"] = "table"
+            section["columns"] = columns if any(columns) else []
+            return section
+
+        list_p = next(
+            (obj for kind, obj in s_blocks
+             if kind == "paragraph" and obj.text.strip() and _is_list_paragraph(obj)),
+            None,
+        )
+        if list_p is not None:
+            section["content_kind"] = "list"
+            return section
+
+        para = next(
+            (obj for kind, obj in s_blocks if kind == "paragraph" and obj.text.strip()),
+            None,
+        )
+        if para is not None:
+            section["content_kind"] = "paragraph"
+            return section
+
+        section["content_kind"] = "empty"
+        return section
+
+    for kind, obj in blocks:
+        if kind == "paragraph" and id(obj._p) in heading_ids:
+            if current is not None:
+                sections.append(_finalize(current, section_blocks))
+            current = {
+                "heading_text": text_by_id[id(obj._p)],
+                "level": level_by_id[id(obj._p)],
+                "content_kind": "empty",
+                "columns": None,
+            }
+            section_blocks = []
+            continue
+
+        if current is None:
+            continue
+        section_blocks.append((kind, obj))
+
+    if current is not None:
+        sections.append(_finalize(current, section_blocks))
+
+    return sections
+
+
 def _extract_images_from_part(part, origin: str) -> list[dict]:
     """Pull every image relationship out of a document/header/footer part."""
     from docx.opc.constants import RELATIONSHIP_TYPE as RT
@@ -186,7 +305,13 @@ def extract_template_from_docx(docx_bytes: bytes) -> tuple[str, dict, list[dict]
     Parse a reference .docx and derive:
       - template_markdown: a heading skeleton mirroring the document's own
         section names/order ('# Título', '## Subtítulo', ...).
-      - style_spec: {"accent_color": "#RRGGBB" | None}.
+      - style_spec: {"accent_color": "#RRGGBB" | None,
+        "sections": [{"heading_text", "level", "content_kind": "table" |
+        "list" | "paragraph" | "empty", "columns": list[str] | None}, ...]}
+        — per-section shape (table/list/paragraph), so the export side can
+        follow the reference doc's own visual form (PC160 Fase 2) instead
+        of a single fixed layout. Never assumes any particular section
+        name/column set — works for any template shape.
       - assets: list of {asset_type, origin, image_bytes, mime_type,
         width_px, height_px} — every image found in header/footer/body,
         plus a best-effort page background.
@@ -208,7 +333,10 @@ def extract_template_from_docx(docx_bytes: bytes) -> tuple[str, dict, list[dict]
     template_markdown = "\n\n".join(lines)
 
     # ── Style spec ───────────────────────────────────────────────────────
-    style_spec = {"accent_color": _dominant_heading_color(doc, heading_paragraphs)}
+    style_spec = {
+        "accent_color": _dominant_heading_color(doc, heading_paragraphs),
+        "sections": _extract_sections(doc, heading_paragraphs),
+    }
 
     # ── Assets: header/footer (per section) + body + page background ──────
     assets: list[dict] = []
@@ -257,5 +385,6 @@ def apply_template_to_docx(
         template_spec = {
             "accent_color": (style_spec or {}).get("accent_color"),
             "assets": assets or [],
+            "sections": (style_spec or {}).get("sections") or [],
         }
     return to_docx(minutes, template_spec=template_spec)

@@ -29,6 +29,300 @@ def _prio_label(p: str) -> str:
     return {"high": "Alta", "normal": "Normal", "low": "Baixa"}.get(p, p.capitalize())
 
 
+# ── PC160 Fase 2 — template-shaped section rendering ────────────────────────
+# Maps a reference .docx section (by heading text) to a MinutesModel field,
+# and — when the reference showed that section as a table — to the table's
+# columns, so the exported .docx follows the SAME visual shape (table vs.
+# list vs. paragraph) as whatever template the context registered, without
+# hardcoding any particular template's section names or columns. See
+# modules/ata_template_engine.py::extract_template_from_docx() for how
+# style_spec["sections"] is derived.
+
+import re as _re
+
+
+def _kw(*roots: str) -> "_re.Pattern":
+    """Compiles '<root1>|<root2>|...' with a leading \\b on each root, so a
+    short/generic root (e.g. 'tema', 'depend') only matches at the START of
+    a word — never as a substring inside an unrelated word ('sistema',
+    'independente'). No trailing \\b, so Portuguese inflections (plural,
+    gender) after the root still match ('tema' -> 'temas'/'temática')."""
+    return _re.compile("|".join(rf"\b{root}" for root in roots), _re.I)
+
+
+# Longer/rarer roots first when a heading could plausibly contain two
+# matches at once (e.g. "Assuntos Discutidos / Decisões Tomadas" contains
+# both a 'summary' signal — assunto/discuti — and a 'decisions' one —
+# decis); the more specific term wins.
+_SECTION_FIELD_PATTERNS: list[tuple["_re.Pattern", str]] = [
+    (_kw("participant", "presente"), "participants"),
+    (_kw("decis"), "decisions"),
+    (_kw("a[cç][aã]o.*respons", "encaminha", "item.*a[cç][aã]o", "next step", "tarefa"), "action_items"),
+    (_kw("proxima reuni", "próxima reuni"), "next_meeting"),
+    (_kw("risco"), "risks_identified"),
+    (_kw("depend"), "dependencies"),
+    (_kw("pergunta.*abert", "questao.*abert", "questão.*abert", "open question"), "open_questions"),
+    (_kw("premissa", "assumption"), "assumptions"),
+    (_kw("stakeholder", "parte interessada"), "stakeholder_needs"),
+    (_kw("pauta", "agenda", "tema"), "agenda"),
+    (_kw("resumo", "assunto", "discuti", "topico", "tópico"), "summary"),
+]
+
+
+def _resolve_section_field(heading_text: str) -> str | None:
+    """First matching synonym pattern wins. None = no known MinutesModel
+    field for this heading — the section is skipped entirely at render
+    time rather than fabricating content for it."""
+    for pattern, field in _SECTION_FIELD_PATTERNS:
+        if pattern.search(heading_text or ""):
+            return field
+    return None
+
+
+_COLUMN_FIELD_PATTERNS: dict[str, list[tuple["_re.Pattern", str | None]]] = {
+    "participants": [
+        (_kw("nome", "name"), None),  # None = the raw string itself
+    ],
+    "action_items": [
+        (_kw("tarefa", "a[cç][aã]o", "atividade"), "task"),
+        (_kw("respons"), "responsible"),
+        (_kw("prazo", "data", "deadline", "due"), "deadline"),
+        (_kw("priorid"), "priority"),
+        (_kw("levantado", "solicitante", "por quem", "raised"), "raised_by"),
+    ],
+}
+
+
+def _shade_table_header_row(table, accent_rgb_hex: str) -> None:
+    """Fills the first row's cells with accent_rgb_hex and sets white bold
+    text — the same visual treatment already used for the default
+    action_items table, now shared across any templated table too."""
+    from docx.shared import Pt, RGBColor
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+
+    if not table.rows:
+        return
+    for cell in table.rows[0].cells:
+        for para in cell.paragraphs:
+            for run in para.runs:
+                run.bold = True
+                run.font.size = Pt(10)
+                run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+        tc = cell._tc
+        tcPr = tc.get_or_add_tcPr()
+        shd = OxmlElement("w:shd")
+        shd.set(qn("w:val"), "clear")
+        shd.set(qn("w:color"), "auto")
+        shd.set(qn("w:fill"), str(accent_rgb_hex))
+        tcPr.append(shd)
+
+
+def _render_field_as_table(doc, field: str, minutes: "MinutesModel", columns: list[str], accent) -> None:
+    """
+    Draws a table with EXACTLY the columns captured from the reference
+    doc. Each detected column is matched (via _COLUMN_FIELD_PATTERNS) to
+    an attribute; unmatched columns keep their header but every cell is
+    "—" (same convention already used for ai.deadline/ai.raised_by when
+    absent) — never fabricates data the transcript didn't provide (e.g.
+    participant e-mail/unit). Assumes columns is non-empty; callers
+    degrade to list rendering when the reference table had no readable
+    header row.
+    """
+    from docx.shared import Pt
+
+    patterns = _COLUMN_FIELD_PATTERNS.get(field, [])
+    col_attrs: list[str | None] = []
+    for col_name in columns:
+        attr = next((a for pat, a in patterns if pat.search(col_name)), "__unmatched__")
+        col_attrs.append(attr)
+
+    rows_data = getattr(minutes, field) or []
+
+    table = doc.add_table(rows=1, cols=len(columns))
+    table.style = "Table Grid"
+    hdr_cells = table.rows[0].cells
+    for i, col_name in enumerate(columns):
+        hdr_cells[i].text = col_name
+
+    for item in rows_data:
+        row_cells = table.add_row().cells
+        for i, attr in enumerate(col_attrs):
+            if attr == "__unmatched__":
+                value = "—"
+            elif attr is None:
+                value = str(item)
+            else:
+                value = getattr(item, attr, None) or "—"
+            row_cells[i].text = str(value)
+        for cell in row_cells:
+            for para in cell.paragraphs:
+                for run in para.runs:
+                    run.font.size = Pt(10)
+
+    _shade_table_header_row(table, str(accent))
+    doc.add_paragraph()
+
+
+def _render_templated_sections(doc, minutes: "MinutesModel", sections: list[dict], navy, accent) -> set[str]:
+    """
+    Walks `sections` (from style_spec, document order) and renders each
+    recognized one following the SHAPE captured from the reference doc
+    (table/list/paragraph). Returns the set of MinutesModel field names
+    rendered here, so to_docx() can still fall back to its default
+    rendering for any field with real data that had no matching section
+    in the template (never silently drops content).
+
+    Never fabricates: a section with no known field is skipped; a table
+    column with no data source is rendered as "—" rather than invented;
+    a heading that repeats (maps to an already-rendered field — e.g. a
+    template with "Participantes" appearing once per meeting sub-block)
+    is skipped the second time, since MinutesModel holds one flat list
+    per field, already printed in full on the first occurrence.
+    """
+    from docx.shared import Pt
+
+    rendered: set[str] = set()
+
+    for section in sections:
+        field = _resolve_section_field(section.get("heading_text", ""))
+        if field is None or field in rendered:
+            continue
+        value = getattr(minutes, field, None)
+        if not value:
+            continue
+
+        heading_label = {
+            "participants": "Participantes",
+            "agenda": "Pauta",
+            "summary": "Resumo da Reunião",
+            "decisions": "Decisões Tomadas",
+            "action_items": "Encaminhamentos / Action Items",
+            "next_meeting": "Próxima Reunião",
+            "risks_identified": "Riscos Identificados",
+            "dependencies": "Dependências",
+            "open_questions": "Questões em Aberto",
+            "assumptions": "Premissas",
+            "stakeholder_needs": "Necessidades dos Stakeholders",
+        }.get(field, field)
+
+        content_kind = section.get("content_kind")
+        columns = section.get("columns") or []
+
+        if content_kind == "table" and columns and field in _COLUMN_FIELD_PATTERNS:
+            _heading_with_border(doc, heading_label, accent)
+            _render_field_as_table(doc, field, minutes, columns, accent)
+        elif field == "action_items":
+            _heading_with_border(doc, f"{heading_label} ({len(value)})", accent)
+            _render_default_action_items_table(doc, minutes)
+        elif field == "summary":
+            _heading_with_border(doc, heading_label, accent)
+            _render_default_summary(doc, minutes, navy)
+        elif field == "next_meeting":
+            _heading_with_border(doc, heading_label, accent)
+            p = doc.add_paragraph()
+            run = p.add_run(str(value))
+            run.font.size = Pt(11)
+            run.font.color.rgb = navy
+            doc.add_paragraph()
+        elif field == "agenda":
+            _heading_with_border(doc, heading_label, accent)
+            for i, item in enumerate(value, 1):
+                p = doc.add_paragraph(style="List Number")
+                p.add_run(item).font.size = Pt(11)
+                p.paragraph_format.space_after = Pt(2)
+            doc.add_paragraph()
+        else:
+            # participants / decisions / risks / dependencies / open_questions /
+            # assumptions / stakeholder_needs — flat list[str] fields, bulleted.
+            _heading_with_border(doc, heading_label, accent)
+            for item in value:
+                p = doc.add_paragraph(style="List Bullet")
+                p.add_run(str(item)).font.size = Pt(11)
+                p.paragraph_format.space_after = Pt(2)
+            doc.add_paragraph()
+
+        rendered.add(field)
+
+    return rendered
+
+
+def _heading_with_border(doc, text: str, accent) -> None:
+    """Section heading with a bottom-border separator in the accent color
+    — shared by to_docx()'s default rendering and _render_templated_sections()."""
+    from docx.shared import Pt
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+
+    h = doc.add_paragraph()
+    run = h.add_run(text.upper())
+    run.bold = True
+    run.font.size = Pt(9)
+    run.font.color.rgb = accent
+    run.font.name = "Calibri"
+    pPr = h._p.get_or_add_pPr()
+    pBdr = OxmlElement("w:pBdr")
+    bottom = OxmlElement("w:bottom")
+    bottom.set(qn("w:val"), "single")
+    bottom.set(qn("w:sz"), "4")
+    bottom.set(qn("w:space"), "4")
+    bottom.set(qn("w:color"), str(accent))
+    pBdr.append(bottom)
+    pPr.append(pBdr)
+    h.paragraph_format.space_after = Pt(4)
+
+
+def _render_default_action_items_table(doc, minutes: "MinutesModel") -> None:
+    """The app's fixed 5-column action items table (Prioridade/Tarefa/
+    Responsável/Prazo/Levantado por), header shaded navy — unchanged
+    default shape, used both as the fallback when no template applies
+    and when a template's 'action_items'-mapped section wasn't itself a
+    recognizable table."""
+    from docx.shared import Pt
+
+    headers = ["Prioridade", "Tarefa", "Responsável", "Prazo", "Levantado por"]
+    table = doc.add_table(rows=1, cols=len(headers))
+    table.style = "Table Grid"
+    hdr_cells = table.rows[0].cells
+    for i, h in enumerate(headers):
+        hdr_cells[i].text = h
+
+    for ai in minutes.action_items:
+        row_cells = table.add_row().cells
+        row_cells[0].text = _prio_label(ai.priority)
+        row_cells[1].text = ai.task
+        row_cells[2].text = ai.responsible
+        row_cells[3].text = ai.deadline or "—"
+        row_cells[4].text = ai.raised_by or "—"
+        for cell in row_cells:
+            for para in cell.paragraphs:
+                for run in para.runs:
+                    run.font.size = Pt(10)
+
+    _shade_table_header_row(table, "0B1E3D")
+    doc.add_paragraph()
+
+
+def _render_default_summary(doc, minutes: "MinutesModel", navy) -> None:
+    from docx.shared import Pt
+
+    for block in minutes.summary:
+        topic = block.get("topic", "")
+        content = block.get("content", "")
+        if topic:
+            sub = doc.add_paragraph()
+            run = sub.add_run(topic)
+            run.bold = True
+            run.font.size = Pt(11)
+            run.font.color.rgb = navy
+            sub.paragraph_format.space_before = Pt(6)
+            sub.paragraph_format.space_after = Pt(2)
+        if content:
+            p = doc.add_paragraph(content)
+            p.paragraph_format.space_after = Pt(4)
+    doc.add_paragraph()
+
+
 def _render_markdown_docx(doc, md: str, navy, accent) -> None:
     """
     Minimal Markdown -> docx renderer, used only when a meeting was loaded
@@ -137,13 +431,18 @@ def to_docx(minutes: "MinutesModel", template_spec: dict | None = None) -> bytes
         of the template feature only carries one color, per
         melhorias/templates-ata-por-contexto.md.
       - the first asset with asset_type in ("logo", "header_image") is
-        inserted into the document header.
+        inserted into the document header;
+      - "sections" (PC160 Fase 2, optional) — per-section shape captured
+        from the reference .docx ("table"/"list"/"paragraph" + columns,
+        see modules/ata_template_engine.py::extract_template_from_docx())
+        — recognized sections render in that shape instead of the fixed
+        default layout below; unrecognized sections are skipped rather
+        than fabricated, and any field with real data but no matching
+        section still falls back to the default rendering.
     """
     from docx import Document
     from docx.shared import Pt, RGBColor, Inches, Cm
     from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.oxml.ns import qn
-    from docx.oxml import OxmlElement
 
     NAVY   = RGBColor(0x0B, 0x1E, 0x3D)
     ACCENT = RGBColor(0x2E, 0x7F, 0xD9)
@@ -214,23 +513,7 @@ def to_docx(minutes: "MinutesModel", template_spec: dict | None = None) -> bytes
     doc.add_paragraph()  # spacer
 
     def _heading(text: str) -> None:
-        h = doc.add_paragraph()
-        run = h.add_run(text.upper())
-        run.bold = True
-        run.font.size = Pt(9)
-        run.font.color.rgb = ACCENT
-        run.font.name = "Calibri"
-        # Bottom border
-        pPr = h._p.get_or_add_pPr()
-        pBdr = OxmlElement("w:pBdr")
-        bottom = OxmlElement("w:bottom")
-        bottom.set(qn("w:val"), "single")
-        bottom.set(qn("w:sz"), "4")
-        bottom.set(qn("w:space"), "4")
-        bottom.set(qn("w:color"), str(ACCENT))
-        pBdr.append(bottom)
-        pPr.append(pBdr)
-        h.paragraph_format.space_after = Pt(4)
+        _heading_with_border(doc, text, ACCENT)
 
     def _bullet(text: str) -> None:
         p = doc.add_paragraph(style="List Bullet")
@@ -249,19 +532,31 @@ def to_docx(minutes: "MinutesModel", template_spec: dict | None = None) -> bytes
     _has_structured = bool(
         minutes.participants or minutes.agenda or minutes.summary
         or minutes.decisions or minutes.action_items
+        or minutes.assumptions or minutes.open_questions
+        or minutes.risks_identified or minutes.dependencies or minutes.stakeholder_needs
     )
     if not _has_structured and getattr(minutes, "minutes_md", ""):
         _render_markdown_docx(doc, minutes.minutes_md, NAVY, ACCENT)
 
+    # ── PC160 Fase 2 — template-shaped sections (table/list/paragraph) ────────
+    # Renders whatever the reference .docx recognizably mapped to a
+    # MinutesModel field, following its captured shape. No-op (empty set)
+    # when the template has no "sections" (older/plain templates, or none
+    # active) — every block below then runs exactly as before.
+    _sections = (template_spec or {}).get("sections") or []
+    _rendered: set[str] = set()
+    if _has_structured and _sections:
+        _rendered = _render_templated_sections(doc, minutes, _sections, NAVY, ACCENT)
+
     # ── Participants ──────────────────────────────────────────────────────────
-    if minutes.participants:
+    if "participants" not in _rendered and minutes.participants:
         _heading("Participantes")
         for p in minutes.participants:
             _bullet(p)
         doc.add_paragraph()
 
     # ── Agenda ────────────────────────────────────────────────────────────────
-    if minutes.agenda:
+    if "agenda" not in _rendered and minutes.agenda:
         _heading("Pauta")
         for i, item in enumerate(minutes.agenda, 1):
             p = doc.add_paragraph(style="List Number")
@@ -270,79 +565,50 @@ def to_docx(minutes: "MinutesModel", template_spec: dict | None = None) -> bytes
         doc.add_paragraph()
 
     # ── Summary ───────────────────────────────────────────────────────────────
-    if minutes.summary:
+    if "summary" not in _rendered and minutes.summary:
         _heading("Resumo da Reunião")
-        for block in minutes.summary:
-            topic   = block.get("topic", "")
-            content = block.get("content", "")
-            if topic:
-                sub = doc.add_paragraph()
-                run = sub.add_run(topic)
-                run.bold = True
-                run.font.size = Pt(11)
-                run.font.color.rgb = NAVY
-                sub.paragraph_format.space_before = Pt(6)
-                sub.paragraph_format.space_after  = Pt(2)
-            if content:
-                _body(content)
-        doc.add_paragraph()
+        _render_default_summary(doc, minutes, NAVY)
 
     # ── Decisions ─────────────────────────────────────────────────────────────
-    if minutes.decisions:
+    if "decisions" not in _rendered and minutes.decisions:
         _heading("Decisões Tomadas")
         for d in minutes.decisions:
             _bullet(d)
         doc.add_paragraph()
 
     # ── Action Items table ────────────────────────────────────────────────────
-    if minutes.action_items:
+    if "action_items" not in _rendered and minutes.action_items:
         _heading(f"Encaminhamentos / Action Items ({len(minutes.action_items)})")
         doc.add_paragraph()
-
-        headers = ["Prioridade", "Tarefa", "Responsável", "Prazo", "Levantado por"]
-        table = doc.add_table(rows=1, cols=len(headers))
-        table.style = "Table Grid"
-
-        # Header row
-        hdr_cells = table.rows[0].cells
-        for i, h in enumerate(headers):
-            hdr_cells[i].text = h
-            run = hdr_cells[i].paragraphs[0].runs[0]
-            run.bold = True
-            run.font.size = Pt(10)
-            run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-            # Navy background
-            tc = hdr_cells[i]._tc
-            tcPr = tc.get_or_add_tcPr()
-            shd = OxmlElement("w:shd")
-            shd.set(qn("w:val"), "clear")
-            shd.set(qn("w:color"), "auto")
-            shd.set(qn("w:fill"), "0B1E3D")
-            tcPr.append(shd)
-
-        # Data rows
-        for ai in minutes.action_items:
-            row_cells = table.add_row().cells
-            row_cells[0].text = _prio_label(ai.priority)
-            row_cells[1].text = ai.task
-            row_cells[2].text = ai.responsible
-            row_cells[3].text = ai.deadline or "—"
-            row_cells[4].text = ai.raised_by or "—"
-            for cell in row_cells:
-                for para in cell.paragraphs:
-                    for run in para.runs:
-                        run.font.size = Pt(10)
-
-        doc.add_paragraph()
+        _render_default_action_items_table(doc, minutes)
 
     # ── Next meeting ──────────────────────────────────────────────────────────
-    if minutes.next_meeting:
+    if "next_meeting" not in _rendered and minutes.next_meeting:
         _heading("Próxima Reunião")
         p = doc.add_paragraph()
         run = p.add_run(minutes.next_meeting)
         run.font.size = Pt(11)
         run.font.color.rgb = NAVY
         doc.add_paragraph()
+
+    # ── BABOK fields (assumptions/open_questions/risks/dependencies/
+    # stakeholder_needs) — bulleted, same shape as decisions/participants.
+    # Previously never rendered in the .docx export at all; now shares the
+    # same _rendered-guard as every other field so a template section can
+    # claim any of them, and each still falls back here otherwise.
+    for _field, _label in (
+        ("assumptions", "Premissas"),
+        ("open_questions", "Questões em Aberto"),
+        ("risks_identified", "Riscos Identificados"),
+        ("dependencies", "Dependências"),
+        ("stakeholder_needs", "Necessidades dos Stakeholders"),
+    ):
+        _value = getattr(minutes, _field, None)
+        if _field not in _rendered and _value:
+            _heading(_label)
+            for _item in _value:
+                _bullet(_item)
+            doc.add_paragraph()
 
     # ── Footer note ───────────────────────────────────────────────────────────
     footer_para = doc.add_paragraph()
