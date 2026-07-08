@@ -59,6 +59,35 @@ MEETING_OPS_CALENDAR_SCHEMAS: list[dict] = [
             {
                 "type": "function",
                 "function": {
+                    "name": "compare_meetings",
+                    "description": (
+                        "Compara duas atas específicas (não transcrições) mostrando o que mudou: "
+                        "participantes que entraram/saíram, decisões novas, encaminhamentos novos "
+                        "ou que sumiram entre as duas reuniões. Renderiza um diff visual (vermelho/"
+                        "verde) no chat. Diferente de compare_meeting_transcripts (que mede "
+                        "similaridade textual pra achar duplicatas) — use esta quando o usuário "
+                        "pedir para 'comparar a ata da reunião X com a Y', 'o que mudou entre as "
+                        "duas reuniões', 'diff das atas' ou 'follow-up da reunião anterior'."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "meeting_number_a": {
+                                "type": "integer",
+                                "description": "Número da primeira reunião (referência 'antes').",
+                            },
+                            "meeting_number_b": {
+                                "type": "integer",
+                                "description": "Número da segunda reunião (referência 'depois').",
+                            },
+                        },
+                        "required": ["meeting_number_a", "meeting_number_b"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "calculate_meeting_roi",
                     "description": (
                         "Calcula o ROI-TR (Retorno sobre Investimento de Tempo de Reunião) para uma "
@@ -1645,6 +1674,132 @@ class _MeetingOpsCalendarToolsMixin:
             "char_count": cc,
         })
         return f"📜 Transcrição da {label} exibida abaixo ({wc:,} palavras · {cc:,} caracteres)."
+
+    @staticmethod
+    def _parse_bullet_lines(section_text: str) -> list[str]:
+        """Extracts '- item' / '* item' lines from a Markdown section block."""
+        items = []
+        for line in section_text.splitlines():
+            m = re.match(r"^\s*[-*]\s+(.+)$", line)
+            if m:
+                items.append(m.group(1).strip())
+        return items
+
+    @staticmethod
+    def _parse_action_items_table(section_text: str) -> list[dict]:
+        """Parses a '| Tarefa | ... |' Markdown table (as AgentMinutes.to_markdown()
+        writes it) into a list of {header: value} dicts, one per data row."""
+        rows = [
+            [c.strip() for c in line.strip().strip("|").split("|")]
+            for line in section_text.splitlines()
+            if line.strip().startswith("|")
+        ]
+        if len(rows) < 2:
+            return []
+        headers = rows[0]
+        data_rows = [r for r in rows[1:] if not all(re.match(r"^:?-+:?$", c) for c in r if c)]
+        return [
+            {headers[i]: (cell.strip("*") if i < len(headers) else cell) for i, cell in enumerate(r)}
+            for r in data_rows
+            if len(r) == len(headers)
+        ]
+
+    def compare_meetings(self, meeting_number_a: int, meeting_number_b: int) -> str:
+        """Diffs two specific meetings' minutes (participants/decisions/action
+        items) — NOT transcript similarity (see compare_meeting_transcripts)."""
+        import streamlit as st
+
+        if meeting_number_a == meeting_number_b:
+            return "Escolha duas reuniões diferentes para comparar."
+
+        ma = self._find_meeting(meeting_number_a)
+        mb = self._find_meeting(meeting_number_b)
+        if not ma:
+            return f"❌ Reunião {meeting_number_a} não encontrada no contexto atual."
+        if not mb:
+            return f"❌ Reunião {meeting_number_b} não encontrada no contexto atual."
+
+        md_a = ma.get("minutes_md") or ""
+        md_b = mb.get("minutes_md") or ""
+        if not md_a or not md_b:
+            missing = meeting_number_a if not md_a else meeting_number_b
+            return f"❌ Reunião {missing} não tem ata gerada — não há o que comparar."
+
+        section_names = {
+            "participants": ("Participantes",),
+            "decisions": ("Decisões Tomadas", "Decisões", "Decisions"),
+            "action_items": ("Encaminhamentos / Action Items", "Encaminhamentos",
+                              "Itens de Ação", "Action Items", "Ações"),
+        }
+
+        participants_a = set(self._parse_bullet_lines(self._section(md_a, *section_names["participants"])))
+        participants_b = set(self._parse_bullet_lines(self._section(md_b, *section_names["participants"])))
+        decisions_a = set(self._parse_bullet_lines(self._section(md_a, *section_names["decisions"])))
+        decisions_b = set(self._parse_bullet_lines(self._section(md_b, *section_names["decisions"])))
+        actions_a = self._parse_action_items_table(self._section(md_a, *section_names["action_items"]))
+        actions_b = self._parse_action_items_table(self._section(md_b, *section_names["action_items"]))
+        task_col = next((h for h in (actions_a[0].keys() if actions_a else actions_b[0].keys() if actions_b else [])
+                          if "tarefa" in h.lower() or "ação" in h.lower() or "task" in h.lower()), None)
+        tasks_a = {a[task_col] for a in actions_a if task_col and a.get(task_col)}
+        tasks_b = {b[task_col] for b in actions_b if task_col and b.get(task_col)}
+
+        def _esc(s: str) -> str:
+            return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+        def _diff_block(title: str, set_a: set, set_b: set) -> str:
+            only_a = sorted(set_a - set_b)
+            only_b = sorted(set_b - set_a)
+            common = set_a & set_b
+            html = f'<div class="field-label">{_esc(title)}</div>'
+            if not only_a and not only_b:
+                html += f'<div class="diff-box">(sem mudanças — {len(common)} em comum)</div>'
+                return html
+            html += '<div class="diff-box">'
+            for item in only_a:
+                html += f'<div><del class="del">− {_esc(item)}</del></div>'
+            for item in only_b:
+                html += f'<div><ins class="ins">+ {_esc(item)}</ins></div>'
+            if common:
+                html += f'<div style="color:#6b7280;margin-top:4px;">({len(common)} sem alteração)</div>'
+            html += "</div>"
+            return html
+
+        title_a = ma.get("title") or f"Reunião {meeting_number_a}"
+        title_b = mb.get("title") or f"Reunião {meeting_number_b}"
+        date_a = (ma.get("meeting_date") or "")[:10]
+        date_b = (mb.get("meeting_date") or "")[:10]
+
+        html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e0e0e0;margin:0;padding:10px;}}
+h3{{font-size:14px;margin:0 0 4px;color:#94a3b8;}}
+.meta{{font-size:11px;color:#64748b;margin-bottom:12px;}}
+.field-label{{font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;margin:14px 0 4px;}}
+.diff-box{{font-size:13px;line-height:1.7;background:#131620;padding:10px 12px;border-radius:6px;border:1px solid #2a2d38;word-break:break-word;}}
+del.del{{background:#7f1d1d;color:#fca5a5;text-decoration:none;border-radius:2px;padding:0 3px;display:inline-block;}}
+ins.ins{{background:#14532d;color:#86efac;text-decoration:none;border-radius:2px;padding:0 3px;display:inline-block;}}
+.legend{{font-size:11px;color:#6b7280;margin-top:10px;}}
+</style></head><body>
+<h3>Comparação de Atas</h3>
+<p class="meta">
+  <strong>R{meeting_number_a}</strong> «{_esc(title_a)}» ({date_a or '—'}) → <strong>R{meeting_number_b}</strong> «{_esc(title_b)}» ({date_b or '—'})
+</p>
+{_diff_block("Participantes", participants_a, participants_b)}
+{_diff_block("Decisões", decisions_a, decisions_b)}
+{_diff_block("Encaminhamentos", tasks_a, tasks_b)}
+<p class="legend">
+  <del class="del">− Removido / só na R{meeting_number_a}</del> &nbsp; <ins class="ins">+ Novo / só na R{meeting_number_b}</ins>
+</p>
+</body></html>"""
+
+        st.session_state.setdefault("_pending_widgets", []).append({
+            "type": "req_diff_html",
+            "html": html,
+        })
+        return (
+            f"📋 Comparação R{meeting_number_a} → R{meeting_number_b} renderizada no chat. "
+            f"Vermelho = só na R{meeting_number_a}, verde = só na R{meeting_number_b}."
+        )
 
     def compare_meeting_transcripts(self, meeting_numbers: list) -> str:
         """Compare transcripts from multiple meetings to detect duplicates."""
