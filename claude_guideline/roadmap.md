@@ -4,6 +4,21 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC157 — Concluído (v5.15 / 2026-07-08) — loops de correção nunca mais viram Link Events invisíveis
+
+**Contexto:** implementação de `melhorias/event-links-aprimoramento.md` (agora arquivado), plano que pedia uma heurística objetiva pra decidir entre seta explícita e Link Event, com uma regra central: loops de correção/retrabalho (ex: "não aprovada" voltando pro passo anterior) devem **sempre** ser seta visível, nunca Link Event, independente da distância.
+
+- **`_closes_cycle(flow, all_flows)`** (`modules/bpmn_generator.py`) — nova função: detecta via BFS se `target` já consegue alcançar `source` pelos demais flows (ou seja, o flow fecha um ciclo no grafo). Um flow que fecha ciclo é estruturalmente um loop de correção/retrabalho — nunca um salto excepcional para um ponto distante não relacionado.
+- **`_detect_crossings()`** agora exclui incondicionalmente qualquer flow que feche ciclo, ANTES de rodar as 5 heurísticas de distância/cruzamento já existentes (calibradas em produção real via PC118/PC131) — essas heurísticas continuam intactas para os saltos genuinamente não-cíclicos.
+- **Convenção de nomenclatura** — Link Events trocaram de `lnk_throw_N`/`lnk_catch_N` (genérico, incremental) para `link_throw_{origem}_{destino}`/`link_catch_{origem}_{destino}` (descritivo, conforme o plano), com verificação de colisão defensiva.
+- **Bug real de trava (infinite loop) encontrado e corrigido durante os testes**: o passo de "resolução de conflito de coluna cross-lane" em `_compute_layout()` sempre assumiu implicitamente que `bpmn.flows` era acíclico — garantia que antes vinha de TODO loop longo/cross-lane já ter sido cortado em Link Events antes desse passo rodar. Ao parar de converter loops de correção, ciclos reais voltaram a chegar nesse passo, e o loop de propagação "empurra coluna pra frente" (sem guarda de ciclo) trava indefinidamente. Corrigido com limites de segurança (teto de coluna = `len(order)+2`, teto de rodadas = `len(order)*4+20`) — reproduzido e verificado com `faulthandler.dump_traceback_later` antes do fix (travava; 11ms depois).
+- **Desvio consciente do plano original**: os critérios numéricos literais do documento (>2000px, ≥3 elementos cruzados) NÃO substituíram as 5 heurísticas de distância/lane-span já existentes — reescrevê-las do zero jogaria fora o ajuste fino validado em produção real (PC118/PC131). A parte de maior valor do plano (loop de correção nunca vira Link Event + nomenclatura descritiva) foi implementada; "tentar reorganizar layout antes" e o rótulo "Retorno para X" não foram implementados literalmente (a exclusão por ciclo já resolve o problema-raiz sem precisar de reposicionamento).
+- [x] 4 testes novos (`tests/test_bpmn_generator_link_events.py`): loop de correção de longa distância fica seta direta, salto forward de mesma distância sem ciclo ainda vira Link Event (caso de controle), nomenclatura `link_throw_{src}_{tgt}` confirmada, guarda de trava em grafo cíclico (assert < 5s). 1 teste existente atualizado para refletir o comportamento novo e correto (`sf_017`/"Solicitar Ajustes" — um loop de correção real no fixture de 6 lanes — deixa de virar Link Event).
+- [x] Validado contra o XML real de "Reclassificação de Lançamento Contábil" visto nesta mesma sessão (o loop "não aprovada" S08→S06 que antes virava `lnk_throw_1`/`lnk_catch_1`) — confirma zero Link Events gerados, `sf_009` permanece seta direta.
+- [x] 611/611 testes automatizados passando.
+
+---
+
 ### PC156 — Concluído (v5.15 / 2026-07-08) — correção de termo com grafia errada agora cobre o SBVR
 
 **Contexto:** usuário perguntou se havia funcionalidade para corrigir um termo/sigla com grafia errada trazida pela transcrição (ex: "SASEP" quando o correto é "SACEP") de forma consistente em todos os artefatos onde o termo aparece — incluindo o vocabulário SBVR. Investigação (Explore agent) confirmou: `apply_text_correction`/`preview_text_correction`/`batch_text_correction` já cobriam transcrição/ata/requisitos, mas o `scope` não tinha opção `"sbvr"`, e as ferramentas dedicadas de SBVR (`update_sbvr_term`/`update_sbvr_term_by_id`) só editavam `definition`/`category` — nenhuma tinha parâmetro para renomear `sbvr_terms.term` em si.

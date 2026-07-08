@@ -56,16 +56,19 @@ _GATEWAY_TYPES = frozenset({
 # After the column-based layout is computed we have concrete (x,y,w,h) for
 # every element and two waypoints per edge (right-centre → left-centre).
 # This pass:
-#   1. Detects edges whose straight line intersects any other edge's straight
-#      line (geometric segment-intersection test).
-#   2. For each crossing edge, replaces it with a
-#      intermediateThrowEvent(link) + intermediateThrowEvent(link) pair placed
-#      in the source / target lanes respectively.
+#   0. Excludes correction/rework loops (flows closing a cycle back to an
+#      earlier step) unconditionally — those must always render as a
+#      visible arrow (melhorias/event-links-aprimoramento.md).
+#   1. Flags remaining flows via 4 heuristics (lane-spanning, long span,
+#      backward cross-lane, far lane-span — see _detect_crossings).
+#   2. For each flagged flow, replaces it with a link_throw_{src}_{tgt} +
+#      link_catch_{src}_{tgt} pair placed in the source / target lanes.
 #   3. Rewires the BpmnProcess model (elements + flows) in-place so that the
 #      standard XML generation path picks up the new elements naturally.
 #
 # The BPMN 2.0 spec (§13.2.9) explicitly defines Link Events as a mechanism
-# to connect distant parts of a diagram without visible crossing connectors.
+# to connect distant parts of a diagram without visible crossing connectors —
+# never as a way to hide a loop.
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _edge_segment(flow, shapes):
@@ -115,18 +118,55 @@ def _segments_intersect(s1, s2):
 
 def _is_link_flow(flow):
     """True if either endpoint of this flow is a generated link event."""
-    return (flow.source.startswith("lnk_") or flow.target.startswith("lnk_"))
+    return (flow.source.startswith("link_") or flow.target.startswith("link_"))
+
+
+def _closes_cycle(flow, all_flows):
+    """
+    True if `flow` (source -> target) closes a cycle — i.e. `target` can
+    already reach `source` via the OTHER flows in the process.
+
+    Such a flow is a correction/rework loop (e.g. a gateway's "reprovado"/
+    "não aprovada" branch returning to an earlier work step) rather than a
+    forward jump to an unrelated distant point. melhorias/event-links-
+    aprimoramento.md: loop visibility is essential to understanding rework
+    and must NEVER be hidden behind a Link Event, regardless of on-screen
+    distance — unlike a genuine one-off exceptional forward jump, which is
+    exactly what Link Events exist for (BPMN 2.0 §13.2.9).
+    """
+    adjacency: dict[str, list[str]] = {}
+    for f in all_flows:
+        if f is flow:
+            continue
+        adjacency.setdefault(f.source, []).append(f.target)
+
+    seen = {flow.target}
+    queue = [flow.target]
+    while queue:
+        node = queue.pop()
+        if node == flow.source:
+            return True
+        for nxt in adjacency.get(node, []):
+            if nxt not in seen:
+                seen.add(nxt)
+                queue.append(nxt)
+    return False
 
 
 def _detect_crossings(flows, shapes, lane_assignment=None, pool=None):
     """
     Return a set of flow IDs that should be replaced with Link Event pairs.
 
-    IMPORTANT: flows that already involve link events (lnk_throw_N or
-    lnk_catch_N) are excluded from detection. This prevents the iterative
+    IMPORTANT: flows that already involve link events (link_throw_* or
+    link_catch_*) are excluded from detection. This prevents the iterative
     injection loop from re-detecting short flows created in a previous pass.
 
-    Only one heuristic is applied:
+    Correction/rework loops (flows that close a cycle back to an earlier
+    step — see _closes_cycle) are ALSO excluded unconditionally, before any
+    other heuristic runs: they must always render as a visible arrow.
+
+    The remaining heuristics (lane-spanning, long horizontal span, backward
+    cross-lane, far lane-span) target genuine forward/lateral jumps only.
 
     LANE-SPANNING  (requires lane_assignment + pool)
       A cross-lane flow that *skips* one or more intermediate lanes
@@ -138,6 +178,7 @@ def _detect_crossings(flows, shapes, lane_assignment=None, pool=None):
     them causes layout distortion (the catch event ends up at column 0).
     """
     candidate_flows = [f for f in flows if not _is_link_flow(f)]
+    candidate_flows = [f for f in candidate_flows if not _closes_cycle(f, flows)]
     crossing_ids = set()
 
     # ── Heuristic 2: lane-spanning ────────────────────────────────────────────
@@ -303,8 +344,13 @@ def _apply_link_events(bpmn, lane_assignment, shapes):
 
     For a crossing flow  A ──────────────────────> B
     we inject:
-        A ──> [throw_link_N]     (in A's lane)
-              [catch_link_N] ──> B   (in B's lane)
+        A ──> [link_throw_A_B]     (in A's lane)
+              [link_catch_A_B] ──> B   (in B's lane)
+
+    Correction/rework loops (flows that close a cycle back to an earlier
+    step) are never selected for this substitution — see _closes_cycle,
+    which _detect_crossings applies unconditionally before any other
+    heuristic. melhorias/event-links-aprimoramento.md.
 
     The throw and catch events are added to bpmn.elements and
     bpmn.pools[0].lanes[*].element_ids.  The original flow is removed
@@ -327,30 +373,34 @@ def _apply_link_events(bpmn, lane_assignment, shapes):
 
     new_elements = list(bpmn.elements)
     new_flows    = []
-    # Start counter above any existing link-event IDs so that repeated calls
-    # within the MAX_ITERATIONS loop never produce duplicate IDs (e.g. a second
-    # pass that detects new crossings created by the first injection would
-    # otherwise restart at 1 and collide with already-placed lnk_throw_1 etc.).
-    _existing_max = 0
-    for _el in bpmn.elements:
-        if _el.id.startswith("lnk_throw_") or _el.id.startswith("lnk_catch_"):
-            try:
-                _existing_max = max(_existing_max, int(_el.id.rsplit("_", 1)[-1]))
-            except ValueError:
-                pass
-    link_counter = [_existing_max]
+    # IDs are derived from (source, target) — inherently unique per directed
+    # edge in a well-formed flow graph, so no counter is needed across the
+    # MAX_ITERATIONS loop. Guard against the pathological case (two distinct
+    # crossing flows sharing the same source/target) by disambiguating with
+    # a numeric suffix on collision only.
+    existing_ids = {_el.id for _el in bpmn.elements}
 
     for flow in bpmn.flows:
         if flow.id not in crossing_ids:
             new_flows.append(flow)
             continue
 
-        link_counter[0] += 1
-        n      = link_counter[0]
-        label  = flow.name or f"L{n}"   # human-readable link name shown on the event
+        label  = flow.name or ""   # human-readable link name shown on the event
 
-        throw_id = f"lnk_throw_{n}"
-        catch_id = f"lnk_catch_{n}"
+        # melhorias/event-links-aprimoramento.md: descriptive naming —
+        # link_throw_{origem}_{destino} / link_catch_{origem}_{destino},
+        # identical linkEventDefinition name for the throw/catch pair
+        # (guaranteed here since both derive from the same flow.source/target).
+        throw_id = f"link_throw_{flow.source}_{flow.target}"
+        catch_id = f"link_catch_{flow.source}_{flow.target}"
+        if throw_id in existing_ids or catch_id in existing_ids:
+            _suffix = 2
+            while f"{throw_id}_{_suffix}" in existing_ids or f"{catch_id}_{_suffix}" in existing_ids:
+                _suffix += 1
+            throw_id = f"{throw_id}_{_suffix}"
+            catch_id = f"{catch_id}_{_suffix}"
+        existing_ids.add(throw_id)
+        existing_ids.add(catch_id)
 
         # ── Throw event in source's lane ──────────────────────────────────────
         src_lane_id = el_lane.get(flow.source)
@@ -711,7 +761,7 @@ def _assign_columns(order, flows):
     1. Process elements in topological order.
     2. Each element's column = max(predecessor columns) + 1.
        (Start nodes with no predecessors get column 0.)
-    3. Link events (lnk_throw_N, lnk_catch_N) are treated like regular
+    3. Link events (link_throw_*, link_catch_*) are treated like regular
        elements for column assignment — they inherit depth from their
        predecessors/successors. Their X position is then fine-tuned in
        _compute_layout to avoid overlapping regular elements in the same
@@ -813,25 +863,25 @@ def _compute_layout(bpmn, lane_assignment):
         col_of = _assign_columns(order, bpmn.flows)
         col_of = _align_parallel_branches(col_of, bpmn.flows)
 
-        # Fix lnk_catch_N columns: catch events have no incoming flows so
+        # Fix link_catch_* columns: catch events have no incoming flows so
         # _assign_columns gives them col=0.  Place them at the same column as
         # their target so they stack cleanly in the target lane rather than
         # appearing at the diagram's left edge alongside the start event.
         for f in bpmn.flows:
-            if f.source.startswith("lnk_catch_") and f.target in col_of:
+            if f.source.startswith("link_catch_") and f.target in col_of:
                 col_of[f.source] = col_of[f.target]
 
-        # Fix lnk_throw_N columns: _assign_columns places the throw event at
+        # Fix link_throw_* columns: _assign_columns places the throw event at
         # col[source]+1 (its natural topological depth).  That +1 column is often
         # shared by cross-lane forward flows (e.g. S07→S08 in the same column),
         # whose diagonal waypoints then geometrically intersect the short
         # source→throw flow.  Placing the throw event at col[source] instead
         # makes the source→throw flow a short vertical arrow within the same
         # column, which lies to the left of the cross-lane diagonal and never
-        # intersects it.  Nothing else depends on lnk_throw_N as a predecessor
+        # intersects it.  Nothing else depends on link_throw_* as a predecessor
         # in the sequence flows, so this reassignment is always safe.
         for f in bpmn.flows:
-            if f.target.startswith("lnk_throw_") and f.source in col_of:
+            if f.target.startswith("link_throw_") and f.source in col_of:
                 col_of[f.target] = col_of[f.source]
 
         # ── Post-pass: resolve cross-lane return column conflicts ──────────────
@@ -844,9 +894,31 @@ def _compute_layout(bpmn, lane_assignment):
         # Fix: for each cross-lane flow A→B, if B's column already has another
         # element in B's lane, push B (and all its downstream successors) one
         # column forward.  Repeats until stable.
+        #
+        # SAFETY GUARDS (melhorias/event-links-aprimoramento.md, PC157): before
+        # this pass, bpmn.flows was always guaranteed acyclic — every long/
+        # cross-lane cycle (correction loop) had already been snipped into a
+        # Link Event pair by _apply_link_events. Correction loops now stay as
+        # direct SequenceFlow edges (never Link-Event-ified — see
+        # _closes_cycle), so bpmn.flows CAN legitimately contain a real graph
+        # cycle here. A cycle makes the push-forward propagation below
+        # unbounded (each lap around the cycle increments columns again,
+        # forever) without a cap. A column index can never legitimately
+        # exceed the element count in an acyclic layering, so treat that as
+        # the signal that this push chain hit a cycle and abandon it — the
+        # affected loop-back arrow keeps its pre-conflict column (a slightly
+        # less tidy diagonal is an acceptable trade for not hiding the loop
+        # behind a Link Event). The outer loop also gets a hard iteration cap
+        # as defense in depth.
+        _max_col_bound  = len(order) + 2
+        _max_cl_rounds  = len(order) * 4 + 20
         _cl_changed = True
+        _cl_rounds  = 0
         while _cl_changed:
             _cl_changed = False
+            _cl_rounds += 1
+            if _cl_rounds > _max_cl_rounds:
+                break   # cycle-driven churn — stop, keep current columns
             # lane → col → [eids]
             _lc_map: dict = {}
             for _eid, _c in col_of.items():
@@ -869,6 +941,8 @@ def _compute_layout(bpmn, lane_assignment):
                 _push_queue = [(_f.target, _tc + 1)]
                 while _push_queue:
                     _cur, _mc = _push_queue.pop(0)
+                    if _mc > _max_col_bound:
+                        continue   # cycle detected mid-propagation — abandon this chain
                     if col_of.get(_cur, -1) >= _mc:
                         continue
                     col_of[_cur] = _mc
@@ -1004,15 +1078,15 @@ def _compute_layout(bpmn, lane_assignment):
                 hx, hy, hw, hh = host
                 shapes[el.id] = (hx + hw - EV_W // 2, hy + hh - EV_H // 2, EV_W, EV_H)
 
-    # ── Step 7: reposition lnk_throw events to avoid passing through stacked elements ──
-    # When a lnk_throw event ends up in the same column as its source, the
+    # ── Step 7: reposition link_throw events to avoid passing through stacked elements ──
+    # When a link_throw event ends up in the same column as its source, the
     # vertical flow source_bottom → throw_top may cross other elements stacked
     # in that column.  Fix: move the throw event to just right of the source
     # (in the inter-column gap) so the routing becomes a short horizontal hop.
     if bpmn.pools:
         _la_inner = _assign_lanes(bpmn)
         for f in bpmn.flows:
-            if not f.target.startswith("lnk_throw_"):
+            if not f.target.startswith("link_throw_"):
                 continue
             src_id   = f.source
             throw_id = f.target

@@ -125,15 +125,26 @@ class TestFarLaneSpanHeuristic:
         assert "sf_015" not in flow_ids
         assert "sf_016" not in flow_ids
 
-    def test_backward_far_lane_span_still_converted(self):
-        """Regression guard: the backward case (already handled by
-        Heuristic 4 before this change) must still work after adding
-        Heuristic 5 -- no double-processing / id collisions."""
+    def test_backward_correction_loop_stays_explicit(self):
+        """PC157 (melhorias/event-links-aprimoramento.md): sf_017 (S13->S05,
+        "Solicitar Ajustes") closes a real cycle -- S05 flows forward through
+        S06..S12 back to S13. Before PC157 this backward cross-lane flow was
+        indistinguishable from a genuine distant jump and got converted to
+        Link Events by Heuristic 4/5, hiding the rework loop from the reader.
+        _closes_cycle now excludes any flow that closes a cycle from
+        Link Event conversion unconditionally, regardless of distance/lane
+        span -- so it must stay a direct, visible sequenceFlow."""
         bpmn = _build_six_lane_process()
         xml_str = generate_bpmn_xml(bpmn)
 
         throws, catches = _link_event_names(xml_str)
-        assert "Solicitar Ajustes" in throws and "Solicitar Ajustes" in catches
+        assert "Solicitar Ajustes" not in throws and "Solicitar Ajustes" not in catches
+
+        root = ET.fromstring(xml_str)
+        flow_ids = {f.get("id") for f in root.iter(f"{_NS}sequenceFlow")}
+        assert "sf_017" in flow_ids
+        sf_017 = next(f for f in root.iter(f"{_NS}sequenceFlow") if f.get("id") == "sf_017")
+        assert sf_017.get("sourceRef") == "S13" and sf_017.get("targetRef") == "S05"
 
     def test_adjacent_lane_flows_stay_direct(self):
         """Regression guard: adjacent-lane flows (span 1, e.g. S08->S09,
@@ -170,3 +181,100 @@ class TestFarLaneSpanHeuristic:
         root = ET.fromstring(xml_str)
         assert list(root.iter(f"{_NS}intermediateThrowEvent")) == []
         assert list(root.iter(f"{_NS}intermediateCatchEvent")) == []
+
+    def test_link_event_ids_use_descriptive_src_tgt_naming(self):
+        """PC157: link event element ids must follow
+        link_throw_{origem}_{destino} / link_catch_{origem}_{destino}
+        (melhorias/event-links-aprimoramento.md), not the old lnk_throw_N."""
+        bpmn = _build_six_lane_process()
+        xml_str = generate_bpmn_xml(bpmn)
+        root = ET.fromstring(xml_str)
+
+        throw_ids = {e.get("id") for e in root.iter(f"{_NS}intermediateThrowEvent")}
+        catch_ids = {e.get("id") for e in root.iter(f"{_NS}intermediateCatchEvent")}
+
+        assert "link_throw_S13_S14" in throw_ids
+        assert "link_catch_S13_S14" in catch_ids
+        assert "link_throw_S13_S18" in throw_ids
+        assert "link_catch_S13_S18" in catch_ids
+        assert not any(tid.startswith("lnk_") for tid in throw_ids | catch_ids)
+
+
+class TestCorrectionLoopNeverBecomesLinkEvent:
+    """PC157 (melhorias/event-links-aprimoramento.md): flows that close a
+    cycle back to an earlier step (correction/rework loops) must always
+    render as a visible sequenceFlow, regardless of distance or lane span
+    -- the whole point being that a hidden retrabalho loop is worse than an
+    untidy long diagonal arrow."""
+
+    def _build_long_distance_loop(self):
+        """A gateway 5 lanes away rejects straight back to lane 1 -- would
+        trip every distance/lane-span heuristic (2, 3, 4, 5) if it weren't
+        for the cycle exclusion, since it is both backward AND spans 4 lane
+        boundaries."""
+        lanes = [BpmnLane(id=f"lane_{i}", name=f"Lane {i}", element_ids=[]) for i in range(6)]
+        pool = BpmnPool(id="pool_1", name="Processo Longo", lanes=lanes)
+
+        elements = [BpmnElement(id="ev_start", type="startEvent", name="Inicio",
+                                 actor="Lane 0", lane="Lane 0")]
+        flows = [SequenceFlow(id="f_start", source="ev_start", target="S1")]
+        prev = "ev_start"
+        for i in range(1, 6):
+            sid = f"S{i}"
+            elements.append(BpmnElement(id=sid, type="userTask", name=f"Passo {i}",
+                                         actor=f"Lane {i}", lane=f"Lane {i}"))
+            if prev != "ev_start":
+                flows.append(SequenceFlow(id=f"f_{prev}_{sid}", source=prev, target=sid))
+            prev = sid
+
+        elements.append(BpmnElement(id="GW", type="exclusiveGateway", name="Aprovado?",
+                                     actor="Lane 5", lane="Lane 5"))
+        flows.append(SequenceFlow(id="f_S5_GW", source="S5", target="GW"))
+        elements.append(BpmnElement(id="ev_end", type="endEvent", name="Fim",
+                                     actor="Lane 5", lane="Lane 5"))
+        flows.append(SequenceFlow(id="f_GW_end", source="GW", target="ev_end", name="Aprovado"))
+        # Rejection: closes a cycle back to S1 (5 lanes away, backward).
+        flows.append(SequenceFlow(id="f_GW_S1", source="GW", target="S1", name="Reprovado"))
+
+        for lane, eid in zip(lanes, ["ev_start", "S1", "S2", "S3", "S4", "S5"]):
+            lane.element_ids.append(eid)
+        lanes[5].element_ids.extend(["GW", "ev_end"])
+
+        return BpmnProcess(name="Processo Longo", elements=elements, flows=flows, pools=[pool])
+
+    def test_correction_loop_stays_direct_sequenceflow(self):
+        bpmn = self._build_long_distance_loop()
+        xml_str = generate_bpmn_xml(bpmn)
+
+        throws, catches = _link_event_names(xml_str)
+        assert "Reprovado" not in throws and "Reprovado" not in catches
+
+        root = ET.fromstring(xml_str)
+        flow_ids = {f.get("id") for f in root.iter(f"{_NS}sequenceFlow")}
+        assert "f_GW_S1" in flow_ids
+
+    def test_non_loop_forward_jump_of_equal_span_still_becomes_link_event(self):
+        """Control case: the SAME distance/lane-span, but the approval branch
+        (GW -> ev_end) doesn't close a cycle, so it's a normal direct arrow
+        either way (same lane, adjacent) -- confirms the exclusion is
+        specific to cycle-closing edges, not a blanket "never convert
+        anything from this gateway" rule."""
+        bpmn = self._build_long_distance_loop()
+        xml_str = generate_bpmn_xml(bpmn)
+        root = ET.fromstring(xml_str)
+        flow_ids = {f.get("id") for f in root.iter(f"{_NS}sequenceFlow")}
+        assert "f_GW_end" in flow_ids  # same-lane, not a crossing candidate at all
+
+    def test_layout_does_not_hang_on_cyclic_flow_graph(self):
+        """Regression guard for the infinite-loop found while implementing
+        PC157: excluding correction loops from Link Event conversion means
+        _compute_layout's cross-lane column-conflict resolver can now see a
+        genuine graph cycle (previously guaranteed acyclic by construction).
+        Must terminate quickly via the round/column safety caps, not hang."""
+        import time
+        bpmn = self._build_long_distance_loop()
+        t0 = time.monotonic()
+        xml_str = generate_bpmn_xml(bpmn)
+        elapsed = time.monotonic() - t0
+        assert xml_str
+        assert elapsed < 5.0, f"generate_bpmn_xml took {elapsed:.1f}s -- possible cycle-driven hang regression"
