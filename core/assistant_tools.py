@@ -214,6 +214,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "sugerir_processos":               "consulta",
     "gerar_deck_executivo":            "consulta",
     "gerar_project_charter":           "consulta",
+    "export_project_charter_docx":     "consulta",
     # Editor Estrutural (Fase 2)
     "reordenar_requisitos":            "escrita",
     "inserir_secao_ata":               "admin",
@@ -827,6 +828,12 @@ class AssistantToolExecutor(
                     tema_cores=tool_input.get("tema_cores", "corporativo"),
                 ),
                 "gerar_project_charter":  lambda: self.gerar_project_charter(
+                    incluir_riscos=bool(tool_input.get("incluir_riscos", True)),
+                    incluir_cronograma=bool(tool_input.get("incluir_cronograma", True)),
+                    incluir_stakeholders=bool(tool_input.get("incluir_stakeholders", True)),
+                    incluir_escopo=bool(tool_input.get("incluir_escopo", True)),
+                ),
+                "export_project_charter_docx": lambda: self.export_project_charter_docx(
                     incluir_riscos=bool(tool_input.get("incluir_riscos", True)),
                     incluir_cronograma=bool(tool_input.get("incluir_cronograma", True)),
                     incluir_stakeholders=bool(tool_input.get("incluir_stakeholders", True)),

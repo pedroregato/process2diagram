@@ -1107,7 +1107,7 @@ class _MeetingsRequirementsToolsMixin:
             f"• Registrado em: {now[:10]}"
         )
 
-    def _section(minutes_md: str, *section_names: str) -> str:
+    def _section(self, minutes_md: str, *section_names: str) -> str:
         """Extract a named section from minutes markdown. Tries each name in order."""
         for name in section_names:
             m = re.search(

@@ -1592,18 +1592,16 @@ for i, msg in enumerate(history):
             # Render A2UI widgets (BPMN, Mermaid, metrics)
             if msg.get("widgets"):
                 _render_message_widgets(msg["widgets"], i)
-            # ── Relatório executivo disponível para download ───────────────────
-            if rd := msg.get("report_download"):
-                _rk  = rd.get("cache_key", "")
-                _fn  = rd.get("filename", "relatorio_executivo.html")
-                _num = rd.get("meeting_number", 0)
+            # ── Arquivo pendente disponível para download (relatório, .docx, etc.) ──
+            if fd := msg.get("file_download"):
+                _rk = fd.get("cache_key", "")
                 if _rk and _rk in st.session_state:
                     st.download_button(
-                        label=f"⬇️ Relatório Executivo — Reunião {_num}",
+                        label=fd.get("label", "⬇️ Download"),
                         data=st.session_state[_rk],
-                        file_name=_fn,
-                        mime="text/html",
-                        key=f"btn_report_dl_{i}_{_num}",
+                        file_name=fd.get("filename", "download.bin"),
+                        mime=fd.get("mime", "application/octet-stream"),
+                        key=f"btn_file_dl_{i}",
                     )
         if msg["role"] == "user":
             col_edit, col_copy, _ = st.columns([1, 1, 8])
@@ -1696,16 +1694,16 @@ if _asst_running:
             "question": last_question,
         })
 
-        # ── Relatório executivo pendente (get_executive_report tool) ──────────
-        if _pending_report := st.session_state.pop("_pending_report_html", None):
-            _rkey = _pending_report.get("cache_key", f"_report_dl_{_pending_report.get('meeting_number', 0)}")
-            if _rkey not in st.session_state and _pending_report.get("html"):
-                st.session_state[_rkey] = _pending_report["html"].encode()
-            history[-1]["report_download"] = {
-                "cache_key": _rkey,
-                "filename":  _pending_report.get("filename", "relatorio_executivo.html"),
-                "meeting_number": _pending_report.get("meeting_number", 0),
-            }
+        # ── Arquivo pendente pra download (get_executive_report, export_project_charter_docx, etc.) ──
+        if _pending_dl := st.session_state.pop("_pending_file_download", None):
+            _rkey = _pending_dl.get("cache_key", "")
+            if _rkey:
+                history[-1]["file_download"] = {
+                    "cache_key": _rkey,
+                    "filename":  _pending_dl.get("filename", "download.bin"),
+                    "mime":      _pending_dl.get("mime", "application/octet-stream"),
+                    "label":     _pending_dl.get("label", "⬇️ Download"),
+                }
 
         st.session_state["assistant_history"] = history
 

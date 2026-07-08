@@ -340,6 +340,41 @@ EXECUTIVE_ADVANCED_SCHEMAS: list[dict] = [
             {
                 "type": "function",
                 "function": {
+                    "name": "export_project_charter_docx",
+                    "description": (
+                        "Gera o Project Charter (mesmo conteúdo de gerar_project_charter) e "
+                        "disponibiliza para download como arquivo Word (.docx) formatado, em vez "
+                        "de Markdown no chat. Use quando o usuário pedir o Charter/Termo de "
+                        "Abertura/TAP/BRD 'em Word', 'para baixar', 'pra imprimir' ou 'pra enviar "
+                        "pro cliente'."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "incluir_riscos": {
+                                "type": "boolean",
+                                "description": "Incluir seção de riscos baseada em contradições abertas. Padrão: true.",
+                            },
+                            "incluir_cronograma": {
+                                "type": "boolean",
+                                "description": "Incluir cronograma inferido das datas de reunião e encaminhamentos. Padrão: true.",
+                            },
+                            "incluir_stakeholders": {
+                                "type": "boolean",
+                                "description": "Incluir seção de stakeholders extraídos das atas. Padrão: true.",
+                            },
+                            "incluir_escopo": {
+                                "type": "boolean",
+                                "description": "Incluir breakdown do escopo por tipo de requisito. Padrão: true.",
+                            },
+                        },
+                        "required": [],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "sincronizar_calendario",
                     "description": (
                         "Sincroniza os encaminhamentos (itens de ação) das atas com o Google Calendar. "
@@ -625,6 +660,45 @@ class _ExecutiveAdvancedToolsMixin:
             "---\n\n"
             + charter
         )
+
+    def export_project_charter_docx(
+        self,
+        incluir_riscos: bool = True,
+        incluir_cronograma: bool = True,
+        incluir_stakeholders: bool = True,
+        incluir_escopo: bool = True,
+    ) -> str:
+        """Generate the Project Charter (same content as gerar_project_charter)
+        and queue it as a .docx download instead of returning raw Markdown."""
+        charter_md = self.gerar_project_charter(
+            incluir_riscos=incluir_riscos,
+            incluir_cronograma=incluir_cronograma,
+            incluir_stakeholders=incluir_stakeholders,
+            incluir_escopo=incluir_escopo,
+        )
+        if not charter_md.lstrip().startswith("#"):
+            # gerar_project_charter() returns a plain error string (no
+            # meetings, LLM failure) instead of a Markdown document — surface
+            # it as-is rather than exporting a broken/empty .docx.
+            return charter_md
+
+        try:
+            from modules.minutes_exporter import markdown_to_docx
+            docx_bytes = markdown_to_docx(charter_md)
+        except Exception as exc:
+            return f"❌ Erro ao converter o Project Charter para .docx: {exc}"
+
+        import streamlit as st
+        from datetime import date as _date
+        key = f"_charter_dl_{_date.today().isoformat()}"
+        st.session_state["_pending_file_download"] = {
+            "cache_key": key,
+            "filename":  f"project_charter_{_date.today().isoformat()}.docx",
+            "mime":      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "label":     "⬇️ Project Charter (.docx)",
+        }
+        st.session_state[key] = docx_bytes
+        return "✅ Project Charter gerado e disponível para download em Word (.docx)."
 
     def mapa_rastreabilidade(
         self,

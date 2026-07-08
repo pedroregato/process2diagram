@@ -2258,11 +2258,11 @@ class _AdminChartsEntitiesToolsMixin:
             )
 
         key = f"_report_dl_{meeting_number}"
-        st.session_state["_pending_report_html"] = {
-            "html":           html,
-            "meeting_number": meeting_number,
-            "filename":       f"relatorio_executivo_reuniao_{meeting_number}.html",
-            "cache_key":      key,
+        st.session_state["_pending_file_download"] = {
+            "cache_key": key,
+            "filename":  f"relatorio_executivo_reuniao_{meeting_number}.html",
+            "mime":      "text/html",
+            "label":     f"⬇️ Relatório Executivo — Reunião {meeting_number}",
         }
         st.session_state[key] = html.encode()
 

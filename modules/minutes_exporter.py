@@ -415,6 +415,38 @@ def _render_markdown_docx(doc, md: str, navy, accent) -> None:
     _flush_table()
 
 
+def markdown_to_docx(md_text: str) -> bytes:
+    """
+    Generic Markdown -> .docx converter, for LLM-generated artifacts that
+    aren't a MinutesModel (Project Charter, release notes, etc.) — reuses
+    _render_markdown_docx() (same headers/bullets/numbered-lists/tables
+    support already exercised by the ata export fallback) so there's a
+    single Markdown->docx implementation in the app, not two.
+    """
+    from docx import Document
+    from docx.shared import Pt, RGBColor, Cm
+
+    NAVY   = RGBColor(0x0B, 0x1E, 0x3D)
+    ACCENT = RGBColor(0x2E, 0x7F, 0xD9)
+
+    doc = Document()
+    for section in doc.sections:
+        section.top_margin    = Cm(2.0)
+        section.bottom_margin = Cm(2.0)
+        section.left_margin   = Cm(2.5)
+        section.right_margin  = Cm(2.5)
+
+    style = doc.styles["Normal"]
+    style.font.name = "Calibri"
+    style.font.size = Pt(11)
+
+    _render_markdown_docx(doc, md_text, NAVY, ACCENT)
+
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
 # ── Word (.docx) ──────────────────────────────────────────────────────────────
 
 def to_docx(minutes: "MinutesModel", template_spec: dict | None = None) -> bytes:
