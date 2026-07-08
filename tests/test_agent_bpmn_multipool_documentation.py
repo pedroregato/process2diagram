@@ -62,9 +62,13 @@ class TestMultiPoolGatewayDocumentation:
         assert xml_str, "XML generation failed"
 
         root = ET.fromstring(xml_str)
+        # PC154: labels are now hard-wrapped with literal '\n' at generation
+        # time (bpmn_generator.py::_wrap_label) so bpmn-js renders correctly
+        # even when its own canvas-based auto-wrap is broken by fingerprinting
+        # blockers — normalize whitespace before comparing.
         gateway = next(
             g for g in root.iter(f"{_NS}exclusiveGateway")
-            if g.get("name") == "Proposta Aprovada?"
+            if (g.get("name") or "").replace("\n", " ") == "Proposta Aprovada?"
         )
         doc = gateway.find(f"{_NS}documentation")
         assert doc is not None, "gateway is missing <documentation> entirely"

@@ -450,6 +450,85 @@ def _task_name(name: str) -> str:
     return cut + "…"
 
 
+# ── Pre-wrap: hard line breaks, independent of bpmn-js's own auto-wrap ────────
+#
+# bpmn-js measures text width for auto-wrap via a throwaway <canvas> element's
+# 2D context (diagram-js Text.js: canvas.getContext('2d').measureText(...)).
+# When that call returns null — which happens when the browser has canvas
+# fingerprinting-blocking active (uBlock advanced mode, Privacy Badger, Brave's
+# built-in protection, hardened corporate browsers) — bpmn-js silently treats
+# every measured width as 0, concludes the whole string always "fits" on one
+# line, and never wraps. The label then renders as a single line that overflows
+# the shape box, unrelated to anything in our XML/DI data (confirmed against
+# bpmn-js/diagram-js source; see engineering notes).
+#
+# Fix: insert literal '\n' ourselves at word boundaries before serializing the
+# name. diagram-js's layoutText() splits on hard line breaks
+# (`text.split(/­?\r?\n/)`) BEFORE any width measurement — so pre-wrapped
+# text renders correctly as multiple lines even when canvas measurement is
+# completely broken. xml.etree.ElementTree correctly escapes '\n' in attribute
+# values as '&#10;' and round-trips it back to a literal '\n' on parse
+# (verified), so this survives serialization intact.
+_WRAP_CHARS_TASK    = 18   # task-type label box interior ≈140px (160 - 2×_LBL_PAD_X)
+_WRAP_LINES_TASK    = 4
+_WRAP_CHARS_EVENT   = 11   # event external label box ≈86px  (EV_W + 50)
+_WRAP_LINES_EVENT   = 2
+_WRAP_CHARS_GATEWAY = 13   # gateway external label box ≈100px (GW_W + 50)
+_WRAP_LINES_GATEWAY = 2
+
+
+def _wrap_label(name: str, chars_per_line: int, max_lines: int = 4) -> str:
+    """
+    Greedy word-wrap `name` into lines of at most `chars_per_line` chars,
+    joined with a literal '\\n'. Breaks at word boundaries; a single word
+    longer than one line is hard-cut. Lines beyond `max_lines` are dropped,
+    with the last kept line truncated and suffixed with "…".
+    """
+    if not name:
+        return ""
+    words = name.split(" ")
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if len(candidate) <= chars_per_line:
+            current = candidate
+            continue
+        if current:
+            lines.append(current)
+        while len(word) > chars_per_line:
+            lines.append(word[:chars_per_line])
+            word = word[chars_per_line:]
+        current = word
+    if current:
+        lines.append(current)
+
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        last = lines[-1]
+        if len(last) >= chars_per_line:
+            last = last[:chars_per_line - 1].rstrip()
+        lines[-1] = last + "…"
+
+    return "\n".join(lines)
+
+
+def _label_for(el) -> str:
+    """
+    Truncate (_task_name) then hard-wrap (_wrap_label) an element's name for
+    its shape's label box — so bpmn-js renders it correctly even when its own
+    canvas-based auto-wrap is silently broken (see _wrap_label docstring).
+    """
+    name = _task_name(el.name)
+    t = el.type
+    if t in ("startEvent", "endEvent", "intermediateThrowEvent",
+             "intermediateCatchEvent", "boundaryEvent"):
+        return _wrap_label(name, _WRAP_CHARS_EVENT, _WRAP_LINES_EVENT)
+    if "Gateway" in t:
+        return _wrap_label(name, _WRAP_CHARS_GATEWAY, _WRAP_LINES_GATEWAY)
+    return _wrap_label(name, _WRAP_CHARS_TASK, _WRAP_LINES_TASK)
+
+
 def _el_size(el):
     t = el.type
     if t in ("startEvent", "endEvent", "intermediateThrowEvent",
@@ -536,14 +615,14 @@ def _assign_lanes(bpmn):
 def _build_el(parent, el):
     t = el.type
     if t in ("startEvent", "endEvent", "intermediateThrowEvent", "intermediateCatchEvent"):
-        node = _sub(parent, B + t, {"id": el.id, "name": _task_name(el.name)})
+        node = _sub(parent, B + t, {"id": el.id, "name": _label_for(el)})
         d = _ev_def(el.event_type)
         if d:
             _sub(node, B + d, {"id": el.id + "_def"})
 
     elif t == "boundaryEvent":
         attrs = {
-            "id": el.id, "name": _task_name(el.name),
+            "id": el.id, "name": _label_for(el),
             "attachedToRef": el.attached_to or "",
             "cancelActivity": str(el.is_interrupting).lower(),
         }
@@ -553,16 +632,16 @@ def _build_el(parent, el):
             _sub(node, B + d, {"id": el.id + "_def"})
 
     elif "Gateway" in t:
-        _sub(parent, B + t, {"id": el.id, "name": _task_name(el.name)})
+        _sub(parent, B + t, {"id": el.id, "name": _label_for(el)})
 
     elif t == "subProcess":
         node = _sub(parent, B + "subProcess",
-                    {"id": el.id, "name": _task_name(el.name), "triggeredByEvent": "false"})
+                    {"id": el.id, "name": _label_for(el), "triggeredByEvent": "false"})
         for child in el.children:
             _build_el(node, child)
 
     elif t == "callActivity":
-        attrs = {"id": el.id, "name": _task_name(el.name)}
+        attrs = {"id": el.id, "name": _label_for(el)}
         if el.called_element:
             attrs["calledElement"] = el.called_element
         _sub(parent, B + "callActivity", attrs)
@@ -570,7 +649,7 @@ def _build_el(parent, el):
     else:
         tag = t if t in ("userTask", "serviceTask", "scriptTask", "sendTask",
                          "receiveTask", "manualTask", "businessRuleTask") else "task"
-        node = _sub(parent, B + tag, {"id": el.id, "name": _task_name(el.name)})
+        node = _sub(parent, B + tag, {"id": el.id, "name": _label_for(el)})
         if el.is_loop:
             _sub(node, B + "standardLoopCharacteristics", {"id": el.id + "_loop"})
         elif el.is_parallel_multi:
@@ -1207,11 +1286,26 @@ def _build_di(diagram, plane_ref, shapes, pool_shapes, bpmn):
         b.set("width", str(int(w))); b.set("height", str(int(h)))
         lbl = _sub(shape, DI + "BPMNLabel")
         # Label placement strategy:
-        # • Tasks / sub-processes: explicit dc:Bounds centered inside the shape.
-        #   Deterministic — does not rely on bpmn-js auto-centering, which fails for
-        #   callActivity (the "+" marker reduces effective text area) and on re-render.
+        # • Tasks / sub-processes: dc:Bounds written here for spec-compliance and for
+        #   external tools (Camunda Modeler, Bizagi, draw.io) that DO read it — but
+        #   bpmn-js itself IGNORES this for internal-label element types. Verified
+        #   against bpmn-js source: BpmnRenderer.js `renderEmbeddedLabel()` builds its
+        #   layout box exclusively from the BPMNShape's own dc:Bounds (element width/
+        #   height), never from BPMNLabel/dc:Bounds — that field is only consulted for
+        #   EXTERNAL-label elements (events, gateways, edges).
+        #   PC154: the real recurring "label overflows the box" symptom (unrelated to
+        #   centering) was bpmn-js's own canvas-based text auto-wrap silently breaking
+        #   under fingerprint-blocking browser extensions (canvas.getContext('2d') →
+        #   null → measured width always 0 → never wraps). Fixed at the source: the
+        #   `name` attribute itself is now hard-wrapped with literal '\n' before being
+        #   written (see `_wrap_label()` / `_label_for()` above, used by `_build_el()`)
+        #   — bpmn-js splits on hard line breaks BEFORE any width measurement, so this
+        #   works even with canvas measurement fully broken. This dc:Bounds block is
+        #   NOT that fix — it only matters for external tools.
         # • Events (small circles): explicit bounds BELOW the circle — wider to fit 2 lines.
+        #   (this one bpmn-js DOES honor — events are external-label elements.)
         # • Gateways (diamonds): explicit bounds BELOW the diamond — wider for longer names.
+        #   (also honored — gateways are external-label elements.)
         _event_types   = ("startEvent", "endEvent",
                           "intermediateThrowEvent", "intermediateCatchEvent")
         _gateway_types = ("exclusiveGateway", "parallelGateway", "inclusiveGateway",

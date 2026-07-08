@@ -375,9 +375,21 @@ def _bpmn_serialize(root, xml_str: str, ET) -> str:
 def reformat_bpmn_labels(xml_str: str) -> tuple[str, list[str]]:
     """
     Ensure every task BPMNShape has a BPMNLabel with dc:Bounds centered inside
-    the shape box, so bpmn-js renders text inside task boxes regardless of viewer.
+    the shape box (spec-compliance + external tools — Camunda Modeler, Bizagi,
+    draw.io — that read this field for internal-label elements).
     Also normalizes task shape dimensions from old generator constants to the
     current standard (160×90), giving more room for long task names.
+
+    NOTE: bpmn-js itself does NOT read this field for task-type shapes — verified
+    against bpmn-js source (`BpmnRenderer.js::renderEmbeddedLabel`), which derives
+    its label box exclusively from the BPMNShape's own dc:Bounds. This pass has
+    no effect on how bpmn-js renders task labels; it exists for DI spec-compliance
+    and other tools.
+    PC154: the actual fix for labels overflowing/not-wrapping in bpmn-js lives in
+    `bpmn_generator.py::_wrap_label()`/`_label_for()` — the `name` attribute itself
+    is hard-wrapped with literal '\n' at generation time, since bpmn-js's own
+    canvas-based auto-wrap silently breaks under fingerprint-blocking browser
+    extensions. See the comment in bpmn_generator.py::_build_di() for detail.
 
     Skips: pools / lanes (isHorizontal="true"), events (~36px), gateways (~50px).
     Task width heuristic: 100px ≤ width ≤ 400px AND not isHorizontal.

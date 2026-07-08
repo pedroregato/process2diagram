@@ -525,9 +525,19 @@ def preview_from_xml(xml: str) -> str:
     • Missing waypoints are filled with synthetic border-to-border points
       (including messageFlow edges) — prevents bpmn-js from drawing
       sequence flows from the centre of elements.
-    • Task label dc:Bounds are ensured to be centred inside shape boxes.
+    • Task label dc:Bounds are ensured to be centred inside shape boxes —
+      NOTE: this only benefits external tools; bpmn-js itself derives the
+      task label box from the BPMNShape's own dc:Bounds and ignores this
+      field (verified against bpmn-js source). Does not affect what this
+      viewer actually renders — see bpmn_generator.py::_build_di() comment.
     This guarantees a correct visual regardless of whether the stored XML
     was saved before or after the repair passes were introduced.
+
+    Text wrapping inside task boxes does NOT depend on this function — labels
+    are hard-wrapped with literal '\n' at XML-generation time (PC154, see
+    bpmn_generator.py::_wrap_label()), so wrapping survives even when the
+    browser's canvas-based text measurement (bpmn-js's own auto-wrap) is
+    broken by fingerprint-blocking extensions.
     """
     try:
         from modules.bpmn_auto_repair import reformat_bpmn_labels as _rl

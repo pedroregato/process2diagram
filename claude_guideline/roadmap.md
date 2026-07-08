@@ -4,6 +4,25 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC154 — Concluído (v5.15 / 2026-07-07) — labels de BPMN não quebravam linha no bpmn-js (pré-wrap em Python)
+
+**Contexto:** queixa recorrente do usuário — labels de atividade "não centralizados" nas caixinhas do diagrama BPMN gerado via pipeline. Investigação por leitura direta do código-fonte do bpmn-js/diagram-js (GitHub, não por memória) em duas etapas:
+
+1. **Hipótese inicial descartada:** a heurística já existente no projeto (`_build_di()`/`reformat_bpmn_labels()` — escrever `bpmndi:BPMNLabel/dc:Bounds` centrado dentro do shape para tasks) é comprovadamente um no-op no bpmn-js — `renderEmbeddedLabel()` monta o box de layout exclusivamente a partir do `dc:Bounds` do próprio `BPMNShape`, nunca de `BPMNLabel/dc:Bounds`, para elementos de label interno (task/userTask/serviceTask/callActivity/etc.); esse campo só é lido para elementos de label externo (event/gateway/edge — `isLabelExternal()`).
+2. **Causa raiz real**, confirmada pelo usuário testando o mesmo diagrama em aba anônima (extensões desabilitadas): bpmn-js mede largura de texto para decidir quebra de linha via `canvas.getContext('2d').measureText(...)`; quando esse contexto retorna `null` — comportamento típico de extensões de bloqueio de fingerprinting via canvas (uBlock avançado, Privacy Badger, proteção nativa do Brave, browsers corporativos endurecidos) — a medição retorna `{width:0}` silenciosamente, e a condição de quebra de linha nunca dispara: o label inteiro renderiza como UMA linha única que ultrapassa a borda da caixa. Não era um bug do código do projeto; era comportamento do navegador do usuário.
+
+**Correção (`modules/bpmn_generator.py`):**
+- `_wrap_label(name, chars_per_line, max_lines)` — greedy word-wrap, insere `\n` literal nos pontos de quebra; corta linhas excedentes com "…".
+- `_label_for(el)` — dispatcher: `_task_name()` trunca primeiro (limite absoluto já existente), depois `_wrap_label` com limites calibrados por categoria de elemento a partir dos tamanhos de caixa já em uso: tasks 18 chars/4 linhas (caixa 160×90), events 11 chars/2 linhas (label externo ~86px), gateways 13 chars/2 linhas (label externo ~100px).
+- `_build_el()` — todos os 6 pontos que antes chamavam `_task_name(el.name)` diretamente (startEvent/endEvent/intermediateThrowEvent/intermediateCatchEvent, boundaryEvent, gateway, subProcess, callActivity, task genérico) agora usam `_label_for(el)`. Cobre single-pool e multi-pool automaticamente, já que ambos os caminhos passam por `_build_process_xml()` → `_build_el()`.
+- **Por que funciona independente do canvas do browser:** verificado no código-fonte de `diagram-js/lib/util/Text.js` — `layoutText()` faz `text.split(/­?\r?\n/)` (quebra em `\n` literal) ANTES de qualquer medição de largura via canvas. Pré-inserir `\n` no Python contorna o `measureText` quebrado inteiramente, sem depender de nenhuma condição do navegador.
+- **Round-trip XML verificado empiricamente:** `xml.etree.ElementTree` escapa `\n` dentro de valor de atributo como `&#10;` na serialização, e o desserializa de volta para `\n` literal corretamente — sobrevive ao parser padrão do bpmn-moddle sem perda.
+- Comentários em `bpmn_generator.py::_build_di()`, `bpmn_auto_repair.py::reformat_bpmn_labels()` e `bpmn_viewer.py::preview_from_xml()` atualizados apontando para o fix real, deixando claro que a escrita de `BPMNLabel/dc:Bounds` para tasks é só compatibilidade com ferramentas externas (Camunda Modeler, Bizagi, draw.io) — não afeta o bpmn-js.
+- [x] 3 testes ajustados (comparação de nome exata → normalizada com `.replace("\n"," ")`) em `test_agent_bpmn_multipool_documentation.py` e `test_bpmn_generator_link_events.py::_link_event_names()` — quebravam porque agora comparam contra um `name` com `\n` embutido, comportamento correto e esperado.
+- [x] 595/595 testes automatizados passando.
+
+---
+
 ### PC152 — Concluído (v5.15 / 2026-07-07) — tabela auxiliar de histórico de processamento de reuniões
 
 **Contexto:** após o PC151 (perda silenciosa de dados de pipeline), o usuário pediu uma tabela auxiliar registrando a data efetiva de cada processamento de transcrição — incluindo reprocessamentos — para saber quantas vezes e quando cada reunião foi processada.

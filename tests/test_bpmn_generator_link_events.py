@@ -96,9 +96,13 @@ def _build_six_lane_process():
 
 
 def _link_event_names(xml_str):
+    # PC154: labels are hard-wrapped with literal '\n' at generation time
+    # (bpmn_generator.py::_wrap_label) so bpmn-js renders correctly even when
+    # its own canvas-based auto-wrap is broken by fingerprinting blockers —
+    # normalize whitespace so name comparisons ignore the wrap points.
     root = ET.fromstring(xml_str)
-    throws = {e.get("name") for e in root.iter(f"{_NS}intermediateThrowEvent")}
-    catches = {e.get("name") for e in root.iter(f"{_NS}intermediateCatchEvent")}
+    throws = {(e.get("name") or "").replace("\n", " ") for e in root.iter(f"{_NS}intermediateThrowEvent")}
+    catches = {(e.get("name") or "").replace("\n", " ") for e in root.iter(f"{_NS}intermediateCatchEvent")}
     return throws, catches
 
 
