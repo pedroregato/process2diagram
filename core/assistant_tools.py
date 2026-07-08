@@ -207,6 +207,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     # Plantonista / Diagnóstico
     "sugestoes_plantonista":           "consulta",
     "diagnostico_projeto":             "consulta",
+    "verificar_rastreabilidade_obrigatoria": "consulta",
     # Rastreabilidade / Simulação / Conformidade (Fase 3)
     "mapa_rastreabilidade":            "consulta",
     "simular_cenario":                 "consulta",
@@ -821,6 +822,7 @@ class AssistantToolExecutor(
                     include_recurring=bool(tool_input.get("include_recurring", True)),
                     include_pendencies=bool(tool_input.get("include_pendencies", True)),
                 ),
+                "verificar_rastreabilidade_obrigatoria": lambda: self.verificar_rastreabilidade_obrigatoria(),
                 # ── Sugestor / Deck / Charter (Fase 4)
                 "sugerir_processos":      lambda: self.sugerir_processos(
                     min_reunioes=int(tool_input.get("min_reunioes", 2)),

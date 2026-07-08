@@ -501,6 +501,24 @@ KNOWLEDGE_REQUIREMENTS2_SCHEMAS: list[dict] = [
             {
                 "type": "function",
                 "function": {
+                    "name": "verificar_rastreabilidade_obrigatoria",
+                    "description": (
+                        "Varre TODO o projeto (não uma reunião ou requisito específico) e aponta "
+                        "gaps de completude/rastreabilidade: requisitos sem source_quote (sem "
+                        "trecho de origem na transcrição), questões IBIS sem alternativa "
+                        "registrada nem resolução, e processos BPMN sem descrição textual. "
+                        "Sem LLM — varredura direta no banco. Diferente de diagnostico_projeto "
+                        "(saúde geral do pipeline) — aqui o foco é completude de conteúdo. "
+                        "Use quando o usuário pedir 'auditoria de rastreabilidade', 'o que está "
+                        "incompleto no projeto', 'gaps de documentação' ou 'requisitos sem "
+                        "origem'."
+                    ),
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "sugerir_processos",
                     "description": (
                         "Analisa os debates IBIS e decisões das reuniões para identificar "
@@ -1550,6 +1568,106 @@ function toggle(el){{
             "*Para um diagnóstico completo, use `diagnostico_projeto()`. "
             "Ou faça qualquer pergunta sobre o projeto.*"
         )
+
+        return "\n".join(lines)
+
+    def verificar_rastreabilidade_obrigatoria(self) -> str:
+        """Project-wide gap analysis, no LLM: requirements missing source_quote,
+        IBIS questions with no alternative/resolution, BPMN processes with no
+        description. Distinct from diagnostico_projeto (pipeline health)."""
+        from modules.supabase_client import get_supabase_client
+
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        meetings = self._get_meetings()
+        if not meetings:
+            return "Nenhuma reunião encontrada. Processe transcrições no Pipeline."
+
+        # ── 1. Requisitos sem source_quote ──────────────────────────────────
+        reqs_sem_origem: list[str] = []
+        try:
+            reqs = (
+                db.table("requirements")
+                .select("req_number, title, source_quote")
+                .eq("project_id", self.project_id)
+                .execute().data or []
+            )
+            reqs_sem_origem = [
+                f"REQ-{r.get('req_number', 0):03d} — {r.get('title', '')}"
+                for r in reqs if not (r.get("source_quote") or "").strip()
+            ]
+            n_reqs = len(reqs)
+        except Exception:
+            n_reqs = 0
+
+        # ── 2. Questões IBIS sem alternativa nem resolução ──────────────────
+        ibis_incompletas: list[str] = []
+        try:
+            qs = (
+                db.table("argumentation_questions")
+                .select("id, statement, alternatives, resolution")
+                .eq("project_id", self.project_id)
+                .execute().data or []
+            )
+            for q in qs:
+                has_alt = bool(q.get("alternatives"))
+                has_res = bool((q.get("resolution") or {}).get("type"))
+                if not has_alt and not has_res:
+                    stmt = (q.get("statement") or "")[:80]
+                    ibis_incompletas.append(f"«{stmt}»")
+            n_ibis = len(qs)
+        except Exception:
+            n_ibis = 0
+
+        # ── 3. Processos BPMN sem descrição ─────────────────────────────────
+        bpmn_sem_desc: list[str] = []
+        try:
+            procs = (
+                db.table("bpmn_processes")
+                .select("name, description")
+                .eq("project_id", self.project_id)
+                .execute().data or []
+            )
+            bpmn_sem_desc = [
+                p.get("name", "") for p in procs if not (p.get("description") or "").strip()
+            ]
+            n_bpmn = len(procs)
+        except Exception:
+            n_bpmn = 0
+
+        lines = ["## 🔍 Rastreabilidade Obrigatória — Gap Analysis\n"]
+
+        lines.append(f"### 📋 Requisitos ({n_reqs} total)")
+        if reqs_sem_origem:
+            lines.append(f"**{len(reqs_sem_origem)} sem fonte na transcrição (`source_quote` vazio):**")
+            lines.extend(f"- {r}" for r in reqs_sem_origem[:20])
+            if len(reqs_sem_origem) > 20:
+                lines.append(f"- ... e mais {len(reqs_sem_origem) - 20}")
+        else:
+            lines.append("✅ Todos os requisitos têm fonte rastreável na transcrição.")
+        lines.append("")
+
+        lines.append(f"### 💬 Questões IBIS ({n_ibis} total)")
+        if ibis_incompletas:
+            lines.append(f"**{len(ibis_incompletas)} sem alternativa registrada nem resolução:**")
+            lines.extend(f"- {q}" for q in ibis_incompletas[:20])
+            if len(ibis_incompletas) > 20:
+                lines.append(f"- ... e mais {len(ibis_incompletas) - 20}")
+        else:
+            lines.append("✅ Todas as questões IBIS têm alternativa ou resolução registrada.")
+        lines.append("")
+
+        lines.append(f"### ⚙️ Processos BPMN ({n_bpmn} total)")
+        if bpmn_sem_desc:
+            lines.append(f"**{len(bpmn_sem_desc)} sem descrição textual:**")
+            lines.extend(f"- {p}" for p in bpmn_sem_desc[:20])
+        else:
+            lines.append("✅ Todos os processos BPMN têm descrição.")
+
+        total_gaps = len(reqs_sem_origem) + len(ibis_incompletas) + len(bpmn_sem_desc)
+        lines.insert(1, f"**{total_gaps} gap(s) de rastreabilidade encontrado(s)** no projeto.\n")
 
         return "\n".join(lines)
 
