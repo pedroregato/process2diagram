@@ -1095,7 +1095,10 @@ class _MeetingOpsCalendarToolsMixin:
             n_decisions = len(dec_lines)
 
             # ── Action items ─────────────────────────────────────────────────
-            act_text   = self._section(minutes_md, "Itens de Ação", "Action Items", "Ações")
+            act_text   = self._section(
+                minutes_md, "Encaminhamentos / Action Items", "Encaminhamentos",
+                "Itens de Ação", "Action Items", "Ações",
+            )
             act_lines  = [l for l in act_text.splitlines() if l.strip()]
             n_act_total = len([
                 l for l in act_lines

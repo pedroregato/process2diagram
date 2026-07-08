@@ -487,7 +487,11 @@ class _ExecutiveAdvancedToolsMixin:
 
         actions: list[str] = []
         for m in meetings:
-            ai = self._section(m.get("minutes_md") or "", "Itens de Ação", "Action Items", "Ações")
+            ai = self._section(
+                m.get("minutes_md") or "",
+                "Encaminhamentos / Action Items", "Encaminhamentos",
+                "Itens de Ação", "Action Items", "Ações",
+            )
             if ai:
                 actions.append(f"Reunião {m.get('meeting_number')}: {ai[:150]}")
 
@@ -586,7 +590,10 @@ class _ExecutiveAdvancedToolsMixin:
             p  = self._section(md, "Participantes")
             if p:
                 participants.append(f"Reunião {m.get('meeting_number')}: {p[:200]}")
-            ai = self._section(md, "Itens de Ação", "Action Items", "Ações")
+            ai = self._section(
+                md, "Encaminhamentos / Action Items", "Encaminhamentos",
+                "Itens de Ação", "Action Items", "Ações",
+            )
             if ai:
                 action_items.append(f"Reunião {m.get('meeting_number')}: {ai[:200]}")
             dt = m.get("meeting_date")
@@ -1499,7 +1506,10 @@ class _ExecutiveAdvancedToolsMixin:
             for m in meetings:
                 m_num      = m.get("meeting_number", "?")
                 minutes_md = m.get("minutes_md") or ""
-                action_txt = self._section(minutes_md, "Itens de Ação", "Action Items", "Ações")
+                action_txt = self._section(
+                    minutes_md, "Encaminhamentos / Action Items", "Encaminhamentos",
+                    "Itens de Ação", "Action Items", "Ações",
+                )
                 if not action_txt.strip():
                     continue
 

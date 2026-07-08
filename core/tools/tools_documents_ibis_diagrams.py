@@ -1339,6 +1339,7 @@ class _DocumentsIbisDiagramsToolsMixin:
         for m in self._get_meetings():
             section = self._section(
                 m.get("minutes_md") or "",
+                "Encaminhamentos / Action Items", "Encaminhamentos",
                 "Itens de Ação", "Action Items", "Ações",
             )
             if not section:

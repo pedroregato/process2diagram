@@ -1353,6 +1353,7 @@ class _MeetingsRequirementsToolsMixin:
         header  = f"Reunião {meeting_number} — {title}"
         content = self._section(
             m.get("minutes_md") or "",
+            "Encaminhamentos / Action Items", "Encaminhamentos",
             "Itens de Ação", "Action Items", "Ações",
         )
         if not content:

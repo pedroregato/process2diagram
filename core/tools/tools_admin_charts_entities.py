@@ -842,7 +842,8 @@ class _AdminChartsEntitiesToolsMixin:
             )
 
         action_items_text = self._section(
-            minutes_md, "Itens de Ação", "Action Items", "Ações"
+            minutes_md, "Encaminhamentos / Action Items", "Encaminhamentos",
+            "Itens de Ação", "Action Items", "Ações",
         )
         if not action_items_text.strip():
             return f"Reunião {meeting_number}: nenhum item de ação encontrado na ata."
