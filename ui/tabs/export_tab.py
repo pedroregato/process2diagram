@@ -33,7 +33,7 @@ def render(hub, prefix, suffix):
             key="export_minutes_md"
         )
         try:
-            from modules.minutes_exporter import to_docx, to_pdf, to_html
+            from modules.minutes_exporter import to_docx, to_pdf
             st.download_button(
                 "⬇️ .docx",
                 data=to_docx(hub.minutes),
@@ -46,6 +46,10 @@ def render(hub, prefix, suffix):
                 file_name=make_filename("minutes", "pdf", prefix, suffix),
                 key="export_minutes_pdf"
             )
+        except Exception:
+            pass
+        try:
+            from modules.minutes_exporter import to_html
             st.download_button(
                 "⬇️ .html",
                 data=to_html(hub.minutes).encode("utf-8"),
@@ -53,8 +57,8 @@ def render(hub, prefix, suffix):
                 mime="text/html",
                 key="export_minutes_html"
             )
-        except Exception:
-            pass
+        except Exception as _exc:
+            st.caption(f"⚠️ Export HTML indisponível: {_exc}")
         verification_md = AgentMinutes.to_verification_report(hub.minutes)
         st.download_button(
             "⬇️ Roteiro de Verificação (.md)",

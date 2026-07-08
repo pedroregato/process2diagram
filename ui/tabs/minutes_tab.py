@@ -32,8 +32,8 @@ def render(hub, prefix, suffix):
                 mime="text/html",
                 key="minutes_html_raw",
             )
-        except Exception:
-            pass
+        except Exception as _exc:
+            st.caption(f"⚠️ Export HTML indisponível: {_exc}")
         return
 
     st.markdown(f"## {m.title}")
@@ -185,5 +185,5 @@ def render(hub, prefix, suffix):
             mime="text/html",
             key="minutes_html"
         )
-    except Exception:
-        pass
+    except Exception as _exc:
+        st.caption(f"⚠️ Export HTML indisponível: {_exc}")
