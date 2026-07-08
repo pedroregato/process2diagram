@@ -493,6 +493,10 @@ KNOWLEDGE_REQUIREMENTS2_SCHEMAS: list[dict] = [
                                 "type": "boolean",
                                 "description": "Incluir contagem de reuniões com encaminhamentos listados. Padrão: true.",
                             },
+                            "include_revision_requests": {
+                                "type": "boolean",
+                                "description": "Incluir requisitos com revisão solicitada pendente (via solicitar_revisao_requisito). Padrão: true.",
+                            },
                         },
                         "required": [],
                     },
@@ -1806,6 +1810,7 @@ function toggle(el){{
         include_roi: bool = True,
         include_recurring: bool = True,
         include_pendencies: bool = True,
+        include_revision_requests: bool = True,
     ) -> str:
         """Checkup completo do projeto: orquestra ferramentas existentes sem LLM."""
         import re as _re
@@ -1923,6 +1928,31 @@ function toggle(el){{
                 )
             else:
                 oks.append("Nenhum encaminhamento registrado ✓")
+
+        # 7. Revisões solicitadas pendentes (solicitar_revisao_requisito) —
+        # única forma de visibilidade dessas solicitações hoje: não há
+        # notificação por e-mail/Slack, então precisam aparecer aqui.
+        if include_revision_requests:
+            try:
+                pending = (
+                    get_supabase_client()
+                    .table("requirements")
+                    .select("req_number, title, status_note")
+                    .eq("project_id", self.project_id)
+                    .eq("status", "revised")
+                    .execute().data or []
+                )
+                from core.tools.tools_meetings_requirements import _MeetingsRequirementsToolsMixin as _MRM
+                marker = _MRM._REVISION_REQUEST_MARKER
+                pending = [r for r in pending if (r.get("status_note") or "").startswith(marker)]
+                if pending:
+                    itens = ", ".join(f"REQ-{r['req_number']:03d}" for r in pending[:8])
+                    alertas.append(f"**{len(pending)} requisito(s)** com revisão solicitada pendente: {itens}")
+                    acoes.append((2, "Revisar pendências: `estimar_risco_requisito()` ou consulte cada REQ"))
+                else:
+                    oks.append("Nenhuma revisão solicitada pendente ✓")
+            except Exception:
+                pass
 
         # Score estimado
         total = len(criticos) + len(alertas) + len(oks)

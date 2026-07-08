@@ -135,6 +135,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "add_sbvr_rule":                "escrita",
     "update_sbvr_rule":             "escrita",
     "update_requirement_status":           "escrita",
+    "solicitar_revisao_requisito":         "escrita",
     "update_requirement_text":             "escrita",
     "update_requirement_implementation":   "escrita",
     # Admin — escrita privilegiada
@@ -460,6 +461,11 @@ class AssistantToolExecutor(
                     filter_current_status=tool_input.get("filter_current_status"),
                     filter_meeting_number=tool_input.get("filter_meeting_number"),
                     status_note=tool_input.get("status_note"),
+                ),
+                "solicitar_revisao_requisito": lambda: self.solicitar_revisao_requisito(
+                    req_number=int(tool_input["req_number"]),
+                    motivo=tool_input["motivo"],
+                    revisor_sugerido=tool_input.get("revisor_sugerido"),
                 ),
                 "update_requirement_text":   lambda: self.update_requirement_text(
                     req_number=int(tool_input["req_number"]),
@@ -828,6 +834,7 @@ class AssistantToolExecutor(
                     include_roi=bool(tool_input.get("include_roi", True)),
                     include_recurring=bool(tool_input.get("include_recurring", True)),
                     include_pendencies=bool(tool_input.get("include_pendencies", True)),
+                    include_revision_requests=bool(tool_input.get("include_revision_requests", True)),
                 ),
                 "verificar_rastreabilidade_obrigatoria": lambda: self.verificar_rastreabilidade_obrigatoria(),
                 "analisar_tendencias":    lambda: self.analisar_tendencias(

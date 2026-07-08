@@ -580,6 +580,41 @@ MEETINGS_REQUIREMENTS_SCHEMAS: list[dict] = [
             {
                 "type": "function",
                 "function": {
+                    "name": "solicitar_revisao_requisito",
+                    "description": (
+                        "Marca um requisito como pendente de revisão, com motivo estruturado e "
+                        "revisor sugerido (opcional). Fluxo de aprovação/revisão SEM notificação "
+                        "por e-mail/Slack (nenhuma integração desse tipo existe no projeto hoje) "
+                        "— a visibilidade é via diagnostico_projeto/sugestoes_plantonista. Thin "
+                        "wrapper sobre update_requirement_status(new_status='revised') com nota "
+                        "sempre formatada da mesma forma, pra pedidos de revisão ficarem "
+                        "consistentes e fáceis de filtrar depois. Use quando o usuário pedir "
+                        "'pedir revisão do REQ-X', 'marcar para revisão' ou 'sinalizar que esse "
+                        "requisito precisa ser revisto'."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "req_number": {
+                                "type": "integer",
+                                "description": "Número do requisito a marcar para revisão.",
+                            },
+                            "motivo": {
+                                "type": "string",
+                                "description": "Motivo da solicitação de revisão (obrigatório — sempre pergunte se o usuário não informar).",
+                            },
+                            "revisor_sugerido": {
+                                "type": "string",
+                                "description": "Nome/papel de quem deveria revisar (opcional).",
+                            },
+                        },
+                        "required": ["req_number", "motivo"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "update_requirement_text",
                     "description": (
                         "Atualiza o título e/ou a descrição completa de um requisito específico pelo número. "
@@ -970,6 +1005,87 @@ class _MeetingsRequirementsToolsMixin:
         if status_note:
             lines.append(f"\n📝 Nota registrada: *{status_note}*")
         return "\n".join(lines)
+
+    _REVISION_REQUEST_MARKER = "🔍 Revisão solicitada:"
+
+    def solicitar_revisao_requisito(
+        self,
+        req_number: int,
+        motivo: str,
+        revisor_sugerido: str | None = None,
+    ) -> str:
+        """Structured 'request revision' workflow for a single requirement.
+        Deliberately NOT delegated to update_requirement_status(): that
+        function early-returns "já estava 'revised' — sem alteração" when
+        the current status already equals the target status, which would
+        silently drop a SECOND revision request on a requirement that's
+        still 'revised' from an earlier one. Writes directly instead, so
+        every request is recorded regardless of current status. No e-mail/
+        Slack notification — none of that infra exists in the project;
+        visibility is via diagnostico_projeto (see include_revision_requests)."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        try:
+            rows = (
+                db.table("requirements")
+                .select("id, req_number, title, req_type, status, first_meeting_id")
+                .eq("project_id", self.project_id)
+                .eq("req_number", req_number)
+                .limit(1)
+                .execute().data or []
+            )
+        except Exception as exc:
+            return f"❌ Erro ao buscar REQ-{req_number:03d}: {exc}"
+        if not rows:
+            return f"❌ REQ-{req_number:03d} não encontrado."
+
+        r = rows[0]
+        old_status = r.get("status") or "active"
+        note = f"{self._REVISION_REQUEST_MARKER} {motivo.strip()}"
+        if revisor_sugerido:
+            note += f" (revisor sugerido: {revisor_sugerido.strip()})"
+
+        from datetime import datetime, timezone
+        now_iso = datetime.now(timezone.utc).isoformat()
+        try:
+            db.table("requirements").update({
+                "status": "revised", "status_note": note, "updated_at": now_iso,
+            }).eq("id", r["id"]).execute()
+        except Exception as exc:
+            return f"❌ Erro ao marcar REQ-{req_number:03d} para revisão: {exc}"
+
+        try:
+            ver_rows = (
+                db.table("requirement_versions")
+                .select("version")
+                .eq("requirement_id", r["id"])
+                .order("version", desc=True)
+                .limit(1)
+                .execute().data or []
+            )
+            next_ver = (ver_rows[0]["version"] + 1) if ver_rows else 1
+            db.table("requirement_versions").insert({
+                "requirement_id": r["id"],
+                "meeting_id":     r.get("first_meeting_id"),
+                "version":        next_ver,
+                "title":          r.get("title", ""),
+                "req_type":       r.get("req_type"),
+                "change_type":    "status_change",
+                "change_summary": f"Status: {old_status} → revised. {note}",
+            }).execute()
+        except Exception:
+            pass  # versão falhou mas o pedido de revisão foi registrado — não bloqueia
+
+        return (
+            f"🔍 **REQ-{req_number:03d}** — {r.get('title', '')} marcado para revisão.\n"
+            f"• Motivo: {motivo.strip()}\n"
+            + (f"• Revisor sugerido: {revisor_sugerido.strip()}\n" if revisor_sugerido else "")
+            + "• Sem notificação automática — visível via diagnóstico do projeto "
+              "(`diagnostico_projeto`) ou consultando o requisito diretamente."
+        )
 
     def update_requirement_text(
         self,
