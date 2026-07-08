@@ -199,6 +199,176 @@ def get_context_files_text(context_id: str) -> str:
         return ""
 
 
+# ── Ata Templates (PC160) ───────────────────────────────────────────────────
+# melhorias/templates-ata-por-contexto.md — modelo de ata em Word por
+# contexto. Permission (admin/master) is the CALLER's responsibility — this
+# module stays Streamlit-agnostic (see module docstring / PC106).
+
+def list_ata_templates(context_id: str) -> list[dict]:
+    """List all ata templates for a context (active + inactive), newest first."""
+    db = _db()
+    if not db:
+        return []
+    try:
+        return _ok(
+            db.table("ata_templates")
+            .select("id, name, docx_filename, is_active, created_at, created_by")
+            .eq("context_id", context_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+    except Exception:
+        return []
+
+
+def get_active_ata_template(context_id: str) -> dict | None:
+    """
+    Fetch the active ata template for a context, with style_spec,
+    template_markdown, and image assets decoded from base64 to raw bytes
+    (ready to pass straight into modules.ata_template_engine.
+    apply_template_to_docx() / modules.minutes_exporter.to_docx()).
+
+    Returns None when the context has no active template — callers must
+    treat that as "use the default layout" (fail-open, no behavior change
+    for contexts that never configured a template).
+    """
+    db = _db()
+    if not db:
+        return None
+    try:
+        rows = _ok(
+            db.table("ata_templates")
+            .select("id, name, template_markdown, style_spec")
+            .eq("context_id", context_id)
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        if not rows:
+            return None
+        template = rows[0]
+
+        asset_rows = _ok(
+            db.table("ata_template_assets")
+            .select("asset_type, origin, image_base64, mime_type, width_px, height_px")
+            .eq("template_id", template["id"])
+            .execute()
+        )
+        import base64 as _b64
+        assets = []
+        for a in asset_rows:
+            try:
+                image_bytes = _b64.b64decode(a["image_base64"])
+            except Exception:
+                continue
+            assets.append({
+                "asset_type": a.get("asset_type"),
+                "origin":     a.get("origin"),
+                "image_bytes": image_bytes,
+                "mime_type":  a.get("mime_type"),
+                "width_px":   a.get("width_px"),
+                "height_px":  a.get("height_px"),
+            })
+        template["assets"] = assets
+        return template
+    except Exception:
+        return None
+
+
+def save_ata_template(context_id: str, name: str, docx_filename: str,
+                       docx_bytes: bytes, created_by: str = "") -> dict | None:
+    """
+    Extract structure/style/assets from docx_bytes (via
+    modules.ata_template_engine.extract_template_from_docx) and persist a
+    new ata template for the context, deactivating any previously active
+    one first (ata_templates has a partial unique index enforcing at most
+    one active row per context). Returns the new template row (without
+    assets) or None on failure.
+    """
+    db = _db()
+    if not db:
+        return None
+    try:
+        from modules.ata_template_engine import extract_template_from_docx
+        import base64 as _b64
+        template_markdown, style_spec, assets = extract_template_from_docx(docx_bytes)
+
+        db.table("ata_templates").update({"is_active": False}) \
+            .eq("context_id", context_id).eq("is_active", True).execute()
+
+        rows = _ok(
+            db.table("ata_templates").insert({
+                "context_id":        context_id,
+                "name":              name,
+                "docx_filename":     docx_filename,
+                "docx_base64":       _b64.b64encode(docx_bytes).decode("ascii"),
+                "template_markdown": template_markdown,
+                "style_spec":        style_spec,
+                "is_active":         True,
+                "created_by":        created_by,
+            }).execute()
+        )
+        if not rows:
+            return None
+        template = rows[0]
+
+        for asset in assets:
+            try:
+                db.table("ata_template_assets").insert({
+                    "template_id":  template["id"],
+                    "asset_type":   asset["asset_type"],
+                    "origin":       asset["origin"],
+                    "image_base64": _b64.b64encode(asset["image_bytes"]).decode("ascii"),
+                    "mime_type":    asset["mime_type"],
+                    "width_px":     asset.get("width_px"),
+                    "height_px":    asset.get("height_px"),
+                }).execute()
+            except Exception:
+                continue  # one bad asset shouldn't fail the whole template save
+
+        return template
+    except Exception:
+        return None
+
+
+def activate_ata_template(template_id: str, context_id: str) -> bool:
+    """Activate a template, deactivating any other active one for the same context."""
+    db = _db()
+    if not db:
+        return False
+    try:
+        db.table("ata_templates").update({"is_active": False}) \
+            .eq("context_id", context_id).eq("is_active", True).execute()
+        db.table("ata_templates").update({"is_active": True}).eq("id", template_id).execute()
+        return True
+    except Exception:
+        return False
+
+
+def deactivate_ata_template(template_id: str) -> bool:
+    """Deactivate a template without deleting it. Returns True on success."""
+    db = _db()
+    if not db:
+        return False
+    try:
+        db.table("ata_templates").update({"is_active": False}).eq("id", template_id).execute()
+        return True
+    except Exception:
+        return False
+
+
+def delete_ata_template(template_id: str) -> bool:
+    """Delete a template and its assets (cascade via FK). Returns True on success."""
+    db = _db()
+    if not db:
+        return False
+    try:
+        db.table("ata_templates").delete().eq("id", template_id).execute()
+        return True
+    except Exception:
+        return False
+
+
 # ── Compatibility aliases (remove after v4.21 rollout confirmed) ──────────────
 list_projects  = list_contexts
 get_project    = get_context

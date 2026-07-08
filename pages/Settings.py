@@ -790,6 +790,146 @@ with tab_db:
 
     st.markdown("---")
 
+    # ── Modelo de Ata por Contexto (PC160) ──────────────────────────────────
+    # melhorias/templates-ata-por-contexto.md — só admin/master configuram.
+    if db:
+        from modules.auth import is_admin as _atatpl_is_admin
+        st.markdown("#### 📝 Modelo de Ata por Contexto")
+        st.caption(
+            "Envie um .docx de referência para cada contexto — a estrutura de seções, cor de "
+            "destaque e logo/identidade visual extraídos dele são aplicados na geração da ata "
+            "e no download em Word. Só admin/master podem configurar."
+        )
+
+        if not _atatpl_is_admin():
+            st.info("🔒 Apenas administradores podem configurar modelos de ata.")
+        else:
+            try:
+                from core.project_store import (
+                    list_ata_templates, get_active_ata_template, save_ata_template,
+                    activate_ata_template, deactivate_ata_template, delete_ata_template,
+                )
+                _atatpl_ctx_rows = db.table("contexts").select("id, name").order("name").execute().data or []
+            except Exception as _atatpl_init_err:
+                st.warning(f"Módulo de templates de ata indisponível: {_atatpl_init_err}")
+                _atatpl_ctx_rows = []
+
+            if not _atatpl_ctx_rows:
+                st.info("Nenhum contexto encontrado.")
+            else:
+                _atatpl_ctx_names = [r["name"] for r in _atatpl_ctx_rows]
+                _atatpl_sel_name  = st.selectbox("Contexto", _atatpl_ctx_names, key="atatpl_ctx_sel")
+                _atatpl_ctx       = next((r for r in _atatpl_ctx_rows if r["name"] == _atatpl_sel_name), None)
+
+                if _atatpl_ctx:
+                    _atatpl_ctx_id = _atatpl_ctx["id"]
+
+                    if st.session_state.get("_atatpl_ok"):
+                        st.success(st.session_state.pop("_atatpl_ok"))
+                    if st.session_state.get("_atatpl_err"):
+                        st.error(st.session_state.pop("_atatpl_err"))
+
+                    # ── Upload de novo modelo ────────────────────────────
+                    _atatpl_file = st.file_uploader(
+                        "Novo modelo de ata (.docx)",
+                        type=["docx"],
+                        key=f"atatpl_upload_{_atatpl_ctx_id}",
+                    )
+                    if _atatpl_file is not None:
+                        _atatpl_name = st.text_input(
+                            "Nome do modelo",
+                            value=f"Modelo {_atatpl_sel_name}",
+                            key=f"atatpl_name_{_atatpl_ctx_id}",
+                        )
+                        if st.button("⬆️ Extrair e Ativar", key=f"atatpl_save_{_atatpl_ctx_id}", type="primary"):
+                            with st.spinner("Extraindo estrutura, cor e imagens do modelo..."):
+                                try:
+                                    _docx_bytes = _atatpl_file.read()
+                                    _login = st.session_state.get("_usuario_login", "")
+                                    _saved = save_ata_template(
+                                        _atatpl_ctx_id,
+                                        _atatpl_name.strip() or _atatpl_file.name,
+                                        _atatpl_file.name,
+                                        _docx_bytes,
+                                        _login,
+                                    )
+                                    if _saved:
+                                        st.session_state["_atatpl_ok"] = (
+                                            f"✅ Modelo '{_saved.get('name')}' ativado para '{_atatpl_sel_name}'."
+                                        )
+                                    else:
+                                        st.session_state["_atatpl_err"] = "Erro ao salvar o modelo no banco."
+                                    st.rerun()
+                                except Exception as _atatpl_upload_err:
+                                    st.error(f"Erro ao processar o .docx: {_atatpl_upload_err}")
+
+                    # ── Preview do modelo ativo ──────────────────────────
+                    try:
+                        _atatpl_active = get_active_ata_template(_atatpl_ctx_id)
+                    except Exception:
+                        _atatpl_active = None
+                    if _atatpl_active:
+                        with st.expander(f"👁️ Modelo ativo: {_atatpl_active.get('name', '—')}", expanded=False):
+                            _atatpl_accent = (_atatpl_active.get("style_spec") or {}).get("accent_color")
+                            if _atatpl_accent:
+                                st.markdown(f"**Cor de destaque detectada:** `{_atatpl_accent}`")
+                            st.markdown("**Estrutura de seções detectada:**")
+                            st.code(
+                                _atatpl_active.get("template_markdown") or "(nenhuma seção detectada)",
+                                language="markdown",
+                            )
+                            _atatpl_assets = _atatpl_active.get("assets") or []
+                            if _atatpl_assets:
+                                st.markdown(f"**{len(_atatpl_assets)} imagem(ns) de identidade extraída(s):**")
+                                _atatpl_cols = st.columns(min(len(_atatpl_assets), 4))
+                                for _ai, _asset in enumerate(_atatpl_assets):
+                                    with _atatpl_cols[_ai % len(_atatpl_cols)]:
+                                        try:
+                                            st.image(
+                                                _asset["image_bytes"],
+                                                caption=f"{_asset['asset_type']} ({_asset['origin']})",
+                                                width=120,
+                                            )
+                                        except Exception:
+                                            st.caption(f"{_asset['asset_type']} ({_asset['origin']}) — preview indisponível")
+
+                    # ── Lista de modelos (ativar/desativar/apagar) ───────
+                    _atatpl_list = list_ata_templates(_atatpl_ctx_id)
+                    if _atatpl_list:
+                        st.markdown(f"**{len(_atatpl_list)} modelo(s) registrado(s):**")
+                        for _t in _atatpl_list:
+                            _tcol1, _tcol2, _tcol3 = st.columns([4, 1, 1])
+                            with _tcol1:
+                                _tstatus = "✅ ativo" if _t.get("is_active") else "inativo"
+                                _tdate   = (_t.get("created_at") or "")[:10]
+                                st.caption(f"📝 **{_t['name']}** ({_t['docx_filename']}) — {_tstatus} — {_tdate}")
+                            with _tcol2:
+                                if not _t.get("is_active"):
+                                    if st.button("Ativar", key=f"atatpl_activate_{_t['id']}"):
+                                        if activate_ata_template(_t["id"], _atatpl_ctx_id):
+                                            st.session_state["_atatpl_ok"] = f"Modelo '{_t['name']}' ativado."
+                                        else:
+                                            st.session_state["_atatpl_err"] = "Erro ao ativar."
+                                        st.rerun()
+                                else:
+                                    if st.button("Desativar", key=f"atatpl_deactivate_{_t['id']}"):
+                                        if deactivate_ata_template(_t["id"]):
+                                            st.session_state["_atatpl_ok"] = f"Modelo '{_t['name']}' desativado."
+                                        else:
+                                            st.session_state["_atatpl_err"] = "Erro ao desativar."
+                                        st.rerun()
+                            with _tcol3:
+                                if st.button("🗑", key=f"atatpl_del_{_t['id']}", help="Remover modelo"):
+                                    if delete_ata_template(_t["id"]):
+                                        st.session_state["_atatpl_ok"] = f"Modelo '{_t['name']}' removido."
+                                    else:
+                                        st.session_state["_atatpl_err"] = "Erro ao remover."
+                                    st.rerun()
+                    else:
+                        st.info("Nenhum modelo de ata configurado para este contexto ainda.")
+
+    st.markdown("---")
+
     # ── Migração de schema ─────────────────────────────────────────────────
     if db:
         st.markdown("#### 🔧 Migração de Schema")

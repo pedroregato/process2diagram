@@ -108,8 +108,22 @@ def _render_markdown_docx(doc, md: str, navy, accent) -> None:
 
 # ── Word (.docx) ──────────────────────────────────────────────────────────────
 
-def to_docx(minutes: "MinutesModel") -> bytes:
-    """Generate a Word document from MinutesModel. Returns raw bytes."""
+def to_docx(minutes: "MinutesModel", template_spec: dict | None = None) -> bytes:
+    """
+    Generate a Word document from MinutesModel. Returns raw bytes.
+
+    template_spec (PC160, optional — retrocompatible, omit for the default
+    layout): {"accent_color": "#RRGGBB" | None, "assets": [{"asset_type",
+    "image_bytes", ...}, ...]}, as produced by
+    modules/ata_template_engine.py::extract_template_from_docx(). When
+    present:
+      - "accent_color" overrides the section-heading color (ACCENT below);
+        the base NAVY brand color is intentionally left untouched — Fase 1
+        of the template feature only carries one color, per
+        melhorias/templates-ata-por-contexto.md.
+      - the first asset with asset_type in ("logo", "header_image") is
+        inserted into the document header.
+    """
     from docx import Document
     from docx.shared import Pt, RGBColor, Inches, Cm
     from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -120,6 +134,14 @@ def to_docx(minutes: "MinutesModel") -> bytes:
     ACCENT = RGBColor(0x2E, 0x7F, 0xD9)
     MUTED  = RGBColor(0x64, 0x74, 0x8B)
 
+    _accent_hex = (template_spec or {}).get("accent_color")
+    if _accent_hex:
+        try:
+            _h = _accent_hex.lstrip("#")
+            ACCENT = RGBColor(int(_h[0:2], 16), int(_h[2:4], 16), int(_h[4:6], 16))
+        except (ValueError, IndexError):
+            pass  # malformed color — keep the app default rather than fail the export
+
     doc = Document()
 
     # ── Page margins ─────────────────────────────────────────────────────────
@@ -128,6 +150,21 @@ def to_docx(minutes: "MinutesModel") -> bytes:
         section.bottom_margin = Cm(2.0)
         section.left_margin   = Cm(2.5)
         section.right_margin  = Cm(2.5)
+
+    # ── Template logo (header) ──────────────────────────────────────────────
+    _assets = (template_spec or {}).get("assets") or []
+    _logo = next(
+        (a for a in _assets if a.get("asset_type") in ("logo", "header_image")), None
+    )
+    if _logo and _logo.get("image_bytes"):
+        try:
+            header = doc.sections[0].header
+            header.is_linked_to_previous = False
+            p = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p.add_run().add_picture(BytesIO(_logo["image_bytes"]), height=Cm(1.5))
+        except Exception:
+            pass  # malformed/unsupported image — export continues without the logo
 
     # ── Default paragraph style ───────────────────────────────────────────────
     style = doc.styles["Normal"]

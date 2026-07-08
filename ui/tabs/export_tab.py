@@ -34,9 +34,11 @@ def render(hub, prefix, suffix):
         )
         try:
             from modules.minutes_exporter import to_docx, to_pdf
+            # PC160: aplica o modelo de ata do contexto ativo, se configurado.
+            _ata_tpl_spec = getattr(hub, "ata_template_spec", None)
             st.download_button(
                 "⬇️ .docx",
-                data=to_docx(hub.minutes),
+                data=to_docx(hub.minutes, template_spec=_ata_tpl_spec),
                 file_name=make_filename("minutes", "docx", prefix, suffix),
                 key="export_minutes_docx"
             )

@@ -242,6 +242,16 @@ class AgentMinutes(BaseAgent):
         if getattr(hub, "context_files_text", "").strip():
             system += f"\n\n## Documentos de Referência do Contexto\n\n{hub.context_files_text.strip()}"
 
+        # PC160 — melhorias/templates-ata-por-contexto.md: modelo de ata do
+        # contexto (esqueleto de seções extraído do .docx de referência).
+        if getattr(hub, "ata_template_markdown", "").strip():
+            system += (
+                "\n\n## Modelo de Ata do Contexto\n\n"
+                "Siga esta estrutura de seções na ata, na mesma ordem e com os "
+                "mesmos nomes de seção (adapte apenas o conteúdo, não os títulos):\n\n"
+                f"{hub.ata_template_markdown.strip()}"
+            )
+
         actor_hint = ""
         if hub.nlp.actors:
             actor_hint = f"\nParticipants identified by NLP: {', '.join(hub.nlp.actors)}"

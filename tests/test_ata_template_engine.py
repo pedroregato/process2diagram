@@ -1,0 +1,308 @@
+# tests/test_ata_template_engine.py
+"""
+Tests for PC160 (melhorias/templates-ata-por-contexto.md): per-context Word
+templates for meeting minutes.
+
+Covers:
+- modules/ata_template_engine.py::extract_template_from_docx() — heading
+  skeleton, accent color detection, image extraction (header/body).
+- modules/ata_template_engine.py::apply_template_to_docx() wrapper.
+- modules/minutes_exporter.py::to_docx() with template_spec (accent color
+  override + logo insertion), retrocompatible when omitted.
+- core/project_store.py CRUD (save/get_active/list/activate/deactivate/
+  delete) via a mocked Supabase client.
+- agents/agent_minutes.py::build_prompt() injects ata_template_markdown.
+
+No real DB/LLM calls.
+"""
+
+import base64
+from io import BytesIO
+from unittest.mock import patch, MagicMock
+
+from docx import Document
+from docx.shared import Cm, RGBColor
+
+from core.knowledge_hub import MinutesModel
+from modules.ata_template_engine import extract_template_from_docx, apply_template_to_docx
+from modules.minutes_exporter import to_docx
+
+# 1x1 transparent PNG, used as a fake logo/image throughout.
+_TINY_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
+
+
+def _build_reference_docx(with_logo: bool = True, accent_hex: str = "AA1122") -> bytes:
+    doc = Document()
+    if with_logo:
+        header = doc.sections[0].header
+        header.is_linked_to_previous = False
+        p = header.paragraphs[0]
+        p.add_run().add_picture(BytesIO(_TINY_PNG), width=Cm(2))
+    h1 = doc.add_paragraph("Ata de Reunião", style="Heading 1")
+    h1.runs[0].font.color.rgb = RGBColor(
+        int(accent_hex[0:2], 16), int(accent_hex[2:4], 16), int(accent_hex[4:6], 16)
+    )
+    doc.add_paragraph("Participantes", style="Heading 2")
+    doc.add_paragraph("Fulano, Beltrano")
+    doc.add_paragraph("Decisões", style="Heading 2")
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+class TestExtractTemplateFromDocx:
+    def test_markdown_skeleton_follows_heading_order(self):
+        ref = _build_reference_docx()
+        template_markdown, _, _ = extract_template_from_docx(ref)
+        assert template_markdown == "# Ata de Reunião\n\n## Participantes\n\n## Decisões"
+
+    def test_accent_color_detected_from_heading_run(self):
+        ref = _build_reference_docx(accent_hex="00FF88")
+        _, style_spec, _ = extract_template_from_docx(ref)
+        assert style_spec["accent_color"] == "#00FF88"
+
+    def test_no_heading_color_returns_none(self):
+        doc = Document()
+        doc.add_paragraph("Sem cor", style="Heading 1")  # no explicit run color
+        buf = BytesIO()
+        doc.save(buf)
+        _, style_spec, _ = extract_template_from_docx(buf.getvalue())
+        assert style_spec["accent_color"] is None
+
+    def test_header_logo_extracted_as_logo_asset(self):
+        ref = _build_reference_docx(with_logo=True)
+        _, _, assets = extract_template_from_docx(ref)
+        logos = [a for a in assets if a["asset_type"] == "logo"]
+        assert len(logos) == 1
+        assert logos[0]["origin"] == "header"
+        assert logos[0]["mime_type"] == "image/png"
+        assert logos[0]["image_bytes"] == _TINY_PNG
+
+    def test_no_logo_produces_no_assets(self):
+        ref = _build_reference_docx(with_logo=False)
+        _, _, assets = extract_template_from_docx(ref)
+        assert assets == []
+
+    def test_no_headings_produces_empty_skeleton_without_error(self):
+        doc = Document()
+        doc.add_paragraph("Só um parágrafo normal, sem heading.")
+        buf = BytesIO()
+        doc.save(buf)
+        template_markdown, style_spec, assets = extract_template_from_docx(buf.getvalue())
+        assert template_markdown == ""
+        assert style_spec == {"accent_color": None}
+        assert assets == []
+
+
+class TestApplyTemplateToDocx:
+    def test_produces_valid_docx_with_style_and_assets(self):
+        m = MinutesModel(title="Reunião", date="2026-07-08", decisions=["Decisão 1"], ready=True)
+        assets = [{"asset_type": "logo", "origin": "header", "image_bytes": _TINY_PNG,
+                   "mime_type": "image/png", "width_px": 10, "height_px": 10}]
+        data = apply_template_to_docx(m, style_spec={"accent_color": "#112233"}, assets=assets)
+        doc = Document(BytesIO(data))
+        assert len(doc.sections[0].header.part.rels) >= 1  # logo relationship present
+
+    def test_no_style_or_assets_still_produces_valid_docx(self):
+        m = MinutesModel(title="Reunião", date="2026-07-08", decisions=["Decisão 1"], ready=True)
+        data = apply_template_to_docx(m)
+        assert isinstance(data, bytes)
+        assert len(data) > 0
+
+
+class TestToDocxTemplateSpec:
+    def test_accent_color_override_applies_to_headings(self):
+        m = MinutesModel(title="Reunião", date="2026-07-08", decisions=["Decisão 1"], ready=True)
+        data = to_docx(m, template_spec={"accent_color": "#AA1122", "assets": []})
+        doc = Document(BytesIO(data))
+        heading = next(p for p in doc.paragraphs if p.text.strip().upper() == "DECISÕES TOMADAS")
+        assert str(heading.runs[0].font.color.rgb) == "AA1122"
+
+    def test_default_color_unaffected_without_template_spec(self):
+        m = MinutesModel(title="Reunião", date="2026-07-08", decisions=["Decisão 1"], ready=True)
+        data = to_docx(m)
+        doc = Document(BytesIO(data))
+        heading = next(p for p in doc.paragraphs if p.text.strip().upper() == "DECISÕES TOMADAS")
+        assert str(heading.runs[0].font.color.rgb) == "2E7FD9"
+
+    def test_logo_inserted_into_header_when_asset_present(self):
+        m = MinutesModel(title="Reunião", date="2026-07-08", ready=True)
+        data = to_docx(m, template_spec={
+            "accent_color": None,
+            "assets": [{"asset_type": "logo", "image_bytes": _TINY_PNG}],
+        })
+        doc = Document(BytesIO(data))
+        assert len(doc.sections[0].header.part.rels) >= 1
+
+    def test_malformed_accent_color_falls_back_silently(self):
+        m = MinutesModel(title="Reunião", date="2026-07-08", decisions=["Decisão 1"], ready=True)
+        data = to_docx(m, template_spec={"accent_color": "not-a-color", "assets": []})
+        doc = Document(BytesIO(data))  # must not raise
+        assert isinstance(data, bytes) and len(data) > 0
+
+
+class _FakeQuery:
+    def __init__(self, rows, table_name, log):
+        self._rows = rows
+        self._table_name = table_name
+        self._log = log
+        self._pending_update = None
+        self._pending_insert = None
+        self._pending_delete = False
+
+    def select(self, *a, **k):
+        return self
+
+    def eq(self, field, value):
+        self._rows = [r for r in self._rows if r.get(field) == value]
+        return self
+
+    def order(self, *a, **k):
+        return self
+
+    def limit(self, *a, **k):
+        return self
+
+    def update(self, patch_dict):
+        self._pending_update = patch_dict
+        return self
+
+    def insert(self, payload):
+        self._pending_insert = payload
+        return self
+
+    def delete(self):
+        self._pending_delete = True
+        return self
+
+    def execute(self):
+        resp = MagicMock()
+        if self._pending_update is not None:
+            for r in self._rows:
+                r.update(self._pending_update)
+            self._log.append((self._table_name, "update", self._pending_update))
+            resp.data = self._rows
+        elif self._pending_insert is not None:
+            import uuid
+            new_row = dict(self._pending_insert)
+            new_row.setdefault("id", str(uuid.uuid4()))
+            self._rows.append(new_row)
+            self._log.append((self._table_name, "insert", new_row))
+            resp.data = [new_row]
+        elif self._pending_delete:
+            self._log.append((self._table_name, "delete", [r.get("id") for r in self._rows]))
+            resp.data = self._rows
+        else:
+            resp.data = self._rows
+        return resp
+
+
+class _FakeDB:
+    def __init__(self, tables: dict):
+        self._tables = tables
+        self.log: list[tuple] = []
+
+    def table(self, name):
+        return _FakeQuery(self._tables.setdefault(name, []), name, self.log)
+
+
+class TestProjectStoreAtaTemplateCRUD:
+    def test_save_ata_template_persists_template_and_assets(self):
+        from core.project_store import save_ata_template
+        db = _FakeDB({"ata_templates": [], "ata_template_assets": []})
+        ref = _build_reference_docx()
+        with patch("core.project_store._db", return_value=db):
+            result = save_ata_template("ctx-1", "Modelo Teste", "modelo.docx", ref, "tester")
+        assert result is not None
+        assert result["name"] == "Modelo Teste"
+        assert result["is_active"] is True
+        assert len(db._tables["ata_template_assets"]) == 1  # the logo
+
+    def test_save_ata_template_deactivates_previous_active(self):
+        from core.project_store import save_ata_template
+        db = _FakeDB({
+            "ata_templates": [{"id": "old-1", "context_id": "ctx-1", "is_active": True}],
+            "ata_template_assets": [],
+        })
+        ref = _build_reference_docx(with_logo=False)
+        with patch("core.project_store._db", return_value=db):
+            save_ata_template("ctx-1", "Novo Modelo", "novo.docx", ref, "tester")
+        old = next(r for r in db._tables["ata_templates"] if r["id"] == "old-1")
+        assert old["is_active"] is False
+
+    def test_get_active_ata_template_decodes_assets(self):
+        from core.project_store import get_active_ata_template
+        tid = "tpl-1"
+        db = _FakeDB({
+            "ata_templates": [{
+                "id": tid, "context_id": "ctx-1", "name": "M1",
+                "template_markdown": "# Ata", "style_spec": {"accent_color": "#112233"},
+                "is_active": True,
+            }],
+            "ata_template_assets": [{
+                "template_id": tid, "asset_type": "logo", "origin": "header",
+                "image_base64": base64.b64encode(_TINY_PNG).decode("ascii"),
+                "mime_type": "image/png", "width_px": 10, "height_px": 10,
+            }],
+        })
+        with patch("core.project_store._db", return_value=db):
+            result = get_active_ata_template("ctx-1")
+        assert result is not None
+        assert result["template_markdown"] == "# Ata"
+        assert len(result["assets"]) == 1
+        assert result["assets"][0]["image_bytes"] == _TINY_PNG
+
+    def test_get_active_ata_template_returns_none_when_no_active_template(self):
+        from core.project_store import get_active_ata_template
+        db = _FakeDB({"ata_templates": [], "ata_template_assets": []})
+        with patch("core.project_store._db", return_value=db):
+            result = get_active_ata_template("ctx-without-template")
+        assert result is None
+
+    def test_activate_deactivates_others_in_same_context(self):
+        from core.project_store import activate_ata_template
+        db = _FakeDB({
+            "ata_templates": [
+                {"id": "a", "context_id": "ctx-1", "is_active": True},
+                {"id": "b", "context_id": "ctx-1", "is_active": False},
+            ],
+        })
+        with patch("core.project_store._db", return_value=db):
+            ok = activate_ata_template("b", "ctx-1")
+        assert ok is True
+
+    def test_delete_ata_template_returns_true_on_success(self):
+        from core.project_store import delete_ata_template
+        db = _FakeDB({"ata_templates": [{"id": "x", "context_id": "ctx-1", "is_active": True}]})
+        with patch("core.project_store._db", return_value=db):
+            assert delete_ata_template("x") is True
+
+
+class TestAgentMinutesTemplateInjection:
+    def test_template_markdown_injected_when_present(self):
+        from agents.agent_minutes import AgentMinutes
+        from core.knowledge_hub import KnowledgeHub
+
+        hub = KnowledgeHub.new()
+        hub.transcript_clean = "Texto de teste da reuniao."
+        hub.ata_template_markdown = "# Ata\n\n## Participantes"
+
+        agent = AgentMinutes.__new__(AgentMinutes)  # bypass __init__ (no LLM client needed)
+        agent._skill = ""
+        system, _ = agent.build_prompt(hub, "pt-BR")
+        assert "Modelo de Ata do Contexto" in system
+        assert "## Participantes" in system
+
+    def test_no_injection_when_template_absent(self):
+        from agents.agent_minutes import AgentMinutes
+        from core.knowledge_hub import KnowledgeHub
+
+        hub = KnowledgeHub.new()
+        hub.transcript_clean = "Texto de teste da reuniao."
+
+        agent = AgentMinutes.__new__(AgentMinutes)
+        agent._skill = ""
+        system, _ = agent.build_prompt(hub, "pt-BR")
+        assert "Modelo de Ata do Contexto" not in system

@@ -4,6 +4,25 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC160 — Concluído (v5.15 / 2026-07-08) — modelo de ata (Word) por contexto
+
+**Contexto:** pedido direto do usuário — domínios/contextos diferentes (ex: fgv/SDEA) têm seus próprios templates visuais de documentos; a ata gerada pelo pipeline deveria seguir o template Word configurado para o contexto ativo, com detecção automática de estilo (cor de destaque, logo/imagens). Fase 1 = apenas ata, um template por contexto, extração automática de elementos de identidade visual; permissão restrita a admin/master (ideia de "admin de contexto" separada e adiada — ver `melhorias/rbac-admin-de-contexto.md`).
+
+- **`modules/ata_template_engine.py`** (novo, sem Streamlit/rede) — `extract_template_from_docx(docx_bytes)`: percorre os parágrafos `Heading N` do `.docx` de referência e monta um esqueleto Markdown (`#`/`##`/`###`) na mesma ordem/nomes; detecta cor de destaque via `_dominant_heading_color()` (cor do primeiro run de heading com `font.color.rgb` explícito); extrai logo/imagens de header/footer/corpo via `_extract_images_from_part()` (percorre `part.rels`, filtra `RELATIONSHIP_TYPE.IMAGE`); tenta extrair fundo de página legado via XML VML (`w:background`/`v:fill`, best-effort). `apply_template_to_docx(minutes, style_spec, assets)` — wrapper fino sobre `to_docx()`.
+- **`modules/minutes_exporter.py::to_docx()`** — parametrizado com `template_spec: dict | None = None` opcional; quando presente, aplica `accent_color` nos headings e insere o primeiro asset `logo`/`header_image` no cabeçalho do documento (`doc.sections[0].header`). Retrocompatível: sem `template_spec`, saída idêntica à anterior.
+- **`core/project_store.py`** — CRUD novo (`list_ata_templates`, `get_active_ata_template`, `save_ata_template`, `activate_ata_template`, `deactivate_ata_template`, `delete_ata_template`) sobre as tabelas `ata_templates`/`ata_template_assets`; `save_ata_template()` chama `extract_template_from_docx()`, desativa o template ativo anterior do contexto (unicidade via índice parcial) e persiste template + assets (imagens em base64). Sem checagem de `is_admin()` no core — permissão fica na camada de UI, por convenção do projeto.
+- **`core/knowledge_hub.py`** — novos campos `ata_template_markdown: str` e `ata_template_spec: dict | None`, com guards em `migrate()`.
+- **`agents/agent_minutes.py::build_prompt()`** — quando `hub.ata_template_markdown` está presente, injeta instrução no system prompt para a ata seguir a mesma estrutura/nomes de seção do template (mesmo padrão de injeção usado pelo CKF).
+- **`pages/Pipeline.py`** — carrega `get_active_ata_template(context_id)` logo após o carregamento do CKF, populando `hub.ata_template_markdown`/`hub.ata_template_spec`; fail-open (sem template ativo → comportamento de sempre).
+- **`ui/tabs/minutes_tab.py`** e **`ui/tabs/export_tab.py`** — passam `template_spec=getattr(hub, "ata_template_spec", None)` para `to_docx()`.
+- **`pages/Settings.py`** — nova seção "📝 Modelo de Ata por Contexto" (gated por `is_admin()`): upload de `.docx` de referência, extração + ativação automática, preview do Markdown/cor/imagens detectados, lista de templates existentes com Ativar/Desativar/Excluir.
+- **`setup/supabase_migration_ata_templates.sql`** (executada pelo usuário) — tabelas `ata_templates` (com índice parcial único garantindo no máximo 1 template ativo por contexto) e `ata_template_assets`, ambas com `ENABLE ROW LEVEL SECURITY` sem policies (app usa `service_role`, que ignora RLS) — convenção confirmada em `setup/supabase_migration_enable_rls.sql` (a primeira versão do arquivo usava `DISABLE ROW LEVEL SECURITY`, corrigida antes da execução após o Supabase acusar o risco na UI).
+- [x] 20 testes novos (`tests/test_ata_template_engine.py`): extração de esqueleto Markdown, detecção de cor de destaque (presente/ausente), extração de logo do header, `to_docx()` com/sem `template_spec` (cor aplicada, cor malformada não quebra, logo inserido), CRUD completo via Supabase mockado, injeção de template no prompt do `AgentMinutes`.
+- [x] 642/642 testes automatizados passando.
+- **Lição de teste registrada**: `core/project_store.py` importa `get_supabase_client` uma única vez no topo do módulo (diferente dos mixins de `core/tools/*.py`, que importam localmente dentro de cada função) — mockar exige `patch("core.project_store._db", ...)`, não `patch("modules.supabase_client.get_supabase_client", ...)` (que não intercepta nada e deixa a chamada real vazar para a API do Supabase).
+
+---
+
 ### PC159 — Concluído (v5.15 / 2026-07-08) — Download Ata em Word na Central de Artefatos + nomes de arquivo com data da reunião
 
 **Contexto:** pedido direto do usuário — na Central de Artefatos, aba Reuniões, só havia "Download Ata (.md)"; pediu para incluir Word também. Segundo ponto: nomes de arquivo gerados eram genéricos (`{projeto}_minutes{data do download}.html`) — usar a **data da reunião** em vez da data em que o export foi pedido.

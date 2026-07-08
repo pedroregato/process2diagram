@@ -158,9 +158,13 @@ def render(hub, prefix, suffix):
     )
     try:
         from modules.minutes_exporter import to_docx
+        # PC160: aplica o modelo de ata do contexto ativo, se configurado
+        # (melhorias/templates-ata-por-contexto.md) — fail-open, None quando
+        # o contexto não tem template ativo (comportamento de sempre).
+        _ata_tpl_spec = getattr(hub, "ata_template_spec", None)
         st.download_button(
             "⬇️ .docx",
-            data=to_docx(m),
+            data=to_docx(m, template_spec=_ata_tpl_spec),
             file_name=make_filename("minutes", "docx", prefix, suffix),
             key="minutes_docx"
         )

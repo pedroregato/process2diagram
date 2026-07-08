@@ -637,6 +637,9 @@ class KnowledgeHub:
     context_type:  str = ""   # project | product | feasibility | strategic | meeting_series | discussion | other
     context_skill: str = ""        # CKF manual (skill_md) — injected into agent prompts
     context_files_text: str = ""   # Extracted text from uploaded context files (HTML, PPTX, PDF, TXT)
+    # Ata template (PC160 — melhorias/templates-ata-por-contexto.md)
+    ata_template_markdown: str = ""          # heading skeleton injected into AgentMinutes' prompt
+    ata_template_spec: dict | None = None    # {"accent_color", "assets"} for to_docx() at export time
     transcript_quality: TranscriptQualityModel = field(default_factory=TranscriptQualityModel)
     preprocessing: PreprocessingModel = field(default_factory=PreprocessingModel)
     nlp: NLPEnvelope = field(default_factory=NLPEnvelope)
@@ -794,6 +797,12 @@ class KnowledgeHub:
             hub.context_skill = ""
         if not hasattr(hub, 'context_files_text'):
             hub.context_files_text = ""
+
+        # ── PC160: Ata template ────────────────────────────────────────────────
+        if not hasattr(hub, 'ata_template_markdown'):
+            hub.ata_template_markdown = ""
+        if not hasattr(hub, 'ata_template_spec'):
+            hub.ata_template_spec = None
 
         # ── v4.13: loaded_from_db flag ────────────────────────────────────────
         if not hasattr(hub, 'loaded_from_db'):

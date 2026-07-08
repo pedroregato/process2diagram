@@ -182,6 +182,21 @@ if pipeline_mode == _MODE_NEW:
             except Exception:
                 pass
 
+            # PC160 — melhorias/templates-ata-por-contexto.md: modelo de ata do
+            # contexto ativo (se configurado). Fail-open: sem template ativo,
+            # o comportamento é idêntico ao layout genérico de sempre.
+            try:
+                from core.project_store import get_active_ata_template
+                _ata_tpl = get_active_ata_template(_ctx_id)
+                if _ata_tpl:
+                    hub.ata_template_markdown = _ata_tpl.get("template_markdown") or ""
+                    hub.ata_template_spec = {
+                        "accent_color": (_ata_tpl.get("style_spec") or {}).get("accent_color"),
+                        "assets": _ata_tpl.get("assets") or [],
+                    }
+            except Exception:
+                pass
+
         # Derive project slug from prefix (e.g. "SDEA_" → "sdea")
         _ata_slug = st.session_state.get("prefix", "p2d_").rstrip("_").lower() or "p2d"
 
