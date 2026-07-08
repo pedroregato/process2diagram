@@ -35,18 +35,63 @@ def _heading_level(paragraph) -> int | None:
     return _HEADING_STYLE_LEVELS.get(style_name)
 
 
-def _dominant_heading_color(doc) -> str | None:
+def _is_pseudo_heading_run(run) -> bool:
+    color = getattr(run.font, "color", None)
+    rgb = getattr(color, "rgb", None) if color else None
+    return bool(run.bold) and rgb is not None
+
+
+def _collect_heading_paragraphs(doc) -> list[tuple[object, int]]:
+    """
+    (paragraph, level) pairs identifying the document's headings.
+
+    Prefers Word's built-in Heading N / Título N paragraph styles. Many
+    real-world reference docs (found in practice — corporate templates
+    built in plain "Normal"/"List Paragraph" styles with manual bold +
+    color formatting standing in for headings) never use those styles at
+    all — for those, falls back to paragraphs whose first run is bold with
+    an explicit font color, ranking distinct font sizes (descending) into
+    levels 1-4. The fallback only kicks in when zero style-based headings
+    exist in the whole document, so a template that DOES use real Heading
+    styles is never second-guessed by this heuristic.
+    """
+    style_based = [
+        (p, lvl) for p in doc.paragraphs
+        if (lvl := _heading_level(p)) is not None and p.text.strip()
+    ]
+    if style_based:
+        return style_based
+
+    candidates: list[tuple[object, float | None]] = []
+    for p in doc.paragraphs:
+        if not p.text.strip() or not p.runs:
+            continue
+        if _is_pseudo_heading_run(p.runs[0]):
+            size = p.runs[0].font.size
+            candidates.append((p, size.pt if size else None))
+    if not candidates:
+        return []
+
+    sizes = sorted({s for _, s in candidates if s is not None}, reverse=True)
+    size_to_level = {s: i + 1 for i, s in enumerate(sizes[:4])}
+    fallback_level = min(len(sizes), 4) + 1 if len(sizes) < 4 else 4
+    return [(p, size_to_level.get(size, fallback_level)) for p, size in candidates]
+
+
+def _dominant_heading_color(doc, heading_paragraphs: list[tuple[object, int]] | None = None) -> str | None:
     """
     Best-effort accent color: the most common explicit RGB color set on a
-    run within a heading paragraph. Returns a '#RRGGBB' string, or None if
-    no heading run has an explicit color (falls back to the app default).
+    run within a heading paragraph (as identified by
+    _collect_heading_paragraphs). Returns a '#RRGGBB' string, or None if no
+    heading run has an explicit color (falls back to the app default).
     """
     from collections import Counter
 
+    if heading_paragraphs is None:
+        heading_paragraphs = _collect_heading_paragraphs(doc)
+
     counts: Counter[str] = Counter()
-    for p in doc.paragraphs:
-        if _heading_level(p) is None:
-            continue
+    for p, _level in heading_paragraphs:
         for run in p.runs:
             color = getattr(run.font, "color", None)
             rgb = getattr(color, "rgb", None) if color else None
@@ -154,18 +199,16 @@ def extract_template_from_docx(docx_bytes: bytes) -> tuple[str, dict, list[dict]
     doc = Document(BytesIO(docx_bytes))
 
     # ── Markdown skeleton from heading paragraphs ──────────────────────────
+    heading_paragraphs = _collect_heading_paragraphs(doc)
     lines: list[str] = []
-    for p in doc.paragraphs:
-        level = _heading_level(p)
-        if level is None:
-            continue
+    for p, level in heading_paragraphs:
         text = p.text.strip()
         if text:
-            lines.append("#" * level + " " + text)
+            lines.append("#" * min(level, 4) + " " + text)
     template_markdown = "\n\n".join(lines)
 
     # ── Style spec ───────────────────────────────────────────────────────
-    style_spec = {"accent_color": _dominant_heading_color(doc)}
+    style_spec = {"accent_color": _dominant_heading_color(doc, heading_paragraphs)}
 
     # ── Assets: header/footer (per section) + body + page background ──────
     assets: list[dict] = []

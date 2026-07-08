@@ -21,7 +21,7 @@ from io import BytesIO
 from unittest.mock import patch, MagicMock
 
 from docx import Document
-from docx.shared import Cm, RGBColor
+from docx.shared import Cm, Pt, RGBColor
 
 from core.knowledge_hub import MinutesModel
 from modules.ata_template_engine import extract_template_from_docx, apply_template_to_docx
@@ -47,6 +47,43 @@ def _build_reference_docx(with_logo: bool = True, accent_hex: str = "AA1122") ->
     doc.add_paragraph("Participantes", style="Heading 2")
     doc.add_paragraph("Fulano, Beltrano")
     doc.add_paragraph("Decisões", style="Heading 2")
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def _build_pseudo_heading_docx(accent_hex: str = "1F4E79") -> bytes:
+    """
+    Mirrors a real-world corporate template (found via a user-submitted
+    .docx, PC160-C): section titles built with bold + explicit font color
+    on plain 'Normal'/'List Paragraph' styles — never Word's built-in
+    Heading N style. Body paragraphs are neither bold nor colored the
+    accent color, so they must NOT be picked up as headings.
+    """
+    accent = RGBColor(int(accent_hex[0:2], 16), int(accent_hex[2:4], 16), int(accent_hex[4:6], 16))
+    body_color = RGBColor(0x1E, 0x29, 0x3B)
+
+    doc = Document()
+
+    def _pseudo_heading(text: str, size_pt: int) -> None:
+        p = doc.add_paragraph(style="List Paragraph")
+        r = p.add_run(text)
+        r.bold = True
+        r.font.size = Pt(size_pt)
+        r.font.color.rgb = accent
+
+    def _body(text: str) -> None:
+        p = doc.add_paragraph(style="List Paragraph")
+        r = p.add_run(text)
+        r.font.color.rgb = body_color
+
+    _pseudo_heading("ATA DE REUNIÃO", 16)
+    _pseudo_heading("Participantes", 13)
+    _body("Fulano, Beltrano")
+    _pseudo_heading("Assuntos Discutidos", 13)
+    _pseudo_heading("Status da Integração", 11)
+    _body("Texto corrido sem negrito nem cor de destaque.")
+
     buf = BytesIO()
     doc.save(buf)
     return buf.getvalue()
@@ -94,6 +131,42 @@ class TestExtractTemplateFromDocx:
         assert template_markdown == ""
         assert style_spec == {"accent_color": None}
         assert assets == []
+
+    def test_pseudo_heading_fallback_when_no_word_heading_style_used(self):
+        """PC160-C: real-world templates built with bold+colored 'Normal'/
+        'List Paragraph' paragraphs (never Word's built-in Heading N style)
+        must still be recognized — this was the exact shape of the .docx a
+        user reported as 'not following the registered model'."""
+        ref = _build_pseudo_heading_docx()
+        template_markdown, style_spec, _ = extract_template_from_docx(ref)
+        assert style_spec["accent_color"] == "#1F4E79"
+        assert template_markdown == (
+            "# ATA DE REUNIÃO\n\n"
+            "## Participantes\n\n"
+            "## Assuntos Discutidos\n\n"
+            "### Status da Integração"
+        )
+
+    def test_pseudo_heading_fallback_ignores_plain_body_paragraphs(self):
+        ref = _build_pseudo_heading_docx()
+        template_markdown, _, _ = extract_template_from_docx(ref)
+        assert "Fulano, Beltrano" not in template_markdown
+        assert "Texto corrido" not in template_markdown
+
+    def test_real_word_heading_style_takes_precedence_over_pseudo_heading(self):
+        """A document that legitimately uses Heading N styles must never be
+        second-guessed by the bold+color fallback, even if it also happens
+        to contain bold-colored body text elsewhere."""
+        doc = Document()
+        doc.add_paragraph("Título Real", style="Heading 1")
+        p = doc.add_paragraph(style="List Paragraph")
+        r = p.add_run("Texto em negrito e colorido, mas não é heading")
+        r.bold = True
+        r.font.color.rgb = RGBColor(0xAA, 0x11, 0x22)
+        buf = BytesIO()
+        doc.save(buf)
+        template_markdown, _, _ = extract_template_from_docx(buf.getvalue())
+        assert template_markdown == "# Título Real"
 
 
 class TestApplyTemplateToDocx:
