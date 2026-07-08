@@ -84,6 +84,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "get_requirements":             "consulta",
     "sample_requirements":          "consulta",
     "analyze_requirement_quality":  "consulta",
+    "estimar_risco_requisito":      "consulta",
     "map_transcript_to_requirements": "consulta",
     "cluster_similar_requirements": "consulta",
     "get_bpmn_execution_log":       "consulta",
@@ -208,6 +209,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "sugestoes_plantonista":           "consulta",
     "diagnostico_projeto":             "consulta",
     "verificar_rastreabilidade_obrigatoria": "consulta",
+    "analisar_tendencias":              "consulta",
     # Rastreabilidade / Simulação / Conformidade (Fase 3)
     "mapa_rastreabilidade":            "consulta",
     "simular_cenario":                 "consulta",
@@ -217,6 +219,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "gerar_deck_executivo":            "consulta",
     "gerar_project_charter":           "consulta",
     "export_project_charter_docx":     "consulta",
+    "gerar_release_notes":             "consulta",
     # Editor Estrutural (Fase 2)
     "reordenar_requisitos":            "escrita",
     "inserir_secao_ata":               "admin",
@@ -389,6 +392,10 @@ class AssistantToolExecutor(
                 ),
                 "analyze_requirement_quality": lambda: self.analyze_requirement_quality(
                     meeting_number=tool_input["meeting_number"],
+                ),
+                "estimar_risco_requisito": lambda: self.estimar_risco_requisito(
+                    req_number=tool_input.get("req_number"),
+                    top_n=int(tool_input.get("top_n", 10)),
                 ),
                 "map_transcript_to_requirements": lambda: self.map_transcript_to_requirements(
                     meeting_number=tool_input["meeting_number"],
@@ -823,6 +830,9 @@ class AssistantToolExecutor(
                     include_pendencies=bool(tool_input.get("include_pendencies", True)),
                 ),
                 "verificar_rastreabilidade_obrigatoria": lambda: self.verificar_rastreabilidade_obrigatoria(),
+                "analisar_tendencias":    lambda: self.analisar_tendencias(
+                    top_n=int(tool_input.get("top_n", 5)),
+                ),
                 # ── Sugestor / Deck / Charter (Fase 4)
                 "sugerir_processos":      lambda: self.sugerir_processos(
                     min_reunioes=int(tool_input.get("min_reunioes", 2)),
@@ -845,6 +855,10 @@ class AssistantToolExecutor(
                     incluir_cronograma=bool(tool_input.get("incluir_cronograma", True)),
                     incluir_stakeholders=bool(tool_input.get("incluir_stakeholders", True)),
                     incluir_escopo=bool(tool_input.get("incluir_escopo", True)),
+                ),
+                "gerar_release_notes":    lambda: self.gerar_release_notes(
+                    meeting_number_inicio=int(tool_input["meeting_number_inicio"]),
+                    meeting_number_fim=int(tool_input["meeting_number_fim"]),
                 ),
                 # ── Rastreabilidade / Simulação / Conformidade (Fase 3)
                 "mapa_rastreabilidade":   lambda: self.mapa_rastreabilidade(

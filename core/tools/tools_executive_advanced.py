@@ -375,6 +375,34 @@ EXECUTIVE_ADVANCED_SCHEMAS: list[dict] = [
             {
                 "type": "function",
                 "function": {
+                    "name": "gerar_release_notes",
+                    "description": (
+                        "Gera notas de release (linguagem natural, técnica + executiva) a "
+                        "partir de TODAS as mudanças de requisitos (novos, revisados, "
+                        "contraditos, confirmados) entre duas reuniões — um marco 'antes' e "
+                        "um 'depois'. Use quando o usuário pedir 'release notes', 'o que mudou "
+                        "desde a última entrega', 'resumo das mudanças entre a reunião X e Y' "
+                        "ou 'notas de versão'."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "meeting_number_inicio": {
+                                "type": "integer",
+                                "description": "Número da reunião-marco inicial (o 'antes').",
+                            },
+                            "meeting_number_fim": {
+                                "type": "integer",
+                                "description": "Número da reunião-marco final (o 'depois').",
+                            },
+                        },
+                        "required": ["meeting_number_inicio", "meeting_number_fim"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "sincronizar_calendario",
                     "description": (
                         "Sincroniza os encaminhamentos (itens de ação) das atas com o Google Calendar. "
@@ -706,6 +734,109 @@ class _ExecutiveAdvancedToolsMixin:
         }
         st.session_state[key] = docx_bytes
         return "✅ Project Charter gerado e disponível para download em Word (.docx)."
+
+    def gerar_release_notes(self, meeting_number_inicio: int, meeting_number_fim: int) -> str:
+        """Consolidates all requirement changes (requirement_versions) between two
+        meeting milestones into LLM-written release notes (technical + executive)."""
+        if meeting_number_inicio > meeting_number_fim:
+            meeting_number_inicio, meeting_number_fim = meeting_number_fim, meeting_number_inicio
+
+        meetings = self._get_meetings()
+        range_meetings = [
+            m for m in meetings
+            if meeting_number_inicio <= (m.get("meeting_number") or -1) <= meeting_number_fim
+        ]
+        if not range_meetings:
+            return f"Nenhuma reunião encontrada entre {meeting_number_inicio} e {meeting_number_fim}."
+
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        meeting_ids = [m["id"] for m in range_meetings]
+        try:
+            versions = (
+                db.table("requirement_versions")
+                .select("requirement_id, version, change_type, change_summary, title, created_at")
+                .in_("meeting_id", meeting_ids)
+                .order("created_at")
+                .execute().data or []
+            )
+        except Exception as exc:
+            return f"❌ Erro ao buscar histórico de requisitos: {exc}"
+
+        if not versions:
+            return (
+                f"Nenhuma alteração de requisito registrada entre as reuniões "
+                f"{meeting_number_inicio} e {meeting_number_fim}."
+            )
+
+        req_ids = list({v["requirement_id"] for v in versions if v.get("requirement_id")})
+        try:
+            reqs = (
+                db.table("requirements")
+                .select("id, req_number, title")
+                .in_("id", req_ids)
+                .execute().data or []
+            ) if req_ids else []
+        except Exception:
+            reqs = []
+        req_lookup = {r["id"]: r for r in reqs}
+
+        type_labels = {
+            "new": "Novos requisitos",
+            "revised": "Requisitos revisados",
+            "contradicted": "Contradições identificadas",
+            "confirmed": "Requisitos confirmados",
+            "status_change": "Mudanças de status",
+            "implementation": "Implementações registradas",
+        }
+        by_type: dict[str, list[dict]] = {}
+        for v in versions:
+            by_type.setdefault(v.get("change_type") or "outro", []).append(v)
+
+        raw_lines: list[str] = []
+        for change_type, items in by_type.items():
+            label = type_labels.get(change_type, change_type.capitalize())
+            raw_lines.append(f"\n{label} ({len(items)}):")
+            for v in items:
+                r = req_lookup.get(v.get("requirement_id"), {})
+                req_num = r.get("req_number")
+                req_label = f"REQ-{req_num:03d}" if req_num else "REQ-?"
+                title = r.get("title") or v.get("title") or ""
+                summary = v.get("change_summary") or ""
+                raw_lines.append(f"  {req_label} — {title}: {summary}")
+        raw_data = "\n".join(raw_lines)
+
+        date_a = (range_meetings[0].get("meeting_date") or "")[:10]
+        date_b = (range_meetings[-1].get("meeting_date") or "")[:10]
+
+        system = (
+            "Você é um Product Owner experiente redigindo release notes para "
+            "stakeholders técnicos e executivos. Seja objetivo, use linguagem clara, "
+            "agrupe por tipo de mudança. Responda em Português do Brasil."
+        )
+        user = (
+            f"Gere release notes a partir das mudanças de requisitos registradas entre "
+            f"a Reunião {meeting_number_inicio} ({date_a or '?'}) e a Reunião "
+            f"{meeting_number_fim} ({date_b or '?'}).\n\n"
+            f"Dados brutos (tipo de mudança : REQ : resumo):\n{raw_data}\n\n"
+            "Estruture em: resumo executivo (2-3 frases), depois seções por tipo de "
+            "mudança com bullets objetivos. Não invente informação além do que está "
+            "nos dados fornecidos."
+        )
+        try:
+            notes = self._llm_call(system, user, max_tokens=2500)
+        except Exception as exc:
+            return f"❌ Erro ao gerar release notes: {exc}"
+
+        return (
+            f"# 📦 Release Notes — Reunião {meeting_number_inicio} → {meeting_number_fim}\n\n"
+            f"*{len(versions)} mudança(ões) em {len(req_lookup)} requisito(s) — "
+            f"{date_a or '?'} a {date_b or '?'}*\n\n"
+            "---\n\n" + notes
+        )
 
     def mapa_rastreabilidade(
         self,

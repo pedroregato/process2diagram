@@ -519,6 +519,31 @@ KNOWLEDGE_REQUIREMENTS2_SCHEMAS: list[dict] = [
             {
                 "type": "function",
                 "function": {
+                    "name": "analisar_tendencias",
+                    "description": (
+                        "Detecta padrões longitudinais no projeto, sem LLM: requisitos que mais "
+                        "mudam de versão (instabilidade), temas IBIS mais debatidos (mais "
+                        "alternativas discutidas) e distribuição de contradições por "
+                        "severidade/status. Não inclui ranking de participante — dado não "
+                        "estruturado o suficiente pra isso sem risco de fabricação. Use quando "
+                        "o usuário pedir 'tendências do projeto', 'requisitos mais instáveis', "
+                        "'temas mais discutidos' ou 'padrões ao longo do tempo'."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "top_n": {
+                                "type": "integer",
+                                "description": "Quantos itens mostrar por ranking. Padrão: 5.",
+                            },
+                        },
+                        "required": [],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "sugerir_processos",
                     "description": (
                         "Analisa os debates IBIS e decisões das reuniões para identificar "
@@ -1665,6 +1690,112 @@ function toggle(el){{
 
         total_gaps = len(reqs_sem_origem) + len(ibis_incompletas) + len(bpmn_sem_desc)
         lines.insert(1, f"**{total_gaps} gap(s) de rastreabilidade encontrado(s)** no projeto.\n")
+
+        return "\n".join(lines)
+
+    def analisar_tendencias(self, top_n: int = 5) -> str:
+        """Project-wide longitudinal trends, no LLM: requirements with the most
+        revisions, most-debated IBIS topics, contradictions by severity/status.
+        Deliberately does NOT rank participants by contested contributions —
+        no table links a contradiction/revision to a specific author, and
+        approximating that from free-text minutes would risk misattribution."""
+        from modules.supabase_client import get_supabase_client
+
+        meetings = self._get_meetings()
+        if not meetings:
+            return "Nenhuma reunião encontrada. Processe transcrições no Pipeline."
+
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        # ── 1. Requisitos que mais mudam de versão ──────────────────────────
+        top_unstable: list[tuple[str, str, int]] = []
+        try:
+            meeting_ids = [m["id"] for m in meetings]
+            versions = (
+                db.table("requirement_versions")
+                .select("requirement_id")
+                .in_("meeting_id", meeting_ids)
+                .execute().data or []
+            ) if meeting_ids else []
+            from collections import Counter
+            counts = Counter(v["requirement_id"] for v in versions if v.get("requirement_id"))
+            top_ids = [rid for rid, _ in counts.most_common(top_n)]
+            if top_ids:
+                reqs = (
+                    db.table("requirements")
+                    .select("id, req_number, title")
+                    .in_("id", top_ids)
+                    .execute().data or []
+                )
+                req_lookup = {r["id"]: r for r in reqs}
+                top_unstable = [
+                    (
+                        f"REQ-{req_lookup.get(rid, {}).get('req_number', 0):03d}",
+                        req_lookup.get(rid, {}).get("title", "—"),
+                        n,
+                    )
+                    for rid, n in counts.most_common(top_n)
+                    if rid in req_lookup
+                ]
+        except Exception:
+            pass
+
+        # ── 2. Temas IBIS mais debatidos (mais alternativas discutidas) ─────
+        top_debated: list[tuple[str, int]] = []
+        try:
+            qs = self._load_ibis_questions()
+            ranked = sorted(qs, key=lambda q: len(q.get("alternatives") or []), reverse=True)
+            top_debated = [
+                (q.get("statement", "")[:100], len(q.get("alternatives") or []))
+                for q in ranked[:top_n] if q.get("alternatives")
+            ]
+        except Exception:
+            pass
+
+        # ── 3. Contradições por severidade/status ───────────────────────────
+        contra_by_severity: dict = {}
+        n_open = n_resolved = 0
+        try:
+            contras = (
+                db.table("kh_contradictions")
+                .select("severity, status")
+                .eq("project_id", self.project_id)
+                .execute().data or []
+            )
+            from collections import Counter as _Counter
+            contra_by_severity = _Counter(c.get("severity") or "—" for c in contras)
+            n_open = sum(1 for c in contras if c.get("status") == "open")
+            n_resolved = sum(1 for c in contras if c.get("status") != "open")
+        except Exception:
+            pass
+
+        lines = ["## 📈 Análise de Tendências\n"]
+
+        lines.append("### 🔄 Requisitos mais instáveis (mais revisões)")
+        if top_unstable:
+            for label, title, n in top_unstable:
+                lines.append(f"- {label} — {title}: **{n} versão(ões)**")
+        else:
+            lines.append("Nenhum requisito com múltiplas versões registradas.")
+        lines.append("")
+
+        lines.append("### 💬 Temas IBIS mais debatidos (por nº de alternativas)")
+        if top_debated:
+            for stmt, n_alt in top_debated:
+                lines.append(f"- «{stmt}» — **{n_alt} alternativa(s)**")
+        else:
+            lines.append("Nenhuma questão IBIS com alternativas registradas.")
+        lines.append("")
+
+        lines.append("### ⚠️ Contradições por severidade")
+        if contra_by_severity:
+            for sev, n in contra_by_severity.most_common():
+                lines.append(f"- {sev}: {n}")
+            lines.append(f"\n{n_open} aberta(s) · {n_resolved} resolvida(s)/outro status")
+        else:
+            lines.append("Nenhuma contradição registrada no Knowledge Hub.")
 
         return "\n".join(lines)
 

@@ -342,6 +342,37 @@ MEETINGS_REQUIREMENTS_SCHEMAS: list[dict] = [
             {
                 "type": "function",
                 "function": {
+                    "name": "estimar_risco_requisito",
+                    "description": (
+                        "Calcula um score de risco (0-100) por requisito cruzando: nº de "
+                        "revisões (instabilidade), contradição sinalizada em alguma versão, "
+                        "ausência de source_quote (rastreabilidade fraca), descrição "
+                        "curta/vaga (ambiguidade) e prioridade alta sem status avançado. "
+                        "Sem análise semântica profunda — heurística ponderada e transparente, "
+                        "não um julgamento definitivo. Informe req_number para o detalhamento "
+                        "de 1 requisito, ou omita para o ranking dos mais arriscados do "
+                        "projeto. Use quando o usuário pedir 'quais requisitos são mais "
+                        "arriscados', 'risco do REQ-X' ou 'onde focar a revisão'."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "req_number": {
+                                "type": "integer",
+                                "description": "Número do requisito específico (opcional — padrão: ranking do projeto todo).",
+                            },
+                            "top_n": {
+                                "type": "integer",
+                                "description": "Quantos requisitos mostrar no ranking (ignorado se req_number for informado). Padrão: 10.",
+                            },
+                        },
+                        "required": [],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "map_transcript_to_requirements",
                     "description": (
                         "Divide a transcrição de uma reunião em trechos/parágrafos e conta quantos requisitos "
@@ -1739,6 +1770,136 @@ class _MeetingsRequirementsToolsMixin:
             "Palavras mais frequentes nos títulos: "
             + (", ".join(f"{w} ({n})" for w, n in common) if common else "—"),
         ]
+        return "\n".join(lines)
+
+    _VAGUE_WORDS = {
+        "adequado", "adequada", "apropriado", "apropriada", "conforme necessário",
+        "quando aplicável", "de forma eficiente", "etc", "diversos", "diversas",
+        "algum", "alguma", "alguns", "algumas", "flexível", "robusto", "amigável",
+    }
+
+    @classmethod
+    def _is_vague_description(cls, description: str) -> bool:
+        """Best-effort heuristic, not NLP: a description is flagged as vague
+        when it's short (<8 words) or contains a hedge/filler word commonly
+        associated with unmeasurable requirements. Transparent and coarse
+        on purpose — never presented as a semantic judgment."""
+        text = (description or "").strip()
+        if not text:
+            return True
+        words = text.split()
+        if len(words) < 8:
+            return True
+        lowered = text.lower()
+        return any(w in lowered for w in cls._VAGUE_WORDS)
+
+    def _score_requirement_risk(self, req: dict, n_revisions: int, has_contradiction: bool) -> dict:
+        """Weighted heuristic, 0-100: instabilidade (revisões) + contradição +
+        rastreabilidade fraca (sem source_quote) + ambiguidade (descrição
+        curta/vaga) + prioridade alta sem status avançado."""
+        score = 0
+        factors: list[str] = []
+
+        revision_points = min(max(n_revisions - 1, 0) * 15, 30)
+        if revision_points:
+            score += revision_points
+            factors.append(f"{n_revisions} versão(ões) registrada(s) (+{revision_points})")
+
+        if has_contradiction:
+            score += 30
+            factors.append("contradição sinalizada em alguma versão (+30)")
+
+        if not (req.get("source_quote") or "").strip():
+            score += 15
+            factors.append("sem source_quote — rastreabilidade fraca (+15)")
+
+        if self._is_vague_description(req.get("description", "")):
+            score += 15
+            factors.append("descrição curta ou vaga (+15)")
+
+        priority = (req.get("priority") or "").lower()
+        status = (req.get("status") or "").lower()
+        if priority == "high" and status in ("backlog", "active", "revised"):
+            score += 10
+            factors.append(f"prioridade alta, status ainda '{status}' (+10)")
+
+        score = min(score, 100)
+        if score >= 75:
+            label = "🔴 Crítico"
+        elif score >= 50:
+            label = "🟠 Alto"
+        elif score >= 25:
+            label = "🟡 Médio"
+        else:
+            label = "🟢 Baixo"
+
+        return {"score": score, "label": label, "factors": factors}
+
+    def estimar_risco_requisito(self, req_number: int | None = None, top_n: int = 10) -> str:
+        """Weighted heuristic risk score per requirement — no LLM. See
+        _score_requirement_risk for the formula; always shows the factors
+        that contributed to a score, never a bare number."""
+        from modules.supabase_client import get_supabase_client
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        try:
+            query = (
+                db.table("requirements")
+                .select("id, req_number, title, description, priority, status, source_quote")
+                .eq("project_id", self.project_id)
+            )
+            if req_number is not None:
+                query = query.eq("req_number", req_number)
+            reqs = query.execute().data or []
+        except Exception as exc:
+            return f"❌ Erro ao buscar requisitos: {exc}"
+
+        if not reqs:
+            if req_number is not None:
+                return f"REQ-{req_number:03d} não encontrado no projeto."
+            return "Nenhum requisito encontrado no projeto."
+
+        try:
+            req_ids = [r["id"] for r in reqs]
+            versions = (
+                db.table("requirement_versions")
+                .select("requirement_id, contradiction_flag")
+                .in_("requirement_id", req_ids)
+                .execute().data or []
+            )
+        except Exception:
+            versions = []
+
+        from collections import Counter
+        rev_counts = Counter(v["requirement_id"] for v in versions)
+        contradicted_ids = {v["requirement_id"] for v in versions if v.get("contradiction_flag")}
+
+        scored = []
+        for r in reqs:
+            n_rev = rev_counts.get(r["id"], 0) + 1  # +1 for the baseline (current) version
+            has_contra = r["id"] in contradicted_ids or (r.get("status") or "").lower() == "contradicted"
+            result = self._score_requirement_risk(r, n_rev, has_contra)
+            scored.append((r, result))
+
+        if req_number is not None:
+            r, result = scored[0]
+            lines = [
+                f"## ⚠️ Risco — REQ-{r.get('req_number', 0):03d} — {r.get('title', '')}",
+                f"\n**Score: {result['score']}/100 — {result['label']}**\n",
+                "**Fatores considerados:**" if result["factors"] else "Nenhum fator de risco identificado.",
+            ]
+            lines.extend(f"- {f}" for f in result["factors"])
+            return "\n".join(lines)
+
+        scored.sort(key=lambda pair: pair[1]["score"], reverse=True)
+        lines = [f"## ⚠️ Requisitos Mais Arriscados — Top {min(top_n, len(scored))}\n"]
+        for r, result in scored[:top_n]:
+            lines.append(
+                f"- **REQ-{r.get('req_number', 0):03d}** — {r.get('title', '')}: "
+                f"{result['score']}/100 {result['label']}"
+            )
         return "\n".join(lines)
 
     def map_transcript_to_requirements(self, meeting_number: int) -> str:
