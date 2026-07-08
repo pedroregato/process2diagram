@@ -1058,7 +1058,7 @@ class _KnowledgeRequirements2ToolsMixin:
         try:
             versions = (
                 db.table("requirement_versions")
-                .select("version, title, description, status, change_type, changed_at, change_note")
+                .select("version, title, description, change_type, change_summary, created_at")
                 .eq("requirement_id", req_id)
                 .order("version")
                 .execute().data or []
@@ -1115,9 +1115,9 @@ class _KnowledgeRequirements2ToolsMixin:
 
         title_diff    = _build_diff_html(va.get("title") or "", vb.get("title") or "")
         desc_diff     = _build_diff_html(va.get("description") or "", vb.get("description") or "")
-        date_a        = (va.get("changed_at") or "")[:10]
-        date_b        = (vb.get("changed_at") or "")[:10]
-        note_b        = _esc(vb.get("change_note") or vb.get("change_type") or "")
+        date_a        = (va.get("created_at") or "")[:10]
+        date_b        = (vb.get("created_at") or "")[:10]
+        note_b        = _esc(vb.get("change_summary") or vb.get("change_type") or "")
 
         html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
@@ -1603,14 +1603,11 @@ function toggle(el){{
             n_reqs = 0
 
         # ── 2. Questões IBIS sem alternativa nem resolução ──────────────────
+        # IBIS não é uma tabela própria — vive como JSON em meetings.argumentation_json
+        # (ver _load_ibis_questions, compartilhado com search_ibis_debates/get_ibis_timeline).
         ibis_incompletas: list[str] = []
         try:
-            qs = (
-                db.table("argumentation_questions")
-                .select("id, statement, alternatives, resolution")
-                .eq("project_id", self.project_id)
-                .execute().data or []
-            )
+            qs = self._load_ibis_questions()
             for q in qs:
                 has_alt = bool(q.get("alternatives"))
                 has_res = bool((q.get("resolution") or {}).get("type"))
