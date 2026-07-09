@@ -4,6 +4,21 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC163 — Concluído (v5.15 / 2026-07-08) — Onda 3 de melhorias do Assistente (workflow de revisão + Importador de Planilha)
+
+**Contexto:** fecha `melhorias/avaliacao-proposta-assistente-20260708.md` — última das 3 ondas priorizadas. Diferente de todas as tools anteriores (Ondas 1 e 2), os 2 itens desta onda são de naturezas distintas: um é uma tool de chat pequena, o outro é uma página/UI inteira (não cabe no padrão de tool).
+
+- **`solicitar_revisao_requisito(req_number, motivo, revisor_sugerido=None)`** (`core/tools/tools_meetings_requirements.py`) — fluxo de revisão estruturado, escopo explicitamente reduzido da proposta original #4 (sem notificação por e-mail/Slack — essa infra não existe no projeto). Implementado **direto**, não delegado a `update_requirement_status`: essa função early-retorna "sem alteração" quando `old_status == new_status`, o que dropraria silenciosamente um segundo pedido de revisão num requisito já `revised`. `diagnostico_projeto()` ganhou `include_revision_requests` (padrão `true`) — única forma de visibilidade do pedido, já que não há notificação.
+- **Importador de Planilha de Requisitos** (`pages/DocumentManager.py`, 7ª aba "📊 Importar Planilha") — usuário escolheu a versão completa com mapeamento interativo de coluna (não a v1 enxuta de formato fixo). Upload `.xlsx` → preview → mapeamento de coluna (sugestão automática por nome) → análise com checagem leve de duplicata → `st.data_editor` para revisão/edição → confirmação. `core/project_store.py` ganhou `find_similar_existing_requirements()` (screening `difflib`, sem LLM/embedding, nunca bloqueia — só sinaliza) e `import_requirements_from_rows()` (reaproveita `save_new_requirement()` com o **mesmo** padrão de rastreabilidade que `save_artifacts_from_document` já usa: `meeting_id=None`, `origin="documento"`, `doc_ref=<uuid do .xlsx registrado via upload_document>`) — nenhuma migration nova.
+  - `cluster_similar_requirements` (dedup por embedding já existente) **não é reaproveitável** aqui — hardcoded a filtrar por `first_meeting_id` de uma reunião específica; requisitos importados de planilha têm `first_meeting_id=NULL` (mesmo padrão do caminho "documento"). `merge_requirements` **é** reaproveitável sem adaptação (não depende de reunião) — mencionado no resultado do import como caminho para consolidar duplicatas remanescentes.
+  - `pandas` (antes só dependência transitiva do Streamlit, já usada em `Assistente.py`/aba Taxonomia) promovida a dependência direta pinada (`pandas==2.3.3`) em `requirements.txt`, já que passa a ser essencial (`pandas.read_excel`).
+- [x] 18 testes novos (`tests/test_solicitar_revisao_requisito.py`, `tests/test_diagnostico_projeto_revision_requests.py`, `tests/test_import_requirements_from_rows.py`, `tests/test_find_similar_existing_requirements.py`).
+- [x] Página verificada sem erro via `streamlit.testing.v1.AppTest` (boot + 7 abas renderizando) — simulação de upload de arquivo não é suportada pela API de teste da versão de Streamlit em uso; o wizard interativo (upload → mapear → confirmar) fica para verificação manual, mesma convenção já usada para outras páginas complexas do projeto.
+- [x] 719/719 testes automatizados passando.
+- **Onda 3 fecha as 9 propostas viáveis identificadas na avaliação original.** Itens não implementados (Classificador de Maturidade, ADR, Jira/ADO, Benchmarking/Catálogo/Biblioteca cross-projeto) seguem documentados em `melhorias/avaliacao-proposta-assistente-20260708.md`, sem plano de execução — aguardando demanda.
+
+---
+
 ### PC162 — Concluído (v5.15 / 2026-07-08) — Onda 2 de melhorias do Assistente (3 tools + 3 bugs reais adicionais)
 
 **Contexto:** continuação de PC161 — `melhorias/avaliacao-proposta-assistente-20260708.md` priorizou 9 propostas em 3 ondas por esforço/reaproveitamento. Onda 1 (3 quick wins) concluída em PC161; esta entrada cobre a Onda 2 (esforço moderado).
