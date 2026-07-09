@@ -1350,6 +1350,87 @@ def save_new_requirement(
     return req_row
 
 
+def find_similar_existing_requirements(
+    project_id: str, title: str, threshold: float = 0.75
+) -> list[dict]:
+    """Best-effort duplicate warning for the spreadsheet importer (Onda 3,
+    melhorias/avaliacao-proposta-assistente-20260708.md, proposta #9) —
+    plain-text similarity (difflib, no LLM/embedding cost) against titles of
+    active (non-deprecated) requirements already in the project. Returns
+    [{"req_number", "title", "score"}, ...] sorted by score desc; empty list
+    on no match or DB unavailable. Never blocks — the caller decides whether
+    to still import a flagged row."""
+    if not (title or "").strip():
+        return []
+    db = _db()
+    if not db:
+        return []
+    try:
+        rows = (
+            db.table("requirements")
+            .select("req_number, title, status")
+            .eq("project_id", project_id)
+            .neq("status", "deprecated")
+            .execute().data or []
+        )
+    except Exception:
+        return []
+
+    from difflib import SequenceMatcher
+    title_norm = title.strip().lower()
+    matches = []
+    for r in rows:
+        existing_title = (r.get("title") or "").strip()
+        if not existing_title:
+            continue
+        score = SequenceMatcher(None, title_norm, existing_title.lower()).ratio()
+        if score >= threshold:
+            matches.append({"req_number": r.get("req_number"), "title": existing_title, "score": round(score, 2)})
+    matches.sort(key=lambda m: m["score"], reverse=True)
+    return matches
+
+
+def import_requirements_from_rows(
+    project_id: str, rows: list[dict], doc_id: str | None
+) -> dict:
+    """Creates requirements from already-mapped/normalized spreadsheet rows
+    (Onda 3 — Importador de Planilha). Mirrors save_artifacts_from_document's
+    requirement loop exactly: meeting_id=None, origin="documento",
+    doc_ref=doc_id — same traceability convention as documents extracted by
+    DocumentExtractorAgent. `rows` items: {"title", "description", "req_type",
+    "priority"} (title required, rest optional/empty string). A row that
+    fails to insert (e.g. missing title, transient DB error) is recorded in
+    "failed" and does NOT stop the remaining rows from being imported.
+    Returns {"created": [{"req_number", "title"}, ...], "failed": [{"row", "reason"}, ...]}."""
+    created: list[dict] = []
+    failed: list[dict] = []
+
+    next_num = next_req_number(project_id)
+    for row in rows:
+        title = (row.get("title") or "").strip()
+        if not title:
+            failed.append({"row": row, "reason": "Título vazio"})
+            continue
+        result = save_new_requirement(
+            project_id=project_id,
+            meeting_id=None,
+            req_number=next_num,
+            title=title,
+            description=(row.get("description") or "").strip(),
+            req_type=(row.get("req_type") or "").strip(),
+            priority=(row.get("priority") or "").strip(),
+            origin="documento",
+            doc_ref=doc_id,
+        )
+        if result:
+            created.append({"req_number": next_num, "title": title})
+            next_num += 1
+        else:
+            failed.append({"row": row, "reason": "Falha ao inserir no banco"})
+
+    return {"created": created, "failed": failed}
+
+
 def list_requirements(project_id: str) -> list[dict]:
     """Retorna todos os requisitos de um projeto com suas versões."""
     db = _db()

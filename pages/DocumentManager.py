@@ -2,12 +2,15 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Document Manager — upload, index, search, and cross-reference meeting documents.
 #
-# 5 tabs:
+# 7 tabs:
 #   📤 Enviar       — upload + embed document
 #   📚 Biblioteca   — list, search, preview, delete
 #   ⚗️ Extrair      — extract requirements / SBVR / BMM / DMN from document (LLM)
 #   🔍 Análise      — cross-reference document vs meeting artifacts (LLM agent)
+#   🔗 Doc × Doc    — cross-reference two documents
 #   🏷️ Taxonomia    — browse the document type taxonomy
+#   📊 Importar Planilha — .xlsx de requisitos legados, mapeamento de coluna,
+#                          checagem leve de duplicata, sem LLM (Onda 3, PC163)
 # ─────────────────────────────────────────────────────────────────────────────
 
 import sys
@@ -161,13 +164,14 @@ def _suggest_doc_title(content: str) -> str:
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
 
-tab_upload, tab_library, tab_extract, tab_analysis, tab_crossdoc, tab_taxonomy = st.tabs([
+tab_upload, tab_library, tab_extract, tab_analysis, tab_crossdoc, tab_taxonomy, tab_import_xlsx = st.tabs([
     "📤 Enviar Documento",
     "📚 Biblioteca",
     "⚗️ Extrair Artefatos",
     "🔍 Análise Cruzada",
     "🔗 Doc × Doc",
     "🏷️ Taxonomia",
+    "📊 Importar Planilha",
 ])
 
 
@@ -1143,3 +1147,214 @@ with tab_taxonomy:
             },
         )
         st.markdown("")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 7 — IMPORTAR PLANILHA DE REQUISITOS (Onda 3, PC163)
+# melhorias/avaliacao-proposta-assistente-20260708.md, proposta #9 — sem LLM,
+# reaproveita core.project_store.save_new_requirement() com o mesmo padrão de
+# rastreabilidade origin="documento"/doc_ref já usado por save_artifacts_from_document.
+# ══════════════════════════════════════════════════════════════════════════════
+
+_PRIORITY_SYNONYMS = {
+    "alta": "high", "high": "high", "crítica": "high", "critica": "high", "urgente": "high",
+    "média": "medium", "media": "medium", "medium": "medium", "normal": "medium",
+    "baixa": "low", "low": "low", "baixo": "low",
+}
+
+
+def _normalize_priority(raw: str) -> str:
+    """Best-effort mapping to the app's high/medium/low convention — an
+    unrecognized value passes through unchanged rather than being coerced
+    to a silent default."""
+    key = (raw or "").strip().lower()
+    return _PRIORITY_SYNONYMS.get(key, raw.strip() if raw else "")
+
+
+def _guess_column(columns: list, keywords: list[str]):
+    for col in columns:
+        lc = str(col).strip().lower()
+        if any(kw in lc for kw in keywords):
+            return col
+    return None
+
+
+def _cell(row, col) -> str:
+    """pandas cell -> stripped string, NaN/None -> ''."""
+    if col is None or col == "(nenhuma)":
+        return ""
+    import pandas as pd
+    val = row.get(col)
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return ""
+    return str(val).strip()
+
+
+with tab_import_xlsx:
+    st.subheader("Importar requisitos de planilha (.xlsx)")
+    st.caption(
+        "Envie uma planilha de requisitos legados, mapeie quais colunas correspondem a "
+        "quais campos, revise possíveis duplicatas e confirme a importação. Sem LLM — "
+        "mapeamento é escolha sua, não inferência. Requisitos criados ficam rastreados "
+        "com origem='documento', igual aos extraídos via aba Extrair Artefatos."
+    )
+
+    uploaded_xlsx = st.file_uploader(
+        "Planilha (.xlsx)", type=["xlsx"], key="xlsx_import_uploader",
+    )
+
+    if uploaded_xlsx is not None:
+        _upload_key = f"{uploaded_xlsx.name}_{uploaded_xlsx.size}"
+        if st.session_state.get("_xlsx_last_upload_key") != _upload_key:
+            # Genuinely new file — drop any stale preview/mapping from a
+            # previous upload in this session.
+            st.session_state["_xlsx_last_upload_key"] = _upload_key
+            st.session_state.pop("xlsx_import_preview", None)
+
+        import pandas as pd
+        try:
+            df = pd.read_excel(uploaded_xlsx)
+        except Exception as exc:
+            st.error(f"Não foi possível ler a planilha: {exc}")
+            df = None
+
+        if df is not None and df.empty:
+            st.warning("A planilha não tem nenhuma linha de dados.")
+        elif df is not None:
+            st.markdown(f"**Prévia** ({len(df)} linha(s) na planilha):")
+            st.dataframe(df.head(5), use_container_width=True)
+
+            columns = list(df.columns)
+            none_option = "(nenhuma)"
+
+            st.markdown("**Mapeamento de colunas**")
+            col_a, col_b = st.columns(2)
+            with col_a:
+                guess_title = _guess_column(columns, ["título", "titulo", "title", "nome", "name"])
+                col_title = st.selectbox(
+                    "Título* (obrigatório)", columns,
+                    index=columns.index(guess_title) if guess_title in columns else 0,
+                    key="xlsx_col_title",
+                )
+                guess_desc = _guess_column(columns, ["descri", "description", "detalhe"])
+                col_desc = st.selectbox(
+                    "Descrição (opcional)", [none_option] + columns,
+                    index=(columns.index(guess_desc) + 1) if guess_desc in columns else 0,
+                    key="xlsx_col_desc",
+                )
+            with col_b:
+                guess_type = _guess_column(columns, ["tipo", "type", "categoria"])
+                col_type = st.selectbox(
+                    "Tipo (opcional)", [none_option] + columns,
+                    index=(columns.index(guess_type) + 1) if guess_type in columns else 0,
+                    key="xlsx_col_type",
+                )
+                guess_prio = _guess_column(columns, ["priorid", "priority"])
+                col_priority = st.selectbox(
+                    "Prioridade (opcional)", [none_option] + columns,
+                    index=(columns.index(guess_prio) + 1) if guess_prio in columns else 0,
+                    key="xlsx_col_priority",
+                )
+
+            if st.button("🔍 Analisar", key="btn_xlsx_analyze", type="primary"):
+                from core.project_store import find_similar_existing_requirements
+
+                with st.spinner("Analisando linhas e checando duplicatas prováveis..."):
+                    preview_rows = []
+                    for _, row in df.iterrows():
+                        title = _cell(row, col_title)
+                        if not title:
+                            continue  # linha sem título não é importável — nem entra no preview
+                        description = _cell(row, col_desc)
+                        req_type = _cell(row, col_type)
+                        priority = _normalize_priority(_cell(row, col_priority))
+                        dupes = find_similar_existing_requirements(project_id, title)
+                        preview_rows.append({
+                            "Importar?": not bool(dupes),
+                            "Título": title,
+                            "Descrição": description,
+                            "Tipo": req_type,
+                            "Prioridade": priority,
+                            "Possível duplicata": (
+                                f"REQ-{dupes[0]['req_number']:03d} ({dupes[0]['score']:.0%}) — {dupes[0]['title']}"
+                                if dupes else ""
+                            ),
+                        })
+                    st.session_state["xlsx_import_preview"] = preview_rows
+                    st.session_state["xlsx_import_filename"] = uploaded_xlsx.name
+                    st.session_state["xlsx_import_bytes"] = uploaded_xlsx.getvalue()
+
+    preview_rows = st.session_state.get("xlsx_import_preview")
+    if preview_rows:
+        st.markdown("---")
+        n_dupes = sum(1 for r in preview_rows if r["Possível duplicata"])
+        st.markdown(f"**Revisão** — {len(preview_rows)} requisito(s) identificado(s)")
+        if n_dupes:
+            st.caption(
+                f"⚠️ {n_dupes} linha(s) com possível duplicata (desmarcadas por padrão — "
+                "marque 'Importar?' se ainda assim quiser criar mesmo com o duplicado sinalizado)."
+            )
+
+        edited_df = st.data_editor(
+            preview_rows,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Importar?": st.column_config.CheckboxColumn(width="small"),
+                "Possível duplicata": st.column_config.TextColumn(disabled=True, width="medium"),
+            },
+            disabled=["Possível duplicata"],
+            key="xlsx_import_editor",
+        )
+
+        n_selected = sum(1 for r in edited_df if r["Importar?"])
+        if st.button(f"✅ Confirmar Importação ({n_selected} selecionado(s))", key="btn_xlsx_confirm", type="primary"):
+            if n_selected == 0:
+                st.warning("Nenhuma linha selecionada para importar.")
+            else:
+                from core.project_store import import_requirements_from_rows
+
+                with st.spinner("Registrando planilha e criando requisitos..."):
+                    doc_id = None
+                    try:
+                        _dump_lines = [
+                            f"{r['Título']} | {r['Descrição']} | {r['Tipo']} | {r['Prioridade']}"
+                            for r in edited_df if r["Importar?"]
+                        ]
+                        doc_id = upload_document(
+                            project_id=project_id,
+                            title=f"Planilha de requisitos — {st.session_state.get('xlsx_import_filename', 'importado.xlsx')}",
+                            doc_type="BACKLOG",
+                            content_text="\n".join(_dump_lines),
+                            file_name=st.session_state.get("xlsx_import_filename", ""),
+                            created_by=st.session_state.get("_usuario_login", ""),
+                        )
+                    except Exception:
+                        pass  # rastreabilidade do doc é best-effort — não bloqueia a importação dos requisitos
+
+                    rows_to_import = [
+                        {
+                            "title": r["Título"], "description": r["Descrição"],
+                            "req_type": r["Tipo"], "priority": r["Prioridade"],
+                        }
+                        for r in edited_df if r["Importar?"]
+                    ]
+                    result = import_requirements_from_rows(project_id, rows_to_import, doc_id=doc_id)
+
+                n_created = len(result["created"])
+                n_failed = len(result["failed"])
+                if n_created:
+                    st.success(
+                        f"✅ {n_created} requisito(s) criado(s): "
+                        + ", ".join(f"REQ-{c['req_number']:03d}" for c in result["created"][:15])
+                        + (f" e mais {n_created - 15}" if n_created > 15 else "")
+                    )
+                if n_failed:
+                    st.warning(f"⚠️ {n_failed} linha(s) não foram importadas: {result['failed']}")
+                if n_created:
+                    st.caption(
+                        "Se ainda encontrar duplicatas depois de importar, use `merge_requirements` "
+                        "no Assistente (chat) para consolidar dois REQ-XXX em um só."
+                    )
+                    st.session_state.pop("xlsx_import_preview", None)
+                    st.session_state.pop("_xlsx_last_upload_key", None)

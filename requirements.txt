@@ -21,7 +21,8 @@ spacy>=3.7,<4.0                 # motor NLP
 
 # ── Exportação de documentos ──────────────────────────────────────────────────
 pypdf>=5.0.0
-openpyxl>=3.1.5                 # exportação .xlsx no Assistente (render_table tool)
+openpyxl>=3.1.5                 # exportação .xlsx no Assistente (render_table tool) + leitura no Importador de Planilha (PC163)
+pandas==2.3.3                   # tabelas no Assistente/Taxonomia + leitura de .xlsx no Importador de Planilha (PC163) — antes só dependência transitiva do Streamlit, agora essencial
 
 # ── Inportação de documentos ──────────────────────────────────────────────────
 python-docx==1.1.2              # exportação DOCX da Ata (pure Python)
