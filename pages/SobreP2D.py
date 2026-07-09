@@ -353,7 +353,9 @@ st.markdown("""
       <div class="card gold-border">
         <p style="font-size:15px;color:var(--white);"><strong style="color:var(--gold2);">Resultado:</strong>
         o P2D acumula conhecimento organizacional ao longo do tempo — tornando-se um especialista
-        no negócio do cliente a cada ciclo de reuniões.</p>
+        no negócio do cliente a cada ciclo de reuniões. O <strong style="color:var(--gold2);">Catálogo
+        do Domínio</strong> leva essa memória além de um projeto isolado: ativos de negócio
+        (requisitos, processos, regras) ficam descobríveis em todos os contextos da organização.</p>
       </div>
     </div>
     <div>
