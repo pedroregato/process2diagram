@@ -73,6 +73,7 @@ pages = {
         st.Page("pages/KnowledgeGraph.py",    title="Grafo de Conhecimento", icon="🕸️"),
         st.Page("pages/DocumentManager.py",      title="Documentos",            icon="📄"),
         st.Page("pages/CostBenefitScenarios.py", title="Cenários de Custo",     icon="💰"),
+        st.Page("pages/AtivosDeNegocio.py",      title="Ativos de Negócio",     icon="📦"),
     ],
     "Sistema": _sistema_pages,
     "Ajuda": [

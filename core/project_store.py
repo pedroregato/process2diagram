@@ -4410,6 +4410,356 @@ def list_argumentation_by_project(project_id: str) -> list[dict]:
     return result
 
 
+def list_bmm_by_project(project_id: str) -> list[dict]:
+    """Retorna o BMM (vision/mission/goals/strategies/policies) de cada reunião do projeto.
+
+    Diferente de DMN/IBIS, o BMM é um modelo único por reunião (não uma lista de
+    itens atômicos) — um dict por reunião, enriquecido com meeting_number/title.
+
+    Retorna [] se nenhuma reunião tiver bmm_json ou Supabase não configurado.
+    """
+    db = _db()
+    if not db:
+        return []
+    try:
+        rows = _ok(
+            db.table("meetings")
+            .select("id, meeting_number, title, meeting_date, bmm_json")
+            .eq("project_id", project_id)
+            .not_.is_("bmm_json", "null")
+            .order("meeting_number")
+            .execute()
+        )
+    except Exception:
+        return []
+
+    import json as _json
+    result = []
+    for m in rows:
+        raw = (m.get("bmm_json") or "").strip()
+        if not raw:
+            continue
+        try:
+            data = _json.loads(raw)
+            data["_meeting_id"]     = m["id"]
+            data["_meeting_number"] = m.get("meeting_number")
+            data["_meeting_title"]  = m.get("title", "")
+            data["_meeting_date"]   = str(m.get("meeting_date") or "")
+            result.append(data)
+        except Exception:
+            continue
+    return result
+
+
+def list_reports_by_project(project_id: str) -> list[dict]:
+    """Retorna as reuniões do projeto que possuem relatório executivo (report_html).
+
+    Não existe uma listagem project-wide de relatórios hoje — get_report_html()
+    só busca por meeting_id. Esta função reaproveita o mesmo select de
+    list_meetings_quality(), filtrando só reuniões com report_html preenchido.
+    """
+    db = _db()
+    if not db:
+        return []
+    try:
+        rows = _ok(
+            db.table("meetings")
+            .select("id, meeting_number, title, meeting_date, report_html")
+            .eq("project_id", project_id)
+            .not_.is_("report_html", "null")
+            .order("meeting_number")
+            .execute()
+        )
+    except Exception:
+        return []
+
+    result = []
+    for m in rows:
+        if not (m.get("report_html") or "").strip():
+            continue
+        result.append({
+            "id":             m["id"],
+            "meeting_number": m.get("meeting_number"),
+            "title":          m.get("title", ""),
+            "meeting_date":   str(m.get("meeting_date") or ""),
+        })
+    return result
+
+
+# ── Ativos de Negócio — Etapa 2 (Metadados, asset_metadata) ─────────────────
+
+# Tipos de artefato com linha própria (UUID real) no banco — únicos suportados
+# por asset_metadata hoje. BMM/DMN/IBIS/Relatórios ficam de fora (só existem
+# como JSON dentro de meetings.*_json) — ver melhorias/cognicao-de-negocio.md.
+ASSET_TYPES_WITH_METADATA = {
+    "requirement", "bpmn_process", "sbvr_term", "sbvr_rule", "meeting_minutes",
+}
+
+
+def get_asset_metadata_map(project_id: str) -> dict[tuple[str, str], dict]:
+    """Retorna todos os registros asset_metadata do projeto, indexados por
+    (artifact_type, artifact_id) para lookup O(1) ao montar a Visão Agregada.
+    """
+    db = _db()
+    if not db:
+        return {}
+    try:
+        rows = _ok(
+            db.table("asset_metadata")
+            .select("*")
+            .eq("project_id", project_id)
+            .execute()
+        )
+    except Exception:
+        return {}
+    return {(r["artifact_type"], r["artifact_id"]): r for r in rows}
+
+
+def upsert_asset_metadata(
+    project_id: str,
+    artifact_type: str,
+    artifact_id: str,
+    *,
+    status: str | None = None,
+    tags: list[str] | None = None,
+    owner: str | None = None,
+    notes: str | None = None,
+    created_by: str | None = None,
+) -> dict | None:
+    """Cria ou atualiza os metadados de governança de um ativo.
+
+    Só sobrescreve os campos passados (não-None) — campos omitidos preservam
+    o valor já salvo (se houver) em vez de serem apagados.
+    """
+    db = _db()
+    if not db:
+        return None
+    if artifact_type not in ASSET_TYPES_WITH_METADATA:
+        return None
+
+    existing = None
+    try:
+        result = (
+            db.table("asset_metadata")
+            .select("*")
+            .eq("project_id", project_id)
+            .eq("artifact_type", artifact_type)
+            .eq("artifact_id", artifact_id)
+            .limit(1)
+            .execute()
+        )
+        if result.data:
+            existing = result.data[0]
+    except Exception:
+        pass
+
+    payload = {
+        "project_id":    project_id,
+        "artifact_type": artifact_type,
+        "artifact_id":   artifact_id,
+        "status":        status if status is not None else (existing or {}).get("status", "rascunho"),
+        "tags":          tags if tags is not None else (existing or {}).get("tags", []),
+        "owner":         owner if owner is not None else (existing or {}).get("owner"),
+        "notes":         notes if notes is not None else (existing or {}).get("notes"),
+    }
+    if not existing:
+        payload["created_by"] = created_by
+
+    try:
+        result = (
+            db.table("asset_metadata")
+            .upsert(payload, on_conflict="project_id,artifact_type,artifact_id")
+            .execute()
+        )
+        return result.data[0] if result.data else None
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"upsert_asset_metadata failed: {e}")
+        return None
+
+
+def list_all_business_assets(project_id: str) -> dict[str, list[dict]]:
+    """Agrega todos os tipos de ativo do projeto em uma única estrutura (Etapa 1).
+
+    Retorna um dict {artifact_type: [items]}. Cada item tem sempre:
+        artifact_id (str | None), title (str), meeting_ref (str),
+        meeting_date (str), has_metadata_support (bool), metadata (dict | None)
+
+    Os 5 tipos com linha própria (requirement/bpmn_process/sbvr_term/sbvr_rule/
+    meeting_minutes) vêm com has_metadata_support=True e o registro de
+    asset_metadata já mesclado (se existir). Os 4 tipos somente-leitura
+    (bmm/dmn/ibis/report) vêm com has_metadata_support=False, metadata=None —
+    não têm um artifact_id de linha própria para governança hoje.
+    """
+    meta_map = get_asset_metadata_map(project_id)
+
+    def _meta_for(artifact_type: str, artifact_id: str) -> dict | None:
+        return meta_map.get((artifact_type, artifact_id))
+
+    result: dict[str, list[dict]] = {}
+
+    # ── Tipos com suporte a metadados ────────────────────────────────────────
+    reqs = list_requirements_light(project_id) or []
+    result["requirement"] = [
+        {
+            "artifact_id":  r["id"],
+            "title":        f"{r.get('req_number', '')} — {r.get('title', '')}".strip(" —"),
+            "meeting_ref":  "",
+            "meeting_date": "",
+            "has_metadata_support": True,
+            "metadata": _meta_for("requirement", r["id"]),
+        }
+        for r in reqs if r.get("id")
+    ]
+
+    bpmns = list_bpmn_processes(project_id) or []
+    result["bpmn_process"] = [
+        {
+            "artifact_id":  b["id"],
+            "title":        b.get("name", ""),
+            "meeting_ref":  ((b.get("meetings") or {}) or {}).get("title", "") if isinstance(b.get("meetings"), dict) else "",
+            "meeting_date": "",
+            "has_metadata_support": True,
+            "metadata": _meta_for("bpmn_process", b["id"]),
+        }
+        for b in bpmns if b.get("id")
+    ]
+
+    terms = list_sbvr_terms(project_id) or []
+    result["sbvr_term"] = [
+        {
+            "artifact_id":  t["id"],
+            "title":        t.get("term", ""),
+            "meeting_ref":  ((t.get("meetings") or {}) or {}).get("title", "") if isinstance(t.get("meetings"), dict) else "",
+            "meeting_date": "",
+            "has_metadata_support": True,
+            "metadata": _meta_for("sbvr_term", t["id"]),
+        }
+        for t in terms if t.get("id")
+    ]
+
+    rules = list_sbvr_rules(project_id) or []
+    result["sbvr_rule"] = [
+        {
+            "artifact_id":  r["id"],
+            "title":        f"{r.get('rule_id', '')} — {r.get('statement', '')[:80]}".strip(" —"),
+            "meeting_ref":  ((r.get("meetings") or {}) or {}).get("title", "") if isinstance(r.get("meetings"), dict) else "",
+            "meeting_date": "",
+            "has_metadata_support": True,
+            "metadata": _meta_for("sbvr_rule", r["id"]),
+        }
+        for r in rules if r.get("id")
+    ]
+
+    meetings = list_meetings(project_id) or []
+    result["meeting_minutes"] = [
+        {
+            "artifact_id":  m["id"],
+            "title":        m.get("title", "") or f"Reunião #{m.get('meeting_number', '')}",
+            "meeting_ref":  "",
+            "meeting_date": (m.get("meeting_date") or "")[:10],
+            "has_metadata_support": True,
+            "metadata": _meta_for("meeting_minutes", m["id"]),
+        }
+        for m in meetings if m.get("id") and (m.get("minutes_md") or "").strip()
+    ]
+
+    # ── Tipos somente-leitura (sem linha própria) ────────────────────────────
+    bmms = list_bmm_by_project(project_id) or []
+    result["bmm"] = [
+        {
+            "artifact_id":  None,
+            "title":        b.get("vision", "") or f"BMM — Reunião #{b.get('_meeting_number', '')}",
+            "meeting_ref":  b.get("_meeting_title", ""),
+            "meeting_date": b.get("_meeting_date", ""),
+            "has_metadata_support": False,
+            "metadata": None,
+        }
+        for b in bmms
+    ]
+
+    dmns = list_dmn_by_project(project_id) or []
+    result["dmn"] = [
+        {
+            "artifact_id":  None,
+            "title":        d.get("name", "") or d.get("decision_id", ""),
+            "meeting_ref":  d.get("_meeting_title", ""),
+            "meeting_date": d.get("_meeting_date", ""),
+            "has_metadata_support": False,
+            "metadata": None,
+        }
+        for d in dmns
+    ]
+
+    ibis = list_argumentation_by_project(project_id) or []
+    result["ibis"] = [
+        {
+            "artifact_id":  None,
+            "title":        i.get("statement", "") or i.get("question", ""),
+            "meeting_ref":  i.get("_meeting_title", ""),
+            "meeting_date": i.get("_meeting_date", ""),
+            "has_metadata_support": False,
+            "metadata": None,
+        }
+        for i in ibis
+    ]
+
+    reports = list_reports_by_project(project_id) or []
+    result["report"] = [
+        {
+            "artifact_id":  None,
+            "title":        r.get("title", "") or f"Relatório — Reunião #{r.get('meeting_number', '')}",
+            "meeting_ref":  r.get("title", ""),
+            "meeting_date": r.get("meeting_date", ""),
+            "has_metadata_support": False,
+            "metadata": None,
+        }
+        for r in reports
+    ]
+
+    return result
+
+
+_ALL_ASSET_TYPES = (
+    "requirement", "bpmn_process", "sbvr_term", "sbvr_rule", "meeting_minutes",
+    "bmm", "dmn", "ibis", "report",
+)
+
+
+def list_all_business_assets_for_domain(tenant_id: str | None) -> dict[str, list[dict]]:
+    """Agrega ativos de negócio de TODOS os contextos do domínio (Catálogo do
+    Domínio — evolução de list_all_business_assets() para "reuso cross-contexto",
+    ver melhorias/cognicao-de-negocio.md §2).
+
+    Reaproveita list_all_business_assets() uma vez por contexto do tenant e
+    mescla os resultados; cada item ganha context_id/context_name para que a
+    UI mostre a origem e upsert_asset_metadata() grave no projeto correto
+    (os 9 tipos de ativo continuam isolados por project_id no banco — este
+    catálogo só agrega a LEITURA, não move nem duplica dado nenhum).
+
+    tenant_id=None retorna o catálogo de todos os contextos existentes —
+    mesmo fallback de list_contexts() usado por login local/dev/admin sem
+    tenant. Custo: 1 chamada a list_contexts() + ~5 queries por contexto do
+    domínio — aceitável para o número de contextos por tenant hoje.
+    """
+    contexts = list_contexts(tenant_id=tenant_id) or []
+    result: dict[str, list[dict]] = {t: [] for t in _ALL_ASSET_TYPES}
+    for ctx in contexts:
+        ctx_id = ctx.get("id")
+        if not ctx_id:
+            continue
+        ctx_name = ctx.get("name", "")
+        per_context = list_all_business_assets(ctx_id)
+        for artifact_type, items in per_context.items():
+            bucket = result.setdefault(artifact_type, [])
+            for item in items:
+                item = dict(item)
+                item["context_id"] = ctx_id
+                item["context_name"] = ctx_name
+                bucket.append(item)
+    return result
+
+
 def list_communication_noise_by_project(project_id: str) -> list[dict]:
     """Retorna análise de ruídos de todas as reuniões do projeto.
 

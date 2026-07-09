@@ -4,6 +4,35 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC165 — Concluído (v5.15 / 2026-07-09) — Ativos de Negócio: Catálogo do Domínio (cross-contexto)
+
+**Contexto:** pedido direto do usuário, na sequência do PC164 — um catálogo de ativos de negócio visualizável em todos os contextos do domínio (tenant), não só no contexto ativo da sessão. Concretiza o item "Reuso cross-contexto" listado como diferencial em `melhorias/cognicao-de-negocio.md` §8.
+
+- **Investigação prévia (Explore agent) sobre o modelo tenant/contexto** antes de codificar: confirmou que "domínio" é sinônimo de tenant (empresa) no app — `tenants(id, domain_slug, display_name, ...)`, sessão grava `_tenant_id`/`_tenant_name` no login — e que `contexts.tenant_id` já é lido/escrito por `list_contexts()`/`create_context()` apesar de não ter uma migration versionada dedicada (schema drift documentado, não corrigido nesta entrega — fora de escopo). Também confirmou que **não existe hierarquia real de domínio→contextos** além do FK `tenant_id`: "domínio" como valor de `context_type` no formulário de novo contexto é um rótulo plano não relacionado.
+- **`core/project_store.py::list_all_business_assets_for_domain(tenant_id)`** — reaproveita `list_contexts(tenant_id)` + `list_all_business_assets(project_id)` já existentes (nenhuma query nova): itera cada contexto do tenant, mescla os 9 tipos de ativo, e marca cada item com `context_id`/`context_name`. `tenant_id=None` cai no mesmo fallback de `list_contexts()` (todos os contextos — login local/dev/admin sem tenant). Custo aceito: 1 + ~5×N queries para N contextos do tenant.
+- **`pages/AtivosDeNegocio.py`** — toggle "Escopo" (`📁 Este contexto` / `🌐 Catálogo do Domínio`) acima dos filtros existentes; no escopo de domínio, filtro adicional por contexto e subtítulo de cada ativo passa a mostrar o contexto de origem. O formulário de metadados grava sempre em `item.get("context_id") or project_id` — nunca no contexto ativo da sessão — para que editar um ativo de outro contexto não vá parar no projeto errado.
+- Decisão de design: estendido o toggle na página já existente (Etapa 1 do PC164), não criada uma página nova — a lista e a governança são as mesmas, só muda o escopo de agregação; separar em duas páginas duplicaria toda a lógica de filtro/formulário sem ganho real.
+- [x] 6 testes novos (`tests/test_list_all_business_assets_for_domain.py`), mockando `list_contexts`/`list_all_business_assets` (mesmo padrão de `test_list_all_business_assets.py`) — cobre mesclagem multi-contexto, tag de `context_id`/`context_name`, contexto sem `id` ignorado, `tenant_id=None`, e não-mutação do item original.
+- [x] Página verificada sem erro via `AppTest` (para no login gate, mesmo comportamento de qualquer página sem sessão).
+- [x] 747/747 testes automatizados passando.
+
+---
+
+### PC164 — Concluído (v5.15 / 2026-07-08) — Ativos de Negócio: Visão Agregada + Metadados (Etapas 1+2)
+
+**Contexto:** implementa Etapas 1 e 2 de `melhorias/cognicao-de-negocio.md` (aprovado no mesmo dia após 5 rodadas de revisão adversarial) — a evolução do RawToInsights AI de "gerador de artefatos por reunião" para "sistema de ativos de negócio governáveis". Etapa 0 (ingestão visual) e Etapas 3-5 (ferramentas do Assistente, dashboard, botão de promoção) ficam para rodadas futuras, dependentes desta entrega.
+
+- **Achado que redefiniu o escopo real, confirmado com o usuário antes de codificar:** o documento aprovado promete metadados "em cada artefato", mas só 5 dos 8 tipos têm linha própria (UUID real) no banco — Requisitos, BPMN, SBVR Termos, SBVR Regras, Atas. BMM/DMN/IBIS/Relatórios só existem como JSON dentro de `meetings.*_json` (`bmm_json`/`dmn_json`/`argumentation_json`/`report_html`), sem `artifact_id` de linha própria. Decisão: `asset_metadata` cobre apenas os 5 tipos com ID real agora; os outros 4 aparecem na Visão Agregada como somente-leitura, com a lacuna documentada na UI (não escondida). Chave sintética (`"meeting_id:decision_id"` como `TEXT`) registrada como estudo de evolução futura, não implementada.
+- **`setup/supabase_migration_asset_metadata.sql`** — tabela genérica polimórfica ("Rota B", já decidida no documento): `asset_metadata(project_id, artifact_type, artifact_id, status, tags[], owner, notes)`, `UNIQUE(project_id, artifact_type, artifact_id)`. `status` de ativo (`rascunho`/`ativo`/`arquivado`) é uma dimensão separada do status de negócio já existente em `requirements`/`bpmn_processes`.
+- **`core/project_store.py`** — `list_bmm_by_project()` (não existia nenhuma listagem de BMM até agora — só era lido por reunião individual via `load_meeting_as_hub`); `list_reports_by_project()` (não existia listagem project-wide de relatórios — só `get_report_html(meeting_id)`); `get_asset_metadata_map()` / `upsert_asset_metadata()` (preserva campos omitidos — só sobrescreve o que é passado); `list_all_business_assets()` — agregador que junta os 9 tipos numa estrutura única para a página.
+- **`pages/AtivosDeNegocio.py`** (nova, grupo "Análise") — uma página cobre as duas etapas juntas (lista unificada + metadados inline), não duas entregas sequenciais: lista sem metadados seria descartável assim que a Etapa 2 chegasse. Filtro por tipo/busca por título; os 5 tipos com suporte ganham formulário inline (status/tags/owner/notas) salvo via `upsert_asset_metadata`; os 4 somente-leitura mostram badge "🔒 Metadados indisponíveis".
+- [x] 22 testes novos (`tests/test_asset_metadata.py`, `tests/test_list_bmm_by_project.py`, `tests/test_list_all_business_assets.py`).
+- [x] Página verificada sem erro via `streamlit.testing.v1.AppTest` (para no login gate, mesmo comportamento de qualquer página sem sessão autenticada — sem exceção).
+- [x] 741/741 testes automatizados passando.
+- **Verificação de schema real via `psycopg2` direto antes de codificar** (mesmo método já usado em PC161-163): confirmou `contexts` como nome real da tabela de projeto-pai e ausência prévia de `asset_metadata`; migration executada e schema resultante conferido coluna a coluna.
+
+---
+
 ### PC163 — Concluído (v5.15 / 2026-07-08) — Onda 3 de melhorias do Assistente (workflow de revisão + Importador de Planilha)
 
 **Contexto:** fecha `melhorias/avaliacao-proposta-assistente-20260708.md` — última das 3 ondas priorizadas. Diferente de todas as tools anteriores (Ondas 1 e 2), os 2 itens desta onda são de naturezas distintas: um é uma tool de chat pequena, o outro é uma página/UI inteira (não cabe no padrão de tool).
