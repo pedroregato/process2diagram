@@ -147,54 +147,64 @@ def render_promote_button(
     Retorna True se uma promoção foi concluída nesta execução — o chamador
     deve reagir com `st.rerun()` para a lista refletir o novo estado.
     """
-    if already_promoted:
-        st.caption("✅ Já é um ativo de negócio — edite a classificação na Central de Ativos.")
-        return False
-
     form_key = f"promote_form_{artifact_type}_{key_suffix}"
-    # Toggle em vez de st.expander — vários chamadores (Reuniões/SBVR em
-    # Artefatos.py, Biblioteca em DocumentManager.py) já renderizam este botão
-    # de dentro de um st.expander próprio; Streamlit não permite expander
-    # aninhado (StreamlitAPIException).
     toggle_key = f"{form_key}_show"
-    if st.button(f"⭐ Promover a Ativo de Negócio", key=f"{form_key}_toggle_btn"):
-        st.session_state[toggle_key] = not st.session_state.get(toggle_key, False)
 
-    if not st.session_state.get(toggle_key):
-        return False
-
-    st.markdown(f"**⭐ Promover a Ativo de Negócio — {title}**")
-    with st.form(form_key):
-        interest, perspective, classification, justification = render_classification_fields(
-            form_key, default_formal_classification,
-        )
-        col_owner, col_tags = st.columns(2)
-        with col_owner:
-            owner = st.text_input("Responsável", key=f"{form_key}_owner")
-        with col_tags:
-            tags_raw = st.text_input("Tags (separadas por vírgula)", key=f"{form_key}_tags")
-
-        if st.form_submit_button("⭐ Promover", type="primary"):
-            if not interest or not perspective or not justification.strip():
-                st.error("Interesse, Perspectiva e Justificativa são obrigatórios.")
-                return False
-            tags_list = [t.strip() for t in tags_raw.split(",") if t.strip()]
-            result = promote_to_business_asset(
-                project_id, artifact_type, artifact_id,
-                business_interest=interest,
-                business_perspective=perspective,
-                promotion_justification=justification.strip(),
-                formal_classification=classification,
-                owner=owner.strip() or None,
-                tags=tags_list,
-                created_by=created_by,
-            )
-            if result:
-                st.session_state[toggle_key] = False
-                st.success("Ativo promovido com sucesso.")
-                return True
-            st.error("Erro ao promover — tente novamente.")
+    # Slot único e estável: do ponto de vista do container-pai, esta função
+    # sempre contribui exatamente 1 elemento (este st.container()), não
+    # importa qual ramo (já promovido / toggle fechado / toggle aberto com
+    # formulário) é renderizado dentro dele. Sem isso, a contagem de filhos
+    # na árvore muda entre reruns (1 elemento fechado vs vários com o
+    # formulário aberto) e o frontend do Streamlit quebra com
+    # "Bad 'setIn' index" ao tentar reaplicar deltas numa árvore que mudou
+    # de forma — mesmo padrão já documentado em ui/tabs/bpmn_tabs.py.
+    with st.container():
+        if already_promoted:
+            st.caption("✅ Já é um ativo de negócio — edite a classificação na Central de Ativos.")
             return False
+
+        # Toggle em vez de st.expander — vários chamadores (Reuniões/SBVR em
+        # Artefatos.py, Biblioteca em DocumentManager.py) já renderizam este
+        # botão de dentro de um st.expander próprio; Streamlit não permite
+        # expander aninhado (StreamlitAPIException).
+        if st.button(f"⭐ Promover a Ativo de Negócio", key=f"{form_key}_toggle_btn"):
+            st.session_state[toggle_key] = not st.session_state.get(toggle_key, False)
+
+        if not st.session_state.get(toggle_key):
+            return False
+
+        st.markdown(f"**⭐ Promover a Ativo de Negócio — {title}**")
+        with st.form(form_key):
+            interest, perspective, classification, justification = render_classification_fields(
+                form_key, default_formal_classification,
+            )
+            col_owner, col_tags = st.columns(2)
+            with col_owner:
+                owner = st.text_input("Responsável", key=f"{form_key}_owner")
+            with col_tags:
+                tags_raw = st.text_input("Tags (separadas por vírgula)", key=f"{form_key}_tags")
+
+            if st.form_submit_button("⭐ Promover", type="primary"):
+                if not interest or not perspective or not justification.strip():
+                    st.error("Interesse, Perspectiva e Justificativa são obrigatórios.")
+                    return False
+                tags_list = [t.strip() for t in tags_raw.split(",") if t.strip()]
+                result = promote_to_business_asset(
+                    project_id, artifact_type, artifact_id,
+                    business_interest=interest,
+                    business_perspective=perspective,
+                    promotion_justification=justification.strip(),
+                    formal_classification=classification,
+                    owner=owner.strip() or None,
+                    tags=tags_list,
+                    created_by=created_by,
+                )
+                if result:
+                    st.session_state[toggle_key] = False
+                    st.success("Ativo promovido com sucesso.")
+                    return True
+                st.error("Erro ao promover — tente novamente.")
+                return False
     return False
 
 
@@ -222,34 +232,39 @@ def render_promote_assistant_content_button(
     # Toggle em vez de st.expander — mesmo motivo de render_promote_button():
     # nunca assumir que o chamador não está dentro de outro expander.
     toggle_key = f"{form_key}_show"
-    if st.button("⭐ Promover esta resposta a Ativo de Negócio", key=f"{form_key}_toggle_btn"):
-        st.session_state[toggle_key] = not st.session_state.get(toggle_key, False)
 
-    if not st.session_state.get(toggle_key):
-        return False
+    # Slot único e estável — mesmo motivo de render_promote_button(): evita
+    # "Bad 'setIn' index" no frontend quando a contagem de filhos muda entre
+    # reruns (toggle fechado vs formulário aberto).
+    with st.container():
+        if st.button("⭐ Promover esta resposta a Ativo de Negócio", key=f"{form_key}_toggle_btn"):
+            st.session_state[toggle_key] = not st.session_state.get(toggle_key, False)
 
-    with st.form(form_key):
-        asset_title = st.text_input("Título do ativo *", value=title, key=f"{form_key}_title")
-        interest, perspective, classification, justification = render_classification_fields(form_key)
-
-        if st.form_submit_button("⭐ Promover", type="primary"):
-            if not asset_title.strip() or not interest or not perspective or not justification.strip():
-                st.error("Título, Interesse, Perspectiva e Justificativa são obrigatórios.")
-                return False
-            result = promote_assistant_output_to_asset(
-                project_id, asset_title.strip(), content_markdown,
-                business_interest=interest,
-                business_perspective=perspective,
-                promotion_justification=justification.strip(),
-                formal_classification=classification,
-                source_tool=source_tool,
-                meeting_id=meeting_id,
-                created_by=created_by,
-            )
-            if result:
-                st.session_state[toggle_key] = False
-                st.success("Conteúdo salvo e promovido a ativo de negócio.")
-                return True
-            st.error("Erro ao promover — tente novamente.")
+        if not st.session_state.get(toggle_key):
             return False
+
+        with st.form(form_key):
+            asset_title = st.text_input("Título do ativo *", value=title, key=f"{form_key}_title")
+            interest, perspective, classification, justification = render_classification_fields(form_key)
+
+            if st.form_submit_button("⭐ Promover", type="primary"):
+                if not asset_title.strip() or not interest or not perspective or not justification.strip():
+                    st.error("Título, Interesse, Perspectiva e Justificativa são obrigatórios.")
+                    return False
+                result = promote_assistant_output_to_asset(
+                    project_id, asset_title.strip(), content_markdown,
+                    business_interest=interest,
+                    business_perspective=perspective,
+                    promotion_justification=justification.strip(),
+                    formal_classification=classification,
+                    source_tool=source_tool,
+                    meeting_id=meeting_id,
+                    created_by=created_by,
+                )
+                if result:
+                    st.session_state[toggle_key] = False
+                    st.success("Conteúdo salvo e promovido a ativo de negócio.")
+                    return True
+                st.error("Erro ao promover — tente novamente.")
+                return False
     return False

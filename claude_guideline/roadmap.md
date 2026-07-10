@@ -4,6 +4,17 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC174 — Concluído (v5.15 / 2026-07-10) — Fix de produção: "Bad 'setIn' index" no frontend do componente de promoção
+
+**Contexto:** logs de console do navegador colados pelo usuário na Central de Artefatos mostravam `Uncaught Error: Bad 'setIn' index 3 (should be between [0, 0])` — erro JS do frontend do Streamlit (não uma exceção Python), reintroduzido pelo próprio fix do PC172.
+
+- Causa raiz: o PC172 trocou `st.expander()` por um toggle `st.button()` dentro de `render_promote_button()`/`render_promote_assistant_content_button()` — mas isso faz a função contribuir uma quantidade VARIÁVEL de elementos pro container-pai (1 quando o toggle está fechado, vários quando o formulário está aberto). Streamlit quebra no frontend quando a contagem de filhos de um bloco muda entre reruns de um jeito que o motor de aplicação de deltas não consegue reconciliar — mesma classe de bug já documentada (e já resolvida) em `ui/tabs/bpmn_tabs.py` (comentário sobre `st.empty()`/child count estável), só que eu não tinha aplicado esse padrão ao criar o toggle do PC172.
+- Fix: as duas funções agora envolvem TODO o corpo (incluindo o branch "já promovido") num único `st.container()` — do ponto de vista do chamador, a função sempre contribui exatamente 1 elemento, e toda a variação de conteúdo fica isolada dentro desse container.
+- **CLAUDE.md** ganhou uma nova entrada na tabela de Pitfalls Conhecidos ("Variable child count in a shared UI component") — já apareceu 2x no projeto (`bpmn_tabs.py` original, agora `promote_asset.py`), vale documentar pra não repetir uma 3ª vez.
+- 5 testes de regressão do PC172 continuam passando; 806/806 na suíte completa. Não há teste automatizado que capture especificamente o erro JS do frontend (é client-side, fora do alcance do `AppTest`) — verificação por leitura do padrão já validado em produção (`bpmn_tabs.py`) + revisão de código.
+
+---
+
 ### PC173 — Concluído (v5.15 / 2026-07-10) — Nome do processo dentro do diagrama BPMN (Pool nomeado)
 
 **Contexto:** usuário perguntou se dava pra mostrar o nome do processo dentro do diagrama; escolheu explicitamente a opção "mais correta" (padrão OMG — Pool nomeado) em vez de um título sobreposto em HTML.

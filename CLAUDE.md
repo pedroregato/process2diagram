@@ -626,6 +626,7 @@ Coordinates are absolute. Edit constants at top of `bpmn_generator.py`: `TASK_W`
 | **delete_meeting cascade order** | `requirement_versions` → FK nullify → SBVR/chunks → bpmn_versions → bpmn_processes → meetings |
 | **Anthropic no json_mode** | Enforce JSON via system prompt only — never pass `response_format` to Anthropic SDK |
 | **Nested `st.expander`** | Streamlit raises `StreamlitAPIException` if an expander is inside another expander (e.g. sidebar Configuração Avançada). Use `st.caption()` or `st.markdown()` as section header instead |
+| **Variable child count in a shared UI component** | A reusable component whose rendered element count changes between reruns (e.g. a `st.button()` toggle that conditionally renders a form) breaks the frontend with `Uncaught Error: Bad 'setIn' index N (should be between [0, 0])` when called from a context whose sibling count matters (loops, other containers). Fix: wrap the whole component body in a single `st.container()` (or `st.empty()`) so the parent always sees exactly one child from the component, regardless of internal branch — see `ui/tabs/bpmn_tabs.py`'s `_main = st.empty()` comment and `ui/components/promote_asset.py`'s `render_promote_button()` |
 | **Settings Domínio tab provider list** | Must iterate `AVAILABLE_PROVIDERS` (not `PROVIDER_KEY_MAP`) and skip providers with `api_key_alias` — `PROVIDER_KEY_MAP` is only the Supabase storage schema, not the source of truth for which providers exist |
 
 ---
