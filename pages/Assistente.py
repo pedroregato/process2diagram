@@ -26,8 +26,29 @@ from core.project_store import (
 from ui.project_selector import require_active_project
 from agents.agent_assistant import AgentAssistant
 from ui.components.copy_button import copy_button
+from ui.components.promote_asset import render_promote_assistant_content_button
 from core.chart_config import CHART_PALETTES, DEFAULT_PALETTE
 from modules.excel_exporter import export_table_to_excel
+
+# ── Escopo de promoção a Ativo de Negócio (Fase C, melhorias/promocao-ativos-negocio.md §6) ──
+# Só mensagens cujo rastro de tool calls inclui pelo menos uma tool de
+# SÍNTESE (análise/pesquisa/gráfico/relatório) ganham o botão de promoção —
+# não qualquer resposta de Q&A simples (consulta/lookup). Critério de negócio
+# definido pelo usuário; esta é a tradução técnica (prefixos + nomes exatos).
+_PROMOTABLE_TOOL_PREFIXES = ("generate_", "gerar_")
+_PROMOTABLE_TOOL_NAMES = {
+    "simular_cenario", "verificar_conformidade", "verificar_rastreabilidade_obrigatoria",
+    "analisar_tendencias", "diagnostico_projeto", "estimar_risco_requisito",
+    "sugerir_processos", "mapa_rastreabilidade", "cluster_topic_decisions",
+    "cluster_similar_requirements",
+}
+
+
+def _is_promotable_message(tools_used: list[str]) -> bool:
+    return any(
+        t in _PROMOTABLE_TOOL_NAMES or t.startswith(_PROMOTABLE_TOOL_PREFIXES)
+        for t in (tools_used or [])
+    )
 
 
 # ── Análise Autônoma UI ───────────────────────────────────────────────────────
@@ -1603,6 +1624,19 @@ for i, msg in enumerate(history):
                         mime=fd.get("mime", "application/octet-stream"),
                         key=f"btn_file_dl_{i}",
                     )
+            # ── Promoção a Ativo de Negócio (Fase C) — só mensagens de síntese ──
+            if _is_promotable_message(msg.get("tools_used")):
+                if render_promote_assistant_content_button(
+                    project_id, msg.get("question", "")[:80] or "Resposta do Assistente",
+                    msg["content"], key_suffix=str(i),
+                    source_tool=next(
+                        (t for t in (msg.get("tools_used") or [])
+                         if t in _PROMOTABLE_TOOL_NAMES or t.startswith(_PROMOTABLE_TOOL_PREFIXES)),
+                        None,
+                    ),
+                    created_by=st.session_state.get("_usuario_login", ""),
+                ):
+                    st.rerun()
         if msg["role"] == "user":
             col_edit, col_copy, _ = st.columns([1, 1, 8])
             with col_edit:
@@ -1692,6 +1726,7 @@ if _asst_running:
             "tables":  pending_tables,
             "widgets": pending_widgets,
             "question": last_question,
+            "tools_used": tools_called,  # Fase C (melhorias/promocao-ativos-negocio.md) — gate de promoção
         })
 
         # ── Arquivo pendente pra download (get_executive_report, export_project_charter_docx, etc.) ──

@@ -441,6 +441,76 @@ EXECUTIVE_ADVANCED_SCHEMAS: list[dict] = [
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "promover_ativo_negocio",
+                    "description": (
+                        "Promove um conteúdo gerado nesta conversa (relatório, análise, síntese) a "
+                        "Ativo de Negócio formal — passa a aparecer na Central de Ativos de Negócio, "
+                        "visível a todos os contextos que o consultarem. Persiste o conteúdo (hoje "
+                        "respostas do Assistente são efêmeras, somem ao fechar a conversa). Use quando "
+                        "o usuário pedir para 'promover', 'salvar como ativo' ou 'tornar isso um ativo "
+                        "de negócio' um relatório, análise ou síntese que você acabou de produzir — "
+                        "NÃO use para perguntas simples de consulta (contagens, listagens)."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "titulo": {
+                                "type": "string",
+                                "description": "Título curto e descritivo do ativo (ex: 'Análise de Tendências — Q3 2026').",
+                            },
+                            "conteudo": {
+                                "type": "string",
+                                "description": (
+                                    "O conteúdo completo a persistir, em Markdown — normalmente a sua "
+                                    "própria resposta anterior nesta conversa (relatório/análise/síntese)."
+                                ),
+                            },
+                            "interesse": {
+                                "type": "string",
+                                "enum": ["estrategico", "tatico", "operacional"],
+                                "description": (
+                                    "Interesse para o negócio: estrategico (impacta a organização como um "
+                                    "todo), tatico (relevante para uma área/iniciativa, reutilizável), "
+                                    "operacional (interesse real, mas de escopo mais local)."
+                                ),
+                            },
+                            "perspectiva": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "enum": [
+                                        "comercial", "compliance", "compras_suprimentos", "contabilidade",
+                                        "financeiro", "governanca", "juridico", "logistica", "marketing",
+                                        "operacoes", "rh", "ti",
+                                    ],
+                                },
+                                "description": "Uma ou mais áreas/departamentos de negócio que têm interesse neste ativo.",
+                            },
+                            "justificativa": {
+                                "type": "string",
+                                "description": "Por que este ativo interessa ao negócio como um todo — obrigatório.",
+                            },
+                            "classificacao_formal": {
+                                "type": "string",
+                                "enum": [
+                                    "AN-01", "AN-02", "AN-03", "AN-04", "AN-05", "AN-06",
+                                    "AN-07", "AN-08", "AN-09", "AN-10", "AN-11", "AN-12",
+                                ],
+                                "description": (
+                                    "Opcional — taxonomia de Ativos de Negócio (ISO 55000/APQC PCF/BIZBOK/TOGAF): "
+                                    "AN-01 Estratégicos, AN-03 Processo, AN-05 Informação e Dados, "
+                                    "AN-07 Documentais e Normativos, AN-11 Governança/Risco/Conformidade, "
+                                    "AN-12 Conhecimento/IA/Automação (mais provável para conteúdo gerado por IA)."
+                                ),
+                            },
+                        },
+                        "required": ["titulo", "conteudo", "interesse", "perspectiva", "justificativa"],
+                    },
+                },
+            },
 ]
 
 class _ExecutiveAdvancedToolsMixin:
@@ -1723,3 +1793,52 @@ class _ExecutiveAdvancedToolsMixin:
                 )
         lines.extend(notes[:5])
         return "\n".join(lines)
+
+    def promover_ativo_negocio(
+        self,
+        titulo: str,
+        conteudo: str,
+        interesse: str,
+        perspectiva: list,
+        justificativa: str,
+        classificacao_formal: str | None = None,
+    ) -> str:
+        """Promove conteúdo gerado nesta conversa a Ativo de Negócio (Fase C,
+        melhorias/promocao-ativos-negocio.md §6) — persiste em
+        assistant_artifacts e cria a linha em asset_metadata numa única
+        chamada. Mesma regra de validação de promote_assistant_output_to_asset():
+        recusa sem as 3 classificações obrigatórias preenchidas."""
+        import streamlit as st
+        from core.project_store import (
+            promote_assistant_output_to_asset,
+            BUSINESS_INTEREST_OPTIONS,
+            BUSINESS_PERSPECTIVE_OPTIONS,
+            FORMAL_CLASSIFICATION_OPTIONS,
+        )
+
+        if interesse not in BUSINESS_INTEREST_OPTIONS:
+            return f"Interesse inválido — use um de: {', '.join(BUSINESS_INTEREST_OPTIONS)}."
+        perspectiva_valida = [p for p in (perspectiva or []) if p in BUSINESS_PERSPECTIVE_OPTIONS]
+        if not perspectiva_valida:
+            return f"Perspectiva ausente ou inválida — use uma ou mais de: {', '.join(BUSINESS_PERSPECTIVE_OPTIONS)}."
+        if classificacao_formal and classificacao_formal not in FORMAL_CLASSIFICATION_OPTIONS:
+            classificacao_formal = None
+        if not (justificativa or "").strip():
+            return "Justificativa é obrigatória — explique por que este ativo interessa ao negócio."
+
+        result = promote_assistant_output_to_asset(
+            self.project_id, titulo, conteudo,
+            business_interest=interesse,
+            business_perspective=perspectiva_valida,
+            promotion_justification=justificativa.strip(),
+            formal_classification=classificacao_formal,
+            source_tool="promover_ativo_negocio",
+            created_by=st.session_state.get("_usuario_login", ""),
+        )
+        if not result:
+            return "Não foi possível promover — verifique se título e conteúdo não estão vazios."
+        return (
+            f"✅ Ativo de negócio promovido: **{titulo}** "
+            f"(Interesse: {interesse}, Perspectiva: {', '.join(perspectiva_valida)}"
+            f"{f', Classificação: {classificacao_formal}' if classificacao_formal else ''})."
+        )

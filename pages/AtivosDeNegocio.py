@@ -88,6 +88,7 @@ _TYPE_META = {
     "sbvr_rule":       ("SBVR — Regras",    "⚖️"),
     "meeting_minutes": ("Atas",             "📝"),
     "document":        ("Documentos",       "🗂️"),
+    "assistant_artifact": ("Conteúdo do Assistente", "🤖"),
     "bmm":             ("BMM",              "🎯"),
     "dmn":             ("DMN",              "🔀"),
     "ibis":            ("IBIS",             "💬"),
@@ -251,6 +252,26 @@ for artifact_type in _TYPE_META:
                 st.caption(f"🏷️ {FORMAL_CLASSIFICATION_LABELS.get(current_classification, current_classification)}")
             if current_justification:
                 st.caption(f"💬 *{current_justification}*")
+
+            # Visualização própria — "Conteúdo do Assistente" não tem reunião
+            # de origem pra remeter; o conteúdo salvo É o próprio ativo.
+            if artifact_type == "assistant_artifact":
+                _content = item.get("content_markdown", "")
+                if item.get("source_tool"):
+                    st.caption(f"🔧 Gerado por: `{item['source_tool']}`")
+                _show_key = f"_show_full_asset_{item['artifact_id']}"
+                if st.session_state.get(_show_key):
+                    st.markdown(_content)
+                    if st.button("▲ Recolher", key=f"{_show_key}_collapse"):
+                        st.session_state[_show_key] = False
+                        st.rerun()
+                else:
+                    st.markdown(_content[:500] + ("..." if len(_content) > 500 else ""))
+                    if len(_content) > 500:
+                        if st.button("▼ Ver conteúdo completo", key=f"{_show_key}_expand"):
+                            st.session_state[_show_key] = True
+                            st.rerun()
+                st.divider()
 
             form_key = f"asset_form_{artifact_type}_{item['artifact_id']}"
             with st.form(form_key):

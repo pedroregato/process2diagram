@@ -28,6 +28,7 @@ def _patches(**overrides):
         "list_sbvr_rules": [],
         "list_meetings": [],
         "_list_documents": [],
+        "list_assistant_artifacts_by_project": [],
         "list_bmm_by_project": [],
         "list_dmn_by_project": [],
         "list_argumentation_by_project": [],
@@ -45,9 +46,37 @@ class TestListAllBusinessAssets:
             result = list_all_business_assets("p1")
         assert set(result.keys()) == {
             "requirement", "bpmn_process", "sbvr_term", "sbvr_rule",
-            "meeting_minutes", "document", "bmm", "dmn", "ibis", "report",
+            "meeting_minutes", "document", "assistant_artifact",
+            "bmm", "dmn", "ibis", "report",
         }
         assert all(v == [] for v in result.values())
+
+    def test_promoted_assistant_artifact_included_with_metadata(self):
+        overrides = _patches(
+            list_assistant_artifacts_by_project=[
+                {"id": "a1", "title": "Análise de Tendências", "created_at": "2026-07-01T10:00:00",
+                 "content_markdown": "## Achados\n...", "source_tool": "analisar_tendencias"},
+            ],
+            get_asset_metadata_map={
+                ("assistant_artifact", "a1"): {"status": "ativo", "business_interest": "tatico"},
+            },
+        )
+        with patch.multiple("core.project_store", **overrides):
+            result = list_all_business_assets("p1")
+        assert len(result["assistant_artifact"]) == 1
+        item = result["assistant_artifact"][0]
+        assert item["title"] == "Análise de Tendências"
+        assert item["metadata"]["business_interest"] == "tatico"
+        assert item["content_markdown"] == "## Achados\n..."
+        assert item["source_tool"] == "analisar_tendencias"
+
+    def test_unpromoted_assistant_artifact_excluded(self):
+        overrides = _patches(
+            list_assistant_artifacts_by_project=[{"id": "a1", "title": "Rascunho", "created_at": ""}],
+        )
+        with patch.multiple("core.project_store", **overrides):
+            result = list_all_business_assets("p1")
+        assert result["assistant_artifact"] == []
 
     def test_document_not_promoted_is_excluded(self):
         overrides = _patches(

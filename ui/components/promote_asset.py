@@ -19,6 +19,7 @@ import streamlit as st
 
 from core.project_store import (
     promote_to_business_asset,
+    promote_assistant_output_to_asset,
     BUSINESS_INTEREST_OPTIONS,
     BUSINESS_PERSPECTIVE_OPTIONS,
     FORMAL_CLASSIFICATION_OPTIONS,
@@ -180,6 +181,55 @@ def render_promote_button(
                 )
                 if result:
                     st.success("Ativo promovido com sucesso.")
+                    return True
+                st.error("Erro ao promover — tente novamente.")
+                return False
+    return False
+
+
+def render_promote_assistant_content_button(
+    project_id: str,
+    title: str,
+    content_markdown: str,
+    *,
+    key_suffix: str,
+    source_tool: str | None = None,
+    meeting_id: str | None = None,
+    created_by: str | None = None,
+) -> bool:
+    """Promoção de conteúdo gerado pelo Assistente (Fase C,
+    melhorias/promocao-ativos-negocio.md §6) — diferente de
+    `render_promote_button()`, aqui não existe uma linha de origem: a
+    promoção CRIA o snapshot em `assistant_artifacts` e promove numa única
+    chamada (`promote_assistant_output_to_asset`).
+
+    `title` pré-preenche o campo (editável — a primeira linha da resposta do
+    Assistente raramente é um bom título por si só). Retorna True se
+    promovido nesta execução — o chamador deve reagir com `st.rerun()`.
+    """
+    form_key = f"promote_assistant_form_{key_suffix}"
+
+    with st.expander("⭐ Promover esta resposta a Ativo de Negócio", expanded=False):
+        with st.form(form_key):
+            asset_title = st.text_input("Título do ativo *", value=title, key=f"{form_key}_title")
+            interest, perspective, classification, justification = render_classification_fields(form_key)
+
+            if st.form_submit_button("⭐ Promover", type="primary"):
+                if not asset_title.strip() or not interest or not perspective or not justification.strip():
+                    st.error("Título, Interesse, Perspectiva e Justificativa são obrigatórios.")
+                    return False
+                result = promote_assistant_output_to_asset(
+                    project_id, asset_title.strip(), content_markdown,
+                    business_interest=interest,
+                    business_perspective=perspective,
+                    promotion_justification=justification.strip(),
+                    formal_classification=classification,
+                    source_tool=source_tool,
+                    meeting_id=meeting_id,
+                    created_by=created_by,
+                )
+                if result:
+                    st.success("Conteúdo salvo e promovido a ativo de negócio.")
                     return True
                 st.error("Erro ao promover — tente novamente.")
                 return False

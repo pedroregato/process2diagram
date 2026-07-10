@@ -182,5 +182,5 @@ class TestUpsertAssetMetadata:
     def test_supported_types(self):
         assert ASSET_TYPES_WITH_METADATA == {
             "requirement", "bpmn_process", "sbvr_term", "sbvr_rule", "meeting_minutes",
-            "document",
+            "document", "assistant_artifact",
         }

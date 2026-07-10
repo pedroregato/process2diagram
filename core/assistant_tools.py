@@ -221,6 +221,8 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "gerar_project_charter":           "consulta",
     "export_project_charter_docx":     "consulta",
     "gerar_release_notes":             "consulta",
+    # Ativos de Negócio — Promoção (Fase C, melhorias/promocao-ativos-negocio.md)
+    "promover_ativo_negocio":          "escrita",
     # Editor Estrutural (Fase 2)
     "reordenar_requisitos":            "escrita",
     "inserir_secao_ata":               "admin",
@@ -886,6 +888,14 @@ class AssistantToolExecutor(
                     req_type_filter=tool_input.get("req_type_filter"),
                     threshold=float(tool_input.get("threshold", 0.75)),
                     mode=tool_input.get("mode", "keyword"),
+                ),
+                "promover_ativo_negocio": lambda: self.promover_ativo_negocio(
+                    titulo=tool_input["titulo"],
+                    conteudo=tool_input["conteudo"],
+                    interesse=tool_input["interesse"],
+                    perspectiva=tool_input.get("perspectiva") or [],
+                    justificativa=tool_input["justificativa"],
+                    classificacao_formal=tool_input.get("classificacao_formal"),
                 ),
                 # ── Editor Estrutural (Fase 2)
                 "reordenar_requisitos":   lambda: self.reordenar_requisitos(

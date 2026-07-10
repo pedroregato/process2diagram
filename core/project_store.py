@@ -4494,7 +4494,7 @@ def list_reports_by_project(project_id: str) -> list[dict]:
 # como JSON dentro de meetings.*_json) — ver melhorias/cognicao-de-negocio.md.
 ASSET_TYPES_WITH_METADATA = {
     "requirement", "bpmn_process", "sbvr_term", "sbvr_rule", "meeting_minutes",
-    "document",
+    "document", "assistant_artifact",
 }
 
 # Mapeamento de sugestão automática — categoria de document_types (Fase B,
@@ -4707,6 +4707,93 @@ def demote_business_asset(project_id: str, artifact_type: str, artifact_id: str)
     return result is not None
 
 
+def list_assistant_artifacts_by_project(project_id: str) -> list[dict]:
+    """Retorna os snapshots de conteúdo do Assistente já promovidos neste
+    projeto (Fase C, melhorias/promocao-ativos-negocio.md §5.3)."""
+    db = _db()
+    if not db:
+        return []
+    try:
+        return _ok(
+            db.table("assistant_artifacts")
+            .select("id, title, content_markdown, source_tool, meeting_id, created_at")
+            .eq("project_id", project_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+    except Exception:
+        return []
+
+
+def promote_assistant_output_to_asset(
+    project_id: str,
+    title: str,
+    content_markdown: str,
+    *,
+    business_interest: str,
+    business_perspective: list[str],
+    promotion_justification: str,
+    formal_classification: str | None = None,
+    source_tool: str | None = None,
+    meeting_id: str | None = None,
+    created_by: str | None = None,
+) -> dict | None:
+    """Persiste um snapshot de conteúdo gerado pelo Assistente e promove a
+    ativo de negócio numa única operação (Fase C, melhorias/promocao-ativos-negocio.md
+    §6). Diferente dos demais `artifact_type`, este não tem uma linha de
+    origem pré-existente — a própria promoção CRIA o snapshot em
+    `assistant_artifacts` (hoje, sem isso, o conteúdo do Assistente é 100%
+    efêmero — só existe como download no navegador).
+
+    Recusa (retorna None) se título/conteúdo estiverem vazios ou se as 3
+    classificações obrigatórias (Interesse, Perspectiva, Justificativa) não
+    vierem preenchidas — mesma regra de `promote_to_business_asset()`.
+
+    Se o snapshot for criado mas a promoção em `asset_metadata` falhar, o
+    snapshot fica órfão (sem linha de metadata) — não é limpo automaticamente,
+    mas também não aparece na Central de Ativos, já que só o que tem linha em
+    `asset_metadata` é listado.
+    """
+    if not title.strip() or not content_markdown.strip():
+        return None
+    if not business_interest or not business_perspective or not (promotion_justification or "").strip():
+        return None
+
+    db = _db()
+    if not db:
+        return None
+
+    payload = {
+        "project_id":       project_id,
+        "title":            title.strip(),
+        "content_markdown": content_markdown,
+        "source_tool":      source_tool,
+        "meeting_id":       meeting_id,
+        "created_by":       created_by,
+    }
+    try:
+        result = db.table("assistant_artifacts").insert(payload).execute()
+        artifact_row = result.data[0] if result.data else None
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"assistant_artifacts insert failed: {e}")
+        return None
+    if not artifact_row:
+        return None
+
+    promoted = promote_to_business_asset(
+        project_id, "assistant_artifact", artifact_row["id"],
+        business_interest=business_interest,
+        business_perspective=business_perspective,
+        promotion_justification=promotion_justification,
+        formal_classification=formal_classification,
+        created_by=created_by,
+    )
+    if not promoted:
+        return None
+    return {**artifact_row, "metadata": promoted}
+
+
 def _hydrate_promoted_assets(
     artifact_type: str,
     promoted: dict[str, dict],
@@ -4714,6 +4801,7 @@ def _hydrate_promoted_assets(
     title_fn,
     meeting_ref_fn=None,
     meeting_date_fn=None,
+    extra_fn=None,
 ) -> list[dict]:
     """Monta os itens de um tipo promovível a partir das linhas de
     `asset_metadata` (a lista de PROMOVIDOS), hidratando título/reunião pela
@@ -4721,19 +4809,26 @@ def _hydrate_promoted_assets(
     promovido) ainda aparece, com título de fallback — nunca desaparece
     silenciosamente do Catálogo (a promoção continua existindo mesmo que a
     origem não exista mais).
+
+    `extra_fn(src) -> dict`, quando informado, mescla campos extras no item
+    (ex.: `content_markdown` de `assistant_artifact`, que precisa da própria
+    "visualização própria" — não tem uma reunião de origem pra remeter).
     """
     by_id = {r["id"]: r for r in source_rows if r.get("id")}
     items = []
     for artifact_id, meta in promoted.items():
         src = by_id.get(artifact_id)
-        items.append({
+        item = {
             "artifact_id":  artifact_id,
             "title":        title_fn(src) if src is not None else "(artefato de origem não encontrado)",
             "meeting_ref":  meeting_ref_fn(src) if (src is not None and meeting_ref_fn) else "",
             "meeting_date": meeting_date_fn(src) if (src is not None and meeting_date_fn) else "",
             "has_metadata_support": True,
             "metadata": meta,
-        })
+        }
+        if extra_fn is not None and src is not None:
+            item.update(extra_fn(src))
+        items.append(item)
     return items
 
 
@@ -4811,6 +4906,15 @@ def list_all_business_assets(project_id: str) -> dict[str, list[dict]]:
         _list_documents(project_id) or [] if promoted_docs else [],
         title_fn=lambda d: d.get("title", "") or d.get("file_name", "") or "(documento sem título)",
         meeting_date_fn=lambda d: (d.get("created_at") or "")[:10],
+    )
+
+    promoted_assistant = _promoted("assistant_artifact")
+    result["assistant_artifact"] = _hydrate_promoted_assets(
+        "assistant_artifact", promoted_assistant,
+        list_assistant_artifacts_by_project(project_id) or [] if promoted_assistant else [],
+        title_fn=lambda a: a.get("title", "") or "(conteúdo do Assistente sem título)",
+        meeting_date_fn=lambda a: (a.get("created_at") or "")[:10],
+        extra_fn=lambda a: {"content_markdown": a.get("content_markdown", ""), "source_tool": a.get("source_tool", "")},
     )
 
     # ── Tipos somente-leitura (sem linha própria) ────────────────────────────

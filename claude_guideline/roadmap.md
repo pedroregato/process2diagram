@@ -4,6 +4,22 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC168 — Concluído (v5.15 / 2026-07-09) — Ativos de Negócio: Promoção de Conteúdo do Assistente (Fase C)
+
+**Contexto:** fecha `melhorias/promocao-ativos-negocio.md` — Fase C, a última do plano. Diferente das Fases A/B (promovem algo que já existia numa tabela), aqui a promoção precisa primeiro **criar** o próprio conteúdo, já que nada do que o Assistente gera sob demanda é persistido hoje (só existe como download efêmero no navegador).
+
+- **Migration `setup/supabase_migration_assistant_artifacts.sql`** (executada e verificada) — tabela nova `assistant_artifacts` (id, project_id, title, content_markdown, source_tool, meeting_id, created_by, created_at). `assistant_artifact` entra em `ASSET_TYPES_WITH_METADATA` (7 tipos governáveis agora).
+- **`core/project_store.py`** — `promote_assistant_output_to_asset()`: grava o snapshot em `assistant_artifacts` **e** a linha em `asset_metadata` numa única chamada; recusa (sem tocar o banco) se título/conteúdo estiverem vazios ou as 3 classificações obrigatórias faltarem. `list_assistant_artifacts_by_project()`. `_hydrate_promoted_assets()` ganhou `extra_fn` opcional — usado aqui pra propagar `content_markdown`/`source_tool` pro item exibido (única forma de a Central de Ativos mostrar o conteúdo real, já que este tipo não tem "reunião de origem" pra remeter).
+- **Rastreamento de tools por mensagem** (`pages/Assistente.py`) — o histórico do chat (`assistant_history`) não guardava quais tools uma resposta usou; passou a gravar `tools_used` em cada entrada. Critério de promoção (decidido com o usuário: "análises, pesquisas, gráficos, relatórios — não perguntas simples") traduzido em código: mensagem com pelo menos uma tool `generate_*`/`gerar_*`/`simular_cenario`/`diagnostico_projeto`/etc. ganha o botão de promoção; consultas simples (`get_meeting_list`, `get_requirements`...) não.
+- **Nova tool do Assistente `promover_ativo_negocio`** (`core/tools/tools_executive_advanced.py` + dispatch em `core/assistant_tools.py`) — permite promoção por linguagem natural no chat ("promova este relatório a ativo estratégico"), sem gate de admin (decisão do usuário — projeto ainda não tem perfis granulares).
+- **`pages/AtivosDeNegocio.py`** — novo tipo "🤖 Conteúdo do Assistente", com visualização própria (prévia + expandir texto completo, mesmo padrão de `DocumentManager.py`).
+- [x] 17 testes novos (`tests/test_promote_assistant_output.py` — 7; `tests/test_tool_promover_ativo_negocio.py` — 8; 2 novos em `test_list_all_business_assets.py`).
+- [x] 4 páginas (`Artefatos.py`, `AtivosDeNegocio.py`, `DocumentManager.py`, `Assistente.py`) verificadas sem erro via `AppTest`.
+- [x] 784/784 testes automatizados passando.
+- **`melhorias/promocao-ativos-negocio.md` fecha as 3 fases** — promoção explícita agora cobre os 7 tipos de origem possíveis (5 do pipeline + documentos + conteúdo do Assistente). BMM/DMN/IBIS/Relatórios do pipeline padrão seguem somente-leitura (decisão do PC164, não revisitada).
+
+---
+
 ### PC167 — Concluído (v5.15 / 2026-07-09) — Ativos de Negócio: Promoção de Documentos (Fase B)
 
 **Contexto:** continuação direta do PC166 na mesma sessão — Fase B de `melhorias/promocao-ativos-negocio.md`. Estende a promoção explícita (já entregue para requisito/BPMN/SBVR/ata) para documentos enviados via `DocumentManager.py`.
