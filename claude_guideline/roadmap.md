@@ -4,6 +4,18 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC169 — Concluído (v5.15 / 2026-07-10) — Upload de imagens (Documentos + Assistente) + fix de labels cortados no Gantt
+
+**Contexto:** 2 pedidos diretos do usuário. Escopo de imagem restrito por decisão do usuário (`AskUserQuestion`): só `DocumentManager.py` (aba Enviar) e o anexo de contexto do `Assistente.py` — não a transcrição do Pipeline nem os Arquivos de Contexto do CKF. Sem OCR/visão computacional ainda (isso é a Etapa 0, maior, de `melhorias/cognicao-de-negocio.md`, não iniciada) — a decisão foi "aceitar o arquivo, guardar sem extrair texto".
+
+- **`pages/DocumentManager.py`** — aba Enviar aceita `.png/.jpg/.jpeg/.gif/.webp/.bmp` além dos formatos de texto já existentes. Imagem é **guardada de verdade** (base64 em `meeting_documents.metadata`, guarda de 5 MB) e fica **visível na Biblioteca** via `st.image()` — não é só uma nota de texto sem conteúdo recuperável. `content_text` recebe um placeholder explícito ("conteúdo textual não extraído..."); embedding é pulado pra imagem (não tem valor gerar embedding de um placeholder). Achado no caminho: o fallback de `_load_file_content()` pra tipo não suportado tentava decodificar bytes binários como UTF-8 (produziria lixo/mojibake) — agora detecta imagem antes e retorna vazio direto.
+- **`pages/Assistente.py`** — anexo de contexto também aceita os mesmos formatos de imagem, mas aqui não há persistência (é contexto efêmero de conversa) nem visão computacional no LLM — em vez de injetar bytes decodificados como "contexto" (que seria lixo no prompt), mostra um aviso claro e não popula `_asst_file_ctx`.
+- **Gantt (`generate_gantt_chart`)** — bug relatado pelo usuário: labels do eixo Y (nomes de fase, texto livre) ficavam cortados/ilegíveis. Causa: `_dark_layout()` (compartilhado por todos os gráficos do Assistente) aplica margem esquerda FIXA (`l=50`) — suficiente pra categorias curtas, não pra nomes de fase longos. Fix: `yaxis=dict(automargin=True)` só no Gantt (não mudou `_dark_layout()` em si, pra não afetar os outros ~15 tipos de gráfico que nunca reportaram o problema).
+- [x] 1 teste novo pro Gantt (`tests/test_tools_requirement_charts.py`). Upload de imagem não tem teste automatizado dedicado — simulação de `st.file_uploader` não é suportada pela API de teste desta versão do Streamlit (mesma limitação já documentada no PC163); verificado via `AppTest` de boot (sem exceção) + revisão de código.
+- [x] 785/785 testes automatizados passando.
+
+---
+
 ### PC168 — Concluído (v5.15 / 2026-07-09) — Ativos de Negócio: Promoção de Conteúdo do Assistente (Fase C)
 
 **Contexto:** fecha `melhorias/promocao-ativos-negocio.md` — Fase C, a última do plano. Diferente das Fases A/B (promovem algo que já existia numa tabela), aqui a promoção precisa primeiro **criar** o próprio conteúdo, já que nada do que o Assistente gera sob demanda é persistido hoje (só existe como download efêmero no navegador).

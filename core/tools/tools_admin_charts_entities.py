@@ -2125,6 +2125,12 @@ class _AdminChartsEntitiesToolsMixin:
             ))
         fig.update_layout(barmode="overlay", xaxis=dict(type="date"))
         self._dark_layout(fig, title)
+        # _dark_layout() sets a fixed left margin (l=50) for charts in general —
+        # not enough for Gantt, whose y-axis labels are phase NAMES (often long
+        # free text), unlike short category labels on other charts. automargin
+        # makes Plotly expand the left margin to fit the actual rendered label
+        # width instead of clipping it.
+        fig.update_layout(yaxis=dict(automargin=True))
         self._pending_charts.append(fig.to_dict())
         return f"📊 Gantt '{title}' gerado com {len(parsed)} fase(s)."
 

@@ -399,6 +399,21 @@ class TestGenerateGanttChart:
         result = ex.generate_gantt_chart(title="X", phases=[{"name": "F1", "start": "not-a-date", "end": "2026-01-01"}])
         assert "Data inválida" in result
 
+    def test_yaxis_automargin_prevents_long_phase_names_from_being_clipped(self):
+        """Bug reportado pelo usuário: labels verticais no eixo Y (nomes de fase,
+        que podem ser texto longo) ficavam cortados/ilegíveis — a margem
+        esquerda fixa de _dark_layout() (l=50) não crescia pra acomodar o
+        texto real renderizado. automargin=True resolve sem afetar os outros
+        tipos de gráfico (só o Gantt tem labels de eixo potencialmente longos)."""
+        ex = _executor()
+        phases = [{
+            "name": "Levantamento de Requisitos e Especificação Técnica Detalhada",
+            "start": "2026-01-01", "end": "2026-02-01",
+        }]
+        ex.generate_gantt_chart(title="Cronograma", phases=phases)
+        layout = ex._pending_charts[0]["layout"]
+        assert layout["yaxis"]["automargin"] is True
+
     def test_sorted_by_start_date(self):
         ex = _executor()
         phases = [

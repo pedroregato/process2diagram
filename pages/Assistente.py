@@ -736,30 +736,48 @@ with st.sidebar:
 
     # Contexto adicional
     uploaded_ctx_file = st.file_uploader(
-        "Arquivo de contexto", type=["txt", "docx", "pdf", "csv", "xlsx"],
+        "Arquivo de contexto",
+        type=["txt", "docx", "pdf", "csv", "xlsx", "png", "jpg", "jpeg", "gif", "webp", "bmp"],
         key="asst_context_file",
+        help=(
+            "Documentos de texto têm o conteúdo injetado como contexto na conversa. "
+            "Imagens são aceitas, mas não são analisadas nesta versão (sem visão computacional) "
+            "— descreva o conteúdo em texto se precisar que o Assistente considere essa informação."
+        ),
     )
 
     if uploaded_ctx_file:
         try:
             import io
             content = ""
-            if uploaded_ctx_file.type == "text/plain":
-                content = uploaded_ctx_file.read().decode("utf-8")
-            elif uploaded_ctx_file.type == "application/pdf":
-                try:
-                    import PyPDF2
-                    pdf_reader = PyPDF2.PdfReader(io.BytesIO(uploaded_ctx_file.read()))
-                    content = " ".join([page.extract_text() for page in pdf_reader.pages])
-                except ImportError:
-                    content = "PDF import não disponível"
+            if (uploaded_ctx_file.type or "").startswith("image/"):
+                # Sem visão computacional no Assistente nesta versão — decodificar os
+                # bytes da imagem como texto produziria lixo injetado no prompt do LLM.
+                # Só avisa o usuário, não injeta nada em _asst_file_ctx.
+                st.session_state.pop("_asst_file_ctx", None)
+                st.session_state.pop("_asst_file_name", None)
+                st.info(
+                    f"🖼️ {uploaded_ctx_file.name} recebido, mas o Assistente ainda não analisa "
+                    "imagens nesta versão (sem extração de texto/visão computacional) — descreva "
+                    "o conteúdo em texto se precisar que ele considere essa informação."
+                )
             else:
-                content = uploaded_ctx_file.read().decode("utf-8", errors="ignore")[:50000]
+                if uploaded_ctx_file.type == "text/plain":
+                    content = uploaded_ctx_file.read().decode("utf-8")
+                elif uploaded_ctx_file.type == "application/pdf":
+                    try:
+                        import PyPDF2
+                        pdf_reader = PyPDF2.PdfReader(io.BytesIO(uploaded_ctx_file.read()))
+                        content = " ".join([page.extract_text() for page in pdf_reader.pages])
+                    except ImportError:
+                        content = "PDF import não disponível"
+                else:
+                    content = uploaded_ctx_file.read().decode("utf-8", errors="ignore")[:50000]
 
-            if content:
-                st.session_state["_asst_file_ctx"] = content
-                st.session_state["_asst_file_name"] = uploaded_ctx_file.name
-                st.success(f"✅ {uploaded_ctx_file.name} carregado ({len(content):,} caracteres)")
+                if content:
+                    st.session_state["_asst_file_ctx"] = content
+                    st.session_state["_asst_file_name"] = uploaded_ctx_file.name
+                    st.success(f"✅ {uploaded_ctx_file.name} carregado ({len(content):,} caracteres)")
         except Exception as e:
             st.error(f"Erro ao processar arquivo: {e}")
 

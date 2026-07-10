@@ -15,6 +15,7 @@
 
 import sys
 import os
+import base64
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
@@ -116,8 +117,23 @@ def _get_extractor():
         provider_cfg = provider_cfg,
     )
 
+_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "bmp"}
+_MAX_IMAGE_BYTES = 5 * 1024 * 1024  # 5 MB — guarda de tamanho pra base64 em JSONB
+
+
+def _is_image_file(uploaded_file) -> bool:
+    return uploaded_file.name.lower().rsplit(".", 1)[-1] in _IMAGE_EXTENSIONS
+
+
 def _load_file_content(uploaded_file) -> str:
-    """Extract plain text from uploaded .txt / .pdf / .docx file."""
+    """Extract plain text from uploaded .txt / .pdf / .docx file.
+
+    Imagens não têm extração de texto nesta versão (sem OCR/visão
+    computacional — ver Etapa 0 de melhorias/cognicao-de-negocio.md, ainda
+    não iniciada) — retorna vazio deliberadamente em vez de tentar decodificar
+    bytes binários como UTF-8 (que produziria texto ilegível/lixo)."""
+    if _is_image_file(uploaded_file):
+        return ""
     try:
         from services.file_ingest import load_transcript
         return load_transcript(uploaded_file) or ""
@@ -253,35 +269,65 @@ with tab_upload:
             ["Upload de arquivo", "Colar texto"],
             horizontal=True,
         )
-        doc_content = ""
-        file_name   = ""
+        doc_content  = ""
+        file_name    = ""
+        doc_metadata = None
 
         if input_mode == "Upload de arquivo":
             uploaded = st.file_uploader(
-                "Arquivo (.txt, .pdf, .docx)",
-                type=["txt", "pdf", "docx"],
-                help="O texto será extraído automaticamente.",
+                "Arquivo (.txt, .pdf, .docx, .png, .jpg, .jpeg, .gif, .webp, .bmp)",
+                type=["txt", "pdf", "docx", "png", "jpg", "jpeg", "gif", "webp", "bmp"],
+                help=(
+                    "Documentos de texto têm o conteúdo extraído automaticamente. "
+                    "Imagens são aceitas e ficam salvas/visíveis na Biblioteca, mas o texto "
+                    "dentro delas não é extraído nesta versão (sem OCR/visão computacional)."
+                ),
             )
             if uploaded:
-                file_name   = uploaded.name
-                doc_content = _load_file_content(uploaded)
-                char_count  = len(doc_content)
-                if doc_content:
-                    st.success(f"Arquivo carregado — {char_count:,} caracteres")
-                    with st.expander("Prévia do texto extraído"):
-                        st.text(doc_content[:1500] + ("..." if char_count > 1500 else ""))
-                    if not st.session_state.get("doc_title_input", "").strip():
-                        if st.button("✨ Sugerir título com IA", key="suggest_title_btn",
-                                     help="O agente lê o conteúdo e propõe um título"):
-                            with st.spinner("Analisando conteúdo…"):
-                                suggestion = _suggest_doc_title(doc_content)
-                            if suggestion:
-                                st.session_state["doc_title_input"] = suggestion
-                                st.rerun()
-                            else:
-                                st.warning("Não foi possível sugerir um título. Verifique a chave da API.")
+                file_name = uploaded.name
+                if _is_image_file(uploaded):
+                    _img_bytes = uploaded.read()
+                    if len(_img_bytes) > _MAX_IMAGE_BYTES:
+                        st.error(
+                            f"Imagem muito grande ({len(_img_bytes) / 1024 / 1024:.1f} MB) — "
+                            f"limite atual de {_MAX_IMAGE_BYTES // 1024 // 1024} MB."
+                        )
+                    else:
+                        st.image(_img_bytes, caption=file_name, use_container_width=True)
+                        st.info(
+                            "🖼️ Imagem recebida — será salva e ficará visível na Biblioteca, mas "
+                            "o **texto dentro dela não é extraído automaticamente** nesta versão "
+                            "(sem OCR/visão computacional ainda). Busca por palavra-chave/semântica "
+                            "não vai encontrar este documento pelo conteúdo visual."
+                        )
+                        doc_content = (
+                            f"[Imagem: {file_name} — conteúdo textual não extraído. "
+                            "Extração via OCR/visão computacional ainda não implementada nesta versão.]"
+                        )
+                        doc_metadata = {
+                            "is_image":     True,
+                            "image_base64": base64.b64encode(_img_bytes).decode("ascii"),
+                            "image_mime":   uploaded.type or "application/octet-stream",
+                        }
                 else:
-                    st.error("Não foi possível extrair texto. Verifique o arquivo.")
+                    doc_content = _load_file_content(uploaded)
+                    char_count  = len(doc_content)
+                    if doc_content:
+                        st.success(f"Arquivo carregado — {char_count:,} caracteres")
+                        with st.expander("Prévia do texto extraído"):
+                            st.text(doc_content[:1500] + ("..." if char_count > 1500 else ""))
+                        if not st.session_state.get("doc_title_input", "").strip():
+                            if st.button("✨ Sugerir título com IA", key="suggest_title_btn",
+                                         help="O agente lê o conteúdo e propõe um título"):
+                                with st.spinner("Analisando conteúdo…"):
+                                    suggestion = _suggest_doc_title(doc_content)
+                                if suggestion:
+                                    st.session_state["doc_title_input"] = suggestion
+                                    st.rerun()
+                                else:
+                                    st.warning("Não foi possível sugerir um título. Verifique a chave da API.")
+                    else:
+                        st.error("Não foi possível extrair texto. Verifique o arquivo.")
         else:
             doc_content = st.text_area(
                 "Conteúdo do documento",
@@ -310,11 +356,17 @@ with tab_upload:
                     file_name           = file_name,
                     meeting_id          = linked_meeting_id,
                     created_by          = user_label,
+                    metadata            = doc_metadata,
                     doc_date            = str(doc_date_input) if doc_date_input else None,
                     doc_date_estimated  = doc_date_estimated_input.strip() or None,
                 )
             if not doc_id:
                 st.error("Erro ao salvar o documento. Verifique a conexão com o banco de dados.")
+            elif doc_metadata and doc_metadata.get("is_image"):
+                # Imagem sem texto extraído — embedding do placeholder não tem valor,
+                # pularia uma chamada de API sem propósito real.
+                st.success(f"Imagem salva na Biblioteca (ID: `{doc_id[:8]}...`).")
+                st.cache_data.clear()
             else:
                 from modules.embeddings import get_active_embedding_params
                 try:
@@ -424,8 +476,22 @@ with tab_library:
                     elif doc.get("doc_date_estimated"):
                         st.caption(f"Data estimada: {doc['doc_date_estimated']}")
 
+                    _doc_meta = doc.get("metadata") or {}
+                    if _doc_meta.get("is_image") and _doc_meta.get("image_base64"):
+                        try:
+                            st.image(
+                                base64.b64decode(_doc_meta["image_base64"]),
+                                caption=doc.get("file_name") or doc["title"],
+                                use_container_width=True,
+                            )
+                        except Exception:
+                            st.caption("⚠️ Não foi possível exibir a imagem salva.")
+                        st.caption(
+                            "🖼️ Documento do tipo imagem — texto interno não extraído "
+                            "(sem OCR/visão computacional nesta versão)."
+                        )
                     # Semantic match snippet
-                    if "_matched_chunk" in doc:
+                    elif "_matched_chunk" in doc:
                         st.markdown("**Trecho correspondente:**")
                         st.text(doc["_matched_chunk"])
                     else:
