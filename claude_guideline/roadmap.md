@@ -4,6 +4,18 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC173 — Concluído (v5.15 / 2026-07-10) — Nome do processo dentro do diagrama BPMN (Pool nomeado)
+
+**Contexto:** usuário perguntou se dava pra mostrar o nome do processo dentro do diagrama; escolheu explicitamente a opção "mais correta" (padrão OMG — Pool nomeado) em vez de um título sobreposto em HTML.
+
+- `agents/agent_bpmn.py::_generate_bpmn_xml_single()` — o `BpmnPool` (que carrega o nome do processo) antes só era criado `if model.lanes:`; processos sem lanes explícitas (o caso comum, um fluxo simples sem raias organizacionais) nunca ganhavam um Pool, e o nome nunca aparecia no canvas. Agora o Pool é sempre criado.
+- `modules/bpmn_generator.py::generate_bpmn_xml()` (caminho single-pool) — quando o Pool não tem lanes reais, injeta uma lane sintética única (mesmo mecanismo `_SYN_LANE_SUFFIX` já usado por `_pool_as_process()` no caminho multi-pool/colaboração) só pra `_compute_layout()` ter pelo menos 1 lane pra trabalhar — nunca vaza pro `<bpmn:laneSet>` semântico. Extraído um helper compartilhado `_synthesize_lane_if_needed()` usado pelos dois caminhos (single-pool e multi-pool), eliminando duplicação.
+- Verificado visualmente via Playwright: o resultado é uma única faixa lateral limpa com o nome do processo (rotacionado, como qualquer Pool BPMN) — sem barra em branco extra, porque bpmn-js já funde visualmente pool+lane sintética sem nome.
+- Achado no caminho: `modules/bpmn_describer.py` (BPMN → descrição textual, usado no BPMN Studio) mostraria uma seção "Participantes (Pools)" redundante repetindo o nome do processo pra todo processo simples agora que ele também tem 1 Pool nomeado — corrigido pra só mostrar essa seção quando há de fato ≥ 2 participantes (colaboração real).
+- 7 testes novos (`tests/test_bpmn_process_name_in_diagram.py`), 806/806 passando. Boot-smoke via AppTest em Pipeline/Diagramas/BpmnEditor/BpmnStudio sem exceção.
+
+---
+
 ### PC172 — Concluído (v5.15 / 2026-07-10) — Fix de produção: expander aninhado quebrava as abas Reuniões/SBVR de Artefatos e a Biblioteca de Documentos
 
 **Contexto:** erro relatado pelo usuário em produção — `StreamlitAPIException: Expanders may not be nested inside other expanders` ao abrir a aba Reuniões da Central de Artefatos. Causa raiz: `render_promote_button()` (componente de promoção a Ativo de Negócio, PC166) sempre envolvia o formulário num `st.expander()` próprio — funciona quando chamado de um contexto "plano", mas quebra sempre que o chamador já está dentro de outro `st.expander()`.

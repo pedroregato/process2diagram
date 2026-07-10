@@ -1706,26 +1706,32 @@ def _is_multi_pool(bpmn: BpmnProcess) -> bool:
 _SYN_LANE_SUFFIX = "_syn_main"   # synthetic single-lane marker for pools without lanes
 
 
+def _synthesize_lane_if_needed(pool: BpmnPool, elements: list) -> list:
+    """
+    Returns pool.lanes, injecting a single synthetic lane covering every
+    element when the pool has none. _compute_layout requires ≥1 lane to
+    position elements — a named pool with no explicit lanes (single-process
+    diagrams, or a collaboration participant with no swimlanes) still needs
+    one internally. The synthetic lane is excluded from the emitted BPMN XML
+    (see _build_process_xml's _SYN_LANE_SUFFIX filter) — it never appears as
+    a real <bpmn:lane>, only as a nameless layout band in the DI.
+    """
+    if pool.lanes or not elements:
+        return pool.lanes
+    return [BpmnLane(
+        id=pool.id + _SYN_LANE_SUFFIX,
+        name="",
+        element_ids=[el.id for el in elements if el.type != "boundaryEvent"],
+    )]
+
+
 def _pool_as_process(pool: BpmnPool) -> BpmnProcess:
     """
     Wrap a single pool's elements + flows in a thin BpmnProcess so that the
     existing _assign_lanes / _compute_layout / _apply_link_events functions,
     which all operate on BpmnProcess, work without modification per-pool.
-
-    When the pool has no lanes, a synthetic single lane is injected so that
-    _compute_layout (which requires at least one lane to position elements)
-    produces valid coordinates.  The synthetic lane is NOT emitted in the DI
-    output — it is identified by the _SYN_LANE_SUFFIX marker.
     """
-    lanes = pool.lanes
-    if not lanes and pool.elements:
-        syn_lane = BpmnLane(
-            id=pool.id + _SYN_LANE_SUFFIX,
-            name="",
-            element_ids=[el.id for el in pool.elements
-                         if el.type != "boundaryEvent"],
-        )
-        lanes = [syn_lane]
+    lanes = _synthesize_lane_if_needed(pool, pool.elements)
     return BpmnProcess(
         name=pool.name,
         elements=pool.elements,   # intentional reference — mutations propagate
@@ -1986,6 +1992,15 @@ def generate_bpmn_xml(bpmn: BpmnProcess) -> str:
     # here, _make_defs() emits xmlns="" (auto) AND xmlns="" (explicit) → duplicate attr.
     for _p_gen, _u_gen in _NS.items():
         ET.register_namespace(_p_gen, _u_gen)
+
+    # A named pool (process name shown inside the diagram) may arrive without
+    # real lanes — inject a synthetic single lane so _compute_layout (which
+    # requires ≥1 lane) still works; excluded from the emitted <laneSet>.
+    if bpmn.pools:
+        bpmn.pools[0] = BpmnPool(
+            id=bpmn.pools[0].id, name=bpmn.pools[0].name,
+            lanes=_synthesize_lane_if_needed(bpmn.pools[0], bpmn.elements),
+        )
 
     process_id = "process_1"
     lane_assignment = _assign_lanes(bpmn)

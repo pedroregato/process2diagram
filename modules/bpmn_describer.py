@@ -130,7 +130,11 @@ def describe_bpmn_from_xml(
         header += f" (v{version})"
     lines = [header, ""]
 
-    if pool_names:
+    # A single named pool (single-process diagrams now always get one, so the
+    # process name shows inside the diagram) duplicates the header above —
+    # only worth its own section when there are genuinely ≥2 participants
+    # (real multi-pool collaboration).
+    if len(pool_names) > 1:
         lines += ["### Participantes (Pools)", ""]
         for p in pool_names:
             lines.append(f"- **{p}**")

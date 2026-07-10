@@ -1024,9 +1024,8 @@ class AgentBPMN(BaseAgent):
                 flows.append(SequenceFlow(id=_fid, source=_term.id,
                                           target="ev_end"))
 
-        pools = []
+        lane_objects = []
         if model.lanes:
-            lane_objects = []
             for lane_name in model.lanes:
                 lane_id = "lane_" + _ascii_id(lane_name)
                 member_ids = [
@@ -1036,8 +1035,11 @@ class AgentBPMN(BaseAgent):
                 lane_objects.append(BpmnLane(
                     id=lane_id, name=lane_name, element_ids=member_ids,
                 ))
-            pools.append(BpmnPool(id="pool_1", name=model.name,
-                                  lanes=lane_objects))
+        # Pool is always created (even without lanes) so the process name is
+        # always rendered inside the diagram as the pool header — when there
+        # are no real lanes, generate_bpmn_xml() injects a synthetic single
+        # lane internally so the layout math still has ≥1 lane to work with.
+        pools = [BpmnPool(id="pool_1", name=model.name, lanes=lane_objects)]
 
         bpmn_process = BpmnProcess(
             name=model.name,
