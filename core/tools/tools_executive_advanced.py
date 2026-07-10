@@ -511,6 +511,46 @@ EXECUTIVE_ADVANCED_SCHEMAS: list[dict] = [
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "gerar_variacao_apresentacao",
+                    "description": (
+                        "Gera uma NOVA versão em HTML autocontido de uma das páginas de material "
+                        "comercial do P2D (Apresentação Geral ou Sobre o P2D), reaproveitando a "
+                        "mesma identidade visual (CSS, cores, cards) da página original, mas "
+                        "adaptando o conteúdo conforme o pedido — ex: foco em um setor/cliente "
+                        "específico, tom mais executivo, versão resumida, ênfase em um diferencial. "
+                        "Use quando o usuário pedir 'gere uma variação da apresentação', 'adapte o "
+                        "Sobre pra um cliente de saúde', 'crie uma versão da apresentação focada "
+                        "em [X]' ou similar. Não usar para editar a página oficial em si — o "
+                        "resultado é um HTML avulso, baixável, e não sobrescreve o material original."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "base": {
+                                "type": "string",
+                                "enum": ["apresentacao", "sobre"],
+                                "description": (
+                                    "Qual página usar como referência de design/conteúdo: "
+                                    "'apresentacao' (pitch comercial — mercado, ROI, 12 artefatos) "
+                                    "ou 'sobre' (autor, filosofia do produto, CKF, Multi-LLM)."
+                                ),
+                            },
+                            "variacao_pedida": {
+                                "type": "string",
+                                "description": (
+                                    "Descrição em linguagem natural da variação desejada "
+                                    "(ex: 'focada em clientes do setor de saúde', 'versão resumida "
+                                    "para investidores', 'tom mais técnico para arquitetos de TI')."
+                                ),
+                            },
+                        },
+                        "required": ["base", "variacao_pedida"],
+                    },
+                },
+            },
 ]
 
 class _ExecutiveAdvancedToolsMixin:
@@ -1841,4 +1881,81 @@ class _ExecutiveAdvancedToolsMixin:
             f"✅ Ativo de negócio promovido: **{titulo}** "
             f"(Interesse: {interesse}, Perspectiva: {', '.join(perspectiva_valida)}"
             f"{f', Classificação: {classificacao_formal}' if classificacao_formal else ''})."
+        )
+
+    _VARIACAO_APRESENTACAO_BASES = {
+        "apresentacao": ("static/apresentacao-geral.html", "Apresentação Geral — pitch comercial (mercado, ROI, 12 artefatos)"),
+        "sobre": ("static/sobre-p2d.html", "Sobre o P2D — autor, filosofia do produto, CKF, Multi-LLM"),
+    }
+
+    def gerar_variacao_apresentacao(self, base: str, variacao_pedida: str) -> str:
+        """Gera uma variação em HTML autocontido de static/apresentacao-geral.html
+        ou static/sobre-p2d.html, mantendo a identidade visual mas adaptando o
+        conteúdo ao pedido do usuário. Disponibiliza via _pending_file_download —
+        nunca sobrescreve o material original."""
+        base_key = (base or "").strip().lower()
+        if base_key not in self._VARIACAO_APRESENTACAO_BASES:
+            return "❌ Parâmetro 'base' inválido — use 'apresentacao' ou 'sobre'."
+        if not (variacao_pedida or "").strip():
+            return "❌ Descreva a variação desejada (ex: 'focada em clientes de saúde')."
+
+        rel_path, desc = self._VARIACAO_APRESENTACAO_BASES[base_key]
+        try:
+            from pathlib import Path
+            root = Path(__file__).resolve().parent.parent.parent
+            reference_html = (root / rel_path).read_text(encoding="utf-8")
+        except Exception as exc:
+            return f"❌ Não consegui carregar o material de referência: {exc}"
+
+        reference_html = re.sub(
+            r"data:image/[^;]+;base64,[A-Za-z0-9+/=]+",
+            "data:image/png;base64,__FOTO_OMITIDA__",
+            reference_html,
+        )
+        if len(reference_html) > 40000:
+            reference_html = reference_html[:40000] + "\n<!-- ...HTML de referência truncado... -->"
+
+        system = (
+            "Você é redator sênior de material comercial B2B para software. Vai receber um "
+            "HTML de referência autocontido (design já aprovado — cores navy/gold, cards, "
+            "tipografia) e deve gerar uma NOVA página HTML completa e autocontida, "
+            "reaproveitando fielmente a mesma estrutura visual (CSS, classes, paleta, layout) "
+            "mas adaptando texto e ênfase de conteúdo conforme o pedido do usuário. Nunca "
+            "invente números/estatísticas novas sem base no material original — pode "
+            "reorganizar, resumir, focar ou trocar o tom, mas não fabricar dados novos. "
+            "Responda em Português do Brasil, APENAS com o HTML completo "
+            "(de <!doctype html> até </html>), sem comentário externo, sem cercas de markdown."
+        )
+        user = (
+            f"Material de referência ({desc}):\n\n{reference_html}\n\n"
+            f"Variação pedida pelo usuário: {variacao_pedida}\n\n"
+            "Gere o HTML completo da nova versão."
+        )
+
+        try:
+            variacao_html = self._llm_call(system, user, max_tokens=8000)
+        except Exception as exc:
+            return f"❌ Erro ao gerar variação: {exc}"
+
+        variacao_html = variacao_html.strip()
+        if variacao_html.startswith("```"):
+            variacao_html = re.sub(r"^```[a-zA-Z]*\n?", "", variacao_html)
+            variacao_html = re.sub(r"\n?```$", "", variacao_html)
+
+        if "<html" not in variacao_html.lower():
+            return "❌ O modelo não retornou um HTML válido. Tente reformular o pedido de variação."
+
+        import streamlit as st
+        from datetime import datetime as _dt
+        key = f"_variacao_apresentacao_dl_{_dt.now().strftime('%Y%m%d%H%M%S')}"
+        st.session_state["_pending_file_download"] = {
+            "cache_key": key,
+            "filename":  f"variacao_{base_key}_p2d_{_dt.now().strftime('%Y%m%d_%H%M')}.html",
+            "mime":      "text/html",
+            "label":     "⬇️ Variação (.html)",
+        }
+        st.session_state[key] = variacao_html.encode("utf-8")
+        return (
+            f"✅ Variação de \"{desc}\" gerada com o pedido: \"{variacao_pedida}\". "
+            "Disponível para download em HTML autocontido — não altera o material original."
         )

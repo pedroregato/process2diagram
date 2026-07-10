@@ -223,6 +223,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "gerar_release_notes":             "consulta",
     # Ativos de Negócio — Promoção (Fase C, melhorias/promocao-ativos-negocio.md)
     "promover_ativo_negocio":          "escrita",
+    "gerar_variacao_apresentacao":     "consulta",
     # Editor Estrutural (Fase 2)
     "reordenar_requisitos":            "escrita",
     "inserir_secao_ata":               "admin",
@@ -896,6 +897,10 @@ class AssistantToolExecutor(
                     perspectiva=tool_input.get("perspectiva") or [],
                     justificativa=tool_input["justificativa"],
                     classificacao_formal=tool_input.get("classificacao_formal"),
+                ),
+                "gerar_variacao_apresentacao": lambda: self.gerar_variacao_apresentacao(
+                    base=tool_input["base"],
+                    variacao_pedida=tool_input["variacao_pedida"],
                 ),
                 # ── Editor Estrutural (Fase 2)
                 "reordenar_requisitos":   lambda: self.reordenar_requisitos(

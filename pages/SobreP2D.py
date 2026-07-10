@@ -32,6 +32,19 @@ _PHOTO_SRC = (
     else ""
 )
 
+# ── Download do HTML autônomo ───────────────────────────────────────────────
+_STATIC_HTML_PATH = root_dir / "static" / "sobre-p2d.html"
+_dl_spacer, _dl_btn = st.columns([5, 1])
+with _dl_btn:
+    if _STATIC_HTML_PATH.exists():
+        st.download_button(
+            "⬇️ HTML",
+            data=_STATIC_HTML_PATH.read_bytes(),
+            file_name="sobre-p2d.html",
+            mime="text/html",
+            key="dl_sobre_p2d_html",
+        )
+
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>

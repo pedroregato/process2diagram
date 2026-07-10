@@ -19,6 +19,19 @@ from ui.auth_gate import apply_auth_gate
 
 apply_auth_gate()
 
+# ── Download do HTML autônomo ───────────────────────────────────────────────
+_STATIC_HTML_PATH = root_dir / "static" / "apresentacao-geral.html"
+_dl_spacer, _dl_btn = st.columns([5, 1])
+with _dl_btn:
+    if _STATIC_HTML_PATH.exists():
+        st.download_button(
+            "⬇️ HTML",
+            data=_STATIC_HTML_PATH.read_bytes(),
+            file_name="apresentacao-geral-p2d.html",
+            mime="text/html",
+            key="dl_apresentacao_geral_html",
+        )
+
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -173,7 +186,7 @@ st.markdown("""
   </div>
   <div class="box red-b" style="margin-top:24px;">
     <p style="color:#F59B9B; font-weight:600; font-size:16px;">
-      ⚠️ Sem documentação formal: decisões são revertidas, requisitos são reescritos,
+      ⚠️ Sem rastreabilidade ativa: decisões são revertidas, requisitos são reescritos,
       processos são redesenhados — pagando o mesmo custo repetidamente.
       <strong style="color:var(--white);">O P2D elimina esse ciclo.</strong>
     </p>

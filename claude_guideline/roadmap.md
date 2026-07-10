@@ -4,6 +4,18 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC171 — Concluído (v5.15 / 2026-07-10) — Ajuste de mensagem + botão de download HTML + tool `gerar_variacao_apresentacao`
+
+**Contexto:** 3 pedidos do usuário na mesma mensagem sobre o material comercial: (1) trocar "Sem documentação formal" por "Sem rastreabilidade ativa" (mais provocativo/engajador) no slide de problema; (2) botão pra salvar o conteúdo em HTML direto nas páginas Sobre/Apresentação; (3) o Assistente "ter em mente" essas duas páginas e ser capaz de reproduzi-las com variações.
+
+- Texto do slide "O Problema" ajustado em `pages/ApresentacaoGeral.py` + `static/apresentacao-geral.html` (par sincronizado).
+- Botão "⬇️ HTML" adicionado no topo de `pages/ApresentacaoGeral.py` e `pages/SobreP2D.py` — baixa o arquivo estático correspondente (`static/apresentacao-geral.html` / `static/sobre-p2d.html`) já existente no repo, sem gerar nada novo.
+- **Nova tool `gerar_variacao_apresentacao(base, variacao_pedida)`** (`core/tools/tools_executive_advanced.py` + dispatch em `core/assistant_tools.py`) — usa o HTML estático de referência (Apresentação ou Sobre) como base de design/conteúdo e pede ao LLM uma nova versão HTML autocontida, mantendo CSS/paleta/estrutura mas adaptando texto ao pedido (ex: "focada em clientes de saúde"). Nunca sobrescreve o material oficial — resultado é um HTML avulso para download via `_pending_file_download` (mesmo mecanismo do PC161). Decisões confirmadas com o usuário (`AskUserQuestion`, ambas as recomendações aceitas): saída em HTML autocontido (não Markdown puro) e sem gate de admin.
+- Achado no caminho: `static/sobre-p2d.html` tem ~2.7MB por causa da foto do autor embutida em base64 — enviar isso cru pro LLM custaria uma fortuna em tokens à toa. Fix: regex remove o blob base64 da imagem antes de montar o prompt, substituindo por um placeholder curto.
+- 9 testes novos (`tests/test_tool_gerar_variacao_apresentacao.py`), 794/794 passando.
+
+---
+
 ### PC170 — Concluído (v5.15 / 2026-07-10) — Material comercial: fluxo "A Jornada" + Ativos de Negócio atualizado
 
 **Contexto:** pedido direto do usuário — atualizar as 3 peças de material comercial (Sobre, Apresentação Geral, HTML executivo para clientes) com as novidades do ciclo de Ativos de Negócio (PC166-168), incluindo um fluxo visual "super elegante" mostrando a jornada transcrição → ativo de negócio.
