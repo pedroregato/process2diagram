@@ -4,6 +4,22 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC166 — Concluído (v5.15 / 2026-07-09) — Ativos de Negócio: Promoção Explícita + Classificação em 3 Dimensões (Fase A)
+
+**Contexto:** implementa a Fase A de `melhorias/promocao-ativos-negocio.md` — plano escrito e refinado em várias rodadas na mesma sessão (perspectiva multi-valor, taxonomia de 12 classes AN-01..AN-12 baseada em ISO 55000/APQC PCF/BIZBOK/TOGAF trazida pelo usuário, justificativa obrigatória, promoção em lote, despromoção com histórico, permissão aberta). Muda a premissa central da Central de Ativos: **um artefato só é ativo de negócio depois de promovido explicitamente** — deixa de listar automaticamente tudo que existe no projeto (comportamento do PC164).
+
+- **Migration `setup/supabase_migration_asset_promotion.sql`** (executada e verificada via psycopg2) — 6 colunas novas em `asset_metadata`: `business_interest`, `business_perspective` (`TEXT[]`), `formal_classification`, `promotion_justification`, `promoted_at`, `promoted_by`. Linhas já existentes desde PC164/165 recebem defaults (fail-open, sem perda de dado).
+- **`core/project_store.py`** — `promote_to_business_asset()` (exige as 3 classificações + justificativa não-vazia, recusa senão); `demote_business_asset()` (move `status` para `arquivado`, nunca apaga); `upsert_asset_metadata()` estendida com as 4 novas colunas e um guard novo: **recusa criar linha nova sem as 3 classificações** — só editar uma linha já promovida continua funcionando sem exigir os campos de novo. `list_all_business_assets()` **reescrita**: em vez de varrer as tabelas de origem e enriquecer com metadata por fora, agora enumera `asset_metadata` (via novo helper `_hydrate_promoted_assets()`) e hidrata título/reunião pela tabela de origem — item cujo artefato de origem sumiu não desaparece, ganha um título de fallback.
+- **`ui/components/promote_asset.py`** (novo) — `render_promote_button()` (formulário de promoção por item) e `render_classification_fields()` (os 4 campos, reutilizados por promoção individual, em lote e reclassificação de ativo já promovido, com defaults opcionais para o caso de edição).
+- **`pages/Artefatos.py`** — botão de promoção plugado nas abas Requisitos (painel de detalhe), BPMN (processo selecionado), SBVR (termo e regra) e Reuniões (ata); seção "📦 Promoção em Lote" na aba Requisitos — multi-select respeitando os filtros já ativos, **tabela de revisão completa obrigatória antes de confirmar** (exigência explícita do usuário), mesma classificação aplicada a todos os itens do lote.
+- **`pages/AtivosDeNegocio.py`** — filtros novos por Interesse/Perspectiva/Classificação Formal; badges das 3 dimensões + justificativa no corpo de cada card; arquivados ocultos por padrão (checkbox "Mostrar arquivados"); formulário de edição ganhou os 4 campos de reclassificação; botão "🗄️ Despromover".
+- [x] 23 testes novos (`tests/test_promote_to_business_asset.py` — 9; `tests/test_asset_metadata.py` — 2 novos cobrindo o guard; `tests/test_list_all_business_assets.py` — reescrito para o modelo "só promovidos", 8 testes).
+- [x] `pages/Artefatos.py` e `pages/AtivosDeNegocio.py` verificados sem erro via `AppTest`.
+- [x] 760/760 testes automatizados passando.
+- **Fases B (Documentos) e C (conteúdo do Assistente) do plano ficam para uma entrega futura** — Fase A é auto-contida e já entrega o núcleo (promoção explícita + as 3 classificações) para os 5 tipos com linha própria no banco.
+
+---
+
 ### PC165 — Concluído (v5.15 / 2026-07-09) — Ativos de Negócio: Catálogo do Domínio (cross-contexto)
 
 **Contexto:** pedido direto do usuário, na sequência do PC164 — um catálogo de ativos de negócio visualizável em todos os contextos do domínio (tenant), não só no contexto ativo da sessão. Concretiza o item "Reuso cross-contexto" listado como diferencial em `melhorias/cognicao-de-negocio.md` §8.

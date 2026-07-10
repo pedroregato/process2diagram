@@ -113,11 +113,38 @@ class TestUpsertAssetMetadata:
             result = upsert_asset_metadata(
                 "p1", "requirement", "r1",
                 status="ativo", tags=["urgente"], owner="Ana", notes="nota",
+                business_interest="estrategico", business_perspective=["financeiro"],
+                promotion_justification="Impacta o orçamento anual.",
             )
         assert result["status"] == "ativo"
         assert result["tags"] == ["urgente"]
         assert result["owner"] == "Ana"
+        assert result["business_interest"] == "estrategico"
+        assert result["business_perspective"] == ["financeiro"]
         assert len(db._table.rows) == 1
+
+    def test_new_row_without_promotion_fields_is_refused(self):
+        """A row's mere existence now means 'promoted' (melhorias/promocao-ativos-negocio.md
+        §4) — creating one without the 3 mandatory classifications must be refused,
+        not silently defaulted, so editing code can't accidentally promote something."""
+        db = _FakeDB([])
+        with patch("core.project_store._db", return_value=db):
+            result = upsert_asset_metadata(
+                "p1", "requirement", "r1", status="ativo", tags=["urgente"], owner="Ana",
+            )
+        assert result is None
+        assert db._table.rows == []
+
+    def test_new_row_with_empty_justification_is_refused(self):
+        db = _FakeDB([])
+        with patch("core.project_store._db", return_value=db):
+            result = upsert_asset_metadata(
+                "p1", "requirement", "r1",
+                business_interest="estrategico", business_perspective=["financeiro"],
+                promotion_justification="   ",
+            )
+        assert result is None
+        assert db._table.rows == []
 
     def test_updates_existing_row(self):
         rows = [{"id": "m1", "project_id": "p1", "artifact_type": "requirement", "artifact_id": "r1",

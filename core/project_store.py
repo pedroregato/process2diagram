@@ -4495,6 +4495,25 @@ ASSET_TYPES_WITH_METADATA = {
     "requirement", "bpmn_process", "sbvr_term", "sbvr_rule", "meeting_minutes",
 }
 
+# Classificação em 3 dimensões da Promoção (melhorias/promocao-ativos-negocio.md
+# §3) — texto livre no banco (mesmo padrão de `status`), validado só na
+# aplicação, para não travar refinamento futuro numa migration nova.
+BUSINESS_INTEREST_OPTIONS = ["estrategico", "tatico", "operacional"]
+
+BUSINESS_PERSPECTIVE_OPTIONS = [
+    "comercial", "compliance", "compras_suprimentos", "contabilidade",
+    "financeiro", "governanca", "juridico", "logistica", "marketing",
+    "operacoes", "rh", "ti",
+]
+
+# AN-01..AN-12 — taxonomia de Ativos de Negócio (ISO 55000/APQC PCF/BIZBOK/
+# TOGAF, §3.3 do plano). Opcional na promoção — várias classes ainda não têm
+# nenhum artefato P2D correspondente hoje.
+FORMAL_CLASSIFICATION_OPTIONS = [
+    "AN-01", "AN-02", "AN-03", "AN-04", "AN-05", "AN-06",
+    "AN-07", "AN-08", "AN-09", "AN-10", "AN-11", "AN-12",
+]
+
 
 def get_asset_metadata_map(project_id: str) -> dict[tuple[str, str], dict]:
     """Retorna todos os registros asset_metadata do projeto, indexados por
@@ -4524,12 +4543,23 @@ def upsert_asset_metadata(
     tags: list[str] | None = None,
     owner: str | None = None,
     notes: str | None = None,
+    business_interest: str | None = None,
+    business_perspective: list[str] | None = None,
+    formal_classification: str | None = None,
+    promotion_justification: str | None = None,
     created_by: str | None = None,
 ) -> dict | None:
-    """Cria ou atualiza os metadados de governança de um ativo.
+    """Cria ou atualiza os metadados de governança de um ativo já promovido.
 
     Só sobrescreve os campos passados (não-None) — campos omitidos preservam
     o valor já salvo (se houver) em vez de serem apagados.
+
+    Não cria linha nova sem as 3 classificações de promoção (business_interest,
+    business_perspective, promotion_justification) — evita que uma chamada de
+    edição comum "promova" um artefato de lado, sem passar pelo fluxo
+    explícito de `promote_to_business_asset()` (melhorias/promocao-ativos-negocio.md
+    §4). Editar um ativo JÁ promovido continua funcionando normalmente, já que
+    nesse caso a linha (e a classificação) já existe.
     """
     db = _db()
     if not db:
@@ -4553,6 +4583,13 @@ def upsert_asset_metadata(
     except Exception:
         pass
 
+    if not existing and (
+        not business_interest
+        or not business_perspective
+        or not (promotion_justification or "").strip()
+    ):
+        return None
+
     payload = {
         "project_id":    project_id,
         "artifact_type": artifact_type,
@@ -4561,9 +4598,14 @@ def upsert_asset_metadata(
         "tags":          tags if tags is not None else (existing or {}).get("tags", []),
         "owner":         owner if owner is not None else (existing or {}).get("owner"),
         "notes":         notes if notes is not None else (existing or {}).get("notes"),
+        "business_interest":       business_interest if business_interest is not None else (existing or {}).get("business_interest", "operacional"),
+        "business_perspective":    business_perspective if business_perspective is not None else (existing or {}).get("business_perspective", []),
+        "formal_classification":   formal_classification if formal_classification is not None else (existing or {}).get("formal_classification"),
+        "promotion_justification": promotion_justification if promotion_justification is not None else (existing or {}).get("promotion_justification", ""),
     }
     if not existing:
-        payload["created_by"] = created_by
+        payload["created_by"]  = created_by
+        payload["promoted_by"] = created_by
 
     try:
         result = (
@@ -4578,91 +4620,158 @@ def upsert_asset_metadata(
         return None
 
 
+def promote_to_business_asset(
+    project_id: str,
+    artifact_type: str,
+    artifact_id: str,
+    *,
+    business_interest: str,
+    business_perspective: list[str],
+    promotion_justification: str,
+    formal_classification: str | None = None,
+    owner: str | None = None,
+    tags: list[str] | None = None,
+    notes: str | None = None,
+    created_by: str | None = None,
+) -> dict | None:
+    """Promove um artefato a ativo de negócio.
+
+    A partir desta função, a EXISTÊNCIA da linha em `asset_metadata` passa a
+    ser a própria definição de "é um ativo de negócio" — não é mais um
+    enriquecimento opcional de algo que já aparecia automaticamente na
+    Central de Ativos (ver melhorias/promocao-ativos-negocio.md §4).
+
+    Recusa a promoção (retorna None) se qualquer uma das 3 classificações
+    obrigatórias estiver ausente: Interesse, Perspectiva (≥1 item) e
+    Justificativa (texto não-vazio). `formal_classification` é opcional —
+    várias das 12 classes ainda não têm nenhum artefato P2D correspondente.
+    """
+    if not business_interest or not business_perspective or not (promotion_justification or "").strip():
+        return None
+    return upsert_asset_metadata(
+        project_id, artifact_type, artifact_id,
+        status="rascunho",
+        tags=tags if tags is not None else [],
+        owner=owner,
+        notes=notes,
+        business_interest=business_interest,
+        business_perspective=business_perspective,
+        formal_classification=formal_classification,
+        promotion_justification=promotion_justification.strip(),
+        created_by=created_by,
+    )
+
+
+def demote_business_asset(project_id: str, artifact_type: str, artifact_id: str) -> bool:
+    """Despromove um ativo — move `status` para `arquivado`, mantendo toda a
+    classificação e o histórico (nunca apaga a linha de `asset_metadata`,
+    ver melhorias/promocao-ativos-negocio.md §4). Reversível: promover de
+    novo com `status="rascunho"`/`"ativo"` reativa o ativo.
+
+    Só afeta linhas já existentes — não cria uma linha nova, então não exige
+    as classificações de promoção.
+    """
+    result = upsert_asset_metadata(project_id, artifact_type, artifact_id, status="arquivado")
+    return result is not None
+
+
+def _hydrate_promoted_assets(
+    artifact_type: str,
+    promoted: dict[str, dict],
+    source_rows: list[dict],
+    title_fn,
+    meeting_ref_fn=None,
+    meeting_date_fn=None,
+) -> list[dict]:
+    """Monta os itens de um tipo promovível a partir das linhas de
+    `asset_metadata` (a lista de PROMOVIDOS), hidratando título/reunião pela
+    tabela de origem. Item cujo artefato de origem sumiu (deletado depois de
+    promovido) ainda aparece, com título de fallback — nunca desaparece
+    silenciosamente do Catálogo (a promoção continua existindo mesmo que a
+    origem não exista mais).
+    """
+    by_id = {r["id"]: r for r in source_rows if r.get("id")}
+    items = []
+    for artifact_id, meta in promoted.items():
+        src = by_id.get(artifact_id)
+        items.append({
+            "artifact_id":  artifact_id,
+            "title":        title_fn(src) if src is not None else "(artefato de origem não encontrado)",
+            "meeting_ref":  meeting_ref_fn(src) if (src is not None and meeting_ref_fn) else "",
+            "meeting_date": meeting_date_fn(src) if (src is not None and meeting_date_fn) else "",
+            "has_metadata_support": True,
+            "metadata": meta,
+        })
+    return items
+
+
 def list_all_business_assets(project_id: str) -> dict[str, list[dict]]:
-    """Agrega todos os tipos de ativo do projeto em uma única estrutura (Etapa 1).
+    """Agrega os ativos de negócio PROMOVIDOS do projeto em uma única estrutura
+    (Fase A da promoção explícita — melhorias/promocao-ativos-negocio.md §4).
+
+    A partir desta versão, uma linha em `asset_metadata` é a própria definição
+    de "é um ativo de negócio" — só aparecem aqui os artefatos que foram
+    promovidos explicitamente. Deixou de listar automaticamente todo
+    requisito/BPMN/termo-ou-regra-SBVR/ata que existe no projeto (era o
+    comportamento da Etapa 1 original, PC164).
 
     Retorna um dict {artifact_type: [items]}. Cada item tem sempre:
         artifact_id (str | None), title (str), meeting_ref (str),
         meeting_date (str), has_metadata_support (bool), metadata (dict | None)
 
-    Os 5 tipos com linha própria (requirement/bpmn_process/sbvr_term/sbvr_rule/
-    meeting_minutes) vêm com has_metadata_support=True e o registro de
-    asset_metadata já mesclado (se existir). Os 4 tipos somente-leitura
-    (bmm/dmn/ibis/report) vêm com has_metadata_support=False, metadata=None —
-    não têm um artifact_id de linha própria para governança hoje.
+    Os 5 tipos promovíveis (requirement/bpmn_process/sbvr_term/sbvr_rule/
+    meeting_minutes) vêm com has_metadata_support=True, só os itens com linha
+    em `asset_metadata`. Os 4 tipos somente-leitura (bmm/dmn/ibis/report)
+    continuam listados automaticamente — não são promovíveis nesta fase (sem
+    `artifact_id` de linha própria; ver melhorias/promocao-ativos-negocio.md
+    §6 Fase D).
     """
-    meta_map = get_asset_metadata_map(project_id)
+    meta_map = get_asset_metadata_map(project_id)  # {(artifact_type, artifact_id): row}
 
-    def _meta_for(artifact_type: str, artifact_id: str) -> dict | None:
-        return meta_map.get((artifact_type, artifact_id))
+    def _promoted(artifact_type: str) -> dict[str, dict]:
+        return {aid: meta for (atype, aid), meta in meta_map.items() if atype == artifact_type}
 
     result: dict[str, list[dict]] = {}
 
-    # ── Tipos com suporte a metadados ────────────────────────────────────────
-    reqs = list_requirements_light(project_id) or []
-    result["requirement"] = [
-        {
-            "artifact_id":  r["id"],
-            "title":        f"{r.get('req_number', '')} — {r.get('title', '')}".strip(" —"),
-            "meeting_ref":  "",
-            "meeting_date": "",
-            "has_metadata_support": True,
-            "metadata": _meta_for("requirement", r["id"]),
-        }
-        for r in reqs if r.get("id")
-    ]
+    # ── Tipos promovíveis — só os que têm linha em asset_metadata ────────────
+    promoted_reqs = _promoted("requirement")
+    result["requirement"] = _hydrate_promoted_assets(
+        "requirement", promoted_reqs,
+        list_requirements_light(project_id) or [] if promoted_reqs else [],
+        title_fn=lambda r: f"{r.get('req_number', '')} — {r.get('title', '')}".strip(" —"),
+    )
 
-    bpmns = list_bpmn_processes(project_id) or []
-    result["bpmn_process"] = [
-        {
-            "artifact_id":  b["id"],
-            "title":        b.get("name", ""),
-            "meeting_ref":  ((b.get("meetings") or {}) or {}).get("title", "") if isinstance(b.get("meetings"), dict) else "",
-            "meeting_date": "",
-            "has_metadata_support": True,
-            "metadata": _meta_for("bpmn_process", b["id"]),
-        }
-        for b in bpmns if b.get("id")
-    ]
+    promoted_bpmns = _promoted("bpmn_process")
+    result["bpmn_process"] = _hydrate_promoted_assets(
+        "bpmn_process", promoted_bpmns,
+        list_bpmn_processes(project_id) or [] if promoted_bpmns else [],
+        title_fn=lambda b: b.get("name", ""),
+        meeting_ref_fn=lambda b: ((b.get("meetings") or {}) or {}).get("title", "") if isinstance(b.get("meetings"), dict) else "",
+    )
 
-    terms = list_sbvr_terms(project_id) or []
-    result["sbvr_term"] = [
-        {
-            "artifact_id":  t["id"],
-            "title":        t.get("term", ""),
-            "meeting_ref":  ((t.get("meetings") or {}) or {}).get("title", "") if isinstance(t.get("meetings"), dict) else "",
-            "meeting_date": "",
-            "has_metadata_support": True,
-            "metadata": _meta_for("sbvr_term", t["id"]),
-        }
-        for t in terms if t.get("id")
-    ]
+    promoted_terms = _promoted("sbvr_term")
+    result["sbvr_term"] = _hydrate_promoted_assets(
+        "sbvr_term", promoted_terms,
+        list_sbvr_terms(project_id) or [] if promoted_terms else [],
+        title_fn=lambda t: t.get("term", ""),
+        meeting_ref_fn=lambda t: ((t.get("meetings") or {}) or {}).get("title", "") if isinstance(t.get("meetings"), dict) else "",
+    )
 
-    rules = list_sbvr_rules(project_id) or []
-    result["sbvr_rule"] = [
-        {
-            "artifact_id":  r["id"],
-            "title":        f"{r.get('rule_id', '')} — {r.get('statement', '')[:80]}".strip(" —"),
-            "meeting_ref":  ((r.get("meetings") or {}) or {}).get("title", "") if isinstance(r.get("meetings"), dict) else "",
-            "meeting_date": "",
-            "has_metadata_support": True,
-            "metadata": _meta_for("sbvr_rule", r["id"]),
-        }
-        for r in rules if r.get("id")
-    ]
+    promoted_rules = _promoted("sbvr_rule")
+    result["sbvr_rule"] = _hydrate_promoted_assets(
+        "sbvr_rule", promoted_rules,
+        list_sbvr_rules(project_id) or [] if promoted_rules else [],
+        title_fn=lambda r: f"{r.get('rule_id', '')} — {r.get('statement', '')[:80]}".strip(" —"),
+        meeting_ref_fn=lambda r: ((r.get("meetings") or {}) or {}).get("title", "") if isinstance(r.get("meetings"), dict) else "",
+    )
 
-    meetings = list_meetings(project_id) or []
-    result["meeting_minutes"] = [
-        {
-            "artifact_id":  m["id"],
-            "title":        m.get("title", "") or f"Reunião #{m.get('meeting_number', '')}",
-            "meeting_ref":  "",
-            "meeting_date": (m.get("meeting_date") or "")[:10],
-            "has_metadata_support": True,
-            "metadata": _meta_for("meeting_minutes", m["id"]),
-        }
-        for m in meetings if m.get("id") and (m.get("minutes_md") or "").strip()
-    ]
+    promoted_meetings = _promoted("meeting_minutes")
+    result["meeting_minutes"] = _hydrate_promoted_assets(
+        "meeting_minutes", promoted_meetings,
+        list_meetings(project_id) or [] if promoted_meetings else [],
+        title_fn=lambda m: m.get("title", "") or f"Reunião #{m.get('meeting_number', '')}",
+        meeting_date_fn=lambda m: (m.get("meeting_date") or "")[:10],
+    )
 
     # ── Tipos somente-leitura (sem linha própria) ────────────────────────────
     bmms = list_bmm_by_project(project_id) or []

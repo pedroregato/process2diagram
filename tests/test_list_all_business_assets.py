@@ -1,9 +1,12 @@
 # tests/test_list_all_business_assets.py
 """
 Tests for core/project_store.py :: list_all_business_assets() (Ativos de
-Negócio — Etapa 1, melhorias/cognicao-de-negocio.md): aggregates all 8
-artifact types (5 with metadata support + BMM/DMN/IBIS/Relatórios read-only)
-into a single unified structure for the "Ativos de Negócio" page.
+Negócio — Fase A da promoção explícita, melhorias/promocao-ativos-negocio.md
+§4): a partir desta versão, só aparecem os artefatos PROMOVIDOS (com linha em
+asset_metadata) para os 5 tipos com suporte a governança — deixou de listar
+automaticamente tudo que existe nas tabelas de origem (comportamento antigo,
+PC164). Os 4 tipos somente-leitura (bmm/dmn/ibis/report) continuam listados
+automaticamente, sem promoção nesta fase.
 
 Mocks the 9 underlying listing/lookup functions directly — this test exercises
 only the merge/normalization logic in list_all_business_assets(), not the
@@ -44,28 +47,49 @@ class TestListAllBusinessAssets:
         }
         assert all(v == [] for v in result.values())
 
-    def test_requirement_has_metadata_support_and_merges_existing_metadata(self):
+    def test_requirement_not_promoted_is_excluded(self):
+        """Existing in the source table is no longer enough — only a row in
+        asset_metadata (i.e. an explicit promotion) makes it appear."""
         overrides = _patches(
             list_requirements_light=[{"id": "r1", "req_number": 1, "title": "Login SSO"}],
-            get_asset_metadata_map={("requirement", "r1"): {"status": "ativo", "owner": "Ana"}},
         )
         with patch.multiple("core.project_store", **overrides):
             result = list_all_business_assets("p1")
+        assert result["requirement"] == []
+
+    def test_promoted_requirement_is_included_with_merged_metadata(self):
+        overrides = _patches(
+            list_requirements_light=[{"id": "r1", "req_number": 1, "title": "Login SSO"}],
+            get_asset_metadata_map={
+                ("requirement", "r1"): {
+                    "status": "ativo", "owner": "Ana",
+                    "business_interest": "estrategico", "business_perspective": ["ti"],
+                },
+            },
+        )
+        with patch.multiple("core.project_store", **overrides):
+            result = list_all_business_assets("p1")
+        assert len(result["requirement"]) == 1
         item = result["requirement"][0]
         assert item["artifact_id"] == "r1"
         assert item["has_metadata_support"] is True
         assert item["metadata"]["status"] == "ativo"
         assert item["metadata"]["owner"] == "Ana"
+        assert item["metadata"]["business_interest"] == "estrategico"
 
-    def test_requirement_without_metadata_row_has_none_metadata(self):
+    def test_promoted_requirement_missing_from_source_gets_fallback_title(self):
+        """Promotion is never silently undone by the source row disappearing —
+        the asset still shows up, with a fallback title instead of crashing."""
         overrides = _patches(
-            list_requirements_light=[{"id": "r1", "req_number": 1, "title": "Login SSO"}],
+            list_requirements_light=[],  # r1 not found in the source table anymore
+            get_asset_metadata_map={("requirement", "r1"): {"status": "ativo"}},
         )
         with patch.multiple("core.project_store", **overrides):
             result = list_all_business_assets("p1")
-        assert result["requirement"][0]["metadata"] is None
+        assert len(result["requirement"]) == 1
+        assert result["requirement"][0]["title"] == "(artefato de origem não encontrado)"
 
-    def test_bmm_dmn_ibis_report_are_read_only(self):
+    def test_bmm_dmn_ibis_report_are_read_only_and_still_auto_listed(self):
         overrides = _patches(
             list_bmm_by_project=[{"vision": "Ser líder", "_meeting_number": 1,
                                     "_meeting_title": "Kickoff", "_meeting_date": "2026-06-01"}],
@@ -82,24 +106,49 @@ class TestListAllBusinessAssets:
             assert item["metadata"] is None
             assert item["artifact_id"] is None
 
-    def test_bpmn_and_sbvr_types_have_metadata_support(self):
+    def test_bpmn_and_sbvr_types_only_listed_when_promoted(self):
         overrides = _patches(
             list_bpmn_processes=[{"id": "b1", "name": "Compras"}],
             list_sbvr_terms=[{"id": "t1", "term": "Cliente"}],
             list_sbvr_rules=[{"id": "ru1", "rule_id": "R001", "statement": "Todo cliente deve..."}],
             list_meetings=[{"id": "m1", "title": "Ata 1", "meeting_date": "2026-06-01", "minutes_md": "conteúdo"}],
+            get_asset_metadata_map={
+                ("bpmn_process", "b1"): {"status": "rascunho"},
+                ("sbvr_term", "t1"): {"status": "rascunho"},
+                ("sbvr_rule", "ru1"): {"status": "rascunho"},
+                ("meeting_minutes", "m1"): {"status": "rascunho"},
+            },
         )
         with patch.multiple("core.project_store", **overrides):
             result = list_all_business_assets("p1")
         assert result["bpmn_process"][0]["has_metadata_support"] is True
-        assert result["sbvr_term"][0]["has_metadata_support"] is True
-        assert result["sbvr_rule"][0]["has_metadata_support"] is True
-        assert result["meeting_minutes"][0]["has_metadata_support"] is True
+        assert result["bpmn_process"][0]["title"] == "Compras"
+        assert result["sbvr_term"][0]["title"] == "Cliente"
+        assert result["sbvr_rule"][0]["title"].startswith("R001")
+        assert result["meeting_minutes"][0]["title"] == "Ata 1"
 
-    def test_meeting_without_minutes_excluded(self):
+    def test_unpromoted_bpmn_and_sbvr_excluded_even_though_they_exist(self):
         overrides = _patches(
-            list_meetings=[{"id": "m1", "title": "Sem ata", "meeting_date": "2026-06-01", "minutes_md": ""}],
+            list_bpmn_processes=[{"id": "b1", "name": "Compras"}],
+            list_sbvr_terms=[{"id": "t1", "term": "Cliente"}],
+            list_sbvr_rules=[{"id": "ru1", "rule_id": "R001", "statement": "..."}],
+            list_meetings=[{"id": "m1", "title": "Ata 1", "meeting_date": "2026-06-01", "minutes_md": "conteúdo"}],
         )
         with patch.multiple("core.project_store", **overrides):
             result = list_all_business_assets("p1")
+        assert result["bpmn_process"] == []
+        assert result["sbvr_term"] == []
+        assert result["sbvr_rule"] == []
         assert result["meeting_minutes"] == []
+
+    def test_promoted_meeting_minutes_included_regardless_of_minutes_md(self):
+        """Promotion state drives inclusion now, not the presence of
+        minutes_md — a promoted meeting stays visible even if minutes_md
+        was later cleared (edge case, not actively encouraged by the UI)."""
+        overrides = _patches(
+            list_meetings=[{"id": "m1", "title": "Sem ata", "meeting_date": "2026-06-01", "minutes_md": ""}],
+            get_asset_metadata_map={("meeting_minutes", "m1"): {"status": "rascunho"}},
+        )
+        with patch.multiple("core.project_store", **overrides):
+            result = list_all_business_assets("p1")
+        assert len(result["meeting_minutes"]) == 1

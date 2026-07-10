@@ -32,8 +32,10 @@ from core.project_store import (
     list_dmn_by_project, list_argumentation_by_project,
     list_communication_noise_by_project,
     load_meeting_as_hub, save_bpmn_from_hub,
+    get_asset_metadata_map, promote_to_business_asset,
 )
 from ui.project_selector import require_active_project
+from ui.components.promote_asset import render_promote_button, render_classification_fields
 
 try:
     from modules.document_store import list_documents
@@ -149,6 +151,9 @@ def _load_documents(pid):          return list_documents(pid)
 @st.cache_data(ttl=300, show_spinner=False)
 def _load_noise(pid):              return list_communication_noise_by_project(pid)
 
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_asset_meta_map(pid):     return get_asset_metadata_map(pid)
+
 # ── Carregamento inicial: dados leves apenas ──────────────────────────────────
 # DMN e IBIS buscam dmn_json/argumentation_json de TODAS as reuniões (JSONs pesados).
 # São carregados sob demanda na primeira visita à respectiva aba, via session_state.
@@ -161,6 +166,19 @@ sbvr_terms       = _load_sbvr_terms(project_id)
 sbvr_rules       = _load_sbvr_rules(project_id)
 bpmn_procs       = _load_bpmn_procs(project_id)
 documents        = _load_documents(project_id)
+asset_meta_map   = _load_asset_meta_map(project_id)  # {(artifact_type, artifact_id): row} — só PROMOVIDOS
+
+def _promote_widget(artifact_type: str, artifact_id: str, title: str) -> None:
+    """Wrapper fino de render_promote_button() já resolvendo já-promovido/created_by
+    e o rerun com invalidação de cache pós-promoção (melhorias/promocao-ativos-negocio.md)."""
+    already = (artifact_type, artifact_id) in asset_meta_map
+    if render_promote_button(
+        project_id, artifact_type, artifact_id,
+        title=title, key_suffix=artifact_id, already_promoted=already,
+        created_by=st.session_state.get("_usuario_login", ""),
+    ):
+        _load_asset_meta_map.clear()
+        st.rerun()
 
 # DMN e IBIS: lê do session_state se já carregados nesta sessão.
 # None = ainda não carregado (primeira visita). [] = carregado, sem dados.
@@ -438,6 +456,64 @@ with tab_req:
             unsafe_allow_html=True,
         )
 
+        # ── Promoção em lote (melhorias/promocao-ativos-negocio.md §6 Fase A) ──
+        # Elevada da proposta original de "Fase D, não incluída" para dentro da
+        # Fase A — exige mostrar a lista COMPLETA dos itens do lote antes de
+        # confirmar (decisão do usuário), nunca promove sem revisão explícita.
+        with st.expander("📦 Promoção em Lote a Ativo de Negócio", expanded=False):
+            st.caption(
+                "Selecione vários requisitos (respeita os filtros acima) e promova todos de "
+                "uma vez, com a mesma classificação. A lista completa aparece abaixo antes de "
+                "confirmar — nada é promovido sem revisão explícita."
+            )
+            _bulk_opts = {
+                f"REQ-{r['req_number']:03d} — {r['title']}": r
+                for r in filtered
+                if ("requirement", r["id"]) not in asset_meta_map
+            }
+            if not _bulk_opts:
+                st.caption("Nenhum requisito elegível — os requisitos filtrados já são ativos de negócio, ou não há requisitos filtrados.")
+            else:
+                _bulk_sel_labels = st.multiselect(
+                    "Requisitos a promover", list(_bulk_opts.keys()), key="rt_bulk_sel",
+                )
+                if _bulk_sel_labels:
+                    st.markdown(f"**Revisão — {len(_bulk_sel_labels)} item(ns) selecionado(s) para promoção:**")
+                    st.table([
+                        {
+                            "ID": lbl.split(" — ")[0],
+                            "Título": _bulk_opts[lbl].get("title", ""),
+                            "Status": _bulk_opts[lbl].get("status", ""),
+                        }
+                        for lbl in _bulk_sel_labels
+                    ])
+                    with st.form("rt_bulk_form"):
+                        st.caption("Esta classificação será aplicada a **todos** os itens revisados acima.")
+                        _bi, _bp, _bc, _bj = render_classification_fields("rt_bulk")
+                        if st.form_submit_button(f"⭐ Promover {len(_bulk_sel_labels)} requisito(s)", type="primary"):
+                            if not _bi or not _bp or not _bj.strip():
+                                st.error("Interesse, Perspectiva e Justificativa são obrigatórios.")
+                            else:
+                                _ok_count = 0
+                                for _lbl in _bulk_sel_labels:
+                                    _r_bulk = _bulk_opts[_lbl]
+                                    _result = promote_to_business_asset(
+                                        project_id, "requirement", _r_bulk["id"],
+                                        business_interest=_bi,
+                                        business_perspective=_bp,
+                                        promotion_justification=_bj.strip(),
+                                        formal_classification=_bc,
+                                        created_by=st.session_state.get("_usuario_login", ""),
+                                    )
+                                    if _result:
+                                        _ok_count += 1
+                                if _ok_count == len(_bulk_sel_labels):
+                                    st.success(f"{_ok_count} requisito(s) promovido(s) com sucesso.")
+                                else:
+                                    st.warning(f"{_ok_count}/{len(_bulk_sel_labels)} promovido(s) — verifique erros.")
+                                _load_asset_meta_map.clear()
+                                st.rerun()
+
         # ── Painel de detalhes (um requisito por vez) ─────────────────────
         st.markdown("---")
         st.markdown("##### Detalhes do requisito")
@@ -509,6 +585,8 @@ with tab_req:
                             st.caption(f'   💬 *"{_v["source_quote"]}"*')
                         if _v.get("contradiction_detail"):
                             st.error(_v["contradiction_detail"])
+
+            _promote_widget("requirement", _det_req["id"], f"REQ-{_det_req['req_number']:03d} — {_det_req['title']}")
         else:
             st.info("Nenhum requisito corresponde aos filtros aplicados.")
 
@@ -779,6 +857,7 @@ with tab_meet:
                             st.caption(f"⚠️ Word indisponível: {_exc}")
                     if st.session_state.get(toggle_key):
                         st.markdown(minutes_md)
+                    _promote_widget("meeting_minutes", m["id"], f"Ata — Reunião {num} ({dt})")
                 else:
                     st.caption("_Ata não disponível para esta reunião._")
 
@@ -847,6 +926,7 @@ with tab_sbvr:
                     )
                     st.markdown(f"**Definição:** {t.get('definition', '—')}")
                     st.caption(source_label)
+                    _promote_widget("sbvr_term", t["id"], t.get("term", "—"))
 
         with col_r:
             st.markdown(f"### 📋 Regras de Negócio ({len(sbvr_rules)} regras)")
@@ -890,6 +970,7 @@ with tab_sbvr:
                     if r.get("source") and r["source"] not in ("manual", "assistente"):
                         footer += f" · 👤 {r['source']}"
                     st.caption(footer)
+                    _promote_widget("sbvr_rule", r["id"], rule_id)
 
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 7 — PROCESSOS BPMN
@@ -1064,6 +1145,8 @@ with tab_bpmn:
         sel_proc = _proc_sel_map[_sel_proc_lbl]
         pid      = sel_proc["id"]
         slug     = sel_proc.get("slug", "")
+
+        _promote_widget("bpmn_process", pid, sel_proc.get("name") or _sel_proc_lbl)
 
         st.markdown("---")
 
