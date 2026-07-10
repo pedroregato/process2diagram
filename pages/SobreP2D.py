@@ -131,6 +131,14 @@ st.markdown("""
 }
 .pipe-step.highlight { border-color: var(--gold); color: var(--gold2); }
 .pipe-arrow { color: var(--gold); font-size: 18px; }
+.journey { display: flex; align-items: flex-start; justify-content: space-between; margin-top: 30px; position: relative; flex-wrap: wrap; gap: 16px 0; }
+.journey-line { position: absolute; top: 22px; left: 6%; right: 6%; height: 2px; background: linear-gradient(90deg, #1E3456 0%, var(--gold) 45%, var(--gold2) 100%); z-index: 0; }
+.journey-step { display: flex; flex-direction: column; align-items: center; text-align: center; flex: 1; min-width: 130px; padding: 0 8px; position: relative; z-index: 1; }
+.journey-num { width: 44px; height: 44px; border-radius: 50%; background: #0D1F38; border: 2px solid var(--gold); color: var(--gold2); font-weight: 800; font-size: 16px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
+.journey-step.final .journey-num { background: linear-gradient(135deg, var(--gold), var(--gold2)); color: var(--navy); border-color: var(--gold2); box-shadow: 0 0 0 5px rgba(233,184,75,.15); }
+.journey-icon { font-size: 24px; margin-bottom: 6px; }
+.journey-title { font-size: 14px; font-weight: 700; color: var(--white); margin-bottom: 5px; }
+.journey-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
 
 /* ── ROI bar ── */
 .roi-row { margin-bottom: 16px; }
@@ -303,6 +311,58 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# ── SLIDE 3.5 — A JORNADA: DE TRANSCRIÇÃO A ATIVO DE NEGÓCIO ──────────────────
+st.markdown("""
+<div class="slide-card">
+  <div class="label">A jornada completa</div>
+  <h2>De uma <span style="color:var(--gold2);">transcrição</span> a um <span style="color:var(--gold2);">ativo de negócio</span> da organização</h2>
+  <p style="margin-top:14px; max-width:700px;">
+    Nenhum passo manual entre o texto bruto e o ativo formal — só uma decisão humana
+    explícita no meio do caminho: promover.
+  </p>
+  <div class="journey">
+    <div class="journey-line"></div>
+    <div class="journey-step">
+      <div class="journey-num">1</div>
+      <div class="journey-icon">📄</div>
+      <div class="journey-title">Transcrição</div>
+      <div class="journey-desc">Dado bruto — cole ou envie o texto de qualquer reunião</div>
+    </div>
+    <div class="journey-step">
+      <div class="journey-num">2</div>
+      <div class="journey-icon">🤖</div>
+      <div class="journey-title">IA Multi-Agente</div>
+      <div class="journey-desc">Extrai BPMN, Requisitos, Ata, SBVR, BMM, DMN, IBIS</div>
+    </div>
+    <div class="journey-step">
+      <div class="journey-num">3</div>
+      <div class="journey-icon">📐</div>
+      <div class="journey-title">Artefato Formal</div>
+      <div class="journey-desc">Padrão internacional — IEEE 830, OMG BPMN/SBVR/BMM/DMN</div>
+    </div>
+    <div class="journey-step">
+      <div class="journey-num">4</div>
+      <div class="journey-icon">⭐</div>
+      <div class="journey-title">Promoção Explícita</div>
+      <div class="journey-desc">Interesse · Perspectiva · Classificação Formal · Justificativa</div>
+    </div>
+    <div class="journey-step">
+      <div class="journey-num">5</div>
+      <div class="journey-icon">📦</div>
+      <div class="journey-title">Ativo de Negócio</div>
+      <div class="journey-desc">Existe além da reunião — governado e reutilizável</div>
+    </div>
+    <div class="journey-step final">
+      <div class="journey-num">6</div>
+      <div class="journey-icon">🌐</div>
+      <div class="journey-title">Catálogo do Domínio</div>
+      <div class="journey-desc">Descobrível por qualquer área, em qualquer contexto</div>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+
 # ── SLIDE 4 — CTA PARA LISTA COMPLETA DE ARTEFATOS ────────────────────────────
 st.markdown("""
 <div class="slide-card" style="text-align:center;">
@@ -354,8 +414,9 @@ st.markdown("""
         <p style="font-size:15px;color:var(--white);"><strong style="color:var(--gold2);">Resultado:</strong>
         o P2D acumula conhecimento organizacional ao longo do tempo — tornando-se um especialista
         no negócio do cliente a cada ciclo de reuniões. O <strong style="color:var(--gold2);">Catálogo
-        do Domínio</strong> leva essa memória além de um projeto isolado: ativos de negócio
-        (requisitos, processos, regras) ficam descobríveis em todos os contextos da organização.</p>
+        do Domínio</strong> leva essa memória além de um projeto isolado: artefatos promovidos a
+        ativo de negócio (requisitos, processos, regras) ficam descobríveis em todos os contextos
+        da organização.</p>
       </div>
     </div>
     <div>

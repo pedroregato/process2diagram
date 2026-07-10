@@ -4,6 +4,19 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC170 — Concluído (v5.15 / 2026-07-10) — Material comercial: fluxo "A Jornada" + Ativos de Negócio atualizado
+
+**Contexto:** pedido direto do usuário — atualizar as 3 peças de material comercial (Sobre, Apresentação Geral, HTML executivo para clientes) com as novidades do ciclo de Ativos de Negócio (PC166-168), incluindo um fluxo visual "super elegante" mostrando a jornada transcrição → ativo de negócio.
+
+- Novo componente CSS `.journey` (círculos numerados + linha conectora em gradiente) reaproveitado nos 3 materiais: `outputs/apresentacao_executiva_p2d.html`, `pages/ApresentacaoGeral.py` + `static/apresentacao-geral.html` (par sincronizado), `pages/SobreP2D.py` + `static/sobre-p2d.html` (par sincronizado).
+- Fluxo de 6 passos: Transcrição → IA Multi-Agente → Artefato Formal → Promoção Explícita → Ativo de Negócio → Catálogo do Domínio.
+- `outputs/apresentacao_executiva_p2d.html` — novo slide 12 "A Jornada"; slide de Ativos de Negócio renumerado pra 13 e reescrito (tabela de governança agora cobre também Documentos enviados e Conteúdo do Assistente como promovíveis; texto reflete a classificação em 3 dimensões). Deck: 18 slides.
+- `ApresentacaoGeral.py`/`SobreP2D.py` (+ pares estáticos) — texto de Compliance/CKF atualizado pra citar "promoção explícita" em vez do antigo "status/tags/dono".
+- Bug encontrado e corrigido via screenshot Playwright (não detectável por validação de HTML): em `sobre-p2d.html`/`SobreP2D.py`, o `<span>` de ênfase dourada no novo `<h2>` da Jornada não herdava a cor porque a regra CSS `.slide-card h1 span` só cobre `h1`; corrigido com `style="color:var(--gold2);"` inline.
+- Sem testes automatizados dedicados (páginas HTML/apresentação) — verificado via Playwright (screenshot real do navegador) nas 3 peças.
+
+---
+
 ### PC169 — Concluído (v5.15 / 2026-07-10) — Upload de imagens (Documentos + Assistente) + fix de labels cortados no Gantt
 
 **Contexto:** 2 pedidos diretos do usuário. Escopo de imagem restrito por decisão do usuário (`AskUserQuestion`): só `DocumentManager.py` (aba Enviar) e o anexo de contexto do `Assistente.py` — não a transcrição do Pipeline nem os Arquivos de Contexto do CKF. Sem OCR/visão computacional ainda (isso é a Etapa 0, maior, de `melhorias/cognicao-de-negocio.md`, não iniciada) — a decisão foi "aceitar o arquivo, guardar sem extrair texto".
