@@ -4,6 +4,17 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC172 — Concluído (v5.15 / 2026-07-10) — Fix de produção: expander aninhado quebrava as abas Reuniões/SBVR de Artefatos e a Biblioteca de Documentos
+
+**Contexto:** erro relatado pelo usuário em produção — `StreamlitAPIException: Expanders may not be nested inside other expanders` ao abrir a aba Reuniões da Central de Artefatos. Causa raiz: `render_promote_button()` (componente de promoção a Ativo de Negócio, PC166) sempre envolvia o formulário num `st.expander()` próprio — funciona quando chamado de um contexto "plano", mas quebra sempre que o chamador já está dentro de outro `st.expander()`.
+
+- 4 pontos de chamada já estavam nessa situação (aninhado, sempre quebrado — só a Ata foi a que o usuário bateu primeiro): `pages/Artefatos.py` aba Reuniões (Ata, dentro do expander por reunião), aba SBVR (Termo e Regra, cada um dentro do seu próprio expander), e `pages/DocumentManager.py` aba Biblioteca (cada documento já é um expander).
+- Fix estrutural em vez de pontual: `render_promote_button()` e `render_promote_assistant_content_button()` (`ui/components/promote_asset.py`) não usam mais `st.expander()` — trocado por botão de toggle + flag em `st.session_state`, o mesmo padrão já documentado no pitfall "Nested `st.expander`" do CLAUDE.md. Corrige os 4 pontos de uma vez, e blinda qualquer chamador futuro (não depende de "lembrar" de não aninhar).
+- 5 testes de regressão novos (`tests/test_promote_asset_nested_expander.py`) reproduzem a forma exata do bug (expander externo envolvendo `render_promote_button`/`render_promote_assistant_content_button`) via `AppTest.from_string()` — antes do fix, davam `StreamlitAPIException`; agora passam, incluindo o clique no toggle que abre o formulário. Achado no caminho (tooling, não produção): `AppTest.from_string()` neste ambiente Windows descarta widgets silenciosamente (sem exceção) quando o texto do script tem caracteres acentuados — scripts de teste reescritos em ASCII puro pra contornar.
+- 799/799 testes passando; boot-smoke via `AppTest` em `Artefatos.py` e `DocumentManager.py` sem exceção.
+
+---
+
 ### PC171 — Concluído (v5.15 / 2026-07-10) — Ajuste de mensagem + botão de download HTML + tool `gerar_variacao_apresentacao`
 
 **Contexto:** 3 pedidos do usuário na mesma mensagem sobre o material comercial: (1) trocar "Sem documentação formal" por "Sem rastreabilidade ativa" (mais provocativo/engajador) no slide de problema; (2) botão pra salvar o conteúdo em HTML direto nas páginas Sobre/Apresentação; (3) o Assistente "ter em mente" essas duas páginas e ser capaz de reproduzi-las com variações.
