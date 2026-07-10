@@ -4,6 +4,18 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC175 — Concluído (v5.15 / 2026-07-10) — "Bad 'setIn' index" persistia após PC174: 2º ponto instável achado (toggle "Ver Ata Completa")
+
+**Contexto:** usuário colou o mesmo log de console de novo após o PC174 — erro ainda presente, só que `index 3` virou `index 1`. O fix do PC174 (envolver `render_promote_button` num `st.container()`) estava correto mas incompleto: existia OUTRO ponto com o mesmo padrão instável bem ao lado, dentro do mesmo expander de reunião.
+
+- Achado: `pages/Artefatos.py`, aba Reuniões — o toggle "📄 Ver Ata Completa"/"🙈 Ocultar Ata" (`if st.session_state.get(toggle_key): st.markdown(minutes_md)`) também contribui uma quantidade VARIÁVEL de elementos (0 ou 1) diretamente no corpo do expander da reunião, no mesmo nível hierárquico do `_promote_widget()` já corrigido no PC174. Corrigindo só um dos dois pontos instáveis não bastava — o outro continuava desalinhando a árvore.
+- Fix: mesmo padrão do PC174 — o `st.markdown(minutes_md)` condicional agora vive dentro do seu próprio `st.container()` estável.
+- Varredura adicional no projeto (`grep -rn "= not st.session_state.get("`) achou o MESMO padrão (botão-toggle variando contagem de elementos, dentro de loop) em `pages/BpmnEditor.py` e `pages/Capacitacao.py` — nenhum dos dois foi alterado (sem relato de erro, fora do escopo deste fix), mas fica registrado aqui como candidato a checar se aparecer relato semelhante nessas páginas.
+- **Limite de verificação reconhecido**: este bug é 100% client-side (reconciliação de deltas no frontend React/JS do Streamlit) — `AppTest` só executa o script Python e não pode reproduzi-lo; não há teste automatizado que prove a ausência do erro. Verificação real depende do usuário reproduzir a interação (expandir uma reunião com Ata, alternar "Ver Ata Completa", tentar promover) em produção após o deploy.
+- 806/806 testes passando (sem regressão Python); boot-smoke via AppTest sem exceção.
+
+---
+
 ### PC174 — Concluído (v5.15 / 2026-07-10) — Fix de produção: "Bad 'setIn' index" no frontend do componente de promoção
 
 **Contexto:** logs de console do navegador colados pelo usuário na Central de Artefatos mostravam `Uncaught Error: Bad 'setIn' index 3 (should be between [0, 0])` — erro JS do frontend do Streamlit (não uma exceção Python), reintroduzido pelo próprio fix do PC172.

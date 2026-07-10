@@ -855,8 +855,14 @@ with tab_meet:
                             )
                         except Exception as _exc:
                             st.caption(f"⚠️ Word indisponível: {_exc}")
-                    if st.session_state.get(toggle_key):
-                        st.markdown(minutes_md)
+                    # Slot único e estável: o toggle acima muda entre 0 e 1
+                    # elemento aqui a cada rerun — sem um container próprio
+                    # isso desalinha a contagem de filhos do expander da
+                    # reunião e quebra o frontend com "Bad 'setIn' index"
+                    # (mesma causa raiz do PC174, ver CLAUDE.md pitfalls).
+                    with st.container():
+                        if st.session_state.get(toggle_key):
+                            st.markdown(minutes_md)
                     _promote_widget("meeting_minutes", m["id"], f"Ata — Reunião {num} ({dt})")
                 else:
                     st.caption("_Ata não disponível para esta reunião._")
