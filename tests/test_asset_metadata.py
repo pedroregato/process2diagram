@@ -179,7 +179,8 @@ class TestUpsertAssetMetadata:
             result = upsert_asset_metadata("p1", "requirement", "r1", status="ativo")
         assert result is None
 
-    def test_only_five_types_supported(self):
+    def test_supported_types(self):
         assert ASSET_TYPES_WITH_METADATA == {
             "requirement", "bpmn_process", "sbvr_term", "sbvr_rule", "meeting_minutes",
+            "document",
         }

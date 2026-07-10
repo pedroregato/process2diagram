@@ -4,6 +4,21 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC167 — Concluído (v5.15 / 2026-07-09) — Ativos de Negócio: Promoção de Documentos (Fase B)
+
+**Contexto:** continuação direta do PC166 na mesma sessão — Fase B de `melhorias/promocao-ativos-negocio.md`. Estende a promoção explícita (já entregue para requisito/BPMN/SBVR/ata) para documentos enviados via `DocumentManager.py`.
+
+- **`core/project_store.py`** — `document` entra em `ASSET_TYPES_WITH_METADATA` (6 tipos agora); `list_all_business_assets()` ganhou o bloco de hidratação de `document` (reaproveita `modules.document_store.list_documents()`, sem query nova). Novo `DOCUMENT_CATEGORY_TO_FORMAL_CLASSIFICATION` + `suggest_formal_classification_for_document(doc_type)` — único `artifact_type` com sugestão automática de Classificação Formal (as 9 categorias de `document_types` mapeiam quase 1:1 nas classes AN-01..AN-12, achado já registrado no plano §3.3); nunca força, só pré-seleciona.
+- **`pages/DocumentManager.py`** (aba Biblioteca) — botão "⭐ Promover a Ativo de Negócio" por documento, reaproveitando o mesmo componente `ui/components/promote_asset.py` da Fase A, com a Classificação Formal já vindo pré-marcada pela categoria do `doc_type`.
+- **`pages/AtivosDeNegocio.py`** — novo tipo "🗂️ Documentos" na Central de Ativos, mesmo tratamento de filtros/badges/despromoção dos outros 5 tipos governáveis.
+- [x] 7 testes novos (`tests/test_document_promotion.py` — 5; `tests/test_list_all_business_assets.py` — 2 novos para o tipo `document`; ajuste em `tests/test_asset_metadata.py` para os 6 tipos suportados).
+- [x] `pages/DocumentManager.py` verificado sem erro via `AppTest` (com contexto ativo simulado).
+- [x] 767/767 testes automatizados passando.
+- **Verificação ao vivo (E2E real) tentada e documentada como bloqueada** — a chave do Supabase no `secrets.toml` local tem RLS sem policy permissiva (limitação já conhecida desde o PC164, não introduzida por este trabalho); confirmado que leitura via `supabase-py` retorna vazio silenciosamente mesmo para dados reais confirmados via `psycopg2` direto. Verificação ficou em: testes unitários com Supabase mockado + `AppTest` de boot sem exceção (mesmo padrão já usado nas fases anteriores).
+- **Fase C (conteúdo do Assistente) segue para uma próxima entrega** — exige tabela nova `assistant_artifacts`, ainda não criada.
+
+---
+
 ### PC166 — Concluído (v5.15 / 2026-07-09) — Ativos de Negócio: Promoção Explícita + Classificação em 3 Dimensões (Fase A)
 
 **Contexto:** implementa a Fase A de `melhorias/promocao-ativos-negocio.md` — plano escrito e refinado em várias rodadas na mesma sessão (perspectiva multi-valor, taxonomia de 12 classes AN-01..AN-12 baseada em ISO 55000/APQC PCF/BIZBOK/TOGAF trazida pelo usuário, justificativa obrigatória, promoção em lote, despromoção com histórico, permissão aberta). Muda a premissa central da Central de Ativos: **um artefato só é ativo de negócio depois de promovido explicitamente** — deixa de listar automaticamente tudo que existe no projeto (comportamento do PC164).

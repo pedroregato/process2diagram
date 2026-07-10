@@ -87,6 +87,7 @@ _TYPE_META = {
     "sbvr_term":       ("SBVR — Termos",    "📖"),
     "sbvr_rule":       ("SBVR — Regras",    "⚖️"),
     "meeting_minutes": ("Atas",             "📝"),
+    "document":        ("Documentos",       "🗂️"),
     "bmm":             ("BMM",              "🎯"),
     "dmn":             ("DMN",              "🔀"),
     "ibis":            ("IBIS",             "💬"),

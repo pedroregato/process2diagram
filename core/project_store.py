@@ -14,6 +14,7 @@ from typing import Any
 
 from modules.supabase_client import get_supabase_client
 from modules.text_utils import rule_keyword_pt
+from modules.document_store import list_documents as _list_documents, get_document_types as _get_document_types
 
 
 # ── helpers internos ──────────────────────────────────────────────────────────
@@ -4493,7 +4494,38 @@ def list_reports_by_project(project_id: str) -> list[dict]:
 # como JSON dentro de meetings.*_json) — ver melhorias/cognicao-de-negocio.md.
 ASSET_TYPES_WITH_METADATA = {
     "requirement", "bpmn_process", "sbvr_term", "sbvr_rule", "meeting_minutes",
+    "document",
 }
+
+# Mapeamento de sugestão automática — categoria de document_types (Fase B,
+# melhorias/promocao-ativos-negocio.md §3.3) → Classificação Formal (AN-01..
+# AN-12). Só uma pré-seleção no formulário de promoção — o usuário sempre
+# pode trocar, nunca é forçado. Único tipo com sugestão automática hoje; os
+# demais artifact_type exigem escolha manual desde o início.
+DOCUMENT_CATEGORY_TO_FORMAL_CLASSIFICATION = {
+    "Contratos e Acordos":       "AN-08",
+    "Normas e Políticas":        "AN-07",
+    "Governança":                "AN-11",
+    "Técnico":                   "AN-06",
+    "Processos":                 "AN-03",
+    "Requisitos":                "AN-04",
+    "Análise de Negócio":        "AN-01",
+    "Qualidade":                 "AN-03",
+    "Iniciação e Planejamento":  "AN-01",
+}
+
+
+def suggest_formal_classification_for_document(doc_type: str) -> str | None:
+    """Sugere a Classificação Formal (AN-01..AN-12) de um documento a partir
+    da categoria do seu `doc_type` em `document_types` — usada para
+    pré-selecionar o campo no formulário de promoção (Fase B). Retorna None
+    se o tipo não existir ou não tiver categoria mapeada (o formulário cai
+    de volta para "não classificar agora", nunca quebra).
+    """
+    for row in (_get_document_types() or []):
+        if row.get("code") == doc_type:
+            return DOCUMENT_CATEGORY_TO_FORMAL_CLASSIFICATION.get(row.get("category", ""))
+    return None
 
 # Classificação em 3 dimensões da Promoção (melhorias/promocao-ativos-negocio.md
 # §3) — texto livre no banco (mesmo padrão de `status`), validado só na
@@ -4771,6 +4803,14 @@ def list_all_business_assets(project_id: str) -> dict[str, list[dict]]:
         list_meetings(project_id) or [] if promoted_meetings else [],
         title_fn=lambda m: m.get("title", "") or f"Reunião #{m.get('meeting_number', '')}",
         meeting_date_fn=lambda m: (m.get("meeting_date") or "")[:10],
+    )
+
+    promoted_docs = _promoted("document")
+    result["document"] = _hydrate_promoted_assets(
+        "document", promoted_docs,
+        _list_documents(project_id) or [] if promoted_docs else [],
+        title_fn=lambda d: d.get("title", "") or d.get("file_name", "") or "(documento sem título)",
+        meeting_date_fn=lambda d: (d.get("created_at") or "")[:10],
     )
 
     # ── Tipos somente-leitura (sem linha própria) ────────────────────────────

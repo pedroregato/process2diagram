@@ -1,14 +1,15 @@
 # tests/test_list_all_business_assets.py
 """
 Tests for core/project_store.py :: list_all_business_assets() (Ativos de
-Negócio — Fase A da promoção explícita, melhorias/promocao-ativos-negocio.md
+Negócio — Fase A/B da promoção explícita, melhorias/promocao-ativos-negocio.md
 §4): a partir desta versão, só aparecem os artefatos PROMOVIDOS (com linha em
-asset_metadata) para os 5 tipos com suporte a governança — deixou de listar
+asset_metadata) para os 6 tipos com suporte a governança (requirement/
+bpmn_process/sbvr_term/sbvr_rule/meeting_minutes/document) — deixou de listar
 automaticamente tudo que existe nas tabelas de origem (comportamento antigo,
 PC164). Os 4 tipos somente-leitura (bmm/dmn/ibis/report) continuam listados
-automaticamente, sem promoção nesta fase.
+automaticamente, sem promoção.
 
-Mocks the 9 underlying listing/lookup functions directly — this test exercises
+Mocks the underlying listing/lookup functions directly — this test exercises
 only the merge/normalization logic in list_all_business_assets(), not the
 individual listing functions (covered elsewhere).
 """
@@ -26,6 +27,7 @@ def _patches(**overrides):
         "list_sbvr_terms": [],
         "list_sbvr_rules": [],
         "list_meetings": [],
+        "_list_documents": [],
         "list_bmm_by_project": [],
         "list_dmn_by_project": [],
         "list_argumentation_by_project": [],
@@ -43,9 +45,35 @@ class TestListAllBusinessAssets:
             result = list_all_business_assets("p1")
         assert set(result.keys()) == {
             "requirement", "bpmn_process", "sbvr_term", "sbvr_rule",
-            "meeting_minutes", "bmm", "dmn", "ibis", "report",
+            "meeting_minutes", "document", "bmm", "dmn", "ibis", "report",
         }
         assert all(v == [] for v in result.values())
+
+    def test_document_not_promoted_is_excluded(self):
+        overrides = _patches(
+            _list_documents=[{"id": "d1", "title": "Contrato de Fornecimento", "created_at": "2026-07-01T10:00:00"}],
+        )
+        with patch.multiple("core.project_store", **overrides):
+            result = list_all_business_assets("p1")
+        assert result["document"] == []
+
+    def test_promoted_document_included_with_metadata(self):
+        overrides = _patches(
+            _list_documents=[{"id": "d1", "title": "Contrato de Fornecimento", "created_at": "2026-07-01T10:00:00"}],
+            get_asset_metadata_map={
+                ("document", "d1"): {
+                    "status": "ativo", "formal_classification": "AN-08",
+                },
+            },
+        )
+        with patch.multiple("core.project_store", **overrides):
+            result = list_all_business_assets("p1")
+        assert len(result["document"]) == 1
+        item = result["document"][0]
+        assert item["title"] == "Contrato de Fornecimento"
+        assert item["meeting_date"] == "2026-07-01"
+        assert item["has_metadata_support"] is True
+        assert item["metadata"]["formal_classification"] == "AN-08"
 
     def test_requirement_not_promoted_is_excluded(self):
         """Existing in the source table is no longer enough — only a row in

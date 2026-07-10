@@ -34,6 +34,8 @@ from modules.document_store import (
     search_documents_keyword,
     get_chunks_count,
 )
+from core.project_store import get_asset_metadata_map, suggest_formal_classification_for_document
+from ui.components.promote_asset import render_promote_button
 
 
 # ── Project context ────────────────────────────────────────────────────────────
@@ -58,6 +60,10 @@ def _cached_doc_types():
 @st.cache_data(ttl=120)
 def _cached_types_by_category():
     return get_types_by_category()
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_asset_meta_map(pid):
+    return get_asset_metadata_map(pid)
 
 def _list_meetings() -> list[dict]:
     """Fetch project meetings for linking documents."""
@@ -396,6 +402,7 @@ with tab_library:
         st.info("Nenhum documento encontrado. Use a aba **Enviar Documento** para adicionar.")
     else:
         st.caption(f"{len(docs)} documento(s) encontrado(s)")
+        asset_meta_map = _cached_asset_meta_map(project_id)  # {(artifact_type, artifact_id): row} — só PROMOVIDOS
 
         for doc in docs:
             doc_id    = doc["id"]
@@ -509,6 +516,22 @@ with tab_library:
                                     st.error("Falha na indexação.")
                             else:
                                 st.error("Conteúdo não encontrado.")
+
+                # Promoção a Ativo de Negócio (Fase B, melhorias/promocao-ativos-negocio.md) —
+                # Classificação Formal pré-selecionada a partir da categoria do doc_type (§3.3).
+                _already_promoted = ("document", doc_id) in asset_meta_map
+                _suggested_class = None
+                if not _already_promoted:
+                    _suggested_class = suggest_formal_classification_for_document(doc.get("doc_type", ""))
+                if render_promote_button(
+                    project_id, "document", doc_id,
+                    title=doc["title"], key_suffix=doc_id,
+                    already_promoted=_already_promoted,
+                    default_formal_classification=_suggested_class,
+                    created_by=st.session_state.get("_usuario_login", ""),
+                ):
+                    _cached_asset_meta_map.clear()
+                    st.rerun()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
