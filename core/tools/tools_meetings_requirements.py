@@ -188,6 +188,30 @@ MEETINGS_REQUIREMENTS_SCHEMAS: list[dict] = [
             {
                 "type": "function",
                 "function": {
+                    "name": "pesquisar_multi_contexto",
+                    "description": (
+                        "Busca uma palavra-chave nas transcrições de TODOS os contextos do "
+                        "mesmo domínio (tenant) — não só o contexto ativo. Use quando o usuário "
+                        "perguntar algo como 'algum outro contexto já discutiu X?', 'onde mais "
+                        "falamos sobre Y?' ou pedir explicitamente uma busca 'em todos os "
+                        "contextos'/'em todo o domínio'. Não usar pra perguntas sobre o contexto "
+                        "atual — nesse caso use search_transcript."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Palavras-chave ou frase para buscar em todos os contextos.",
+                            },
+                        },
+                        "required": ["query"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "count_artifacts",
                     "description": (
                         "OBRIGATÓRIO para qualquer pergunta de contagem — faz SELECT COUNT(*) no banco. "
@@ -1615,6 +1639,78 @@ class _MeetingsRequirementsToolsMixin:
             scope = f" na Reunião {meeting_number}" if meeting_number else ""
             return f"Nenhum trecho encontrado para '{query}'{scope}."
         return "\n".join(results)
+
+    def pesquisar_multi_contexto(self, query: str) -> str:
+        """Busca uma palavra-chave nas transcrições de TODOS os contextos do
+        mesmo domínio (tenant) — não só o contexto ativo. Reaproveita o
+        padrão de agregação cross-contexto já usado por
+        list_all_business_assets_for_domain (PC165, Catálogo do Domínio):
+        resolve o tenant_id do contexto atual e consulta cada contexto do
+        tenant isoladamente, sem instanciar múltiplos AssistantToolExecutor
+        (a restrição arquitetural real é o project_id fixo no __init__ desta
+        classe — este método contorna isso operando direto na camada de
+        dados, mesmo shape do padrão já aprovado no PC165)."""
+        from core.project_store import get_context, list_contexts, _extract_keywords, _extract_passages
+        from modules.supabase_client import get_supabase_client
+
+        keywords = _extract_keywords(query)
+        if not keywords:
+            return "Consulta sem palavras-chave úteis — tente termos mais específicos."
+
+        db = get_supabase_client()
+        if not db:
+            return "Banco de dados não disponível."
+
+        ctx = get_context(self.project_id)
+        tenant_id = (ctx or {}).get("tenant_id")
+        contexts = list_contexts(tenant_id=tenant_id) or ([ctx] if ctx else [])
+        if not contexts:
+            return "Nenhum contexto encontrado no domínio."
+
+        results: list[str] = []
+        n_contexts_com_hits = 0
+        for c in contexts:
+            cid = c.get("id")
+            if not cid:
+                continue
+            cname = c.get("name") or cid
+            try:
+                rows = (
+                    db.table("meetings")
+                    .select("meeting_number, title, meeting_date, transcript_clean, transcript_raw")
+                    .eq("project_id", cid)
+                    .order("meeting_number")
+                    .execute().data or []
+                )
+            except Exception:
+                continue
+
+            ctx_hits: list[str] = []
+            for m in rows:
+                transcript = m.get("transcript_clean") or m.get("transcript_raw") or ""
+                if not transcript:
+                    continue
+                passages = _extract_passages(transcript, keywords, max_passages=2)
+                if not passages:
+                    continue
+                num   = m.get("meeting_number", "?")
+                title = m.get("title") or f"Reunião {num}"
+                for p in passages:
+                    ctx_hits.append(f"  - **Reunião {num}** ({title}): {p}")
+
+            if ctx_hits:
+                n_contexts_com_hits += 1
+                results.append(f"### 📁 {cname}")
+                results.extend(ctx_hits[:6])
+                results.append("")
+
+        if not results:
+            return f"Nenhuma menção a \"{query}\" encontrada em nenhum contexto do domínio."
+        header = (
+            f"# 🌐 Pesquisa Multi-Contexto — \"{query}\"\n\n"
+            f"{n_contexts_com_hits} de {len(contexts)} contexto(s) com resultados:\n"
+        )
+        return header + "\n".join(results)
 
     def get_requirements(
         self,

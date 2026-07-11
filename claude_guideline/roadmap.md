@@ -4,6 +4,17 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC179 — Concluído (v5.15 / 2026-07-11) — 3 tools novas do Assistente (avaliação de `melhorias/assistente-20260711.md`)
+
+**Contexto:** o próprio Assistente gerou uma auto-reflexão (`melhorias/assistente-20260711.md`, criada direto no GitHub) propondo 6 gaps: memória entre conversas, exportação consolidada, grafo de rastreamento, simulação com diff visual, sugestão proativa de encaminhamentos, pesquisa multi-contexto. Pesquisa (agent Explore) contra o código real descartou #3/#4 (grafo/diff visual — ambos dependem de `mapa_rastreabilidade`, que casa por palavra-chave, não FK real; construir visualização em cima disso mostraria ligações não confiáveis) e deixou #1 (memória) fora por ser decisão de produto, não gap técnico. Usuário confirmou implementar #2, #5, #6.
+
+- **`exportar_pacote_completo()`** (`core/tools/tools_executive_advanced.py`) — 1 único .docx consolidando Atas+Requisitos+SBVR+BMM+BPMN+IBIS com sumário e numeração de páginas, em vez de exportar cada artefato separado. Reaproveita `markdown_to_docx()` (já existente, usado por `export_project_charter_docx`) e as mesmas funções de leitura de `pages/Artefatos.py` — não pagina (é export de arquivo, não tela reativa, sem o problema do PC178). Gráficos explicitamente fora de escopo (sem conversor Plotly→imagem estática no projeto). `modules/minutes_exporter.py::markdown_to_docx()` ganhou parâmetro opcional `add_page_numbers` (campo PAGE/NUMPAGES nativo do Word via XML raw, técnica padrão do python-docx) — default `False`, não muda a saída de nenhum chamador já existente.
+- **`sugerir_encaminhamentos_pendentes()`** (`core/tools/tools_knowledge_requirements2.py`) — compara Decisões x Encaminhamentos do `minutes_md` (texto livre — não existe tabela `action_items`) via 1 chamada LLM por reunião, apontando decisão sem encaminhamento correspondente e prazo vencido. `meeting_number=None` analisa as 5 reuniões mais recentes.
+- **`pesquisar_multi_contexto()`** (`core/tools/tools_meetings_requirements.py`) — busca por palavra-chave em transcrições de TODOS os contextos do mesmo tenant, não só o ativo. Contorna a restrição de `AssistantToolExecutor` (um único `project_id` fixo) reaproveitando o padrão já aprovado em `list_all_business_assets_for_domain` (PC165): resolve `tenant_id` via `get_context(self.project_id)`, itera `list_contexts()`, consulta cada contexto direto na camada de dados — sem instanciar múltiplos executors.
+- 23 testes novos (7+9+7), 831/831 passando. Boot-smoke real de `Assistente.py` (chave de auth correta, achado do PC178) sem exceção.
+
+---
+
 ### PC178 — Concluído (v5.15 / 2026-07-11) — Paginação da aba SBVR em Artefatos.py (provável causa real do segfault/tela branca) + correção de metodologia de teste
 
 **Contexto:** usuário mandou screenshot real de um contexto de produção: **842 requisitos, 751 termos SBVR, 502 regras SBVR, 28 reuniões, 43 processos BPMN, 113 decisões DMN**. Como `st.tabs()` executa o corpo de TODAS as abas a cada rerun (achado do PC176/177), a aba SBVR — sem paginação — renderizava **1253 expanders** (751+502), cada um com um `_promote_widget()` aninhado, TODA VEZ que a página Artefatos era carregada, mesmo que o usuário estivesse olhando outra aba. Essa é a explicação mais concreta e evidenciada até agora para os episódios de segfault/tela branca/lentidão — mais forte que as hipóteses anteriores (drift de dependência, refutada; volume total do contexto, parcialmente confirmada agora com números reais).

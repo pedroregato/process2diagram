@@ -460,6 +460,33 @@ KNOWLEDGE_REQUIREMENTS2_SCHEMAS: list[dict] = [
             {
                 "type": "function",
                 "function": {
+                    "name": "sugerir_encaminhamentos_pendentes",
+                    "description": (
+                        "Analisa Decisões x Encaminhamentos de uma ata (ou das 5 reuniões mais "
+                        "recentes) e aponta: (1) decisões que parecem não ter um encaminhamento/"
+                        "ação correspondente registrada, (2) encaminhamentos com prazo já vencido. "
+                        "Use quando o usuário pedir 'essa reunião teve decisão sem encaminhamento?', "
+                        "'tem algo vencido nos encaminhamentos?' ou 'verifique os encaminhamentos "
+                        "pendentes'."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "meeting_number": {
+                                "type": "integer",
+                                "description": (
+                                    "Reunião específica a analisar. Omitido: analisa as 5 reuniões "
+                                    "mais recentes do projeto."
+                                ),
+                            },
+                        },
+                        "required": [],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "diagnostico_projeto",
                     "description": (
                         "Executa um checkup completo do projeto: integridade do banco (admin), "
@@ -1598,6 +1625,71 @@ function toggle(el){{
             "Ou faça qualquer pergunta sobre o projeto.*"
         )
 
+        return "\n".join(lines)
+
+    def sugerir_encaminhamentos_pendentes(self, meeting_number: int | None = None) -> str:
+        """Compara Decisões x Encaminhamentos da ata (texto livre em
+        minutes_md, sem tabela estruturada de action items no banco) via LLM,
+        pra achar decisões sem item de ação correspondente e encaminhamentos
+        com prazo aparentemente vencido. meeting_number=None analisa as 5
+        reuniões mais recentes; passar um número foca numa reunião só."""
+        meetings = self._get_meetings()
+        if not meetings:
+            return "Nenhuma reunião encontrada neste projeto."
+
+        if meeting_number is not None:
+            target = [m for m in meetings if m.get("meeting_number") == meeting_number]
+            if not target:
+                return f"Reunião {meeting_number} não encontrada."
+        else:
+            target = meetings[-5:]
+
+        from datetime import date as _date
+        today_str = _date.today().isoformat()
+
+        lines: list[str] = ["# 📋 Encaminhamentos Pendentes\n"]
+        analisadas = 0
+        for m in target:
+            md = m.get("minutes_md") or ""
+            if not md:
+                continue
+            decisions = self._section(md, "Decisões", "Decisões Tomadas", "Decisions")
+            actions = self._section(
+                md, "Encaminhamentos / Action Items", "Encaminhamentos",
+                "Itens de Ação", "Action Items", "Ações",
+            )
+            if not decisions and not actions:
+                continue
+            analisadas += 1
+            num   = m.get("meeting_number")
+            title = m.get("title") or f"Reunião {num}"
+
+            system = (
+                "Você analisa atas de reunião pra achar (1) decisões sem encaminhamento/ação "
+                "correspondente registrada e (2) encaminhamentos cujo prazo já passou. "
+                "Responda em Português do Brasil, só com o que encontrar de fato — se uma "
+                "categoria não tiver nenhuma pendência, diga isso claramente em vez de forçar "
+                "um achado. Máximo 5 itens por categoria, objetivo, sem repetir o texto da ata."
+            )
+            user = (
+                f"Data de hoje: {today_str}\n\n"
+                f"**Decisões da reunião:**\n{decisions or '(nenhuma seção de decisões na ata)'}\n\n"
+                f"**Encaminhamentos da reunião:**\n{actions or '(nenhuma seção de encaminhamentos na ata)'}\n\n"
+                "1. Decisões que parecem não ter um encaminhamento/ação correspondente registrada.\n"
+                "2. Encaminhamentos com prazo mencionado que já passou da data de hoje."
+            )
+            try:
+                result = self._llm_call(system, user, max_tokens=700)
+            except Exception as exc:
+                result = f"⚠️ Erro ao analisar: {exc}"
+
+            lines.append(f"## Reunião {num} — {title}")
+            lines.append(result)
+            lines.append("")
+
+        if not analisadas:
+            escopo = f"a reunião {meeting_number}" if meeting_number is not None else "as reuniões recentes"
+            return f"Nenhuma decisão ou encaminhamento registrado em {escopo} para analisar."
         return "\n".join(lines)
 
     def verificar_rastreabilidade_obrigatoria(self) -> str:

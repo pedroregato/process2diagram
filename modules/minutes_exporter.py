@@ -415,13 +415,58 @@ def _render_markdown_docx(doc, md: str, navy, accent) -> None:
     _flush_table()
 
 
-def markdown_to_docx(md_text: str) -> bytes:
+def _add_page_number_footer(doc) -> None:
+    """Inserts a 'Página X de Y' PAGE/NUMPAGES field in every section's
+    footer, centered. Standard python-docx raw-XML field-code technique —
+    python-docx has no high-level API for dynamic fields (they're computed
+    by Word on open/print, not baked into the file)."""
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+
+    def _field(instr: str):
+        run = OxmlElement("w:r")
+        fld_begin = OxmlElement("w:fldChar")
+        fld_begin.set(qn("w:fldCharType"), "begin")
+        instr_el = OxmlElement("w:instrText")
+        instr_el.set(qn("xml:space"), "preserve")
+        instr_el.text = instr
+        fld_sep = OxmlElement("w:fldChar")
+        fld_sep.set(qn("w:fldCharType"), "separate")
+        fld_end = OxmlElement("w:fldChar")
+        fld_end.set(qn("w:fldCharType"), "end")
+        for el in (fld_begin,):
+            run.append(el)
+        run2 = OxmlElement("w:r")
+        run2.append(instr_el)
+        run3 = OxmlElement("w:r")
+        run3.append(fld_sep)
+        run4 = OxmlElement("w:r")
+        run4.append(fld_end)
+        return [run, run2, run3, run4]
+
+    for section in doc.sections:
+        footer = section.footer
+        p = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.add_run("Página ")
+        for el in _field("PAGE"):
+            p._p.append(el)
+        p.add_run(" de ")
+        for el in _field("NUMPAGES"):
+            p._p.append(el)
+
+
+def markdown_to_docx(md_text: str, *, add_page_numbers: bool = False) -> bytes:
     """
     Generic Markdown -> .docx converter, for LLM-generated artifacts that
     aren't a MinutesModel (Project Charter, release notes, etc.) — reuses
     _render_markdown_docx() (same headers/bullets/numbered-lists/tables
     support already exercised by the ata export fallback) so there's a
     single Markdown->docx implementation in the app, not two.
+
+    add_page_numbers: opt-in (default off, to not change output bytes for
+    existing callers) — adds a centered "Página X de Y" footer field.
     """
     from docx import Document
     from docx.shared import Pt, RGBColor, Cm
@@ -441,6 +486,9 @@ def markdown_to_docx(md_text: str) -> bytes:
     style.font.size = Pt(11)
 
     _render_markdown_docx(doc, md_text, NAVY, ACCENT)
+
+    if add_page_numbers:
+        _add_page_number_footer(doc)
 
     buf = BytesIO()
     doc.save(buf)

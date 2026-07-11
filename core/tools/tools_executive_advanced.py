@@ -551,6 +551,40 @@ EXECUTIVE_ADVANCED_SCHEMAS: list[dict] = [
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "exportar_pacote_completo",
+                    "description": (
+                        "Gera um único arquivo Word (.docx) consolidando TODOS os artefatos do "
+                        "projeto — atas, requisitos, SBVR (termos e regras), BMM, processos BPMN "
+                        "e debates IBIS — com sumário e numeração de páginas, em vez de exportar "
+                        "cada um separadamente. Use quando o usuário pedir 'exporte tudo', 'quero "
+                        "um documento único com todos os artefatos', 'pacote completo pra enviar "
+                        "ao cliente' ou similar. Não inclui gráficos (sem conversor de figura "
+                        "interativa pra imagem estática)."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "meeting_numbers": {
+                                "type": "array",
+                                "items": {"type": "integer"},
+                                "description": "Reuniões a incluir na seção de Atas. Padrão: todas.",
+                            },
+                            "incluir_secoes": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "enum": ["atas", "requisitos", "sbvr", "bmm", "bpmn", "ibis"],
+                                },
+                                "description": "Seções a incluir no pacote. Padrão: todas as 6.",
+                            },
+                        },
+                        "required": [],
+                    },
+                },
+            },
 ]
 
 class _ExecutiveAdvancedToolsMixin:
@@ -1958,4 +1992,126 @@ class _ExecutiveAdvancedToolsMixin:
         return (
             f"✅ Variação de \"{desc}\" gerada com o pedido: \"{variacao_pedida}\". "
             "Disponível para download em HTML autocontido — não altera o material original."
+        )
+
+    _EXPORT_PACOTE_SECOES = ("atas", "requisitos", "sbvr", "bmm", "bpmn", "ibis")
+
+    def exportar_pacote_completo(
+        self,
+        meeting_numbers: list | None = None,
+        incluir_secoes: list | None = None,
+    ) -> str:
+        """Gera um único .docx consolidando ata + requisitos + SBVR + BMM +
+        processos BPMN + IBIS do projeto inteiro, com sumário e numeração de
+        páginas — em vez de exportar cada artefato separadamente. Reaproveita
+        as mesmas funções de leitura já usadas por pages/Artefatos.py (não
+        pagina — é um export, não uma tela reativa, então não tem o problema
+        de contagem de widgets do PC178) e o mesmo padrão de download de
+        export_project_charter_docx(). Gráficos (Plotly) não são incluídos —
+        não há conversor de figura interativa para imagem estática no projeto."""
+        from core.project_store import (
+            list_requirements_light, list_sbvr_terms, list_sbvr_rules,
+            list_bpmn_processes, list_argumentation_by_project,
+        )
+
+        secoes = [s for s in (incluir_secoes or self._EXPORT_PACOTE_SECOES)
+                  if s in self._EXPORT_PACOTE_SECOES] or list(self._EXPORT_PACOTE_SECOES)
+
+        meetings = self._get_meetings()
+        if meeting_numbers:
+            meetings = [m for m in meetings if m.get("meeting_number") in meeting_numbers]
+        if not meetings:
+            return "Nenhuma reunião encontrada para exportar."
+
+        toc: list[str] = []
+        body: list[str] = []
+
+        def _add_section(title: str, content_lines: list[str]) -> None:
+            toc.append(title)
+            body.append(f"## {title}")
+            body.extend(content_lines)
+            body.append("")
+
+        if "atas" in secoes:
+            lines: list[str] = []
+            for m in meetings:
+                md = m.get("minutes_md") or ""
+                if not md:
+                    continue
+                lines.append(
+                    f"### Reunião {m.get('meeting_number')} — {m.get('title','')} "
+                    f"({m.get('meeting_date') or '—'})"
+                )
+                lines.append(md)
+                lines.append("")
+            _add_section("Atas das Reuniões", lines or ["_Nenhuma ata disponível._"])
+
+        if "requisitos" in secoes:
+            reqs = list_requirements_light(self.project_id)
+            lines = ["| # | Título | Tipo | Prioridade | Status |", "|---|---|---|---|---|"]
+            for r in reqs:
+                lines.append(
+                    f"| REQ-{r.get('req_number') or 0:03d} | {(r.get('title') or '—')[:60]} | "
+                    f"{r.get('req_type') or '—'} | {r.get('priority') or '—'} | {r.get('status') or '—'} |"
+                )
+            _add_section(f"Requisitos ({len(reqs)})", lines if reqs else ["_Nenhum requisito registrado._"])
+
+        if "sbvr" in secoes:
+            terms = list_sbvr_terms(self.project_id)
+            rules = list_sbvr_rules(self.project_id)
+            lines = [f"### Termos ({len(terms)})", ""]
+            for t in terms:
+                lines.append(f"- **{t.get('term') or '—'}**: {t.get('definition') or '—'}")
+            lines += ["", f"### Regras ({len(rules)})", ""]
+            for r in rules:
+                lines.append(f"- **{r.get('rule_id') or '—'}**: {r.get('statement') or '—'}")
+            _add_section(
+                "SBVR — Vocabulário e Regras de Negócio",
+                lines if (terms or rules) else ["_Nenhum dado SBVR registrado._"],
+            )
+
+        if "bmm" in secoes:
+            bmm_md = self.get_bmm()
+            _add_section(
+                "BMM — Modelo de Motivação de Negócio",
+                [bmm_md] if bmm_md and "não encontrad" not in bmm_md.lower() else ["_Nenhum dado BMM registrado._"],
+            )
+
+        if "bpmn" in secoes:
+            procs = list_bpmn_processes(self.project_id)
+            lines = ["| Processo | Versões |", "|---|---|"]
+            for p in procs:
+                lines.append(f"| {p.get('name') or '—'} | {p.get('version_count') or 0} |")
+            _add_section(f"Processos BPMN ({len(procs)})", lines if procs else ["_Nenhum processo BPMN registrado._"])
+
+        if "ibis" in secoes:
+            questions = list_argumentation_by_project(self.project_id)
+            lines = [f"- **{q.get('id') or 'Q?'}**: {q.get('statement') or '—'}" for q in questions]
+            _add_section(f"IBIS — Debates ({len(questions)})", lines if questions else ["_Nenhum debate IBIS registrado._"])
+
+        sumario = ["## Sumário", ""] + [f"- {t}" for t in toc] + [""]
+        full_md = "\n".join(
+            ["# 📦 Pacote Completo de Artefatos — Process2Diagram", ""] + sumario + body
+        )
+
+        try:
+            from modules.minutes_exporter import markdown_to_docx
+            docx_bytes = markdown_to_docx(full_md, add_page_numbers=True)
+        except Exception as exc:
+            return f"❌ Erro ao gerar o pacote consolidado: {exc}"
+
+        import streamlit as st
+        from datetime import date as _date
+        key = f"_pacote_completo_dl_{_date.today().isoformat()}"
+        st.session_state["_pending_file_download"] = {
+            "cache_key": key,
+            "filename":  f"pacote_completo_{_date.today().isoformat()}.docx",
+            "mime":      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "label":     "⬇️ Pacote Completo (.docx)",
+        }
+        st.session_state[key] = docx_bytes
+        return (
+            f"✅ Pacote completo gerado — {len(toc)} seção(ões): {', '.join(toc)}. "
+            "Disponível para download em Word (.docx), com sumário e numeração de páginas. "
+            "Obs: gráficos não são incluídos (sem conversor de figura interativa pra imagem estática)."
         )

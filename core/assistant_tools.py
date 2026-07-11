@@ -80,6 +80,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "compare_meetings":             "consulta",
     "show_meeting_transcript":      "consulta",
     "search_transcript":            "consulta",
+    "pesquisar_multi_contexto":     "consulta",
     "count_artifacts":              "consulta",
     "get_requirements":             "consulta",
     "sample_requirements":          "consulta",
@@ -208,6 +209,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "cluster_topic_decisions":         "consulta",
     # Plantonista / Diagnóstico
     "sugestoes_plantonista":           "consulta",
+    "sugerir_encaminhamentos_pendentes": "consulta",
     "diagnostico_projeto":             "consulta",
     "verificar_rastreabilidade_obrigatoria": "consulta",
     "analisar_tendencias":              "consulta",
@@ -224,6 +226,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     # Ativos de Negócio — Promoção (Fase C, melhorias/promocao-ativos-negocio.md)
     "promover_ativo_negocio":          "escrita",
     "gerar_variacao_apresentacao":     "consulta",
+    "exportar_pacote_completo":        "consulta",
     # Editor Estrutural (Fase 2)
     "reordenar_requisitos":            "escrita",
     "inserir_secao_ata":               "admin",
@@ -360,6 +363,9 @@ class AssistantToolExecutor(
                 "search_transcript":         lambda: self.search_transcript(
                     tool_input["query"],
                     tool_input.get("meeting_number"),
+                ),
+                "pesquisar_multi_contexto":  lambda: self.pesquisar_multi_contexto(
+                    tool_input["query"],
                 ),
                 "count_artifacts":           lambda: self._count_artifacts(
                     artifact_type=tool_input.get("artifact_type", "all"),
@@ -831,6 +837,9 @@ class AssistantToolExecutor(
                 ),
                 # ── Plantonista / Diagnóstico
                 "sugestoes_plantonista":  lambda: self.sugestoes_plantonista(),
+                "sugerir_encaminhamentos_pendentes": lambda: self.sugerir_encaminhamentos_pendentes(
+                    meeting_number=tool_input.get("meeting_number"),
+                ),
                 "diagnostico_projeto":    lambda: self.diagnostico_projeto(
                     include_integrity=bool(tool_input.get("include_integrity", True)),
                     include_contradictions=bool(tool_input.get("include_contradictions", True)),
@@ -901,6 +910,10 @@ class AssistantToolExecutor(
                 "gerar_variacao_apresentacao": lambda: self.gerar_variacao_apresentacao(
                     base=tool_input["base"],
                     variacao_pedida=tool_input["variacao_pedida"],
+                ),
+                "exportar_pacote_completo": lambda: self.exportar_pacote_completo(
+                    meeting_numbers=tool_input.get("meeting_numbers"),
+                    incluir_secoes=tool_input.get("incluir_secoes"),
                 ),
                 # ── Editor Estrutural (Fase 2)
                 "reordenar_requisitos":   lambda: self.reordenar_requisitos(
