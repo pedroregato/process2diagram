@@ -323,7 +323,7 @@ def _render_default_summary(doc, minutes: "MinutesModel", navy) -> None:
     doc.add_paragraph()
 
 
-def _render_markdown_docx(doc, md: str, navy, accent) -> None:
+def _render_markdown_docx(doc, md: str, navy, accent, *, page_break_before_h2: bool = False) -> None:
     """
     Minimal Markdown -> docx renderer, used only when a meeting was loaded
     from the DB without structured minutes fields (only minutes_md
@@ -333,6 +333,10 @@ def _render_markdown_docx(doc, md: str, navy, accent) -> None:
     breaks, plain paragraphs. Inline **bold**/*italic* markers are
     stripped (not rendered as bold/italic runs — not worth per-token
     splitting for a fallback path).
+
+    page_break_before_h2: opt-in (default off) — starts each ## section on
+    a new page, for multi-section consolidated exports (e.g.
+    exportar_pacote_completo) where sections read as separate chapters.
     """
     import re
     from docx.shared import Pt
@@ -358,6 +362,7 @@ def _render_markdown_docx(doc, md: str, navy, accent) -> None:
 
     lines = (md or "").splitlines()
     table_rows: list[list[str]] = []
+    _seen_h2 = False
 
     def _flush_table() -> None:
         nonlocal table_rows
@@ -392,6 +397,9 @@ def _render_markdown_docx(doc, md: str, navy, accent) -> None:
             r = p.add_run(_strip_inline(stripped[4:]))
             r.bold = True; r.font.size = Pt(12); r.font.color.rgb = accent
         elif stripped.startswith("## "):
+            if page_break_before_h2 and _seen_h2:
+                doc.add_page_break()
+            _seen_h2 = True
             p = doc.add_paragraph()
             r = p.add_run(_strip_inline(stripped[3:]))
             r.bold = True; r.font.size = Pt(14); r.font.color.rgb = navy
@@ -457,7 +465,52 @@ def _add_page_number_footer(doc) -> None:
             p._p.append(el)
 
 
-def markdown_to_docx(md_text: str, *, add_page_numbers: bool = False) -> bytes:
+def _force_field_recalculation(doc) -> None:
+    """Sets <w:updateFields w:val="true"/> in word/settings.xml — without
+    this, Word/LibreOffice show PAGE/NUMPAGES fields as blank or "0" until
+    the user manually selects all + F9 ("Update Field"), because raw
+    XML-inserted fields (as opposed to ones Word itself inserted via the
+    UI) aren't marked dirty/stale on their own. This is the actual fix for
+    page numbers silently not appearing on first open."""
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+
+    settings = doc.settings.element
+    update_fields = OxmlElement("w:updateFields")
+    update_fields.set(qn("w:val"), "true")
+    settings.append(update_fields)
+
+
+def _add_document_header(doc, title: str, subtitle: str = "") -> None:
+    """Adds a running header (repeats on every page) with the project/
+    document identification — distinct from the body's H1 title, which
+    only appears once on page 1. Standard convention for multi-page
+    corporate reports."""
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Pt, RGBColor
+
+    ACCENT = RGBColor(0x2E, 0x7F, 0xD9)
+    MUTED  = RGBColor(0x64, 0x74, 0x8B)
+
+    for section in doc.sections:
+        header = section.header
+        p = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        r = p.add_run(title)
+        r.bold = True; r.font.size = Pt(10); r.font.color.rgb = ACCENT
+        if subtitle:
+            r2 = p.add_run(f"  ·  {subtitle}")
+            r2.font.size = Pt(9); r2.font.color.rgb = MUTED
+
+
+def markdown_to_docx(
+    md_text: str,
+    *,
+    add_page_numbers: bool = False,
+    header_title: str | None = None,
+    header_subtitle: str = "",
+    page_break_before_h2: bool = False,
+) -> bytes:
     """
     Generic Markdown -> .docx converter, for LLM-generated artifacts that
     aren't a MinutesModel (Project Charter, release notes, etc.) — reuses
@@ -465,8 +518,17 @@ def markdown_to_docx(md_text: str, *, add_page_numbers: bool = False) -> bytes:
     support already exercised by the ata export fallback) so there's a
     single Markdown->docx implementation in the app, not two.
 
-    add_page_numbers: opt-in (default off, to not change output bytes for
-    existing callers) — adds a centered "Página X de Y" footer field.
+    All extras are opt-in (default off/None), so output bytes for existing
+    callers (export_project_charter_docx) don't change unless requested:
+      add_page_numbers    — centered "Página X de Y" footer field, forced
+                             to recalculate on open (see
+                             _force_field_recalculation).
+      header_title         — running header repeated on every page (e.g.
+                             the project/context name) — distinct from the
+                             body's H1, which only shows on page 1.
+      header_subtitle       — smaller, muted text next to header_title
+                             (e.g. document type + date).
+      page_break_before_h2 — starts each ## section on its own page.
     """
     from docx import Document
     from docx.shared import Pt, RGBColor, Cm
@@ -485,10 +547,14 @@ def markdown_to_docx(md_text: str, *, add_page_numbers: bool = False) -> bytes:
     style.font.name = "Calibri"
     style.font.size = Pt(11)
 
-    _render_markdown_docx(doc, md_text, NAVY, ACCENT)
+    _render_markdown_docx(doc, md_text, NAVY, ACCENT, page_break_before_h2=page_break_before_h2)
+
+    if header_title:
+        _add_document_header(doc, header_title, header_subtitle)
 
     if add_page_numbers:
         _add_page_number_footer(doc)
+        _force_field_recalculation(doc)
 
     buf = BytesIO()
     doc.save(buf)

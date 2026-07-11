@@ -78,6 +78,7 @@ pages = {
     "Sistema": _sistema_pages,
     "Ajuda": [
         st.Page("pages/Orientacoes_ComoIniciar.py",  title="Como Iniciar",  icon="📖"),
+        st.Page("pages/Orientacoes_CasosDeUso.py",   title="Casos de Uso — Valor de Negócio", icon="💼"),
         st.Page("pages/Orientacoes_Assistente.py",   title="Ferramentas do Assistente", icon="💬"),
         st.Page("pages/Orientacoes_Glossario.py",    title="Glossário",     icon="📚"),
         st.Page("pages/Orientacoes_Arquiteturas.py", title="Arquiteturas",  icon="🏗️"),

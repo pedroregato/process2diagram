@@ -961,6 +961,19 @@ with tab_avancado:
         ]
     ), unsafe_allow_html=True)
 
+    st.markdown(_card(
+        "sugerir_encaminhamentos_pendentes", "consulta",
+        "Compara Decisões x Encaminhamentos de uma ata (ou das 5 reuniões mais "
+        "recentes) via LLM e aponta: decisões sem item de ação correspondente "
+        "registrado, e encaminhamentos com prazo já vencido. Não depende de tabela "
+        "estruturada de action items — analisa o texto livre da própria ata.",
+        [
+            "Essa última reunião teve alguma decisão sem encaminhamento?",
+            "Tem algo vencido nos encaminhamentos?",
+            "Analise a reunião 5 — tem decisão sem ação correspondente?",
+        ]
+    ), unsafe_allow_html=True)
+
     st.markdown('<div class="g-section-hdr">Rastreabilidade e análise de impacto</div>', unsafe_allow_html=True)
 
     st.markdown(_card(
@@ -1047,6 +1060,34 @@ with tab_avancado:
             "Crie o termo de abertura do projeto com riscos e cronograma",
             "Monte um Project Charter sem a seção de orçamento",
             "Gere o Project Charter incluindo a análise de stakeholders",
+        ]
+    ), unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "exportar_pacote_completo", "consulta",
+        "Gera um único .docx consolidando TODOS os artefatos do projeto — atas, "
+        "requisitos, SBVR, BMM, processos BPMN e debates IBIS — com sumário, "
+        "cabeçalho identificando o projeto e numeração de páginas, cada seção "
+        "principal começando em página nova. Gráficos não são incluídos.",
+        [
+            "Exporte tudo do projeto num único documento Word",
+            "Quero um pacote completo com todos os artefatos pra enviar ao cliente",
+            "Gere um .docx só com requisitos e SBVR, sem o resto",
+        ]
+    ), unsafe_allow_html=True)
+
+    st.markdown('<div class="g-section-hdr">Busca cross-contexto (domínio)</div>', unsafe_allow_html=True)
+
+    st.markdown(_card(
+        "pesquisar_multi_contexto", "consulta",
+        "Busca uma palavra-chave nas transcrições de TODOS os contextos do mesmo "
+        "domínio (tenant) — não só o contexto ativo. Reaproveita o mesmo padrão "
+        "de agregação cross-contexto do Catálogo do Domínio, sem instanciar "
+        "múltiplos executores. Resultado agrupado por nome do contexto.",
+        [
+            "Algum outro contexto já discutiu integração com Core Banking?",
+            "Onde mais falamos sobre migração de nuvem, em qualquer projeto?",
+            "Busque 'aprovação de crédito' em todos os contextos do domínio",
         ]
     ), unsafe_allow_html=True)
 

@@ -4,6 +4,31 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC181 — Concluído (v5.15 / 2026-07-11) — Página "Casos de Uso — Valor de Negócio" + guia de ferramentas atualizado
+
+**Contexto:** usuário pediu pra "melhorar a documentação incluindo as novas funcionalidades" e criar uma página especial com exemplos de uso do P2D "demonstrando seu valor para o negócio". Escopo confirmado: página nova focada no Assistente (não o pipeline inteiro, que já tem material comercial próprio), como página Streamlit dentro do grupo Ajuda, com botão de exportar pra HTML.
+
+- **`pages/Orientacoes_CasosDeUso.py`** (novo, grupo Ajuda) — 15 cenários de negócio em 5 categorias (Comunicação & Entrega, Acompanhamento & Gestão, Auditoria & Rastreabilidade, Simulação & Risco, Conhecimento Organizacional), cada um estruturado como Cenário → Pergunta literal (copiável) → O que o Assistente entrega → Valor de negócio. Cobre as 3 tools novas do PC179 (`exportar_pacote_completo`, `sugerir_encaminhamentos_pendentes`, `pesquisar_multi_contexto`) e as ferramentas mais fortes já existentes (`simular_cenario`, `verificar_conformidade`, `mapa_rastreabilidade`, `gerar_deck_executivo`, `promover_ativo_negocio`, etc).
+- **Fonte única de conteúdo**: os 15 cenários vivem em um único dict Python (`_SCENARIOS`) que alimenta DOIS renderizadores — cards em abas dentro do Streamlit, E um HTML autocontido gerado sob demanda pelo botão "⬇️ Exportar HTML". Decisão deliberada de NÃO criar um segundo arquivo estático mantido à mão (padrão já usado em `ApresentacaoGeral.py`/`apresentacao-geral.html`) — evita o problema de sincronização manual entre 2 arquivos que já exigiu uma rodada inteira de correção nesta mesma sessão.
+- **`pages/Orientacoes_Assistente.py`** (guia técnico de ~150 tools) — 3 cards novos (`exportar_pacote_completo`, `sugerir_encaminhamentos_pendentes`, `pesquisar_multi_contexto`) na aba Avançado, mesmo padrão `_card()` já usado nas outras ~64 ferramentas documentadas.
+- `app.py` — nova página registrada no grupo Ajuda.
+- 5 testes novos (`tests/test_page_casos_de_uso.py`) — boot-smoke real (chave de auth correta) + validação do HTML exportado (bem formado, sem CDN externo, todos os cenários representados, as 3 tools do PC179 mencionadas por nome). Verificação visual real via Playwright screenshot do HTML exportado.
+- 838/838 testes passando; boot-smoke de `app.py` confirma navegação íntegra com a página nova registrada.
+
+---
+
+### PC180 — Concluído (v5.15 / 2026-07-11) — Correções de estilo do .docx consolidado (feedback do usuário sobre PC179)
+
+**Contexto:** usuário testou `exportar_pacote_completo` (PC179) e reportou 3 problemas: numeração de página não aparecia, cabeçalho não identificava o projeto, estilo geral podia melhorar.
+
+- **Numeração de página**: a causa raiz não era o campo em si (já estava correto) — Word/LibreOffice não recalculam campos inseridos via XML bruto na abertura, a menos que o documento peça explicitamente. Fix: `_force_field_recalculation()` grava `<w:updateFields w:val="true"/>` em `word/settings.xml`.
+- **Identificação do projeto**: `exportar_pacote_completo()` agora resolve o nome real do contexto via `get_context(self.project_id)` (mesmo padrão já usado em `pesquisar_multi_contexto`) e usa em dois lugares — no título do corpo (H1) e num cabeçalho novo que se repete em toda página (`_add_document_header()`, distinto do H1 que só aparece na página 1).
+- **Estilo geral**: `markdown_to_docx()`/`_render_markdown_docx()` ganharam `page_break_before_h2` (opcional, default `False`) — cada seção principal do pacote agora começa em página nova, lendo como capítulos de um relatório, em vez de tudo corrido.
+- Todos os parâmetros novos (`header_title`, `header_subtitle`, `page_break_before_h2`, `add_page_numbers`) são opt-in — `export_project_charter_docx()` (chamador já existente de `markdown_to_docx`) continua produzindo a mesma saída de antes, sem regressão.
+- 2 testes novos (verificação real de bytes do .docx gerado: nome do projeto no cabeçalho E no corpo, setting `updateFields` presente), 833/833 passando.
+
+---
+
 ### PC179 — Concluído (v5.15 / 2026-07-11) — 3 tools novas do Assistente (avaliação de `melhorias/assistente-20260711.md`)
 
 **Contexto:** o próprio Assistente gerou uma auto-reflexão (`melhorias/assistente-20260711.md`, criada direto no GitHub) propondo 6 gaps: memória entre conversas, exportação consolidada, grafo de rastreamento, simulação com diff visual, sugestão proativa de encaminhamentos, pesquisa multi-contexto. Pesquisa (agent Explore) contra o código real descartou #3/#4 (grafo/diff visual — ambos dependem de `mapa_rastreabilidade`, que casa por palavra-chave, não FK real; construir visualização em cima disso mostraria ligações não confiáveis) e deixou #1 (memória) fora por ser decisão de produto, não gap técnico. Usuário confirmou implementar #2, #5, #6.

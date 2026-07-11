@@ -55,7 +55,8 @@ process2diagram/
 │   ├── CostEstimator.py          # LLM cost estimator
 │   ├── LLMBenchmark.py           # LLM Benchmark & Telemetria — on-demand benchmark + passive telemetry analysis
 │   ├── Orientacoes_ComoIniciar.py   # Guia de início rápido
-│   ├── Orientacoes_Assistente.py    # Guia de ferramentas do Assistente (90 tools + exemplos)
+│   ├── Orientacoes_CasosDeUso.py    # Casos de Uso — Valor de Negócio: 15 cenários (Cenário → Pergunta → Entrega → Valor) em 5 categorias, fonte única alimenta Streamlit + botão de export HTML autocontido (PC181)
+│   ├── Orientacoes_Assistente.py    # Guia de ferramentas do Assistente (151 tools + exemplos)
 │   ├── Orientacoes_Glossario.py     # Glossário interativo (components.v1.html — busca + filtros + índice alfabético)
 │   ├── Orientacoes_Arquiteturas.py  # Arquiteturas do sistema
 │   ├── Orientacoes_CKF.py           # Guia CKF
@@ -238,7 +239,7 @@ AgentRequirements┘
 | **Pipeline** | Pipeline.py, Diagramas.py, BpmnEditor.py, BpmnStudio.py | Todos |
 | **Análise** | Assistente.py, Artefatos.py, ValidationHub.py, MeetingROI.py, DocumentManager.py, CostBenefitScenarios.py, AtivosDeNegocio.py | Todos |
 | **Sistema** | Settings.py, CostEstimator.py, LLMBenchmark.py [+ MasterAdmin.py, DatabaseOverview.py] | Todos [admin extra] |
-| **Ajuda** | ComoIniciar, Assistente (tool guide), Glossário, Arquiteturas, CKF, BpmnStudio (guia), Gráficos (guia) | Todos |
+| **Ajuda** | ComoIniciar, CasosDeUso (valor de negócio), Assistente (tool guide), Glossário, Arquiteturas, CKF, BpmnStudio (guia), Gráficos (guia) | Todos |
 | **Manutenção** | BatchRunner.py, BpmnBackfill.py, MinutesBackfill.py, TranscriptBackfill.py | Admin only |
 
 `app.py` renders no content — only calls `st.navigation(pages).run()`. Groups rebuilt every rerun (menu updates immediately after login).

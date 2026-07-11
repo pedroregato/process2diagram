@@ -2011,8 +2011,11 @@ class _ExecutiveAdvancedToolsMixin:
         não há conversor de figura interativa para imagem estática no projeto."""
         from core.project_store import (
             list_requirements_light, list_sbvr_terms, list_sbvr_rules,
-            list_bpmn_processes, list_argumentation_by_project,
+            list_bpmn_processes, list_argumentation_by_project, get_context,
         )
+
+        ctx = get_context(self.project_id)
+        project_name = (ctx or {}).get("name") or "Process2Diagram"
 
         secoes = [s for s in (incluir_secoes or self._EXPORT_PACOTE_SECOES)
                   if s in self._EXPORT_PACOTE_SECOES] or list(self._EXPORT_PACOTE_SECOES)
@@ -2091,12 +2094,19 @@ class _ExecutiveAdvancedToolsMixin:
 
         sumario = ["## Sumário", ""] + [f"- {t}" for t in toc] + [""]
         full_md = "\n".join(
-            ["# 📦 Pacote Completo de Artefatos — Process2Diagram", ""] + sumario + body
+            [f"# 📦 Pacote Completo de Artefatos — {project_name}", ""] + sumario + body
         )
 
         try:
             from modules.minutes_exporter import markdown_to_docx
-            docx_bytes = markdown_to_docx(full_md, add_page_numbers=True)
+            from datetime import date as _dt
+            docx_bytes = markdown_to_docx(
+                full_md,
+                add_page_numbers=True,
+                header_title=project_name,
+                header_subtitle=f"Pacote Completo de Artefatos · {_dt.today().strftime('%d/%m/%Y')}",
+                page_break_before_h2=True,
+            )
         except Exception as exc:
             return f"❌ Erro ao gerar o pacote consolidado: {exc}"
 

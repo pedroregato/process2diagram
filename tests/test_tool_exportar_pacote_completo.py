@@ -5,14 +5,24 @@ Tests for AssistantToolExecutor.exportar_pacote_completo() — melhoria
 SBVR + BMM + BPMN + IBIS) instead of exporting each artifact separately.
 
 No real DB/LLM calls: _get_meetings()/get_bmm() are stubbed on the instance;
-core.project_store list_* functions are patched at the source (project_store
-imports are done locally inside the method, so patching the source module
-attribute is picked up).
+core.project_store list_*/get_context functions are patched at the source
+(project_store imports are done locally inside the method, so patching the
+source module attribute is picked up).
+
+Follow-up round (user feedback on the first shipped version): page numbers
+weren't showing (Word never recalculates raw XML fields on open unless told
+to), the project name was missing from the document, and the overall style
+needed polish. Covered here: header_title/header_subtitle resolved from
+get_context(), _force_field_recalculation (updateFields setting), and
+page_break_before_h2.
 """
 
+from contextlib import ExitStack
 from unittest.mock import patch
 
 import streamlit as st
+from docx import Document
+from io import BytesIO
 
 from core.assistant_tools import AssistantToolExecutor
 
@@ -29,6 +39,20 @@ def _executor():
     return ex
 
 
+def _patched(
+    stack: ExitStack,
+    *,
+    requirements=None, terms=None, rules=None, bpmn=None, ibis=None,
+    context=None,
+):
+    stack.enter_context(patch("core.project_store.list_requirements_light", return_value=requirements or []))
+    stack.enter_context(patch("core.project_store.list_sbvr_terms", return_value=terms or []))
+    stack.enter_context(patch("core.project_store.list_sbvr_rules", return_value=rules or []))
+    stack.enter_context(patch("core.project_store.list_bpmn_processes", return_value=bpmn or []))
+    stack.enter_context(patch("core.project_store.list_argumentation_by_project", return_value=ibis or []))
+    stack.enter_context(patch("core.project_store.get_context", return_value=context))
+
+
 class TestExportarPacoteCompleto:
     def setup_method(self):
         st.session_state.clear()
@@ -41,22 +65,17 @@ class TestExportarPacoteCompleto:
         assert "_pending_file_download" not in st.session_state
 
     def test_success_queues_docx_download_with_all_sections(self):
-        with patch("core.project_store.list_requirements_light", return_value=[
-                {"req_number": 1, "title": "Login via SSO", "req_type": "Funcional",
-                 "priority": "Alto", "status": "active"},
-            ]), \
-             patch("core.project_store.list_sbvr_terms", return_value=[
-                {"term": "Cliente", "definition": "Pessoa que contrata o serviço"},
-             ]), \
-             patch("core.project_store.list_sbvr_rules", return_value=[
-                {"rule_id": "RN-001", "statement": "Todo cliente deve ter CPF válido."},
-             ]), \
-             patch("core.project_store.list_bpmn_processes", return_value=[
-                {"name": "Processo de Onboarding", "version_count": 2},
-             ]), \
-             patch("core.project_store.list_argumentation_by_project", return_value=[
-                {"id": "Q-001", "statement": "Qual fluxo de aprovação usar?"},
-             ]):
+        with ExitStack() as stack:
+            _patched(
+                stack,
+                requirements=[{"req_number": 1, "title": "Login via SSO", "req_type": "Funcional",
+                               "priority": "Alto", "status": "active"}],
+                terms=[{"term": "Cliente", "definition": "Pessoa que contrata o serviço"}],
+                rules=[{"rule_id": "RN-001", "statement": "Todo cliente deve ter CPF válido."}],
+                bpmn=[{"name": "Processo de Onboarding", "version_count": 2}],
+                ibis=[{"id": "Q-001", "statement": "Qual fluxo de aprovação usar?"}],
+                context={"id": "proj-1", "name": "Projeto Aurora"},
+            )
             ex = _executor()
             result = ex.exportar_pacote_completo()
 
@@ -75,12 +94,34 @@ class TestExportarPacoteCompleto:
         docx_bytes = st.session_state[pending["cache_key"]]
         assert isinstance(docx_bytes, bytes) and len(docx_bytes) > 0
 
+    def test_header_shows_project_name_and_page_fields_recalculate_on_open(self):
+        with ExitStack() as stack:
+            _patched(stack, context={"id": "proj-1", "name": "Projeto Aurora"})
+            ex = _executor()
+            ex.exportar_pacote_completo()
+
+        pending = st.session_state["_pending_file_download"]
+        docx_bytes = st.session_state[pending["cache_key"]]
+        doc = Document(BytesIO(docx_bytes))
+
+        header_text = " ".join(r.text for p in doc.sections[0].header.paragraphs for r in p.runs)
+        assert "Projeto Aurora" in header_text
+
+        body_title = doc.paragraphs[0].text
+        assert "Projeto Aurora" in body_title
+
+        assert "updateFields" in doc.settings.element.xml
+
+    def test_missing_context_falls_back_to_generic_name_without_crashing(self):
+        with ExitStack() as stack:
+            _patched(stack, context=None)  # get_context() returns None (fail-open)
+            ex = _executor()
+            result = ex.exportar_pacote_completo()
+        assert "✅" in result  # doesn't crash — falls back to a generic title
+
     def test_incluir_secoes_filters_to_requested_sections_only(self):
-        with patch("core.project_store.list_requirements_light", return_value=[]), \
-             patch("core.project_store.list_sbvr_terms", return_value=[]), \
-             patch("core.project_store.list_sbvr_rules", return_value=[]), \
-             patch("core.project_store.list_bpmn_processes", return_value=[]), \
-             patch("core.project_store.list_argumentation_by_project", return_value=[]):
+        with ExitStack() as stack:
+            _patched(stack)
             ex = _executor()
             result = ex.exportar_pacote_completo(incluir_secoes=["atas", "requisitos"])
 
@@ -92,11 +133,8 @@ class TestExportarPacoteCompleto:
         assert "IBIS" not in result
 
     def test_meeting_numbers_filters_atas_section(self):
-        with patch("core.project_store.list_requirements_light", return_value=[]), \
-             patch("core.project_store.list_sbvr_terms", return_value=[]), \
-             patch("core.project_store.list_sbvr_rules", return_value=[]), \
-             patch("core.project_store.list_bpmn_processes", return_value=[]), \
-             patch("core.project_store.list_argumentation_by_project", return_value=[]):
+        with ExitStack() as stack:
+            _patched(stack)
             ex = _executor()
             result = ex.exportar_pacote_completo(meeting_numbers=[1], incluir_secoes=["atas"])
 
@@ -105,12 +143,9 @@ class TestExportarPacoteCompleto:
         assert pending is not None
 
     def test_docx_generation_failure_reported_without_raising(self):
-        with patch("core.project_store.list_requirements_light", return_value=[]), \
-             patch("core.project_store.list_sbvr_terms", return_value=[]), \
-             patch("core.project_store.list_sbvr_rules", return_value=[]), \
-             patch("core.project_store.list_bpmn_processes", return_value=[]), \
-             patch("core.project_store.list_argumentation_by_project", return_value=[]), \
-             patch("modules.minutes_exporter.markdown_to_docx", side_effect=RuntimeError("boom")):
+        with ExitStack() as stack:
+            _patched(stack)
+            stack.enter_context(patch("modules.minutes_exporter.markdown_to_docx", side_effect=RuntimeError("boom")))
             ex = _executor()
             result = ex.exportar_pacote_completo()
         assert "❌" in result
