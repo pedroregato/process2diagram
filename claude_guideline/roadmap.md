@@ -4,6 +4,27 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC177 — Concluído (v5.15 / 2026-07-10) — Carregamento paralelo dos dados iniciais da Central de Artefatos
+
+**Contexto:** usuário reportou lentidão no carregamento de `pages/Artefatos.py` depois do episódio de segfault (PC176). Investigação prévia (não implementada — decisão explícita do usuário) mostrou que "carregar só a aba ativa" exigiria trocar `st.tabs()` por navegação manual (risco alto, ganho incerto, já que `st.tabs()` executa o código de TODAS as abas a cada rerun independente de qual está visível). O que sobrou como alavanca real de velocidade: as 8 queries independentes do carregamento inicial rodavam sequencialmente.
+
+- `pages/Artefatos.py` — as 8 chamadas `_load_*(project_id)` (reuniões, requisitos, contradições, termos/regras SBVR, processos BPMN, documentos, mapa de metadados de ativos) agora disparam em paralelo via `ThreadPoolExecutor(max_workers=8)`, mesmo padrão já usado no Orchestrator (Minutes+Requirements) e em `modules/bpmn_viewer.py::_load_bpmn_assets`. Como são todas chamadas HTTP ao Supabase (I/O-bound), o tempo total passa a ser ~o da consulta mais lenta, não a soma de todas.
+- Não resolve o consumo de memória do primeiro carregamento (mesma quantidade de dados é buscada) — só o tempo de espera (wall clock).
+- 806/806 testes passando; boot-smoke via AppTest sem exceção.
+
+---
+
+### PC176 — Concluído (v5.15 / 2026-07-10) — Fixa versões soltas em requirements.txt (segfault em produção)
+
+**Contexto:** usuário relatou 2ª ocorrência de `Segmentation fault` no deploy do Streamlit Cloud (não uma exceção Python — crash no próprio processo). Sem acesso a stack trace/core dump, causa raiz não confirmada com certeza — mas `requirements.txt` violava a própria política do projeto ("Always pin exact versions") em várias linhas com range solto (`spacy>=3.7,<4.0`, `supabase>=2.4.0`, `lxml>=5.0`, etc.), fazendo cada deploy resolver possivelmente versões diferentes de numpy/blis/thinc (dependências nativas do spaCy) — fonte clássica de segfault por incompatibilidade de ABI entre builds.
+
+- Todas as dependências antes soltas em `requirements.txt` fixadas nas versões que já resolviam com sucesso hoje: `spacy==3.8.14`, `google-genai==2.11.0`, `google-generativeai==0.8.6`, `pypdf==6.14.2`, `openpyxl==3.1.5` (já batia), `jsonschema==4.26.0`, `lxml==6.1.1`, `python-dateutil==2.9.0.post0`, `supabase==2.31.0`, `pytest==9.1.1`.
+- Adicionado pin explícito de `numpy==2.5.1`, `blis==1.3.3`, `thinc==8.3.13` — dependências nativas transitivas do spaCy que antes nunca apareciam no arquivo (resolvidas implicitamente a cada build, sem controle de versão).
+- **Não é confirmação de causa raiz** — é uma medida preventiva de baixo risco alinhada à política já documentada do projeto. Ação imediata recomendada ao usuário: reboot manual do app no painel do Streamlit Cloud (fora do alcance do Claude Code).
+- 806/806 testes passando localmente (pin não afeta o venv local já instalado, só builds futuros).
+
+---
+
 ### PC175 — Concluído (v5.15 / 2026-07-10) — "Bad 'setIn' index" persistia após PC174: 2º ponto instável achado (toggle "Ver Ata Completa")
 
 **Contexto:** usuário colou o mesmo log de console de novo após o PC174 — erro ainda presente, só que `index 3` virou `index 1`. O fix do PC174 (envolver `render_promote_button` num `st.container()`) estava correto mas incompleto: existia OUTRO ponto com o mesmo padrão instável bem ao lado, dentro do mesmo expander de reunião.

@@ -12,16 +12,20 @@ pyvis==0.3.2                    # grafo de conhecimento interativo (física, arr
 anthropic==0.49.0
 openai==1.65.0
 pydantic==2.12.5                # output schema validation em BaseAgent (PC84)                  # também usado por DeepSeek, Groq e Gemini
-google-genai>=1.0.0             # embeddings Gemini via SDK novo (v1 estável, não v1beta)
-google-generativeai>=0.8.0      # list_models() para diagnóstico de chave/modelos disponíveis
+google-genai==2.11.0            # embeddings Gemini via SDK novo (v1 estável, não v1beta)
+google-generativeai==0.8.6      # list_models() para diagnóstico de chave/modelos disponíveis
 
 # ── NLP / Chunker (Agente sem LLM) ───────────────────────────────────────────
-spacy>=3.7,<4.0                 # motor NLP
+spacy==3.8.14                   # motor NLP
+numpy==2.5.1                    # dependência nativa do spaCy (via thinc/blis) — pin explícito evita
+                                 # deriva de versão/ABI entre deploys (causa clássica de segfault)
+blis==1.3.3                     # dependência nativa do spaCy (via thinc) — mesma razão do numpy acima
+thinc==8.3.13                   # dependência nativa do spaCy — mesma razão do numpy acima
 # Modelo pt após instalar: python -m spacy download pt_core_news_lg
 
 # ── Exportação de documentos ──────────────────────────────────────────────────
-pypdf>=5.0.0
-openpyxl>=3.1.5                 # exportação .xlsx no Assistente (render_table tool) + leitura no Importador de Planilha (PC163)
+pypdf==6.14.2
+openpyxl==3.1.5                 # exportação .xlsx no Assistente (render_table tool) + leitura no Importador de Planilha (PC163)
 pandas==2.3.3                   # tabelas no Assistente/Taxonomia + leitura de .xlsx no Importador de Planilha (PC163) — antes só dependência transitiva do Streamlit, agora essencial
 
 # ── Inportação de documentos ──────────────────────────────────────────────────
@@ -30,11 +34,11 @@ fpdf2==2.8.2                    # exportação PDF da Ata (pure Python, sem GTK)
 python-pptx==1.0.2              # extração de texto de apresentações .pptx (context_files)
 
 # ── Validação de schema ────────────────────────────────────────────────────────
-jsonschema>=4.21                # validação do Knowledge Hub e modelos JSON
-lxml>=5.0                       # validação do BPMN XML contra XSD da OMG
+jsonschema==4.26.0               # validação do Knowledge Hub e modelos JSON
+lxml==6.1.1                      # validação do BPMN XML contra XSD da OMG
 
 # ── Utilitários ───────────────────────────────────────────────────────────────
-python-dateutil>=2.9            # parsing de datas nos action items
+python-dateutil==2.9.0.post0     # parsing de datas nos action items
 
 # ── Componentes Streamlit extras ─────────────────────────────────────────────
 streamlit-javascript==0.1.5     # executa JS no browser e retorna valor ao Python (BpmnEditor)
@@ -46,7 +50,7 @@ json-repair==0.60.1             # fallback robusto em _parse_json quando o LLM g
 # (AgentAnalyst usa loop manual de tool-calling — sem dependência extra de LangChain)
 
 # ── Supabase (persistência de projetos/reuniões/requisitos) ──────────────────
-supabase>=2.4.0                 # cliente Python para Supabase (project_store.py)
+supabase==2.31.0                # cliente Python para Supabase (project_store.py)
 
 # ── API Comercial (FastAPI) ────────────────────────────────────────────────────
 fastapi==0.115.0                # framework REST para api.py
@@ -55,7 +59,7 @@ python-multipart==0.0.9         # upload de arquivos nos endpoints FastAPI
 httpx==0.28.1                   # cliente HTTP async + TestClient dos testes FastAPI
 
 # ── Testes ────────────────────────────────────────────────────────────────────
-pytest>=8.0                     # suite de testes automatizados (run: pytest tests/)
+pytest==9.1.1                   # suite de testes automatizados (run: pytest tests/)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # NOTAS DE INSTALAÇÃO

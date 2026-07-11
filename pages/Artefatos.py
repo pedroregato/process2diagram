@@ -157,16 +157,33 @@ def _load_asset_meta_map(pid):     return get_asset_metadata_map(pid)
 # ── Carregamento inicial: dados leves apenas ──────────────────────────────────
 # DMN e IBIS buscam dmn_json/argumentation_json de TODAS as reuniões (JSONs pesados).
 # São carregados sob demanda na primeira visita à respectiva aba, via session_state.
-# Isso reduz o carregamento inicial de 10-11 queries para 7-8 queries sequenciais.
+# Isso reduz o carregamento inicial de 10-11 queries para 8 queries.
+#
+# As 8 são independentes entre si (cada uma só depende de project_id) — disparadas
+# em paralelo via ThreadPoolExecutor (mesmo padrão do Orchestrator e de
+# modules/bpmn_viewer.py::_load_bpmn_assets) em vez de sequenciais. Tempo de
+# carga passa a ser ~o da consulta mais lenta, não a soma de todas — grande
+# ganho em contextos com muito conteúdo (cada query aqui é uma chamada HTTP
+# ao Supabase, I/O-bound, então threads liberam a GIL enquanto esperam rede).
+from concurrent.futures import ThreadPoolExecutor as _TPE
+with _TPE(max_workers=8) as _artefatos_pool:
+    _f_meetings       = _artefatos_pool.submit(_load_meetings, project_id)
+    _f_requirements   = _artefatos_pool.submit(_load_requirements, project_id)
+    _f_contradictions = _artefatos_pool.submit(_load_contradictions, project_id)
+    _f_sbvr_terms     = _artefatos_pool.submit(_load_sbvr_terms, project_id)
+    _f_sbvr_rules     = _artefatos_pool.submit(_load_sbvr_rules, project_id)
+    _f_bpmn_procs     = _artefatos_pool.submit(_load_bpmn_procs, project_id)
+    _f_documents      = _artefatos_pool.submit(_load_documents, project_id)
+    _f_asset_meta     = _artefatos_pool.submit(_load_asset_meta_map, project_id)
 
-meetings         = _load_meetings(project_id)
-requirements     = _load_requirements(project_id)
-contradictions   = _load_contradictions(project_id)
-sbvr_terms       = _load_sbvr_terms(project_id)
-sbvr_rules       = _load_sbvr_rules(project_id)
-bpmn_procs       = _load_bpmn_procs(project_id)
-documents        = _load_documents(project_id)
-asset_meta_map   = _load_asset_meta_map(project_id)  # {(artifact_type, artifact_id): row} — só PROMOVIDOS
+    meetings         = _f_meetings.result()
+    requirements     = _f_requirements.result()
+    contradictions   = _f_contradictions.result()
+    sbvr_terms       = _f_sbvr_terms.result()
+    sbvr_rules       = _f_sbvr_rules.result()
+    bpmn_procs       = _f_bpmn_procs.result()
+    documents        = _f_documents.result()
+    asset_meta_map   = _f_asset_meta.result()  # {(artifact_type, artifact_id): row} — só PROMOVIDOS
 
 def _promote_widget(artifact_type: str, artifact_id: str, title: str) -> None:
     """Wrapper fino de render_promote_button() já resolvendo já-promovido/created_by
