@@ -4,6 +4,18 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC182 — Concluído (v5.15 / 2026-07-11) — 3º ponto instável do "Bad setIn index" — toggle "Visualizar diagrama interativo" (aba Processos BPMN)
+
+**Contexto:** usuário reportou "Oh no. Error running app" de novo, agora ao entrar na aba Processos BPMN — mesma classe de crash já corrigida 2x nesta sessão (PC172/174: componente de promoção; PC175: toggle "Ver Ata Completa").
+
+- Achado: `st.toggle("Visualizar diagrama interativo", ...)` na aba BPMN condicionava diretamente um `components.html(bpmn_html, height=700)` — variando entre 0 e 1 elemento no mesmo nível hierárquico a cada rerun, sem `st.container()` estável. Agravante em relação aos casos anteriores: o payload condicional aqui é grande (a biblioteca bpmn-js inteira + XML do diagrama embutidos inline), tornando esse provavelmente o gatilho mais forte já encontrado pra essa classe de bug.
+- Fix: mesmo padrão já estabelecido — resultado do toggle capturado numa variável, conteúdo condicional movido pra dentro de um `st.container()` que sempre contribui exatamente 1 elemento ao pai, independente do estado do toggle.
+- Varredura confirmou que era o **único** `st.toggle()` em todo `Artefatos.py`, e os outros `components.html()` do arquivo (DMN tabelas/DRD) renderizam incondicionalmente a cada execução (sem variar contagem — não têm essa classe de bug, só custo fixo).
+- 3 testes novos (`tests/test_artefatos_bpmn_toggle_stable_container.py`) — reproduz a forma exata (toggle dentro de abas aninhadas) via `AppTest.from_string()`, mais uma checagem estática confirmando que o `st.container()` envolve o `components.html()` real no código-fonte.
+- 841/841 testes passando; boot-smoke real de `Artefatos.py` (chave de auth correta) sem exceção.
+
+---
+
 ### PC181 — Concluído (v5.15 / 2026-07-11) — Página "Casos de Uso — Valor de Negócio" + guia de ferramentas atualizado
 
 **Contexto:** usuário pediu pra "melhorar a documentação incluindo as novas funcionalidades" e criar uma página especial com exemplos de uso do P2D "demonstrando seu valor para o negócio". Escopo confirmado: página nova focada no Assistente (não o pipeline inteiro, que já tem material comercial próprio), como página Streamlit dentro do grupo Ajuda, com botão de exportar pra HTML.

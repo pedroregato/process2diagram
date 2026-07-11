@@ -1269,15 +1269,22 @@ with tab_bpmn:
                             mime="application/xml",
                             key=f"dl_bpmn_{pid}_{sel_ver['version']}",
                         )
-                        if st.toggle(
+                        _bpmn_show = st.toggle(
                             "Visualizar diagrama interativo",
                             key=f"bpmn_show_{pid}_{sel_ver['version']}",
-                        ):
-                            try:
-                                bpmn_html = preview_from_xml(bpmn_xml)
-                                components.html(bpmn_html, height=700, scrolling=False)
-                            except Exception as e:
-                                st.error(f"Erro ao renderizar BPMN: {e}")
+                        )
+                        # Slot único e estável: o toggle acima variava entre 0
+                        # e 1 elemento aqui (e o elemento, quando presente, é
+                        # um components.html() com a lib bpmn-js inteira
+                        # embutida — payload grande) — mesma causa raiz do
+                        # PC174/175 ("Bad 'setIn' index"), ver CLAUDE.md pitfalls.
+                        with st.container():
+                            if _bpmn_show:
+                                try:
+                                    bpmn_html = preview_from_xml(bpmn_xml)
+                                    components.html(bpmn_html, height=700, scrolling=False)
+                                except Exception as e:
+                                    st.error(f"Erro ao renderizar BPMN: {e}")
                     else:
                         st.info("XML BPMN não disponível para esta versão.")
                 with sub_mermaid:
