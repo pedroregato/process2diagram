@@ -4,6 +4,18 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC178 — Concluído (v5.15 / 2026-07-11) — Paginação da aba SBVR em Artefatos.py (provável causa real do segfault/tela branca) + correção de metodologia de teste
+
+**Contexto:** usuário mandou screenshot real de um contexto de produção: **842 requisitos, 751 termos SBVR, 502 regras SBVR, 28 reuniões, 43 processos BPMN, 113 decisões DMN**. Como `st.tabs()` executa o corpo de TODAS as abas a cada rerun (achado do PC176/177), a aba SBVR — sem paginação — renderizava **1253 expanders** (751+502), cada um com um `_promote_widget()` aninhado, TODA VEZ que a página Artefatos era carregada, mesmo que o usuário estivesse olhando outra aba. Essa é a explicação mais concreta e evidenciada até agora para os episódios de segfault/tela branca/lentidão — mais forte que as hipóteses anteriores (drift de dependência, refutada; volume total do contexto, parcialmente confirmada agora com números reais).
+
+- `pages/Artefatos.py` — aba SBVR (Termos e Regras, cada coluna independente) ganhou paginação de 25 itens/página, mesmo padrão já usado na aba Requisitos (`_REQ_PAGE_SIZE`) — nova constante `_SBVR_PAGE_SIZE = 25`, navegação Anterior/Próximo + contador, reset de página ao mudar filtro (reunião/categoria ou reunião/tipo).
+- **Achado crítico de metodologia**: todo "boot-smoke via AppTest" reportado nesta sessão (PC172 a PC177) usava a chave de sessão errada (`"authenticated"` em vez de `"_autenticado"`, a chave real lida por `modules/auth.py::is_authenticated()`) — isso significa que essas verificações só confirmavam que a **tela de login** renderizava sem erro, nunca testaram de fato o conteúdo das páginas alteradas. Corrigido nos testes novos deste PC; os testes de regressão de expander aninhado/Bad-setIn de PC172-175 continuam válidos porque usavam `AppTest.from_string()` com scripts autônomos, sem depender do gate de autenticação.
+- 2 testes novos (`tests/test_artefatos_sbvr_pagination.py`) com dado sintético grande (60 termos + 60 regras) e autenticação REAL corrigida — provam que a paginação de fato limita a renderização a 25 itens por coluna, incluindo navegação Próximo→.
+- Testado à parte (não é regressão, é achado): com autenticação real e Supabase real configurado localmente, a página completa (mesmo já com paginação) levou ~34s pra carregar contra um `project_id` sintético — não travou (descarta deadlock do `ThreadPoolExecutor` do PC177), mas confirma que o carregamento é genuinamente pesado; sem acesso a um projeto real de produção localmente (RLS bloqueia a chave local), não dá pra medir o ganho exato da paginação em produção.
+- 808/808 testes passando.
+
+---
+
 ### PC177 — Concluído (v5.15 / 2026-07-10) — Carregamento paralelo dos dados iniciais da Central de Artefatos
 
 **Contexto:** usuário reportou lentidão no carregamento de `pages/Artefatos.py` depois do episódio de segfault (PC176). Investigação prévia (não implementada — decisão explícita do usuário) mostrou que "carregar só a aba ativa" exigiria trocar `st.tabs()` por navegação manual (risco alto, ganho incerto, já que `st.tabs()` executa o código de TODAS as abas a cada rerun independente de qual está visível). O que sobrou como alavanca real de velocidade: as 8 queries independentes do carregamento inicial rodavam sequencialmente.

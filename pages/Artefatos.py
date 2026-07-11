@@ -899,6 +899,9 @@ _RULE_BADGE = {
     "behavioral":   ("badge-revised",      "Comportamental"),
     "structural":   ("badge-new",          "Estrutural"),
 }
+_SBVR_PAGE_SIZE = 25  # mesma paginação da aba Requisitos — contextos grandes (ex: 751 termos)
+                      # renderizavam TODOS os expanders de uma vez, mesmo sem essa aba estar
+                      # visível (st.tabs() executa o corpo de todas as abas a cada rerun)
 
 with tab_sbvr:
     st.caption(
@@ -926,10 +929,39 @@ with tab_sbvr:
             sel_cat = st.selectbox("Categoria", ["Todas"] + cats, key="sbvr_cat")
             if sel_cat != "Todas":
                 filtered_terms = [t for t in filtered_terms if t.get("category") == sel_cat]
-            st.caption(f"{len(filtered_terms)} termo(s)")
+            n_filtered_t = len(filtered_terms)
+            st.caption(f"{n_filtered_t} termo(s)")
             st.markdown("")
 
-            for t in filtered_terms:
+            # ── Paginação — reset ao mudar filtros ─────────────────────────
+            _t_filter_sig = f"{project_id}|{sel_meet_t}|{sel_cat}"
+            if st.session_state.get("_sbvr_t_last_filter") != _t_filter_sig:
+                st.session_state["sbvr_t_page"] = 0
+                st.session_state["_sbvr_t_last_filter"] = _t_filter_sig
+            _t_page       = min(st.session_state.get("sbvr_t_page", 0),
+                                max(0, (n_filtered_t - 1) // _SBVR_PAGE_SIZE))
+            _t_n_pages    = max(1, (n_filtered_t + _SBVR_PAGE_SIZE - 1) // _SBVR_PAGE_SIZE)
+            _t_page_start = _t_page * _SBVR_PAGE_SIZE
+            _t_page_end   = min(_t_page_start + _SBVR_PAGE_SIZE, n_filtered_t)
+            page_terms    = filtered_terms[_t_page_start:_t_page_end]
+
+            if n_filtered_t > _SBVR_PAGE_SIZE:
+                _tnav1, _tnav2, _tnav3 = st.columns([1, 1, 2])
+                with _tnav1:
+                    if st.button("← Anterior", key="sbvr_t_prev", disabled=(_t_page == 0)):
+                        st.session_state["sbvr_t_page"] = _t_page - 1
+                        st.rerun()
+                with _tnav2:
+                    if st.button("Próximo →", key="sbvr_t_next", disabled=(_t_page == _t_n_pages - 1)):
+                        st.session_state["sbvr_t_page"] = _t_page + 1
+                        st.rerun()
+                with _tnav3:
+                    st.caption(
+                        f"**{_t_page_start + 1}–{_t_page_end}** de **{n_filtered_t}** "
+                        f"· Pág. **{_t_page + 1}/{_t_n_pages}**"
+                    )
+
+            for t in page_terms:
                 cat = t.get("category", "concept")
                 badge_cls, badge_txt = _CATEGORY_BADGE.get(cat, ("badge-active", cat))
                 meet_info = t.get("meetings") or {}
@@ -965,10 +997,39 @@ with tab_sbvr:
             sel_rtype = st.selectbox("Tipo", ["Todos"] + types, key="sbvr_rtype")
             if sel_rtype != "Todos":
                 filtered_rules = [r for r in filtered_rules if r.get("rule_type") == sel_rtype]
-            st.caption(f"{len(filtered_rules)} regra(s)")
+            n_filtered_r = len(filtered_rules)
+            st.caption(f"{n_filtered_r} regra(s)")
             st.markdown("")
 
-            for idx, r in enumerate(filtered_rules, 1):
+            # ── Paginação — reset ao mudar filtros ─────────────────────────
+            _r_filter_sig = f"{project_id}|{sel_meet_r}|{sel_rtype}"
+            if st.session_state.get("_sbvr_r_last_filter") != _r_filter_sig:
+                st.session_state["sbvr_r_page"] = 0
+                st.session_state["_sbvr_r_last_filter"] = _r_filter_sig
+            _r_page       = min(st.session_state.get("sbvr_r_page", 0),
+                                max(0, (n_filtered_r - 1) // _SBVR_PAGE_SIZE))
+            _r_n_pages    = max(1, (n_filtered_r + _SBVR_PAGE_SIZE - 1) // _SBVR_PAGE_SIZE)
+            _r_page_start = _r_page * _SBVR_PAGE_SIZE
+            _r_page_end   = min(_r_page_start + _SBVR_PAGE_SIZE, n_filtered_r)
+            page_rules    = filtered_rules[_r_page_start:_r_page_end]
+
+            if n_filtered_r > _SBVR_PAGE_SIZE:
+                _rnav1, _rnav2, _rnav3 = st.columns([1, 1, 2])
+                with _rnav1:
+                    if st.button("← Anterior", key="sbvr_r_prev", disabled=(_r_page == 0)):
+                        st.session_state["sbvr_r_page"] = _r_page - 1
+                        st.rerun()
+                with _rnav2:
+                    if st.button("Próximo →", key="sbvr_r_next", disabled=(_r_page == _r_n_pages - 1)):
+                        st.session_state["sbvr_r_page"] = _r_page + 1
+                        st.rerun()
+                with _rnav3:
+                    st.caption(
+                        f"**{_r_page_start + 1}–{_r_page_end}** de **{n_filtered_r}** "
+                        f"· Pág. **{_r_page + 1}/{_r_n_pages}**"
+                    )
+
+            for idx, r in enumerate(page_rules, _r_page_start + 1):
                 rtype = r.get("rule_type", "constraint")
                 badge_cls, badge_txt = _RULE_BADGE.get(rtype, ("badge-active", rtype))
                 rule_id = r.get("rule_id") or f"BR-{idx:03d}"
