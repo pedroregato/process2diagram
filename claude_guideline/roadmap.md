@@ -4,6 +4,20 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC183 — Concluído (v5.15 / 2026-07-12) — Telemetria fecha o loop: erro por provider vira alerta + taxa de schema válido vira métrica
+
+**Contexto:** discussão sobre RLS/telemetria levou o usuário a explicar que o P2D também serve como POC pessoal de proficiência em engenharia de IA (career motivation, ver memória `user_profile.md`). Avaliação conjunta descartou analytics genéricos (Sentry, page views) por não demonstrarem profundidade específica de IA, e propôs 2 adições que fecham o loop de dado bruto → sinal acionável em cima de infraestrutura 100% existente. Usuário aprovou com "Implemente as duas".
+
+- **Achado crítico na investigação:** `is_error` em `llm_telemetry` estava hard-coded `False` no único ponto de escrita de `_call_llm()` (que só executava DEPOIS de uma chamada bem-sucedida) — uma chamada que falhasse (ex.: o problema intermitente conhecido do DeepSeek, "conteúdo vazio") **nunca gerava registro nenhum** de telemetria. O bug documentado na memória do projeto era literalmente invisível ao próprio sistema de observabilidade.
+- **`agents/base_agent.py::_call_llm()`** — chamada a `_call_openai`/`_call_anthropic` agora envolvida em `try/except`: em caso de exceção, grava `TelemetryRecord(is_error=True, error_message=str(exc)[:300])` e **relança a mesma exceção inalterada** — comportamento de retry/escalação de `_call_with_retry()` preservado byte a byte (coberto por regressão explícita).
+- **`agents/base_agent.py::_call_with_retry()`** — resultado de `output_schema.model_validate(data)` (padrão PC84), antes só um `warnings.warn()` efêmero, agora também persiste via `_telemetry.record_validation(agent_name, skill_version, valid)` — fail-open, nunca bloqueia o pipeline.
+- **`services/llm_telemetry.py`** — `TelemetryRecord` ganhou `error_message`, `is_validation_event`, `schema_valid`; `LLMTelemetry.record_validation()` novo; `query()` passou a filtrar `is_validation_event=False` (não polui médias de latência/throughput); 4 métodos novos: `query_error_rate_by_provider(hours)`, `detect_error_anomalies(hours, min_calls, error_rate_threshold)` (guard de `min_calls` evita falso positivo de baixo volume), `query_recent_errors(hours, limit)`, `query_schema_validation_rate(days, agent_name)`.
+- **`pages/LLMBenchmark.py`** — aba "📊 Telemetria Real" ganhou 2 sub-abas: **🚨 Alertas** (taxa de erro por provider, limiar/mínimo de chamadas configuráveis via slider, bar chart com linha de limiar, tabela de últimas falhas com `error_message`) e **✅ Qualidade** (taxa geral e por agente de saída bem-formada, evolução temporal, breakdown por versão de skill quando disponível).
+- **Migration** — `setup/supabase_migration_llm_telemetry_pc183.sql` (3 colunas `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` + 2 índices parciais) — **executada em produção** via `psycopg2`/`connection_string` direto.
+- 21 testes novos (`tests/test_base_agent_telemetry.py`, `tests/test_llm_telemetry_pc183.py`, `tests/test_page_llm_benchmark_pc183.py`) — cobrem gravação de erro + relançamento da exceção original, fail-open quando a própria telemetria falha, persistência de `schema_valid` true/false sem bloquear o pipeline, cálculo de taxa de erro/anomalia/ruído de baixo volume, e boot-smoke real da página contra o Supabase de produção pós-migração.
+
+---
+
 ### PC182 — Concluído (v5.15 / 2026-07-11) — 3º ponto instável do "Bad setIn index" — toggle "Visualizar diagrama interativo" (aba Processos BPMN)
 
 **Contexto:** usuário reportou "Oh no. Error running app" de novo, agora ao entrar na aba Processos BPMN — mesma classe de crash já corrigida 2x nesta sessão (PC172/174: componente de promoção; PC175: toggle "Ver Ata Completa").

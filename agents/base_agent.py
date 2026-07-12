@@ -258,18 +258,45 @@ class BaseAgent(ABC):
 
         t0 = time.time()
 
-        if client_type == "openai_compatible":
-            raw, tokens_in, tokens_out = self._call_openai(
-                system, safe_user, api_key, model,
-                timeout=_timeout, long_context=use_long_ctx,
-            )
-        elif client_type == "anthropic":
-            raw, tokens_in, tokens_out = self._call_anthropic(
-                system, safe_user, api_key, model,
-                timeout=_timeout, long_context=use_long_ctx,
-            )
-        else:
-            raise ValueError(f"Unknown client_type: {client_type}")
+        try:
+            if client_type == "openai_compatible":
+                raw, tokens_in, tokens_out = self._call_openai(
+                    system, safe_user, api_key, model,
+                    timeout=_timeout, long_context=use_long_ctx,
+                )
+            elif client_type == "anthropic":
+                raw, tokens_in, tokens_out = self._call_anthropic(
+                    system, safe_user, api_key, model,
+                    timeout=_timeout, long_context=use_long_ctx,
+                )
+            else:
+                raise ValueError(f"Unknown client_type: {client_type}")
+        except Exception as call_exc:
+            # PC183 — previously a failed call left NO telemetry trace at all
+            # (is_error was hardcoded False on the success path only), so the
+            # known intermittent DeepSeek "conteúdo vazio" issue was invisible
+            # to telemetry. Record then re-raise unchanged — _call_with_retry's
+            # retry/escalation logic depends on the exception propagating.
+            try:
+                from services.llm_telemetry import _telemetry, TelemetryRecord
+                _telemetry.record(TelemetryRecord(
+                    agent_name=self.name,
+                    provider=self.provider_cfg.get("api_key_label", client_type),
+                    model=model,
+                    latency_ms=int((time.time() - t0) * 1000),
+                    input_tokens=0,
+                    output_tokens=0,
+                    total_tokens=0,
+                    from_cache=False,
+                    long_context=use_long_ctx,
+                    is_error=True,
+                    benchmark_run=False,
+                    skill_version=getattr(self, "skill_version", None),
+                    error_message=str(call_exc)[:300],
+                ))
+            except Exception:
+                pass
+            raise
 
         tokens = tokens_in + tokens_out
         elapsed_ms = int((time.time() - t0) * 1000)
@@ -502,14 +529,27 @@ class BaseAgent(ABC):
                 # Fail-open schema validation — warns but never blocks the pipeline
                 _schema = getattr(self, "output_schema", None)
                 if _schema is not None:
+                    _schema_valid = True
                     try:
                         _schema.model_validate(data)
                     except Exception as _exc:
+                        _schema_valid = False
                         import warnings
                         warnings.warn(
                             f"[{self.name}] Output schema validation: {_exc}",
                             stacklevel=2,
                         )
+                    # PC183 — persist the outcome (previously only the
+                    # ephemeral warnings.warn() above) so "% well-formed
+                    # structured output by agent/skill_version over time" can
+                    # be tracked as a quality metric, not just a live warning.
+                    try:
+                        from services.llm_telemetry import _telemetry
+                        _telemetry.record_validation(
+                            self.name, getattr(self, "skill_version", None), _schema_valid
+                        )
+                    except Exception:
+                        pass
                 return data
             except (ValueError, KeyError, UnicodeEncodeError) as exc:
                 last_error = exc

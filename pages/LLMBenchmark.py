@@ -401,8 +401,9 @@ with tab_tele:
 
     st.markdown("---")
 
-    sub_lat, sub_thr, sub_hist, sub_heat, sub_ver = st.tabs([
+    sub_lat, sub_thr, sub_hist, sub_heat, sub_ver, sub_alert, sub_qual = st.tabs([
         "📊 Latência", "⚡ Throughput", "📈 Histórico", "🔥 Heatmap", "📋 Versões",
+        "🚨 Alertas", "✅ Qualidade",
     ])
 
     providers_present = sorted(df_all["provider"].unique())
@@ -664,6 +665,197 @@ with tab_tele:
                     ),
                 )
                 st.plotly_chart(fig_vts, use_container_width=True)
+
+    # ── Sub-tab: Alertas (taxa de erro por provider) — PC183 ───────────────
+    with sub_alert:
+        st.markdown(
+            "Detecção de anomalia sobre a própria telemetria: chamadas que "
+            "**falharam** (ex.: o problema intermitente conhecido do DeepSeek — "
+            "conteúdo vazio / truncamento) agora deixam rastro em vez de sumir "
+            "num retry silencioso."
+        )
+        ac1, ac2 = st.columns(2)
+        with ac1:
+            f_alert_threshold = st.slider(
+                "Limiar de taxa de erro", min_value=0.05, max_value=0.5,
+                value=0.15, step=0.05, format="%.0f%%", key="tele_alert_thr",
+            )
+        with ac2:
+            f_alert_min_calls = st.number_input(
+                "Mínimo de chamadas p/ considerar", min_value=1, max_value=50,
+                value=5, key="tele_alert_min",
+                help="Evita falso positivo (ex.: 1 erro em 1 chamada = 100%)",
+            )
+
+        @st.cache_data(ttl=60, show_spinner=False)
+        def _load_error_stats(hours):
+            return _telemetry.query_error_rate_by_provider(hours=hours)
+
+        _hours = f_days * 24
+        err_stats = _load_error_stats(_hours)
+
+        if not err_stats:
+            st.info("Nenhuma chamada registrada no período (ou nenhuma falha) — sem dados de erro.")
+        else:
+            anomalies = [
+                {"provider": p, **s} for p, s in err_stats.items()
+                if s["total"] >= f_alert_min_calls and s["error_rate"] >= f_alert_threshold
+            ]
+            anomalies.sort(key=lambda a: a["error_rate"], reverse=True)
+
+            if anomalies:
+                for a in anomalies:
+                    st.error(
+                        f"🚨 **{a['provider']}** — taxa de erro **{a['error_rate']:.0%}** "
+                        f"({a['errors']}/{a['total']} chamadas nos últimos {f_days} dias)"
+                    )
+            else:
+                st.success(f"Nenhum provider acima do limiar de {f_alert_threshold:.0%} no período.")
+
+            df_err = pd.DataFrame([
+                {"Provider": p, "Chamadas": s["total"], "Erros": s["errors"],
+                 "Taxa de erro": s["error_rate"]}
+                for p, s in err_stats.items()
+            ]).sort_values("Taxa de erro", ascending=False)
+
+            fig_err = go.Figure(go.Bar(
+                x=df_err["Provider"], y=df_err["Taxa de erro"],
+                marker_color=[
+                    "#dc2626" if r >= f_alert_threshold else "#2563eb"
+                    for r in df_err["Taxa de erro"]
+                ],
+                text=df_err["Taxa de erro"].apply(lambda v: f"{v:.0%}"),
+                textposition="outside",
+            ))
+            fig_err.add_hline(
+                y=f_alert_threshold, line_dash="dash", line_color="#dc2626",
+                annotation_text="Limiar", annotation_position="top right",
+            )
+            fig_err.update_layout(
+                title=f"Taxa de erro por provider — últimos {f_days} dias",
+                height=360,
+                plot_bgcolor="#0d1b2a",
+                paper_bgcolor="#0d1b2a",
+                font_color="#f0f4f8",
+                yaxis_title="Taxa de erro",
+                yaxis_tickformat=".0%",
+            )
+            st.plotly_chart(fig_err, use_container_width=True)
+
+            df_err_display = df_err.copy()
+            df_err_display["Taxa de erro"] = df_err_display["Taxa de erro"].apply(lambda v: f"{v:.1%}")
+            st.dataframe(df_err_display, use_container_width=True, hide_index=True)
+
+            st.markdown("##### Últimas falhas (amostra)")
+            recent_errors = _telemetry.query_recent_errors(hours=_hours, limit=20)
+            if recent_errors:
+                df_recent = pd.DataFrame(recent_errors).rename(columns={
+                    "agent_name": "Agente", "provider": "Provider", "model": "Modelo",
+                    "error_message": "Erro", "created_at": "Quando",
+                })
+                st.dataframe(df_recent, use_container_width=True, hide_index=True)
+            else:
+                st.caption("Nenhuma falha registrada no período.")
+
+    # ── Sub-tab: Qualidade (schema validation rate) — PC183 ────────────────
+    with sub_qual:
+        st.markdown(
+            "% de saídas **bem-formadas** (`output_schema.model_validate()`, PC84) "
+            "por agente e versão de skill. Antes só existia como um "
+            "`warnings.warn()` efêmero — aqui vira um sinal de qualidade "
+            "acompanhável ao longo do tempo, não só \"a chamada teve sucesso\"."
+        )
+
+        @st.cache_data(ttl=60, show_spinner=False)
+        def _load_validation_rows(days):
+            return _telemetry.query_schema_validation_rate(days=days)
+
+        val_rows = _load_validation_rows(f_days)
+
+        if not val_rows:
+            st.info(
+                "Nenhum evento de validação de schema no período. Apenas agentes "
+                "com `output_schema` definido (padrão PC84) geram esse dado — "
+                "processe novas reuniões para popular."
+            )
+        else:
+            df_val = pd.DataFrame(val_rows)
+            df_val["schema_valid"] = df_val["schema_valid"].fillna(False)
+
+            overall_rate = df_val["schema_valid"].mean()
+            vq1, vq2, vq3 = st.columns(3)
+            vq1.metric("Taxa geral de saída bem-formada", f"{overall_rate:.1%}")
+            vq2.metric("Eventos de validação", f"{len(df_val):,}")
+            vq3.metric("Agentes monitorados", df_val["agent_name"].nunique())
+
+            agg_val = (
+                df_val.groupby("agent_name")["schema_valid"]
+                .agg(N="count", taxa="mean")
+                .reset_index()
+                .sort_values("taxa")
+                .rename(columns={"agent_name": "Agente", "N": "Eventos", "taxa": "Taxa"})
+            )
+            fig_val = go.Figure(go.Bar(
+                x=agg_val["Agente"], y=agg_val["Taxa"],
+                marker_color=[
+                    "#dc2626" if r < 0.9 else "#16a34a" for r in agg_val["Taxa"]
+                ],
+                text=agg_val["Taxa"].apply(lambda v: f"{v:.0%}"),
+                textposition="outside",
+            ))
+            fig_val.update_layout(
+                title=f"Taxa de saída bem-formada por agente — últimos {f_days} dias",
+                height=360,
+                plot_bgcolor="#0d1b2a",
+                paper_bgcolor="#0d1b2a",
+                font_color="#f0f4f8",
+                yaxis_title="Taxa de validação",
+                yaxis_tickformat=".0%",
+                yaxis_range=[0, 1.05],
+            )
+            st.plotly_chart(fig_val, use_container_width=True)
+
+            df_val_display = agg_val.copy()
+            df_val_display["Taxa"] = df_val_display["Taxa"].apply(lambda v: f"{v:.1%}")
+            st.dataframe(df_val_display, use_container_width=True, hide_index=True)
+
+            # Evolução temporal
+            df_val_ts = df_val.copy()
+            df_val_ts["date"] = pd.to_datetime(df_val_ts["created_at"]).dt.date
+            agg_val_ts = (
+                df_val_ts.groupby("date")["schema_valid"].mean().reset_index()
+            )
+            if len(agg_val_ts) > 1:
+                fig_val_ts = go.Figure(go.Scatter(
+                    x=agg_val_ts["date"], y=agg_val_ts["schema_valid"],
+                    mode="lines+markers", line=dict(color="#16a34a", width=2),
+                    marker=dict(size=6),
+                ))
+                fig_val_ts.update_layout(
+                    title="Evolução da taxa de saída bem-formada por dia",
+                    height=320,
+                    plot_bgcolor="#0d1b2a",
+                    paper_bgcolor="#0d1b2a",
+                    font_color="#f0f4f8",
+                    yaxis_title="Taxa de validação",
+                    yaxis_tickformat=".0%",
+                    yaxis_range=[0, 1.05],
+                    xaxis_title="Data",
+                )
+                st.plotly_chart(fig_val_ts, use_container_width=True)
+
+            # Por versão de skill, quando disponível
+            df_val_sv = df_val[df_val["skill_version"].notna()]
+            if not df_val_sv.empty:
+                st.markdown("##### Por versão de skill")
+                agg_val_sv = (
+                    df_val_sv.groupby(["agent_name", "skill_version"])["schema_valid"]
+                    .agg(N="count", Taxa="mean")
+                    .reset_index()
+                    .rename(columns={"agent_name": "Agente", "skill_version": "Versão"})
+                )
+                agg_val_sv["Taxa"] = agg_val_sv["Taxa"].apply(lambda v: f"{v:.1%}")
+                st.dataframe(agg_val_sv, use_container_width=True, hide_index=True)
 
     st.markdown("---")
     st.caption(

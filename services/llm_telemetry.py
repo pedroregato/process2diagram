@@ -33,6 +33,13 @@ class TelemetryRecord:
     is_error:      bool = False
     benchmark_run: bool = False
     skill_version: Optional[str] = None
+    error_message: Optional[str] = None
+    # PC183 — schema-validation outcome (output_schema.model_validate). These
+    # records share the same table but are a distinct event type: they carry
+    # no latency/token data, so query()'s default latency/throughput views
+    # must keep filtering is_validation_event=False (see query()).
+    is_validation_event: bool = False
+    schema_valid:        Optional[bool] = None
 
 
 # ── Synthetic transcripts for on-demand benchmarks ────────────────────────────
@@ -230,6 +237,27 @@ class LLMTelemetry:
         """Fire-and-forget async write. Never raises."""
         threading.Thread(target=self._write, args=(rec,), daemon=True).start()
 
+    def record_validation(self, agent_name: str, skill_version: Optional[str], valid: bool) -> None:
+        """Fire-and-forget async write of a schema-validation outcome (PC183).
+
+        Separate from record() because a validation event has no latency/token
+        data of its own — it piggybacks on the same table as a distinct row
+        (is_validation_event=True) so it can be queried independently without
+        polluting the latency/throughput aggregates in query().
+        """
+        self.record(TelemetryRecord(
+            agent_name=agent_name,
+            provider="",
+            model="",
+            latency_ms=0,
+            input_tokens=0,
+            output_tokens=0,
+            total_tokens=0,
+            skill_version=skill_version,
+            is_validation_event=True,
+            schema_valid=valid,
+        ))
+
     def _write(self, rec: TelemetryRecord) -> None:
         try:
             from modules.supabase_client import get_supabase_client
@@ -249,6 +277,9 @@ class LLMTelemetry:
                 "is_error":      rec.is_error,
                 "benchmark_run": rec.benchmark_run,
                 "skill_version": rec.skill_version,
+                "error_message": rec.error_message,
+                "is_validation_event": rec.is_validation_event,
+                "schema_valid":  rec.schema_valid,
             }).execute()
         except Exception:
             pass
@@ -275,6 +306,7 @@ class LLMTelemetry:
                         "output_tokens,total_tokens,from_cache,long_context,"
                         "is_error,benchmark_run,skill_version,created_at")
                 .eq("is_error", False)
+                .eq("is_validation_event", False)
                 .gte("created_at", f"now() - interval '{days} days'")
                 .order("created_at", desc=True)
                 .limit(limit)
@@ -289,6 +321,113 @@ class LLMTelemetry:
                 q = q.eq("benchmark_run", True)
             elif not include_benchmark:
                 q = q.eq("benchmark_run", False)
+            return q.execute().data or []
+        except Exception:
+            return []
+
+    def query_error_rate_by_provider(self, hours: int = 24) -> dict[str, dict]:
+        """Error rate per provider over the last `hours` (PC183).
+
+        Excludes cached/benchmark calls — those don't reflect live provider
+        health. Returns {} on any error (fail-open).
+        """
+        try:
+            from modules.supabase_client import get_supabase_client
+            db = get_supabase_client()
+            if not db:
+                return {}
+            rows = (
+                db.table("llm_telemetry")
+                .select("provider,is_error")
+                .eq("is_validation_event", False)
+                .eq("from_cache", False)
+                .eq("benchmark_run", False)
+                .gte("created_at", f"now() - interval '{hours} hours'")
+                .limit(5000)
+                .execute().data or []
+            )
+            stats: dict[str, dict] = {}
+            for r in rows:
+                p = r.get("provider") or "?"
+                s = stats.setdefault(p, {"total": 0, "errors": 0})
+                s["total"] += 1
+                if r.get("is_error"):
+                    s["errors"] += 1
+            for s in stats.values():
+                s["error_rate"] = s["errors"] / s["total"] if s["total"] else 0.0
+            return stats
+        except Exception:
+            return {}
+
+    def detect_error_anomalies(
+        self,
+        hours: int = 24,
+        min_calls: int = 5,
+        error_rate_threshold: float = 0.15,
+    ) -> list[dict]:
+        """Flags providers whose recent error rate crosses `error_rate_threshold`
+        (PC183) — e.g. surfaces the known intermittent DeepSeek "conteúdo vazio"
+        failure pattern as an actionable signal instead of silent retries.
+
+        `min_calls` guards against false positives from low-volume noise
+        (e.g. 1 error out of 1 call = 100% but meaningless).
+        """
+        stats = self.query_error_rate_by_provider(hours=hours)
+        anomalies = [
+            {"provider": provider, **s}
+            for provider, s in stats.items()
+            if s["total"] >= min_calls and s["error_rate"] >= error_rate_threshold
+        ]
+        return sorted(anomalies, key=lambda a: a["error_rate"], reverse=True)
+
+    def query_recent_errors(self, hours: int = 24, limit: int = 20) -> list[dict]:
+        """Most recent failed calls (PC183) — lets the Alertas panel show *why*
+        a provider is flagged, not just the error rate. Returns [] on error.
+        """
+        try:
+            from modules.supabase_client import get_supabase_client
+            db = get_supabase_client()
+            if not db:
+                return []
+            rows = (
+                db.table("llm_telemetry")
+                .select("agent_name,provider,model,error_message,created_at")
+                .eq("is_error", True)
+                .gte("created_at", f"now() - interval '{hours} hours'")
+                .order("created_at", desc=True)
+                .limit(limit)
+                .execute().data or []
+            )
+            return rows
+        except Exception:
+            return []
+
+    def query_schema_validation_rate(
+        self,
+        days: int = 30,
+        agent_name: Optional[str] = None,
+    ) -> list[dict]:
+        """Per agent/skill_version well-formed-output rate (PC183) — surfaces
+        PC84's schema validation outcome (previously only a transient
+        warnings.warn(), never persisted) as a quality-over-time metric.
+        Returns raw rows [{agent_name, skill_version, schema_valid, created_at}];
+        aggregation is done by the caller (UI groups by agent/version/day).
+        """
+        try:
+            from modules.supabase_client import get_supabase_client
+            db = get_supabase_client()
+            if not db:
+                return []
+            q = (
+                db.table("llm_telemetry")
+                .select("agent_name,skill_version,schema_valid,created_at")
+                .eq("is_validation_event", True)
+                .gte("created_at", f"now() - interval '{days} days'")
+                .order("created_at", desc=True)
+                .limit(5000)
+            )
+            if agent_name:
+                q = q.eq("agent_name", agent_name)
             return q.execute().data or []
         except Exception:
             return []
