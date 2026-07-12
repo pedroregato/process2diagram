@@ -78,6 +78,40 @@ AVAILABLE_PROVIDERS: dict = {
         "max_tokens": 8192,
     },
 
+    "Azure OpenAI": {
+        # `default_model` is the Azure *deployment name*, not a model id —
+        # Azure OpenAI routes by deployment, so this must match whatever the
+        # user named their deployment in Azure AI Foundry / Azure Portal.
+        "default_model": "gpt-4o-mini",
+        "base_url": None,               # unused — Azure uses azure_endpoint (extra_fields) instead
+        "api_key_label": "Azure OpenAI API Key",
+        "api_key_help": "Get your key at portal.azure.com — recurso Azure OpenAI > Keys and Endpoint",
+        "api_key_prefix": "",
+        "client_type": "azure_openai",
+        "cost_hint": "Preço definido pelo seu contrato/região Azure (varia por SKU e deployment)",
+        "supports_json_mode": True,
+        "supports_system_prompt": True,
+        "max_tokens": 8192,
+        "api_version": "2024-10-21",
+        "extra_fields": [
+            {
+                "key": "azure_endpoint",
+                "label": "Azure Endpoint",
+                "placeholder": "https://<seu-recurso>.openai.azure.com",
+                "help": "Azure Portal > seu recurso Azure OpenAI > Keys and Endpoint.",
+            },
+            {
+                "key": "deployment_name",
+                "label": "Deployment Name (opcional)",
+                "placeholder": "ex: gpt-4o-mini-prod",
+                "help": "Azure roteia por nome de deployment, não por model id. "
+                        "Deixe em branco para usar 'gpt-4o-mini' (padrão acima) — "
+                        "preencha se o seu deployment tem outro nome.",
+            },
+        ],
+        "note": "Requer endpoint próprio do recurso Azure (campos adicionais abaixo).",
+    },
+
     "Groq (Llama)": {
         "default_model": "llama-3.3-70b-versatile",
         "base_url": "https://api.groq.com/openai/v1",

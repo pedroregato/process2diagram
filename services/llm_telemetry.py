@@ -218,6 +218,34 @@ def run_benchmark_call(
             )
             inp = msg.usage.input_tokens  if msg.usage else 0
             out = msg.usage.output_tokens if msg.usage else 0
+
+        elif client_type == "azure_openai":
+            from openai import AzureOpenAI
+            from modules.session_security import get_extra_field
+            azure_endpoint = get_extra_field(provider_name, "azure_endpoint")
+            deployment = get_extra_field(provider_name, "deployment_name") or model
+            if not azure_endpoint:
+                return 0, 0, 0, "Azure OpenAI: endpoint não configurado em Configurações."
+            client = AzureOpenAI(
+                api_key=api_key, azure_endpoint=azure_endpoint,
+                api_version=provider_cfg.get("api_version", "2024-10-21"),
+            )
+            kwargs = dict(
+                model=deployment,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user",   "content": user},
+                ],
+                max_tokens=max_tokens,
+                temperature=0.1,
+            )
+            if provider_cfg.get("supports_json_mode"):
+                kwargs["response_format"] = {"type": "json_object"}
+                if "json" not in user.lower():
+                    kwargs["messages"][-1]["content"] += "\n\nReturn valid JSON only."
+            resp = client.chat.completions.create(**kwargs, timeout=60)
+            inp  = resp.usage.prompt_tokens     if resp.usage else 0
+            out  = resp.usage.completion_tokens if resp.usage else 0
         else:
             return 0, 0, 0, f"Unknown client_type: {client_type}"
 

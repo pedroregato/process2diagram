@@ -269,6 +269,11 @@ class BaseAgent(ABC):
                     system, safe_user, api_key, model,
                     timeout=_timeout, long_context=use_long_ctx,
                 )
+            elif client_type == "azure_openai":
+                raw, tokens_in, tokens_out = self._call_azure_openai(
+                    system, safe_user, api_key, model,
+                    timeout=_timeout, long_context=use_long_ctx,
+                )
             else:
                 raise ValueError(f"Unknown client_type: {client_type}")
         except Exception as call_exc:
@@ -351,7 +356,66 @@ class BaseAgent(ABC):
     ) -> tuple[str, int]:
         from openai import OpenAI
         client = OpenAI(api_key=api_key, base_url=self.provider_cfg.get("base_url"))
+        return self._run_openai_chat(client, system, user, model, timeout, long_context)
 
+    def _call_azure_openai(
+        self,
+        system: str,
+        user: str,
+        api_key: str,
+        model: str,
+        timeout: int = 60,
+        long_context: bool = False,
+    ) -> tuple[str, int]:
+        """
+        Azure OpenAI Service — same chat-completions contract as OpenAI, but a
+        distinct SDK client (endpoint + api_version instead of base_url) and
+        `model` here is the Azure *deployment name*, not a model id.
+
+        Endpoint/api_version resolution mirrors _is_long_context_enabled():
+        client_info (API mode) → st.session_state extra field (Streamlit
+        sidebar, see modules/session_security.py::render_extra_fields) → "".
+        """
+        azure_endpoint = self.client_info.get("azure_endpoint", "")
+        deployment = self.client_info.get("azure_deployment", "")
+        api_version = self.provider_cfg.get("api_version", "2024-10-21")
+        if not azure_endpoint or not deployment:
+            try:
+                from modules.session_security import get_extra_field
+                _provider_name = self.provider_cfg.get("provider_name", "Azure OpenAI")
+                azure_endpoint = azure_endpoint or get_extra_field(_provider_name, "azure_endpoint")
+                deployment = deployment or get_extra_field(_provider_name, "deployment_name")
+            except Exception:
+                pass
+        if not azure_endpoint:
+            raise ValueError(
+                f"[{self.name}] Azure OpenAI requer um endpoint configurado "
+                f"(ex: https://<recurso>.openai.azure.com) — configure em "
+                f"Configurações antes de usar este provider."
+            )
+        # Azure routes by deployment name, not model id — an explicit
+        # deployment override (extra field) takes precedence over whatever
+        # model id was resolved upstream (default_model / scenario override).
+        if deployment:
+            model = deployment
+
+        from openai import AzureOpenAI
+        client = AzureOpenAI(
+            api_key=api_key, azure_endpoint=azure_endpoint, api_version=api_version,
+        )
+        return self._run_openai_chat(client, system, user, model, timeout, long_context)
+
+    def _run_openai_chat(
+        self,
+        client,
+        system: str,
+        user: str,
+        model: str,
+        timeout: int,
+        long_context: bool,
+    ) -> tuple[str, int]:
+        """Shared chat-completions call for any client exposing the OpenAI SDK
+        interface (OpenAI, AzureOpenAI, and OpenAI-compatible base_urls)."""
         # Sanitize before sending — httpx encodes body as UTF-8; corrupt or
         # surrogate code points raise UnicodeEncodeError inside the SDK.
         system = self._ensure_utf8(system)

@@ -2,7 +2,7 @@
 import streamlit as st
 from datetime import date
 from modules.config import AVAILABLE_PROVIDERS
-from modules.session_security import render_api_key_gate
+from modules.session_security import render_api_key_gate, render_extra_fields
 from modules.auth import get_current_name, logout
 from modules.i18n import t
 
@@ -50,6 +50,7 @@ def render_sidebar():
         st.session_state.provider_cfg = AVAILABLE_PROVIDERS[sel]
         st.caption(f"{t('model_label')} `{st.session_state.provider_cfg['default_model']}`")
         render_api_key_gate(sel, st.session_state.provider_cfg)
+        render_extra_fields(sel, st.session_state.provider_cfg)
 
         out_lang = st.selectbox(
             t("output_language"),

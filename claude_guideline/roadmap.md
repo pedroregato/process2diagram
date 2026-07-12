@@ -4,6 +4,20 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC184 — Concluído (v5.15 / 2026-07-12) — Provider Azure OpenAI Service
+
+**Contexto:** avaliação honesta de gaps de vaga (feita a partir de um checklist de currículo do usuário, cruzado com o código real do P2D) apontou que "Azure AI Services / Azure OpenAI" era um gap literal — o projeto já integra OpenAI diretamente, mas não via Azure. Diferente de gaps que não fazem sentido forçar no P2D (data warehouse, certificações), este era uma extensão pequena e genuína da arquitetura já agnóstica de provider — decisão explícita do usuário via `AskUserQuestion` de implementar de verdade, não só ajustar o texto do CV.
+
+- **`modules/config.py`** — nova entrada `"Azure OpenAI"` em `AVAILABLE_PROVIDERS`: `client_type="azure_openai"`, `api_version` fixo (`2024-10-21`), e um mecanismo novo e genérico `extra_fields` (lista de `{key,label,placeholder,help}`) para providers que precisam de config não-secreta além da API key — Azure precisa de endpoint por recurso (não é um `base_url` fixo igual aos demais providers) e, opcionalmente, do nome do deployment (Azure roteia por deployment, não por model id).
+- **`agents/base_agent.py`** — `_call_openai()` refatorado sem mudar comportamento: lógica de montar request/validar resposta extraída para `_run_openai_chat(client, ...)` compartilhada; `_call_azure_openai()` novo monta o `openai.AzureOpenAI` (endpoint+api_version em vez de base_url) e reusa o mesmo helper — mesma checagem de `finish_reason='length'`/conteúdo vazio que os outros providers já tinham. Resolução de endpoint/deployment segue o mesmo padrão 3-camadas já usado em `_is_long_context_enabled()`: `client_info` (modo API) → campo extra da sessão (Streamlit) → erro claro se nenhum dos dois tiver o endpoint.
+- **`modules/session_security.py`** — `render_extra_fields()`/`get_extra_field()` novos, genéricos (não hardcoded pra Azure) — qualquer provider futuro com necessidade parecida reusa sem código novo.
+- **`ui/sidebar.py`** + **`pages/Settings.py`** — chamam `render_extra_fields()` logo após o campo de API key existente; Settings > Domínio (multi-tenant) automaticamente NÃO lista Azure OpenAI (guard pré-existente `p in PROVIDER_KEY_MAP`) — escopo deliberadamente limitado à config de sessão/usuário único nesta rodada, não ao sistema multi-tenant de chaves por domínio.
+- **`services/llm_telemetry.py::run_benchmark_call()`** — branch Azure próprio (caminho paralelo ao de `_call_llm`, sem hub/cache/PII) — sem isso, a aba Benchmark On-Demand falharia silenciosamente pra esse provider.
+- 13 testes novos (`test_base_agent_azure_openai.py`, `test_run_benchmark_call_azure.py`) — 100% mockado, zero chamada de rede real. Boot-smoke real de `Settings.py` com Azure OpenAI selecionado confirma os 2 campos extras renderizando sem exceção. 874/874 passando na suite completa.
+- REGRA DERIVADA: ao avaliar "gap de currículo" contra um projeto pessoal real, distinguir gap que vale fechar com código genuíno (arquitetura já generaliza, adição tem valor de produto real) de gap que só faria sentido como teatro pra CV (forçar um data warehouse ou MLOps formal sem uso real seria o oposto do que o usuário pediu — "sem exagerar").
+
+---
+
 ### PC183 — Concluído (v5.15 / 2026-07-12) — Telemetria fecha o loop: erro por provider vira alerta + taxa de schema válido vira métrica
 
 **Contexto:** discussão sobre RLS/telemetria levou o usuário a explicar que o P2D também serve como POC pessoal de proficiência em engenharia de IA (career motivation, ver memória `user_profile.md`). Avaliação conjunta descartou analytics genéricos (Sentry, page views) por não demonstrarem profundidade específica de IA, e propôs 2 adições que fecham o loop de dado bruto → sinal acionável em cima de infraestrutura 100% existente. Usuário aprovou com "Implemente as duas".

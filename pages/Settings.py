@@ -145,7 +145,7 @@ with tab_llm:
     st.caption(pcfg.get("api_key_help", ""))
 
     # Reuse session_security key format so Pipeline sidebar reads the same value
-    from modules.session_security import _session_key
+    from modules.session_security import _session_key, render_extra_fields
     sk = _session_key(selected)
     _render_api_key_section(
         section_title=selected,
@@ -157,6 +157,7 @@ with tab_llm:
         clear_btn_key=f"settings_clear_llm_{selected}",
         input_key=f"settings_input_llm_{selected}",
     )
+    render_extra_fields(selected, pcfg)
 
     # Show status for all providers
     st.markdown("---")

@@ -309,11 +309,12 @@ Configured in `modules/config.py → AVAILABLE_PROVIDERS`:
 | DeepSeek V4 Flash (Thinking) | `deepseek-v4-flash` | `openai_compatible` | thinking mode via `reasoning_effort=high`; no `json_mode`; no `temperature` |
 | Claude (Anthropic) | `claude-sonnet-4-20250514` | `anthropic` | No `json_mode` — enforce via prompt |
 | OpenAI | `gpt-4o-mini` | `openai_compatible` | |
+| Azure OpenAI | `gpt-4o-mini` (= deployment name) | `azure_openai` | Requer `extra_fields` (endpoint + deployment name, ver Settings/sidebar); rota por deployment, não por model id |
 | Groq (Llama) | `llama-3.3-70b-versatile` | `openai_compatible` | Fastest |
 | Google Gemini | `gemini-2.0-flash` | `openai_compatible` | Free tier |
 | Grok (xAI) | `grok-4-1-fast-reasoning` | `openai_compatible` | 2M context |
 
-To add a provider: edit `AVAILABLE_PROVIDERS`; new `client_type` → add routing in `_call_llm()`. Thinking mode: `reasoning_effort: "high"` → `_call_openai` passes `extra_body={"thinking":{"type":"enabled"}}`, drops `temperature`. Shared API key: `api_key_alias: "<provider_name>"` — `session_security` resolves automatically.
+To add a provider: edit `AVAILABLE_PROVIDERS`; new `client_type` → add routing in `_call_llm()`. Thinking mode: `reasoning_effort: "high"` → `_call_openai` passes `extra_body={"thinking":{"type":"enabled"}}`, drops `temperature`. Shared API key: `api_key_alias: "<provider_name>"` — `session_security` resolves automatically. **`extra_fields`** (PC184): a provider can declare non-secret config fields beyond the API key (e.g. Azure OpenAI's per-resource endpoint URL) — `[{"key","label","placeholder","help"}]`, rendered by `session_security.render_extra_fields()` (called from `ui/sidebar.py` and `pages/Settings.py`), read back via `session_security.get_extra_field(provider, key)`. `BaseAgent._call_azure_openai()` and `_run_openai_chat()` (shared with `_call_openai`) implement the Azure client; `run_benchmark_call()` in `services/llm_telemetry.py` has its own parallel Azure branch for the On-Demand Benchmark tab.
 
 ---
 

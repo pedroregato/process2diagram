@@ -77,6 +77,39 @@ def render_api_key_gate(provider: str, provider_cfg: dict) -> None:
                 st.error("Key seems too short. Check and try again.")
 
 
+def _extra_field_key(provider: str, field_key: str) -> str:
+    """Session key for a provider-specific non-secret config field (e.g. an
+    Azure OpenAI endpoint URL) — separate namespace from _session_key(),
+    which is reserved for the API key itself."""
+    return f"_llm_extra_{provider.replace(' ', '_').lower()}_{field_key}"
+
+
+def render_extra_fields(provider: str, provider_cfg: dict) -> None:
+    """
+    Renders any additional (non-secret) config fields a provider needs beyond
+    a single API key — e.g. Azure OpenAI needs a per-resource endpoint URL,
+    since (unlike every other provider here) that URL isn't the same for
+    every user of the app. Declared via provider_cfg["extra_fields"]:
+    a list of {"key", "label", "placeholder", "help"} dicts. No-op for
+    providers that don't declare any (i.e. everyone except Azure OpenAI today).
+    """
+    for field in provider_cfg.get("extra_fields", []):
+        sk = _extra_field_key(provider, field["key"])
+        # key=sk makes the widget itself the persistence store — Streamlit
+        # keeps st.session_state[sk] in sync across reruns automatically.
+        st.text_input(
+            field["label"],
+            placeholder=field.get("placeholder", ""),
+            help=field.get("help", ""),
+            key=sk,
+        )
+
+
+def get_extra_field(provider: str, field_key: str) -> str:
+    """Reads a provider-specific extra field saved by render_extra_fields()."""
+    return st.session_state.get(_extra_field_key(provider, field_key), "")
+
+
 def render_api_key_readonly(provider: str) -> str:
     """
     Displays the API key status for the given provider (read-only).
