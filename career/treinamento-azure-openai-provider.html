@@ -1,0 +1,291 @@
+<title>Treinamento — Provider Azure OpenAI (P2D)</title>
+<style>
+  :root{
+    --bg:#0d1b2a; --surface:#142a3f; --surface-2:#1c3a54;
+    --ink:#e9eff5; --ink-muted:#90a4bb; --border:rgba(233,239,245,.09);
+    --accent:#3b82f6; --accent-warm:#c97b1a; --good:#10b981; --bad:#ef4444;
+    --mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    --sans: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); font-size:16.5px; line-height:1.6; -webkit-font-smoothing:antialiased;}
+  a{color:var(--accent);}
+  ::selection{background:var(--accent); color:#08131f;}
+
+  .shell{display:grid; grid-template-columns:260px minmax(0,1fr); min-height:100vh;}
+  @media (max-width:880px){ .shell{grid-template-columns:1fr;} .rail{position:static; height:auto;} }
+  .rail{position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto; border-right:1px solid var(--border); padding:28px 22px; background:#0a1521;}
+  .rail-eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); margin:0 0 4px;}
+  .rail-title{font-family:var(--serif); font-size:19px; margin:0 0 22px; line-height:1.3;}
+  .rail nav{display:flex; flex-direction:column; gap:2px;}
+  .rail nav a{color:var(--ink-muted); text-decoration:none; font-size:14px; padding:7px 10px; border-radius:6px;}
+  .rail nav a:hover{background:var(--surface); color:var(--ink);}
+  .rail nav a.chapter{color:var(--ink); font-weight:600; margin-top:14px; padding-left:10px;}
+  .rail nav a.chapter:first-child{margin-top:0;}
+  .rail-progress{margin-top:24px; padding-top:18px; border-top:1px solid var(--border);}
+  .rail-progress-label{font-family:var(--mono); font-size:11px; color:var(--ink-muted); text-transform:uppercase; letter-spacing:.08em;}
+  .rail-progress-bar{height:6px; background:var(--surface); border-radius:99px; margin-top:8px; overflow:hidden;}
+  .rail-progress-fill{height:100%; background:linear-gradient(90deg,var(--accent),var(--good)); width:0%; transition:width .3s ease;}
+
+  main{padding:56px 64px 120px; max-width:900px;}
+  @media (max-width:880px){ main{padding:36px 22px 90px;} }
+
+  header.hero{margin-bottom:56px;}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent-warm);}
+  h1{font-family:var(--serif); font-size:2.5rem; line-height:1.15; margin:10px 0 16px; text-wrap:balance; font-weight:500;}
+  .lede{font-size:1.15rem; color:var(--ink-muted); max-width:62ch; margin:0 0 22px;}
+  .prereq-row{display:flex; gap:10px; flex-wrap:wrap;}
+  .chip{font-family:var(--mono); font-size:12.5px; padding:6px 12px; border-radius:99px; border:1px solid var(--border); color:var(--ink-muted); background:var(--surface);}
+  .chip.warn{border-color:rgba(201,123,26,.45); color:var(--accent-warm);}
+
+  section{margin-bottom:64px; scroll-margin-top:28px;}
+  h2{font-family:var(--serif); font-size:1.7rem; margin:0 0 6px; font-weight:500; text-wrap:balance;}
+  h2 .num{font-family:var(--mono); color:var(--accent); font-size:1rem; margin-right:10px;}
+  .section-intro{color:var(--ink-muted); max-width:66ch; margin:0 0 26px;}
+  p{max-width:66ch;}
+  code{font-family:var(--mono); background:var(--surface); padding:.12em .4em; border-radius:4px; font-size:.92em; color:#bcd4f5;}
+
+  .steps{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:14px;}
+  .steps li{display:grid; grid-template-columns:34px 1fr; gap:16px; padding:16px 18px; background:var(--surface); border:1px solid var(--border); border-radius:10px;}
+  .steps li .n{font-family:var(--mono); font-size:14px; color:var(--accent); font-weight:700; width:34px; height:34px; border-radius:50%; border:1px solid rgba(59,130,246,.35); display:flex; align-items:center; justify-content:center; background:rgba(59,130,246,.08);}
+  .steps li p{margin:0; max-width:none;}
+  .steps li .step-title{font-weight:700; display:block; margin-bottom:3px;}
+  .steps li .path{display:block; font-family:var(--mono); font-size:12.5px; color:var(--ink-muted); margin-top:6px;}
+
+  .callout{border-left:3px solid var(--accent-warm); background:var(--surface); border-radius:0 10px 10px 0; padding:14px 18px; margin:18px 0; max-width:66ch;}
+  .callout.safety{border-left-color:var(--bad);}
+  .callout.alt{border-left-color:var(--accent);}
+  .callout .label{font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent-warm); display:block; margin-bottom:5px;}
+  .callout.safety .label{color:var(--bad);}
+  .callout.alt .label{color:var(--accent);}
+  .callout p{margin:0;}
+
+  .mock{background:#0a1723; border:1px solid var(--border); border-radius:12px; padding:22px; margin:22px 0;}
+  .mock-label{font-family:var(--mono); font-size:11px; color:var(--ink-muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:14px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-size:13px; color:var(--ink-muted); margin-bottom:6px; font-family:var(--mono);}
+  .field .fake-input{background:var(--surface); border:1px solid var(--border); border-radius:7px; padding:10px 12px; font-family:var(--mono); font-size:13px; color:#5a6f87;}
+  .field .fake-input.filled{color:var(--ink);}
+
+  .twrap{overflow-x:auto;}
+  table{width:100%; border-collapse:collapse; margin:18px 0; font-size:14.5px;}
+  th,td{text-align:left; padding:10px 14px; border-bottom:1px solid var(--border); font-variant-numeric:tabular-nums; vertical-align:top;}
+  th{font-family:var(--mono); font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-muted); font-weight:600;}
+  td code{white-space:nowrap;}
+  .sev{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:7px; vertical-align:middle;}
+  .sev.high{background:var(--bad);} .sev.med{background:var(--accent-warm);}
+
+  .checklist{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px;}
+  .checklist li{display:flex; gap:12px; align-items:flex-start; padding:12px 14px; background:var(--surface); border:1px solid var(--border); border-radius:9px;}
+  .checklist input[type=checkbox]{appearance:none; width:19px; height:19px; min-width:19px; margin-top:2px; border-radius:5px; border:1.5px solid var(--ink-muted); background:transparent; cursor:pointer; position:relative;}
+  .checklist input[type=checkbox]:checked{background:var(--good); border-color:var(--good);}
+  .checklist input[type=checkbox]:checked::after{content:"✓"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:13px; color:#08131f; font-weight:700;}
+  .checklist input[type=checkbox]:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  .checklist label{cursor:pointer; font-size:15px;}
+  .checklist .sub{display:block; color:var(--ink-muted); font-size:13px; margin-top:2px;}
+
+  .glossary{display:flex; flex-direction:column; gap:16px; margin-top:18px;}
+  .gterm{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px;}
+  .gterm .term{font-family:var(--mono); color:var(--accent); font-weight:700; font-size:14.5px;}
+  .gterm p{margin:8px 0 0; font-size:14.5px; color:var(--ink-muted); max-width:none;}
+  .gterm p b{color:var(--ink); font-weight:600;}
+
+  footer{border-top:1px solid var(--border); padding:26px 64px 60px; color:var(--ink-muted); font-size:13px; max-width:900px;}
+  @media (max-width:880px){footer{padding:26px 22px 60px;}}
+</style>
+
+<div class="shell">
+  <aside class="rail">
+    <p class="rail-eyebrow">Treinamento prático</p>
+    <p class="rail-title">Provider Azure OpenAI</p>
+    <nav>
+      <a class="chapter" href="#visao-geral">Visão geral</a>
+      <a class="chapter" href="#pre-requisito">§1 · Criar o recurso Azure</a>
+      <a href="#sem-azure">Sem conta Azure ainda?</a>
+      <a class="chapter" href="#configurar">§2 · Configurar no P2D</a>
+      <a class="chapter" href="#testar">§3 · Testar de ponta a ponta</a>
+      <a class="chapter" href="#verificar">§4 · Verificar</a>
+      <a class="chapter" href="#troubleshoot">§5 · Erros comuns</a>
+      <a class="chapter" href="#vocabulario">Vocabulário de entrevista</a>
+      <a class="chapter" href="#checklist">Checklist de domínio</a>
+    </nav>
+    <div class="rail-progress">
+      <p class="rail-progress-label">Progresso salvo neste navegador</p>
+      <div class="rail-progress-bar"><div class="rail-progress-fill" id="progressFill"></div></div>
+    </div>
+  </aside>
+
+  <main>
+    <header class="hero" id="visao-geral">
+      <p class="eyebrow">Process2Diagram · PC184</p>
+      <h1>Configure e teste o Azure OpenAI Service como provider real</h1>
+      <p class="lede">Você implementou o código em 2026-07-12 — 13 testes, tudo mockado, zero chamada real. Isso prova que a integração está <b>correta</b>, mas não te dá <b>vivência</b>. Este treinamento fecha essa lacuna: criar o recurso na Azure de verdade, configurar no P2D, e ver uma chamada real ir e voltar.</p>
+      <div class="prereq-row">
+        <span class="chip warn">Requer conta Azure (free tier serve)</span>
+        <span class="chip">Custo: centavos por teste</span>
+        <span class="chip">~30 min</span>
+      </div>
+    </header>
+
+    <section id="pre-requisito">
+      <h2><span class="num">§1</span>Criar o recurso Azure OpenAI</h2>
+      <p class="section-intro">Isto acontece fora do P2D, direto no Azure. Se você já tem um recurso pronto, pule para <a href="#configurar">§2</a>.</p>
+      <ol class="steps">
+        <li>
+          <span class="n">1</span>
+          <div>
+            <span class="step-title">Acesse o Azure AI Foundry (ou Azure Portal)</span>
+            <p>Com uma conta Azure ativa, procure por <code>Azure OpenAI</code> ou <code>Azure AI Foundry</code> no portal e crie um novo recurso — escolha uma região com o modelo que você quer disponível (<code>gpt-4o-mini</code> é o mais barato para testar).</p>
+          </div>
+        </li>
+        <li>
+          <span class="n">2</span>
+          <div>
+            <span class="step-title">Implante ("deploy") um modelo</span>
+            <p>Dentro do recurso, vá em <b>Deployments</b> → <b>Create new deployment</b> → escolha o modelo → dê um nome ao deployment. <b>Anote esse nome exatamente</b> — é o que o P2D vai precisar, não o nome do modelo em si.</p>
+          </div>
+        </li>
+        <li>
+          <span class="n">3</span>
+          <div>
+            <span class="step-title">Copie Endpoint e Key</span>
+            <p>No menu do recurso, abra <b>Keys and Endpoint</b>. Você precisa de duas coisas: o <code>Endpoint</code> (formato <code>https://&lt;recurso&gt;.openai.azure.com</code>) e uma das duas <code>Key</code>. Guarde os dois — vai usar no P2D em seguida.</p>
+          </div>
+        </li>
+        <li>
+          <span class="n">4</span>
+          <div>
+            <span class="step-title">Configure um alerta de orçamento</span>
+            <p>No Azure, vá em <b>Cost Management → Budgets</b> e crie um alerta baixo (ex: US$5). Isso é higiene básica antes de testar qualquer API paga — e também é, coincidentemente, o mesmo raciocínio de FinOps que o P2D já pratica internamente com o <code>cost_model.py</code>.</p>
+          </div>
+        </li>
+      </ol>
+
+      <div class="callout alt" id="sem-azure">
+        <span class="label">Sem conta Azure ainda?</span>
+        <p>Tudo bem — não force a criação de conta agora só para marcar uma caixa. Estude o conceito via o guia do NotebookLM (arquivo separado) e volte para este treinamento quando tiver acesso. Enquanto isso, seja honesto: fale sobre a integração como "implementada e testada com testes automatizados/mocks — validação end-to-end contra a API real pendente", não como "usei em produção".</p>
+      </div>
+    </section>
+
+    <section id="configurar">
+      <h2><span class="num">§2</span>Configurar no P2D</h2>
+      <p class="section-intro">Dois lugares fazem a mesma coisa: a barra lateral (rápido, sessão atual) ou <b>Settings → Provedor e Modelo</b> (mais visível, mesma persistência de sessão). Em qualquer um dos dois, selecione <code>Azure OpenAI</code> no seletor de provider.</p>
+      <div class="mock">
+        <p class="mock-label">Campos que vão aparecer (modules/session_security.py::render_extra_fields)</p>
+        <div class="field">
+          <label>Azure OpenAI API Key</label>
+          <div class="fake-input filled">••••••••••••7f2a</div>
+        </div>
+        <div class="field">
+          <label>Azure Endpoint</label>
+          <div class="fake-input filled">https://meu-recurso.openai.azure.com</div>
+        </div>
+        <div class="field">
+          <label>Deployment Name (opcional)</label>
+          <div class="fake-input">ex: gpt-4o-mini-prod</div>
+        </div>
+      </div>
+      <p>O campo <code>Deployment Name</code> é opcional só porque o P2D assume <code>gpt-4o-mini</code> como padrão — mas a Azure roteia por <b>nome de deployment</b>, não por model id. Se você chamou seu deployment de outra coisa no passo §1.2, preencha aqui com o nome exato, senão a chamada vai falhar com "deployment not found" (veja §5).</p>
+    </section>
+
+    <section id="testar">
+      <h2><span class="num">§3</span>Testar de ponta a ponta</h2>
+      <p class="section-intro">O caminho mais rápido para validar não é rodar o pipeline inteiro — é usar o Benchmark On-Demand, que faz 1 chamada real isolada.</p>
+      <ol class="steps">
+        <li>
+          <span class="n">1</span>
+          <div>
+            <span class="step-title">Abra LLM Benchmark &amp; Telemetria → 🧪 Benchmark On-Demand</span>
+            <p>No multiselect de providers, marque só <code>Azure OpenAI</code>. Em tipos de agente, marque só um (ex: <code>minutes</code>, é o mais barato/curto). Repetições: 1.</p>
+          </div>
+        </li>
+        <li>
+          <span class="n">2</span>
+          <div>
+            <span class="step-title">Execute</span>
+            <p>Clique em <b>▶ Executar Benchmark</b>. Isso chama <code>run_benchmark_call()</code>, que tem uma rota própria para Azure — a mesma que você testou com mocks, agora contra a API real.</p>
+            <span class="path">services/llm_telemetry.py::run_benchmark_call()</span>
+          </div>
+        </li>
+        <li>
+          <span class="n">3</span>
+          <div>
+            <span class="step-title">Leia o resultado</span>
+            <p>Sucesso: latência real e contagem de tokens aparecem na tela. Erro: a mensagem retornada é a mesma que a Azure devolveu — guarde para comparar com a tabela de §5 se algo falhar.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section id="verificar">
+      <h2><span class="num">§4</span>Verificar</h2>
+      <p class="section-intro">Duas confirmações independentes de que funcionou de verdade:</p>
+      <div class="twrap"><table>
+        <tr><th>Onde</th><th>O que checar</th></tr>
+        <tr><td><code>Settings</code> → "Status de todas as chaves"</td><td>Linha <code>Azure OpenAI</code> mostra <code>✅ Configurada</code></td></tr>
+        <tr><td><code>LLM Benchmark</code> → Telemetria Real → Latência</td><td>Se marcou "gravar na telemetria histórica" no benchmark, <code>Azure OpenAI</code> aparece como série própria nos gráficos, ao lado dos providers que você já usava</td></tr>
+      </table></div>
+    </section>
+
+    <section id="troubleshoot">
+      <h2><span class="num">§5</span>Erros comuns</h2>
+      <p class="section-intro">Ler e resolver esses erros é, sozinho, mais vivência prática de integração de API corporativa do que qualquer leitura teórica.</p>
+      <div class="twrap"><table>
+        <tr><th>Sintoma</th><th>Causa provável</th><th>Fix</th></tr>
+        <tr><td><span class="sev high"></span>401 / Unauthorized</td><td>Key errada ou copiada com espaço extra</td><td>Recopie a <code>Key 1</code> direto de Keys and Endpoint</td></tr>
+        <tr><td><span class="sev high"></span>404 / DeploymentNotFound</td><td><code>Deployment Name</code> não bate com o nome real do deployment na Azure</td><td>Confirme o nome exato em Azure → Deployments e preencha o campo opcional</td></tr>
+        <tr><td><span class="sev med"></span>Endpoint inválido / timeout</td><td>Endpoint copiado sem <code>https://</code> ou com barra extra no final</td><td>Formato exato: <code>https://&lt;recurso&gt;.openai.azure.com</code>, sem barra final</td></tr>
+        <tr><td><span class="sev med"></span>"endpoint não configurado"</td><td>Campo <code>Azure Endpoint</code> ficou em branco</td><td>É obrigatório — só o deployment name é opcional</td></tr>
+      </table></div>
+    </section>
+
+    <section id="vocabulario">
+      <h2><span class="num">§6</span>Vocabulário de entrevista</h2>
+      <div class="glossary">
+        <div class="gterm">
+          <span class="term">deployment-based routing</span>
+          <p>Diferente da OpenAI direta (que roteia por <i>model id</i>), a Azure roteia por <i>deployment</i> — uma camada de indireção que existe para permitir controle de custo/quota por recurso da organização. Saber explicar essa diferença é um sinal concreto de que você configurou a integração de verdade, não só leu a respeito.</p>
+        </div>
+        <div class="gterm">
+          <span class="term">enterprise LLM gateway</span>
+          <p>Azure OpenAI é frequentemente escolhido por empresas não pelo modelo em si (o mesmo GPT-4o está disponível direto na OpenAI), mas pelo enquadramento contratual/compliance — dados processados dentro do tenant Azure da empresa, SLA corporativo, integração com Azure AD/RBAC.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="checklist">
+      <h2><span class="num">§7</span>Checklist de domínio</h2>
+      <ul class="checklist">
+        <li><input type="checkbox" id="a1" class="track"><label for="a1">Criei um recurso Azure OpenAI real e implantei um deployment<span class="sub">§1</span></label></li>
+        <li><input type="checkbox" id="a2" class="track"><label for="a2">Configurei os 3 campos no P2D (key, endpoint, deployment name)<span class="sub">§2</span></label></li>
+        <li><input type="checkbox" id="a3" class="track"><label for="a3">Rodei uma chamada real via Benchmark On-Demand e ela retornou com sucesso<span class="sub">§3</span></label></li>
+        <li><input type="checkbox" id="a4" class="track"><label for="a4">Provoquei pelo menos um erro de propósito (ex: deployment name errado) e reconheci a causa pela mensagem<span class="sub">§5</span></label></li>
+        <li><input type="checkbox" id="a5" class="track"><label for="a5">Consigo explicar deployment-based routing sem olhar a tela<span class="sub">§6</span></label></li>
+      </ul>
+    </section>
+  </main>
+</div>
+
+<footer>
+  Process2Diagram · material de treinamento pessoal, gerado a partir do código real do projeto em 2026-07-12 (PC184). Guarde junto com <code>career/briefing_verificacao-gap-vaga-ia.md</code>.
+</footer>
+
+<script>
+  document.querySelectorAll('.track').forEach(function(el){
+    var key = 'p2d-train-azure-' + el.id;
+    el.checked = localStorage.getItem(key) === '1';
+    el.addEventListener('change', function(){
+      localStorage.setItem(key, el.checked ? '1' : '0');
+      updateProgress();
+    });
+  });
+  function updateProgress(){
+    var boxes = document.querySelectorAll('.track');
+    var checked = document.querySelectorAll('.track:checked').length;
+    var pct = boxes.length ? Math.round((checked / boxes.length) * 100) : 0;
+    var fill = document.getElementById('progressFill');
+    if (fill) fill.style.width = pct + '%';
+  }
+  updateProgress();
+</script>

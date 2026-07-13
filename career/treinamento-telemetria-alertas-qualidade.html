@@ -1,0 +1,383 @@
+<title>Treinamento — Telemetria, Alertas e Qualidade (P2D)</title>
+<style>
+  :root{
+    --bg:#0d1b2a;
+    --surface:#142a3f;
+    --surface-2:#1c3a54;
+    --ink:#e9eff5;
+    --ink-muted:#90a4bb;
+    --border:rgba(233,239,245,.09);
+    --accent:#3b82f6;
+    --accent-warm:#c97b1a;
+    --good:#10b981;
+    --bad:#ef4444;
+    --mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    --sans: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
+    font-size:16.5px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent);}
+  ::selection{background:var(--accent); color:#08131f;}
+
+  .shell{display:grid; grid-template-columns:260px minmax(0,1fr); min-height:100vh;}
+  @media (max-width:880px){ .shell{grid-template-columns:1fr;} .rail{position:static; height:auto;} }
+
+  .rail{
+    position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+    border-right:1px solid var(--border); padding:28px 22px; background:#0a1521;
+  }
+  .rail-eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); margin:0 0 4px;}
+  .rail-title{font-family:var(--serif); font-size:19px; margin:0 0 22px; line-height:1.3;}
+  .rail nav{display:flex; flex-direction:column; gap:2px;}
+  .rail nav a{
+    color:var(--ink-muted); text-decoration:none; font-size:14px; padding:7px 10px;
+    border-radius:6px; border-left:2px solid transparent;
+  }
+  .rail nav a:hover{background:var(--surface); color:var(--ink);}
+  .rail nav a.chapter{color:var(--ink); font-weight:600; margin-top:14px; padding-left:10px;}
+  .rail nav a.chapter:first-child{margin-top:0;}
+  .rail-progress{margin-top:24px; padding-top:18px; border-top:1px solid var(--border);}
+  .rail-progress-label{font-family:var(--mono); font-size:11px; color:var(--ink-muted); text-transform:uppercase; letter-spacing:.08em;}
+  .rail-progress-bar{height:6px; background:var(--surface); border-radius:99px; margin-top:8px; overflow:hidden;}
+  .rail-progress-fill{height:100%; background:linear-gradient(90deg,var(--accent),var(--good)); width:0%; transition:width .3s ease;}
+
+  main{padding:56px 64px 120px; max-width:900px;}
+  @media (max-width:880px){ main{padding:36px 22px 90px;} }
+
+  header.hero{margin-bottom:56px;}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent-warm);}
+  h1{font-family:var(--serif); font-size:2.5rem; line-height:1.15; margin:10px 0 16px; text-wrap:balance; font-weight:500;}
+  .lede{font-size:1.15rem; color:var(--ink-muted); max-width:62ch; margin:0 0 22px;}
+  .prereq-row{display:flex; gap:10px; flex-wrap:wrap;}
+  .chip{
+    font-family:var(--mono); font-size:12.5px; padding:6px 12px; border-radius:99px;
+    border:1px solid var(--border); color:var(--ink-muted); background:var(--surface);
+  }
+  .chip.ok{border-color:rgba(16,185,129,.4); color:var(--good);}
+
+  section{margin-bottom:64px; scroll-margin-top:28px;}
+  h2{font-family:var(--serif); font-size:1.7rem; margin:0 0 6px; font-weight:500; text-wrap:balance;}
+  h2 .num{font-family:var(--mono); color:var(--accent); font-size:1rem; margin-right:10px;}
+  .section-intro{color:var(--ink-muted); max-width:66ch; margin:0 0 26px;}
+  h3{font-family:var(--sans); font-size:1.02rem; font-weight:700; margin:26px 0 10px;}
+  p{max-width:66ch;}
+  code{font-family:var(--mono); background:var(--surface); padding:.12em .4em; border-radius:4px; font-size:.92em; color:#bcd4f5;}
+
+  .steps{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:14px;}
+  .steps li{
+    display:grid; grid-template-columns:34px 1fr; gap:16px; padding:16px 18px;
+    background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  }
+  .steps li .n{
+    font-family:var(--mono); font-size:14px; color:var(--accent); font-weight:700;
+    width:34px; height:34px; border-radius:50%; border:1px solid rgba(59,130,246,.35);
+    display:flex; align-items:center; justify-content:center; background:rgba(59,130,246,.08);
+  }
+  .steps li p{margin:0; max-width:none;}
+  .steps li .step-title{font-weight:700; display:block; margin-bottom:3px;}
+  .steps li .path{display:block; font-family:var(--mono); font-size:12.5px; color:var(--ink-muted); margin-top:6px;}
+
+  .callout{
+    border-left:3px solid var(--accent-warm); background:var(--surface); border-radius:0 10px 10px 0;
+    padding:14px 18px; margin:18px 0; max-width:66ch;
+  }
+  .callout.safety{border-left-color:var(--bad);}
+  .callout .label{font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent-warm); display:block; margin-bottom:5px;}
+  .callout.safety .label{color:var(--bad);}
+  .callout p{margin:0;}
+
+  /* --- mockups --- */
+  .mock{background:#0a1723; border:1px solid var(--border); border-radius:12px; padding:22px; margin:22px 0;}
+  .mock-label{font-family:var(--mono); font-size:11px; color:var(--ink-muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:14px;}
+  .tabbar{display:flex; gap:6px; flex-wrap:wrap; font-family:var(--mono); font-size:12.5px;}
+  .tabbar span{padding:8px 12px; border-radius:8px 8px 0 0; background:var(--surface); color:var(--ink-muted); border:1px solid var(--border); border-bottom:none;}
+  .tabbar span.tab-new{color:var(--bg); background:var(--accent-warm); font-weight:700; border-color:var(--accent-warm);}
+
+  .barchart{display:flex; align-items:flex-end; gap:22px; height:150px; margin-top:18px; position:relative; padding-top:10px;}
+  .barchart .threshold{position:absolute; left:0; right:0; top:44px; border-top:2px dashed var(--bad); }
+  .barchart .threshold::after{content:"limiar 15%"; position:absolute; right:0; top:-18px; font-family:var(--mono); font-size:10.5px; color:var(--bad);}
+  .bar-col{display:flex; flex-direction:column; align-items:center; gap:8px; width:64px;}
+  .bar{width:100%; border-radius:6px 6px 0 0;}
+  .bar.high{height:96px; background:var(--bad);}
+  .bar.low{height:22px; background:var(--accent);}
+  .bar-col .pv{font-family:var(--mono); font-size:11px; color:var(--ink-muted);}
+
+  .gaugewrap{display:flex; align-items:center; gap:26px; margin-top:14px;}
+  .gauge{width:118px; height:118px; border-radius:50%; background:conic-gradient(var(--good) 0% 92%, var(--surface-2) 92% 100%); display:flex; align-items:center; justify-content:center; position:relative;}
+  .gauge::before{content:""; position:absolute; width:82px; height:82px; border-radius:50%; background:#0a1723;}
+  .gauge span{position:relative; font-family:var(--mono); font-weight:700; font-size:19px;}
+  .gauge-legend{font-size:14px; color:var(--ink-muted); max-width:32ch; margin:0;}
+  .gauge-legend b{color:var(--ink);}
+
+  table{width:100%; border-collapse:collapse; margin:18px 0; font-size:14.5px;}
+  .twrap{overflow-x:auto;}
+  th,td{text-align:left; padding:10px 14px; border-bottom:1px solid var(--border); font-variant-numeric:tabular-nums;}
+  th{font-family:var(--mono); font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-muted); font-weight:600;}
+  td code{white-space:nowrap;}
+
+  .checklist{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px;}
+  .checklist li{display:flex; gap:12px; align-items:flex-start; padding:12px 14px; background:var(--surface); border:1px solid var(--border); border-radius:9px;}
+  .checklist input[type=checkbox]{
+    appearance:none; width:19px; height:19px; min-width:19px; margin-top:2px; border-radius:5px;
+    border:1.5px solid var(--ink-muted); background:transparent; cursor:pointer; position:relative;
+  }
+  .checklist input[type=checkbox]:checked{background:var(--good); border-color:var(--good);}
+  .checklist input[type=checkbox]:checked::after{content:"✓"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:13px; color:#08131f; font-weight:700;}
+  .checklist input[type=checkbox]:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  .checklist label{cursor:pointer; font-size:15px;}
+  .checklist .sub{display:block; color:var(--ink-muted); font-size:13px; margin-top:2px;}
+
+  .glossary{display:flex; flex-direction:column; gap:16px; margin-top:18px;}
+  .gterm{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px;}
+  .gterm .term{font-family:var(--mono); color:var(--accent); font-weight:700; font-size:14.5px;}
+  .gterm p{margin:8px 0 0; font-size:14.5px; color:var(--ink-muted); max-width:none;}
+  .gterm p b{color:var(--ink); font-weight:600;}
+
+  footer{border-top:1px solid var(--border); padding:26px 64px 60px; color:var(--ink-muted); font-size:13px; max-width:900px;}
+  @media (max-width:880px){footer{padding:26px 22px 60px;}}
+</style>
+
+<div class="shell">
+  <aside class="rail">
+    <p class="rail-eyebrow">Treinamento prático</p>
+    <p class="rail-title">Telemetria, Alertas e Qualidade</p>
+    <nav>
+      <a class="chapter" href="#visao-geral">Visão geral</a>
+      <a href="#onde-encontrar">Onde encontrar no app</a>
+      <a class="chapter" href="#exercicio-1">Exercício 1</a>
+      <a href="#ex1-passos">Gerar sinal de qualidade real</a>
+      <a class="chapter" href="#exercicio-2">Exercício 2</a>
+      <a href="#ex2-passos">Provocar um alerta de propósito</a>
+      <a class="chapter" href="#vocabulario">Vocabulário de entrevista</a>
+      <a class="chapter" href="#checklist">Checklist de domínio</a>
+    </nav>
+    <div class="rail-progress">
+      <p class="rail-progress-label">Progresso salvo neste navegador</p>
+      <div class="rail-progress-bar"><div class="rail-progress-fill" id="progressFill"></div></div>
+    </div>
+  </aside>
+
+  <main>
+    <header class="hero" id="visao-geral">
+      <p class="eyebrow">Process2Diagram · PC183</p>
+      <h1>Feche o loop entre uma chamada de modelo e um sinal acionável</h1>
+      <p class="lede">Este é o treinamento prático das duas funcionalidades de telemetria implementadas em 2026-07-12: <b>detecção de anomalia de erro por provider</b> e <b>taxa de saída bem-formada por agente</b>. O objetivo não é só ler sobre isso — é você gerar dado real no seu próprio ambiente e aprender a interpretá-lo como quem já operou isso em produção.</p>
+      <div class="prereq-row">
+        <span class="chip ok">✓ Nenhum acesso extra necessário</span>
+        <span class="chip">Usa o provider que você já tem configurado</span>
+        <span class="chip">~20 min</span>
+      </div>
+    </header>
+
+    <section id="onde-encontrar">
+      <h2><span class="num">§1</span>Onde encontrar no app</h2>
+      <p class="section-intro">Abra o P2D → grupo <b>Sistema</b> na navegação lateral → página <code>LLM Benchmark &amp; Telemetria</code>. Dentro dela, a aba <code>📊 Telemetria Real</code> tem 7 sub-abas — as duas últimas são as que você vai treinar hoje.</p>
+      <div class="mock">
+        <p class="mock-label">pages/LLMBenchmark.py → aba Telemetria Real</p>
+        <div class="tabbar">
+          <span>📊 Latência</span><span>⚡ Throughput</span><span>📈 Histórico</span><span>🔥 Heatmap</span><span>📋 Versões</span><span class="tab-new">🚨 Alertas</span><span class="tab-new">✅ Qualidade</span>
+        </div>
+      </div>
+      <p>Antes de qualquer coisa: os filtros no topo da aba (<code>Provider</code>, <code>Agente</code>, <code>Período</code>) afetam <i>todas</i> as sub-abas, incluindo as duas novas. Se você não estiver vendo dado, o primeiro instinto certo é checar se o filtro de período (padrão 30 dias) não está cortando o que você acabou de gerar.</p>
+    </section>
+
+    <section id="exercicio-1">
+      <h2><span class="num">§2</span>Exercício 1 — Gerar sinal de qualidade real</h2>
+      <p class="section-intro">A aba <b>✅ Qualidade</b> mostra a taxa de saída "bem-formada" — o resultado real de <code>output_schema.model_validate()</code> (Pydantic) rodando em cada chamada de um agente que declara schema. Antes desta implementação, esse resultado só existia por um instante como um aviso que desaparecia; agora ele fica persistido. Para ver dado de verdade, você precisa gerar chamadas reais.</p>
+
+      <ol class="steps" id="ex1-passos">
+        <li>
+          <span class="n">1</span>
+          <div>
+            <span class="step-title">Rode uma transcrição curta no Pipeline</span>
+            <p>Vá em <b>Pipeline → Nova transcrição</b>, cole um texto curto de reunião (pode ser sintético — 8–10 falas já bastam) e mantenha ativos pelo menos os agentes <code>bpmn</code>, <code>minutes</code> e <code>requirements</code>. São 3 dos agentes que já declaram <code>output_schema</code> — cada um vai gerar um evento de validação.</p>
+            <span class="path">agents/agent_bpmn.py · agent_minutes.py · agent_requirements.py</span>
+          </div>
+        </li>
+        <li>
+          <span class="n">2</span>
+          <div>
+            <span class="step-title">Espere o pipeline terminar</span>
+            <p>Cada chamada bem-sucedida grava dois tipos de registro na mesma tabela: o registro de latência/throughput de sempre, e — se o agente tem schema — um segundo registro só com o resultado da validação (<code>is_validation_event=True</code>). Você não vê isso na tela; é gravação assíncrona em background.</p>
+          </div>
+        </li>
+        <li>
+          <span class="n">3</span>
+          <div>
+            <span class="step-title">Abra Telemetria Real → Qualidade</span>
+            <p>Ajuste o filtro <code>Período</code> para <code>7</code> dias se estiver testando agora. Você deve ver 3 métricas no topo: taxa geral, número de eventos, agentes monitorados — e um gráfico de barras por agente.</p>
+          </div>
+        </li>
+        <li>
+          <span class="n">4</span>
+          <div>
+            <span class="step-title">Repita mais 2–3 vezes com transcrições diferentes</span>
+            <p>Uma amostra de 1 chamada não ensina nada sobre taxa. Rode o pipeline mais algumas vezes — inclusive testando um provider mais barato/instável (ex: DeepSeek Flash) — para começar a ver variação real entre agentes.</p>
+          </div>
+        </li>
+      </ol>
+
+      <div class="mock">
+        <p class="mock-label">O que você deve ver — leitura do gauge</p>
+        <div class="gaugewrap">
+          <div class="gauge"><span>92%</span></div>
+          <p class="gauge-legend"><b>92%</b> das saídas do agente validaram contra o schema Pydantic esperado sem erro. O resto (8%) é o que <code>warnings.warn()</code> capturava antes e ninguém revisitava — agora é uma métrica que você pode monitorar por versão de skill ao longo do tempo.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="label">O que interpretar</span>
+        <p>Se um agente específico está sistematicamente abaixo de ~90%, isso não é "o modelo é ruim" — é sinal de que o <b>skill/prompt</b> desse agente pode estar pedindo uma estrutura que o modelo escolhido tem dificuldade de cumprir de forma consistente. É exatamente o tipo de leitura que separa "eu uso IA generativa" de "eu instrumento e itero sobre qualidade de saída de IA generativa" numa entrevista.</p>
+      </div>
+    </section>
+
+    <section id="exercicio-2">
+      <h2><span class="num">§3</span>Exercício 2 — Provocar um alerta de propósito</h2>
+      <p class="section-intro">A aba <b>🚨 Alertas</b> só fica interessante quando existe pelo menos uma falha real registrada — e antes desta implementação, <i>nenhuma falha jamais gerava registro</i> (o campo <code>is_error</code> estava fixo em <code>False</code>). Provocar uma falha controlada é a forma mais honesta de verificar, na prática, que a instrumentação realmente captura o que promete — é o mesmo raciocínio de quem testa um alerta de produção antes de confiar nele.</p>
+
+      <div class="callout safety">
+        <span class="label">Antes de começar</span>
+        <p>Você vai invalidar temporariamente uma chave de API. Escolha um provider que <b>não</b> esteja em uso ativo agora (ex: se seu dia a dia é DeepSeek, use o Groq ou o OpenAI para este teste) e anote a chave real antes de trocar — você vai restaurá-la no passo 5.</p>
+      </div>
+
+      <ol class="steps" id="ex2-passos">
+        <li>
+          <span class="n">1</span>
+          <div>
+            <span class="step-title">Vá em Configurações → escolha um provider de teste</span>
+            <p>Na página <b>Settings</b>, selecione um provider secundário (ex: <code>Groq (Llama)</code>) e substitua a chave real por algo claramente inválido, tipo <code>sk-invalido-teste-123</code>.</p>
+          </div>
+        </li>
+        <li>
+          <span class="n">2</span>
+          <div>
+            <span class="step-title">Force uma chamada real com esse provider</span>
+            <p>No Pipeline, selecione esse provider na barra lateral e rode uma transcrição curta — ou, mais rápido, use a aba <code>🧪 Benchmark On-Demand</code> selecionando só esse provider e 1 tipo de agente, com 1 repetição.</p>
+          </div>
+        </li>
+        <li>
+          <span class="n">3</span>
+          <div>
+            <span class="step-title">Confirme que a chamada falhou visivelmente</span>
+            <p>Você deve ver um erro de autenticação na tela (401/invalid API key). Isso é esperado e é o comportamento correto — o objetivo é gerar exatamente esse tipo de falha real.</p>
+          </div>
+        </li>
+        <li>
+          <span class="n">4</span>
+          <div>
+            <span class="step-title">Restaure a chave real imediatamente</span>
+            <p>Volte em Configurações e coloque a chave correta de volta. Não deixe o provider quebrado entre uma sessão e outra.</p>
+          </div>
+        </li>
+        <li>
+          <span class="n">5</span>
+          <div>
+            <span class="step-title">Abra Telemetria Real → Alertas</span>
+            <p>Ajuste <code>Mínimo de chamadas p/ considerar</code> para <code>1</code> (você só gerou uma falha) e o <code>Limiar de taxa de erro</code> para algo baixo, tipo 10%. O provider de teste deve aparecer como anomalia — leia a mensagem de erro real na tabela <b>Últimas falhas</b>.</p>
+          </div>
+        </li>
+      </ol>
+
+      <div class="mock">
+        <p class="mock-label">O que você deve ver — barra acima do limiar</p>
+        <div class="barchart">
+          <div class="threshold"></div>
+          <div class="bar-col"><div class="bar high"></div><span class="pv">Groq (teste)</span></div>
+          <div class="bar-col"><div class="bar low"></div><span class="pv">DeepSeek</span></div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="label">O que interpretar</span>
+        <p>O parâmetro <code>Mínimo de chamadas</code> existe para evitar falso positivo — 1 erro em 1 chamada é 100%, mas é ruído estatístico, não um provider instável de verdade. Em produção esse mesmo guard evita que um alerta dispare por acaso. Isso é <b>exatamente</b> o vocabulário e o raciocínio de "detecção de anomalia com proteção de baixo volume" que se espera de quem já lidou com observabilidade de sistemas de IA.</p>
+      </div>
+    </section>
+
+    <section id="vocabulario">
+      <h2><span class="num">§4</span>Vocabulário de entrevista</h2>
+      <p class="section-intro">Você acabou de fazer, na prática, o que o mercado chama pelos termos abaixo. Guarde essa tradução — é o que te permite falar sobre o que você fez usando o vocabulário que quem está entrevistando espera ouvir.</p>
+      <div class="glossary">
+        <div class="gterm">
+          <span class="term">error-rate alerting / anomaly detection</span>
+          <p>O que você fez no Exercício 2: monitorar a proporção de chamadas que falham por segmento (aqui, por provider) e disparar um sinal quando ultrapassa um limiar, com proteção contra amostra pequena.</p>
+        </div>
+        <div class="gterm">
+          <span class="term">structured output validation / schema conformance rate</span>
+          <p>O que você viu no Exercício 1: medir se a saída do modelo respeitou o contrato de dados esperado (aqui, um schema Pydantic), não só se a chamada "respondeu alguma coisa".</p>
+        </div>
+        <div class="gterm">
+          <span class="term">LLMOps (não confundir com MLOps clássico)</span>
+          <p>MLOps clássico lida com <b>treino</b>, versionamento de pesos de modelo e registry. Aqui não há treino — é orquestração de chamadas a modelos de terceiros via API. O equivalente correto é <b>LLMOps</b>: versionamento de prompt/skill, cache semântico, telemetria de chamada, e — agora — qualidade de saída estruturada ao longo do tempo.</p>
+        </div>
+        <div class="gterm">
+          <span class="term">fail-open instrumentation</span>
+          <p>Cada gravação de telemetria está protegida por <code>try/except</code> silencioso — se o Supabase estiver fora do ar, a chamada ao LLM continua funcionando normalmente, só a métrica é que se perde. Instrumentar sem criar um novo ponto de falha no caminho crítico é uma decisão de design deliberada, não um acidente.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="checklist">
+      <h2><span class="num">§5</span>Checklist de domínio</h2>
+      <p class="section-intro">Marque conforme for confirmando — o progresso fica salvo neste navegador, então você pode fechar e voltar depois.</p>
+      <ul class="checklist">
+        <li>
+          <input type="checkbox" id="c1" class="track">
+          <label for="c1">Gerei pelo menos 3 execuções reais do pipeline e vi a aba Qualidade populada
+            <span class="sub">Exercício 1, passos 1–4</span>
+          </label>
+        </li>
+        <li>
+          <input type="checkbox" id="c2" class="track">
+          <label for="c2">Provoquei uma falha real de propósito e vi ela aparecer em Alertas
+            <span class="sub">Exercício 2, passos 1–5 — e restaurei a chave depois</span>
+          </label>
+        </li>
+        <li>
+          <input type="checkbox" id="c3" class="track">
+          <label for="c3">Consigo explicar por que "1 min_calls" evita falso positivo, sem olhar a tela
+            <span class="sub">Fixação do conceito de proteção de baixo volume</span>
+          </label>
+        </li>
+        <li>
+          <input type="checkbox" id="c4" class="track">
+          <label for="c4">Consigo explicar a diferença entre MLOps clássico e LLMOps em 2 frases
+            <span class="sub">Vocabulário de entrevista, item 3</span>
+          </label>
+        </li>
+        <li>
+          <input type="checkbox" id="c5" class="track">
+          <label for="c5">Sei apontar, no código, onde a validação de schema é chamada
+            <span class="sub"><code>agents/base_agent.py::_call_with_retry()</code></span>
+          </label>
+        </li>
+      </ul>
+    </section>
+  </main>
+</div>
+
+<footer>
+  Process2Diagram · material de treinamento pessoal, gerado a partir do código real do projeto em 2026-07-12 (PC183). Guarde junto com <code>career/briefing_verificacao-gap-vaga-ia.md</code>.
+</footer>
+
+<script>
+  document.querySelectorAll('.track').forEach(function(el){
+    var key = 'p2d-train-telemetria-' + el.id;
+    el.checked = localStorage.getItem(key) === '1';
+    el.addEventListener('change', function(){
+      localStorage.setItem(key, el.checked ? '1' : '0');
+      updateProgress();
+    });
+  });
+  function updateProgress(){
+    var boxes = document.querySelectorAll('.track');
+    var checked = document.querySelectorAll('.track:checked').length;
+    var pct = boxes.length ? Math.round((checked / boxes.length) * 100) : 0;
+    var fill = document.getElementById('progressFill');
+    if (fill) fill.style.width = pct + '%';
+  }
+  updateProgress();
+</script>

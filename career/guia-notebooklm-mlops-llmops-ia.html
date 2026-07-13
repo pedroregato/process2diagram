@@ -1,0 +1,278 @@
+<title>Guia NotebookLM — MLOps, LLMOps e Azure AI</title>
+<style>
+  :root{
+    --bg:#0d1b2a; --surface:#142a3f; --surface-2:#1c3a54;
+    --ink:#e9eff5; --ink-muted:#90a4bb; --border:rgba(233,239,245,.09);
+    --accent:#3b82f6; --accent-warm:#c97b1a; --good:#10b981; --bad:#ef4444; --violet:#8b5cf6;
+    --mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    --sans: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); font-size:16.5px; line-height:1.6; -webkit-font-smoothing:antialiased;}
+  a{color:var(--accent);}
+  ::selection{background:var(--accent); color:#08131f;}
+
+  .shell{display:grid; grid-template-columns:260px minmax(0,1fr); min-height:100vh;}
+  @media (max-width:880px){ .shell{grid-template-columns:1fr;} .rail{position:static; height:auto;} }
+  .rail{position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto; border-right:1px solid var(--border); padding:28px 22px; background:#0a1521;}
+  .rail-eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); margin:0 0 4px;}
+  .rail-title{font-family:var(--serif); font-size:19px; margin:0 0 22px; line-height:1.3;}
+  .rail nav{display:flex; flex-direction:column; gap:2px;}
+  .rail nav a{color:var(--ink-muted); text-decoration:none; font-size:14px; padding:7px 10px; border-radius:6px;}
+  .rail nav a:hover{background:var(--surface); color:var(--ink);}
+  .rail nav a.chapter{color:var(--ink); font-weight:600; margin-top:14px; padding-left:10px;}
+  .rail nav a.chapter:first-child{margin-top:0;}
+
+  main{padding:56px 64px 120px; max-width:960px;}
+  @media (max-width:880px){ main{padding:36px 22px 90px;} }
+
+  header.hero{margin-bottom:56px;}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent-warm);}
+  h1{font-family:var(--serif); font-size:2.5rem; line-height:1.15; margin:10px 0 16px; text-wrap:balance; font-weight:500;}
+  .lede{font-size:1.15rem; color:var(--ink-muted); max-width:64ch; margin:0 0 22px;}
+
+  section{margin-bottom:64px; scroll-margin-top:28px;}
+  h2{font-family:var(--serif); font-size:1.7rem; margin:0 0 6px; font-weight:500; text-wrap:balance;}
+  h2 .num{font-family:var(--mono); color:var(--accent); font-size:1rem; margin-right:10px;}
+  .section-intro{color:var(--ink-muted); max-width:68ch; margin:0 0 26px;}
+  h3{font-family:var(--sans); font-size:1rem; font-weight:700; margin:30px 0 14px; display:flex; align-items:center; gap:9px;}
+  h3 .dot{width:8px; height:8px; border-radius:50%; display:inline-block;}
+  p{max-width:68ch;}
+  code{font-family:var(--mono); background:var(--surface); padding:.12em .4em; border-radius:4px; font-size:.92em; color:#bcd4f5;}
+
+  .cardgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px;}
+  .srccard{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px;}
+  .srccard .kind{font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-muted);}
+  .srccard .name{font-weight:700; margin:6px 0 6px; font-size:15px;}
+  .srccard p{margin:0; font-size:13.5px; color:var(--ink-muted); max-width:none;}
+  .srccard.internal{border-left:3px solid var(--accent);}
+  .srccard.external{border-left:3px solid var(--accent-warm);}
+
+  .promptcard{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px 20px; margin-bottom:12px;}
+  .promptcard .q{font-family:var(--serif); font-size:16px; margin:0 0 4px; font-style:italic;}
+  .promptcard .why{font-size:13.5px; color:var(--ink-muted); margin:0; max-width:none;}
+  .theme-block{margin-bottom:38px;}
+
+  .callout{border-left:3px solid var(--accent-warm); background:var(--surface); border-radius:0 10px 10px 0; padding:14px 18px; margin:18px 0; max-width:68ch;}
+  .callout.alt{border-left-color:var(--accent);}
+  .callout .label{font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent-warm); display:block; margin-bottom:5px;}
+  .callout.alt .label{color:var(--accent);}
+  .callout p{margin:0;}
+
+  .featgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; margin-top:16px;}
+  .featcard{background:#0a1723; border:1px solid var(--border); border-radius:10px; padding:16px 18px;}
+  .featcard .name{font-family:var(--mono); font-size:13px; color:var(--violet); font-weight:700;}
+  .featcard p{margin:8px 0 0; font-size:13.5px; color:var(--ink-muted); max-width:none;}
+
+  .checklist{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px;}
+  .checklist li{display:flex; gap:12px; align-items:flex-start; padding:12px 14px; background:var(--surface); border:1px solid var(--border); border-radius:9px;}
+  .checklist input[type=checkbox]{appearance:none; width:19px; height:19px; min-width:19px; margin-top:2px; border-radius:5px; border:1.5px solid var(--ink-muted); background:transparent; cursor:pointer; position:relative;}
+  .checklist input[type=checkbox]:checked{background:var(--good); border-color:var(--good);}
+  .checklist input[type=checkbox]:checked::after{content:"✓"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:13px; color:#08131f; font-weight:700;}
+  .checklist input[type=checkbox]:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  .checklist label{cursor:pointer; font-size:15px;}
+
+  footer{border-top:1px solid var(--border); padding:26px 64px 60px; color:var(--ink-muted); font-size:13px; max-width:960px;}
+  @media (max-width:880px){footer{padding:26px 22px 60px;}}
+</style>
+
+<div class="shell">
+  <aside class="rail">
+    <p class="rail-eyebrow">Companheiro teórico</p>
+    <p class="rail-title">NotebookLM para MLOps / LLMOps / Azure AI</p>
+    <nav>
+      <a class="chapter" href="#visao-geral">Visão geral</a>
+      <a class="chapter" href="#fontes">§1 · Fontes para carregar</a>
+      <a href="#fontes-internas">Do próprio projeto</a>
+      <a href="#fontes-externas">Externas, para equilíbrio</a>
+      <a class="chapter" href="#perguntas">§2 · Perguntas por tema</a>
+      <a class="chapter" href="#recursos">§3 · Além do chat</a>
+      <a class="chapter" href="#validar">§4 · Como validar respostas</a>
+      <a class="chapter" href="#checklist">Checklist de domínio</a>
+    </nav>
+  </aside>
+
+  <main>
+    <header class="hero" id="visao-geral">
+      <p class="eyebrow">Companheiro de estudo · não substitui a prática</p>
+      <h1>Vocabulário e teoria para sustentar o que você já fez na prática</h1>
+      <p class="lede">Os dois treinamentos anteriores (Telemetria/Alertas/Qualidade e Azure OpenAI) te deram vivência real. Este guia é para a outra metade: o vocabulário formal e o panorama de mercado que uma entrevista técnica espera — usando o NotebookLM como um tutor que só responde a partir das fontes que você escolher, o que reduz alucinação e te obriga a ancorar tudo em texto real.</p>
+    </header>
+
+    <section id="fontes">
+      <h2><span class="num">§1</span>Fontes para carregar no NotebookLM</h2>
+      <p class="section-intro">Crie um notebook novo chamado <em>"P2D — MLOps/LLMOps/Azure AI"</em> e carregue as duas categorias abaixo. O NotebookLM só responde com base no que você subir — por isso a mistura entre fonte interna (o que você construiu) e externa (o padrão de mercado) importa: é o que te permite comparar os dois.</p>
+
+      <h3 id="fontes-internas"><span class="dot" style="background:var(--accent)"></span>Do próprio projeto (cole como texto ou PDF)</h3>
+      <div class="cardgrid">
+        <div class="srccard internal">
+          <span class="kind">Trecho de CLAUDE.md</span>
+          <div class="name">Seção "LLM Telemetry"</div>
+          <p>Descreve a arquitetura de telemetria completa — cole o bloco inteiro, incluindo o parágrafo "PC183".</p>
+        </div>
+        <div class="srccard internal">
+          <span class="kind">Trecho de CLAUDE.md</span>
+          <div class="name">Seção "LLM Providers"</div>
+          <p>Tabela de providers + o parágrafo sobre <code>extra_fields</code> (PC184) — a base para explicar deployment-based routing.</p>
+        </div>
+        <div class="srccard internal">
+          <span class="kind">Markdown</span>
+          <div class="name">roadmap.md — entradas PC183 e PC184</div>
+          <p>O relato completo de causa raiz → decisão → implementação → teste, exatamente como um post-mortem de engenharia real.</p>
+        </div>
+        <div class="srccard internal">
+          <span class="kind">Markdown</span>
+          <div class="name">career/briefing_verificacao-gap-vaga-ia.md</div>
+          <p>O cruzamento honesto entre o checklist de vaga e o código real — bom para o NotebookLM te questionar sobre o que ainda é gap.</p>
+        </div>
+        <div class="srccard internal">
+          <span class="kind">Código</span>
+          <div class="name">services/llm_telemetry.py</div>
+          <p>Cole o arquivo inteiro — é pequeno o bastante e é a fonte primária de tudo que você praticou no treinamento de telemetria.</p>
+        </div>
+        <div class="srccard internal">
+          <span class="kind">Código</span>
+          <div class="name">agents/base_agent.py — métodos _call_llm e _call_with_retry</div>
+          <p>Onde o try/except de erro e a chamada de validação de schema realmente acontecem.</p>
+        </div>
+      </div>
+
+      <h3 id="fontes-externas"><span class="dot" style="background:var(--accent-warm)"></span>Externas, para equilíbrio teórico</h3>
+      <p style="max-width:68ch; color:var(--ink-muted); font-size:14.5px; margin-top:-4px;">Busque e adicione como fonte web dentro do próprio NotebookLM (ele aceita URL direto) — não estou linkando URLs específicas aqui porque prefiro que você confirme a fonte oficial no momento, em vez de confiar num link que pode ter mudado.</p>
+      <div class="cardgrid">
+        <div class="srccard external">
+          <span class="kind">Documentação oficial</span>
+          <div class="name">Microsoft Learn — Azure OpenAI Service</div>
+          <p>Busque "Azure OpenAI Service documentation overview" no Microsoft Learn — a página de conceitos e a de "what is Azure OpenAI" bastam.</p>
+        </div>
+        <div class="srccard external">
+          <span class="kind">Artigo de referência</span>
+          <div class="name">Definição de LLMOps</div>
+          <p>Busque "LLMOps" combinado com "Chip Huyen" ou "a16z" — são as fontes mais citadas que cunharam/popularizaram o termo distinguindo de MLOps clássico.</p>
+        </div>
+        <div class="srccard external">
+          <span class="kind">Guia técnico</span>
+          <div class="name">Google Cloud — MLOps: continuous delivery and automation pipelines</div>
+          <p>Busque esse título exato no site do Google Cloud — é a referência canônica de MLOps clássico (treino/CI/CD de modelo), útil para contrastar com o que você fez no P2D.</p>
+        </div>
+        <div class="srccard external">
+          <span class="kind">Governança</span>
+          <div class="name">Lei Geral de Proteção de Dados (LGPD) — texto oficial + guias da ANPD</div>
+          <p>Busque o texto da Lei 13.709/2018 e os guias orientativos da ANPD sobre tratamento de dados por IA — ancora o que você já implementou em <code>modules/compliance/</code>.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="perguntas">
+      <h2><span class="num">§2</span>Perguntas sugeridas por tema</h2>
+      <p class="section-intro">Cole direto na caixa de chat do NotebookLM. Cada uma força ele a citar a fonte específica (ele sempre linka o trecho de origem) — use isso para verificar se a resposta é rastreável, não decorada.</p>
+
+      <div class="theme-block">
+        <h3><span class="dot" style="background:var(--accent)"></span>Fundamentos: MLOps vs. LLMOps</h3>
+        <div class="promptcard">
+          <p class="q">"Com base nas fontes externas sobre MLOps e LLMOps, e no código de services/llm_telemetry.py que subi, classifique: o que o P2D faz hoje é MLOps clássico, LLMOps, ou os dois? Justifique ponto a ponto."</p>
+          <p class="why">Força uma resposta ancorada no seu próprio código, não uma definição genérica de manual.</p>
+        </div>
+        <div class="promptcard">
+          <p class="q">"Quais das práticas clássicas de MLOps (versionamento de modelo, feature store, model registry, retraining pipeline) simplesmente não se aplicam a um sistema que só orquestra chamadas de API a LLMs de terceiros, como o P2D? Por quê?"</p>
+          <p class="why">Essa é a pergunta que separa quem entende a diferença de quem só decorou os dois termos.</p>
+        </div>
+      </div>
+
+      <div class="theme-block">
+        <h3><span class="dot" style="background:var(--good)"></span>Observabilidade e FinOps para IA</h3>
+        <div class="promptcard">
+          <p class="q">"No trecho de CLAUDE.md sobre LLM Telemetry, identifique os 4 sinais que o sistema rastreia hoje (latência, erro, custo, qualidade de schema). Para cada um, qual seria o próximo nível de maturidade que uma empresa grande adicionaria?"</p>
+          <p class="why">Usa seu próprio sistema como base e te empurra a pensar no "próximo passo" — ótimo para perguntas de "como você evoluiria isso".</p>
+        </div>
+        <div class="promptcard">
+          <p class="q">"O que é FinOps aplicado a IA generativa, segundo as fontes que carreguei? Como o core/cost_model.py do P2D (que descrevi no briefing) se relaciona com essa prática?"</p>
+          <p class="why">Conecta terminologia de mercado a uma peça de código concreta que você pode mostrar.</p>
+        </div>
+      </div>
+
+      <div class="theme-block">
+        <h3><span class="dot" style="background:var(--accent-warm)"></span>Azure AI Services — panorama</h3>
+        <div class="promptcard">
+          <p class="q">"Segundo a documentação da Microsoft Learn que carreguei, quais são as diferenças arquiteturais entre chamar a API da OpenAI diretamente e chamar via Azure OpenAI Service? Cite deployment, quota, e isolamento de dados."</p>
+          <p class="why">É literalmente o que você configurou no treinamento prático — aqui você aprende o "porquê" por trás do "como".</p>
+        </div>
+      </div>
+
+      <div class="theme-block">
+        <h3><span class="dot" style="background:var(--bad)"></span>Governança, LGPD e ética aplicada</h3>
+        <div class="promptcard">
+          <p class="q">"Com base no texto da LGPD e nos guias da ANPD que carreguei, e no código de modules/compliance/ que descrevi (detector, audit, consent), quais princípios legais essa implementação já atende e quais ainda não?"</p>
+          <p class="why">Pergunta deliberadamente aberta — o objetivo é você conseguir listar honestamente lacunas, não só pontos fortes.</p>
+        </div>
+      </div>
+
+      <div class="theme-block">
+        <h3><span class="dot" style="background:var(--violet)"></span>Simulação de entrevista</h3>
+        <div class="promptcard">
+          <p class="q">"Aja como um entrevistador técnico sênior de IA. Com base em tudo que subi sobre o P2D, me faça 5 perguntas difíceis sobre as decisões de arquitetura de telemetria e providers — inclua pelo menos uma pergunta de 'e se isso escalasse 100x'."</p>
+          <p class="why">O melhor uso do NotebookLM aqui: ele conhece seu projeto real e pode fazer perguntas específicas, não genéricas de banco de perguntas.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="recursos">
+      <h2><span class="num">§3</span>Além do chat — outros recursos do NotebookLM</h2>
+      <p class="section-intro">O NotebookLM não é só uma caixa de pergunta-resposta. Estes recursos ajudam a fixar o conteúdo de formas diferentes.</p>
+      <div class="featgrid">
+        <div class="featcard">
+          <span class="name">Audio Overview</span>
+          <p>Gera um resumo em formato de podcast (dois "apresentadores" discutindo o conteúdo). Bom para revisar no trajeto, sem precisar olhar tela.</p>
+        </div>
+        <div class="featcard">
+          <span class="name">Study Guide / FAQ automático</span>
+          <p>Pede um guia de estudo ou uma lista de perguntas frequentes geradas a partir das suas fontes — útil para revisão rápida antes de uma entrevista.</p>
+        </div>
+        <div class="featcard">
+          <span class="name">Mapa mental</span>
+          <p>Gera uma visualização de como os conceitos das fontes se conectam — ajuda a ver, por exemplo, onde LLMOps e FinOps se cruzam no seu próprio projeto.</p>
+        </div>
+        <div class="featcard">
+          <span class="name">Citações rastreáveis</span>
+          <p>Toda resposta do chat vem com marcadores clicáveis apontando o trecho exato da fonte — sempre clique para confirmar antes de repetir a afirmação em voz alta numa entrevista.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="validar">
+      <h2><span class="num">§4</span>Como validar as respostas</h2>
+      <div class="callout">
+        <span class="label">Regra de ouro</span>
+        <p>O NotebookLM reduz alucinação por estar restrito às suas fontes, mas não elimina — ele ainda pode interpretar mal um trecho ou generalizar demais. Trate toda resposta como rascunho, não como verdade.</p>
+      </div>
+      <div class="callout alt">
+        <span class="label">Antes de repetir algo numa entrevista</span>
+        <p>Clique na citação, leia o trecho original de onde a resposta veio, e pergunte a si mesmo: "isso é o que o código realmente faz, ou é o NotebookLM extrapolando o padrão de mercado sobre o meu caso específico?" — essa é a mesma disciplina de honestidade que guiou o briefing de gap analysis.</p>
+      </div>
+    </section>
+
+    <section id="checklist">
+      <h2><span class="num">§5</span>Checklist de domínio</h2>
+      <ul class="checklist">
+        <li><input type="checkbox" id="n1" class="track-nb"><label for="n1">Criei o notebook e carreguei as 6 fontes internas</label></li>
+        <li><input type="checkbox" id="n2" class="track-nb"><label for="n2">Adicionei pelo menos as 4 fontes externas sugeridas</label></li>
+        <li><input type="checkbox" id="n3" class="track-nb"><label for="n3">Rodei as perguntas dos 5 temas e li as citações de origem de cada resposta</label></li>
+        <li><input type="checkbox" id="n4" class="track-nb"><label for="n4">Gerei um Audio Overview e ouvi pelo menos uma vez</label></li>
+        <li><input type="checkbox" id="n5" class="track-nb"><label for="n5">Consigo responder, sem olhar, a pergunta de "e se isso escalasse 100x" com uma resposta específica do P2D</label></li>
+      </ul>
+    </section>
+  </main>
+</div>
+
+<footer>
+  Process2Diagram · guia de estudo teórico complementar aos treinamentos práticos de PC183/PC184, 2026-07-12. Use junto com <code>career/treinamento-telemetria-alertas-qualidade.html</code> e <code>career/treinamento-azure-openai-provider.html</code>.
+</footer>
+
+<script>
+  document.querySelectorAll('.track-nb').forEach(function(el){
+    var key = 'p2d-train-notebooklm-' + el.id;
+    el.checked = localStorage.getItem(key) === '1';
+    el.addEventListener('change', function(){ localStorage.setItem(key, el.checked ? '1' : '0'); });
+  });
+</script>
