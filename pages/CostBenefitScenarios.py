@@ -38,6 +38,13 @@ render_page_header(
     "Projete e compare o custo estimado de diferentes combinações de LLMs por agente.",
 )
 
+st.caption(
+    "⚠️ Projeções assumem **cache frio** (toda chamada bate no provider) — o pior caso de custo. "
+    "O cache LLM do Process2Diagram (hash exato, sem custo de embedding) reduz o custo real em "
+    "reprocessamentos e reuniões recorrentes; não é modelado aqui porque a taxa de hit depende do "
+    "seu padrão de uso. Ver **Ajuda → 🗄️ Cache LLM** e **Qualidade ROI-TR → 💾 Cache LLM** (hits reais)."
+)
+
 # ── Constantes ────────────────────────────────────────────────────────────────
 
 _ALL_AGENTS = list(DEFAULT_TOKEN_PROFILES)

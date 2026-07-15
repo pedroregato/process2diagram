@@ -593,10 +593,20 @@ st.markdown("""
 </div>
 <div class="feat-row">
   <div class="fr-icon">🗑️</div>
-  <div class="fr-text"><strong>TTL e limpeza:</strong> Entradas do cache expiram automaticamente.
-  Administradores podem limpar o cache por agente via ferramenta
-  <code>clear_llm_cache()</code> no Assistente. TTL configurável em
-  <strong>Qualidade ROI-TR → Cache LLM</strong>.</div>
+  <div class="fr-text"><strong>TTL e limpeza:</strong> Entradas expiram automaticamente após 30 dias
+  (padrão fixo). Administradores podem limpar o cache por agente via ferramenta
+  <code>clear_llm_cache()</code> no Assistente ou pelo botão em
+  <strong>Qualidade ROI-TR → 💾 Cache LLM</strong> (também mostra hits e economia estimada).</div>
+</div>
+<div class="feat-row">
+  <div class="fr-icon">🧩</div>
+  <div class="fr-text"><strong>Correspondência exata, não aproximada (PC185):</strong> o hash é calculado
+  sobre o prompt <em>normalizado</em> — apenas diferenças de espaçamento/quebra de linha
+  (reenvio da mesma transcrição com formatação levemente diferente) reutilizam a mesma
+  entrada. Qualquer mudança real de conteúdo gera um hash diferente. O P2D avaliou
+  deliberadamente um cache <em>fuzzy</em> por similaridade de embedding e optou por não
+  implementá-lo — para artefatos de negócio (BPMN, ata), um falso positivo por similaridade
+  entregaria o resultado de uma transcrição errada ao usuário.</div>
 </div>
 """, unsafe_allow_html=True)
 

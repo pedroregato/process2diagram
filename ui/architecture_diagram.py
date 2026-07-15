@@ -49,6 +49,11 @@ flowchart TD
         P8["Grok\\nxAI"]:::lCls
     end
 
+    subgraph CACHEG["⚡ Cache LLM — SHA-256 · PII-safe · services/semantic_cache.py"]
+        direction LR
+        CC["🔑 hash(provedor+modelo+prompt)\\nwhitespace-normalizado"]:::rCls
+    end
+
     subgraph PIPE["⚙️ Pipeline Multi-Agente — KnowledgeHub como estado central"]
         direction TB
         A1["🔬 Quality Inspector\\nGrade A–E · critérios ponderados"]:::aCls
@@ -98,7 +103,10 @@ flowchart TD
     end
 
     IN --> A1
-    LLM -.->|"REST API (TLS)"| PIPE
+    PIPE -.->|"1. verifica cache"| CACHEG
+    CACHEG -.->|"2. hit → resposta cacheada"| PIPE
+    CACHEG -.->|"2. miss → REST API (TLS)"| LLM
+    LLM -.->|"3. resposta → grava no cache"| CACHEG
     A4 --> R1
     A4 --> R2
     A5 --> R3

@@ -42,6 +42,11 @@ O diagrama inclui a **camada de segurança transversal (🔒 C1–C6)**:
 sanitização de PII antes de cada chamada LLM, conformidade LGPD pós-pipeline
 (detecção · consentimento · auditoria) e autenticação/RLS na persistência.
 Para detalhes completos, consulte **Início → 🔒 Segurança de Dados**.
+
+Toda chamada de agente passa primeiro pela **⚡ Cache LLM** (hash exato
+SHA-256 de provedor+modelo+prompt, PII-safe) antes de ir ao provider real —
+um hit evita a chamada de API por completo. Detalhes em
+**Ajuda → 🗄️ Cache LLM**.
 """
 )
 

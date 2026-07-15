@@ -4,6 +4,22 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC186 — Concluído (v5.15 / 2026-07-15) — Documentação in-app do cache LLM (páginas de arquitetura, custo, novo guia)
+
+**Contexto:** sequência do PC185 — usuário pediu para atualizar as páginas de arquitetura, os cenários de custo (se fosse o caso) e criar uma página nova explicando o conceito de cache semântico e como o P2D usa.
+
+- **`ui/architecture_diagram.py`** — diagrama Mermaid do splash ganhou subgraph `CACHEG` (⚡ Cache LLM) entre `PIPE` e `LLM`, com 4 arestas mostrando o fluxo real (verifica cache → hit/miss → API real → grava cache). Validado via fetch real em `mermaid.ink` (SVG renderizou, sem erro de sintaxe).
+- **`pages/Orientacoes_Arquiteturas.py`** — legenda do Pipeline menciona o cache-first e aponta para o novo guia.
+- **`pages/SegurancaDeDados.py`** — seção "Cache Semântico — Segurança entre Sessões" ganhou um card novo sobre a normalização de whitespace (PC185) e a decisão de não usar fuzzy matching; corrigida uma afirmação pré-existente incorreta ("TTL configurável em Qualidade ROI-TR") — TTL é fixo em 30 dias, não há UI de configuração.
+- **`pages/CostEstimator.py`** — caption corrigida: dizia "~$0.003/1M no cache hit", um número sem lastro no código real. Um hit evita a chamada por completo (custo ≈ $0, só leitura no Supabase), não uma fração do preço do provider.
+- **`pages/CostBenefitScenarios.py`** — nova caption deixando explícito que `project_cost()` não modela taxa de hit de cache (assume cache frio / pior caso de custo) — decisão deliberada de não modelar (taxa de hit depende do padrão de uso do usuário, não é uma constante do sistema).
+- **`pages/Orientacoes_CacheSemantico.py`** (NOVA, grupo Ajuda) — guia completo no mesmo padrão HTML dark-navy/âmbar de `Orientacoes_CKF.py`: conceito geral de cache semântico de LLM (exato vs. embedding, tabela comparativa), o que o P2D implementa de fato (hash SHA-256, PII-safe, whitespace-normalizado, global a todos os agentes, 2 exceções deliberadas — torneio BPMN e rerun manual), diagrama de fluxo em ASCII, segurança entre sessões, **a decisão de engenharia do PC185 documentada de forma transparente** (por que fuzzy matching por embedding foi avaliado e rejeitado), onde ver estatísticas reais (aba Cache LLM em Qualidade ROI-TR), FAQ.
+- **`app.py`** — página registrada no grupo Ajuda (ícone 🗄️, título "Cache LLM"). **`CLAUDE.md`** — entrada na árvore de `pages/`, na tabela de grupos de navegação, e no comentário de `services/semantic_cache.py`.
+- Verificação real: todas as 5 páginas tocadas sobem via `AppTest` sem exceção (chaves de sessão corretas — `_autenticado`, não `authenticated`, lição do PC178); caption da CostBenefitScenarios confirmada presente no output renderizado. 878/878 testes passando (nenhum teste automatizado preexistente cobria essas páginas — mudança é conteúdo/HTML, não lógica).
+- REGRA DERIVADA: ao atualizar documentação in-app depois de uma decisão de arquitetura, aproveitar a revisão para auditar afirmações VIZINHAS já existentes no mesmo texto — 2 imprecisões pré-existentes e não relacionadas ao pedido original (TTL "configurável" que não existe, custo de hit "$0.003/1M" sem lastro) foram encontradas e corrigidas só por estarem coladas ao trecho que eu já precisava editar.
+
+---
+
 ### PC185 — Concluído (v5.15 / 2026-07-15) — Avaliação de `cache-semantico.md` + normalização de whitespace no cache exato
 
 **Contexto:** usuário trouxe uma spec (`melhorias/cache-semantico.md`) propondo um cache semântico por embedding (pgvector, threshold de similaridade, 2 camadas — roteamento e geração de artefato), pedindo avaliação e implementação do que fosse adequado.

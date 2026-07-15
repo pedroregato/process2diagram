@@ -367,6 +367,9 @@ else:
 st.markdown("---")
 st.caption(
     "💡 **Dica**: DeepSeek V4 Flash é o provider padrão — mesmo preço do antigo deepseek-chat ($0.14/1M). "
-    "O cache semântico do Process2Diagram (~$0.003/1M no cache hit) pode reduzir drasticamente o custo real. "
-    "Groq e Google Gemini oferecem tiers gratuitos adequados para projetos de pequeno porte."
+    "Um hit no cache LLM do Process2Diagram evita a chamada de API por completo — custo real ≈ $0 "
+    "para essa chamada, não uma fração do preço do provider. As estimativas acima assumem cache frio "
+    "(pior caso); reprocessamentos reais tendem a custar menos. Veja **Qualidade ROI-TR → 💾 Cache LLM** "
+    "para hits/economia real do seu uso. Groq e Google Gemini oferecem tiers gratuitos adequados para "
+    "projetos de pequeno porte."
 )

@@ -62,6 +62,7 @@ process2diagram/
 │   ├── Orientacoes_CKF.py           # Guia CKF
 │   ├── Orientacoes_BpmnStudio.py    # Guia BPMN Studio — passo a passo + exemplo de descrição complexa (multi-pool)
 │   ├── Orientacoes_Graficos.py      # Guia dos 13 gráficos do Assistente — o que são, melhor uso, prompts + resumo executivo (PC143)
+│   ├── Orientacoes_CacheSemantico.py # Guia do cache LLM (hash exato SHA-256, PII-safe) — conceito, arquitetura, por que não é fuzzy/embedding (PC185)
 │   ├── BatchRunner.py            # Batch pipeline (Manutenção)
 │   ├── BpmnBackfill.py           # Backfill BPMN XML (Manutenção)
 │   ├── TranscriptBackfill.py     # Backfill transcript embeddings (Manutenção)
@@ -150,7 +151,7 @@ process2diagram/
 │   ├── export_service.py         # make_filename(base, ext, prefix, suffix) → str
 │   ├── file_ingest.py            # load_transcript() wrapper
 │   ├── preprocessor_service.py  # preprocess_transcript() wrapper
-│   ├── semantic_cache.py        # SemanticCache — SHA256 LLM response cache (Supabase llm_cache)
+│   ├── semantic_cache.py        # SemanticCache — SHA256 exact-hash LLM response cache (Supabase llm_cache), whitespace-normalized before hashing (PC185); guide: pages/Orientacoes_CacheSemantico.py
 │   ├── context_analyzer.py     # estimate_tokens(), should_use_long_context(), LONG_CONTEXT_AGENTS
 │   └── llm_telemetry.py        # LLMTelemetry (async Supabase write), run_benchmark_call(), BENCHMARK_TASKS, _telemetry singleton
 │
@@ -239,7 +240,7 @@ AgentRequirements┘
 | **Pipeline** | Pipeline.py, Diagramas.py, BpmnEditor.py, BpmnStudio.py | Todos |
 | **Análise** | Assistente.py, Artefatos.py, ValidationHub.py, MeetingROI.py, DocumentManager.py, CostBenefitScenarios.py, AtivosDeNegocio.py | Todos |
 | **Sistema** | Settings.py, CostEstimator.py, LLMBenchmark.py [+ MasterAdmin.py, DatabaseOverview.py] | Todos [admin extra] |
-| **Ajuda** | ComoIniciar, CasosDeUso (valor de negócio), Assistente (tool guide), Glossário, Arquiteturas, CKF, BpmnStudio (guia), Gráficos (guia) | Todos |
+| **Ajuda** | ComoIniciar, CasosDeUso (valor de negócio), Assistente (tool guide), Glossário, Arquiteturas, CKF, BpmnStudio (guia), Gráficos (guia), Cache LLM (guia) | Todos |
 | **Manutenção** | BatchRunner.py, BpmnBackfill.py, MinutesBackfill.py, TranscriptBackfill.py | Admin only |
 
 `app.py` renders no content — only calls `st.navigation(pages).run()`. Groups rebuilt every rerun (menu updates immediately after login).
