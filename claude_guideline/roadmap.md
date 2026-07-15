@@ -4,6 +4,19 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC185 — Concluído (v5.15 / 2026-07-15) — Avaliação de `cache-semantico.md` + normalização de whitespace no cache exato
+
+**Contexto:** usuário trouxe uma spec (`melhorias/cache-semantico.md`) propondo um cache semântico por embedding (pgvector, threshold de similaridade, 2 camadas — roteamento e geração de artefato), pedindo avaliação e implementação do que fosse adequado.
+
+- **Achado principal:** o p2d já tem um cache rodando exatamente onde a spec propõe (`services/semantic_cache.py`, tabela `llm_cache`, plugado em `agents/base_agent.py::_call_llm()`) — global (todos os agentes), PII-safe, com stats/admin tool. Só que é por hash exato (SHA256), não por similaridade de embedding.
+- **Mismatches da spec com a arquitetura real:** usa `group_id`/tabela `groups` (não existem — isolamento real é `project_id`/`tenant_id`); a camada de "cache de roteamento" (seção 5.1) pressupõe um classificador de trechos de transcrição dentro do Orchestrator que não existe — o pipeline roda agentes completos sobre a transcrição inteira, não faz triagem por trecho.
+- **Decisão (via `AskUserQuestion`, usuário escolheu a opção recomendada):** não construir a infraestrutura de embedding completa — custaria 1 chamada de embedding extra em toda chamada de LLM (hit ou miss) e, para geração de artefato (BPMN/ata), um falso positivo por similaridade entregaria o artefato de uma transcrição errada, sem ganho demonstrado (nenhum relato de "reprocessar quase-idêntico" como problema real de produção).
+- **Implementado:** `SemanticCache.compute_hash()` normaliza espaços em branco (`_normalize_for_hash` — colapsa runs de whitespace, strip) antes de hashear `system`/`safe_user` — cobre a motivação nº1 da spec ("revisão marginal" da mesma transcrição) sem custo de embedding e sem risco de falso positivo (mudança de conteúdo real continua gerando hash diferente).
+- 4 testes novos (`tests/test_semantic_cache.py`). Spec original arquivada em `melhorias/arquivados/cache-semantico.md` com nota de fechamento documentando a avaliação completa.
+- REGRA DERIVADA (reforça PC183/PC184 e os casos de `solution-manage.md`/`assistente-20260711.md`): antes de implementar uma spec de melhoria, verificar se o mecanismo proposto já existe sob outro nome no código real — "cache semântico" no p2d já existia, só que com garantia mais forte (exato) do que a spec assumia; a lacuna real era muito mais estreita que a spec descrita.
+
+---
+
 ### PC184 — Concluído (v5.15 / 2026-07-12) — Provider Azure OpenAI Service
 
 **Contexto:** avaliação honesta de gaps de vaga (feita a partir de um checklist de currículo do usuário, cruzado com o código real do P2D) apontou que "Azure AI Services / Azure OpenAI" era um gap literal — o projeto já integra OpenAI diretamente, mas não via Azure. Diferente de gaps que não fazem sentido forçar no P2D (data warehouse, certificações), este era uma extensão pequena e genuína da arquitetura já agnóstica de provider — decisão explícita do usuário via `AskUserQuestion` de implementar de verdade, não só ajustar o texto do CV.

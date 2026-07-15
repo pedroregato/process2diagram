@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -23,13 +24,33 @@ logger = logging.getLogger(__name__)
 
 _TABLE = "llm_cache"
 
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _normalize_for_hash(text: str) -> str:
+    """Collapse whitespace runs (spaces/tabs/newlines) to a single space and strip.
+
+    Makes the exact-match cache tolerant to whitespace-only differences between
+    otherwise identical prompts (re-pasted transcript with different line endings,
+    extra blank lines, trailing spaces) without touching punctuation/wording —
+    a real content change must still change the hash.
+    """
+    return _WHITESPACE_RE.sub(" ", text).strip()
+
 
 class SemanticCache:
 
     @staticmethod
     def compute_hash(provider: str, model: str, system: str, safe_user: str) -> str:
-        """SHA256 of (provider | model | system_prompt | sanitized_user_prompt)."""
-        key = f"{provider}|{model}|{system}|{safe_user}"
+        """SHA256 of (provider | model | system_prompt | sanitized_user_prompt).
+
+        system/safe_user are whitespace-normalized before hashing (see
+        _normalize_for_hash) so whitespace-only reprocessing still hits the cache.
+        """
+        key = (
+            f"{provider}|{model}|"
+            f"{_normalize_for_hash(system)}|{_normalize_for_hash(safe_user)}"
+        )
         return hashlib.sha256(key.encode("utf-8")).hexdigest()
 
     def get(self, cache_hash: str) -> Optional[tuple[str, int]]:
