@@ -48,6 +48,9 @@ def _build_glossary_html() -> str:
             "related": e.get("related", []),
         })
     entries_json = json.dumps(js_entries, ensure_ascii=False, indent=2)
+    tag_label_json = json.dumps(
+        {slug: meta["label"] for slug, meta in TAG_META.items()}, ensure_ascii=False
+    )
 
     # ── Filter buttons HTML ───────────────────────────────────────────────────
     filter_buttons = '<button class="filter-btn fb-all active" onclick="filtrar(\'all\', this)">Todos</button>\n'
@@ -189,6 +192,15 @@ def _build_glossary_html() -> str:
     font-family: var(--mono); font-size: 11px; color: var(--muted);
     white-space: nowrap; min-width: 80px; text-align: right;
   }}
+  .btn-newtab {{
+    font-family: var(--mono); font-size: 10px;
+    letter-spacing: .06em; text-transform: uppercase;
+    padding: 8px 13px; border-radius: 2px;
+    border: 1px solid var(--border); background: var(--s1);
+    color: var(--muted); cursor: pointer; transition: all .12s;
+    white-space: nowrap;
+  }}
+  .btn-newtab:hover {{ color: var(--ink); border-color: var(--ink); }}
 
   /* ── FILTROS ── */
   .filters {{
@@ -359,6 +371,10 @@ def _build_glossary_html() -> str:
   <input class="search-input" id="search" type="text"
     placeholder="Buscar termo, sigla ou conceito..." oninput="buscar()">
   <span class="search-count" id="result-count"></span>
+  <button class="btn-newtab" onclick="openNewTab()"
+    title="Abre o Glossário numa aba separada — útil para manter aberto lado a lado enquanto lê outra página">
+    ↗ Nova janela
+  </button>
 </div>
 
 <div class="filters">
@@ -380,15 +396,21 @@ def _build_glossary_html() -> str:
 <script>
 const ENTRIES = {entries_json};
 
-const TAG_LABEL = {{
-  bpmn: "Modelagem & BPMN",
-  req:  "Requisitos & Spec",
-  ai:   "IA & LLM",
-  dev:  "Dev & Infra",
-  neg:  "Negócios",
-}};
+const TAG_LABEL = {tag_label_json};
 
 let activeFilter = 'all';
+
+/* ── openNewTab() ────────────────────────────────────────────── */
+/* Abre uma cópia autocontida desta página numa aba separada do   */
+/* browser — permite manter o Glossário aberto lado a lado com    */
+/* outra página enquanto o leitor consulta um termo desconhecido. */
+function openNewTab() {{
+  var html = '<!DOCTYPE html>' + document.documentElement.outerHTML;
+  var blob = new Blob([html], {{type: 'text/html;charset=utf-8'}});
+  var url = URL.createObjectURL(blob);
+  var w = (window.top || window).open(url, '_blank');
+  if (!w) window.open(url, '_blank');
+}}
 
 /* ── render(entries) ─────────────────────────────────────────── */
 function render(entries) {{

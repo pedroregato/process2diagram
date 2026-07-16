@@ -4,6 +4,17 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC188 — Concluído (v5.15 / 2026-07-15) — Glossário: botão "Abrir em nova janela"
+
+**Contexto:** ideia do usuário — o Glossário já é uma página própria, mas para consultar um termo desconhecido enquanto lê outra página (ex.: o novo guia de Cache LLM) era preciso navegar para fora da página atual. Apresentei 2 opções (botão de nova janela vs. busca inline embutida em cada página de guia) com o trade-off de custo/complexidade; usuário escolheu a primeira.
+
+- **`pages/Orientacoes_Glossario.py`**: botão "↗ Nova janela" na barra de busca — mesmo padrão `openNewTab()` já usado em `ui/architecture_diagram.py` (blob de `document.documentElement.outerHTML` aberto via `window.open`). Abre uma cópia autocontida do Glossário numa aba separada do browser, que o leitor mantém aberta lado a lado com a página que está lendo.
+- **Bug pré-existente corrigido de passagem**: `TAG_LABEL` no JavaScript era um dict hardcoded (`bpmn/req/ai/dev/neg`) sem a tag `seg` — os 5 verbetes de Segurança (Segurança, Sanitização de PII, Trilha de Auditoria, Camada de Conformidade LGPD, Consentimento de Dados) mostravam a badge crua "seg" em vez de "Segurança & Privacidade" desde o PC81/82. Corrigido gerando `TAG_LABEL` a partir do `TAG_META` real em Python (`json.dumps({slug: meta["label"] ...})`) em vez de duplicar o dict em JS — elimina o risco de essa mesma categoria de drift acontecer de novo com tags futuras.
+- Verificação: `_build_glossary_html()` chamada diretamente confirma a função `openNewTab`, o botão e o label "Segurança & Privacidade" presentes no HTML gerado; `AppTest` sem exceção; suite completa passando.
+- REGRA DERIVADA (reforça padrão já visto no projeto): qualquer dict que espelha `TAG_META`/uma fonte de verdade Python só deve existir gerado a partir dela no momento do build da página — nunca reescrito à mão em JS/HTML, mesmo que pareça "só uma cópia rápida". O próprio arquivo já fazia isso corretamente para `css_cat_vars`/`css_tag_classes`/`filter_buttons`; só o `TAG_LABEL` no `<script>` tinha escapado dessa disciplina.
+
+---
+
 ### PC187 — Concluído (v5.15 / 2026-07-15) — Glossário: 9 termos novos cobrindo o cache LLM
 
 **Contexto:** sequência do PC186 — usuário pediu para o Glossário cobrir o vocabulário técnico usado na nova página `Orientacoes_CacheSemantico.py` (exemplos dados: hit, cache, embedding, tax).
