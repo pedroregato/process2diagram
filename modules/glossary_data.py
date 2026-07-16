@@ -16,6 +16,7 @@
 #   ai   → IA & LLM               (#7a4a10 âmbar)
 #   dev  → Dev & Infraestrutura   (#4a1a7a violeta)
 #   neg  → Negócios & Metodologia (#6a2a10 terracota)
+#   seg  → Segurança & Privacidade (#0a6050 verde-azulado)
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
@@ -256,6 +257,23 @@ GLOSSARY_ENTRIES: list[dict] = [
     # ── C ─────────────────────────────────────────────────────────────────────
 
     {
+        "term": "Cache Hit / Cache Miss",
+        "en": "Cache Hit / Cache Miss",
+        "tag": "ai",
+        "def_": (
+            "<strong>Hit</strong>: o hash calculado para a chamada já existe no cache LLM — a resposta "
+            "salva é reaproveitada, <strong>nenhuma chamada de API acontece</strong> (custo real ≈ $0, "
+            "só uma leitura no Supabase). <strong>Miss</strong>: hash não encontrado — a chamada segue "
+            "normalmente ao provider, e a resposta é gravada no cache ao final para a próxima vez."
+        ),
+        "example": (
+            "Reprocessar a mesma reunião sem mudar nada → todo agente bate em hit. "
+            "Mudar uma frase da transcrição → hash muda → miss só naquele agente, os demais podem "
+            "continuar batendo em hit se o texto que eles usam não mudou."
+        ),
+        "related": ["Semantic Cache", "Hash (SHA-256)", "LLM Telemetria"],
+    },
+    {
         "term": "CKF",
         "en": "Context Knowledge File",
         "tag": "neg",
@@ -414,7 +432,7 @@ GLOSSARY_ENTRIES: list[dict] = [
             "'Prazo de entrega' e 'deadline' têm vetores similares → a busca semântica "
             "os conecta mesmo sem coincidência de palavras-chave."
         ),
-        "related": ["pgvector", "RAG", "Supabase", "Gemini"],
+        "related": ["pgvector", "RAG", "Supabase", "Gemini", "Fuzzy Matching", "Semantic Cache"],
     },
     {
         "term": "Enforce Rules",
@@ -460,6 +478,28 @@ GLOSSARY_ENTRIES: list[dict] = [
             "sem criar setas longas e diagonais. Throw lança; Catch recebe."
         ),
         "related": ["BPMN 2.0", "Link Intermediate Event", "AgentBPMN", "Enforce Rules"],
+    },
+
+    # ── F ─────────────────────────────────────────────────────────────────────
+
+    {
+        "term": "Fuzzy Matching",
+        "en": "Fuzzy / Similarity Matching",
+        "tag": "ai",
+        "def_": (
+            "Correspondência <strong>aproximada</strong> entre dois textos, baseada em distância vetorial "
+            "de embedding (ex.: similaridade de cosseno ≥ threshold) em vez de igualdade exata. "
+            "É a técnica por trás de um cache semântico \"de verdade\" — mas o P2D "
+            "<strong>avaliou e optou por não usá-la</strong> no cache LLM (PC185): exigiria uma chamada de "
+            "embedding extra em toda consulta (hit ou miss) e, para artefatos de negócio (BPMN, ata), "
+            "um falso positivo entregaria o resultado de uma transcrição diferente ao usuário."
+        ),
+        "example": (
+            "Cache exato: 'Aprovar o pedido' e 'Aprovar  o  pedido' (espaço extra) → mesmo hash após "
+            "normalização, hit. Fuzzy matching: 'Aprovar o pedido' e 'Autorizar a solicitação' → embeddings "
+            "próximos, hit por similaridade — é justamente esse tipo de hit que o P2D evita."
+        ),
+        "related": ["Semantic Cache", "Embedding", "Cache Hit / Cache Miss"],
     },
 
     # ── G ─────────────────────────────────────────────────────────────────────
@@ -508,6 +548,25 @@ GLOSSARY_ENTRIES: list[dict] = [
             "calendar_create_event('Revisão de Requisitos', '2026-06-01T10:00:00', ...)."
         ),
         "related": ["Assistente RAG", "Tool-use"],
+    },
+
+    # ── H ─────────────────────────────────────────────────────────────────────
+
+    {
+        "term": "Hash (SHA-256)",
+        "en": "Hash (SHA-256)",
+        "tag": "dev",
+        "def_": (
+            "Função que transforma um texto de tamanho qualquer numa <strong>impressão digital</strong> "
+            "de tamanho fixo (64 caracteres hexadecimais) — o mesmo texto sempre produz o mesmo hash, "
+            "e qualquer mudança de conteúdo produz um hash completamente diferente (sem meio-termo). "
+            "É a chave do cache LLM: <code>SHA256(provedor | modelo | system_prompt | user_prompt)</code>."
+        ),
+        "example": (
+            "compute_hash('DeepSeek', 'deepseek-v4-flash', system, prompt) → "
+            "'a3f9...'(64 chars). Mudar um único caractere do prompt produz um hash totalmente diferente."
+        ),
+        "related": ["Semantic Cache", "Cache Hit / Cache Miss", "Fuzzy Matching"],
     },
 
     # ── I ─────────────────────────────────────────────────────────────────────
@@ -1111,18 +1170,22 @@ GLOSSARY_ENTRIES: list[dict] = [
     },
     {
         "term": "Semantic Cache",
-        "en": "Semantic Cache",
+        "en": "Semantic Cache (Cache LLM)",
         "tag": "ai",
         "def_": (
-            "Cache de respostas LLM baseado em <strong>hash SHA-256</strong> do system prompt + user message. "
-            "Armazenado em Supabase (tabela llm_cache). Em hit, aplica o token_map atual (PII-safe). "
-            "hub.meta.cache_hits rastreia o total de acertos por sessão."
+            "Cache de respostas LLM do Process2Diagram. Apesar do nome (herdado do módulo, "
+            "<code>services/semantic_cache.py</code>), a implementação é <strong>hash exato SHA-256</strong> "
+            "(provedor + modelo + prompt) — não similaridade de embedding (ver Fuzzy Matching). "
+            "Desde o PC185, o texto é normalizado (espaços/quebras de linha colapsados) antes do hash, "
+            "então só diferenças de formatação reaproveitam a mesma entrada — qualquer mudança real de "
+            "conteúdo gera um hash novo. Em hit, aplica o token_map da sessão atual (PII-safe). "
+            "hub.meta.cache_hits rastreia acertos por sessão; estatísticas reais em Qualidade ROI-TR → 💾 Cache LLM."
         ),
         "example": (
             "Segunda execução da mesma transcrição no mesmo agente → "
-            "resposta do cache em <100ms vs ~5s da API real."
+            "resposta do cache em <100ms (leitura Supabase) vs ~5s da API real — custo dessa chamada ≈ $0."
         ),
-        "related": ["BaseAgent", "LLM", "Supabase"],
+        "related": ["BaseAgent", "LLM", "Supabase", "Cache Hit / Cache Miss", "Fuzzy Matching", "Hash (SHA-256)"],
     },
     {
         "term": "Skill",
@@ -1249,6 +1312,23 @@ GLOSSARY_ENTRIES: list[dict] = [
         "related": ["BPMN 2.0", "Gateway", "AgentValidator", "AgentBPMN"],
     },
     {
+        "term": "Tax (Overhead por Chamada)",
+        "en": "Tax / Overhead per Call",
+        "tag": "ai",
+        "def_": (
+            "Custo (latência e/ou dinheiro) adicionado a <strong>toda</strong> chamada de um mecanismo, "
+            "independentemente do resultado — diferente de um custo pago só quando algo dá certo. "
+            "É o principal argumento contra o fuzzy matching por embedding no cache LLM (PC185): checar o "
+            "cache por similaridade exigiria 1 chamada de embedding em toda consulta, <strong>hit ou miss</strong> "
+            "— uma tax paga 100% das vezes, não só nas que teriam hit."
+        ),
+        "example": (
+            "Cache exato (hash): tax ≈ 0 — cálculo de hash é local e instantâneo. "
+            "Cache fuzzy (embedding): tax = 1 chamada de rede extra por consulta, mesmo em miss."
+        ),
+        "related": ["Fuzzy Matching", "Semantic Cache", "Embedding"],
+    },
+    {
         "term": "Temperatura",
         "en": "Temperature (LLM)",
         "tag": "ai",
@@ -1294,6 +1374,23 @@ GLOSSARY_ENTRIES: list[dict] = [
             "Uma transcrição de 1h de reunião ≈ 8.000–15.000 tokens de entrada."
         ),
         "related": ["LLM", "BaseAgent", "Context Analyzer", "Semantic Cache", "Sanitização de PII"],
+    },
+    {
+        "term": "TTL",
+        "en": "Time To Live",
+        "tag": "dev",
+        "def_": (
+            "Prazo de validade de uma entrada de cache — depois dele, a entrada é tratada como expirada "
+            "e descartada, mesmo que o hash ainda bata. No cache LLM do P2D, o TTL é fixo em "
+            "<strong>30 dias</strong> (checado no cliente a cada leitura; sem UI de configuração). "
+            "Evita que uma resposta antiga demais (ex.: de uma versão anterior de um skill) seja "
+            "reaproveitada indefinidamente."
+        ),
+        "example": (
+            "Entrada gravada há 31 dias → próxima consulta com o mesmo hash não conta como hit, "
+            "a entrada expirada é apagada e uma nova chamada real ao provider acontece."
+        ),
+        "related": ["Semantic Cache", "Cache Hit / Cache Miss"],
     },
     {
         "term": "Trilha de Auditoria",

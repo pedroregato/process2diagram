@@ -133,7 +133,7 @@ process2diagram/
 │   ├── ingest.py                 # .txt/.docx/.pdf file loader
 │   ├── text_utils.py             # rule_keyword_pt() — Portuguese text utils
 │   ├── reqtracker_exporter.py    # RequirementsModel → HTML/PDF (usado por Artefatos.py)
-│   ├── glossary_data.py          # 80 verbetes do glossário técnico + search_glossary() + TAG_META
+│   ├── glossary_data.py          # 89 verbetes do glossário técnico + search_glossary() + TAG_META
 │   └── document_store.py         # Document CRUD + embedding + semantic/keyword search (Supabase)
 │
 ├── ui/
