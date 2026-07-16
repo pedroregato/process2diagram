@@ -4,6 +4,18 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC187 — Concluído (v5.15 / 2026-07-15) — Glossário: 9 termos novos cobrindo o cache LLM
+
+**Contexto:** sequência do PC186 — usuário pediu para o Glossário cobrir o vocabulário técnico usado na nova página `Orientacoes_CacheSemantico.py` (exemplos dados: hit, cache, embedding, tax).
+
+- **`modules/glossary_data.py`**: 5 termos novos — `Cache Hit / Cache Miss`, `Fuzzy Matching` (nova seção F), `Hash (SHA-256)` (nova seção H), `Tax (Overhead por Chamada)`, `TTL`. `Semantic Cache` atualizado para esclarecer que a implementação real é hash exato normalizado (PC185), não embedding, com cross-links para os termos novos. `Embedding` ganhou cross-link para `Fuzzy Matching`/`Semantic Cache`.
+- Corrigido de passagem: comentário de categorias no topo do arquivo listava só 5 tags (`bpmn/req/ai/dev/neg`), faltando `seg` — que já existia em `TAG_META` e em várias entradas (Segurança, Sanitização de PII, Trilha de Auditoria) desde o PC81/82, sem nunca ter sido documentado no comentário.
+- **`CLAUDE.md`**: contagem de verbetes atualizada (80 → 89).
+- Verificação: script standalone confere 0 termos duplicados, 0 links `related` quebrados, 0 tags desconhecidas contra `TAG_META`; `search_glossary()` testado nas queries "hit/embedding/tax/ttl/hash/fuzzy/miss" — todas retornam os termos esperados. `AppTest` na página do Glossário sem exceção. 878/878 testes passando (nenhum teste automatizado preexistente cobre o glossário — mudança é dado, não lógica).
+- Commit a155173, pushed.
+
+---
+
 ### PC186 — Concluído (v5.15 / 2026-07-15) — Documentação in-app do cache LLM (páginas de arquitetura, custo, novo guia)
 
 **Contexto:** sequência do PC185 — usuário pediu para atualizar as páginas de arquitetura, os cenários de custo (se fosse o caso) e criar uma página nova explicando o conceito de cache semântico e como o P2D usa.
