@@ -977,6 +977,7 @@ class AgentAssistant(BaseAgent):
         self,
         project_name: str,
         project_id: str,
+        tools_used_digest: str = "",
     ) -> str:
         """Build the system prompt for tool-use mode (compact data summary, no raw context)."""
         try:
@@ -1006,12 +1007,31 @@ class AgentAssistant(BaseAgent):
         # Use .replace() instead of .format() — the template contains dict literals
         # like {"[PESSOA:PG]": "..."} (added in PC82) that Python's str.format()
         # mis-parses as format specs, raising KeyError('"').
-        return (
+        prompt = (
             _SYSTEM_TOOLS_TEMPLATE
             .replace("{p2d_guide}", p2d_guide)
             .replace("{project_name}", project_name)
             .replace("{data_summary}", "\n".join(summary_lines))
         )
+
+        # PC189 — avaliação de melhorias/proposta-assistente-20261607.md (item #1):
+        # digest raso (só nomes, não resultados — ver _build_tools_used_digest() em
+        # pages/Assistente.py) das ferramentas já chamadas nesta conversa, pra reduzir
+        # rechamadas idênticas em turnos seguintes sem reintroduzir payload bruto no
+        # histórico (motivo da falha de serialização que _trim_history() evita).
+        if tools_used_digest:
+            prompt += (
+                "\n\n╔══════════════════════════════════════════════════════════════════╗\n"
+                "║  FERRAMENTAS JÁ CHAMADAS NESTA CONVERSA                          ║\n"
+                "╚══════════════════════════════════════════════════════════════════╝\n"
+                f"{tools_used_digest}\n\n"
+                "Antes de rechamar uma dessas ferramentas com os MESMOS parâmetros, "
+                "considere se a resposta já dada ao usuário nesta conversa já cobre a "
+                "pergunta atual. Rechame apenas se o usuário pedir dados novos/atualizados, "
+                "parâmetros diferentes, ou se a pergunta atual não foi de fato respondida antes."
+            )
+
+        return prompt
 
     # ── Tool-use loop — OpenAI-compatible ─────────────────────────────────────
 
@@ -1389,6 +1409,7 @@ class AgentAssistant(BaseAgent):
         project_name: str = "",
         cancel_event: threading.Event | None = None,
         status_fn: Callable[[str], None] | None = None,
+        tools_used_digest: str = "",
     ) -> tuple[str, int, list[str], list[dict]]:
         """
         Tool-use conversational turn.
@@ -1407,6 +1428,9 @@ class AgentAssistant(BaseAgent):
             cancel_event:  threading.Event — set it to interrupt the loop between rounds.
             status_fn:     Optional callable(str) invoked with step descriptions
                            (e.g. "🔧 Executando `get_meeting_list`…").
+            tools_used_digest: PC189 — comma-separated tool names already called earlier
+                           in this conversation (name-only, no results/args). Nudges the
+                           LLM to avoid identical re-fetches across turns.
 
         Returns:
             (response_text, tokens_used, tools_called, charts)
@@ -1415,7 +1439,7 @@ class AgentAssistant(BaseAgent):
         """
         from core.assistant_tools import AssistantToolExecutor
 
-        system   = self._build_system_prompt_tools(project_name, project_id)
+        system   = self._build_system_prompt_tools(project_name, project_id, tools_used_digest)
         messages = _trim_history(list(history)) + [{"role": "user", "content": question}]
         executor = AssistantToolExecutor(
             project_id,

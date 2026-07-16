@@ -51,6 +51,31 @@ def _is_promotable_message(tools_used: list[str]) -> bool:
     )
 
 
+_TOOLS_USED_DIGEST_MAX = 25
+
+
+def _build_tools_used_digest(history: list[dict]) -> str:
+    """
+    Compact, name-only digest of tools already called earlier in this conversation.
+
+    Avaliação de melhorias/proposta-assistente-20261607.md (PC189): a proposta original
+    pedia um "cache" com os DADOS já buscados — implementar isso exigiria reintroduzir
+    exatamente o que a PC82/histórico já removeu de propósito (payloads brutos com
+    datetime/objetos não serializáveis quebravam a chamada — ver _trim_history()).
+    Este digest é deliberadamente mais raso: só os NOMES das ferramentas já usadas,
+    não os resultados — dá ao LLM uma pista pra não rechamar a mesma consulta sem
+    necessidade, sem reintroduzir o risco de serialização.
+    """
+    seen: list[str] = []
+    for msg in history:
+        for t in (msg.get("tools_used") or []):
+            if t not in seen:
+                seen.append(t)
+    if not seen:
+        return ""
+    return ", ".join(seen[-_TOOLS_USED_DIGEST_MAX:])
+
+
 # ── Análise Autônoma UI ───────────────────────────────────────────────────────
 
 def _render_analyst_mode(
@@ -1854,6 +1879,7 @@ if active_question and not _asst_running:
                     project_name=_project_name,
                     cancel_event=_cancel_ev,
                     status_fn=_status,
+                    tools_used_digest=_build_tools_used_digest(_history_snap),
                 )
                 _result_box["response"]     = resp_text
                 _result_box["tokens"]       = tok

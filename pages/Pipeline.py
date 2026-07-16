@@ -346,6 +346,34 @@ if pipeline_mode == _MODE_NEW:
                             f"salvar novamente na tela de reunião carregada."
                         )
 
+                    # PC189 — item #4 de melhorias/proposta-assistente-20261607.md:
+                    # embeddings deixam de ser só um backfill manual (admin tool
+                    # generate_meeting_embeddings()) e passam a ser gerados aqui,
+                    # automaticamente, sempre que a chave de embedding já estiver
+                    # configurada em Configurações → Embeddings & Busca. Fail-open:
+                    # sem chave configurada, ou qualquer erro (rate limit, API fora do
+                    # ar), a reunião permanece salva normalmente — search_transcript
+                    # continua funcionando via fallback ILIKE, exatamente como antes
+                    # desta mudança. Não bloqueia nem atrasa a exibição do resultado
+                    # do pipeline: roda depois dos avisos de transcrição/artefatos.
+                    if _transcript_ok:
+                        _embed_key = st.session_state.get("asst_embed_key", "").strip()
+                        if _embed_key:
+                            _embed_text = hub.transcript_clean or hub.transcript_raw or ""
+                            if _embed_text.strip():
+                                try:
+                                    with st.spinner("🔎 Gerando embeddings da transcrição..."):
+                                        from core.project_store import save_transcript_embeddings
+                                        save_transcript_embeddings(
+                                            meeting_id=meeting_id,
+                                            project_id=st.session_state.project_id,
+                                            transcript=_embed_text,
+                                            api_key=_embed_key,
+                                            provider=st.session_state.get("asst_embed_provider", "OpenAI"),
+                                        )
+                                except Exception:
+                                    pass
+
                     # Knowledge Hub extraction (PC137) — must run AFTER create_meeting()
                     # so entities/processes are linked to a real meeting_id. Running it
                     # earlier, inside run_pipeline(), always saw meeting_id=None here
