@@ -212,3 +212,35 @@ def run_knowledge_extraction(hub, client_info, provider_cfg, output_lang,
             progress_callback("Detecção de Contradições", "done")
         except Exception:
             progress_callback("Detecção de Contradições", "skipped")
+
+
+def run_provocations(hub, client_info, provider_cfg, output_lang,
+                      meeting_id, project_id, progress_callback):
+    """
+    Runs AgentProvocations for one meeting, validates and persists.
+    Non-fatal — failures are reported via progress_callback and swallowed,
+    never raised (melhorias/arquivados/agente-de-provocacoes.md, PC190).
+
+    meeting_id MUST be a real, already-persisted meeting UUID — mesma exigência
+    de run_knowledge_extraction() acima (PC137): provocações são amarradas a
+    uma reunião real, nunca rode isto antes de create_meeting() existir. Por
+    isso este agente NÃO é chamado de dentro de run_pipeline() (que roda antes
+    da reunião existir) — diferente de AgentCKFUpdater, que não precisa de
+    meeting_id porque atualiza o contexto, não uma reunião específica.
+    """
+    if not meeting_id or not project_id:
+        progress_callback("Provocações", "skipped")
+        return
+
+    try:
+        progress_callback("Provocações", "running")
+        from agents.agent_provocations import AgentProvocations
+        from core.project_store import save_provocations
+        _prov_agent = AgentProvocations(client_info, provider_cfg)
+        _prov_agent.run(hub, output_lang)
+        items = hub.provocations.items if hub.provocations else []
+        if items:
+            save_provocations(meeting_id, project_id, items)
+        progress_callback("Provocações", "done")
+    except Exception:
+        progress_callback("Provocações", "skipped")

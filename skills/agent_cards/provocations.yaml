@@ -1,0 +1,17 @@
+name: "provocations"
+class: "AgentProvocations"
+module: "agents/agent_provocations.py"
+display_name: "Provocações"
+description: "Gera observações lastreadas sobre o que ficou fechado numa reunião sem ter sido examinado — validador determinístico confere cada evidência contra a transcrição antes de persistir. Fase 1: apenas kind absence/asymmetry"
+pipeline_phase: "post"
+mode: "llm"
+fatal: false
+reads:
+  - "hub.transcript_clean"
+writes:
+  - "hub.provocations (ProvocationsModel)"
+  - "provocations (Supabase, via save_provocations())"
+artifacts:
+  - "Provocações lastreadas (0–5 por reunião)"
+dependencies: []
+skill_file: "skills/skill_provocations.md"

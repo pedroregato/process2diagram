@@ -502,3 +502,58 @@ class PerspectiveSummarySchema(_PermissiveModel):
 class QuerySummaryOutputSchema(_PermissiveModel):
     """Validates the raw LLM JSON from AgentQuerySummarizer."""
     perspectives: list[PerspectiveSummarySchema] = []
+
+
+# ── Provocations ─────────────────────────────────────────────────────────────
+# Schema-level checks only guard against genuinely malformed JSON (blank
+# required fields). Taxonomy/confidence/tone/grounding enforcement is NOT done
+# here — that's the deterministic validator in agents/agent_provocations.py
+# (the "coração da proposta" per melhorias/arquivados/agente-de-provocacoes.md),
+# which is the real gate before anything reaches the DB/UI. Keeping this schema
+# permissive avoids conflating "expected content the validator will filter"
+# (e.g. confidence="baixa") with "malformed JSON" in the PC183 quality signal.
+#
+# `absence_check` (melhorias/revisao-plano-provocacoes.md, PC190-fix): a
+# citação existindo no transcript só prova PRESENÇA. Os dois tipos da fase 1
+# alegam AUSÊNCIA ("este termo não ocorre em lugar nenhum" / "ninguém
+# retomou o tema entre a objeção e o fechamento") — sem essa checagem
+# separada, o validador auditava a decoração (a citação existe) e não a
+# alegação em si (o "nunca" também é verdade). Ver agent_provocations.py.
+
+class ProvocationReferenceSchema(_PermissiveModel):
+    timestamp: str = ""
+    speaker: str = ""
+    excerpt: str = ""
+
+
+class ProvocationAbsenceCheckSchema(_PermissiveModel):
+    terms: list[str] = []
+
+
+class ProvocationGroundingSchema(_PermissiveModel):
+    type: str = ""
+    references: list[ProvocationReferenceSchema] = []
+    business_assets: list[str] = []
+    context_artifacts: list[str] = []
+    absence_check: ProvocationAbsenceCheckSchema = ProvocationAbsenceCheckSchema()
+
+
+class ProvocationItemSchema(_PermissiveModel):
+    kind: str = ""
+    title: str
+    body: str
+    question: str
+    grounding: ProvocationGroundingSchema = ProvocationGroundingSchema()
+    confidence: str = "medium"
+
+    @field_validator("title", "body", "question")
+    @classmethod
+    def not_blank(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("field cannot be blank")
+        return v
+
+
+class ProvocationsOutputSchema(_PermissiveModel):
+    """Validates the raw LLM JSON from AgentProvocations."""
+    provocations: list[ProvocationItemSchema] = []

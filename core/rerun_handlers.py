@@ -13,11 +13,18 @@ from agents.agent_communication_noise import AgentCommunicationNoise
 from agents.agent_transcript_quality import AgentTranscriptQuality
 from core.knowledge_hub import SynthesizerModel
 
-def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
+def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language,
+                  meeting_id=None, project_id=None):
     """Run a single agent and return (hub, messages).
 
     messages is a list of (level, text) tuples where level is "info"|"warning"|"error".
     No st.* calls are made here — safe to run from a background thread.
+
+    meeting_id/project_id: optional, only used by "provocations" (PC190) — its
+    artifact lives in a dedicated Supabase table (`provocations`), not a hub
+    field folded into save_meeting_artifacts()'s payload like the other
+    agents, so a rerun must persist explicitly here or the regenerated items
+    would only exist in-session. Ignored by every other branch.
     """
     messages = []
 
@@ -173,6 +180,21 @@ def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language):
         agent = AgentCommunicationNoise(client_info, provider_cfg)
         agent._lg_skip_cache = True
         hub = agent.run(hub, output_language)
+    elif agent_name == "provocations":
+        from agents.agent_provocations import AgentProvocations
+        agent = AgentProvocations(client_info, provider_cfg)
+        agent._lg_skip_cache = True
+        hub = agent.run(hub, output_language)
+        items = hub.provocations.items if hub.provocations else []
+        if meeting_id and project_id and items:
+            try:
+                from core.project_store import save_provocations
+                save_provocations(meeting_id, project_id, items)
+                messages.append(("info", f"💾 {len(items)} provocação(ões) salva(s)."))
+            except Exception:
+                messages.append(("warning", "⚠️ Provocações geradas, mas não foi possível salvar."))
+        elif not items:
+            messages.append(("info", "Nenhuma provocação com lastro suficiente nesta reunião."))
     elif agent_name == "mermaid":
         from agents.agent_mermaid import MermaidGenerator
         if hub.bpmn.steps:

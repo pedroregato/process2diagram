@@ -171,6 +171,11 @@ def render_sidebar():
                 value=st.session_state.run_ckf_updater,
                 help=t("update_ckf_help"),
             )
+            st.session_state.run_provocations = st.checkbox(
+                t("gen_provocations"),
+                value=st.session_state.get("run_provocations", False),
+                help=t("gen_provocations_help"),
+            )
 
             st.markdown("---")
 
@@ -203,6 +208,8 @@ def render_sidebar():
                     st.session_state.rerun_agent = "minutes"
                 if st.button(t("btn_sbvr"),         key="rr_sv",  use_container_width=True):
                     st.session_state.rerun_agent = "sbvr"
+                if st.button(t("btn_provocations"), key="rr_prov", use_container_width=True):
+                    st.session_state.rerun_agent = "provocations"
             with col2:
                 if st.button(t("btn_requirements"), key="rr_r",   use_container_width=True):
                     st.session_state.rerun_agent = "requirements"

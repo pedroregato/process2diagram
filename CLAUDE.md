@@ -44,7 +44,7 @@ process2diagram/
 │   ├── BpmnEditor.py             # BPMN editor — bpmn-js Modeler, version history, Supabase save
 │   ├── BpmnStudio.py             # BPMN Studio (PC116) — descrição → BPMN+Mermaid (sem reunião) + BPMN → descrição
 │   ├── Assistente.py             # RAG assistant — conversational Q&A over transcripts
-│   ├── Artefatos.py              # Central de Artefatos — 12 abas: req, mind map, contradições, histórico, reuniões, SBVR, BPMN, DMN, IBIS, rastreabilidade, ruídos, comparar
+│   ├── Artefatos.py              # Central de Artefatos — 13 abas: req, mind map, contradições, histórico, reuniões, SBVR, BPMN, DMN, IBIS, rastreabilidade, ruídos, provocações (PC190), comparar
 │   ├── KnowledgeGraph.py         # Knowledge graph — pyvis physics (Obsidian-like), entity/contradiction viz, timeline heatmap, JSON-LD export
 │   ├── MeetingROI.py             # ROI-TR dashboard — type-aware quality indicators
 │   ├── DocumentManager.py        # Document management — 7 tabs: upload, library, extract artifacts, cross-ref, doc×doc, taxonomy, import spreadsheet; aba Biblioteca tem botão de promoção a Ativo de Negócio (PC167, Classificação Formal pré-sugerida por document_types.category)
@@ -105,7 +105,8 @@ process2diagram/
 │   ├── agent_document_analyzer.py  # On-demand: cross-references a document vs meeting artifacts
 │   ├── agent_document_extractor.py # On-demand: extracts req/SBVR/BMM/DMN artifacts from a document
 │   ├── agent_bpmn_studio.py      # On-demand (PC116): generate_bpmn_from_description() — hub sintético + AgentBPMN, sem reunião
-│   └── agent_bpmn_analyst.py     # On-demand (PC135): answer(process_name, bpmn_xml, question) — free-form Q&A over an existing BPMN diagram
+│   ├── agent_bpmn_analyst.py     # On-demand (PC135): answer(process_name, bpmn_xml, question) — free-form Q&A over an existing BPMN diagram
+│   └── agent_provocations.py     # Post-pipeline opcional (PC190): observações lastreadas (absence/asymmetry) — validador determinístico confere grounding contra o transcript antes de persistir; nunca instanciado de dentro de run_pipeline() (precisa de meeting_id real, mesmo motivo do PC137) — chamado de core/pipeline.py::run_provocations(), invocado por pages/Pipeline.py depois de create_meeting()
 │
 ├── modules/
 │   ├── config.py                 # LLM provider registry — add new providers here
@@ -172,6 +173,7 @@ process2diagram/
 │   ├── skill_document_analyzer.md   # DocumentAnalyzerAgent — cross-reference analysis
 │   ├── skill_document_extractor.md  # DocumentExtractorAgent — artifact extraction from docs
 │   ├── skill_bpmn_analyst.md     # AgentBPMNAnalyst — free-form Q&A over an existing BPMN diagram
+│   ├── skill_provocations.md     # AgentProvocations (PC190) — só absence/asymmetry habilitados; validador determinístico é o gate real, não este prompt
 │   ├── SKILL_REQUIREMENTS.md     # uppercase — git-tracked name
 │   └── SKILL_SYNTHESIZER.md      # uppercase — git-tracked name
 │
@@ -474,7 +476,7 @@ Type-aware quality system — 11 meeting types, each with a weight matrix across
 
 ## Core Modules (`core/`)
 
-- `session_state.init_session_state()` — idempotent, call immediately after `st.set_page_config()`. Defaults: provider=DeepSeek, embed_provider=OpenAI, run_quality/bpmn/minutes/requirements=True, run_sbvr/bmm/synthesizer/dmn/argumentation/ckf_updater/query_summarizer=True, n_bpmn_runs=3, use_langgraph=True, enable_long_context=True.
+- `session_state.init_session_state()` — idempotent, call immediately after `st.set_page_config()`. Defaults: provider=DeepSeek, embed_provider=OpenAI, run_quality/bpmn/minutes/requirements=True, run_sbvr/bmm/synthesizer/dmn/argumentation/ckf_updater/query_summarizer=True, n_bpmn_runs=3, use_langgraph=True, enable_long_context=True. `run_provocations=False` (PC190) — único opcional novo com default OFF, não ON: agente novo/experimental, custa 1 chamada LLM extra por reunião.
 - `pipeline.run_pipeline(hub, config, callback)` — 3 paths: multi-run tournament / LangGraph / standard. Raises on error (caller catches).
 - `rerun_handlers.handle_rerun(agent_name, ...)` — re-runs one agent: `"quality"`, `"bpmn"`, `"minutes"`, `"requirements"`, `"sbvr"`, `"bmm"`, `"synthesizer"`. BPMN re-run invalidates `hub.synthesizer`.
 - `cost_model.py` — modelo de dados para Cenários de Custo-Benefício (sem Streamlit, sem rede). Exporta: `ModelPricing`, `AgentTokenProfile`, `ScenarioConfig`, `ScenarioResult`, `PRICING_CATALOG` (17 modelos / 6 provedores), `DEFAULT_TOKEN_PROFILES` (9 agentes com perfis heurísticos), `project_cost(scenario, word_count, catalog) → ScenarioResult`. Catálogo editável via `st.session_state["cost_catalog_overrides"]`; cenário ativo em `st.session_state["scenario_assignments"]` (dict agent_name→model_id) — lido por `BaseAgent._call_llm()` para sobrescrever `model` por agente (fail-open se ausente).

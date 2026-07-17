@@ -4,6 +4,36 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC190 — Concluído (v5.15 / 2026-07-17) — Novo agente `AgentProvocations` (Fases 1–3 de `agente-de-provocacoes.md`) + correção bloqueante de `revisao-plano-provocacoes.md`
+
+**Contexto:** proposta de um novo agente de pipeline — **Provocações**: observações sobre o que ficou fechado numa reunião sem ter sido examinado (tema ausente, objeção sem resposta). Restrição central de arquitetura, não de prompt: nenhuma provocação sai sem lastro verificado em código (validador determinístico, sem LLM). Proposta explicitamente exigia aprovação humana antes de qualquer implementação além da Fase 0 (verificação de hipóteses `⟨?⟩` contra o código real).
+
+**Fase 0 (investigação, 3 rodadas de Explore agent) achou 2 divergências reais e corrigiu o plano:**
+- Nomenclatura: `AgentProvocations`/`agents/agent_provocations.py` (padrão real do repo é `Agent<Nome>`, não `ProvocationsAgent` como a proposta original escreveu) — usuário já havia resolvido a colisão de nome com a persona do Assistente ("Vichara") numa 2ª revisão da proposta antes da implementação, deixando o agente sem persona própria por decisão explícita ("nome humanizante é privilégio de quem conversa").
+- Orquestração: **não** usa o padrão do `AgentCKFUpdater` (chamado de dentro de `core/pipeline.py::run_pipeline()`) porque esse padrão só funciona pra CKF porque ele não precisa de `meeting_id` — Provocações precisa, e usar o mesmo padrão reproduziria o bug do PC137. Nova função standalone `run_provocations()` em `core/pipeline.py`, mirror de `run_knowledge_extraction()`, chamada de `pages/Pipeline.py` **depois** de `create_meeting()`.
+- Colunas/enums 100% em inglês na tabela nova (`meeting_id`, `title`, `body`, `grounding`, `status`...) — proposta usava português; convenção real do projeto (`asset_metadata`, `assistant_artifacts`) é inglês nas colunas, português no conteúdo/UI (mesmo padrão `AgentMinutes` → "Ata").
+- Opt-in (`default_enabled: False`, sidebar checkbox default `False`) — diferente do CKF Updater (default `True`): agente novo/experimental, custa 1 chamada LLM extra por reunião.
+
+**Escopo implementado — Fases 1–3 apenas:** tipos `absence` e `asymmetry` (dependem só da transcrição atual, sem leitura de memória do contexto/domínio — isso fica pra uma fase futura), validador determinístico, persistência (tabela `provocations` nova), UI (13ª aba em `Artefatos.py`, aceitar/descartar).
+
+**Revisão externa (`melhorias/revisao-plano-provocacoes.md`) achou 1 problema bloqueante real, aplicado antes do commit:**
+- **O validador original conferia PRESENÇA, não a alegação.** `absence` alega "este termo não ocorre em lugar nenhum" e `asymmetry` alega "ninguém retomou o tema entre a objeção e a decisão" — a primeira versão só conferia que as citações existiam no transcript (prova a objeção/decisão aconteceram, não prova o "nunca"). Um `asymmetry` factualmente falso passava desde que as aspas estivessem corretas.
+- **Fix:** nova primitiva `_span_text()` — "estes termos não ocorrem neste span" (span = transcrição inteira pra `absence`, ou a janela de turnos **estritamente entre** as duas referências pra `asymmetry`, derivada delas mesmas, nunca de um span separado fornecido pelo LLM). Exclusivo nas duas pontas de propósito: a objeção sempre menciona o próprio tema que levanta, incluí-la produziria falso positivo sistemático. Contrato `grounding` ganhou `absence_check: {terms: [...]}` (substituindo o `absent_terms` solto original), obrigatório em ambos os tipos.
+- **Achado técnico durante a implementação do fix:** a primeira tentativa reaproveitou os 6 padrões regex de `modules/transcript_time_parser.py` (todos exigem `:` no fim da linha) — mas o formato REAL de `hub.transcript_clean` pós-preprocessamento Teams é `"Nome   0:03"` sem dois-pontos nenhum (`modules/transcript_preprocessor.py::_SPEAKER_LINE_PAT`). Confirmado empiricamente: `parse_transcript_timings()` rodado contra um fixture real (`test-scenarios/cenario-teste-002/transcricao.txt`) retorna `has_timestamps=False` — os dois módulos NUNCA foram testados juntos antes. Fix usa `_SPEAKER_LINE_PAT` (recompilado com `re.MULTILINE`) como estratégia primária, com os padrões de `transcript_time_parser.py` como fallback pra outros formatos.
+- Allowlist de `kind` já estava em código (não só no prompt) desde a implementação inicial — item da revisão já satisfeito, só reforçado com a simplificação do skill (removida a tabela dos 5 tipos da taxonomia completa, prompt agora descreve só os 2 habilitados — "o modelo não precisa saber o que ainda não pode fazer").
+- Dívida técnica registrada em comentário SQL (`project_id → contexts(id)` é nome herdado, termo de produto é "contexto") — sem doc de dívida técnica dedicado no projeto ainda, só o comentário.
+- Taxa de reprovação por motivo (`rejected_reasons: dict`) logada estruturadamente — persistência dedicada (tabela/telemetria) fica pra depois, marcado como item opcional/menor pela própria revisão.
+
+**Fora de escopo (ambos os documentos concordam):** tipos `contradiction`/`premise`/`analogy` (dependem de memória do contexto e Ativos de Negócio — Fases 4-5 futuras), o laço provocação-aceita→divergência/pauta (Fase 6 — schema já nasce com `status='became_divergence'` previsto, destino desligado), correção de wording da persona do Assistente (tarefa separada, mesma origem da proposta).
+
+**Arquivos novos:** `agents/agent_provocations.py`, `skills/skill_provocations.md` (v1.1), `skills/agent_cards/provocations.yaml`, `setup/supabase_migration_provocations.sql` (**não executada automaticamente** — nova tabela, aguardando confirmação do usuário), `tests/test_agent_provocations.py`, `tests/test_artefatos_provocations_tab.py`. **Modificados:** `core/output_schemas.py`, `core/knowledge_hub.py`, `core/agent_registry.py`, `core/pipeline.py`, `core/project_store.py`, `core/rerun_handlers.py`, `pages/Pipeline.py`, `pages/Artefatos.py`, `ui/sidebar.py`, `core/session_state.py`, `modules/i18n.py`.
+
+**Achado colateral corrigido durante a Fase 0:** `test_artefatos_sbvr_pagination.py` tinha uma fragilidade latente de poluição de cache (`@st.cache_data` global do processo, chave por `project_id="p1"` hardcoded) que só se manifestou quando um novo arquivo de teste de Artefatos.py passou a rodar antes dele na ordem alfabética da suíte — corrigido usando `project_id` namespaced (`pc190-test-N`) nos testes novos, nunca reusando IDs curtos que outros arquivos já usam.
+
+931/931 testes passando na suíte completa (878 pré-PC190 + 53 novos). Boot-smoke real via `AppTest` na aba Provocações (render vazio, render com dados, filtro "Novas"→"Todas", botões aceitar/descartar condicionados a `status="new"`).
+
+---
+
 ### PC189 — Concluído (v5.15 / 2026-07-16) — Avaliação de `proposta-assistente-20261607.md`: 2 implementadas, 1 rejeitada (segurança), 2 já existiam
 
 **Contexto:** auto-reflexão do próprio Assistente ("Vichāra") propondo 5 melhorias de fricção no dia a dia. Agent Explore investigou as 5 alegações contra o código real ANTES de qualquer implementação — achado recorrente do projeto (mesmo padrão de `solution-manage.md`/`assistente-20260711.md`): a proposta subestimava o quanto já existe, e uma das 5 (SQL direto) contradiz uma garantia de segurança real do app.

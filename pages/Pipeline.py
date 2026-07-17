@@ -19,7 +19,7 @@ from ui.auth_gate import apply_auth_gate
 from ui.sidebar import render_sidebar
 from ui.input_area import render_input_area
 from ui.project_selector import render_project_selector, render_bpmn_process_selector
-from core.pipeline import run_pipeline, run_knowledge_extraction
+from core.pipeline import run_pipeline, run_knowledge_extraction, run_provocations
 from core.rerun_handlers import handle_rerun
 from core.project_store import (
     create_meeting, save_transcript, save_meeting_artifacts,
@@ -389,6 +389,21 @@ if pipeline_mode == _MODE_NEW:
                                 progress_callback=lambda *_: None,
                             )
 
+                    # PC190 — Provocações (melhorias/arquivados/agente-de-provocacoes.md).
+                    # Opt-in (default OFF, diferente do CKF Updater): agente novo, custa
+                    # 1 chamada LLM extra por reunião. Mesma exigência de meeting_id real
+                    # de run_knowledge_extraction() acima — por isso roda aqui, não dentro
+                    # de run_pipeline() (que roda antes da reunião existir).
+                    if st.session_state.get("run_provocations", False):
+                        with st.spinner("🎭 Gerando provocações..."):
+                            run_provocations(
+                                hub, client_info, st.session_state.provider_cfg,
+                                st.session_state.output_language,
+                                meeting_id=meeting_id,
+                                project_id=st.session_state.project_id,
+                                progress_callback=lambda *_: None,
+                            )
+
                     # LGPD audit — log pipeline run (async, fail-open)
                     try:
                         from modules.compliance import log_audit_event, detect_pii
@@ -678,6 +693,14 @@ if "rerun_agent" in st.session_state:
         else:
             _client_info = get_session_llm_client(st.session_state.selected_provider)
             if _client_info:
+                _rr_meeting_id = (
+                    st.session_state.get("current_meeting_id")
+                    or st.session_state.get("_loaded_meeting_id")
+                )
+                _rr_project_id = (
+                    st.session_state.get("project_id")
+                    or st.session_state.get("_loaded_project_id")
+                )
                 # PC112-J: spinner auto-limpa ao sair do bloco → árvore vazia antes do rerun.
                 with st.spinner(f"⏳ Reprocessando agente **{_agent_name}**…"):
                     try:
@@ -687,20 +710,14 @@ if "rerun_agent" in st.session_state:
                             _client_info,
                             st.session_state.provider_cfg,
                             st.session_state.output_language,
+                            meeting_id=_rr_meeting_id,
+                            project_id=_rr_project_id,
                         )
                         st.session_state.hub = _result_hub
                         st.session_state["_rr_pending_messages"] = [
                             ("success", f"✅ {_agent_name.capitalize()} re‑executado com sucesso."),
                         ] + list(_messages or [])
 
-                        _rr_meeting_id = (
-                            st.session_state.get("current_meeting_id")
-                            or st.session_state.get("_loaded_meeting_id")
-                        )
-                        _rr_project_id = (
-                            st.session_state.get("project_id")
-                            or st.session_state.get("_loaded_project_id")
-                        )
                         if _rr_meeting_id and _rr_project_id:
                             log_meeting_processing(
                                 meeting_id=_rr_meeting_id,

@@ -202,6 +202,13 @@ AGENT_REGISTRY: dict[str, dict] = {
         "default_enabled": True,
         "tags": ["ckf"],
     },
+    "provocations": {
+        "authority_level": "draft",
+        "skill_path": "skills/skill_provocations.md",
+        "pipeline_step": 10,
+        "default_enabled": False,
+        "tags": ["provocations"],
+    },
     "knowledge_extractor": {
         "authority_level": "draft",
         "skill_path": "skills/skill_knowledge_extractor.md",

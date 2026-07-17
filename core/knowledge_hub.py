@@ -460,6 +460,33 @@ class DMNModel:
     ready: bool = False
 
 
+# ── Provocations (melhorias/arquivados/agente-de-provocacoes.md) ─────────────
+# Fase 1: apenas kind in {"absence", "asymmetry"}, lastro só contra a
+# transcrição da própria reunião — ver agents/agent_provocations.py.
+
+@dataclass
+class ProvocationItem:
+    kind: str                # "absence" | "asymmetry" (fase 1)
+    title: str
+    body: str
+    question: str
+    grounding_type: str = ""
+    references: list[dict] = field(default_factory=list)   # [{timestamp, speaker, excerpt}]
+    absence_terms: list[str] = field(default_factory=list)  # termos que NÃO devem ocorrer no span (PC190-fix)
+    confidence: str = "medium"           # "high" | "medium" — nunca "low"
+    status: str = "new"                  # "new" | "accepted" | "discarded" | "became_divergence"
+    db_id: Optional[str] = None          # id em Supabase, após persistência
+
+
+@dataclass
+class ProvocationsModel:
+    """Output of AgentProvocations — provocações lastreadas e validadas."""
+    items: list[ProvocationItem] = field(default_factory=list)
+    rejected_count: int = 0   # quantas o validador determinístico descartou (métrica de saúde)
+    rejected_reasons: dict = field(default_factory=dict)  # {motivo: contagem} — PC190-fix, ver melhorias/revisao-plano-provocacoes.md §4
+    ready: bool = False
+
+
 # ── Argumentation Map (Fase C — IBIS) ─────────────────────────────────────────
 
 @dataclass
@@ -652,6 +679,7 @@ class KnowledgeHub:
     argumentation: ArgumentationMap = field(default_factory=ArgumentationMap)  # Fase C: IBIS map
     query_summary: QuerySummaryModel = field(default_factory=QuerySummaryModel)  # Fase F: multi-perspective
     communication_noise: CommunicationNoiseModel = field(default_factory=CommunicationNoiseModel)
+    provocations: ProvocationsModel = field(default_factory=ProvocationsModel)  # PC190: provocações lastreadas
     validation: ValidationReport = field(default_factory=ValidationReport)
     synthesizer: SynthesizerModel = field(default_factory=SynthesizerModel)
     meeting_time: MeetingTimeModel = field(default_factory=MeetingTimeModel)
@@ -941,6 +969,10 @@ class KnowledgeHub:
         # ── PC120: detail_diagrams (on-demand callActivity detail) ───────────
         if not hasattr(hub.bpmn, 'detail_diagrams'):
             hub.bpmn.detail_diagrams = {}
+
+        # ── PC190: ProvocationsModel ──────────────────────────────────────────
+        if not hasattr(hub, 'provocations'):
+            hub.provocations = ProvocationsModel()
 
         return hub
 

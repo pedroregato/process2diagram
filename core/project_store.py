@@ -4707,6 +4707,84 @@ def demote_business_asset(project_id: str, artifact_type: str, artifact_id: str)
     return result is not None
 
 
+# ── Provocations (melhorias/arquivados/agente-de-provocacoes.md, PC190) ──────
+
+def save_provocations(
+    meeting_id: str,
+    project_id: str,
+    items: list,
+    tenant_id: str | None = None,
+) -> int:
+    """Persiste provocações já validadas (list[ProvocationItem]) na tabela
+    `provocations`. Fail-open: qualquer erro retorna 0 sem propagar exceção —
+    a reunião permanece salva normalmente mesmo se isto falhar.
+
+    `tenant_id` é denormalizado na linha para scoping (mesmo padrão de
+    `asset_metadata`); se omitido, é resolvido a partir de `contexts.tenant_id`
+    (pode vir None — coluna com drift de schema conhecido, ver `get_context()`).
+    """
+    db = _db()
+    if not db or not items:
+        return 0
+    if tenant_id is None:
+        try:
+            tenant_id = (get_context(project_id) or {}).get("tenant_id")
+        except Exception:
+            tenant_id = None
+    try:
+        rows = [
+            {
+                "meeting_id": meeting_id,
+                "project_id": project_id,
+                "tenant_id":  tenant_id,
+                "kind":       item.kind,
+                "title":      item.title,
+                "body":       item.body,
+                "question":   item.question,
+                "grounding": {
+                    "type":           item.grounding_type,
+                    "references":     item.references,
+                    "absence_check":  {"terms": item.absence_terms},
+                },
+                "confidence": item.confidence,
+                "status":     item.status,
+            }
+            for item in items
+        ]
+        resp = db.table("provocations").insert(rows).execute()
+        return len(_ok(resp))
+    except Exception:
+        return 0
+
+
+def list_provocations_by_project(project_id: str, status: str | None = None) -> list[dict]:
+    """Lista provocações de um projeto, mais recentes primeiro. Fail-open."""
+    db = _db()
+    if not db:
+        return []
+    try:
+        q = db.table("provocations").select("*").eq("project_id", project_id)
+        if status:
+            q = q.eq("status", status)
+        return _ok(q.order("created_at", desc=True).execute())
+    except Exception:
+        return []
+
+
+def update_provocation_status(provocation_id: str, status: str) -> bool:
+    """Atualiza o status de uma provocação (aceitar/descartar). Fail-open."""
+    db = _db()
+    if not db:
+        return False
+    try:
+        db.table("provocations").update(
+            {"status": status, "updated_at": "NOW()"}
+        ).eq("id", provocation_id).execute()
+        return True
+    except Exception:
+        return False
+
+
 def list_assistant_artifacts_by_project(project_id: str) -> list[dict]:
     """Retorna os snapshots de conteúdo do Assistente já promovidos neste
     projeto (Fase C, melhorias/promocao-ativos-negocio.md §5.3)."""

@@ -33,6 +33,7 @@ from core.project_store import (
     list_communication_noise_by_project,
     load_meeting_as_hub, save_bpmn_from_hub,
     get_asset_metadata_map, promote_to_business_asset,
+    list_provocations_by_project, update_provocation_status,
 )
 from ui.project_selector import require_active_project
 from ui.components.promote_asset import render_promote_button, render_classification_fields
@@ -154,6 +155,9 @@ def _load_noise(pid):              return list_communication_noise_by_project(pi
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_asset_meta_map(pid):     return get_asset_metadata_map(pid)
 
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_provocations(pid):       return list_provocations_by_project(pid)
+
 # ── Carregamento inicial: dados leves apenas ──────────────────────────────────
 # DMN e IBIS buscam dmn_json/argumentation_json de TODAS as reuniões (JSONs pesados).
 # São carregados sob demanda na primeira visita à respectiva aba, via session_state.
@@ -175,6 +179,7 @@ with _TPE(max_workers=8) as _artefatos_pool:
     _f_bpmn_procs     = _artefatos_pool.submit(_load_bpmn_procs, project_id)
     _f_documents      = _artefatos_pool.submit(_load_documents, project_id)
     _f_asset_meta     = _artefatos_pool.submit(_load_asset_meta_map, project_id)
+    _f_provocations   = _artefatos_pool.submit(_load_provocations, project_id)
 
     meetings         = _f_meetings.result()
     requirements     = _f_requirements.result()
@@ -184,6 +189,7 @@ with _TPE(max_workers=8) as _artefatos_pool:
     bpmn_procs       = _f_bpmn_procs.result()
     documents        = _f_documents.result()
     asset_meta_map   = _f_asset_meta.result()  # {(artifact_type, artifact_id): row} — só PROMOVIDOS
+    provocations     = _f_provocations.result()  # tabela dedicada — leve, carrega sempre (PC190)
 
 def _promote_widget(artifact_type: str, artifact_id: str, title: str) -> None:
     """Wrapper fino de render_promote_button() já resolvendo já-promovido/created_by
@@ -307,7 +313,7 @@ with st.expander("📦 Exportar Relatório", expanded=False):
 st.markdown("---")
 
 # ── Abas principais ───────────────────────────────────────────────────────────
-tab_req, tab_mindmap, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn, tab_dmn, tab_ibis, tab_trace, tab_noise, tab_comp = st.tabs([
+tab_req, tab_mindmap, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn, tab_dmn, tab_ibis, tab_trace, tab_noise, tab_prov, tab_comp = st.tabs([
     "📝 Requisitos",
     "🗺️ Mind Map",
     f"⚠️ Contradições ({len(contradictions)})",
@@ -319,6 +325,7 @@ tab_req, tab_mindmap, tab_contra, tab_hist, tab_meet, tab_sbvr, tab_bpmn, tab_dm
     f"🗺️ IBIS ({len(ibis_questions) if ibis_questions is not None else '…'})",
     "🔗 Rastreabilidade",
     f"🔊 Ruídos ({len(noise_items) if noise_items is not None else '…'})",
+    f"🎭 Provocações ({len(provocations)})",
     "🔄 Comparar",
 ])
 
@@ -2915,7 +2922,115 @@ with tab_noise:
                             _gi2.success(f"Recomendação: {_gap['recommendation']}")
 
 # ════════════════════════════════════════════════════════════════════════════
-# TAB 12 — COMPARAÇÃO DE REUNIÕES
+# TAB 12 — PROVOCAÇÕES (PC190, melhorias/arquivados/agente-de-provocacoes.md)
+# ════════════════════════════════════════════════════════════════════════════
+with tab_prov:
+    st.caption(
+        "**Provocações** — observações sobre o que ficou fechado numa reunião sem ter sido "
+        "examinado: tema ausente, objeção sem resposta. Cada uma carrega evidência verificável "
+        "(citação com timestamp, ou lista de termos com contagem zero) conferida por um "
+        "validador determinístico antes de chegar aqui — nenhuma sai sem lastro."
+    )
+
+    if not st.session_state.get("run_provocations", False):
+        st.info(
+            "🎭 A geração de provocações está desligada por padrão. Ative em "
+            "**Pipeline → ⚙️ Configuração Avançada → 🎭 Gerar Provocações** para que novas "
+            "reuniões processadas produzam provocações automaticamente.",
+            icon="ℹ️",
+        )
+
+    _prov_kind_label = {
+        "absence": "Ausente estrutural", "asymmetry": "Assimetria discursiva",
+        "contradiction": "Contradição no tempo", "premise": "Premissa não examinada",
+        "analogy": "Analogia estrutural",
+    }
+    _prov_conf_color = {"high": "#1a7f5a", "medium": "#c97b1a"}
+    _prov_status_label = {
+        "new": "Nova", "accepted": "Aceita", "discarded": "Descartada",
+        "became_divergence": "Virou divergência",
+    }
+    _meeting_num_by_id = {m["id"]: m.get("meeting_number", "?") for m in meetings}
+
+    _prov_filter = st.radio(
+        "Filtro", ["Novas", "Aceitas", "Descartadas", "Todas"],
+        horizontal=True, label_visibility="collapsed", key="prov_filter",
+    )
+    _status_map = {"Novas": "new", "Aceitas": "accepted", "Descartadas": "discarded", "Todas": None}
+    _wanted_status = _status_map[_prov_filter]
+    _visible = provocations if _wanted_status is None else [
+        p for p in provocations if p.get("status") == _wanted_status
+    ]
+
+    if not provocations:
+        st.success(
+            "Nenhuma provocação gerada ainda neste projeto. Isso pode significar que ainda não "
+            "há reuniões processadas com o recurso ativo — ou que as reuniões existentes não "
+            "tinham nada com lastro suficiente para apontar, o que também é um resultado válido.",
+            icon="🎭",
+        )
+    elif not _visible:
+        st.info(f"Nenhuma provocação com status **{_prov_filter.lower()}**.", icon="🎭")
+    else:
+        for p in _visible:
+            _kind = p.get("kind", "")
+            _conf = p.get("confidence", "medium")
+            _status = p.get("status", "new")
+            _num = _meeting_num_by_id.get(p.get("meeting_id"), "?")
+            _ccolor = _prov_conf_color.get(_conf, "#8a8070")
+
+            with st.expander(f"**{p.get('title', '(sem título)')}** — Reunião {_num}"):
+                _b1, _b2, _b3 = st.columns(3)
+                _b1.caption(f"Tipo: **{_prov_kind_label.get(_kind, _kind)}**")
+                _b2.markdown(
+                    f'<span style="background:{_ccolor}22;color:{_ccolor};padding:1px 8px;'
+                    f'border-radius:3px;font-size:0.85em;">Confiança: {_conf}</span>',
+                    unsafe_allow_html=True,
+                )
+                _b3.caption(f"Status: **{_prov_status_label.get(_status, _status)}**")
+
+                st.markdown(p.get("body", ""))
+                st.info(f"❓ {p.get('question', '')}")
+
+                _grounding = p.get("grounding") or {}
+                _refs = _grounding.get("references") or []
+                _absent = (_grounding.get("absence_check") or {}).get("terms") or []
+                if _refs or _absent:
+                    st.caption("**Lastro:**")
+                    for _r in _refs:
+                        st.markdown(
+                            f'<blockquote style="border-left:3px solid #555;padding:4px 10px;'
+                            f'color:#888;font-style:italic;font-size:0.9em;">'
+                            f'[{_r.get("timestamp","")}] {_r.get("speaker","")}: '
+                            f'"{_r.get("excerpt","")}"</blockquote>',
+                            unsafe_allow_html=True,
+                        )
+                    if _absent:
+                        _span_desc = (
+                            "em toda a transcrição" if _kind == "absence"
+                            else "entre os dois momentos citados acima"
+                        )
+                        st.caption(f"Termos verificados, sem ocorrência {_span_desc}: " + ", ".join(_absent))
+
+                if _status == "new":
+                    _a1, _a2 = st.columns(2)
+                    if _a1.button("✅ Aceitar", key=f"prov_acc_{p['id']}", use_container_width=True):
+                        if update_provocation_status(p["id"], "accepted"):
+                            _load_provocations.clear()
+                            st.toast("Provocação aceita.", icon="✅")
+                            st.rerun()
+                        else:
+                            st.error("Erro ao atualizar — tente novamente.")
+                    if _a2.button("🗑️ Descartar", key=f"prov_disc_{p['id']}", use_container_width=True):
+                        if update_provocation_status(p["id"], "discarded"):
+                            _load_provocations.clear()
+                            st.toast("Provocação descartada.", icon="🗑️")
+                            st.rerun()
+                        else:
+                            st.error("Erro ao atualizar — tente novamente.")
+
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 13 — COMPARAÇÃO DE REUNIÕES
 # ════════════════════════════════════════════════════════════════════════════
 with tab_comp:
     st.caption(
