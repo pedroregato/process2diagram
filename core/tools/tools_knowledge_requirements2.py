@@ -491,7 +491,8 @@ KNOWLEDGE_REQUIREMENTS2_SCHEMAS: list[dict] = [
                     "description": (
                         "Executa um checkup completo do projeto: integridade do banco (admin), "
                         "contradições abertas, reuniões sem ata, ROI-TR abaixo do limiar, "
-                        "tópicos recorrentes e encaminhamentos pendentes. "
+                        "tópicos recorrentes, encaminhamentos pendentes e avaliações de usuário "
+                        "(feedback de artefatos e respostas do Assistente). "
                         "Retorna relatório estruturado com itens críticos, alertas, situações OK "
                         "e ações recomendadas priorizadas. "
                         "Use quando o usuário pedir 'diagnóstico', 'checkup', 'saúde do projeto' "
@@ -523,6 +524,10 @@ KNOWLEDGE_REQUIREMENTS2_SCHEMAS: list[dict] = [
                             "include_revision_requests": {
                                 "type": "boolean",
                                 "description": "Incluir requisitos com revisão solicitada pendente (via solicitar_revisao_requisito). Padrão: true.",
+                            },
+                            "include_feedback": {
+                                "type": "boolean",
+                                "description": "Incluir avaliações de usuário (⭐ artefatos, 👍👎 respostas do Assistente) — taxa de aceitação e nota média. Padrão: true.",
                             },
                         },
                         "required": [],
@@ -1903,6 +1908,7 @@ function toggle(el){{
         include_recurring: bool = True,
         include_pendencies: bool = True,
         include_revision_requests: bool = True,
+        include_feedback: bool = True,
     ) -> str:
         """Checkup completo do projeto: orquestra ferramentas existentes sem LLM."""
         import re as _re
@@ -2043,6 +2049,57 @@ function toggle(el){{
                     acoes.append((2, "Revisar pendências: `estimar_risco_requisito()` ou consulte cada REQ"))
                 else:
                     oks.append("Nenhuma revisão solicitada pendente ✓")
+            except Exception:
+                pass
+
+        # 8. Feedback de usuário (PC191, Camada 1 de
+        # melhorias/arquivados/aprimoramento-metacognitivo-3camadas.md) —
+        # avaliações de artefatos (⭐ 1-5 + "aceitável?") e respostas do
+        # Assistente (👍/👎). `_MIN_FEEDBACK_COUNT` guarda contra falso
+        # positivo de baixo volume, mesmo princípio de
+        # detect_error_anomalies() (services/llm_telemetry.py) — só que com
+        # limiar menor (3, não 5), porque feedback de usuário tende a ter
+        # volume bem mais baixo que chamadas de telemetria.
+        if include_feedback:
+            try:
+                from core.project_store import get_feedback_summary
+                _MIN_FEEDBACK_COUNT = 3
+                feedback_summary = get_feedback_summary(self.project_id)
+                _fb_labels = {
+                    "bpmn_process": "Processos BPMN",
+                    "meeting_minutes": "Atas",
+                    "assistant_response": "Respostas do Assistente",
+                }
+                any_feedback = False
+                for artifact_type, label in _fb_labels.items():
+                    stats = feedback_summary.get(artifact_type)
+                    if not stats or stats["count"] < _MIN_FEEDBACK_COUNT:
+                        continue
+                    any_feedback = True
+                    acceptance = stats.get("acceptance_rate")
+                    if acceptance is not None and acceptance < 0.7:
+                        sev = "high" if acceptance < 0.5 else "medium"
+                        msg = (
+                            f"{label}: **{acceptance:.0%}** de aceitação "
+                            f"({stats['count']} avaliações, nota média {stats['avg_rating']})"
+                        )
+                        if sev == "high":
+                            criticos.append(msg)
+                            acoes.append((1, f"Revisar {label.lower()} recentes com nota baixa — comentários em `feedback.comment`"))
+                        else:
+                            alertas.append(msg)
+                            acoes.append((3, f"Revisar {label.lower()} recentes com nota baixa — comentários em `feedback.comment`"))
+                    elif acceptance is not None:
+                        oks.append(f"{label}: **{acceptance:.0%}** de aceitação ({stats['count']} avaliações) ✓")
+                    elif stats["avg_rating"] < 3.0:
+                        alertas.append(
+                            f"{label}: nota média **{stats['avg_rating']}/5** ({stats['count']} avaliações)"
+                        )
+                        acoes.append((3, f"Revisar feedback de {label.lower()} — comentários em `feedback.comment`"))
+                    else:
+                        oks.append(f"{label}: nota média **{stats['avg_rating']}/5** ({stats['count']} avaliações) ✓")
+                if not any_feedback:
+                    oks.append("Feedback de usuário: volume insuficiente para diagnóstico ainda")
             except Exception:
                 pass
 

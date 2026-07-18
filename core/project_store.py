@@ -4785,6 +4785,91 @@ def update_provocation_status(provocation_id: str, status: str) -> bool:
         return False
 
 
+# ── Feedback (melhorias/arquivados/aprimoramento-metacognitivo-3camadas.md, PC191) ──
+
+def save_feedback(
+    project_id: str,
+    artifact_type: str,
+    artifact_id: str,
+    rating: int,
+    is_acceptable: bool | None = None,
+    comment: str = "",
+    meeting_id: str | None = None,
+    created_by: str = "",
+) -> bool:
+    """Persiste uma avaliação de usuário (resposta do Assistente ou artefato
+    gerado). Fail-open: qualquer erro retorna False sem propagar exceção.
+
+    `rating` é sempre 1-5 — para o widget de thumbs (assistant_response),
+    o chamador já mapeou down→1/up→5 antes de chegar aqui (uma única escala
+    pros dois tipos de widget).
+    """
+    db = _db()
+    if not db:
+        return False
+    try:
+        db.table("feedback").insert({
+            "project_id":    project_id,
+            "meeting_id":    meeting_id,
+            "artifact_type": artifact_type,
+            "artifact_id":   str(artifact_id),
+            "rating":        int(rating),
+            "is_acceptable": is_acceptable,
+            "comment":       comment.strip() if comment else None,
+            "created_by":    created_by,
+        }).execute()
+        return True
+    except Exception:
+        return False
+
+
+def get_feedback_summary(project_id: str) -> dict[str, dict]:
+    """Agrega feedback cru por `artifact_type` — média, contagem e taxa de
+    aceitação (quando `is_acceptable` foi informado). Fail-open: {} em erro.
+
+    Mirror de get_roster_attendance_summary() — busca linhas cruas, agrega
+    em Python (evita manter uma tabela de agregado com read-modify-write
+    concorrente).
+    """
+    db = _db()
+    if not db:
+        return {}
+    try:
+        rows = _ok(
+            db.table("feedback")
+            .select("artifact_type, rating, is_acceptable")
+            .eq("project_id", project_id)
+            .execute()
+        )
+        if not rows:
+            return {}
+
+        acc: dict[str, dict] = {}
+        for row in rows:
+            t = row["artifact_type"]
+            if t not in acc:
+                acc[t] = {"count": 0, "rating_sum": 0, "acceptable_count": 0, "acceptable_total": 0}
+            acc[t]["count"] += 1
+            acc[t]["rating_sum"] += row.get("rating") or 0
+            if row.get("is_acceptable") is not None:
+                acc[t]["acceptable_total"] += 1
+                if row["is_acceptable"]:
+                    acc[t]["acceptable_count"] += 1
+
+        summary: dict[str, dict] = {}
+        for t, a in acc.items():
+            entry = {
+                "count": a["count"],
+                "avg_rating": round(a["rating_sum"] / a["count"], 2) if a["count"] else 0.0,
+            }
+            if a["acceptable_total"] > 0:
+                entry["acceptance_rate"] = round(a["acceptable_count"] / a["acceptable_total"], 2)
+            summary[t] = entry
+        return summary
+    except Exception:
+        return {}
+
+
 def list_assistant_artifacts_by_project(project_id: str) -> list[dict]:
     """Retorna os snapshots de conteúdo do Assistente já promovidos neste
     projeto (Fase C, melhorias/promocao-ativos-negocio.md §5.3)."""

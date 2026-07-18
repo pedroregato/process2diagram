@@ -37,6 +37,7 @@ from core.project_store import (
 )
 from ui.project_selector import require_active_project
 from ui.components.promote_asset import render_promote_button, render_classification_fields
+from ui.components.artifact_feedback import render_artifact_feedback
 
 try:
     from modules.document_store import list_documents
@@ -888,6 +889,12 @@ with tab_meet:
                         if st.session_state.get(toggle_key):
                             st.markdown(minutes_md)
                     _promote_widget("meeting_minutes", m["id"], f"Ata — Reunião {num} ({dt})")
+                    if render_artifact_feedback(
+                        project_id, "meeting_minutes", m["id"], key_suffix=m["id"],
+                        meeting_id=m["id"],
+                        created_by=st.session_state.get("_usuario_login", ""),
+                    ):
+                        st.rerun()
                 else:
                     st.caption("_Ata não disponível para esta reunião._")
 
@@ -1238,6 +1245,12 @@ with tab_bpmn:
         slug     = sel_proc.get("slug", "")
 
         _promote_widget("bpmn_process", pid, sel_proc.get("name") or _sel_proc_lbl)
+        if render_artifact_feedback(
+            project_id, "bpmn_process", pid, key_suffix=pid,
+            meeting_id=sel_proc.get("first_meeting_id") or sel_proc.get("last_meeting_id"),
+            created_by=st.session_state.get("_usuario_login", ""),
+        ):
+            st.rerun()
 
         st.markdown("---")
 

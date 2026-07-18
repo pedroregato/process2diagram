@@ -22,6 +22,7 @@ from core.project_store import (
     format_context,
     transcript_chunks_table_exists,
     get_embedding_coverage,
+    save_feedback,
 )
 from ui.project_selector import require_active_project
 from agents.agent_assistant import AgentAssistant
@@ -1680,6 +1681,23 @@ for i, msg in enumerate(history):
                     created_by=st.session_state.get("_usuario_login", ""),
                 ):
                     st.rerun()
+            # ── Feedback leve (👍/👎) — PC191, Camada 1 de
+            # melhorias/arquivados/aprimoramento-metacognitivo-3camadas.md.
+            # Rastreado em session_state, não sobrevive a reload de página —
+            # aceitável pro v1: assistant_history não tem id estável por
+            # mensagem pra persistir "já avaliada" de forma mais robusta
+            # (só role/content/charts/tools_used..., ver PC189).
+            _fb_given = st.session_state.setdefault("_asst_feedback_given", set())
+            if i not in _fb_given:
+                _thumbs = st.feedback("thumbs", key=f"thumbs_{i}")
+                if _thumbs is not None:
+                    _rating = 5 if _thumbs == 1 else 1
+                    if save_feedback(
+                        project_id, "assistant_response", str(i), _rating,
+                        created_by=st.session_state.get("_usuario_login", ""),
+                    ):
+                        _fb_given.add(i)
+                        st.rerun()
         if msg["role"] == "user":
             col_edit, col_copy, _ = st.columns([1, 1, 8])
             with col_edit:

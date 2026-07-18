@@ -1,3 +1,25 @@
+> **Status: AVALIADA em 2026-07-18 (PC191) — Camada 1 implementada, Camadas 2 e 3 rejeitadas.**
+>
+> - **Camada 1 (feedback)** → implementada, com uma correção de desenho: tabela `feedback` guarda
+>   linhas cruas por evento (não a `feedback_aggregate` com médias em JSONB desta proposta —
+>   read-modify-write concorrente é evitado agregando na leitura, mesmo padrão de
+>   `get_roster_attendance_summary()` já existente no projeto). Widget de artefato (⭐+aceitável+
+>   comentário) em `ui/components/artifact_feedback.py`, plugado em BPMN e Reuniões da Central de
+>   Artefatos. Thumbs (👍/👎) nas respostas do Assistente.
+> - **Camada 2 (`AgentMeta`) → REJEITADA.** Redundante em propósito com `diagnostico_projeto()`/
+>   `sugestoes_plantonista()` (já fazem diagnóstico determinístico → ações priorizadas, **sem
+>   LLM**) e com a telemetria do PC183 (`detect_error_anomalies` etc.). Em vez de um agente novo,
+>   `diagnostico_projeto()` ganhou um 8º check usando os dados de feedback.
+> - **Camada 3 (auto-apply) → REJEITADA.** Sem precedente no projeto; contraria os princípios mais
+>   próximos já assinados no `ENGINEERING_MANIFESTO.md` (Fail-Open = degradar graciosamente, nunca
+>   agir sozinho; supervisão humana como regra de ouro §1). Um mecanismo que modifica prompts/
+>   pesos automaticamente sem revisão humana clara é uma categoria de risco que exigiria decisão
+>   de produto explícita, não uma implementação direta a partir de uma proposta externa.
+>
+> Detalhes completos: entrada PC191 em `claude_guideline/roadmap.md`.
+
+---
+
 Excelente diagnóstico! Você identificou precisamente as lacunas que transformam um sistema com "metacognição tática" (monitoramento e correção pontuais) em um sistema com **metacognição estratégica** (aprendizado contínuo e evolução autônoma). 
 
 Vou estruturar uma proposta de melhoria em **3 camadas**, abrangendo desde a interação com o usuário até a evolução autônoma do sistema.
