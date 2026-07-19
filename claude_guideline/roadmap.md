@@ -4,6 +4,32 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC193 — Concluído (v5.15 / 2026-07-19) — Split do menu "Ajuda" em "Ajuda" + "Guias"
+
+**Contexto:** discussão técnico-filosófica prévia sobre a diferença entre "página de ajuda"
+e "guia de utilização" convergiu no framework Diátaxis (Tutorial / How-to / Reference —
+prático, "o que fazer agora" — vs. Explanation — teórico, "como funciona por baixo"). Usuário
+pediu para aplicar essa distinção ao menu real: dividir o grupo único "Ajuda" (12 páginas) em
+dois grupos, para facilitar o entendimento dos usuários.
+
+- **`app.py`** — grupo `"Ajuda"` mantém as páginas de natureza prática/consulta rápida:
+  Como Iniciar (tutorial), Casos de Uso (orientação de valor), Ferramentas do Assistente
+  (reference — catálogo de tools), Glossário (reference pura), Curso Corporativo/`Capacitacao.py`
+  (tutorial hands-on por módulo/cenário). Novo grupo `"Guias"` recebe o conteúdo explicativo/
+  conceitual: Arquiteturas, Guia CKF, Guia BPMN Studio, Gráficos & Visualizações, Cache LLM,
+  Avaliação e Feedback, Manifesto de Engenharia — todas respondem "como/por que o sistema
+  funciona assim", não "o que fazer agora".
+- `Capacitacao.py` foi o caso ambíguo (curso multi-módulo, mais extenso que os outros itens de
+  Ajuda) — mantido em Ajuda porque seu conteúdo é fundamentalmente hands-on/tutorial (cenários
+  práticos com transcrições de exemplo), não explicação teórica.
+- `CLAUDE.md` atualizado: tabela de grupos de navegação (nova linha "Guias") + árvore de
+  `pages/` com sufixo `(Ajuda)`/`(Guias)` em cada página do antigo grupo único.
+- Nenhuma mudança de código de página — só reorganização de `app.py::pages` (dict, ordem de
+  inserção preservada dentro de cada grupo).
+- Verificação: `ast.parse` em `app.py`; suíte completa passando.
+
+---
+
 ### PC192 — Concluído (v5.15 / 2026-07-19) — Guia "Avaliação e Feedback" (Ajuda)
 
 **Contexto:** usuário pediu uma página na seção Ajuda explicando o fluxo completo de

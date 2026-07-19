@@ -54,16 +54,18 @@ process2diagram/
 │   ├── DatabaseOverview.py       # Database health — record counts, embeddings, integrity fixes
 │   ├── CostEstimator.py          # LLM cost estimator
 │   ├── LLMBenchmark.py           # LLM Benchmark & Telemetria — on-demand benchmark + passive telemetry analysis
-│   ├── Orientacoes_ComoIniciar.py   # Guia de início rápido
-│   ├── Orientacoes_CasosDeUso.py    # Casos de Uso — Valor de Negócio: 15 cenários (Cenário → Pergunta → Entrega → Valor) em 5 categorias, fonte única alimenta Streamlit + botão de export HTML autocontido (PC181)
-│   ├── Orientacoes_Assistente.py    # Guia de ferramentas do Assistente (151 tools + exemplos)
-│   ├── Orientacoes_Glossario.py     # Glossário interativo (components.v1.html — busca + filtros + índice alfabético)
-│   ├── Orientacoes_Arquiteturas.py  # Arquiteturas do sistema
-│   ├── Orientacoes_CKF.py           # Guia CKF
-│   ├── Orientacoes_BpmnStudio.py    # Guia BPMN Studio — passo a passo + exemplo de descrição complexa (multi-pool)
-│   ├── Orientacoes_Graficos.py      # Guia dos 13 gráficos do Assistente — o que são, melhor uso, prompts + resumo executivo (PC143)
-│   ├── Orientacoes_CacheSemantico.py # Guia do cache LLM (hash exato SHA-256, PII-safe) — conceito, arquitetura, por que não é fuzzy/embedding (PC185)
-│   ├── Orientacoes_Feedback.py   # Guia de Avaliação/Feedback (PC191) — onde avaliar, fluxo até diagnostico_projeto(), valor de negócio, o que NÃO faz (sem auto-apply)
+│   ├── Orientacoes_ComoIniciar.py   # Guia de início rápido (Ajuda)
+│   ├── Orientacoes_CasosDeUso.py    # Casos de Uso — Valor de Negócio: 15 cenários (Cenário → Pergunta → Entrega → Valor) em 5 categorias, fonte única alimenta Streamlit + botão de export HTML autocontido (PC181) (Ajuda)
+│   ├── Orientacoes_Assistente.py    # Guia de ferramentas do Assistente (151 tools + exemplos) (Ajuda)
+│   ├── Orientacoes_Glossario.py     # Glossário interativo (components.v1.html — busca + filtros + índice alfabético) (Ajuda)
+│   ├── Capacitacao.py               # Curso corporativo — módulos hands-on por cenário de negócio (Ajuda)
+│   ├── Orientacoes_Arquiteturas.py  # Arquiteturas do sistema (Guias)
+│   ├── Orientacoes_CKF.py           # Guia CKF (Guias)
+│   ├── Orientacoes_BpmnStudio.py    # Guia BPMN Studio — passo a passo + exemplo de descrição complexa (multi-pool) (Guias)
+│   ├── Orientacoes_Graficos.py      # Guia dos 13 gráficos do Assistente — o que são, melhor uso, prompts + resumo executivo (PC143) (Guias)
+│   ├── Orientacoes_CacheSemantico.py # Guia do cache LLM (hash exato SHA-256, PII-safe) — conceito, arquitetura, por que não é fuzzy/embedding (PC185) (Guias)
+│   ├── Orientacoes_Feedback.py   # Guia de Avaliação/Feedback (PC191) — onde avaliar, fluxo até diagnostico_projeto(), valor de negócio, o que NÃO faz (sem auto-apply) (Guias)
+│   ├── Orientacoes_Manifesto.py  # Manifesto de Engenharia — princípios arquiteturais (Guias)
 │   ├── BatchRunner.py            # Batch pipeline (Manutenção)
 │   ├── BpmnBackfill.py           # Backfill BPMN XML (Manutenção)
 │   ├── TranscriptBackfill.py     # Backfill transcript embeddings (Manutenção)
@@ -245,7 +247,8 @@ AgentRequirements┘
 | **Pipeline** | Pipeline.py, Diagramas.py, BpmnEditor.py, BpmnStudio.py | Todos |
 | **Análise** | Assistente.py, Artefatos.py, ValidationHub.py, MeetingROI.py, DocumentManager.py, CostBenefitScenarios.py, AtivosDeNegocio.py | Todos |
 | **Sistema** | Settings.py, CostEstimator.py, LLMBenchmark.py [+ MasterAdmin.py, DatabaseOverview.py] | Todos [admin extra] |
-| **Ajuda** | ComoIniciar, CasosDeUso (valor de negócio), Assistente (tool guide), Glossário, Arquiteturas, CKF, BpmnStudio (guia), Gráficos (guia), Cache LLM (guia), Avaliação e Feedback (guia) | Todos |
+| **Ajuda** | ComoIniciar (tutorial), CasosDeUso (valor de negócio), Assistente (tool reference), Glossário (reference), Capacitacao (curso corporativo) | Todos |
+| **Guias** | Arquiteturas, CKF, BpmnStudio, Gráficos, CacheSemantico, Feedback, Manifesto — conteúdo explicativo/conceitual ("como funciona por baixo") | Todos |
 | **Manutenção** | BatchRunner.py, BpmnBackfill.py, MinutesBackfill.py, TranscriptBackfill.py | Admin only |
 
 `app.py` renders no content — only calls `st.navigation(pages).run()`. Groups rebuilt every rerun (menu updates immediately after login).

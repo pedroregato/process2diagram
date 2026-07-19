@@ -8,7 +8,8 @@
 #   Pipeline     → Processar Transcrição, Diagramas, Editor BPMN
 #   Análise      → Assistente, Req. Tracker, Validação, ROI-TR, Entidades
 #   Sistema      → Configurações, Custo [+ Admin, Banco apenas para admin]
-#   Ajuda        → Como Iniciar, Arquiteturas
+#   Ajuda        → Como Iniciar, Casos de Uso, Ferramentas do Assistente, Glossário, Curso
+#   Guias        → Arquiteturas, CKF, BPMN Studio, Gráficos, Cache LLM, Feedback, Manifesto
 #   Manutenção   → Batch Runner, Backfills [apenas admin]
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -81,13 +82,15 @@ pages = {
         st.Page("pages/Orientacoes_CasosDeUso.py",   title="Casos de Uso — Valor de Negócio", icon="💼"),
         st.Page("pages/Orientacoes_Assistente.py",   title="Ferramentas do Assistente", icon="💬"),
         st.Page("pages/Orientacoes_Glossario.py",    title="Glossário",     icon="📚"),
+        st.Page("pages/Capacitacao.py",              title="Curso Corporativo",    icon="🎓"),
+    ],
+    "Guias": [
         st.Page("pages/Orientacoes_Arquiteturas.py", title="Arquiteturas",  icon="🏗️"),
         st.Page("pages/Orientacoes_CKF.py",          title="Guia CKF",      icon="🧠"),
         st.Page("pages/Orientacoes_BpmnStudio.py",   title="Guia BPMN Studio", icon="🧩"),
         st.Page("pages/Orientacoes_Graficos.py",     title="Gráficos & Visualizações", icon="📈"),
         st.Page("pages/Orientacoes_CacheSemantico.py", title="Cache LLM",   icon="🗄️"),
         st.Page("pages/Orientacoes_Feedback.py",     title="Avaliação e Feedback", icon="⭐"),
-        st.Page("pages/Capacitacao.py",              title="Curso Corporativo",    icon="🎓"),
         st.Page("pages/Orientacoes_Manifesto.py",    title="Manifesto de Engenharia", icon="🛸"),
     ],
 }
