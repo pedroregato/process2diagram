@@ -7,10 +7,15 @@
 > **Atualização (PC195, mesma data):** o Agente 0 revisou este relatório e autorizou 2 dos
 > itens de baixo risco listados abaixo — **aplicados**: (1) `COLLABORATIVE_MANIFESTO.md §5.3`
 > corrigido de 1:1 para 1:N (v5.11→v5.12); (2) `manifestos/README.md` ganhou
-> `PRODUCT_MANIFESTO.md` no mapa e na ordem de leitura (status v0.1/rascunho preservado,
-> **não** tratado como ratificado). A ratificação do `PRODUCT_MANIFESTO` em si, a rodada de
-> renomeação global e o item de isolamento multi-tenant no `ENGINEERING_MANIFESTO` (achados #7
-> e §4 da recomendação) seguem pendentes, fora de escopo desta rodada.
+> `PRODUCT_MANIFESTO.md` no mapa e na ordem de leitura.
+>
+> **Atualização (PC196, mesma data):** o Agente 0 ratificou `PRODUCT_MANIFESTO.md` como **v1.0,
+> ASSINADO** — as 4 ações de ratificação prescritas no próprio §10 foram executadas: assinatura,
+> bump de versão, registro do PC em `project_state.md`, e entrada na tabela de memória do
+> `ENGINEERING_MANIFESTO §8` (v1.0→v1.1). A rodada de renomeação global (`project_id`→
+> `context_id`, "P2D"→"Vichara") e a regra explícita de isolamento multi-tenant no
+> `ENGINEERING_MANIFESTO` (achado #7 acima) seguem pendentes — deliberadamente fora de escopo,
+> não bloqueiam a ratificação.
 
 ---
 

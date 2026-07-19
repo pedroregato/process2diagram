@@ -4,6 +4,22 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC196 — Concluído (v5.15 / 2026-07-19) — `PRODUCT_MANIFESTO.md` ratificado como v1.0
+
+**Contexto:** sequência direta do PC195 (auditoria de contradições, `memory/reconciliacao_product_manifesto.md`) — a auditoria não encontrou nenhuma incompatibilidade bloqueante entre `manifestos/PRODUCT_MANIFESTO.md` e os manifestos vigentes, e a maior parte do documento já era realidade em produção (identidade Vichāra desde 01/07, split domínio/contexto desde PC164/165). Usuário (Agente 0) instruiu diretamente: "Ratifique o PRODUCT_MANIFESTO como v1.0 e assine."
+
+Executadas as 4 ações que o próprio `PRODUCT_MANIFESTO.md §10` prescreve para ratificação:
+1. **Assinatura** — tabela §10: `Agente 0 | Arquiteto | [Pedro Regato] | 2026-07-19`.
+2. **Bump de versão** — cabeçalho de 0.1/RASCUNHO para 1.0/ASSINADO.
+3. **Registro do PC** — este documento (`claude_guideline/roadmap.md`) + `memory/project_state.md` (memória persistente do Claude Code).
+4. **Entrada na ordem de leitura obrigatória** — já feita no PC195 (`manifestos/README.md`, mapa + ordem de leitura); status do mapa atualizado de "rascunho" para "v1.0 — ASSINADO, PC196". Nova entrada em `manifestos/ENGINEERING_MANIFESTO.md §8` (tabela de Gestão de Memória de Longo Prazo) — versão do `ENGINEERING_MANIFESTO` bumpada 1.0→1.1.
+
+`memory/reconciliacao_product_manifesto.md` atualizado com nota de ratificação. Renomeação global (`project_id`→`context_id`, "P2D"→"Vichara") e a regra explícita de isolamento multi-tenant no `ENGINEERING_MANIFESTO` (achado #7 do PC195) seguem deliberadamente fora de escopo — não bloqueiam a ratificação, ficam para iniciativas futuras e separadas.
+
+Verificação: nenhuma mudança de código — só texto de governança; sem impacto em testes.
+
+---
+
 ### PC195 — Concluído (v5.15 / 2026-07-19) — `PRODUCT_MANIFESTO.md`: auditoria de contradições + 2 correções aplicadas
 
 **Contexto:** `melhorias/contexto-de-produto.md` (task de handoff inter-agente, formato próximo do

@@ -1,7 +1,7 @@
 # 🕉️ Manifesto do Produto — Filosofia de Negócio (Vichara / P2D)
 
-> **Versão:** 0.1 — **RASCUNHO, aguardando assinatura do Agente 0**
-> **Data:** julho de 2026
+> **Versão:** 1.0 — **ASSINADO**
+> **Data:** julho de 2026 (ratificado em 19 de julho de 2026, PC196)
 > **Arquiteto:** Pedro Regato
 > **Classificação:** Diretriz de Filosofia de Negócio — o *porquê* e o *o quê* do produto
 > **Complementa:** `COLLABORATIVE_MANIFESTO.md` (quem), `ENGINEERING_MANIFESTO.md` (como), `CONTINUIDADE_ARQUITETURAL.md` (resiliência)
@@ -288,11 +288,13 @@ substitui.
 
 | Papel | Função | Assinatura | Data |
 |---|---|---|---|
-| Agente 0 | Arquiteto | _[pendente — este documento aguarda ratificação]_ | — |
+| Agente 0 | Arquiteto | [Pedro Regato] | 2026-07-19 |
 
-> **Estado:** RASCUNHO v0.1. Ao ratificar, o Agente 0 deve: (1) assinar acima; (2) bumpar para
-> v1.0; (3) registrar o PC correspondente em `memory/project_state.md`; (4) adicionar este arquivo
-> à ordem de leitura obrigatória do `README.md` e à tabela de memória do `ENGINEERING_MANIFESTO §8`.
+> **Estado:** ASSINADO v1.0 (PC196, 2026-07-19). Ratificado pelo Agente 0 após a auditoria de
+> contradições de PC195 (`memory/reconciliacao_product_manifesto.md`), que não encontrou nenhuma
+> incompatibilidade bloqueante — a maior parte deste manifesto já era realidade em produção
+> (identidade Vichāra, split domínio/contexto). Já registrado na ordem de leitura obrigatória do
+> `README.md` e na tabela de memória do `ENGINEERING_MANIFESTO §8` (ver abaixo).
 
 ---
 

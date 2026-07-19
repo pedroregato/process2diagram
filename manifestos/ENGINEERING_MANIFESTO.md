@@ -1,6 +1,6 @@
 # Manifesto de Engenharia — Process2Diagram (P2D)
 
-> **Versão:** 1.0 | **Data:** Junho de 2026 | **Status:** Ativo — leitura obrigatória para todos os agentes e colaboradores.
+> **Versão:** 1.1 | **Data:** Junho de 2026 (§8 atualizado em 19 de julho de 2026, PC196) | **Status:** Ativo — leitura obrigatória para todos os agentes e colaboradores.
 
 Este documento é a fonte canônica dos princípios arquiteturais que governam o desenvolvimento do P2D. Ele complementa o `manifestos/COLLABORATIVE_MANIFESTO.md` (governança de equipe), o `manifestos/CONTINUIDADE_ARQUITETURAL.md` (blindagem contra SPOF) e o `CLAUDE.md` (restrições técnicas de runtime).
 
@@ -200,6 +200,7 @@ Para garantir continuidade entre sessões (agentes e humanos):
 | Arquivo | Propósito |
 |---|---|
 | `CLAUDE.md` | Fonte da verdade — restrições de runtime, estrutura do repositório |
+| `manifestos/PRODUCT_MANIFESTO.md` | Filosofia de produto — o quê e por quê (a alma); decisões de produto consultam este primeiro |
 | `manifestos/COLLABORATIVE_MANIFESTO.md` | Governança de equipe — papéis, dinâmica de cooperação |
 | `manifestos/ENGINEERING_MANIFESTO.md` | Este arquivo — princípios arquiteturais e decisões técnicas permanentes |
 | `manifestos/CONTINUIDADE_ARQUITETURAL.md` | Blindagem contra SPOF — protocolo de substituição do Arquiteto Sênior |
