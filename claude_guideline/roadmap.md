@@ -4,6 +4,42 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC195 — Concluído (v5.15 / 2026-07-19) — `PRODUCT_MANIFESTO.md`: auditoria de contradições + 2 correções aplicadas
+
+**Contexto:** `melhorias/contexto-de-produto.md` (task de handoff inter-agente, formato próximo do
+`COLLABORATIVE_MANIFESTO §4.1`) pediu leitura do novo `manifestos/PRODUCT_MANIFESTO.md`
+(v0.1, RASCUNHO — filosofia de produto: reunião como o ativo, artefatos como espelhos não-
+gateados, duas memórias contexto/domínio, regra do lastro, identidade Vichāra) e uma auditoria
+de contradições contra os demais manifestos + `CLAUDE.md` + `README.md`, com a restrição
+explícita de **detectar e reportar, não corrigir** — arbitragem é exclusiva do Agente 0 (Pedro).
+
+- **`memory/reconciliacao_product_manifesto.md`** (novo) — relatório completo: tabela de 8
+  atritos classificados (terminológico/premissa/lacuna), lista de 7 itens "sem contradição,
+  esclarecido", inventário preliminar de renomeação global (1471 ocorrências de `project_id`
+  em 100 arquivos `.py`, 34 arquivos com `active_project_id`/`active_project_name`/
+  `require_active_project()`, 28 migrations SQL, 28 arquivos mencionando "process2diagram"/
+  "P2D" — nenhuma renomeação executada), e recomendação de ordem de ratificação.
+- **Achado principal:** a maior parte do `PRODUCT_MANIFESTO` já é realidade em produção — a
+  identidade "Vichāra" já existe em `agents/agent_assistant.py` desde 2026-07-01 (commits
+  `3edc236`/`89632d3`), quase 3 semanas antes do manifesto existir como arquivo; o mapeamento
+  domínio=`tenant_id`/contexto=`contexts` já é a arquitetura real desde PC164/165.
+- **Achado real de contradição:** `COLLABORATIVE_MANIFESTO.md §5.3` afirmava "cada cliente =
+  projeto isolado" (relação 1:1) — desatualizado desde o Catálogo do Domínio cross-contexto
+  (PC165), que já opera com 1 `tenant_id` ⊃ N `contexts`. A pista fornecida pela tarefa também
+  citava a seção errada (`ENGINEERING_MANIFESTO §5.3` — na verdade é `COLLABORATIVE_MANIFESTO`).
+- **Após revisão do usuário, 2 correções de baixo risco aplicadas** (não a rodada de renomeação
+  global, que segue explicitamente fora de escopo): `COLLABORATIVE_MANIFESTO.md §5.3` reescrito
+  para 1:N + referência ao `PRODUCT_MANIFESTO §4` (bump v5.11→v5.12); `manifestos/README.md`
+  ganhou `PRODUCT_MANIFESTO.md` no "Mapa dos Manifestos" (com status v0.1/rascunho explícito,
+  não tratado como ratificado) e na "Ordem de Leitura Recomendada" (lido primeiro — "a alma").
+- **Fora de escopo, deliberadamente:** ratificação/assinatura do `PRODUCT_MANIFESTO` em si
+  (segue v0.1, aguardando o Agente 0); renomeação global `project_id`→`context_id` /
+  "P2D"→"Vichara"; regra nova de isolamento multi-tenant no `ENGINEERING_MANIFESTO` (achado
+  #7 do relatório, registrado para revisão futura).
+- Verificação: nenhuma mudança de código — só texto de governança; sem impacto em testes.
+
+---
+
 ### PC194 — Concluído (v5.15 / 2026-07-19) — `get_system_capabilities()` atualizada + tool section dinâmica
 
 **Contexto:** usuário pediu para "dar munição ao Assistente para auxiliar em todas as mudanças

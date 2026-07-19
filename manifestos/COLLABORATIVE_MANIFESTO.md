@@ -1,8 +1,8 @@
-# COLLABORATIVE MANIFESTO — Process2Diagram v5.11 (PC112-J)
+# COLLABORATIVE MANIFESTO — Process2Diagram v5.12 (PC195)
 ## Documento de Governança Multi-Agente — ASSINADO
 
-**Versão:** 5.11  
-**Data:** 30 de junho de 2026  
+**Versão:** 5.12  
+**Data:** 30 de junho de 2026 (§5.3 corrigido em 19 de julho de 2026, PC195)  
 **Arquiteto:** Pedro Regato  
 **Status:** ASSINADO — Em execução
 
@@ -148,8 +148,12 @@ Todo handoff entre agentes deve seguir o template:
 
 ### 5.3 Segregação de Dados (Multi-tenant)
 
-- Cada cliente = projeto isolado no P2D
-- CKF (Context Knowledge File) isolado por projeto
+- Um cliente (domínio, `tenant_id`) pode conter **múltiplos** projetos/contextos isolados no
+  P2D — a relação é 1:N, não 1:1 (corrigido PC195; a redação anterior — "cada cliente = projeto
+  isolado" — ficou desatualizada a partir do Catálogo do Domínio cross-contexto, PC165, que já
+  opera com `tenant_id` ⊃ N `contexts`). Ver `manifestos/PRODUCT_MANIFESTO.md §4` para o
+  vocabulário de produto completo (domínio × contexto).
+- CKF (Context Knowledge File) isolado por projeto/contexto
 - Grafo de conhecimento segmentado por tenant_id
 - n8n workflows com variáveis de ambiente por cliente
 

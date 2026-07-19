@@ -12,6 +12,7 @@ Estes documentos servem como a **memória institucional imutável** do projeto. 
 
 | Arquivo | Público-Alvo | Função Estratégica |
 | :--- | :--- | :--- |
+| **`PRODUCT_MANIFESTO.md`** | Todos (IAs e humanos) | *(v0.1 — RASCUNHO, aguardando ratificação do Agente 0)* Filosofia de negócio — o **porquê** e o **o quê** do produto. Responde a pergunta que os demais manifestos não respondem: reunião como o ativo, artefatos como espelhos não-gateados, as duas memórias (contexto automático × domínio por promoção), a regra do lastro, e a identidade de Vichāra. Decisão de *produto* consulta este documento primeiro; decisão de *implementação* continua no `ENGINEERING_MANIFESTO`. |
 | **`COLLABORATIVE_MANIFESTO.md`** | Engenheiros e IAs | Define a cultura de cooperação multiagente. Estabelece a esteira assíncrona de produção entre o *Antigravity* (Arquiteto), o *Claude Code* (Operário) e o *Engenheiro Humano* (Diretor de Orquestra). |
 | **`ENGINEERING_MANIFESTO.md`** | Stakeholders e Devs | Documenta o blueprint de arquitetura, a matriz de pesos do pipeline (PC107), os mecanismos de segurança de API Keys, proteção de concorrência global e as políticas estritas de sanitização de PII (LGPD Default). |
 | **`CONTINUIDADE_ARQUITETURAL.md`** | Governança e IAs | Estabelece o protocolo de blindagem de ritmo contra pontos únicos de falha cognitiva (SPOF). Ensina os agentes de terminal a assumirem a postura de um Arquiteto Sênior caso ocorram interrupções em APIs ou limites de cotas externas. |
@@ -35,9 +36,10 @@ Toda nova sessão aberta por um agente de desenvolvimento (como o *Claude Code* 
 Para uma integração eficaz ao ecossistema, recomenda-se a leitura nesta sequência:
 
 ```
-1. COLLABORATIVE_MANIFESTO.md   → Entender os papéis e o fluxo de trabalho
-2. ENGINEERING_MANIFESTO.md     → Absorver os princípios técnicos e de segurança
-3. CONTINUIDADE_ARQUITETURAL.md → Conhecer o protocolo de resiliência e substituição
+1. PRODUCT_MANIFESTO.md         → Entender o quê e por quê (a alma do produto)
+2. COLLABORATIVE_MANIFESTO.md   → Entender os papéis e o fluxo de trabalho
+3. ENGINEERING_MANIFESTO.md     → Absorver os princípios técnicos e de segurança
+4. CONTINUIDADE_ARQUITETURAL.md → Conhecer o protocolo de resiliência e substituição
 ```
 
 Após a leitura dos manifestos, consulte os documentos companheiros na raiz:
