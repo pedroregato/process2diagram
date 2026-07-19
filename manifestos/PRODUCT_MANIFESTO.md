@@ -130,7 +130,7 @@ redescobri-lo.
 >   o ativo que o produto existe para constituir.
 > - **Nunca vazar artefato não promovido de um contexto para outro.** A fronteira do contexto é a
 >   regra; a promoção é a exceção deliberada. Vazamento aqui não é bug de qualidade — é quebra de
->   confidencialidade entre silos (alinhado ao `ENGINEERING_MANIFESTO §5.3`, segregação por tenant).
+>   confidencialidade entre silos (alinhado ao `COLLABORATIVE_MANIFESTO §5.3`, segregação por tenant).
 > - Toda leitura de contexto de entrada resolve `artefatos DO contexto ∪ Ativos de Negócio DO
 >   domínio` — nada além.
 

@@ -4,6 +4,50 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC197 — Concluído (v5.15 / 2026-07-19) — Arbitragem em 4 frentes sobre PC195 + abertura da renomeação global
+
+**Contexto:** Agente 0 revisou `memory/reconciliacao_product_manifesto.md` e devolveu uma
+arbitragem em 4 frentes, com a restrição de responder a Frente 1 (confirmação de governança)
+antes de qualquer edição.
+
+- **Frente 1 (resposta, sem edição):** confirmado com evidência real (`git show df58b10`) que
+  as 2 edições do PC195 (correção do `COLLABORATIVE_MANIFESTO §5.3` + entrada do
+  `PRODUCT_MANIFESTO.md` no `README.md`) foram de fato aplicadas e commitadas — não ficaram só
+  na recomendação do relatório. Confirmado que a autorização foi **expressa** ("Sim, aplique os
+  dois ajustes e commite", em resposta direta a uma pergunta que nomeava as duas edições), não
+  inferida da ordem de ratificação recomendada. Achado adicional reportado ao usuário: o texto
+  de arbitragem partia da premissa "PRODUCT_MANIFESTO segue em v0.1" — desatualizada, já que o
+  PC196 (mensagem anterior da mesma conversa) já tinha ratificado o documento para v1.0/ASSINADO
+  a pedido do próprio usuário. Sinalizado antes de prosseguir; ratificação do PC196 mantida
+  (não revertida) até confirmação em contrário.
+- **Frente 2 (autorizada, única edição de arquivo):** `manifestos/PRODUCT_MANIFESTO.md §4` —
+  parêntese "(alinhado ao `ENGINEERING_MANIFESTO §5.3`...)" corrigido para
+  "`COLLABORATIVE_MANIFESTO §5.3`" — o erro de citação identificado no PC195 também existia
+  dentro do próprio documento a ratificar.
+- **Frente 3 (proposta, sem editar manifesto assinado):** achado #7 do PC195 (isolamento de
+  contexto) promovido de "opcional/futuro" para "regra a redigir", por decisão do Agente 0.
+  Nova **`melhorias/proposta-isolamento-de-contexto.md`** — parágrafo proposto para o
+  `ENGINEERING_MANIFESTO` declarando isolamento de contexto como a **única exceção ao
+  Fail-Open** (bloqueia + loga como incidente de segurança + notifica, em vez de degradar),
+  paralelo à LGPD §5. Inclui varredura preliminar (só listagem): 126 ocorrências de
+  `.eq("project_id", ...)` como mecanismo de isolamento manual, em 88 funções únicas, em
+  `core/project_store.py` (35 funções) + 7 arquivos de `core/tools/` — nenhuma corrigida,
+  só mapeada como evidência de superfície de risco (o `service_role` do Supabase bypassa RLS
+  por design; o precedente de risco real é a rejeição da tool `run_sql` no PC189).
+- **Frente 4 (registro, sem resolver):** item #8 do PC195 (unidade de cobrança ambígua entre
+  domínio-agregado vs. contexto individual) registrado em `memory/project_state.md` como
+  "⚠️ DECISÃO COMERCIAL PENDENTE — Agente 0" — decisão de receita, não técnica.
+- **Abertura da renomeação global (iniciativa separada, nada executado):** nova
+  **`melhorias/renomeacao-global-contexto-vichara.md`** — escopo em 5 fases de risco crescente
+  (Fase 0: string do prompt de Vichāra; Fase 1: session state/`require_active_project()`;
+  Fase 2: `project_id` em `core/` — 1471 ocorrências; Fase 3: coluna de schema em 28 migrations,
+  maior risco; Fase 4: identidade de produto P2D→Vichara, nome do repositório). Nenhuma fase
+  iniciada — cada uma exige autorização explícita e específica, separadamente.
+- Verificação: nenhuma mudança de código nesta PC — só texto de governança/propostas; sem
+  impacto em testes.
+
+---
+
 ### PC196 — Concluído (v5.15 / 2026-07-19) — `PRODUCT_MANIFESTO.md` ratificado como v1.0
 
 **Contexto:** sequência direta do PC195 (auditoria de contradições, `memory/reconciliacao_product_manifesto.md`) — a auditoria não encontrou nenhuma incompatibilidade bloqueante entre `manifestos/PRODUCT_MANIFESTO.md` e os manifestos vigentes, e a maior parte do documento já era realidade em produção (identidade Vichāra desde 01/07, split domínio/contexto desde PC164/165). Usuário (Agente 0) instruiu diretamente: "Ratifique o PRODUCT_MANIFESTO como v1.0 e assine."
