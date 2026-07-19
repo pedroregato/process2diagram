@@ -4,6 +4,36 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC194 — Concluído (v5.15 / 2026-07-19) — `get_system_capabilities()` atualizada + tool section dinâmica
+
+**Contexto:** usuário pediu para "dar munição ao Assistente para auxiliar em todas as mudanças
+que promovemos agora" — o Assistente (chat) usa `get_system_capabilities()` (tool
+`get_system_capabilities`) como a própria descrição de si mesmo quando o usuário pergunta "o
+que você pode fazer?"/"quais suas ferramentas?". Essa função estava badly stale: lista de
+ferramentas hardcoded (faltavam ~80 tools adicionadas desde PC115 — `diagnostico_projeto`,
+`promover_ativo_negocio`, `pesquisar_multi_contexto`, `mapa_rastreabilidade`, etc.), "Outras
+páginas" sem metade das páginas atuais (AtivosDeNegocio, CostBenefitScenarios, ContextHealth,
+KnowledgeHub, ReportBackfill, EntityRecognition, LLMBenchmark, e o split Ajuda/Guias do
+PC193), provedor Azure OpenAI (PC184) ausente da lista.
+
+- **`core/tools/tools_meetings_requirements.py::get_system_capabilities()`** — seção
+  "Ferramentas do Assistente" reescrita para ser gerada dinamicamente a partir de
+  `core/assistant_tools.py::get_tool_catalog()` (a mesma fonte já usada por
+  `pages/Settings.py` pro catálogo de ferramentas visível na UI) em vez de uma string
+  hardcoded mantida manualmente — elimina a classe inteira de staleness daqui pra frente,
+  qualquer tool nova aparece automaticamente. Import feito dentro do método (lazy) pra evitar
+  import circular (`core/assistant_tools.py` importa este módulo no nível de módulo).
+  Agentes (`AgentProvocations` incluso) já eram dinâmicos via `get_agent_cards()` — nenhuma
+  mudança necessária ali.
+- "Outras páginas" e "Provedores LLM suportados" atualizados manualmente com o estado real de
+  `app.py` (7 grupos, split Ajuda/Guias do PC193 mencionado explicitamente) e
+  `modules/config.py::AVAILABLE_PROVIDERS` (Azure OpenAI Service).
+- **`tests/test_get_system_capabilities.py`** (novo, 5 testes) — sem import circular, seção de
+  tools contém amostra de tools recentes, provedores/páginas/grupos citados no texto.
+- Verificação: suíte completa rodada.
+
+---
+
 ### PC193 — Concluído (v5.15 / 2026-07-19) — Split do menu "Ajuda" em "Ajuda" + "Guias"
 
 **Contexto:** discussão técnico-filosófica prévia sobre a diferença entre "página de ajuda"

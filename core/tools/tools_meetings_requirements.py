@@ -1351,10 +1351,33 @@ class _MeetingsRequirementsToolsMixin:
             return f"❌ Erro ao invalidar cache: {exc}"
 
     def get_system_capabilities(self) -> str:
-        """Return a description of all P2D capabilities, built dynamically from Agent Cards."""
+        """Return a description of all P2D capabilities, built dynamically from Agent Cards + tool catalog."""
         from modules.calendar_client import calendar_configured
         from core.agent_registry import get_agent_cards
+        from core.assistant_tools import get_tool_catalog
         cal_status = "✅ configurado" if calendar_configured() else "⚙️ não configurado neste ambiente"
+
+        # Build tool section dynamically from the real catalog (core/assistant_tools.py)
+        # — avoids a hand-maintained list drifting out of sync as tools are added (was
+        # missing ~80 tools before this was made dynamic).
+        _cat_labels = [
+            ("consulta", "Consulta (todos os perfis)"),
+            ("escrita",  "Escrita (todos os perfis)"),
+            ("grafico",  "Gráficos (todos os perfis)"),
+            ("admin",    "Admin (perfil admin/master)"),
+        ]
+        tools_by_cat: dict[str, list[str]] = {}
+        for t in get_tool_catalog():
+            tools_by_cat.setdefault(t["category"], []).append(t["name"])
+
+        tools_lines = ["## Ferramentas do Assistente (este chat)"]
+        for cat_key, label in _cat_labels:
+            names = sorted(tools_by_cat.get(cat_key, []))
+            if not names:
+                continue
+            tools_lines.append(f"  {label} — {len(names)} ferramentas:")
+            tools_lines.append("    " + ", ".join(names))
+        tools_section = "\n".join(tools_lines)
 
         # Build agent section from Agent Cards
         cards = get_agent_cards()
@@ -1403,30 +1426,7 @@ class _MeetingsRequirementsToolsMixin:
   • Busca semântica nas transcrições via pgvector (512 dims — Matryoshka `vector(512)`)
   • Grafo de Conhecimento (kh_entities, kh_facts, kh_contradictions)
 
-## Ferramentas do Assistente (este chat)
-  Consulta (todos os perfis):
-    get_meeting_list, get_meeting_participants, get_meeting_decisions,
-    get_meeting_action_items, get_meeting_summary, search_transcript,
-    get_requirements, get_bpmn_execution_log, list_bpmn_processes, list_bpmn_versions, get_sbvr_terms, get_sbvr_rules,
-    list_context_files, calculate_meeting_roi, get_recurring_topics, get_meeting_metadata,
-    preview_meeting_deletion, preview_text_correction, get_speaker_contributions,
-    get_requirement_history, get_bmm, get_ckf,
-    list_kh_entities, list_kh_contradictions, resolve_contradiction, delete_contradiction, list_kh_facts,
-    search_ibis_debates, get_ibis_timeline, generate_ibis_map, search_glossary,
-    generate_next_agenda, cluster_topic_decisions, read_skill_reference,
-    show_bpmn_diagram, show_mermaid_diagram, show_metrics, render_requirements_table
-
-  Escrita (todos os perfis):
-    add_sbvr_term, update_sbvr_term, update_sbvr_term_by_id, add_sbvr_rule, update_sbvr_rule,
-    update_requirement_text
-
-  Admin (perfil admin/master):
-    apply_text_correction, rename_meeting, delete_meeting, delete_project_artifacts,
-    reprocess_meeting_requirements, reprocess_meeting_full, batch_reprocess_requirements,
-    generate_missing_minutes, get_database_integrity, fix_missing_llm_provider,
-    embed_meeting (reunião única), generate_meeting_embeddings (em lote),
-    delete_bpmn_version (exclui versão específica de diagrama BPMN),
-    reprocess_communication_noise
+{tools_section}
 
 ## Integração Google Calendar ({cal_status})
   Consulta (todos os perfis):
@@ -1442,16 +1442,31 @@ class _MeetingsRequirementsToolsMixin:
 
 ## Outras páginas
   • BpmnEditor       — editor visual BPMN com histórico de versões
-  • Artefatos        — central de artefatos: requisitos, SBVR, BMM, DMN, IBIS, Ruídos, rastreabilidade
+  • BpmnStudio       — gera BPMN+Mermaid a partir de descrição em texto livre, sem reunião
+  • Artefatos        — central de artefatos: requisitos, SBVR, BMM, DMN, IBIS, Ruídos,
+                        rastreabilidade, Provocações (observações lastreadas pós-reunião), comparar
+  • ContextHealth    — saúde do contexto/projeto ativo
+  • KnowledgeHub     — visão consolidada do KnowledgeHub da reunião
   • KnowledgeGraph   — grafo de conhecimento interativo (entidades, fatos, contradições)
   • MeetingROI       — dashboard ROI-TR por tipo de reunião
+  • ReportBackfill   — geração/regeneração de relatório executivo
+  • EntityRecognition — reconhecimento de entidades (NER) por reunião
   • DocumentManager  — gestão de documentos com extração de artefatos e análise cruzada
-  • DatabaseOverview — saúde do banco + gestão de embeddings
-  • BatchRunner      — processamento em lote de múltiplas transcrições
+  • CostBenefitScenarios — compara combinações agente→modelo (custo/qualidade) antes de aplicar ao pipeline
+  • AtivosDeNegocio  — catálogo de artefatos promovidos explicitamente a Ativo de Negócio (classificação 3D + governança)
+  • LLMBenchmark     — benchmark on-demand + telemetria real (latência, erro por provider, qualidade de schema)
+  • DatabaseOverview — saúde do banco + gestão de embeddings (admin)
+  • BatchRunner      — processamento em lote de múltiplas transcrições (admin)
+
+  Grupo "Ajuda" (prático — tutorial/como usar): Como Iniciar, Casos de Uso — Valor de Negócio,
+  Ferramentas do Assistente, Glossário, Curso Corporativo.
+  Grupo "Guias" (teórico — como o sistema funciona por baixo): Arquiteturas, Guia CKF,
+  Guia BPMN Studio, Gráficos & Visualizações, Cache LLM, Avaliação e Feedback,
+  Manifesto de Engenharia.
 
 ## Provedores LLM suportados
-  DeepSeek V4 Flash (padrão), DeepSeek V4 Pro, Claude (Anthropic), OpenAI,
-  Groq (Llama), Google Gemini, Grok (xAI)
+  DeepSeek V4 Flash (padrão), DeepSeek V4 Pro, DeepSeek V4 Flash (Thinking), Claude (Anthropic),
+  OpenAI, Azure OpenAI Service, Groq (Llama), Google Gemini, Grok (xAI)
 """
 
     def get_meeting_list(self, order_by: str = "number") -> str:
