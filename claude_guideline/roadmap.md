@@ -4,6 +4,26 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC192 — Concluído (v5.15 / 2026-07-19) — Guia "Avaliação e Feedback" (Ajuda)
+
+**Contexto:** usuário pediu uma página na seção Ajuda explicando o fluxo completo de
+avaliação (PC191) — onde encontrar os widgets, como cada um funciona, para onde vai o dado,
+e o valor de negócio, deixando claro para qualquer usuário do sistema.
+
+- **`pages/Orientacoes_Feedback.py`** (novo, grupo Ajuda, ícone ⭐) — mesmo padrão HTML
+  dark-navy/âmbar dos outros guias (CKF, Cache LLM): hero, TOC com scroll suave, cards,
+  diagrama de fluxo em ASCII (clique → `save_feedback()` → tabela `feedback` → 
+  `get_feedback_summary()` → `diagnostico_projeto()` → 🔴/🟡/🟢 + ação recomendada), tabela
+  comparativa "sem feedback vs. com feedback" para a seção de valor de negócio, seção
+  dedicada e transparente sobre o que a funcionalidade **não** faz (sem auto-apply — mesma
+  transparência já usada no guia de Cache LLM sobre a decisão de não usar fuzzy matching),
+  boas práticas e FAQ.
+- Registrada em `app.py` (grupo Ajuda) e `CLAUDE.md` (árvore de `pages/` + tabela de grupos
+  de navegação).
+- Verificação: `AppTest` sem exceção; suíte completa passando.
+
+---
+
 ### PC191 — Concluído (v5.15 / 2026-07-18) — Feedback leve em respostas do Assistente e artefatos (Camada 1 de `aprimoramento-metacognitivo-3camadas.md`)
 
 **Contexto:** proposta externa de "Sistema Metacognitivo de 3 Camadas" — (1) widgets de feedback; (2) `AgentMeta` (LLM) que diagnostica o sistema a partir do feedback + telemetria; (3) scheduler que aplica automaticamente recomendações (ajustar prompts/pesos) sem revisão humana clara. Avaliação contra o código real (Explore agent) achou: Camada 1 é gap real (zero mecanismo de avaliação hoje em qualquer página); Camada 2 é redundante em propósito com `diagnostico_projeto()`/`sugestoes_plantonista()` (já fazem diagnóstico determinístico → ações priorizadas, sem LLM) e com a telemetria do PC183 (`detect_error_anomalies` etc.); Camada 3 não tem precedente no projeto e contraria os princípios mais próximos do `ENGINEERING_MANIFESTO.md` (Fail-Open = degradar graciosamente, nunca agir sozinho; supervisão humana como regra de ouro §1). Usuário confirmou: só Camada 1, estendendo `diagnostico_projeto()` em vez de criar `AgentMeta`, sem Camada 3.

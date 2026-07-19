@@ -86,6 +86,7 @@ pages = {
         st.Page("pages/Orientacoes_BpmnStudio.py",   title="Guia BPMN Studio", icon="🧩"),
         st.Page("pages/Orientacoes_Graficos.py",     title="Gráficos & Visualizações", icon="📈"),
         st.Page("pages/Orientacoes_CacheSemantico.py", title="Cache LLM",   icon="🗄️"),
+        st.Page("pages/Orientacoes_Feedback.py",     title="Avaliação e Feedback", icon="⭐"),
         st.Page("pages/Capacitacao.py",              title="Curso Corporativo",    icon="🎓"),
         st.Page("pages/Orientacoes_Manifesto.py",    title="Manifesto de Engenharia", icon="🛸"),
     ],
