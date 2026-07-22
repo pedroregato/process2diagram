@@ -4,6 +4,43 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC199 — Concluído (v5.15 / 2026-07-22) — Governança de Requisitos: visão agregada de mudanças em Artefatos.py
+
+**Contexto:** usuário avaliou que o sinal de instabilidade/contradição de requisitos — hoje
+espalhado em 3 tools de chat (`get_requirement_history`, `generate_requirements_waterfall`,
+`analisar_tendencias`) sem equivalente em página — era "ouro para governança de requisitos" e
+pediu uma visão consolidada sem precisar do Assistente.
+
+- Nova seção **"🏛️ Governança de Requisitos"** no topo da aba "📅 Histórico" de `Artefatos.py`
+  (não criada aba nova — mesma fonte de dado e mesmo contexto mental do usuário que já usa essa
+  aba para histórico por requisito). KPIs (total, % com ≥1 revisão, instáveis ≥3 revisões,
+  contradições não resolvidas), tabela ranqueada dos requisitos que mais mudaram, e gráfico
+  Plotly waterfall de evolução líquida de requisitos ativos por reunião — mesma lógica de
+  `generate_requirements_waterfall` (`core/tools/tools_admin_charts_entities.py`), reconstruída
+  inline na página porque a tool original é acoplada ao padrão de chat (`self._pending_charts`).
+- Nova `core/project_store.py::list_requirement_versions_by_project(project_id)` — 1 query
+  agregada (join `requirement_versions`↔`requirements!inner`, mesmo padrão de
+  `list_contradictions`) para substituir N chamadas de `list_requirement_versions(req_id)` que
+  uma visão de todos os requisitos exigiria.
+- Confirmado na investigação: **dois sistemas de contradição não relacionados** no codebase —
+  `requirement_versions.contradiction_flag`/`requirements.status='contradicted'` (reconciliação
+  de versão, por requisito) vs. `kh_contradictions` (grafo de processos/fatos do Knowledge Hub,
+  cross-artefato). A seção nova usa apenas o primeiro (é o mesmo já exibido na aba "⚠️
+  Contradições"); misturar os dois distorceria o dado — inclusive `analisar_tendencias()` já
+  trata os dois como facetas separadas, sem mesclar.
+- Sem migration nova (reusa tabelas existentes), sem novo agente, sem mudança em
+  `KnowledgeHub.migrate()` — mesma aba, mesmo contador de 13 abas em `Artefatos.py`.
+- Verificação: `python -m py_compile` nos dois arquivos tocados; teste manual em navegador ainda
+  pendente (ver nota abaixo).
+
+---
+
+# Roadmap — Process2Diagram
+
+Histórico completo de entregas por ciclo de projeto.
+
+---
+
 ### PC197 — Concluído (v5.15 / 2026-07-19) — Arbitragem em 4 frentes sobre PC195 + abertura da renomeação global
 
 **Contexto:** Agente 0 revisou `memory/reconciliacao_product_manifesto.md` e devolveu uma

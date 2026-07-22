@@ -26,7 +26,7 @@ from modules.reqtracker_exporter import to_html as export_html, to_pdf as export
 from services.export_service import format_date_suffix
 from core.project_store import (
     list_meetings, list_requirements, list_requirements_light,
-    list_requirement_versions, list_contradictions,
+    list_requirement_versions, list_requirement_versions_by_project, list_contradictions,
     list_sbvr_terms, list_sbvr_rules,
     list_bpmn_processes, list_bpmn_versions, bpmn_tables_exist,
     list_dmn_by_project, list_argumentation_by_project,
@@ -120,6 +120,9 @@ def _load_requirements(pid):       return list_requirements_light(pid)
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _load_req_versions(req_id):    return list_requirement_versions(req_id)
+
+@st.cache_data(ttl=120, show_spinner=False)
+def _load_req_versions_all(pid):   return list_requirement_versions_by_project(pid)
 
 @st.cache_data(ttl=120, show_spinner=False)
 def _load_contradictions(pid):     return list_contradictions(pid)
@@ -708,6 +711,125 @@ with tab_hist:
         "Cada versão registra a descrição, prioridade e status vigentes naquele momento, "
         "permitindo auditar mudanças de escopo ao longo do projeto."
     )
+
+    # ── Governança de Requisitos — visão agregada (PC199) ──────────────────
+    # Consolida em um só lugar 3 sinais hoje espalhados em tools de chat
+    # (get_requirement_history, generate_requirements_waterfall, analisar_tendencias):
+    # instabilidade (nº de revisões), contradição não resolvida e evolução por reunião.
+    # Usa apenas o sistema de contradição de requirement_versions/requirements.status —
+    # kh_contradictions (Knowledge Hub) é um mecanismo separado, não relacionado.
+    if requirements:
+        st.markdown("#### 🏛️ Governança de Requisitos")
+        st.caption(
+            "Quais requisitos mudaram mais e quais têm contradição em aberto — "
+            "sinal de risco para revisão de escopo, não coberto pelas outras abas."
+        )
+        _gov_versions = _load_req_versions_all(project_id)
+
+        _GOV_CHANGE_LABEL = {
+            "new": "Nova", "confirmed": "Confirmada",
+            "revised": "Revisada", "contradicted": "Contradição",
+        }
+        _version_count: dict[str, int] = {}
+        _last_change: dict[str, str] = {}
+        for _v in _gov_versions:
+            _rid = _v.get("requirement_id")
+            if not _rid:
+                continue
+            _version_count[_rid] = _version_count.get(_rid, 0) + 1
+            _last_change[_rid] = _v.get("change_type", "—")
+
+        _n_revised_once = sum(1 for r in requirements if _version_count.get(r["id"], 0) > 1)
+        _n_unstable = sum(1 for r in requirements if _version_count.get(r["id"], 0) >= 3)
+        _pct_revised = (_n_revised_once / n_total * 100) if n_total else 0.0
+
+        _gc1, _gc2, _gc3, _gc4 = st.columns(4)
+        _gc1.metric("Requisitos", n_total)
+        _gc2.metric("Com ≥1 revisão", _n_revised_once, delta=f"{_pct_revised:.0f}%")
+        _gc3.metric("⚠️ Instáveis (≥3 revisões)", _n_unstable,
+                    delta_color="off" if _n_unstable == 0 else "inverse")
+        _gc4.metric("⚠️ Contradições não resolvidas", n_contradicted,
+                    delta_color="off" if n_contradicted == 0 else "inverse")
+
+        _gov_rows = [
+            {
+                "REQ": f"REQ-{r['req_number']:03d}",
+                "Título": (r.get("title") or "—")[:60],
+                "Revisões": _version_count.get(r["id"], 0),
+                "Última mudança": _GOV_CHANGE_LABEL.get(_last_change.get(r["id"]), "—"),
+                "Status": _STATUS_BADGE.get(r.get("status", "active"), ("", r.get("status", "—")))[1],
+                "⚠️": "⚠️" if r.get("status") == "contradicted" else "",
+            }
+            for r in requirements
+            if _version_count.get(r["id"], 0) > 1
+        ]
+        _gov_rows.sort(key=lambda x: x["Revisões"], reverse=True)
+
+        if not _gov_rows:
+            st.info("Nenhum requisito foi revisado mais de uma vez neste projeto ainda.")
+        else:
+            st.markdown("**Requisitos que mais mudaram**")
+            _GOV_TOP_N = 20
+            st.dataframe(_gov_rows[:_GOV_TOP_N], use_container_width=True, hide_index=True)
+            if len(_gov_rows) > _GOV_TOP_N:
+                st.caption(f"Mostrando {_GOV_TOP_N} de {len(_gov_rows)} requisitos com ≥2 revisões.")
+
+            # ── Evolução líquida de requisitos ativos por reunião ───────────
+            _added: dict[int, int] = {}
+            _removed: dict[int, int] = {}
+            for r in requirements:
+                _mid = r.get("first_meeting_id")
+                if not _mid or _mid not in meet_map:
+                    continue
+                _mnum = meet_map[_mid].get("meeting_number")
+                if _mnum is None:
+                    continue
+                _added[_mnum] = _added.get(_mnum, 0) + 1
+                if (r.get("status") or "").strip().lower() in {"contradicted", "deprecated"}:
+                    _removed[_mnum] = _removed.get(_mnum, 0) + 1
+
+            _meeting_nums = sorted(_added.keys())
+            if _meeting_nums:
+                try:
+                    import plotly.graph_objects as go
+                    _wx, _wy, _measure, _text = [], [], [], []
+                    for _n in _meeting_nums:
+                        _net = _added[_n] - _removed.get(_n, 0)
+                        _wx.append(f"Reunião {_n}")
+                        _wy.append(_net)
+                        _measure.append("relative")
+                        _text.append(f"+{_added[_n]}" + (f" -{_removed[_n]}" if _removed.get(_n) else ""))
+                    _wx.append("Total")
+                    _wy.append(0)
+                    _measure.append("total")
+                    _text.append("")
+                    _gov_fig = go.Figure(go.Waterfall(
+                        x=_wx, y=_wy, measure=_measure, text=_text, textposition="outside",
+                        increasing={"marker": {"color": "#10b981"}},
+                        decreasing={"marker": {"color": "#ef4444"}},
+                        totals={"marker": {"color": "#2563eb"}},
+                    ))
+                    _gov_fig.update_layout(
+                        title="Evolução líquida de requisitos ativos por reunião",
+                        plot_bgcolor="#0d1b2a",
+                        paper_bgcolor="#0d1b2a",
+                        font={"color": "#e2e8f0"},
+                        showlegend=False,
+                        xaxis={"gridcolor": "#1e3a55"},
+                        yaxis={"gridcolor": "#1e3a55"},
+                        height=340,
+                        margin={"t": 40, "b": 20, "l": 20, "r": 20},
+                    )
+                    st.plotly_chart(_gov_fig, use_container_width=True)
+                except ImportError:
+                    pass
+
+        if st.button("🔄 Atualizar dados de governança", key="gov_refresh"):
+            _load_req_versions_all.clear()
+            st.rerun()
+
+        st.markdown("---")
+
     if not requirements:
         st.info("Nenhum requisito registrado.")
     else:

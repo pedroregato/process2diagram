@@ -1492,6 +1492,30 @@ def list_requirement_versions(requirement_id: str) -> list[dict]:
         return []
 
 
+def list_requirement_versions_by_project(project_id: str) -> list[dict]:
+    """Retorna todas as versões de todos os requisitos do projeto, numa única query.
+
+    Para painéis de governança que precisam agregar (contagem de revisões,
+    contradições) sem disparar N queries via list_requirement_versions().
+    Ordenado por requisito e depois por versão, para que a última linha de
+    cada requisito processada em ordem seja sempre sua versão mais recente.
+    """
+    db = _db()
+    if not db:
+        return []
+    try:
+        return _ok(
+            db.table("requirement_versions")
+            .select("*, requirements!inner(project_id, req_number, title, status)")
+            .eq("requirements.project_id", project_id)
+            .order("requirement_id")
+            .order("version")
+            .execute()
+        )
+    except Exception:
+        return []
+
+
 def add_requirement_version(
     requirement_id: str,
     meeting_id: str,
