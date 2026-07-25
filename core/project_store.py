@@ -4770,6 +4770,15 @@ def save_provocations(
                     # a evidência já é a linha de kh_contradictions referenciada.
                     {"type": "contradiction_bridge", **(item.contradiction_ref or {})}
                     if item.kind == "contradiction" else
+                    # kind="premise" (PC201): citações literais, mas sem
+                    # absence_check — o piso objetivo é premise_markers, não
+                    # ausência de termo num span.
+                    {
+                        "type":            "premise",
+                        "references":      item.references,
+                        "premise_markers": item.premise_markers,
+                    }
+                    if item.kind == "premise" else
                     {
                         "type":           item.grounding_type,
                         "references":     item.references,

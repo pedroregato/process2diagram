@@ -3062,10 +3062,10 @@ with tab_noise:
 with tab_prov:
     st.caption(
         "**Provocações** — observações sobre o que ficou fechado numa reunião sem ter sido "
-        "examinado: tema ausente, objeção sem resposta, ou contradição com uma reunião anterior. "
-        "Cada uma carrega evidência verificável — citação com timestamp e lista de termos "
-        "conferida por um validador determinístico, ou referência a uma contradição já detectada "
-        "entre duas reuniões — nenhuma sai sem lastro."
+        "examinado: tema ausente, objeção sem resposta, afirmação categórica aceita sem "
+        "contestação, ou contradição com uma reunião anterior. Cada uma carrega evidência "
+        "verificável — citação com timestamp conferida por um validador determinístico, ou "
+        "referência a uma contradição já detectada entre duas reuniões — nenhuma sai sem lastro."
     )
 
     if not st.session_state.get("run_provocations", False):
@@ -3145,7 +3145,8 @@ with tab_prov:
                 else:
                     _refs = _grounding.get("references") or []
                     _absent = (_grounding.get("absence_check") or {}).get("terms") or []
-                    if _refs or _absent:
+                    _markers = _grounding.get("premise_markers") or []
+                    if _refs or _absent or _markers:
                         st.caption("**Lastro:**")
                         for _r in _refs:
                             st.markdown(
@@ -3161,6 +3162,8 @@ with tab_prov:
                                 else "entre os dois momentos citados acima"
                             )
                             st.caption(f"Termos verificados, sem ocorrência {_span_desc}: " + ", ".join(_absent))
+                        if _markers:
+                            st.caption("Marcador de assertiva categórica identificado: " + ", ".join(_markers))
 
                 if _status == "new":
                     _a1, _a2 = st.columns(2)

@@ -70,6 +70,33 @@ VALID_ABSENCE = {
     "grounding": {"type": "absence", "references": [], "absence_check": {"terms": ["multa por atraso", "penalidade contratual"]}},
 }
 
+# Transcript próprio pra premise — TRANSCRIPT acima não tem nenhum marcador de
+# assertiva categórica (_PREMISE_MARKERS) em nenhuma linha.
+PREMISE_TRANSCRIPT = """João   0:22
+É claro que o Catálogo Mestre fica no SE Suíte, não precisa nem discutir.
+Maria   0:28
+Ok, próximo item da pauta.
+Pedro   0:35
+Concordo, vamos priorizar isso na reunião de amanhã.
+Ricardo   0:41
+Fechado então? Todo mundo de acordo.
+"""
+
+VALID_PREMISE = {
+    "kind": "premise",
+    "title": "Localização do Catálogo Mestre assumida sem debate",
+    "body": "João afirmou a localização como óbvia; a pauta seguiu sem questionar.",
+    "question": "Isso já estava decidido antes, ou fechou sem debate?",
+    "confidence": "high",
+    "grounding": {
+        "type": "premise",
+        "references": [
+            {"timestamp": "0:22", "speaker": "João", "excerpt": "É claro que o Catálogo Mestre fica no SE Suíte, não precisa nem discutir."},
+            {"timestamp": "0:28", "speaker": "Maria", "excerpt": "Ok, próximo item da pauta."},
+        ],
+    },
+}
+
 
 class TestNormalizeAndBlacklist:
     def test_normalize_collapses_whitespace_and_lowercases(self):
@@ -185,10 +212,13 @@ class TestValidateAndRankRejects:
         assert reasons == {"blank_required_field": 1}
 
     def test_rejects_kind_outside_enabled_taxonomy(self):
-        for kind in ("contradiction", "premise", "analogy", "insight", "sugestao"):
+        # "premise" saiu desta lista no PC201 — virou um kind válido (ver
+        # TestValidateAndRankPremise). "contradiction" nunca passa por aqui —
+        # só o bridge determinístico pode produzi-lo (ver PC200).
+        for kind in ("contradiction", "analogy", "insight", "sugestao"):
             item = dict(VALID_ASYMMETRY, kind=kind)
             approved, rejected, reasons = AgentProvocations._validate_and_rank([item], TRANSCRIPT)
-            assert approved == [], f"kind={kind} should never be approved in fase 1"
+            assert approved == [], f"kind={kind} should never be approved"
             assert reasons == {"kind_not_enabled": 1}
 
     def test_rejects_invalid_confidence(self):
@@ -322,6 +352,115 @@ class TestValidateAndRankRejects:
         assert approved == []
         assert rejected == 3
         assert reasons == {"not_a_dict": 3}
+
+
+class TestValidateAndRankPremise:
+    """kind='premise' (PC201) — não reduz à primitiva ausência-de-termo-em-span
+    das outras kinds ('ninguém contestou' é julgamento semântico, só o LLM
+    julga). O piso objetivo aqui é diferente: citação literal + marcador de
+    assertiva categórica de lista fixa + turno seguinte real e posterior."""
+
+    def test_valid_premise_is_approved(self):
+        approved, rejected, reasons = AgentProvocations._validate_and_rank([VALID_PREMISE], PREMISE_TRANSCRIPT)
+        assert len(approved) == 1
+        assert rejected == 0
+        assert reasons == {}
+        item = approved[0]
+        assert item.kind == "premise"
+        assert len(item.references) == 2
+        assert item.premise_markers == ["é claro que"]
+        assert item.absence_terms == []  # não se aplica a premise
+
+    def test_rejects_premise_without_marker(self):
+        """Afirmação sem nenhum marcador de certeza/dispensa de debate —
+        pode ser uma opinião comum, não uma premissa não examinada."""
+        item = dict(VALID_PREMISE)
+        item["grounding"] = {
+            "references": [
+                {"timestamp": "0:35", "speaker": "Pedro", "excerpt": "Concordo, vamos priorizar isso na reunião de amanhã."},
+                {"timestamp": "0:41", "speaker": "Ricardo", "excerpt": "Fechado então? Todo mundo de acordo."},
+            ],
+        }
+        approved, rejected, reasons = AgentProvocations._validate_and_rank([item], PREMISE_TRANSCRIPT)
+        assert approved == []
+        assert reasons == {"premise_marker_missing": 1}
+
+    def test_rejects_premise_with_paraphrased_excerpt(self):
+        item = dict(VALID_PREMISE)
+        item["grounding"] = {
+            "references": [
+                {"timestamp": "0:22", "speaker": "João", "excerpt": "João disse que era óbvio onde ficava o Catálogo Mestre"},
+                {"timestamp": "0:28", "speaker": "Maria", "excerpt": "Ok, próximo item da pauta."},
+            ],
+        }
+        approved, rejected, reasons = AgentProvocations._validate_and_rank([item], PREMISE_TRANSCRIPT)
+        assert approved == []
+        assert reasons == {"reference_not_found": 1}
+
+    def test_rejects_premise_with_fewer_than_two_references(self):
+        item = dict(VALID_PREMISE)
+        item["grounding"] = {
+            "references": [
+                {"timestamp": "0:22", "speaker": "João", "excerpt": "É claro que o Catálogo Mestre fica no SE Suíte, não precisa nem discutir."},
+            ],
+        }
+        approved, rejected, reasons = AgentProvocations._validate_and_rank([item], PREMISE_TRANSCRIPT)
+        assert approved == []
+        assert reasons == {"insufficient_references": 1}
+
+    def test_rejects_premise_with_inverted_turn_order(self):
+        """Referência 1 (suposto 'turno seguinte') vem ANTES da premissa —
+        não prova que a reunião seguiu adiante sem contestação."""
+        item = dict(VALID_PREMISE)
+        item["grounding"] = {
+            "references": [
+                {"timestamp": "0:28", "speaker": "Maria", "excerpt": "Ok, próximo item da pauta."},
+                {"timestamp": "0:22", "speaker": "João", "excerpt": "É claro que o Catálogo Mestre fica no SE Suíte, não precisa nem discutir."},
+            ],
+        }
+        approved, rejected, reasons = AgentProvocations._validate_and_rank([item], PREMISE_TRANSCRIPT)
+        assert approved == []
+        assert reasons == {"premise_marker_missing": 1}  # marcador só está no excerto[0], que aqui é "Ok, próximo item..."
+
+    def test_rejects_premise_when_next_turn_timestamp_does_not_exist(self):
+        """Excerto é uma citação literal real (existe em outro ponto do
+        transcript), mas o timestamp anexado a ele é fabricado — não
+        corresponde a nenhum turno real, então não prova que a citação
+        ocorreu ONDE o LLM diz que ocorreu."""
+        item = dict(VALID_PREMISE)
+        item["grounding"] = {
+            "references": [
+                {"timestamp": "0:22", "speaker": "João", "excerpt": "É claro que o Catálogo Mestre fica no SE Suíte, não precisa nem discutir."},
+                {"timestamp": "9:00", "speaker": "Alguém", "excerpt": "Ok, próximo item da pauta."},
+            ],
+        }
+        approved, rejected, reasons = AgentProvocations._validate_and_rank([item], PREMISE_TRANSCRIPT)
+        assert approved == []
+        assert reasons == {"next_turn_not_after": 1}
+
+    def test_rejects_premise_when_next_turn_same_timestamp_as_premise(self):
+        item = dict(VALID_PREMISE)
+        item["grounding"] = {
+            "references": [
+                {"timestamp": "0:22", "speaker": "João", "excerpt": "É claro que o Catálogo Mestre fica no SE Suíte, não precisa nem discutir."},
+                {"timestamp": "0:22", "speaker": "João", "excerpt": "É claro que o Catálogo Mestre fica no SE Suíte, não precisa nem discutir."},
+            ],
+        }
+        approved, rejected, reasons = AgentProvocations._validate_and_rank([item], PREMISE_TRANSCRIPT)
+        assert approved == []
+        assert reasons == {"next_turn_not_after": 1}
+
+    def test_rejects_premise_blacklisted_tone(self):
+        item = dict(VALID_PREMISE, body="A equipe falhou em questionar isso.")
+        approved, rejected, reasons = AgentProvocations._validate_and_rank([item], PREMISE_TRANSCRIPT)
+        assert approved == []
+        assert reasons == {"blacklisted_tone": 1}
+
+    def test_rejects_premise_invalid_confidence(self):
+        item = dict(VALID_PREMISE, confidence="baixa")
+        approved, rejected, reasons = AgentProvocations._validate_and_rank([item], PREMISE_TRANSCRIPT)
+        assert approved == []
+        assert reasons == {"invalid_confidence": 1}
 
 
 class TestValidateAndRankCapAndRank:

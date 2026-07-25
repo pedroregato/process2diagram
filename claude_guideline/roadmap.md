@@ -4,6 +4,41 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC201 — Concluído (v5.15 / 2026-07-25) — Provocações: kind="premise" (Premissa Não Examinada)
+
+**Contexto:** sequência do PC200 no roadmap de `melhorias/provocacoes-vichara.md`. Diferente de
+`contradiction`, `premise` não tem detector existente pra reaproveitar — nenhuma ferramenta
+identifica hoje "afirmação categórica aceita sem contestação". Precisa passar pelo LLM (só ele
+julga se uma frase é uma assertiva dispensada de debate), com o mesmo validador determinístico
+das outras kinds do prompt garantindo que a evidência é real.
+
+- **Diferença de arquitetura reconhecida no design:** `absence`/`asymmetry` reduzem à primitiva
+  "este termo não ocorre neste span", verificável por código. `premise` não reduz limpo a isso —
+  "ninguém contestou" é julgamento semântico sobre o turno seguinte, só o LLM pode fazer, e
+  tentar verificar essa semântica em código seria "um LLM validando outro LLM" (padrão já
+  rejeitado no projeto). O validador ganhou um piso objetivo diferente em vez disso: a citação
+  da premissa precisa realmente conter um marcador de assertiva categórica de lista fixa
+  (`_PREMISE_MARKERS` — "é claro que", "obviamente", "todo mundo sabe", "vamos assumir",
+  "não precisa discutir", "sem dúvida", "é fato que"), e se o LLM cita o turno seguinte como
+  prova de não-contestação, esse turno precisa ser uma citação real, posicionada de fato depois
+  da premissa na transcrição — a checagem é de integridade de citação, não de correção semântica.
+- `agents/agent_provocations.py`: `_ENABLED_KINDS` ganha `"premise"` (agora `{absence,
+  asymmetry, premise}`); `_validate_and_rank` reestruturado — a exigência de `absence_check`
+  (antes aplicada a todos os kinds antes do branch) passa a valer só para `absence`/`asymmetry`;
+  novo branch de `premise` com as 3 checagens acima.
+- `core/knowledge_hub.py::ProvocationItem` ganha `premise_markers`; `core/project_store.py::
+  save_provocations()` ganha o 3º formato de `grounding` (`{type, references,
+  premise_markers}`, sem `absence_check`); `pages/Artefatos.py` (aba Provocações) reaproveita o
+  bloco de citações já existente (formato de `references` é o mesmo dos outros 2 kinds
+  transcript-literais), só adiciona uma linha pros marcadores.
+- `skills/skill_provocations.md` (v1.2→1.3): nova seção `### premise`, exemplo no formato de
+  saída, "dois tipos" → "três tipos".
+- Sem migração — `provocations.kind` CHECK já incluía `'premise'` desde o PC190 (espaço
+  reservado de propósito pra taxonomia completa). 11 testes novos (`TestValidateAndRankPremise`
+  + `TestPremiseKindRendering`), 980/980 passando (suíte completa, sem regressão).
+
+---
+
 ### PC200 — Concluído (v5.15 / 2026-07-25) — Provocações: kind="contradiction" (Contradição no Tempo)
 
 **Contexto:** `melhorias/provocacoes-vichara.md` (proposta externa, escrita sem acesso ao código
@@ -82,6 +117,60 @@ pediu uma visão consolidada sem precisar do Assistente.
   `KnowledgeHub.migrate()` — mesma aba, mesmo contador de 13 abas em `Artefatos.py`.
 - Verificação: `python -m py_compile` nos dois arquivos tocados; teste manual em navegador ainda
   pendente (ver nota abaixo).
+
+---
+
+### PC198 — Concluído (v5.15 / 2026-07-19) — Fase A (auditoria + teste de isolamento) + Fase B (inventário por ondas) + Fase D (gatilho comercial)
+
+**Contexto:** Agente 0 arbitrou o sequenciamento da renomeação global: Fase A (segurança do
+isolamento de contexto, achado #7) é pré-condição bloqueante da Fase C (execução da
+renomeação); Fase B (inventário, read-only) podia rodar em paralelo; Fase D só precisava de um
+ajuste de texto. Nenhuma renomeação foi executada nesta rodada — só evidência e documentação.
+
+- **Fase A1 (auditoria de cobertura)** — `memory/auditoria_isolamento.md`: 163 funções em
+  `core/project_store.py` + `core/tools/*.py` tocam alguma tabela; 66 são leituras; 27 sem
+  filtro de contexto detectável por regex simples, revisadas manualmente uma a uma (código
+  real, não inferência). Resultado: **12 🟢 PROTEGIDO** (2 eram falsos positivos do regex —
+  `list_contradictions` filtra via join, `context_id` é o próprio isolamento em 6 funções de
+  contexto/template), **11 🟡 AMBÍGUO** (sem filtro de `project_id` na própria função — seguras
+  hoje só porque todo call site real resolve o id-filho via uma consulta já escopada antes),
+  **4 ⚪ fora de escopo** (probes de existência de tabela, ou views admin-only deliberadamente
+  cross-contexto — `list_project_calendar_configs`/`list_login_logs`, mesma categoria do
+  Catálogo do Domínio do PC165, não artefato de negócio).
+- **Fase A2 (teste que prova)** — `tests/test_context_isolation.py` (5 testes, fake Supabase
+  client com filtragem real, mesmo padrão de `tests/test_meeting_processing_log.py`): 3 provam
+  que os caminhos protegidos isolam de fato (`list_requirements_light`, `list_bpmn_processes`,
+  `list_sbvr_terms`, 2 contextos sintéticos); **2 provam empiricamente**, chamando a função real
+  com um id de outro contexto, que `get_bpmn_process()` e `list_requirement_versions()`
+  **retornam dado do contexto errado** quando chamadas sem a validação prévia que hoje só existe
+  na camada de cima. Achado colateral notável: `get_roster_attendance_summary()` busca
+  `meeting_participants` inteira (todo o banco) antes de filtrar via `roster` já escopado —
+  funciona hoje só por unicidade de UUID, não por filtro declarado; não é vazamento comprovado,
+  mas é o candidato mais barato de hardening isolado.
+- **Fase A3: nenhum incidente confirmado.** Todo caminho real hoje alcançável (tool do
+  Assistente ou página) valida o id antes de chamar a função de baixo nível — protocolo de
+  incidente não disparado.
+- **Fase A4 (desenho do guard, rascunho)** — `melhorias/proposta-isolamento-de-contexto.md`
+  ganhou a seção 2.1 com 2 opções de código-rascunho (não aplicadas): helper único de leitura
+  escopada (`_scoped_select`, cobre código novo) vs. assert central pós-leitura
+  (`_assert_context`/`ContextIsolationError`, cobre os 11 casos ambíguos existentes mas exige
+  adicionar `project_id` ao contrato de cada um). Seção 4 (recomendação) atualizada refletindo
+  a auditoria concluída.
+- **Fase B (inventário por ondas, paralelo, read-only)** — `melhorias/inventario-renomeacao.md`:
+  números do PC195 reconfirmados (cresceram só pelos próprios artefatos desta rodada: 1471→1486
+  ocorrências de `project_id`, +3 arquivos citando "process2diagram"). 4 ondas por risco (símbolos
+  Python / session_state+UI / string do prompt Vichāra / schema SQL). Marcação de coincidência
+  com a Fase A: **Onda 1 (símbolos Python) e Onda 4 (schema) coincidem diretamente** com os 126
+  pontos de `.eq("project_id", ...)` auditados — travadas até a Fase A completar; Ondas 2 e 3
+  (session_state, string de prompt) não tocam o mecanismo de isolamento, mas seguem sob a mesma
+  trava geral da Fase C por instrução explícita.
+- **Fase D (gatilho comercial)** — item #8 (unidade de cobrança) em `memory/project_state.md`
+  ajustado de "decisão pendente sem prazo" para gatilho explícito: revisar quando o 1º cliente
+  real tiver mais de 1 contexto simultâneo, OU na próxima revisão de planos comerciais — o que
+  vier antes.
+- **Fase C: não iniciada** — permanece travada, conforme instrução ("não pule a trava entre B e
+  C"). Nenhuma renomeação de símbolo, coluna ou nome de produto foi executada.
+- Verificação: 5 testes novos, suíte completa rodada.
 
 ---
 

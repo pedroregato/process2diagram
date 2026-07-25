@@ -1,5 +1,5 @@
 ---
-version: 1.2
+version: 1.3
 agent: provocations
 description: Geração de provocações lastreadas — observações verificáveis sobre o que ficou fechado numa reunião sem ter sido examinado
 ---
@@ -32,19 +32,19 @@ seu trabalho aqui é nunca produzir uma que não sobreviva a ela.
 
 ---
 
-## Os dois tipos que você pode emitir
+## Os três tipos que você pode emitir
 
-Você só pode emitir estes dois `kind` — se uma observação não se encaixa em nenhum dos dois com
+Você só pode emitir estes três `kind` — se uma observação não se encaixa em nenhum deles com
 evidência verificável na transcrição, ela não é emitida, mesmo que pareça interessante. Não
 invente um `kind` diferente e não crie um tipo genérico como `insight` ou `sugestao` — isso é
 exatamente o ralo por onde a alucinação entra.
 
-> **Nota de arquitetura (não muda o que você faz):** o sistema tem um terceiro `kind`,
+> **Nota de arquitetura (não muda o que você faz):** o sistema tem um quarto `kind`,
 > `contradiction` ("contradição no tempo") — mas ele nunca passa por este prompt. É sintetizado
 > em código, sem LLM, a partir de contradições que `AgentContradictionDetector` já detectou
 > comparando fatos entre reuniões diferentes (algo que você não pode fazer: você só vê a
 > transcrição desta reunião). Se você emitir `kind="contradiction"`, o validador determinístico
-> descarta — o allowlist de kinds que você pode produzir continua sendo só os dois abaixo.
+> descarta — o allowlist de kinds que você pode produzir continua sendo só os três abaixo.
 
 ### `absence` — Ausente estrutural
 
@@ -81,6 +81,35 @@ fechada sem que ninguém retomasse o ponto.
   termos da objeção reapareceriam no span, e a provocação seria reprovada (corretamente).
 - ✗ `references` sem `absence_check.terms` — prova que a objeção e a decisão existem, mas não
   prova que ninguém retomou o tema entre elas. Incompleto, não emita.
+
+### `premise` — Premissa não examinada
+
+Alguém fez uma afirmação categórica — apresentada como óbvia, consensual ou indiscutível — e a
+reunião seguiu em frente sem que ninguém a questionasse, pedisse esclarecimento ou discordasse.
+Diferente de `asymmetry` (uma objeção EXPLÍCITA que não foi respondida), aqui a alegação é o
+oposto: **nada foi levantado** — o risco é justamente a ausência de qualquer debate sobre algo
+apresentado como fechado.
+
+**Você faz DUAS alegações, e as duas precisam de evidência:**
+1. "Esta afirmação categórica realmente foi dita, neste momento" → prove com a primeira entrada
+   de `references` (citação literal, com timestamp). A citação precisa conter uma expressão de
+   certeza/dispensa de debate — "é claro que", "obviamente", "todo mundo sabe", "não precisa
+   discutir", "vamos assumir que", "sem dúvida", "é fato que" (ou equivalente direto). Uma
+   afirmação sem esse tipo de marcador não é uma premissa não examinada, é só uma opinião — não
+   emita.
+2. "A reunião seguiu adiante sem contestação" → prove com a segunda entrada de `references`: o
+   turno seguinte real (citação literal, com timestamp posterior ao da premissa) que mostra a
+   conversa prosseguindo — mudando de assunto, fechando a decisão, etc. — sem questionar o que
+   foi dito.
+
+Não existe `absence_check` neste tipo — não envie o campo, ou envie vazio.
+
+- ✓ "É claro que o Catálogo Mestre fica no SE Suíte, não precisa nem discutir." (00:14:02, Pedro)
+  → "Ok, próximo item da pauta." (00:14:19, Ana) → `references` com as duas citações exatas.
+- ✗ Afirmação categórica seguida de alguém perguntando "por quê?" ou discordando — isso foi
+  examinado, não é uma premissa não examinada (mesmo que a resposta tenha sido fraca).
+- ✗ "Pedro parecia convencido de que..." sem uma citação literal com um marcador de certeza
+  explícito — vago demais, o validador determinístico rejeita.
 
 ---
 
@@ -138,14 +167,29 @@ Retorne **APENAS JSON válido**, sem markdown, sem comentários:
         }
       },
       "confidence": "medium"
+    },
+    {
+      "kind": "premise",
+      "title": "Localização do Catálogo Mestre assumida sem debate",
+      "body": "Pedro afirmou que o Catálogo Mestre fica no SE Suíte, apresentando isso como óbvio. A pauta seguiu para o próximo item sem qualquer questionamento.",
+      "question": "A localização do Catálogo Mestre foi de fato decidida antes, ou essa afirmação está fechando uma questão em aberto sem debate?",
+      "grounding": {
+        "type": "premise",
+        "references": [
+          {"timestamp": "00:14:02", "speaker": "Pedro", "excerpt": "É claro que o Catálogo Mestre fica no SE Suíte, não precisa nem discutir."},
+          {"timestamp": "00:14:19", "speaker": "Ana", "excerpt": "Ok, próximo item da pauta."}
+        ]
+      },
+      "confidence": "high"
     }
   ]
 }
 ```
 
-`absence_check.terms` é **obrigatório e não pode ser vazio** em ambos os tipos — é a evidência
-que prova a alegação de ausência, não um campo decorativo. `references` é obrigatório (2 itens)
-só em `asymmetry`; em `absence`, envie `references: []`.
+`absence_check.terms` é **obrigatório e não pode ser vazio** em `absence` e `asymmetry` — é a
+evidência que prova a alegação de ausência, não um campo decorativo. `references` é obrigatório
+(2 itens) em `asymmetry` e em `premise`; em `absence`, envie `references: []`. Em `premise`, não
+envie `absence_check` (não se aplica a este tipo).
 
 Se não houver provocações válidas com evidência real, retorne `{"provocations": []}`.
 

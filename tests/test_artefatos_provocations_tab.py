@@ -62,6 +62,23 @@ _FAKE_PROVOCATIONS = [
         },
         "confidence": "high", "status": "new", "created_at": "2026-01-01T00:00:00Z",
     },
+    {
+        # kind="premise" (PC201) — citações literais como asymmetry, mas sem
+        # absence_check; ganha premise_markers em vez de termos ausentes.
+        "id": "prov-4", "meeting_id": "m1", "project_id": "p1", "tenant_id": None,
+        "kind": "premise", "title": "Localização assumida sem debate",
+        "body": "Afirmação categórica seguida de mudança de assunto, sem questionamento.",
+        "question": "Isso já estava decidido antes?",
+        "grounding": {
+            "type": "premise",
+            "references": [
+                {"timestamp": "00:14", "speaker": "Pedro", "excerpt": "é claro que fica assim"},
+                {"timestamp": "00:15", "speaker": "Ana", "excerpt": "próximo item"},
+            ],
+            "premise_markers": ["é claro que"],
+        },
+        "confidence": "high", "status": "new", "created_at": "2026-01-01T00:00:00Z",
+    },
 ]
 
 
@@ -173,3 +190,27 @@ class TestContradictionKindRendering:
 
         markdowns = " ".join(m.value for m in at.markdown)
         assert "Consolidar a decisão da Reunião 2." in markdowns
+
+
+class TestPremiseKindRendering:
+    """kind='premise' (PC201) reusa o bloco de citações de absence/asymmetry
+    (references já renderiza igual), mas troca 'termos ausentes' por
+    premise_markers — confere que aparece sem quebrar."""
+
+    def test_renders_without_exception(self):
+        at = _run_with_mocks(provocations=_FAKE_PROVOCATIONS)
+        assert not at.exception
+
+    def test_markers_and_references_shown(self):
+        at = _run_with_mocks(provocations=_FAKE_PROVOCATIONS)
+        radios = [r for r in at.radio if r.key == "prov_filter"]
+        radios[0].set_value("Todas").run()
+        assert not at.exception
+        labels = [e.label for e in at.expander]
+        assert any("Localização assumida sem debate" in l for l in labels)
+
+        captions = " ".join(c.value for c in at.caption)
+        assert "é claro que" in captions
+
+        markdowns = " ".join(m.value for m in at.markdown)
+        assert "é claro que fica assim" in markdowns

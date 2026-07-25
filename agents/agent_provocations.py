@@ -42,9 +42,27 @@ from modules.transcript_time_parser import _PATTERNS as _OTHER_PATTERNS, _TS_FIR
 
 _logger = logging.getLogger(__name__)
 
-_ENABLED_KINDS = {"absence", "asymmetry"}
+_ENABLED_KINDS = {"absence", "asymmetry", "premise"}
 _ALLOWED_CONFIDENCE = {"high", "medium"}
 _MAX_PROVOCATIONS = 5
+
+# kind="premise" (PC201, melhorias/provocacoes-vichara.md Fase 4): "ninguém
+# contestou" não reduz à primitiva de ausência-de-termo-em-span (absence/
+# asymmetry) — é julgamento semântico sobre o turno seguinte, que só o LLM
+# pode fazer; verificar isso em código seria "um LLM validando outro LLM"
+# (rejeitado — ver _validate_and_rank abaixo). O piso objetivo aqui é outro:
+# a citação da premissa precisa realmente conter um destes marcadores de
+# assertiva categórica (lista fixa, mesmo padrão de _TONE_BLACKLIST) — não é
+# o LLM que decide se qualifica, o código confere contra a lista.
+_PREMISE_MARKERS = (
+    "vamos assumir",
+    "é claro que", "e claro que",
+    "todo mundo sabe",
+    "obviamente",
+    "não precisa discutir", "nao precisa discutir",
+    "sem dúvida", "sem duvida",
+    "é fato que", "e fato que",
+)
 
 # kind="contradiction" (bridge, ver AgentProvocations.bridge_contradictions):
 # relation_type de kh_contradictions que qualificam como "provocação-worthy".
@@ -284,24 +302,56 @@ class AgentProvocations(BaseAgent):
                 reject("blacklisted_tone")
                 continue
 
-            absence_check = grounding.get("absence_check") or {}
-            if not isinstance(absence_check, dict):
-                absence_check = {}
-            terms = [str(t).strip() for t in (absence_check.get("terms") or []) if str(t).strip()]
-            if not terms:
-                reject("absence_check_missing")
-                continue
-
             references: list[dict] = []
+            terms: list[str] = []
+            matched_markers: list[str] = []
 
-            if kind == "absence":
-                # Span = transcrição inteira. Lastro é falso se QUALQUER termo
-                # supostamente ausente na verdade ocorre em algum lugar.
-                if any(_normalize(t) in transcript_norm for t in terms):
-                    reject("term_present_in_span")
+            if kind in ("absence", "asymmetry"):
+                absence_check = grounding.get("absence_check") or {}
+                if not isinstance(absence_check, dict):
+                    absence_check = {}
+                terms = [str(t).strip() for t in (absence_check.get("terms") or []) if str(t).strip()]
+                if not terms:
+                    reject("absence_check_missing")
                     continue
 
-            else:  # kind == "asymmetry"
+                if kind == "absence":
+                    # Span = transcrição inteira. Lastro é falso se QUALQUER termo
+                    # supostamente ausente na verdade ocorre em algum lugar.
+                    if any(_normalize(t) in transcript_norm for t in terms):
+                        reject("term_present_in_span")
+                        continue
+
+                else:  # kind == "asymmetry"
+                    refs = grounding.get("references") or []
+                    if not isinstance(refs, list) or len(refs) < 2:
+                        reject("insufficient_references")
+                        continue
+                    refs = [r for r in refs if isinstance(r, dict)]
+                    excerpts = [str(r.get("excerpt") or "").strip() for r in refs[:2]]
+                    if len(excerpts) < 2 or not all(excerpts):
+                        reject("insufficient_references")
+                        continue
+                    # Cada excerto precisa ser citação literal (normalizada) da
+                    # transcrição — uma paráfrase é lastro inventado, não real.
+                    if not all(_normalize(ex) in transcript_norm for ex in excerpts):
+                        reject("reference_not_found")
+                        continue
+
+                    # A alegação real de asymmetry é "ninguém retomou o tema
+                    # ENTRE a objeção e o fechamento" — span derivado das duas
+                    # referências (não confiado a um span separado do LLM, que
+                    # poderia não corresponder às citações de fato fornecidas).
+                    span = _span_text(transcript, refs[0].get("timestamp", ""), refs[1].get("timestamp", ""))
+                    if span is None:
+                        reject("span_unresolved")
+                        continue
+                    if any(_normalize(t) in _normalize(span) for t in terms):
+                        reject("term_present_in_span")
+                        continue
+                    references = refs
+
+            else:  # kind == "premise" (PC201) — sem absence_check, checagem própria
                 refs = grounding.get("references") or []
                 if not isinstance(refs, list) or len(refs) < 2:
                     reject("insufficient_references")
@@ -311,24 +361,42 @@ class AgentProvocations(BaseAgent):
                 if len(excerpts) < 2 or not all(excerpts):
                     reject("insufficient_references")
                     continue
-                # Cada excerto precisa ser citação literal (normalizada) da
-                # transcrição — uma paráfrase é lastro inventado, não real.
+                # As duas citações (a premissa + o turno seguinte) precisam ser
+                # literais — mesma exigência de asymmetry, mesmo motivo.
                 if not all(_normalize(ex) in transcript_norm for ex in excerpts):
                     reject("reference_not_found")
                     continue
 
-                # A alegação real de asymmetry é "ninguém retomou o tema
-                # ENTRE a objeção e o fechamento" — span derivado das duas
-                # referências (não confiado a um span separado do LLM, que
-                # poderia não corresponder às citações de fato fornecidas).
-                span = _span_text(transcript, refs[0].get("timestamp", ""), refs[1].get("timestamp", ""))
-                if span is None:
-                    reject("span_unresolved")
+                # Piso objetivo: a citação da premissa precisa realmente conter
+                # um marcador de assertiva categórica (lista fixa) — não é o
+                # LLM que decide se "é uma premissa", o código confere.
+                premise_excerpt_norm = _normalize(excerpts[0])
+                matched_markers = [m for m in _PREMISE_MARKERS if m in premise_excerpt_norm]
+                if not matched_markers:
+                    reject("premise_marker_missing")
                     continue
-                if any(_normalize(t) in _normalize(span) for t in terms):
-                    reject("term_present_in_span")
+
+                # A referência 1 (turno seguinte) precisa ser um turno REAL da
+                # transcrição, posicionado depois da referência 0 — não
+                # tentamos verificar a SEMÂNTICA de "ninguém contestou" (isso
+                # é julgamento do LLM), só que a citação não é inventada nem
+                # está fora de ordem.
+                ts_premise = refs[0].get("timestamp", "")
+                ts_next = refs[1].get("timestamp", "")
+                if not (_looks_like_timestamp(ts_premise) and _looks_like_timestamp(ts_next)):
+                    reject("next_turn_not_after")
                     continue
-                references = refs
+                turns = _turn_positions(transcript)
+                known_seconds = {sec for sec, _ in turns}
+                sec_premise, sec_next = _ts_to_seconds(ts_premise), _ts_to_seconds(ts_next)
+                if (
+                    sec_premise not in known_seconds
+                    or sec_next not in known_seconds
+                    or sec_next <= sec_premise
+                ):
+                    reject("next_turn_not_after")
+                    continue
+                references = refs[:2]
 
             approved.append(ProvocationItem(
                 kind=kind,
@@ -338,6 +406,7 @@ class AgentProvocations(BaseAgent):
                 grounding_type=str(grounding.get("type") or kind),
                 references=references,
                 absence_terms=terms,
+                premise_markers=matched_markers,
                 confidence=confidence,
             ))
 

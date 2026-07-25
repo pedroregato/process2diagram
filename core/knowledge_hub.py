@@ -466,11 +466,15 @@ class DMNModel:
 # agents/agent_provocations.py. kind="contradiction" é uma 3ª via: nunca
 # passa pelo LLM/validador transcript-literal, é sintetizado deterministicamente
 # a partir de kh_contradictions já detectadas por AgentContradictionDetector
-# (ver AgentProvocations.bridge_contradictions()).
+# (ver AgentProvocations.bridge_contradictions()). kind="premise" (PC201) volta
+# a passar pelo LLM+validador (não reduz à primitiva de ausência de termo em
+# span — "ninguém contestou" é julgamento semântico, não checável por código),
+# mas com um piso objetivo novo: a citação precisa conter um marcador de
+# assertiva categórica de lista fixa, conferido em código.
 
 @dataclass
 class ProvocationItem:
-    kind: str                # "absence" | "asymmetry" (fase 1) | "contradiction" (bridge, sem LLM)
+    kind: str                # "absence" | "asymmetry" | "premise" (LLM+validador) | "contradiction" (bridge, sem LLM)
     title: str
     body: str
     question: str
@@ -478,6 +482,7 @@ class ProvocationItem:
     references: list[dict] = field(default_factory=list)   # [{timestamp, speaker, excerpt}]
     absence_terms: list[str] = field(default_factory=list)  # termos que NÃO devem ocorrer no span (PC190-fix)
     contradiction_ref: Optional[dict] = None  # kind="contradiction": {source_contradiction_id, meeting_a_id, meeting_b_id, relation_type, suggested_rewrite}
+    premise_markers: list[str] = field(default_factory=list)  # kind="premise": marcadores de _PREMISE_MARKERS que bateram na citação
     confidence: str = "medium"           # "high" | "medium" — nunca "low"
     status: str = "new"                  # "new" | "accepted" | "discarded" | "became_divergence"
     db_id: Optional[str] = None          # id em Supabase, após persistência
