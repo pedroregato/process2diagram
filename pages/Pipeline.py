@@ -390,11 +390,11 @@ if pipeline_mode == _MODE_NEW:
                             )
 
                     # PC190 — Provocações (melhorias/arquivados/agente-de-provocacoes.md).
-                    # Opt-in (default OFF, diferente do CKF Updater): agente novo, custa
-                    # 1 chamada LLM extra por reunião. Mesma exigência de meeting_id real
-                    # de run_knowledge_extraction() acima — por isso roda aqui, não dentro
+                    # Default ON desde o PC205 (era opt-in/OFF no PC190) — custa 1 chamada
+                    # LLM extra por reunião. Mesma exigência de meeting_id real de
+                    # run_knowledge_extraction() acima — por isso roda aqui, não dentro
                     # de run_pipeline() (que roda antes da reunião existir).
-                    if st.session_state.get("run_provocations", False):
+                    if st.session_state.get("run_provocations", True):
                         with st.spinner("🎭 Gerando provocações..."):
                             run_provocations(
                                 hub, client_info, st.session_state.provider_cfg,

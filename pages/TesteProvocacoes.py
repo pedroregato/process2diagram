@@ -400,7 +400,7 @@ _guide_html = """<!DOCTYPE html>
       <li><input type="checkbox" id="c0-1"><label for="c0-1">Login feito, com um <b>contexto/projeto ativo</b> definido — Home → selecionar ou criar um projeto de teste (ex. <code>Teste Provocações</code>)</label></li>
       <li><input type="checkbox" id="c0-2"><label for="c0-2">Provider de LLM configurado (Settings → chave de API de algum provider)</label></li>
       <li><input type="checkbox" id="c0-3"><label for="c0-3">Em <b>Pipeline → 🆕 Processar Transcrição → ⚙️ Configuração Avançada</b>, ativar <code>🕸️ Grafo de Conhecimento (KH)</code> — padrão já ligado, só conferir</label></li>
-      <li><input type="checkbox" id="c0-4"><label for="c0-4">No mesmo painel, ativar <code>🎭 Gerar Provocações</code> — <b>desligado por padrão</b>, precisa marcar manualmente</label></li>
+      <li><input type="checkbox" id="c0-4"><label for="c0-4">No mesmo painel, conferir que <code>🎭 Gerar Provocações</code> está ativo — <b>ligado por padrão desde o PC205</b> (era desligado por padrão antes disso)</label></li>
     </ul>
   </section>
 

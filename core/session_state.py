@@ -36,7 +36,7 @@ def init_session_state():
     if "run_ckf_updater" not in st.session_state:
         st.session_state.run_ckf_updater = True
     if "run_provocations" not in st.session_state:
-        st.session_state.run_provocations = False  # PC190 — novo/experimental, opt-in
+        st.session_state.run_provocations = True  # PC205 — padrão ligado (era False/opt-in desde o PC190); custa 1 chamada LLM extra por reunião, mas sem isso a feature nunca gera dado real pra validar
     if "run_dmn" not in st.session_state:
         st.session_state.run_dmn = True
     if "run_argumentation" not in st.session_state:

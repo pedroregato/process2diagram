@@ -2,10 +2,12 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Provocações Backfill (PC204) — re-deriva provocações kind="contradiction" a
 # partir de contradições já detectadas em kh_contradictions/AgentContradictionDetector,
-# para reuniões já processadas SEM o toggle "🎭 Gerar Provocações" ligado
-# (desligado por padrão). Não roda nenhum agente LLM, não reprocessa a reunião —
-# só chama AgentProvocations.bridge_contradictions() (PC200, determinístico) e
-# persiste o que ainda não tinha sido salvo.
+# para reuniões já processadas SEM o toggle "🎭 Gerar Provocações" ligado (era
+# desligado por padrão até o PC190; ligado por padrão desde o PC205 — ainda útil
+# pra reuniões processadas antes disso, ou com o toggle desativado manualmente).
+# Não roda nenhum agente LLM, não reprocessa a reunião — só chama
+# AgentProvocations.bridge_contradictions() (PC200, determinístico) e persiste
+# o que ainda não tinha sido salvo.
 #
 # Fluxo:
 #   1. Seleciona o projeto
@@ -40,8 +42,9 @@ st.markdown("# 🎭 Provocações — Backfill de Contradições")
 st.caption(
     "Re-deriva provocações **kind=\"contradiction\"** a partir de contradições já detectadas "
     "(`kh_contradictions`/`AgentContradictionDetector`) para reuniões já processadas — sem rodar "
-    "nenhum agente LLM, sem reprocessar a reunião. Útil para reuniões processadas antes de "
-    "\"🎭 Gerar Provocações\" estar ligado (desligado por padrão). Não cobre `absence`/`asymmetry`/"
+    "nenhum agente LLM, sem reprocessar a reunião. Útil para reuniões processadas com "
+    "\"🎭 Gerar Provocações\" desativado (padrão até o PC205; ligado por padrão desde então, mas o "
+    "toggle ainda pode ser desmarcado manualmente). Não cobre `absence`/`asymmetry`/"
     "`premise` — essas exigem uma chamada real ao LLM sobre a transcrição, não têm backfill barato."
 )
 

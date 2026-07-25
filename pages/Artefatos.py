@@ -3068,11 +3068,11 @@ with tab_prov:
         "referência a uma contradição já detectada entre duas reuniões — nenhuma sai sem lastro."
     )
 
-    if not st.session_state.get("run_provocations", False):
+    if not st.session_state.get("run_provocations", True):
         st.info(
-            "🎭 A geração de provocações está desligada por padrão. Ative em "
-            "**Pipeline → ⚙️ Configuração Avançada → 🎭 Gerar Provocações** para que novas "
-            "reuniões processadas produzam provocações automaticamente.",
+            "🎭 A geração de provocações está desligada para esta sessão. Ative em "
+            "**Pipeline → ⚙️ Configuração Avançada → 🎭 Gerar Provocações** (ligado por padrão) "
+            "para que novas reuniões processadas produzam provocações automaticamente.",
             icon="ℹ️",
         )
 
