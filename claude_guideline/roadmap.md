@@ -4,6 +4,49 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC206 — Concluído (v5.15 / 2026-07-25) — Fix real: contradições de Full Scan gravavam meeting_a_id=None pra sempre
+
+**Contexto:** investigando por que o backfill (PC204) deu zero pendente pro AURORA apesar de 8
+contradições `status=open` reais no Knowledge Hub (dado bruto confirmado pelo usuário via a página
+Knowledge Hub, não a narração do chat — 6 das 8 com `relation_type`/`severity` dentro do allowlist
+do bridge), a causa não estava no bridge do PC200, e sim em quem grava o dado.
+
+- **Achado, por leitura direta de `agents/agent_contradiction_detector.py::_call_and_store()`:**
+  `meeting_a_id` era atribuído direto do parâmetro `meeting_id` (`"meeting_a_id": meeting_id`),
+  nunca resolvido a partir de `fact_a_id` — assimetria com `meeting_b_id`, que já era corretamente
+  resolvido via `fact_b_id`. Em modo compare (`_run_compare_mode`, pipeline normal) isso funciona
+  por acidente (`meeting_id` é sempre a reunião real sendo processada). Em modo full-scan
+  (`_run_fullscan_mode`, botão "🔍 Reprocessar Contradições" — visível na tela do usuário, confirma
+  que as 8 do AURORA vieram desse caminho) `_call_and_store()` é chamado com `meeting_id=None` **de
+  propósito** — não há "reunião atual" numa varredura completa. Resultado: **toda contradição
+  detectada via full-scan grava `meeting_a_id=None` permanentemente**, e
+  `AgentProvocations.bridge_contradictions()` (PC200) exige `meeting_a_id == a reunião sendo
+  iterada` — nunca bate com `None`. O bridge estava correto; o full-scan gravava dado incompleto.
+- **Fix:** resolver `meeting_a_id` a partir de `fact_a_id` (via `all_facts_idx`, já existente,
+  mesmo mecanismo já usado pro lado B), com fallback pro `meeting_id` passado — preserva o
+  comportamento exato do modo compare, só corrige o full-scan (que hoje sempre gravava `None`).
+  Fail-open natural: sem `fact_a_id` no output do LLM, `meeting_a_id` continua `None`, sem lançar
+  exceção.
+- **Consequência para dado já existente, sem correção possível daqui:** o fix só vale pra execuções
+  futuras de full-scan. As 8 linhas já gravadas no AURORA continuam com `meeting_a_id=None` pra
+  sempre — sem acesso ao Supabase de produção. `insert_contradiction()`
+  (`core/knowledge_store.py:383`) não tem dedup — rodar "🔍 Reprocessar Contradições" de novo depois
+  do fix cria linhas NOVAS com `meeting_a_id` correto, mas as 8 antigas continuam como duplicatas.
+  **Usuário precisa, no AURORA: (1) rodar o full-scan de novo, (2) marcar as 8 linhas antigas como
+  resolvida/falso-positivo em Knowledge Hub → Contradições**, pra não conviverem confusamente com
+  as novas.
+- `tests/test_agent_contradiction_detector.py` — **arquivo novo, nenhum teste existia pra
+  `agent_contradiction_detector.py` antes deste PC.** 4 testes: modo compare sem regressão, modo
+  full-scan resolve via `fact_a_id` (regressão do bug real), `fact_a_id` ausente/inexistente →
+  `None` sem exceção (fail-open).
+- Fora de escopo, deliberado: não corrigir as 8 linhas do AURORA diretamente (sem acesso ao banco
+  de produção); não adicionar dedup em `insert_contradiction()` (gap adjacente real, não corrigido
+  agora); nenhuma mudança em `bridge_contradictions()` (estava correto).
+- Verificação: `python -m py_compile` limpo; suíte completa 993/993 passando (4 testes novos, sem
+  regressão).
+
+---
+
 ### PC205 — Concluído (v5.15 / 2026-07-25) — "Gerar Provocações" passa a ser ligado por padrão
 
 **Contexto:** ao testar o projeto real AURORA (via `pages/TesteProvocacoes.py`/PC203 e o backfill do

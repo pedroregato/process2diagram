@@ -287,7 +287,17 @@ class AgentContradictionDetector(BaseAgent):
             if relation_type in ("equivalent", "complementary", "more_specific"):
                 continue
 
-            # Resolve meeting_b_id from fact_b_id
+            # Resolve meeting_a_id/meeting_b_id from fact_a_id/fact_b_id (PC206-fix).
+            # meeting_id só é confiável no modo compare (sempre a reunião real
+            # sendo processada); no modo full-scan (_run_fullscan_mode) ele é
+            # None de propósito — não há "reunião atual" numa varredura
+            # completa. Sem resolver por fato, toda contradição de full-scan
+            # gravava meeting_a_id=None permanentemente, e nunca conseguia
+            # passar em AgentProvocations.bridge_contradictions() (PC200), que
+            # exige meeting_a_id == a reunião sendo iterada.
+            fact_a_id    = c.get("fact_a_id")
+            meeting_a_id = meeting_id or all_facts_idx.get(fact_a_id)
+
             fact_b_id    = c.get("fact_b_id")
             meeting_b_id = all_facts_idx.get(fact_b_id) if fact_b_id else None
 
@@ -302,7 +312,7 @@ class AgentContradictionDetector(BaseAgent):
                 "description":         desc,
                 "process_name":        c.get("process_name") or None,
                 "severity":            c.get("severity") or "medium",
-                "meeting_a_id":        meeting_id,
+                "meeting_a_id":        meeting_a_id,
                 "meeting_b_id":        meeting_b_id,
                 "relation_type":       relation_type or None,
                 "confidence":          conf,
