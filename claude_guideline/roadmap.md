@@ -4,6 +4,27 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC205 — Concluído (v5.15 / 2026-07-25) — "Gerar Provocações" passa a ser ligado por padrão
+
+**Contexto:** ao testar o projeto real AURORA (via `pages/TesteProvocacoes.py`/PC203 e o backfill do
+PC204), ficou claro que nenhuma reunião do AURORA tinha sido processada com "🎭 Gerar Provocações"
+ativo — o toggle era `False` por padrão desde o PC190 (agente novo/experimental, custa 1 chamada LLM
+extra por reunião). Resultado prático: a feature nunca gerava dado real pra validar em projetos já
+existentes, mesmo quando havia sinal genuíno disponível (contradições em `kh_contradictions`).
+
+- `core/session_state.py::init_session_state()` — `run_provocations` default `False` → `True`.
+  Continua um toggle de sessão comum, pode ser desativado manualmente; o custo (1 chamada LLM extra
+  por reunião) passa a ser aceito por padrão em vez de opt-in.
+- Atualizadas as 5 referências no código que mencionavam o default antigo, pra não ficarem
+  inconsistentes: `pages/Pipeline.py` (fallback do `.get()` + comentário), `pages/Artefatos.py` (banner
+  da aba Provocações), `pages/ProvocationsBackfill.py` (comentário + caption), schema do tool
+  `backfill_provocations_contradictions` (`tools_admin_charts_entities.py`), `pages/TesteProvocacoes.py`
+  (item do checklist interativo), `CLAUDE.md` (linha de defaults de `init_session_state()`).
+- Verificação: `python -m py_compile` nos arquivos tocados; suíte completa 989/989 passando (nenhum
+  teste existente assumia o default antigo).
+
+---
+
 ### PC204 — Concluído (v5.15 / 2026-07-25) — Backfill de Provocações kind="contradiction" (página + tool do Assistente)
 
 **Contexto:** testando o projeto real AURORA (via `pages/TesteProvocacoes.py`, PC203), o usuário achou
