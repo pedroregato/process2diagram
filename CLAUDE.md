@@ -69,7 +69,8 @@ process2diagram/
 │   ├── BatchRunner.py            # Batch pipeline (Manutenção)
 │   ├── BpmnBackfill.py           # Backfill BPMN XML (Manutenção)
 │   ├── TranscriptBackfill.py     # Backfill transcript embeddings (Manutenção)
-│   └── MinutesBackfill.py        # Backfill meeting minutes (Manutenção)
+│   ├── MinutesBackfill.py        # Backfill meeting minutes (Manutenção)
+│   └── TesteProvocacoes.py       # Roteiro de teste manual das 4 kinds de Provocações — checklist interativo, transcrições prontas (PC190/PC200/PC201/PC202) (Manutenção)
 │
 ├── core/
 │   ├── knowledge_hub.py          # KnowledgeHub dataclass — central session state
@@ -249,7 +250,7 @@ AgentRequirements┘
 | **Sistema** | Settings.py, CostEstimator.py, LLMBenchmark.py [+ MasterAdmin.py, DatabaseOverview.py] | Todos [admin extra] |
 | **Ajuda** | ComoIniciar (tutorial), CasosDeUso (valor de negócio), Assistente (tool reference), Glossário (reference), Capacitacao (curso corporativo) | Todos |
 | **Guias** | Arquiteturas, CKF, BpmnStudio, Gráficos, CacheSemantico, Feedback, Manifesto — conteúdo explicativo/conceitual ("como funciona por baixo") | Todos |
-| **Manutenção** | BatchRunner.py, BpmnBackfill.py, MinutesBackfill.py, TranscriptBackfill.py | Admin only |
+| **Manutenção** | BatchRunner.py, BpmnBackfill.py, MinutesBackfill.py, TranscriptBackfill.py, TesteProvocacoes.py — roteiro de QA, não conteúdo explicativo (por isso não fica em Guias) | Admin only |
 
 `app.py` renders no content — only calls `st.navigation(pages).run()`. Groups rebuilt every rerun (menu updates immediately after login).
 

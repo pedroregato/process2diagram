@@ -4,6 +4,32 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC203 — Concluído (v5.15 / 2026-07-25) — Roteiro de teste manual das Provocações em Manutenção (`pages/TesteProvocacoes.py`)
+
+**Contexto:** usuário pediu um plano de testes das Provocações pra seguir na versão web — entreguei
+como Artifact (checklist interativo, transcrições prontas pra reproduzir as 4 kinds), e o usuário
+pediu pra incluir na própria aplicação, na seção "Guias".
+
+- **Desvio deliberado do pedido literal:** conteúdo é um roteiro de QA/debug ("reprocesse se não
+  reproduzir", "onde reportar bug"), não conteúdo explicativo/conceitual — quebraria a convenção
+  de "Guias" (PC193, framework Diátaxis, visível a **todos os usuários**). Perguntei ao usuário via
+  `AskUserQuestion` antes de implementar; ele escolheu **Manutenção** (admin-only, mesmo grupo de
+  `BatchRunner.py`/`BpmnBackfill.py`) em vez de seguir o pedido literal.
+- `pages/TesteProvocacoes.py` — embeda o HTML/CSS/JS já publicado como Artifact via
+  `st.components.v1.html()`, mesmo padrão de `Orientacoes_Feedback.py`/`Orientacoes_CacheSemantico.py`
+  (guias em HTML dark-theme). Checklist interativo com persistência via `localStorage` do navegador
+  (sobrevive a reload), botão de copiar transcrição. Cobre as 4 kinds em produção: `absence`,
+  `asymmetry`, `premise` (LLM + validador determinístico) e `contradiction` (bridge determinístico) —
+  2 transcrições desenhadas pra provocar as 3 primeiras numa única reunião e reverter uma decisão
+  numa segunda reunião pra testar a quarta. `analogy` não está no roteiro (PC202, adiado).
+- Registrado em `app.py` (grupo Manutenção, ícone 🎭) + `CLAUDE.md` (árvore de `pages/` + tabela de
+  grupos de navegação, com nota explícita do porquê não está em Guias).
+- Verificação: `python -m py_compile` limpo; boot-smoke via `AppTest` (chave de sessão real
+  `_autenticado`/`_role="admin"`, mesma lição do PC178) sem exceção, componente HTML renderizado;
+  suíte completa 980/980 passando, sem regressão.
+
+---
+
 ### PC202 — Concluído (v5.15 / 2026-07-25) — Provocações: kind="analogy" AVALIADO E ADIADO + correção de achado do PC200 + arquivamento de `provocacoes-vichara.md`
 
 **Contexto:** fecha o roadmap de `melhorias/provocacoes-vichara.md` (Fase 1 já existia desde
