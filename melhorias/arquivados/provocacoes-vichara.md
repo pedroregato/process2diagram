@@ -1,4 +1,47 @@
-Excelente. Aqui está o plano completo, estruturado por tipo de provocação, com estimativas de esforço e ordem de implementação sugerida.
+**Status:** AVALIADA — 2 de 5 fases implementadas (2026-07-25), arquivada
+**Data:** 2026-07-22 (proposta) / 2026-07-25 (fechamento)
+
+---
+
+## Nota de fechamento (2026-07-25)
+
+Avaliação contra o código real, fase por fase:
+
+1. **Fase 1 (fundação: tabela + tool `provoke()`) já existia** desde o PC190 — `provocations`
+   (`setup/supabase_migration_provocations.sql`) + `AgentProvocations`
+   (`agents/agent_provocations.py`) + aba "🎭 Provocações" em `Artefatos.py`. O `CHECK` de `kind`
+   já incluía os 5 valores da taxonomia completa, deixado de propósito com espaço reservado.
+2. **Fase 3 (Contradição no Tempo) → implementada como `kind="contradiction"` (PC200,
+   commit `bda83ee`)**, mas não como a proposta descrevia: em vez de um detector novo, virou um
+   **bridge determinístico, sem LLM**, a partir de `kh_contradictions`/`AgentContradictionDetector`
+   — que já faziam detecção cross-reunião automaticamente, achado só depois de investigar o
+   código real.
+3. **Fase 4 (Premissa Não Examinada) → implementada como `kind="premise"` (PC201,
+   commit `eb41b70`)**, essa sim passando pelo LLM (não tinha detector pra reaproveitar), com
+   validador determinístico próprio (marcador de assertiva categórica + integridade de citação,
+   não a mesma primitiva de ausência-de-termo de absence/asymmetry).
+4. **Fase 2 (Ausência via catálogo de domínio)** — tratada como feature separada da proposta, não
+   parte do roadmap de `AgentProvocations` (é um mecanismo diferente do `kind="absence"` já
+   existente). Não avaliada em detalhe.
+5. **Fase 5 (Assimetria via extensão do modelo IBIS)** — confirmado gap real de schema
+   (`ibis_alternatives` não rastreia objeção↔resposta), mas não avaliada pra implementação.
+6. **Fase 6 (Analogia Estrutural) → AVALIADA E ADIADA**, sem implementação. Achados: (a) a
+   proposta cita `cluster_topic_decisions()` como já existente — a função existe de fato
+   (`core/tools/tools_documents_ibis_diagrams.py:1414`, ao contrário do que foi concluído em duas
+   investigações anteriores neste mesmo processo de avaliação — corrigido aqui), mas agrupa por
+   **mesmo tópico** (palavra-chave) ao longo do tempo, não por padrão de decisão entre tópicos
+   diferentes — não cobre o que "analogy" pede. (b) A infraestrutura real (fingerprint estrutural
+   de decisão IBIS + embedding pra clusterização semântica) não existe em lugar nenhum do
+   codebase — seria a primeira das kinds a exigir infraestrutura nova do zero (tabela, RPC
+   pgvector, passo de síntese), não reaproveitamento, ao contrário de `contradiction`/`premise`.
+   (c) Uma versão v1 reduzida (bucketing determinístico por tag estrutural simples, sem
+   embedding) foi considerada e **descartada** — corresponder por coincidência de bucket sem
+   relação de assunto não é uma provocação lastreada, é ruído com aparência de insight,
+   minando a confiança nas outras 2 kinds que são genuinamente verificáveis.
+
+**Decisão:** `analogy` fica fora do roadmap de Provocações. Só revisitar como iniciativa própria
+de infraestrutura, com caso de negócio próprio, se o uso real de `contradiction`/`premise`
+sinalizar que esse tipo de insight faz falta.
 
 ---
 

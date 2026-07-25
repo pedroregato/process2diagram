@@ -4,6 +4,45 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC202 — Concluído (v5.15 / 2026-07-25) — Provocações: kind="analogy" AVALIADO E ADIADO + correção de achado do PC200 + arquivamento de `provocacoes-vichara.md`
+
+**Contexto:** fecha o roadmap de `melhorias/provocacoes-vichara.md` (Fase 1 já existia desde
+PC190; `contradiction`=PC200; `premise`=PC201). Faltava avaliar Fase 6 (Analogia Estrutural).
+
+- **Correção de um achado errado do PC200:** eu tinha concluído (2x, em investigações
+  separadas) que `cluster_topic_decisions()` não existia no codebase — **estava errado**. A
+  função existe (`core/tools/tools_documents_ibis_diagrams.py:1414`, tool registrada do
+  Assistente, usada em `pages/Assistente.py`). Só um `grep` direto no arquivo certo achou; as
+  duas buscas anteriores (via Explore agent) erraram. O que ela faz, porém, não é o que a
+  proposta descreve para "analogy": agrupa DMN+IBIS+atas por **mesmo tópico** (palavra-chave) ao
+  longo do tempo — "o que foi decidido sobre X ao longo do projeto", não "quais decisões
+  DIFERENTES seguiram o mesmo PADRÃO de deliberação". Não cobre o gap. Nota de correção deixada
+  na entrada do PC200 acima, sem reescrever o commit já pushado (`bda83ee`).
+- **`analogy` avaliado e adiado, sem implementação.** Ao contrário de `contradiction` (bridge
+  determinístico sobre detector já existente) e `premise` (LLM + validador reaproveitando o
+  padrão transcript-literal), `analogy` exigiria **infraestrutura nova do zero**: o modelo IBIS
+  não captura "padrão de decisão" (só `resolution_type` decided/deferred/unresolved, sem
+  contagem de alternativas/veto/consenso como feature tipada), e não existe em lugar nenhum do
+  projeto um pipeline de embedding para conteúdo estruturado (todo embedding existente —
+  `cross_meeting_analyzer.py`, `document_store.py`, `project_store::search_semantic` — indexa
+  texto bruto de transcrição/documento, nunca um fingerprint sintetizado). Construir isso como a
+  proposta original imaginou (clusterização semântica) exigiria tabela nova, RPC pgvector nova,
+  passo de síntese — ordem de grandeza maior que `contradiction`/`premise`.
+- **Alternativa reduzida (bucketing determinístico por tag estrutural, sem embedding) foi
+  considerada e descartada.** Usuário questionou diretamente por que construir "algo simbólico"
+  em vez de algo de valor real — correto: correspondência por coincidência de bucket (mesma
+  faixa de nº de alternativas + `resolution_type` + presença de oposição), sem relação de
+  assunto, não é uma provocação lastreada, é ruído com aparência de insight — minaria a confiança
+  nas outras 2 kinds, que são genuinamente verificáveis.
+- `melhorias/provocacoes-vichara.md` arquivada em `melhorias/arquivados/` com nota de fechamento
+  resumindo o que foi implementado, o que foi adiado e por quê — mesmo padrão já usado no
+  projeto para propostas avaliadas (`cache-semantico.md`, `solution-manage.md`).
+- Sem código de aplicação tocado — só documentação/decisão registrada. Roadmap de Provocações
+  fecha aqui: `absence`/`asymmetry` (PC190) + `contradiction` (PC200) + `premise` (PC201) em
+  produção; `analogy` fora de escopo até haver sinal real de demanda.
+
+---
+
 ### PC201 — Concluído (v5.15 / 2026-07-25) — Provocações: kind="premise" (Premissa Não Examinada)
 
 **Contexto:** sequência do PC200 no roadmap de `melhorias/provocacoes-vichara.md`. Diferente de
@@ -83,9 +122,13 @@ próprio pipeline (`run_knowledge_extraction()`, antes de `run_provocations()`).
   automático de `run_for_meeting()`.
 - Sem migração de banco (`kind` CHECK e `grounding JSONB` já suportavam). 24 testes novos
   (`tests/test_agent_provocations.py` — filtros do bridge; `tests/test_artefatos_provocations_tab.py`
-  — rendering novo via AppTest real), 969/969 passando (suíte completa, sem regressão). Achado
-  colateral fechado pela leitura do código antes de propor: `cluster_topic_decisions()`, citada
-  pela proposta externa como já existente, não existe em lugar nenhum do codebase.
+  — rendering novo via AppTest real), 969/969 passando (suíte completa, sem regressão).
+  ~~Achado colateral: `cluster_topic_decisions()`, citada pela proposta externa como já existente,
+  não existe em lugar nenhum do codebase.~~ **Correção (PC202, 2026-07-25): essa afirmação estava
+  errada.** A função existe (`core/tools/tools_documents_ibis_diagrams.py:1414`, tool registrada
+  do Assistente) — só que agrupa por MESMO TÓPICO (palavra-chave) ao longo do tempo, não por
+  padrão de decisão entre tópicos diferentes; não cobre o gap que motivou o achado original. Ver
+  PC202.
 
 ---
 
