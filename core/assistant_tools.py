@@ -147,6 +147,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "delete_project_artifacts":     "admin",
     "fix_missing_llm_provider":     "admin",
     "generate_meeting_embeddings":  "admin",
+    "backfill_provocations_contradictions": "admin",
     "embed_meeting":                "admin",
     "get_database_integrity":       "admin",
     # Geração (LLM-powered) — admin
@@ -252,6 +253,7 @@ _ADMIN_TOOLS: frozenset[str] = frozenset({
     "get_database_integrity",
     "fix_missing_llm_provider",
     "generate_meeting_embeddings",
+    "backfill_provocations_contradictions",
     "embed_meeting",
     "delete_meeting",
     "delete_project_artifacts",
@@ -627,6 +629,9 @@ class AssistantToolExecutor(
                     tool_input["provider"],
                 ),
                 "generate_meeting_embeddings":    lambda: self.generate_meeting_embeddings(
+                    tool_input.get("meeting_numbers"),
+                ),
+                "backfill_provocations_contradictions": lambda: self.backfill_provocations_contradictions(
                     tool_input.get("meeting_numbers"),
                 ),
                 "embed_meeting":                  lambda: self.embed_meeting(

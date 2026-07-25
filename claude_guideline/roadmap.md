@@ -4,6 +4,53 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC204 — Concluído (v5.15 / 2026-07-25) — Backfill de Provocações kind="contradiction" (página + tool do Assistente)
+
+**Contexto:** testando o projeto real AURORA (via `pages/TesteProvocacoes.py`, PC203), o usuário achou
+um gap real que o PC200 não previu: `AgentProvocations.bridge_contradictions()` só roda dentro de
+`run_provocations()`, chamado uma única vez, logo após `create_meeting()`. As 8 contradições reais do
+AURORA foram detectadas por `AgentContradictionDetector` quando as reuniões foram processadas, mas
+quase certamente com "🎭 Gerar Provocações" desligado (padrão) — nunca passaram pela ponte, mesmo já
+existindo em `kh_contradictions`. Reprocessar a reunião pra corrigir isso re-rodaria extração de
+conhecimento (custo de LLM, risco de duplicar contradições no banco).
+
+- **Escopo deliberadamente restrito a `kind="contradiction"`** — é a única kind "backfillável" sem
+  custo de LLM (o bridge determinístico já existe, PC200). `absence`/`asymmetry`/`premise` exigem
+  chamada real ao LLM sobre a transcrição, sem equivalente de backfill barato.
+- `core/pipeline.py::backfill_contradiction_provocations(project_id, meeting_ids=None,
+  progress_callback=None)` — nova função de orquestração, mesmo módulo/convenção de
+  `run_provocations()`/`run_knowledge_extraction()`. Constrói o índice de dedup **uma vez pro lote
+  inteiro** (não por reunião, otimização sobre a versão single-meeting do PC200), chama
+  `bridge_contradictions()` por reunião, salva só o que é novo, erro isolado numa reunião não derruba
+  as demais (fail-open, mesmo padrão de `run_provocations()`).
+- `pages/ProvocationsBackfill.py` (Manutenção, admin-only) — mesma estrutura de
+  `pages/MinutesBackfill.py` (seletor de projeto → tabela de elegibilidade → multiselect pré-marcado →
+  botão único → progresso → resultado), sem seleção de LLM (não precisa) e com elegibilidade calculada
+  chamando o próprio `bridge_contradictions()` por reunião — a prévia nunca diverge do resultado real
+  da execução. **Gap sinalizado, não corrigido:** confirmado que nenhuma página de Backfill existente
+  (nem esta) tem checagem `is_admin()` própria — a proteção é só a página não aparecer no menu; um
+  usuário não-admin que soubesse a URL não seria bloqueado. Pré-existente na família inteira, fora do
+  escopo deste PC.
+- Tool do Assistente `backfill_provocations_contradictions(meeting_numbers=None)` — mesmo arquivo de
+  `fix_missing_llm_provider`/`generate_meeting_embeddings` (`core/tools/tools_admin_charts_entities.py`),
+  resolve número→id via `self._get_meetings()`, chama a mesma função compartilhada, retorna string
+  pronta pra relay pelo LLM. Registro completo: schema em `ADMIN_CHARTS_ENTITIES_SCHEMAS`, dispatch em
+  `execute()`, `_ADMIN_TOOLS` (gate real server-side) **e** `_TOOL_CATEGORIES` (só exibição — achado da
+  investigação: fácil de esquecer, sem isso o tool aparece como "consulta" no catálogo mesmo sendo
+  admin/escrita).
+- `app.py` (grupo Manutenção) + `CLAUDE.md` atualizados (árvore de `pages/`, tabela de grupos, lista de
+  tools admin-only do Assistente). Corrigido de passagem: comentário de `skill_provocations.md` na
+  árvore de `skills/` estava desatualizado desde o PC201 (dizia "só absence/asymmetry habilitados").
+- Verificação: 9 testes novos (`tests/test_pipeline_provocations_backfill.py` — múltiplas reuniões,
+  dedup em lote, filtro por `meeting_ids`, erro isolado não derruba as demais, `progress_callback`,
+  projeto vazio). Sem teste dedicado pra página nem pro método do tool — mesmo padrão já estabelecido
+  (nenhuma página de Backfill/Guia tem teste próprio no projeto). Boot-smoke via `AppTest` nos dois
+  caminhos da página (sem elegíveis / com elegível + clique no botão), sem exceção. Schema/dispatch/
+  admin-gate/categoria conferidos via import direto. `backfill_contradiction_provocations()` chamado
+  ao vivo contra o Supabase real — fail-open confirmado. Suíte completa 989/989 passando.
+
+---
+
 ### PC203 — Concluído (v5.15 / 2026-07-25) — Roteiro de teste manual das Provocações em Manutenção (`pages/TesteProvocacoes.py`)
 
 **Contexto:** usuário pediu um plano de testes das Provocações pra seguir na versão web — entreguei

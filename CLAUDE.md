@@ -70,7 +70,8 @@ process2diagram/
 │   ├── BpmnBackfill.py           # Backfill BPMN XML (Manutenção)
 │   ├── TranscriptBackfill.py     # Backfill transcript embeddings (Manutenção)
 │   ├── MinutesBackfill.py        # Backfill meeting minutes (Manutenção)
-│   └── TesteProvocacoes.py       # Roteiro de teste manual das 4 kinds de Provocações — checklist interativo, transcrições prontas (PC190/PC200/PC201/PC202) (Manutenção)
+│   ├── TesteProvocacoes.py       # Roteiro de teste manual das 4 kinds de Provocações — checklist interativo, transcrições prontas (PC190/PC200/PC201/PC202) (Manutenção)
+│   └── ProvocationsBackfill.py   # Backfill de kind="contradiction" a partir de kh_contradictions já detectadas — sem LLM, sem reprocessar reunião (PC204) (Manutenção)
 │
 ├── core/
 │   ├── knowledge_hub.py          # KnowledgeHub dataclass — central session state
@@ -179,7 +180,7 @@ process2diagram/
 │   ├── skill_document_analyzer.md   # DocumentAnalyzerAgent — cross-reference analysis
 │   ├── skill_document_extractor.md  # DocumentExtractorAgent — artifact extraction from docs
 │   ├── skill_bpmn_analyst.md     # AgentBPMNAnalyst — free-form Q&A over an existing BPMN diagram
-│   ├── skill_provocations.md     # AgentProvocations (PC190) — só absence/asymmetry habilitados; validador determinístico é o gate real, não este prompt
+│   ├── skill_provocations.md     # AgentProvocations (PC190) — absence/asymmetry/premise habilitados (PC201); validador determinístico é o gate real, não este prompt. kind="contradiction" (PC200) nunca passa por este prompt — bridge determinístico, ver AgentProvocations.bridge_contradictions()
 │   ├── SKILL_REQUIREMENTS.md     # uppercase — git-tracked name
 │   └── SKILL_SYNTHESIZER.md      # uppercase — git-tracked name
 │
@@ -250,7 +251,7 @@ AgentRequirements┘
 | **Sistema** | Settings.py, CostEstimator.py, LLMBenchmark.py [+ MasterAdmin.py, DatabaseOverview.py] | Todos [admin extra] |
 | **Ajuda** | ComoIniciar (tutorial), CasosDeUso (valor de negócio), Assistente (tool reference), Glossário (reference), Capacitacao (curso corporativo) | Todos |
 | **Guias** | Arquiteturas, CKF, BpmnStudio, Gráficos, CacheSemantico, Feedback, Manifesto — conteúdo explicativo/conceitual ("como funciona por baixo") | Todos |
-| **Manutenção** | BatchRunner.py, BpmnBackfill.py, MinutesBackfill.py, TranscriptBackfill.py, TesteProvocacoes.py — roteiro de QA, não conteúdo explicativo (por isso não fica em Guias) | Admin only |
+| **Manutenção** | BatchRunner.py, BpmnBackfill.py, MinutesBackfill.py, TranscriptBackfill.py, TesteProvocacoes.py — roteiro de QA, não conteúdo explicativo (por isso não fica em Guias) —, ProvocationsBackfill.py — backfill de kind="contradiction", sem LLM (PC204) | Admin only |
 
 `app.py` renders no content — only calls `st.navigation(pages).run()`. Groups rebuilt every rerun (menu updates immediately after login).
 
@@ -411,7 +412,7 @@ Within Assistente mode, sidebar toggle `asst_use_tools`:
 
 **Non-admin:** `get_meeting_list`, `get_meeting_participants`, `get_meeting_decisions`, `get_meeting_action_items`, `get_meeting_processing_history`, `get_meeting_summary`, `search_transcript`, `get_requirements`, `get_requirement_history`, `update_requirement_text`, `sample_requirements`, `analyze_requirement_quality`, `map_transcript_to_requirements`, `cluster_similar_requirements`, `list_bpmn_processes`, `list_bpmn_versions`, `review_bpmn_diagram`, `describe_bpmn_process`, `ask_bpmn_diagram`, `generate_bpmn_diagram`, `suggest_bpmn_corrections`, `get_sbvr_terms`, `get_sbvr_rules`, `update_sbvr_rule`, `update_sbvr_term_by_id`, `get_bmm`, `get_ckf`, `calendar_list_events`, `calendar_get_event`, `calendar_suggest_time`, `get_system_capabilities`, `lookup_entity`, `get_cache_stats`, `list_meeting_documents`, `get_document_content`, `search_documents`, `get_document_types`, `search_glossary`, `read_skill_reference`, `search_ibis_debates`, `get_ibis_timeline`, `generate_ibis_map`, `generate_requirements_flow_chart`, `generate_requirements_heatmap`, `generate_requirements_bubble_chart`, `generate_requirements_waterfall`, `generate_meeting_radar_chart`, `generate_gantt_chart`, `list_kh_entities`, `list_kh_contradictions`, `resolve_contradiction`, `delete_contradiction`, `list_kh_facts`, `cluster_topic_decisions`, `generate_next_agenda`, `sugestoes_plantonista`, `diagnostico_projeto`, `reordenar_requisitos`, `vincular_regra_debate`, `mapa_rastreabilidade`, `simular_cenario`, `verificar_conformidade`, `sugerir_processos`, `gerar_deck_executivo`, `gerar_project_charter`, `export_project_charter_docx`, `compare_meetings`, `verificar_rastreabilidade_obrigatoria`, `gerar_release_notes`, `analisar_tendencias`, `estimar_risco_requisito`, `promover_ativo_negocio`, `gerar_variacao_apresentacao`, `exportar_pacote_completo`, `sugerir_encaminhamentos_pendentes`, `pesquisar_multi_contexto`.
 
-**Admin only (`is_admin()`):** `get_database_integrity`, `fix_missing_llm_provider`, `generate_meeting_embeddings`, `reprocess_meeting_full`, `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`, `delete_entity`, `resolve_entity_ambiguity`, `clear_llm_cache`, `delete_bpmn_version`, `save_bpmn_revision`, `save_generated_bpmn`, `apply_bpmn_corrections`, `inserir_secao_ata`, `mesclar_reunioes`, `sincronizar_calendario`, write/generate tools.
+**Admin only (`is_admin()`):** `get_database_integrity`, `fix_missing_llm_provider`, `generate_meeting_embeddings`, `backfill_provocations_contradictions`, `reprocess_meeting_full`, `calendar_create_event`, `calendar_schedule_action_items`, `calendar_share_with_user`, `calendar_revoke_access`, `calendar_diagnose`, `delete_entity`, `resolve_entity_ambiguity`, `clear_llm_cache`, `delete_bpmn_version`, `save_bpmn_revision`, `save_generated_bpmn`, `apply_bpmn_corrections`, `inserir_secao_ata`, `mesclar_reunioes`, `sincronizar_calendario`, write/generate tools.
 
 Detalhes de parâmetros e comportamento por grupo de ferramentas: `claude_guideline/architecture_details.md §Tool list`.
 

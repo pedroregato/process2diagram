@@ -265,3 +265,66 @@ def run_provocations(hub, client_info, provider_cfg, output_lang,
         progress_callback("Provocações", "done")
     except Exception:
         progress_callback("Provocações", "skipped")
+
+
+def backfill_contradiction_provocations(project_id, meeting_ids=None, progress_callback=None):
+    """
+    Re-deriva provocações kind="contradiction" para reuniões JÁ PROCESSADAS de
+    um projeto, sem rodar nenhum agente LLM (PC204).
+
+    Motivação: bridge_contradictions() (PC200) só é chamado de dentro de
+    run_provocations(), que só roda no momento do processamento de UMA
+    reunião. Reuniões processadas com "🎭 Gerar Provocações" desligado (padrão)
+    nunca tiveram a ponte executada — mesmo que kh_contradictions já tenha
+    contradições reais detectadas por AgentContradictionDetector pra elas.
+    Reprocessar a reunião pra corrigir isso re-rodaria extração de
+    conhecimento (custo de LLM, risco de duplicar linhas em kh_contradictions).
+    Esta função só chama a ponte determinística já existente, direto.
+
+    meeting_ids: subconjunto de reuniões a processar (por id); None = todas as
+    reuniões do projeto.
+    progress_callback(i, total, result_row): opcional, chamado após cada
+    reunião — result_row é um dict com meeting_id/meeting_number/title e
+    candidates/saved/skipped_dup, ou "error" em caso de falha isolada.
+
+    Retorna list[dict], um resultado por reunião processada. Nunca lança —
+    erro numa reunião vira {"error": ...} nessa linha, sem derrubar as demais
+    (mesmo padrão fail-open de run_provocations()).
+    """
+    from agents.agent_provocations import AgentProvocations
+    from core.project_store import list_meetings, save_provocations, list_provocations_by_project
+
+    meetings = list_meetings(project_id)
+    if meeting_ids:
+        wanted = set(meeting_ids)
+        meetings = [m for m in meetings if m["id"] in wanted]
+
+    # Uma query só pro dedup, não uma por reunião.
+    already_bridged_by_meeting: dict = {}
+    for p in list_provocations_by_project(project_id):
+        if p.get("kind") == "contradiction":
+            already_bridged_by_meeting.setdefault(p.get("meeting_id"), set()).add(
+                (p.get("grounding") or {}).get("source_contradiction_id")
+            )
+
+    total = len(meetings)
+    results = []
+    for i, m in enumerate(meetings):
+        mid = m["id"]
+        row = {"meeting_id": mid, "meeting_number": m.get("meeting_number"), "title": m.get("title")}
+        try:
+            bridged = AgentProvocations.bridge_contradictions(project_id, mid)
+            already = already_bridged_by_meeting.get(mid, set())
+            new_items = [
+                b for b in bridged
+                if (b.contradiction_ref or {}).get("source_contradiction_id") not in already
+            ]
+            saved = save_provocations(mid, project_id, new_items) if new_items else 0
+            row.update(candidates=len(bridged), saved=saved, skipped_dup=len(bridged) - len(new_items))
+        except Exception as exc:
+            row["error"] = str(exc)
+        results.append(row)
+        if progress_callback:
+            progress_callback(i, total, row)
+
+    return results

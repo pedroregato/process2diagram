@@ -10,7 +10,7 @@
 #   Sistema      → Configurações, Custo [+ Admin, Banco apenas para admin]
 #   Ajuda        → Como Iniciar, Casos de Uso, Ferramentas do Assistente, Glossário, Curso
 #   Guias        → Arquiteturas, CKF, BPMN Studio, Gráficos, Cache LLM, Feedback, Manifesto
-#   Manutenção   → Batch Runner, Backfills, Teste de Provocações [apenas admin]
+#   Manutenção   → Batch Runner, Backfills, Teste e Backfill de Provocações [apenas admin]
 # ─────────────────────────────────────────────────────────────────────────────
 
 import streamlit as st
@@ -105,6 +105,7 @@ if _admin:
         st.Page("pages/TranscriptBackfill.py", title="Transcript Backfill", icon="📑"),
         st.Page("pages/PaymentAdmin.py",       title="Billing Admin",       icon="💳"),
         st.Page("pages/TesteProvocacoes.py",   title="Teste — Provocações", icon="🎭"),
+        st.Page("pages/ProvocationsBackfill.py", title="Backfill — Provocações", icon="🌉"),
     ]
 pg = st.navigation(pages)
 

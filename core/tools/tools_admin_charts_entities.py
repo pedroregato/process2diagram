@@ -153,6 +153,38 @@ ADMIN_CHARTS_ENTITIES_SCHEMAS: list[dict] = [
             {
                 "type": "function",
                 "function": {
+                    "name": "backfill_provocations_contradictions",
+                    "description": (
+                        "Re-deriva provocações kind=\"contradiction\" a partir de contradições já "
+                        "detectadas em kh_contradictions (AgentContradictionDetector), para reuniões "
+                        "já processadas — sem rodar nenhum agente LLM, sem reprocessar a reunião. "
+                        "Útil para reuniões processadas antes de 'Gerar Provocações' estar ligado "
+                        "(desligado por padrão) — as contradições já existiam, só nunca tinham sido "
+                        "convertidas em provocação. NÃO cobre absence/asymmetry/premise (essas exigem "
+                        "reprocessar com LLM). USE quando o usuário pedir para preencher/backfillar "
+                        "provocações de contradição, ou perguntar por que uma contradição conhecida "
+                        "não aparece na aba Provocações. "
+                        "🔒 Requer perfil administrador."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "meeting_numbers": {
+                                "type": "array",
+                                "items": {"type": "integer"},
+                                "description": (
+                                    "Lista de números de reunião a processar. "
+                                    "Omita para processar todas as reuniões do projeto."
+                                ),
+                            },
+                        },
+                        "required": [],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "generate_meeting_embeddings",
                     "description": (
                         "Gera embeddings de transcrição para reuniões que ainda não foram indexadas "
@@ -1009,6 +1041,44 @@ class _AdminChartsEntitiesToolsMixin:
         if errors:
             lines.append(f"❌ {len(errors)} erro(s):")
             lines.extend(errors)
+        return "\n".join(lines)
+
+    def backfill_provocations_contradictions(self, meeting_numbers: list[int] | None = None) -> str:
+        """Re-derives kind="contradiction" provocations from already-detected
+        kh_contradictions, for meetings processed without "🎭 Gerar Provocações"
+        enabled. No LLM call, no reprocessing (PC204)."""
+        from core.pipeline import backfill_contradiction_provocations
+
+        meetings = self._get_meetings()
+        if not meetings:
+            return "Nenhuma reunião encontrada neste projeto."
+
+        meeting_ids = None
+        if meeting_numbers:
+            wanted = set(meeting_numbers)
+            meeting_ids = [m["id"] for m in meetings if m.get("meeting_number") in wanted]
+            if not meeting_ids:
+                return f"Nenhuma reunião encontrada com os números {sorted(wanted)}."
+
+        results = backfill_contradiction_provocations(self.project_id, meeting_ids)
+        if not results:
+            return "Nenhuma reunião elegível para backfill neste projeto."
+
+        n_saved = sum(r.get("saved", 0) for r in results)
+        n_meetings_with_new = sum(1 for r in results if r.get("saved"))
+        n_dup = sum(r.get("skipped_dup", 0) for r in results)
+        errors = [r for r in results if "error" in r]
+
+        lines = [
+            f"backfill_provocations_contradictions — {len(results)} reunião(ões) verificada(s).",
+            f"✅ {n_saved} provocação(ões) nova(s) salva(s), em {n_meetings_with_new} reunião(ões).",
+        ]
+        if n_dup:
+            lines.append(f"ℹ️ {n_dup} já existiam (puladas, sem duplicar).")
+        if errors:
+            lines.append(f"❌ {len(errors)} erro(s):")
+            for r in errors:
+                lines.append(f"  • Reunião {r.get('meeting_number')} — {r.get('title') or '(sem título)'}: {r['error']}")
         return "\n".join(lines)
 
     def _get_embed_credentials(self) -> tuple[str, str]:
