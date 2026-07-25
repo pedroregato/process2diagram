@@ -235,10 +235,31 @@ def run_provocations(hub, client_info, provider_cfg, output_lang,
     try:
         progress_callback("Provocações", "running")
         from agents.agent_provocations import AgentProvocations
-        from core.project_store import save_provocations
+        from core.project_store import save_provocations, list_provocations_by_project
         _prov_agent = AgentProvocations(client_info, provider_cfg)
         _prov_agent.run(hub, output_lang)
-        items = hub.provocations.items if hub.provocations else []
+        items = list(hub.provocations.items) if hub.provocations else []
+
+        # kind="contradiction" — bridge determinístico a partir de
+        # kh_contradictions já detectadas por AgentContradictionDetector
+        # (roda antes, dentro de run_knowledge_extraction). Best-effort:
+        # isolado em try/except próprio para nunca derrubar a geração normal
+        # de absence/asymmetry acima.
+        try:
+            bridged = AgentProvocations.bridge_contradictions(project_id, meeting_id)
+            if bridged:
+                already_bridged = {
+                    (p.get("grounding") or {}).get("source_contradiction_id")
+                    for p in list_provocations_by_project(project_id)
+                    if p.get("meeting_id") == meeting_id and p.get("kind") == "contradiction"
+                }
+                items += [
+                    b for b in bridged
+                    if (b.contradiction_ref or {}).get("source_contradiction_id") not in already_bridged
+                ]
+        except Exception:
+            pass
+
         if items:
             save_provocations(meeting_id, project_id, items)
         progress_callback("Provocações", "done")

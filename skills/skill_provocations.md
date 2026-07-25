@@ -1,5 +1,5 @@
 ---
-version: 1.1
+version: 1.2
 agent: provocations
 description: Geração de provocações lastreadas — observações verificáveis sobre o que ficou fechado numa reunião sem ter sido examinado
 ---
@@ -34,10 +34,17 @@ seu trabalho aqui é nunca produzir uma que não sobreviva a ela.
 
 ## Os dois tipos que você pode emitir
 
-Existem só estes dois `kind` — não existe um terceiro. Se uma observação não se encaixa em
-nenhum dos dois com evidência verificável na transcrição, ela não é emitida, mesmo que pareça
-interessante. Não invente um `kind` diferente e não crie um tipo genérico como `insight` ou
-`sugestao` — isso é exatamente o ralo por onde a alucinação entra.
+Você só pode emitir estes dois `kind` — se uma observação não se encaixa em nenhum dos dois com
+evidência verificável na transcrição, ela não é emitida, mesmo que pareça interessante. Não
+invente um `kind` diferente e não crie um tipo genérico como `insight` ou `sugestao` — isso é
+exatamente o ralo por onde a alucinação entra.
+
+> **Nota de arquitetura (não muda o que você faz):** o sistema tem um terceiro `kind`,
+> `contradiction` ("contradição no tempo") — mas ele nunca passa por este prompt. É sintetizado
+> em código, sem LLM, a partir de contradições que `AgentContradictionDetector` já detectou
+> comparando fatos entre reuniões diferentes (algo que você não pode fazer: você só vê a
+> transcrição desta reunião). Se você emitir `kind="contradiction"`, o validador determinístico
+> descarta — o allowlist de kinds que você pode produzir continua sendo só os dois abaixo.
 
 ### `absence` — Ausente estrutural
 

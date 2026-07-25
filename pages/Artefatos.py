@@ -3062,9 +3062,10 @@ with tab_noise:
 with tab_prov:
     st.caption(
         "**Provocações** — observações sobre o que ficou fechado numa reunião sem ter sido "
-        "examinado: tema ausente, objeção sem resposta. Cada uma carrega evidência verificável "
-        "(citação com timestamp, ou lista de termos com contagem zero) conferida por um "
-        "validador determinístico antes de chegar aqui — nenhuma sai sem lastro."
+        "examinado: tema ausente, objeção sem resposta, ou contradição com uma reunião anterior. "
+        "Cada uma carrega evidência verificável — citação com timestamp e lista de termos "
+        "conferida por um validador determinístico, ou referência a uma contradição já detectada "
+        "entre duas reuniões — nenhuma sai sem lastro."
     )
 
     if not st.session_state.get("run_provocations", False):
@@ -3128,24 +3129,38 @@ with tab_prov:
                 st.info(f"❓ {p.get('question', '')}")
 
                 _grounding = p.get("grounding") or {}
-                _refs = _grounding.get("references") or []
-                _absent = (_grounding.get("absence_check") or {}).get("terms") or []
-                if _refs or _absent:
-                    st.caption("**Lastro:**")
-                    for _r in _refs:
-                        st.markdown(
-                            f'<blockquote style="border-left:3px solid #555;padding:4px 10px;'
-                            f'color:#888;font-style:italic;font-size:0.9em;">'
-                            f'[{_r.get("timestamp","")}] {_r.get("speaker","")}: '
-                            f'"{_r.get("excerpt","")}"</blockquote>',
-                            unsafe_allow_html=True,
-                        )
-                    if _absent:
-                        _span_desc = (
-                            "em toda a transcrição" if _kind == "absence"
-                            else "entre os dois momentos citados acima"
-                        )
-                        st.caption(f"Termos verificados, sem ocorrência {_span_desc}: " + ", ".join(_absent))
+                if _kind == "contradiction":
+                    # Bridge determinístico a partir de kh_contradictions — sem
+                    # citação transcript-literal (a evidência é a linha de
+                    # contradição já detectada por AgentContradictionDetector).
+                    _num_a = _meeting_num_by_id.get(_grounding.get("meeting_a_id"), "?")
+                    _num_b = _meeting_num_by_id.get(_grounding.get("meeting_b_id"), "?")
+                    st.caption(
+                        f"**Lastro:** contradição entre **Reunião {_num_a}** e "
+                        f"**Reunião {_num_b}** — tipo `{_grounding.get('relation_type','—')}` "
+                        f"(detectada por AgentContradictionDetector, ver aba Knowledge Hub)."
+                    )
+                    if _grounding.get("suggested_rewrite"):
+                        st.markdown(f"💡 Sugestão de reescrita: _{_grounding['suggested_rewrite']}_")
+                else:
+                    _refs = _grounding.get("references") or []
+                    _absent = (_grounding.get("absence_check") or {}).get("terms") or []
+                    if _refs or _absent:
+                        st.caption("**Lastro:**")
+                        for _r in _refs:
+                            st.markdown(
+                                f'<blockquote style="border-left:3px solid #555;padding:4px 10px;'
+                                f'color:#888;font-style:italic;font-size:0.9em;">'
+                                f'[{_r.get("timestamp","")}] {_r.get("speaker","")}: '
+                                f'"{_r.get("excerpt","")}"</blockquote>',
+                                unsafe_allow_html=True,
+                            )
+                        if _absent:
+                            _span_desc = (
+                                "em toda a transcrição" if _kind == "absence"
+                                else "entre os dois momentos citados acima"
+                            )
+                            st.caption(f"Termos verificados, sem ocorrência {_span_desc}: " + ", ".join(_absent))
 
                 if _status == "new":
                     _a1, _a2 = st.columns(2)

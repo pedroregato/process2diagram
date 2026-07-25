@@ -461,18 +461,23 @@ class DMNModel:
 
 
 # ── Provocations (melhorias/arquivados/agente-de-provocacoes.md) ─────────────
-# Fase 1: apenas kind in {"absence", "asymmetry"}, lastro só contra a
-# transcrição da própria reunião — ver agents/agent_provocations.py.
+# Fase 1: kind in {"absence", "asymmetry"}, lastro contra a transcrição da
+# própria reunião, gerado por LLM + validador determinístico — ver
+# agents/agent_provocations.py. kind="contradiction" é uma 3ª via: nunca
+# passa pelo LLM/validador transcript-literal, é sintetizado deterministicamente
+# a partir de kh_contradictions já detectadas por AgentContradictionDetector
+# (ver AgentProvocations.bridge_contradictions()).
 
 @dataclass
 class ProvocationItem:
-    kind: str                # "absence" | "asymmetry" (fase 1)
+    kind: str                # "absence" | "asymmetry" (fase 1) | "contradiction" (bridge, sem LLM)
     title: str
     body: str
     question: str
     grounding_type: str = ""
     references: list[dict] = field(default_factory=list)   # [{timestamp, speaker, excerpt}]
     absence_terms: list[str] = field(default_factory=list)  # termos que NÃO devem ocorrer no span (PC190-fix)
+    contradiction_ref: Optional[dict] = None  # kind="contradiction": {source_contradiction_id, meeting_a_id, meeting_b_id, relation_type, suggested_rewrite}
     confidence: str = "medium"           # "high" | "medium" — nunca "low"
     status: str = "new"                  # "new" | "accepted" | "discarded" | "became_divergence"
     db_id: Optional[str] = None          # id em Supabase, após persistência

@@ -46,6 +46,21 @@ _ENABLED_KINDS = {"absence", "asymmetry"}
 _ALLOWED_CONFIDENCE = {"high", "medium"}
 _MAX_PROVOCATIONS = 5
 
+# kind="contradiction" (bridge, ver AgentProvocations.bridge_contradictions):
+# relation_type de kh_contradictions que qualificam como "provocação-worthy".
+# skills/skill_contradiction_detector.md trata só contradiction_direct/
+# conditional/temporal/responsibility como "contradição real"; superseded é
+# rotulado ali como evolução normal, mas é semanticamente o mais próximo do
+# que "contradição no tempo" significa aqui (reunião B reverteu a decisão de
+# A) — incluído de propósito. exception/ambiguous ficam de fora: a própria
+# skill do detector já os trata como não-acionáveis.
+_CONTRADICTION_RELATION_ALLOWLIST = {
+    "contradiction_direct", "contradiction_conditional",
+    "contradiction_temporal", "contradiction_responsibility",
+    "superseded",
+}
+_CONTRADICTION_SEVERITY_ALLOWLIST = {"medium", "high", "critical"}
+
 # Regras de tom — melhorias/arquivados/agente-de-provocacoes.md §4:
 # "proibido 'vocês ignoraram', 'a equipe falhou', 'deveriam ter'... isto entra
 # no skill como regra explícita E como checagem de lista negra no validador."
@@ -329,3 +344,63 @@ class AgentProvocations(BaseAgent):
         approved.sort(key=lambda p: _CONFIDENCE_RANK.get(p.confidence, 9))
         rejected_count = sum(reasons.values())
         return approved[:_MAX_PROVOCATIONS], rejected_count, dict(reasons)
+
+    # ── Bridge determinístico: kind="contradiction" ─────────────────────────────
+    # Não passa pelo LLM nem por _validate_and_rank acima — "contradição no
+    # tempo" exige comparar esta reunião contra reuniões ANTERIORES do mesmo
+    # projeto, e hub (usado por build_prompt/run) não carrega dado de outras
+    # reuniões (é um dataclass por sessão, sem acesso a banco). Essa
+    # comparação cross-reunião já é feita por AgentContradictionDetector, que
+    # roda antes deste agente no pipeline (core/pipeline.py::
+    # run_knowledge_extraction, chamado antes de run_provocations). Este
+    # método só decide, sem chamar LLM de novo, se uma contradição já
+    # detectada e persistida em kh_contradictions é "provocação-worthy" o
+    # bastante para virar um card na aba Provocações — zero risco de
+    # alucinação nova, o julgamento já foi feito e já está no banco.
+    @staticmethod
+    def bridge_contradictions(project_id: str, meeting_id: str) -> list[ProvocationItem]:
+        from core.knowledge_store import get_contradictions
+
+        rows = get_contradictions(project_id, status="open", limit=200)
+        items: list[ProvocationItem] = []
+
+        for c in rows:
+            if c.get("meeting_a_id") != meeting_id:
+                # Só provoca na reunião em que a contradição foi detectada —
+                # evita reintroduzir a mesma contradição toda vez que outra
+                # reunião do projeto é processada.
+                continue
+            meeting_b = c.get("meeting_b_id")
+            if not meeting_b or meeting_b == c.get("meeting_a_id"):
+                # Só contradição genuinamente cross-reunião — a que
+                # AgentKnowledgeExtractor grava sozinho, dentro da mesma
+                # reunião (sem meeting_b_id), não é "no tempo".
+                continue
+            if c.get("relation_type") not in _CONTRADICTION_RELATION_ALLOWLIST:
+                continue
+            if (c.get("severity") or "").strip().lower() not in _CONTRADICTION_SEVERITY_ALLOWLIST:
+                continue
+
+            confidence_raw = c.get("confidence")
+            try:
+                confidence = "high" if float(confidence_raw) >= 0.7 else "medium"
+            except (TypeError, ValueError):
+                confidence = "medium"
+
+            items.append(ProvocationItem(
+                kind="contradiction",
+                title=(c.get("process_name") or "Contradição entre reuniões")[:120],
+                body=c.get("description") or "",
+                question=c.get("clarifying_question")
+                or "Isso ainda reflete a decisão atual, ou uma reunião substituiu a outra?",
+                confidence=confidence,
+                contradiction_ref={
+                    "source_contradiction_id": c.get("id"),
+                    "meeting_a_id": c.get("meeting_a_id"),
+                    "meeting_b_id": meeting_b,
+                    "relation_type": c.get("relation_type"),
+                    "suggested_rewrite": c.get("suggested_rewrite"),
+                },
+            ))
+
+        return items[:_MAX_PROVOCATIONS]

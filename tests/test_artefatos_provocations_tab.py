@@ -44,6 +44,24 @@ _FAKE_PROVOCATIONS = [
         "grounding": {"type": "absence", "references": [], "absence_check": {"terms": ["multa"]}},
         "confidence": "medium", "status": "accepted", "created_at": "2026-01-01T00:00:00Z",
     },
+    {
+        # kind="contradiction" — bridge determinístico a partir de
+        # kh_contradictions (AgentProvocations.bridge_contradictions), sem
+        # citação transcript-literal; grounding tem forma diferente das
+        # outras 2 kinds (meeting_a_id/meeting_b_id/relation_type).
+        "id": "prov-3", "meeting_id": "m1", "project_id": "p1", "tenant_id": None,
+        "kind": "contradiction", "title": "Catálogo Mestre",
+        "body": "Reunião 1 decidiu X; Reunião 2 decidiu o oposto.",
+        "question": "Qual decisão vale?",
+        "grounding": {
+            "type": "contradiction_bridge",
+            "source_contradiction_id": "kh-1",
+            "meeting_a_id": "m1", "meeting_b_id": "m2",
+            "relation_type": "contradiction_direct",
+            "suggested_rewrite": "Consolidar a decisão da Reunião 2.",
+        },
+        "confidence": "high", "status": "new", "created_at": "2026-01-01T00:00:00Z",
+    },
 ]
 
 
@@ -76,7 +94,9 @@ def _run_with_mocks(provocations=None):
     with patch("modules.supabase_client.supabase_configured", lambda: True), \
          patch("core.project_store.list_meetings", lambda pid: [
              {"id": "m1", "meeting_number": 1, "title": "R1", "meeting_date": "2026-01-01",
-              "total_tokens": 0, "llm_provider": "x"}
+              "total_tokens": 0, "llm_provider": "x"},
+             {"id": "m2", "meeting_number": 2, "title": "R2", "meeting_date": "2026-01-02",
+              "total_tokens": 0, "llm_provider": "x"},
          ]), \
          patch("core.project_store.list_requirements_light", lambda pid: []), \
          patch("core.project_store.list_contradictions", lambda pid: []), \
@@ -127,3 +147,29 @@ class TestProvocationsTabBootSmoke:
         assert accept_buttons and discard_buttons  # prov-1 is status="new"
         no_action_on_accepted = [b for b in at.button if "prov-2" in (b.key or "")]
         assert no_action_on_accepted == []  # prov-2 is status="accepted", no actions
+
+
+class TestContradictionKindRendering:
+    """kind='contradiction' (bridge) tem um formato de grounding diferente
+    das outras 2 kinds — sem citação transcript-literal, referencia
+    meeting_a_id/meeting_b_id/relation_type. Confere que a aba não quebra e
+    que o branch de renderização novo aparece."""
+
+    def test_renders_without_exception(self):
+        at = _run_with_mocks(provocations=_FAKE_PROVOCATIONS)
+        assert not at.exception
+
+    def test_kind_label_and_meeting_reference_shown(self):
+        at = _run_with_mocks(provocations=_FAKE_PROVOCATIONS)
+        radios = [r for r in at.radio if r.key == "prov_filter"]
+        radios[0].set_value("Todas").run()
+        assert not at.exception
+        labels = [e.label for e in at.expander]
+        assert any("Catálogo Mestre" in l for l in labels)
+
+        captions = " ".join(c.value for c in at.caption)
+        assert "Reunião 1" in captions and "Reunião 2" in captions
+        assert "contradiction_direct" in captions
+
+        markdowns = " ".join(m.value for m in at.markdown)
+        assert "Consolidar a decisão da Reunião 2." in markdowns

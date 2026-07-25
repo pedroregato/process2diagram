@@ -4,6 +4,56 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC200 — Concluído (v5.15 / 2026-07-25) — Provocações: kind="contradiction" (Contradição no Tempo)
+
+**Contexto:** `melhorias/provocacoes-vichara.md` (proposta externa, escrita sem acesso ao código
+real) pediu um roadmap de 5 tipos de "provocação investigativa", começando por "Contradição no
+Tempo". Investigação contra o código real mudou o escopo: a Fase 1 da proposta (tabela +
+tool `provoke()`) já existia desde o PC190 — `provocations`/`AgentProvocations`/aba
+"🎭 Provocações" — e a própria `CHECK` de `kind` na tabela já incluía os 5 valores da
+taxonomia, deixado de propósito com espaço para os tipos futuros. Achado mais importante:
+detecção de contradição **cross-reunião já existe e já roda automaticamente** —
+`AgentContradictionDetector`/`kh_contradictions`, chamado antes de `AgentProvocations` no
+próprio pipeline (`run_knowledge_extraction()`, antes de `run_provocations()`).
+
+- **Decisão de arquitetura:** não duplicar detecção. `kind="contradiction"` não passa pelo
+  LLM+validador transcript-literal das outras 2 kinds (`hub` é single-meeting, sem acesso a
+  banco — arquiteturalmente não dá pra comparar reuniões dentro de `AgentProvocations.run()`
+  como ele funciona hoje). Em vez disso, `AgentProvocations.bridge_contradictions(project_id,
+  meeting_id)` — método estático novo, zero chamada LLM — lê `kh_contradictions` já detectadas
+  por `AgentContradictionDetector` e decide, deterministicamente, quais são "provocação-worthy":
+  `meeting_a_id` = a própria reunião, `meeting_b_id` presente e diferente (só contradição
+  genuinamente cross-reunião), `relation_type` num allowlist (os 4 tipos que a skill do
+  detector trata como "contradição real" + `superseded`, que semanticamente é o mais próximo de
+  "reunião B reverteu a decisão de A"), `severity` ≥ medium. Zero risco de alucinação nova — o
+  julgamento já foi feito e já está persistido.
+- `core/pipeline.py::run_provocations()` chama o bridge depois da geração normal de
+  absence/asymmetry, com dedup (compara `grounding.source_contradiction_id` contra provocações
+  já salvas pra essa reunião, evita duplicar em reprocessamento) — `try/except` isolado, não
+  derruba a geração normal se falhar.
+- `core/project_store.py::save_provocations()` ramifica a construção de `grounding` por kind:
+  `contradiction` grava `{type: "contradiction_bridge", ...contradiction_ref}` em vez do formato
+  `{references, absence_check}` das outras 2 kinds.
+- `pages/Artefatos.py` (aba Provocações) ganha um branch de renderização novo para
+  `kind="contradiction"` — Reunião A × Reunião B, `relation_type`, sugestão de reescrita. Labels
+  já existiam desde o PC190 (`_prov_kind_label["contradiction"]`), só nunca eram alimentadas.
+- `skills/skill_provocations.md` (v1.1→1.2) ganha nota de arquitetura: existe um 3º `kind` no
+  sistema que este prompt nunca deve emitir (`_ENABLED_KINDS` continua `{absence, asymmetry}` —
+  só o bridge determinístico pode produzir `kind="contradiction"`, propriedade de segurança já
+  coberta por teste existente desde o PC190).
+- **Fora de escopo, deliberado:** sem sincronização de volta pra `kh_contradictions` (aceitar/
+  descartar a provocação-ponte não muda o status da linha original — não existe precedente de
+  bridge bidirecional no código); contradição intra-reunião (sem `meeting_b_id`) fica fora, não
+  é "no tempo"; `detect_contradictions` (full-scan admin) não alimenta o bridge, só o caminho
+  automático de `run_for_meeting()`.
+- Sem migração de banco (`kind` CHECK e `grounding JSONB` já suportavam). 24 testes novos
+  (`tests/test_agent_provocations.py` — filtros do bridge; `tests/test_artefatos_provocations_tab.py`
+  — rendering novo via AppTest real), 969/969 passando (suíte completa, sem regressão). Achado
+  colateral fechado pela leitura do código antes de propor: `cluster_topic_decisions()`, citada
+  pela proposta externa como já existente, não existe em lugar nenhum do codebase.
+
+---
+
 ### PC199 — Concluído (v5.15 / 2026-07-22) — Governança de Requisitos: visão agregada de mudanças em Artefatos.py
 
 **Contexto:** usuário avaliou que o sinal de instabilidade/contradição de requisitos — hoje
@@ -32,12 +82,6 @@ pediu uma visão consolidada sem precisar do Assistente.
   `KnowledgeHub.migrate()` — mesma aba, mesmo contador de 13 abas em `Artefatos.py`.
 - Verificação: `python -m py_compile` nos dois arquivos tocados; teste manual em navegador ainda
   pendente (ver nota abaixo).
-
----
-
-# Roadmap — Process2Diagram
-
-Histórico completo de entregas por ciclo de projeto.
 
 ---
 

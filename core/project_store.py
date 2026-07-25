@@ -4765,11 +4765,17 @@ def save_provocations(
                 "title":      item.title,
                 "body":       item.body,
                 "question":   item.question,
-                "grounding": {
-                    "type":           item.grounding_type,
-                    "references":     item.references,
-                    "absence_check":  {"terms": item.absence_terms},
-                },
+                "grounding": (
+                    # kind="contradiction" (bridge): sem citação transcript-literal —
+                    # a evidência já é a linha de kh_contradictions referenciada.
+                    {"type": "contradiction_bridge", **(item.contradiction_ref or {})}
+                    if item.kind == "contradiction" else
+                    {
+                        "type":           item.grounding_type,
+                        "references":     item.references,
+                        "absence_check":  {"terms": item.absence_terms},
+                    }
+                ),
                 "confidence": item.confidence,
                 "status":     item.status,
             }

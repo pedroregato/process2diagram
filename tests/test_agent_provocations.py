@@ -388,3 +388,145 @@ class TestProvocationItemDataclass:
         assert item.references == []
         assert item.absence_terms == []
         assert item.db_id is None
+        assert item.contradiction_ref is None
+
+
+# ── bridge_contradictions — kind="contradiction" (bridge determinístico,
+# sem LLM, ver comentário no topo de agent_provocations.py) ─────────────────
+
+MEETING_ID = "meeting-current"
+OTHER_MEETING_ID = "meeting-prior"
+PROJECT_ID = "project-1"
+
+
+def _kh_row(**overrides) -> dict:
+    row = {
+        "id": "kh-contra-1",
+        "process_name": "Catálogo Mestre",
+        "description": "Reunião 12 decidiu X; Reunião 18 decidiu o oposto.",
+        "meeting_a_id": MEETING_ID,
+        "meeting_b_id": OTHER_MEETING_ID,
+        "severity": "high",
+        "status": "open",
+        "relation_type": "contradiction_direct",
+        "confidence": 0.9,
+        "clarifying_question": "Qual decisão vale?",
+        "suggested_rewrite": "Consolidar a decisão da Reunião 18.",
+    }
+    row.update(overrides)
+    return row
+
+
+class TestBridgeContradictions:
+    def test_builds_provocation_from_qualifying_row(self, monkeypatch):
+        monkeypatch.setattr(
+            "core.knowledge_store.get_contradictions",
+            lambda project_id, status="open", limit=200: [_kh_row()],
+        )
+        items = AgentProvocations.bridge_contradictions(PROJECT_ID, MEETING_ID)
+        assert len(items) == 1
+        item = items[0]
+        assert item.kind == "contradiction"
+        assert item.title == "Catálogo Mestre"
+        assert item.confidence == "high"  # confidence 0.9 >= 0.7
+        assert item.contradiction_ref == {
+            "source_contradiction_id": "kh-contra-1",
+            "meeting_a_id": MEETING_ID,
+            "meeting_b_id": OTHER_MEETING_ID,
+            "relation_type": "contradiction_direct",
+            "suggested_rewrite": "Consolidar a decisão da Reunião 18.",
+        }
+
+    def test_excludes_rows_not_detected_in_this_meeting(self, monkeypatch):
+        """Só provoca na reunião onde a contradição foi detectada — evita
+        reintroduzir a mesma contradição toda vez que outra reunião roda."""
+        monkeypatch.setattr(
+            "core.knowledge_store.get_contradictions",
+            lambda project_id, status="open", limit=200: [_kh_row(meeting_a_id="meeting-other")],
+        )
+        assert AgentProvocations.bridge_contradictions(PROJECT_ID, MEETING_ID) == []
+
+    def test_excludes_rows_without_meeting_b(self, monkeypatch):
+        """Contradição intra-reunião (AgentKnowledgeExtractor, sem meeting_b_id)
+        não é 'no tempo' — fica de fora do bridge."""
+        monkeypatch.setattr(
+            "core.knowledge_store.get_contradictions",
+            lambda project_id, status="open", limit=200: [_kh_row(meeting_b_id=None)],
+        )
+        assert AgentProvocations.bridge_contradictions(PROJECT_ID, MEETING_ID) == []
+
+    def test_excludes_rows_where_meeting_b_equals_meeting_a(self, monkeypatch):
+        monkeypatch.setattr(
+            "core.knowledge_store.get_contradictions",
+            lambda project_id, status="open", limit=200: [_kh_row(meeting_b_id=MEETING_ID)],
+        )
+        assert AgentProvocations.bridge_contradictions(PROJECT_ID, MEETING_ID) == []
+
+    def test_excludes_relation_type_outside_allowlist(self, monkeypatch):
+        for relation_type in ("exception", "ambiguous", "something_unknown", ""):
+            monkeypatch.setattr(
+                "core.knowledge_store.get_contradictions",
+                lambda project_id, status="open", limit=200, rt=relation_type: [_kh_row(relation_type=rt)],
+            )
+            assert AgentProvocations.bridge_contradictions(PROJECT_ID, MEETING_ID) == [], \
+                f"relation_type={relation_type!r} should never bridge"
+
+    def test_includes_superseded_relation_type(self, monkeypatch):
+        """superseded = 'uma reunião reverteu a outra' — o mais próximo do
+        que a proposta original chama de 'contradição no tempo' (decisão
+        pendente documentada no código, não um esquecimento)."""
+        monkeypatch.setattr(
+            "core.knowledge_store.get_contradictions",
+            lambda project_id, status="open", limit=200: [_kh_row(relation_type="superseded")],
+        )
+        items = AgentProvocations.bridge_contradictions(PROJECT_ID, MEETING_ID)
+        assert len(items) == 1
+        assert items[0].contradiction_ref["relation_type"] == "superseded"
+
+    def test_excludes_low_severity(self, monkeypatch):
+        monkeypatch.setattr(
+            "core.knowledge_store.get_contradictions",
+            lambda project_id, status="open", limit=200: [_kh_row(severity="low")],
+        )
+        assert AgentProvocations.bridge_contradictions(PROJECT_ID, MEETING_ID) == []
+
+    def test_maps_confidence_below_threshold_to_medium(self, monkeypatch):
+        monkeypatch.setattr(
+            "core.knowledge_store.get_contradictions",
+            lambda project_id, status="open", limit=200: [_kh_row(confidence=0.5)],
+        )
+        items = AgentProvocations.bridge_contradictions(PROJECT_ID, MEETING_ID)
+        assert items[0].confidence == "medium"
+
+    def test_maps_missing_or_invalid_confidence_to_medium(self, monkeypatch):
+        for bad_confidence in (None, "not-a-number"):
+            monkeypatch.setattr(
+                "core.knowledge_store.get_contradictions",
+                lambda project_id, status="open", limit=200, c=bad_confidence: [_kh_row(confidence=c)],
+            )
+            items = AgentProvocations.bridge_contradictions(PROJECT_ID, MEETING_ID)
+            assert items[0].confidence == "medium"
+
+    def test_falls_back_to_default_question_when_missing(self, monkeypatch):
+        monkeypatch.setattr(
+            "core.knowledge_store.get_contradictions",
+            lambda project_id, status="open", limit=200: [_kh_row(clarifying_question="")],
+        )
+        items = AgentProvocations.bridge_contradictions(PROJECT_ID, MEETING_ID)
+        assert "reflete a decisão atual" in items[0].question
+
+    def test_caps_at_max_provocations(self, monkeypatch):
+        rows = [_kh_row(id=f"kh-{i}") for i in range(8)]
+        monkeypatch.setattr(
+            "core.knowledge_store.get_contradictions",
+            lambda project_id, status="open", limit=200: rows,
+        )
+        items = AgentProvocations.bridge_contradictions(PROJECT_ID, MEETING_ID)
+        assert len(items) == 5
+
+    def test_empty_when_no_contradictions(self, monkeypatch):
+        monkeypatch.setattr(
+            "core.knowledge_store.get_contradictions",
+            lambda project_id, status="open", limit=200: [],
+        )
+        assert AgentProvocations.bridge_contradictions(PROJECT_ID, MEETING_ID) == []
