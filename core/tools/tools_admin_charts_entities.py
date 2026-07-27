@@ -185,6 +185,30 @@ ADMIN_CHARTS_ENTITIES_SCHEMAS: list[dict] = [
             {
                 "type": "function",
                 "function": {
+                    "name": "get_provocations_diagnostics",
+                    "description": (
+                        "Mostra o resultado da última execução do validador determinístico de "
+                        "Provocações (AgentProvocations) para uma reunião específica — quantas "
+                        "provocações foram aprovadas, quantas foram rejeitadas, e por qual motivo "
+                        "(ex.: reference_not_found, premise_marker_missing, absence_check_missing). "
+                        "USE quando o usuário perguntar por que uma reunião não gerou provocações, "
+                        "ou quiser entender a taxa de rejeição do recurso pra uma reunião específica."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "meeting_number": {
+                                "type": "integer",
+                                "description": "Número da reunião a diagnosticar.",
+                            },
+                        },
+                        "required": ["meeting_number"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "generate_meeting_embeddings",
                     "description": (
                         "Gera embeddings de transcrição para reuniões que ainda não foram indexadas "
@@ -1079,6 +1103,49 @@ class _AdminChartsEntitiesToolsMixin:
             lines.append(f"❌ {len(errors)} erro(s):")
             for r in errors:
                 lines.append(f"  • Reunião {r.get('meeting_number')} — {r.get('title') or '(sem título)'}: {r['error']}")
+        return "\n".join(lines)
+
+    def get_provocations_diagnostics(self, meeting_number: int) -> str:
+        """Shows AgentProvocations' deterministic-validator outcome (approved/
+        rejected counts + rejection reasons) for a specific meeting's most
+        recent processing run — answers "why did this meeting generate no
+        provocations" without opening the app's process logs (PC207)."""
+        from services.llm_telemetry import LLMTelemetry
+
+        meetings = self._get_meetings()
+        match = next((m for m in meetings if m.get("meeting_number") == meeting_number), None)
+        if not match:
+            return f"Nenhuma reunião encontrada com o número {meeting_number}."
+
+        rows = LLMTelemetry().query_provocations_diagnostics(self.project_id, match["id"], limit=1)
+        if not rows:
+            return (
+                f"Nenhum registro de execução de Provocações para a Reunião {meeting_number}. "
+                "Isso significa que ela nunca foi processada com \"🎭 Gerar Provocações\" ativo, "
+                "ou foi processada antes desta telemetria existir (PC207)."
+            )
+
+        r = rows[0]
+        approved = r.get("approved_count") or 0
+        rejected = r.get("rejected_count") or 0
+        reasons  = r.get("rejected_reasons") or {}
+
+        lines = [
+            f"Provocações — Reunião {meeting_number} (última execução, {r.get('created_at','—')}):",
+            f"✅ {approved} aprovada(s) · ❌ {rejected} rejeitada(s) pelo validador determinístico.",
+        ]
+        if reasons:
+            lines.append("Motivos de rejeição (contagem):")
+            for motivo, contagem in sorted(reasons.items(), key=lambda kv: -kv[1]):
+                lines.append(f"  • {motivo}: {contagem}")
+        elif rejected:
+            lines.append("(motivos não detalhados neste registro)")
+        elif approved == 0:
+            lines.append(
+                "O LLM não propôs nenhuma candidata pra esta reunião — resultado válido "
+                "quando não há tema ausente, objeção não respondida ou afirmação categórica "
+                "com lastro suficiente na transcrição."
+            )
         return "\n".join(lines)
 
     def _get_embed_credentials(self) -> tuple[str, str]:

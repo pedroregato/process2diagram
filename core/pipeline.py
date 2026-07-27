@@ -240,6 +240,23 @@ def run_provocations(hub, client_info, provider_cfg, output_lang,
         _prov_agent.run(hub, output_lang)
         items = list(hub.provocations.items) if hub.provocations else []
 
+        # PC207 — persiste o resultado do validador determinístico (aprovadas/
+        # rejeitadas + motivo) por reunião, pra dar pro Assistente responder
+        # "por que esta reunião não gerou provocações" sem precisar abrir os
+        # logs efêmeros do processo. Best-effort: nunca deve impedir o
+        # salvamento normal das provocações abaixo.
+        try:
+            from services.llm_telemetry import _telemetry
+            if hub.provocations:
+                _telemetry.record_provocations_outcome(
+                    project_id, meeting_id, _prov_agent.skill_version,
+                    approved_count=len(hub.provocations.items),
+                    rejected_count=hub.provocations.rejected_count,
+                    rejected_reasons=hub.provocations.rejected_reasons,
+                )
+        except Exception:
+            pass
+
         # kind="contradiction" — bridge determinístico a partir de
         # kh_contradictions já detectadas por AgentContradictionDetector
         # (roda antes, dentro de run_knowledge_extraction). Best-effort:

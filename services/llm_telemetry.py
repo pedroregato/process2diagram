@@ -40,6 +40,14 @@ class TelemetryRecord:
     # must keep filtering is_validation_event=False (see query()).
     is_validation_event: bool = False
     schema_valid:        Optional[bool] = None
+    # PC207 — escopo por reunião + motivo de rejeição do validador determinístico
+    # de AgentProvocations. Genéricos no schema (não exclusivos de Provocações),
+    # mas só record_provocations_outcome() os popula por ora.
+    project_id:          Optional[str] = None
+    meeting_id:          Optional[str] = None
+    approved_count:      Optional[int] = None
+    rejected_count:      Optional[int] = None
+    rejected_reasons:    Optional[dict] = None
 
 
 # ── Synthetic transcripts for on-demand benchmarks ────────────────────────────
@@ -286,6 +294,42 @@ class LLMTelemetry:
             schema_valid=valid,
         ))
 
+    def record_provocations_outcome(
+        self,
+        project_id: Optional[str],
+        meeting_id: Optional[str],
+        skill_version: Optional[str],
+        approved_count: int,
+        rejected_count: int,
+        rejected_reasons: Optional[dict],
+    ) -> None:
+        """Fire-and-forget async write of AgentProvocations' deterministic
+        validator outcome for one meeting (PC207) — mesmo padrão de
+        record_validation(): evento diagnóstico sem latência/tokens próprios,
+        compartilha a tabela via agent_name="provocations" + meeting_id.
+
+        Antes desta PC, rejected_count/rejected_reasons (já calculados por
+        AgentProvocations._validate_and_rank) só existiam em hub.provocations,
+        efêmero, e num logging.info() nos logs do processo — sem jeito de
+        consultar "por que a reunião X não gerou provocações" sem abrir os
+        logs do Streamlit Cloud manualmente.
+        """
+        self.record(TelemetryRecord(
+            agent_name="provocations",
+            provider="",
+            model="",
+            latency_ms=0,
+            input_tokens=0,
+            output_tokens=0,
+            total_tokens=0,
+            skill_version=skill_version,
+            project_id=project_id,
+            meeting_id=meeting_id,
+            approved_count=approved_count,
+            rejected_count=rejected_count,
+            rejected_reasons=rejected_reasons,
+        ))
+
     def _write(self, rec: TelemetryRecord) -> None:
         try:
             from modules.supabase_client import get_supabase_client
@@ -308,6 +352,11 @@ class LLMTelemetry:
                 "error_message": rec.error_message,
                 "is_validation_event": rec.is_validation_event,
                 "schema_valid":  rec.schema_valid,
+                "project_id":       rec.project_id,
+                "meeting_id":       rec.meeting_id,
+                "approved_count":   rec.approved_count,
+                "rejected_count":   rec.rejected_count,
+                "rejected_reasons": rec.rejected_reasons,
             }).execute()
         except Exception:
             pass
@@ -456,6 +505,38 @@ class LLMTelemetry:
             )
             if agent_name:
                 q = q.eq("agent_name", agent_name)
+            return q.execute().data or []
+        except Exception:
+            return []
+
+    def query_provocations_diagnostics(
+        self,
+        project_id: str,
+        meeting_id: Optional[str] = None,
+        limit: int = 5,
+    ) -> list[dict]:
+        """Execuções recentes de AgentProvocations pra um projeto (opcionalmente
+        filtradas por reunião) — PC207. Responde "por que a reunião X não
+        gerou provocações" sem precisar abrir os logs do processo. Returns raw
+        rows [{meeting_id, skill_version, approved_count, rejected_count,
+        rejected_reasons, created_at}], mais recente primeiro. Fail-open: []
+        em qualquer erro ou sem cliente configurado.
+        """
+        try:
+            from modules.supabase_client import get_supabase_client
+            db = get_supabase_client()
+            if not db:
+                return []
+            q = (
+                db.table("llm_telemetry")
+                .select("meeting_id,skill_version,approved_count,rejected_count,rejected_reasons,created_at")
+                .eq("agent_name", "provocations")
+                .eq("project_id", project_id)
+                .order("created_at", desc=True)
+                .limit(limit)
+            )
+            if meeting_id:
+                q = q.eq("meeting_id", meeting_id)
             return q.execute().data or []
         except Exception:
             return []

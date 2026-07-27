@@ -4,6 +4,52 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC207 — Concluído (v5.15 / 2026-07-26) — Observabilidade de Provocações: motivo de rejeição persistido e consultável por reunião
+
+**Contexto:** testando a Reunião 5 do AURORA, a aba Provocações mostrou "nenhuma provocação
+gerada" — resultado válido por design, mas só diagnosticável abrindo os logs efêmeros do
+Streamlit Cloud ("Manage app") e procurando a linha `_logger.info("AgentProvocations: %d
+gerada(s)... reprovada(s) %s", ...)`. Usuário pediu pra isso virar algo consultável pelo chat.
+
+- **Achado que define o desenho:** `services/llm_telemetry.py` (PC183) já é a infraestrutura
+  certa pra esse tipo de sinal (fail-open, escrita assíncrona, `record_validation()` já é
+  precisamente esse padrão — "evento diagnóstico sem latência/tokens próprios, compartilha a
+  tabela") — mas não tinha `project_id`/`meeting_id`. Sem isso, dava pra responder só perguntas
+  agregadas ("taxa de erro do provider X"), nunca "por que ESTA reunião não gerou nada".
+- `setup/supabase_migration_llm_telemetry_pc207.sql` — `project_id`/`meeting_id` (genéricos no
+  schema, não exclusivos de Provocações — abre caminho pra outros agentes de pipeline usarem
+  depois, sem migração nova) + `approved_count`/`rejected_count`/`rejected_reasons` (JSONB).
+- `services/llm_telemetry.py`: `TelemetryRecord` ganha os 5 campos; `record_provocations_outcome()`
+  (mesmo padrão de `record_validation()`); `query_provocations_diagnostics(project_id,
+  meeting_id=None, limit=5)` (mesmo padrão de `query_recent_errors()`).
+- `core/pipeline.py::run_provocations()` chama `record_provocations_outcome()` depois de cada
+  execução de `AgentProvocations`, com `approved_count=len(hub.provocations.items)` (só as kinds
+  LLM+validador — `absence`/`asymmetry`/`premise` — não inclui `bridge_contradictions()`, que não
+  tem "rejeição" no mesmo sentido). Isolado em `try/except` próprio — nunca impede o salvamento
+  normal das provocações.
+- Tool do Assistente `get_provocations_diagnostics(meeting_number)` — **não-admin** (categoria
+  "consulta", mesmo grupo de `get_cache_stats` — informação de diagnóstico, não escrita) — em
+  `core/tools/tools_admin_charts_entities.py`, mesmo arquivo do backfill de Provocações (PC204).
+- Sem tradução dos identificadores de motivo de rejeição na resposta do tool (`reference_not_found`,
+  `premise_marker_missing`, etc.) — evita drift se um motivo novo for adicionado ao validador e
+  esquecido numa tabela de tradução separada.
+- Fora de escopo, deliberado: não propagar `project_id`/`meeting_id` pra telemetria de OUTROS
+  agentes (exigiria mudar a assinatura de `_call_llm()` em `base_agent.py`, escopo bem maior);
+  nada sobre `bridge_contradictions()` (não tem conceito de rejeição de validador).
+- `run_provocations()` não tinha teste próprio antes desta PC (só a função vizinha
+  `backfill_contradiction_provocations`, PC204, tinha) — `tests/test_pipeline_run_provocations.py`
+  novo, focado na chamada de telemetria nova. `tests/test_llm_telemetry_pc207.py` novo, mesmo
+  padrão de mock de `test_llm_telemetry_pc183.py`.
+- Verificação: `py_compile` limpo; 10 testes novos, 1003/1003 passando (suíte completa, sem
+  regressão); `query_provocations_diagnostics()` chamado ao vivo contra o Supabase real —
+  fail-open confirmado mesmo sem a migração ainda aplicada em produção.
+- **Pendente do usuário:** rodar `setup/supabase_migration_llm_telemetry_pc207.sql` no Supabase de
+  produção (mesmo fluxo manual já usado nas migrations anteriores desta sessão) — sem ela, o tool
+  novo responde "nenhum registro encontrado" sempre (fail-open, não erro), mas não funciona de
+  verdade até a migração rodar.
+
+---
+
 ### PC206 — Concluído (v5.15 / 2026-07-25) — Fix real: contradições de Full Scan gravavam meeting_a_id=None pra sempre
 
 **Contexto:** investigando por que o backfill (PC204) deu zero pendente pro AURORA apesar de 8

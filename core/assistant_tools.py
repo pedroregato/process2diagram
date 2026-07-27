@@ -178,6 +178,7 @@ _TOOL_CATEGORIES: dict[str, str] = {
     "lookup_entity":                   "consulta",
     "delete_entity":                   "admin",
     "get_cache_stats":                 "consulta",
+    "get_provocations_diagnostics":    "consulta",
     "clear_llm_cache":                 "admin",
     # Documentos
     "list_meeting_documents":          "consulta",
@@ -633,6 +634,9 @@ class AssistantToolExecutor(
                 ),
                 "backfill_provocations_contradictions": lambda: self.backfill_provocations_contradictions(
                     tool_input.get("meeting_numbers"),
+                ),
+                "get_provocations_diagnostics": lambda: self.get_provocations_diagnostics(
+                    tool_input["meeting_number"],
                 ),
                 "embed_meeting":                  lambda: self.embed_meeting(
                     tool_input["meeting_number"],
