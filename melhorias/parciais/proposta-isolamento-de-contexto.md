@@ -75,6 +75,69 @@ ou §12, à critério do Agente 0; segue o mesmo estilo/tom das seções existen
 
 ---
 
+## 2.1 Desenho do Guard (rascunho de código — não aplicado)
+
+*(Atualização 2026-07-19, sequenciamento Fase A: a auditoria real — `memory/auditoria_isolamento.md`
+— e o teste `tests/test_context_isolation.py` confirmam empiricamente o padrão descrito abaixo:
+11 funções em `core/project_store.py` filtram só por um id-filho, nunca por `project_id`; 2 delas
+foram provadas retornando dado de outro contexto quando chamadas diretamente com um id não
+validado. Nenhum vazamento em produção — todo call site real de hoje valida antes — mas nada
+força isso estruturalmente.)*
+
+Duas opções de guard, ambas rascunho — o Agente 0 escolhe qual (ou nenhuma) incorporar:
+
+**Opção 1 — helper único de leitura escopada.** Toda leitura de artefato passa por um wrapper
+que exige `project_id` como argumento obrigatório (não opcional) e faz o `.eq()` internamente —
+elimina a possibilidade de "esquecer" o filtro, porque não existe mais um caminho sem ele:
+
+```python
+# core/project_store.py — rascunho, não aplicado
+def _scoped_select(table: str, project_id: str, columns: str = "*") -> "PostgrestQuery":
+    """Único ponto de leitura de tabela escopada por contexto. project_id é
+    posicional e obrigatório — não há como chamar isto sem informar o contexto."""
+    db = _db()
+    if not db:
+        return None
+    return db.table(table).select(columns).eq("project_id", project_id)
+```
+
+Limite honesto desta opção: não cobre os 11 casos AMBÍGUOS já existentes (que filtram por
+`meeting_id`/`process_id`/`requirement_id`, não por `project_id` direto) sem reescrevê-los —
+resolveria só para código novo, a menos que os 11 sejam migrados também.
+
+**Opção 2 — assert central pós-leitura (mais barato, cobre os 11 casos existentes).** Em vez de
+mudar como a query é montada, valida o **resultado** contra o `project_id` esperado antes de
+devolver ao caller — funciona mesmo quando o filtro real foi por um id-filho:
+
+```python
+# core/project_store.py — rascunho, não aplicado
+class ContextIsolationError(Exception):
+    """A exceção ao Fail-Open — nunca engolida por um except Exception genérico."""
+
+def _assert_context(row: dict | None, expected_project_id: str, *, source: str) -> dict | None:
+    if row is None:
+        return None
+    actual = row.get("project_id")
+    if actual is not None and actual != expected_project_id:
+        logger.error(
+            "ISOLATION BREACH: %s returned project_id=%s, expected=%s",
+            source, actual, expected_project_id,
+        )
+        raise ContextIsolationError(f"{source}: contexto {actual} != esperado {expected_project_id}")
+    return row
+```
+
+Limite honesto desta opção: exige que o caller *saiba* qual `project_id` esperar — em vários dos
+11 casos ambíguos (ex.: `get_bpmn_process(process_id)` chamado de dentro de `save_bpmn_new_version`)
+o próprio contrato da função não recebe `project_id` hoje; adotar isto exigiria adicionar esse
+parâmetro em cada um — não é gratuito, é a mesma ordem de grandeza de esforço da Onda 1 da
+renomeação global.
+
+Nenhuma das duas foi aplicada. Ambas são material para o Agente 0 arbitrar junto com a
+incorporação do parágrafo da seção 2.
+
+---
+
 ## 3. Varredura Preliminar — Superfície de Risco (apenas listagem, nada corrigido)
 
 Escopo: `core/project_store.py` + `core/tools/*.py`, ocorrências de `.eq("project_id", ...)`
@@ -127,9 +190,11 @@ Amostra de funções por arquivo (lista completa disponível via
 (ou de uma IA implementando) lembrar de escrever `.eq("project_id", ...)` corretamente, sem
 nenhum mecanismo que force isso estruturalmente (não há teste de regressão genérico que
 verifique isolamento; RLS existe na tabela mas é ignorado pelo `service_role`). Isto **não**
-significa que existam vazamentos hoje — não foi feita uma auditoria função-a-função nesta
-rodada (fora de escopo: "listagem, não correção") — significa que a superfície onde um
-vazamento *poderia* entrar despercebido é grande e cresce a cada tool nova.
+significa que existam vazamentos hoje — a auditoria função-a-função foi feita numa rodada
+seguinte (item 3 desta seção, abaixo), com resultado: nenhum vazamento confirmado em produção,
+mas 11 funções sem nenhum filtro de contexto próprio, seguras hoje só por disciplina do
+caller — 2 delas provadas retornando dado de outro contexto quando chamadas diretamente com
+um id não validado.
 
 ---
 
@@ -139,8 +204,15 @@ Esta proposta não resolve nada por si — só torna a decisão possível. Ao Ag
 
 1. Incorporar (ou adaptar) o parágrafo da seção 2 ao `ENGINEERING_MANIFESTO.md`, com bump de
    versão e registro de PC, conforme `manifestos/README.md §Regras de Versionamento`.
-2. Decidir se/quando abrir uma iniciativa separada de **teste de isolamento genérico** (um
-   helper de teste que, dado um `project_id` A e um B, chama a função com A e afirma que nada
-   de B aparece no retorno) — não coberto por esta proposta, que é só a regra de governança.
-3. Decidir se a varredura da seção 3 deve virar uma auditoria função-a-função de fato (ex.:
-   um Explore agent revisando as 88 funções uma a uma) como iniciativa separada.
+2. Escolher entre a Opção 1 (helper único) e a Opção 2 (assert central) da seção 2.1 — ou
+   nenhuma — como mecanismo real de guard, sabendo que qualquer uma delas é esforço não-trivial
+   (mesma ordem de grandeza da Onda 1 da renomeação global).
+3. ~~Auditoria função-a-função~~ — feita (`memory/auditoria_isolamento.md`, 27 funções
+   revisadas manualmente + 5 testes reais em `tests/test_context_isolation.py`). Decidir se as
+   11 funções 🟡 AMBÍGUAS devem ganhar `project_id` obrigatório como parâmetro numa iniciativa
+   própria, antes ou junto da renomeação global (`melhorias/renomeacao-global-contexto-vichara.md`).
+4. `get_roster_attendance_summary()` (achado da auditoria, não do escopo original desta
+   proposta): busca `meeting_participants` inteira sem filtro antes de reduzir via `roster`
+   escopado — funciona hoje só por unicidade de UUID. Não é vazamento comprovado, mas é o
+   candidato mais barato de corrigir isoladamente, se o Agente 0 quiser adiantar algo antes de
+   decidir o guard completo.
