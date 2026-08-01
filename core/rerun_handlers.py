@@ -186,6 +186,22 @@ def handle_rerun(agent_name, hub, client_info, provider_cfg, output_language,
         agent._lg_skip_cache = True
         hub = agent.run(hub, output_language)
         items = hub.provocations.items if hub.provocations else []
+        # PC207 — mesmo registro de telemetria (approved/rejected/motivos) que
+        # core/pipeline.py::run_provocations() já faz no processamento original;
+        # faltava aqui, então um rerun de agente único nunca aparecia em
+        # get_provocations_diagnostics() (achado da POC AURORA, 2026-08-01).
+        # Best-effort: nunca deve impedir o salvamento abaixo.
+        if meeting_id and project_id and hub.provocations:
+            try:
+                from services.llm_telemetry import _telemetry
+                _telemetry.record_provocations_outcome(
+                    project_id, meeting_id, agent.skill_version,
+                    approved_count=len(items),
+                    rejected_count=hub.provocations.rejected_count,
+                    rejected_reasons=hub.provocations.rejected_reasons,
+                )
+            except Exception:
+                pass
         if meeting_id and project_id and items:
             try:
                 from core.project_store import save_provocations
