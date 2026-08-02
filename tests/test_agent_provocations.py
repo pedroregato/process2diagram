@@ -119,6 +119,27 @@ class TestTurnPositionsAndSpan:
         seconds = [s for s, _ in turns]
         assert seconds == [22, 28, 35, 41]
 
+    def test_turn_positions_detects_single_space_format(self):
+        """hub.transcript_clean REAL (pós modules/transcript_preprocessor.py)
+        tem só 1 espaço entre nome e timestamp — a limpeza final do
+        preprocessador (`re.sub(r"\\s{2,}", " ", text)`) colapsa qualquer
+        sequência de 2+ espaços em 1, inclusive a que separa nome de
+        timestamp. Achado real da POC AURORA (2026-08-02, domínio p2d /
+        contexto Projeto AURORA): a regex original exigia 2+ espaços (mesma
+        de _SPEAKER_LINE_PAT, desenhada pro texto BRUTO, pré-limpeza) e nunca
+        batia contra transcript_clean de verdade — 0 turnos detectados em
+        produção, todo `asymmetry` rejeitado com "span_unresolved",
+        silenciosamente, desde o PC190."""
+        single_space = TRANSCRIPT.replace("   ", " ")
+        turns = _turn_positions(single_space)
+        seconds = [s for s, _ in turns]
+        assert seconds == [22, 28, 35, 41]
+
+    def test_span_resolves_with_single_space_format(self):
+        single_space = TRANSCRIPT.replace("   ", " ")
+        span = _span_text(single_space, "0:22", "0:41")
+        assert "cronograma" in span.lower()
+
     def test_span_excludes_both_boundary_turns(self):
         """Exclusivo nas duas pontas de propósito — a objeção sempre menciona
         o próprio tema que levanta; incluí-la no span produziria falso

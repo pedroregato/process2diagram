@@ -36,7 +36,6 @@ from collections import Counter
 from agents.base_agent import BaseAgent
 from core.knowledge_hub import KnowledgeHub, ProvocationsModel, ProvocationItem
 from core.output_schemas import ProvocationsOutputSchema
-from modules.transcript_preprocessor import _SPEAKER_LINE_PAT
 from modules.transcript_time_parser import _ts_to_seconds
 from modules.transcript_time_parser import _PATTERNS as _OTHER_PATTERNS, _TS_FIRST_PATTERNS as _OTHER_TS_FIRST
 
@@ -102,16 +101,24 @@ def _contains_blacklisted_tone(*texts: str) -> bool:
     return any(term in haystack for term in _TONE_BLACKLIST)
 
 
-# `_SPEAKER_LINE_PAT` (modules/transcript_preprocessor.py) casa o formato REAL
-# de hub.transcript_clean pós-preprocessamento Teams: "Nome   0:03" numa linha
-# própria, SEM dois-pontos (confirmado empiricamente contra
-# test-scenarios/cenario-teste-002/transcricao.txt — os 6 padrões de
-# modules/transcript_time_parser.py, todos com ':' obrigatório no fim, NÃO
-# casam nada nesse formato: parse_transcript_timings() nele retorna
-# has_timestamps=False). Reusa o pattern original (mesma fonte da verdade),
-# só recompilado com re.MULTILINE para varrer o texto inteiro de uma vez em
-# vez de linha a linha.
-_TEAMS_SPEAKER_LINE = re.compile(_SPEAKER_LINE_PAT.pattern, re.MULTILINE)
+# `_SPEAKER_LINE_PAT` (modules/transcript_preprocessor.py) casa "Nome   0:03"
+# numa linha própria, SEM dois-pontos — mas exige 2+ espaços (\s{2,}) entre
+# nome e timestamp, porque foi desenhado pra rodar sobre o texto BRUTO, antes
+# da limpeza. hub.transcript_clean (o que este agente de fato recebe) já
+# passou pela limpeza final do preprocessador (`re.sub(r"\s{2,}", " ", ...)`,
+# modules/transcript_preprocessor.py), que colapsa qualquer sequência de 2+
+# espaços em 1 — inclusive a que separava nome de timestamp. Resultado:
+# _SPEAKER_LINE_PAT nunca bate em hub.transcript_clean real (confirmado
+# direto no banco contra a Reunião 5 da POC AURORA, 2026-08-02: 0 turnos
+# detectados onde deveriam ser 10) — _turn_positions() sempre voltava vazio,
+# _span_text() sempre None, e todo candidato de asymmetry que dependesse de
+# span era rejeitado com "span_unresolved", silenciosamente, desde o PC190.
+# Mesmo padrão de _SPEAKER_LINE_PAT, mas com \s+ (1+ espaço) em vez de
+# \s{2,} — o "\s*$" already exige a linha terminar exatamente no timestamp,
+# então 1 espaço já é suficiente pra não confundir nome com o resto da linha.
+_TEAMS_SPEAKER_LINE = re.compile(
+    r"^(.+?)\s+(\d{1,2}:\d{2}(?::\d{2})?)\s*$", re.MULTILINE
+)
 
 
 def _turn_positions(transcript: str) -> list[tuple[int, int]]:
