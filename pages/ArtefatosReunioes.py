@@ -72,11 +72,7 @@ with _TPE(max_workers=6) as _pool:
 # (categoria + contagem, não um score único — ver
 # melhorias/parciais/classificador-pii-transcricoes.md). ⚪ = ainda não
 # reprocessada desde que a coluna existe, distinto de "risco baixo confirmado".
-_PII_BADGE = {"low": "🟢", "medium": "🟡", "high": "🔴"}
-_PII_CATEGORY_LABEL = {
-    "CPF": "CPF", "CNPJ": "CNPJ", "EMAIL": "E-mail", "TEL": "Telefone",
-    "VALOR": "Valor monetário", "NOME_PESSOA": "Nome de pessoa",
-}
+from modules.compliance import PII_CATEGORY_LABELS as _PII_CATEGORY_LABEL, PII_RISK_BADGE as _PII_BADGE
 
 # DMN/IBIS: leitura somente-leitura do cache de sessão das outras páginas da
 # seção (Modelagem Formal / Debates) — a aba Comparar usa as contagens quando

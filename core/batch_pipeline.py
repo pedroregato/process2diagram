@@ -525,6 +525,17 @@ class BatchPipeline:
                 getattr(hub.meta, "llm_provider", ""),
             )
 
+            # Reclassifica PII a cada reprocessamento — sem isso a classificação
+            # ficaria presa ao que foi computado na 1ª vez que a reunião passou
+            # por pages/Pipeline.py (ver melhorias/parciais/classificador-pii-
+            # transcricoes.md). Determinístico, sem custo de LLM extra.
+            try:
+                from modules.compliance import detect_pii
+                from core.project_store import save_meeting_pii_summary
+                save_meeting_pii_summary(meeting_id, detect_pii(transcript).summary)
+            except Exception:
+                pass
+
             n_terms, n_rules = 0, 0
             if getattr(hub, "sbvr", None) and hub.sbvr.ready:
                 n_terms, n_rules = save_sbvr_from_hub(meeting_id, project_id, hub)

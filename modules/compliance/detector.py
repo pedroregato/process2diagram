@@ -32,6 +32,16 @@ _STRUCTURED: list[tuple[str, re.Pattern]] = [
 # Cap text sent to spaCy to avoid OOM on very long transcripts
 _SPACY_MAX_CHARS = 50_000
 
+# Rótulos legíveis por categoria — fonte única, reaproveitada por
+# agents/agent_minutes.py, modules/ata_engine_generator.py,
+# modules/minutes_exporter.py e pages/ArtefatosReunioes.py (nunca duplicar
+# esse mapeamento — categoria nova aqui precisa aparecer em todo lugar).
+PII_CATEGORY_LABELS: dict[str, str] = {
+    "CPF": "CPF", "CNPJ": "CNPJ", "EMAIL": "E-mail", "TEL": "Telefone",
+    "VALOR": "Valor monetário", "NOME_PESSOA": "Nome de pessoa",
+}
+PII_RISK_BADGE: dict[str, str] = {"low": "🟢", "medium": "🟡", "high": "🔴"}
+
 
 # ── spaCy lazy loader (function-level cache, same pattern as nlp_chunker) ────
 

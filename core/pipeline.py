@@ -284,6 +284,66 @@ def run_provocations(hub, client_info, provider_cfg, output_lang,
         progress_callback("Provocações", "skipped")
 
 
+def backfill_meeting_pii(project_id, meeting_ids=None, progress_callback=None):
+    """
+    Classifica PII (categoria + contagem + risk_level) para reuniões JÁ
+    PROCESSADAS de um projeto, sem rodar nenhum agente LLM.
+
+    Motivação: modules/compliance/detector.py::detect_pii() só era chamado
+    dentro do fluxo de "Nova transcrição" (pages/Pipeline.py) — reuniões
+    processadas antes dessa feature existir (ou carregadas via qualquer
+    caminho que não passe por lá) nunca tiveram pii_risk_level/pii_categories
+    persistidos (ver melhorias/parciais/classificador-pii-transcricoes.md).
+    Reprocessar a reunião inteira pra corrigir isso re-rodaria o pipeline
+    completo (custo de LLM) só pra recalcular algo 100% determinístico —
+    esta função só roda detect_pii() sobre a transcrição já armazenada e
+    persiste, direto.
+
+    meeting_ids: subconjunto de reuniões a processar (por id); None = todas
+    as reuniões do projeto que tenham transcrição salva.
+    progress_callback(i, total, result_row): opcional, chamado após cada
+    reunião — result_row é um dict com meeting_id/meeting_number/title e
+    risk_level/categories, ou "error" em caso de falha isolada.
+
+    Retorna list[dict], um resultado por reunião processada. Nunca lança —
+    erro numa reunião vira {"error": ...} nessa linha, sem derrubar as
+    demais (mesmo padrão fail-open de backfill_contradiction_provocations()).
+    """
+    from modules.compliance import detect_pii
+    from core.project_store import list_meetings, save_meeting_pii_summary
+
+    meetings = list_meetings(project_id)
+    if meeting_ids:
+        wanted = set(meeting_ids)
+        meetings = [m for m in meetings if m["id"] in wanted]
+
+    total = len(meetings)
+    results = []
+    for i, m in enumerate(meetings):
+        mid = m["id"]
+        row = {"meeting_id": mid, "meeting_number": m.get("meeting_number"), "title": m.get("title")}
+        try:
+            transcript = m.get("transcript_raw") or m.get("transcript_clean") or ""
+            if not transcript.strip():
+                row.update(skipped="sem transcrição salva")
+            else:
+                pii = detect_pii(transcript)
+                saved = save_meeting_pii_summary(mid, pii.summary)
+                row.update(
+                    risk_level=pii.risk_level,
+                    categories=pii.categories,
+                    total=sum(pii.categories.values()) if pii.categories else 0,
+                    saved=saved,
+                )
+        except Exception as exc:
+            row["error"] = str(exc)
+        results.append(row)
+        if progress_callback:
+            progress_callback(i, total, row)
+
+    return results
+
+
 def backfill_contradiction_provocations(project_id, meeting_ids=None, progress_callback=None):
     """
     Re-deriva provocações kind="contradiction" para reuniões JÁ PROCESSADAS de

@@ -274,6 +274,16 @@ class AgentMinutes(BaseAgent):
 
         hub.minutes = self._build_model(data)
         hub.minutes.ready = True
+
+        # Classificação de PII (determinística, sem LLM) — populada aqui, antes
+        # do to_markdown(), pra que a ata (markdown/HTML/docx/pdf) já nasça com
+        # a seção pronta. Ver melhorias/parciais/classificador-pii-transcricoes.md
+        try:
+            from modules.compliance import detect_pii
+            hub.minutes.pii_summary = detect_pii(hub.transcript_raw or hub.transcript_clean or "").summary
+        except Exception:
+            pass
+
         hub.minutes.minutes_md = AgentMinutes.to_markdown(hub.minutes)
         hub.mark_agent_run(self.name)
         hub.bump()
@@ -417,6 +427,25 @@ class AgentMinutes(BaseAgent):
                 for ex in ap_examples:
                     lines.append(f'  > "{ex}"')
                 lines.append("")
+
+        # PII summary (modules/compliance/detector.py::detect_pii(), determinístico
+        # — categoria+contagem, não score único, ver
+        # melhorias/parciais/classificador-pii-transcricoes.md)
+        pii = getattr(minutes, "pii_summary", None) or {}
+        pii_categories = pii.get("categories") or {}
+        if pii_categories:
+            from modules.compliance import PII_CATEGORY_LABELS, PII_RISK_BADGE
+            _pii_badge = PII_RISK_BADGE.get(pii.get("risk_level"), "⚪")
+            _pii_total = sum(pii_categories.values())
+            lines += [f"## {_pii_badge} Dados Sensíveis Identificados", ""]
+            lines.append(
+                f"*Classificação automática de PII na transcrição — "
+                f"{_pii_total} informação(ões) sensível(eis) no total.*"
+            )
+            lines.append("")
+            for cat, count in sorted(pii_categories.items(), key=lambda kv: -kv[1]):
+                lines.append(f"- **{PII_CATEGORY_LABELS.get(cat, cat)}:** {count}")
+            lines.append("")
 
         lines += [
             "---",

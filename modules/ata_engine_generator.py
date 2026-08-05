@@ -81,6 +81,7 @@ def generate_ata_html(
     hero_chips_html     = _render_hero_chips(participants)
     topics_html         = _render_topics(minutes)
     next_meeting_html   = _render_next_meeting(next_meeting, next_meeting_detail)
+    pii_summary_html    = _render_pii_summary(minutes)
 
     # ── Metadata ──────────────────────────────────────────────────────────────
     date_str  = meeting_date.strftime("%d/%m/%Y")
@@ -105,6 +106,7 @@ def generate_ata_html(
         ("{{HERO_CHIPS}}",     hero_chips_html),
         ("{{TOPICS}}",         topics_html),
         ("{{NEXT_MEETING}}",   next_meeting_html),
+        ("{{PII_SUMMARY}}",    pii_summary_html),
         ("{{ACTION_ITEMS_JS}}", action_items_js),
         ("{{EXPORT_JS}}",      _EXPORT_JS),
     ]:
@@ -226,6 +228,32 @@ def _render_topics(minutes: "MinutesModel") -> str:
         )
 
     return "\n".join(html_parts)
+
+
+def _render_pii_summary(minutes: "MinutesModel") -> str:
+    """Classificação de PII (modules/compliance/detector.py::detect_pii()) —
+    categoria + contagem, não score único. Ver
+    melhorias/parciais/classificador-pii-transcricoes.md."""
+    from modules.compliance import PII_CATEGORY_LABELS, PII_RISK_BADGE
+
+    pii = getattr(minutes, "pii_summary", None) or {}
+    categories = pii.get("categories") or {}
+    if not categories:
+        return '<p class="no-topics">Nenhum dado sensível identificado nesta transcrição.</p>'
+
+    badge = PII_RISK_BADGE.get(pii.get("risk_level"), "⚪")
+    total = sum(categories.values())
+    items = "".join(
+        f'<li>{_e(PII_CATEGORY_LABELS.get(cat, cat))}: <strong>{count}</strong></li>'
+        for cat, count in sorted(categories.items(), key=lambda kv: -kv[1])
+    )
+    return (
+        f'<div class="topic-card" data-topic="pii">'
+        f'<div class="topic-header"><span class="topic-num">{badge}</span>'
+        f'<span class="topic-title">{total} informação(ões) sensível(eis) no total</span></div>'
+        f'<div class="topic-body"><ul class="decision-list">{items}</ul></div>'
+        f'</div>'
+    )
 
 
 def _render_next_meeting(next_meeting: str, detail: str) -> str:
@@ -513,6 +541,7 @@ table.ai-table tr:hover td { background: rgba(255,255,255,.02); }
     <a class="nav-item active" href="#topics">Topicos</a>
     <a class="nav-item" href="#actions">Pendencias</a>
     <a class="nav-item" href="#next">Proxima</a>
+    <a class="nav-item" href="#pii">Dados Sensiveis</a>
   </nav>
   <div class="sidebar-footer">
     <button class="export-btn" onclick="exportAta()">Exportar copia</button>
@@ -564,6 +593,11 @@ table.ai-table tr:hover td { background: rgba(255,255,255,.02); }
     <section id="next">
       <div class="section-title">Proxima Reuniao</div>
       {{NEXT_MEETING}}
+    </section>
+
+    <section id="pii">
+      <div class="section-title">Dados Sensiveis Identificados</div>
+      {{PII_SUMMARY}}
     </section>
   </div>
 </main>

@@ -114,6 +114,7 @@ if _admin:
         st.Page("pages/PaymentAdmin.py",       title="Billing Admin",       icon="💳"),
         st.Page("pages/TesteProvocacoes.py",   title="Teste — Provocações", icon="🎭"),
         st.Page("pages/ProvocationsBackfill.py", title="Backfill — Provocações", icon="🌉"),
+        st.Page("pages/PiiBackfill.py",         title="Backfill — PII",         icon="🔐"),
     ]
 pg = st.navigation(pages)
 

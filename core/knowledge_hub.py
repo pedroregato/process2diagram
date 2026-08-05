@@ -163,6 +163,11 @@ class MinutesModel:
     # ATA Engine interactive HTML — generated after pipeline, empty if not available
     ata_html: str = ""
     ata_html_error: str = ""
+    # Classificação de PII (modules/compliance/detector.py::detect_pii().summary)
+    # — determinística, sem LLM, populada em AgentMinutes.run() antes do
+    # to_markdown()/ata_html serem gerados, ver
+    # melhorias/parciais/classificador-pii-transcricoes.md
+    pii_summary: dict = field(default_factory=dict)
 
 
 # ── Requirements Model ────────────────────────────────────────────────────
@@ -825,6 +830,10 @@ class KnowledgeHub:
         # ── v4.28: Meeting conduct antipatterns ───────────────────────────────────
         if not hasattr(hub.minutes, 'meeting_antipatterns'):
             hub.minutes.meeting_antipatterns = []
+
+        # ── v5.15: PII summary (classificador-pii-transcricoes.md) ────────────────
+        if not hasattr(hub.minutes, 'pii_summary'):
+            hub.minutes.pii_summary = {}
 
         # ── v4.21: Context fields (project → context rename) ──────────────────
         if not hasattr(hub, 'context_id'):

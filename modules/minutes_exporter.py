@@ -756,6 +756,19 @@ def to_docx(minutes: "MinutesModel", template_spec: dict | None = None) -> bytes
                 _bullet(_item)
             doc.add_paragraph()
 
+    # ── PII summary (modules/compliance/detector.py::detect_pii(), determinístico
+    # — categoria+contagem, não score único) ────────────────────────────────────
+    _pii = getattr(minutes, "pii_summary", None) or {}
+    _pii_categories = _pii.get("categories") or {}
+    if _pii_categories:
+        from modules.compliance import PII_CATEGORY_LABELS
+        _heading("Dados Sensíveis Identificados")
+        _total = sum(_pii_categories.values())
+        _body(f"{_total} informação(ões) sensível(eis) identificada(s) na transcrição:")
+        for _cat, _count in sorted(_pii_categories.items(), key=lambda kv: -kv[1]):
+            _bullet(f"{PII_CATEGORY_LABELS.get(_cat, _cat)}: {_count}")
+        doc.add_paragraph()
+
     # ── Footer note ───────────────────────────────────────────────────────────
     footer_para = doc.add_paragraph()
     footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -976,6 +989,19 @@ def to_pdf(minutes: "MinutesModel") -> bytes:
         pdf.set_font("Helvetica", "B", 11)
         set_navy()
         pdf.cell(W, 7, _p(minutes.next_meeting), ln=True)
+        pdf.ln(3)
+
+    # ── PII summary (modules/compliance/detector.py::detect_pii(), determinístico
+    # — categoria+contagem, não score único) ────────────────────────────────────
+    _pii = getattr(minutes, "pii_summary", None) or {}
+    _pii_categories = _pii.get("categories") or {}
+    if _pii_categories:
+        from modules.compliance import PII_CATEGORY_LABELS
+        section_header("Dados Sensiveis Identificados")
+        _total = sum(_pii_categories.values())
+        body_text(f"{_total} informacao(oes) sensivel(eis) identificada(s) na transcricao:")
+        for _cat, _count in sorted(_pii_categories.items(), key=lambda kv: -kv[1]):
+            bullet(f"{PII_CATEGORY_LABELS.get(_cat, _cat)}: {_count}")
         pdf.ln(3)
 
     return bytes(pdf.output())
@@ -1213,6 +1239,20 @@ def to_html(minutes: "MinutesModel") -> str:
             sections.append(
                 f'<div class="card"><h2 class="section-title">Próxima Reunião</h2>'
                 f'<p class="next-meeting">{esc(minutes.next_meeting)}</p></div>'
+            )
+        _pii = getattr(minutes, "pii_summary", None) or {}
+        _pii_categories = _pii.get("categories") or {}
+        if _pii_categories:
+            from modules.compliance import PII_CATEGORY_LABELS
+            _total = sum(_pii_categories.values())
+            items = "".join(
+                f"<li>{esc(PII_CATEGORY_LABELS.get(cat, cat))}: <strong>{count}</strong></li>"
+                for cat, count in sorted(_pii_categories.items(), key=lambda kv: -kv[1])
+            )
+            sections.append(
+                f'<div class="card"><h2 class="section-title">Dados Sensíveis Identificados</h2>'
+                f'<p class="body-text">{_total} informação(ões) sensível(eis) no total</p>'
+                f'<ul class="plain">{items}</ul></div>'
             )
     else:
         # Loaded from DB without structured fields — parse the raw markdown.
