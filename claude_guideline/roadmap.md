@@ -4,6 +4,56 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC208 — Concluído (v5.15 / 2026-07-27) — Nova seção lateral "Artefatos": divisão por assunto
+
+**Contexto:** usuário relatou que `pages/Artefatos.py` (3332 linhas, 13 `st.tabs()`) tinha
+navegação desconfortável — lista grande de conteúdo e número de abas. Discussão prévia sobre
+abordagem (abas agrupadas em 2 níveis / menu lateral / páginas separadas) foi retomada com
+pedido explícito: criar uma **seção lateral própria** para Artefatos, com **divisões por
+assuntos correlatos** dentro dela.
+
+- Nova entrada em `app.py::pages["Artefatos"]` com 6 páginas, logo após "Análise": Visão
+  Geral (`pages/Artefatos.py`, reaproveitado — não removido), Requisitos, Modelagem Formal,
+  Reuniões, Debates (IBIS), Qualidade & Sinais.
+- Agrupamento das 13 abas antigas por assunto real do conteúdo (não só do nome): **Requisitos**
+  (Requisitos, Mind Map, Contradições — conflitos entre requisitos, Histórico com a seção
+  "🏛️ Governança de Requisitos" do PC199); **Modelagem Formal** (SBVR, BPMN, DMN — os 3
+  artefatos formais estilo OMG); **Reuniões** (Reuniões, Rastreabilidade de Origem, Comparação);
+  **Debates** (IBIS sozinha — feature coesa de ~1160 linhas, sem dependentes externos);
+  **Qualidade & Sinais** (Ruídos de Comunicação, Provocações).
+- `pages/Artefatos.py` (Visão Geral) perde os 13 `st.tabs()`, mantém os KPIs e o export
+  "📦 Exportar Relatório" (único bloco que ficava fora de todas as abas — não pertence a
+  nenhuma subseção sozinha), e ganha uma grade de `st.page_link` para as 5 subseções.
+- Novo `ui/artefatos_shared.py` (não é página) — os `@st.cache_data` loaders + helpers
+  `meet_label`/`doc_label`/`_promote_widget` (como factories, para preservar as call sites
+  originais sem editar cada uma) + CSS + `render_artefatos_nav()` (faixa de `st.page_link` no
+  topo de cada página, linkando para as outras 5). Cache do Streamlit é por identidade de
+  função — importar o mesmo loader em páginas diferentes compartilha o cache entre elas.
+- Cada página nova carrega só os loaders que sua própria aba usa (antes: toda visita disparava
+  as 8-9 queries paralelas mesmo para ver só BPMN) — ganho lateral da divisão.
+- IBIS virou página com `st.container()` no lugar de `st.tabs()` (assunto único — evita uma
+  barra de aba sem sentido) preservando a indentação `with tab_ibis:` original intacta (zero
+  risco de dedent numa seção com ~1160 linhas de HTML/JS pyvis embutido sensível a espaçamento).
+- **Achado de correção durante a extração:** `pages/Artefatos.py` chamava `export_html()`/
+  `export_pdf()` com uma variável `project` nunca definida no arquivo (`NameError` latente,
+  nunca acionado em produção porque exigia clicar "Gerar HTML"/"Gerar PDF") — corrigido para
+  `project = {"name": project_name}`, o formato que `reqtracker_exporter.to_html()` já esperava.
+- **Achado de correção nos testes:** os 3 testes que faziam `AppTest.from_file("pages/Artefatos.py")`
+  e `patch("core.project_store.X", ...)` parariam de funcionar silenciosamente após a divisão —
+  `unittest.mock.patch` precisa mirar o namespace onde o nome é resolvido em tempo de chamada, e
+  isso passou a ser `ui.artefatos_shared` (que faz `from core.project_store import X` uma única
+  vez, cacheado em `sys.modules` pelo resto do processo) em vez de `core.project_store` direto —
+  os 3 arquivos de teste foram retargetados (`test_artefatos_provocations_tab.py` →
+  `ArtefatosQualidade.py`, `test_artefatos_sbvr_pagination.py` e
+  `test_artefatos_bpmn_toggle_stable_container.py` → `ArtefatosModelagem.py`).
+- Novo `tests/test_artefatos_pages_boot_smoke.py` cobre as 3 páginas que nunca tiveram teste
+  próprio (Visão Geral, Requisitos, Reuniões) + Debates.
+- Verificação: 1008/1008 testes passando (suíte completa, +5 novos), `py_compile` limpo nos 6
+  arquivos + `ui/artefatos_shared.py`, checagem estática de nomes não resolvidos (AST) em cada
+  página nova, `streamlit run` manual navegando pelas 6 páginas.
+
+---
+
 ### PC207 — Concluído (v5.15 / 2026-07-26) — Observabilidade de Provocações: motivo de rejeição persistido e consultável por reunião
 
 **Contexto:** testando a Reunião 5 do AURORA, a aba Provocações mostrou "nenhuma provocação

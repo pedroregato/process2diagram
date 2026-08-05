@@ -35,8 +35,12 @@ Hoje o resultado só existe dentro do JSONB de auditoria (difícil de consultar 
 Nova função `list_meetings_pii_summary(project_id)` em `core/project_store.py`, mesmo padrão de `list_meetings_quality()` já existente (a que alimenta o Radar de Qualidade da Home/ValidationHub) — 1 query, sem N+1.
 
 ### Camada 3 — Superfície visual
-- Badge de risco (🟢🟡🔴) na listagem de reuniões (`ArtefatosReunioes.py`, Home).
-- Aba "Dashboard" real em `pages/SegurancaDeDados.py` (hoje só tem documentação estática) — reaproveitar o padrão visual já existente do Radar de Qualidade (Scatterpolar Plotly), com dimensões tipo "% reuniões com CPF exposto", "% reuniões com e-mail", distribuição de risco por período.
+
+**Decisão de design (2026-08-05, confirmada com o usuário):** o `risk_level` (🟢🟡🔴) funciona como badge rápido de leitura na listagem, mas o card de detalhe por trás dele mostra a **contagem bruta por categoria**, não só o nível — ex.: *"CPF: 4 · E-mail: 2 · Telefone: 1 · Nome: 14 — 21 informações sensíveis no total"*. Contagem bruta (não normalizada por tamanho da transcrição) é o que a pessoa quer ler num card individual — "quantas vezes um CPF apareceu" é a pergunta real, não uma taxa abstrata. Normalização por tamanho (pra comparar reuniões de durações muito diferentes de forma justa) fica reservada pro dashboard agregado (3b), onde comparação entre reuniões de fato importa.
+
+- **Badge de risco** (🟢🟡🔴) na listagem de reuniões (`ArtefatosReunioes.py`, Home) — leitura rápida, sem abrir nada.
+- **Card de detalhe por reunião** — categoria + contagem + total, formato acima. Abre ao clicar/expandir a reunião na listagem.
+- **Aba "Dashboard" real em `pages/SegurancaDeDados.py`** (hoje só tem documentação estática) — reaproveitar o padrão visual já existente do Radar de Qualidade (Scatterpolar Plotly), com dimensões tipo "% reuniões com CPF exposto", "% reuniões com e-mail", distribuição de risco por período — aqui sim com normalização por tamanho quando fizer sentido comparar.
 
 ### Camada 4 — Ferramenta do Assistente
 Tool nova `get_pii_risk_summary(meeting_number)` / `list_high_risk_meetings()`, categoria "consulta" (não-admin — é awareness/disclosure, não mutação), mesmo padrão de `get_cache_stats`/`get_provocations_diagnostics`.

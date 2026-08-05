@@ -1,6 +1,6 @@
 # tests/test_artefatos_bpmn_toggle_stable_container.py
 """
-Regression test for pages/Artefatos.py's BPMN tab: the "Visualizar diagrama
+Regression test for pages/ArtefatosModelagem.py's BPMN tab: the "Visualizar diagrama
 interativo" st.toggle() conditionally rendered a components.html() block
 (the whole bpmn-js library + diagram XML — a large payload) directly inline,
 without a stable st.container() wrapper — same "variable child count" defect
@@ -57,7 +57,7 @@ class TestArtefatosBpmnTabSourceUsesStableContainer:
         captured into a variable BEFORE a st.container() block, and the
         heavy components.html() call must live inside that container —
         not directly gated by `if st.toggle(...):`."""
-        src = open("pages/Artefatos.py", encoding="utf-8").read()
+        src = open("pages/ArtefatosModelagem.py", encoding="utf-8").read()
         idx = src.index('key=f"bpmn_show_{pid}_{sel_ver[\'version\']}",')
         window = src[idx: idx + 800]
         assert "with st.container():" in window

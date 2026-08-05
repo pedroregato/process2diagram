@@ -599,6 +599,70 @@ def list_meetings_quality(project_id: str) -> list[dict]:
         return []
 
 
+def save_meeting_pii_summary(meeting_id: str, pii_summary: dict) -> bool:
+    """Persiste o resultado de detect_pii() (modules/compliance/detector.py)
+    em colunas dedicadas de `meetings`, além do log de auditoria em
+    compliance_audit — sem isso o dado só existia dentro de um JSONB
+    write-only, sem consulta agregada possível (ver
+    melhorias/parciais/classificador-pii-transcricoes.md).
+
+    pii_summary: dict no formato de PIIDetectionResult.summary
+    ({"categories": {...}, "persons_count": int, "risk_level": str, ...}).
+    """
+    db = _db()
+    if not db or not pii_summary:
+        return False
+    try:
+        payload = {
+            "pii_risk_level":    pii_summary.get("risk_level"),
+            "pii_categories":    pii_summary.get("categories") or {},
+            "pii_persons_count": pii_summary.get("persons_count") or 0,
+        }
+        db.table("meetings").update(payload).eq("id", meeting_id).execute()
+        return True
+    except Exception:
+        return False
+
+
+def list_meetings_pii_summary(project_id: str) -> list[dict]:
+    """Retorna reuniões com a classificação de PII (categoria + contagem +
+    risk_level) pro dashboard de segurança de dados — mesmo padrão de
+    list_meetings_quality() acima. Cada dict contém: id, title,
+    meeting_number, meeting_date, pii_risk_level (None = reunião ainda não
+    reprocessada desde que a coluna existe — distinto de "low" confirmado,
+    nunca colapsar os dois), pii_categories (dict categoria→contagem),
+    pii_persons_count, pii_total (soma das categorias — derivado aqui, não
+    armazenado)."""
+    db = _db()
+    if not db:
+        return []
+    try:
+        rows = _ok(
+            db.table("meetings")
+            .select("id, title, meeting_number, meeting_date, "
+                    "pii_risk_level, pii_categories, pii_persons_count")
+            .eq("project_id", project_id)
+            .order("meeting_number")
+            .execute()
+        )
+        result = []
+        for r in rows:
+            categories = r.get("pii_categories") or {}
+            result.append({
+                "id":                r["id"],
+                "title":             r.get("title", ""),
+                "meeting_number":    r.get("meeting_number"),
+                "meeting_date":      (r.get("meeting_date") or "")[:10],
+                "pii_risk_level":    r.get("pii_risk_level"),  # None = não analisada ainda
+                "pii_categories":    categories,
+                "pii_persons_count": r.get("pii_persons_count") or 0,
+                "pii_total":         sum(categories.values()) if categories else 0,
+            })
+        return result
+    except Exception:
+        return []
+
+
 def _next_meeting_number(project_id: str) -> int:
     db = _db()
     if not db:

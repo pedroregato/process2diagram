@@ -1,6 +1,7 @@
 # tests/test_artefatos_provocations_tab.py
 """
-Boot-smoke + interaction test for the "🎭 Provocações" tab in pages/Artefatos.py
+Boot-smoke + interaction test for the "🎭 Provocações" tab in
+pages/ArtefatosQualidade.py
 (PC190, melhorias/arquivados/agente-de-provocacoes.md).
 
 Real AppTest run (not a mocked function call) — exercises the actual page
@@ -18,6 +19,14 @@ from streamlit.testing.v1 import AppTest
 # memory/engineering_notes): st.page_link("pages/Home.py", ...) can't resolve
 # a sibling page when AppTest treats this file as the sole entrypoint.
 st.page_link = lambda *a, **k: None
+
+# PC208: os loaders/cached-loaders foram movidos de pages/Artefatos.py para
+# ui/artefatos_shared.py (import compartilhado por todas as 6 páginas da
+# seção). unittest.mock.patch precisa mirar o namespace onde o NOME é
+# procurado em tempo de chamada — que agora é ui.artefatos_shared, não mais
+# core.project_store (from-import não repassa patches feitos na origem depois
+# que o módulo compartilhado já foi importado uma vez no processo).
+_PS = "ui.artefatos_shared"
 
 
 _FAKE_PROVOCATIONS = [
@@ -96,7 +105,7 @@ _pid_counter = iter(range(1, 1000))
 
 
 def _base_app(pid: str):
-    at = AppTest.from_file("pages/Artefatos.py", default_timeout=60)
+    at = AppTest.from_file("pages/ArtefatosQualidade.py", default_timeout=60)
     at.session_state["_autenticado"] = True
     at.session_state["_usuario_login"] = "teste"
     at.session_state["_usuario_nome"] = "Teste"
@@ -109,22 +118,15 @@ def _base_app(pid: str):
 def _run_with_mocks(provocations=None):
     pid = f"pc190-test-{next(_pid_counter)}"
     with patch("modules.supabase_client.supabase_configured", lambda: True), \
-         patch("core.project_store.list_meetings", lambda pid: [
+         patch(f"{_PS}.list_meetings", lambda pid: [
              {"id": "m1", "meeting_number": 1, "title": "R1", "meeting_date": "2026-01-01",
               "total_tokens": 0, "llm_provider": "x"},
              {"id": "m2", "meeting_number": 2, "title": "R2", "meeting_date": "2026-01-02",
               "total_tokens": 0, "llm_provider": "x"},
          ]), \
-         patch("core.project_store.list_requirements_light", lambda pid: []), \
-         patch("core.project_store.list_contradictions", lambda pid: []), \
-         patch("core.project_store.list_bpmn_processes", lambda pid: []), \
-         patch("core.project_store.bpmn_tables_exist", lambda: False), \
-         patch("core.project_store.get_asset_metadata_map", lambda pid: {}), \
-         patch("core.project_store.list_sbvr_terms", lambda pid: []), \
-         patch("core.project_store.list_sbvr_rules", lambda pid: []), \
-         patch("core.project_store.list_provocations_by_project",
+         patch(f"{_PS}.list_provocations_by_project",
                lambda pid, status=None: provocations or []), \
-         patch("modules.document_store.list_documents", lambda pid, **_: []):
+         patch(f"{_PS}.list_communication_noise_by_project", lambda pid: []):
         at = _base_app(pid)
         at.run()
     return at

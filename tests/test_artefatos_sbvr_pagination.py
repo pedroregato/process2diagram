@@ -1,6 +1,6 @@
 # tests/test_artefatos_sbvr_pagination.py
 """
-Regression test for SBVR pagination in pages/Artefatos.py (PC178).
+Regression test for SBVR pagination in pages/ArtefatosModelagem.py (PC178).
 
 Production incident: a context with 751 SBVR terms + 502 SBVR rules made
 Artefatos.py render 1253 st.expander() widgets (each with a nested
@@ -61,7 +61,7 @@ def _fake_rules(n):
 
 
 def _base_app():
-    at = AppTest.from_file("pages/Artefatos.py", default_timeout=30)
+    at = AppTest.from_file("pages/ArtefatosModelagem.py", default_timeout=30)
     # is_authenticated() (modules/auth.py) checks _autenticado, not
     # "authenticated" — a wrong key here silently renders the login page
     # instead of the target page, and boot-smoke checks trivially "pass"
@@ -75,11 +75,16 @@ def _base_app():
     return at
 
 
+# PC208: os loaders foram movidos de pages/Artefatos.py para
+# ui/artefatos_shared.py (import compartilhado pelas 6 páginas da seção
+# Artefatos) — patch precisa mirar o namespace onde o nome é resolvido em
+# tempo de chamada, que agora é ui.artefatos_shared, não mais
+# core.project_store/modules.document_store.
+_PS = "ui.artefatos_shared"
+
 _PATCH_TARGETS = dict(
     supabase_configured=lambda: True,
     list_meetings=lambda pid: [],
-    list_requirements_light=lambda pid: [],
-    list_contradictions=lambda pid: [],
     list_bpmn_processes=lambda pid: [],
     bpmn_tables_exist=lambda: False,
     get_asset_metadata_map=lambda pid: {},
@@ -90,15 +95,13 @@ _PATCH_TARGETS = dict(
 class TestSbvrPaginationCapsRenderedExpanders:
     def test_60_terms_and_60_rules_render_at_most_25_expanders_each(self):
         with patch("modules.supabase_client.supabase_configured", _PATCH_TARGETS["supabase_configured"]), \
-             patch("core.project_store.list_meetings", _PATCH_TARGETS["list_meetings"]), \
-             patch("core.project_store.list_requirements_light", _PATCH_TARGETS["list_requirements_light"]), \
-             patch("core.project_store.list_contradictions", _PATCH_TARGETS["list_contradictions"]), \
-             patch("core.project_store.list_bpmn_processes", _PATCH_TARGETS["list_bpmn_processes"]), \
-             patch("core.project_store.bpmn_tables_exist", _PATCH_TARGETS["bpmn_tables_exist"]), \
-             patch("core.project_store.get_asset_metadata_map", _PATCH_TARGETS["get_asset_metadata_map"]), \
-             patch("core.project_store.list_sbvr_terms", lambda pid: _fake_terms(60)), \
-             patch("core.project_store.list_sbvr_rules", lambda pid: _fake_rules(60)), \
-             patch("modules.document_store.list_documents", _PATCH_TARGETS["list_documents"]):
+             patch(f"{_PS}.list_meetings", _PATCH_TARGETS["list_meetings"]), \
+             patch(f"{_PS}.list_bpmn_processes", _PATCH_TARGETS["list_bpmn_processes"]), \
+             patch(f"{_PS}.bpmn_tables_exist", _PATCH_TARGETS["bpmn_tables_exist"]), \
+             patch(f"{_PS}.get_asset_metadata_map", _PATCH_TARGETS["get_asset_metadata_map"]), \
+             patch(f"{_PS}.list_sbvr_terms", lambda pid: _fake_terms(60)), \
+             patch(f"{_PS}.list_sbvr_rules", lambda pid: _fake_rules(60)), \
+             patch(f"{_PS}.list_documents", _PATCH_TARGETS["list_documents"]):
             at = _base_app()
             at.run()
 
@@ -120,15 +123,13 @@ class TestSbvrPaginationCapsRenderedExpanders:
 
     def test_next_page_button_advances_without_exceeding_page_size(self):
         with patch("modules.supabase_client.supabase_configured", _PATCH_TARGETS["supabase_configured"]), \
-             patch("core.project_store.list_meetings", _PATCH_TARGETS["list_meetings"]), \
-             patch("core.project_store.list_requirements_light", _PATCH_TARGETS["list_requirements_light"]), \
-             patch("core.project_store.list_contradictions", _PATCH_TARGETS["list_contradictions"]), \
-             patch("core.project_store.list_bpmn_processes", _PATCH_TARGETS["list_bpmn_processes"]), \
-             patch("core.project_store.bpmn_tables_exist", _PATCH_TARGETS["bpmn_tables_exist"]), \
-             patch("core.project_store.get_asset_metadata_map", _PATCH_TARGETS["get_asset_metadata_map"]), \
-             patch("core.project_store.list_sbvr_terms", lambda pid: _fake_terms(60)), \
-             patch("core.project_store.list_sbvr_rules", lambda pid: _fake_rules(0)), \
-             patch("modules.document_store.list_documents", _PATCH_TARGETS["list_documents"]):
+             patch(f"{_PS}.list_meetings", _PATCH_TARGETS["list_meetings"]), \
+             patch(f"{_PS}.list_bpmn_processes", _PATCH_TARGETS["list_bpmn_processes"]), \
+             patch(f"{_PS}.bpmn_tables_exist", _PATCH_TARGETS["bpmn_tables_exist"]), \
+             patch(f"{_PS}.get_asset_metadata_map", _PATCH_TARGETS["get_asset_metadata_map"]), \
+             patch(f"{_PS}.list_sbvr_terms", lambda pid: _fake_terms(60)), \
+             patch(f"{_PS}.list_sbvr_rules", lambda pid: _fake_rules(0)), \
+             patch(f"{_PS}.list_documents", _PATCH_TARGETS["list_documents"]):
             at = _base_app()
             at.run()
             assert not at.exception

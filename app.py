@@ -6,7 +6,8 @@
 # Estrutura de seções:
 #   (default)    → Home (Central de Operações)
 #   Pipeline     → Processar Transcrição, Diagramas, Editor BPMN
-#   Análise      → Assistente, Req. Tracker, Validação, ROI-TR, Entidades
+#   Análise      → Assistente, Validação, ROI-TR, Entidades
+#   Artefatos    → Visão Geral, Requisitos, Modelagem Formal, Reuniões, Debates (IBIS), Qualidade & Sinais (PC208)
 #   Sistema      → Configurações, Custo [+ Admin, Banco apenas para admin]
 #   Ajuda        → Como Iniciar, Casos de Uso, Ferramentas do Assistente, Glossário, Curso
 #   Guias        → Arquiteturas, CKF, BPMN Studio, Gráficos, Cache LLM, Feedback, Manifesto
@@ -65,7 +66,6 @@ pages = {
     "Análise": [
         st.Page("pages/ContextHealth.py",     title="Saúde do Contexto",     icon="🏥"),
         st.Page("pages/Assistente.py",        title="Assistente",            icon="💬"),
-        st.Page("pages/Artefatos.py",          title="Artefatos",             icon="🗂️"),
         st.Page("pages/ValidationHub.py",     title="Validação",             icon="✅"),
         st.Page("pages/MeetingROI.py",        title="Qualidade ROI-TR",      icon="📊"),
         st.Page("pages/ReportBackfill.py",    title="Relatório Executivo",   icon="📄"),
@@ -75,6 +75,14 @@ pages = {
         st.Page("pages/DocumentManager.py",      title="Documentos",            icon="📄"),
         st.Page("pages/CostBenefitScenarios.py", title="Cenários de Custo",     icon="💰"),
         st.Page("pages/AtivosDeNegocio.py",      title="Ativos de Negócio",     icon="📦"),
+    ],
+    "Artefatos": [
+        st.Page("pages/Artefatos.py",           title="Visão Geral",        icon="🗂️"),
+        st.Page("pages/ArtefatosRequisitos.py", title="Requisitos",         icon="📝"),
+        st.Page("pages/ArtefatosModelagem.py",  title="Modelagem Formal",   icon="📐"),
+        st.Page("pages/ArtefatosReunioes.py",   title="Reuniões",           icon="🗓️"),
+        st.Page("pages/ArtefatosDebates.py",    title="Debates (IBIS)",     icon="🗺️"),
+        st.Page("pages/ArtefatosQualidade.py",  title="Qualidade & Sinais", icon="🔎"),
     ],
     "Sistema": _sistema_pages,
     "Ajuda": [

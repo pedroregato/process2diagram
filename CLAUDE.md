@@ -44,12 +44,17 @@ process2diagram/
 │   ├── BpmnEditor.py             # BPMN editor — bpmn-js Modeler, version history, Supabase save
 │   ├── BpmnStudio.py             # BPMN Studio (PC116) — descrição → BPMN+Mermaid (sem reunião) + BPMN → descrição
 │   ├── Assistente.py             # RAG assistant — conversational Q&A over transcripts
-│   ├── Artefatos.py              # Central de Artefatos — 13 abas: req, mind map, contradições, histórico, reuniões, SBVR, BPMN, DMN, IBIS, rastreabilidade, ruídos, provocações (PC190), comparar
 │   ├── KnowledgeGraph.py         # Knowledge graph — pyvis physics (Obsidian-like), entity/contradiction viz, timeline heatmap, JSON-LD export
 │   ├── MeetingROI.py             # ROI-TR dashboard — type-aware quality indicators
 │   ├── DocumentManager.py        # Document management — 7 tabs: upload, library, extract artifacts, cross-ref, doc×doc, taxonomy, import spreadsheet; aba Biblioteca tem botão de promoção a Ativo de Negócio (PC167, Classificação Formal pré-sugerida por document_types.category)
 │   ├── CostBenefitScenarios.py   # Cenários de Custo-Benefício — compara até 5 combinações agente→modelo, presets, gráficos Plotly, apply ao pipeline
-│   ├── AtivosDeNegocio.py        # Ativos de Negócio (PC164-168) — só ativos PROMOVIDOS explicitamente (Artefatos.py + DocumentManager.py + Assistente.py); classificação em 3 dimensões (Interesse/Perspectiva/Classificação Formal AN-01..AN-12) + governança (status/tags/owner/notas); toggle de escopo Contexto x Catálogo do Domínio; 7 tipos governáveis (req/BPMN/SBVR termo/SBVR regra/ata/documento/conteúdo do Assistente) + 4 somente-leitura
+│   ├── AtivosDeNegocio.py        # Ativos de Negócio (PC164-168) — só ativos PROMOVIDOS explicitamente (Artefatos*.py + DocumentManager.py + Assistente.py); classificação em 3 dimensões (Interesse/Perspectiva/Classificação Formal AN-01..AN-12) + governança (status/tags/owner/notas); toggle de escopo Contexto x Catálogo do Domínio; 7 tipos governáveis (req/BPMN/SBVR termo/SBVR regra/ata/documento/conteúdo do Assistente) + 4 somente-leitura
+│   ├── Artefatos.py              # Seção "Artefatos" (PC208) — Visão Geral: KPIs consolidados, exportação de relatório (HTML/PDF), cards de navegação para as 5 subseções abaixo
+│   ├── ArtefatosRequisitos.py    # Requisitos, Mind Map, Contradições (conflitos entre requisitos), Histórico (inclui "🏛️ Governança de Requisitos", PC199)
+│   ├── ArtefatosModelagem.py     # SBVR, Processos BPMN, DMN — os 3 artefatos formais estilo OMG
+│   ├── ArtefatosReunioes.py      # Reuniões, Rastreabilidade de Origem, Comparação de Reuniões
+│   ├── ArtefatosDebates.py       # IBIS/Argumentação — métricas, evolução temporal, força de argumentos, mapa visual pyvis (assunto único, sem abas internas)
+│   ├── ArtefatosQualidade.py     # Ruídos de Comunicação, Provocações (PC190)
 │   ├── Settings.py               # Central settings — LLM providers, API keys, tool catalog
 │   ├── DatabaseOverview.py       # Database health — record counts, embeddings, integrity fixes
 │   ├── CostEstimator.py          # LLM cost estimator
@@ -147,6 +152,7 @@ process2diagram/
 │   ├── input_area.py             # render_input_area() — text area, upload, pre-process
 │   ├── auth_gate.py              # apply_auth_gate() — login wall
 │   ├── project_selector.py       # require_active_project() — global project context
+│   ├── artefatos_shared.py       # PC208 — loaders @st.cache_data + helpers (meet_label/doc_label/_promote_widget via factories) + CSS + render_artefatos_nav(), compartilhados pelas 6 páginas Artefatos*.py; não é página, não registrado em app.py
 │   ├── components/
 │   │   ├── copy_button.py        # clipboard copy (navigator.clipboard + execCommand)
 │   │   ├── download_button.py    # styled download wrapper
@@ -247,7 +253,8 @@ AgentRequirements┘
 |---|---|---|
 | **Início** | Home.py (default) | Todos |
 | **Pipeline** | Pipeline.py, Diagramas.py, BpmnEditor.py, BpmnStudio.py | Todos |
-| **Análise** | Assistente.py, Artefatos.py, ValidationHub.py, MeetingROI.py, DocumentManager.py, CostBenefitScenarios.py, AtivosDeNegocio.py | Todos |
+| **Análise** | Assistente.py, ValidationHub.py, MeetingROI.py, DocumentManager.py, CostBenefitScenarios.py, AtivosDeNegocio.py | Todos |
+| **Artefatos** | Artefatos.py (Visão Geral), ArtefatosRequisitos.py, ArtefatosModelagem.py, ArtefatosReunioes.py, ArtefatosDebates.py, ArtefatosQualidade.py — divisão por assunto da antiga Central de Artefatos de 13 abas (PC208) | Todos |
 | **Sistema** | Settings.py, CostEstimator.py, LLMBenchmark.py [+ MasterAdmin.py, DatabaseOverview.py] | Todos [admin extra] |
 | **Ajuda** | ComoIniciar (tutorial), CasosDeUso (valor de negócio), Assistente (tool reference), Glossário (reference), Capacitacao (curso corporativo) | Todos |
 | **Guias** | Arquiteturas, CKF, BpmnStudio, Gráficos, CacheSemantico, Feedback, Manifesto — conteúdo explicativo/conceitual ("como funciona por baixo") | Todos |

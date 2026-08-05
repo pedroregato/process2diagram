@@ -408,6 +408,7 @@ if pipeline_mode == _MODE_NEW:
                     try:
                         from modules.compliance import log_audit_event, detect_pii
                         from modules.auth import get_current_user as _get_user
+                        from core.project_store import save_meeting_pii_summary
                         _pii = detect_pii(hub.transcript_raw or "")
                         st.session_state[f"_pii_result_{meeting_id}"] = _pii
                         log_audit_event(
@@ -417,6 +418,10 @@ if pipeline_mode == _MODE_NEW:
                             user_login=_get_user(),
                             details=_pii.summary,
                         )
+                        # Colunas dedicadas em `meetings` (além do log de auditoria)
+                        # — habilita consulta agregada/dashboard, ver
+                        # melhorias/parciais/classificador-pii-transcricoes.md
+                        save_meeting_pii_summary(meeting_id, _pii.summary)
                     except Exception:
                         pass
 
