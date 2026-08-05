@@ -1,0 +1,20 @@
+Ricardo   0:05
+Bom dia. Vamos revisar os pontos pendentes da Sprint 3 antes da homologação de 30/04.
+Fernanda   0:12
+Certo. Sobre o Motor de Risco, o modelo já está retornando score em menos de 60 segundos, conforme o requisito.
+Ricardo   0:20
+Ótimo. Precisamos revisar o SLA de 4 horas que ficou definido na R3 para resposta do MIB às integrações do Core Banking — não é mais viável com o volume real que estamos vendo em homologação.
+Fernanda   0:29
+E qual seria o novo valor?
+Ricardo   0:33
+Vamos ampliar para 8 horas. Essa decisão substitui o que foi fechado na R3 — o SLA de 4h não se sustenta com a fila de prioridade atual.
+Diego   0:41
+É claro que isso não vai impactar o cliente final, a fila é só interna, não precisa nem discutir isso com o Portal do Cliente.
+Camila   0:48
+Mas se o SLA dobrar, isso não muda o tempo de resposta que prometemos pro comitê de crédito? Achei que 4h era compromisso com eles, não só interno.
+Ricardo   0:56
+Vamos seguir com o cronograma de homologação por enquanto. Sobre o Lex4All, seguimos com a Fase 1B conforme definido na R3.
+Diego   1:03
+Perfeito, sem pendências desse lado.
+Fernanda   1:09
+Fechando por aqui então — 8h de SLA, Motor de Risco dentro do prazo, Lex4All mantido em 1B.
