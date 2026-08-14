@@ -164,7 +164,14 @@ def render_context_selector() -> None:
                                   placeholder="Ex: Kickoff, Sprint 3, Homologação...")
 
         with col_date:
-            meeting_dt = st.date_input("Data", value=date.today(), key="meeting_date_input")
+            # Sem value= explícito de propósito — passar value= E também
+            # pré-popular st.session_state["meeting_date_input"] (acima, pra
+            # inferência) dispara o aviso do Streamlit de conflito entre os
+            # dois. Sem value=, o próprio st.date_input já usa hoje como
+            # padrão no 1º render (nenhuma chave em session_state ainda) e
+            # respeita session_state normalmente depois (inferência ou edição
+            # manual do usuário) — mesmo resultado, sem o aviso.
+            meeting_dt = st.date_input("Data", key="meeting_date_input")
 
         # Campos extras para novo contexto
         new_name = new_sigla = new_desc = ""
