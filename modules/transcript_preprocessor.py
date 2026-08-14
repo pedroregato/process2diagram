@@ -366,6 +366,73 @@ def _clean_turn_content(lines: list[str]) -> tuple[str, int, int]:
     return cleaned, fillers, reps
 
 
+# ── Título/data inferidos do cabeçalho (sem LLM) ──────────────────────────────
+#
+# Melhoria pedida pelo usuário: pré-preencher Título/Data da reunião na tela
+# de "Nova transcrição" quando esses campos estiverem vazios. Reaproveita o
+# parser de cabeçalho do Teams já existente (_parse_teams_transcript) — sem
+# chamada de LLM, sem custo. Best-effort: transcrição sem cabeçalho
+# estruturado (ex. diálogo puro, sem linhas antes da primeira fala) retorna
+# ("", None) e os campos continuam em branco pra preenchimento manual, exatamente
+# como hoje — nunca fica pior do que o comportamento atual.
+
+_TITLE_SKIP_PREFIXES = (
+    "data:", "horário:", "horario:", "local:",
+    "transcrição gerada por:", "transcricao gerada por:", "participantes:",
+)
+
+
+def infer_title_and_date_from_header(raw: str) -> tuple[str, "date | None"]:
+    """Extrai um candidato de título e de data das linhas de cabeçalho de uma
+    transcrição (linhas antes da primeira fala reconhecida) — heurística,
+    sem LLM. Nunca lança; retorna ("", None) quando não acha nada plausível."""
+    from datetime import date as _date
+
+    if not raw or not raw.strip():
+        return "", None
+
+    header_lines, _turns, _issues = _parse_teams_transcript(raw)
+
+    inferred_date: "_date | None" = None
+    title_candidates: list[str] = []
+
+    for line in header_lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        if inferred_date is None:
+            m = _VALID_DATE_PAT.search(stripped)
+            if m:
+                dm = re.match(
+                    r"(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})", m.group(0), re.IGNORECASE
+                )
+                if dm:
+                    day_s, month_name, year_s = dm.groups()
+                    month = _MONTHS_PT.get(month_name.lower())
+                    if month:
+                        try:
+                            inferred_date = _date(int(year_s), month, int(day_s))
+                        except ValueError:
+                            pass
+                continue  # linha de data não vira candidata a título
+
+        low = stripped.lower()
+        if low.startswith(_TITLE_SKIP_PREFIXES):
+            continue
+        # Linha toda maiúscula sem separador — provavelmente nome de empresa
+        # (ex. "GRUPO MERIDIONAL S.A."), não o assunto da reunião.
+        if stripped.isupper() and "—" not in stripped and " - " not in stripped:
+            continue
+        title_candidates.append(stripped)
+
+    title = next(
+        (c for c in title_candidates if "reunião" in c.lower() or "reuniao" in c.lower()),
+        title_candidates[0] if title_candidates else "",
+    )
+    return title, inferred_date
+
+
 # ── Main public function ──────────────────────────────────────────────────────
 
 def preprocess(raw_text: str) -> PreprocessingResult:

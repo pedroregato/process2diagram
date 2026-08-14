@@ -122,6 +122,34 @@ def render_context_selector() -> None:
                     default_idx = i
                     break
 
+        # Título/data inferidos do cabeçalho da transcrição, sem LLM, quando os
+        # campos ainda estiverem vazios — melhoria pedida pelo usuário. Só
+        # tenta 1x por transcrição nova (guard por hash), pra nunca sobrescrever
+        # uma edição manual do usuário em reruns subsequentes. Best-effort:
+        # transcrição sem cabeçalho estruturado não acha nada, campos continuam
+        # em branco como hoje. Ver modules/transcript_preprocessor.py.
+        _raw_transcript = st.session_state.get("transcript_text", "")
+        if _raw_transcript.strip():
+            # hash() builtin é suficiente aqui — só compara "mudou desde o
+            # último rerun nesta sessão", nunca persistido nem comparado
+            # entre processos (onde PYTHONHASHSEED variar não importa).
+            _tx_hash = hash(_raw_transcript)
+            if st.session_state.get("_meta_autofill_src") != _tx_hash:
+                st.session_state["_meta_autofill_src"] = _tx_hash
+                try:
+                    from modules.transcript_preprocessor import infer_title_and_date_from_header
+                    _inferred_title, _inferred_date = infer_title_and_date_from_header(_raw_transcript)
+                except Exception:
+                    _inferred_title, _inferred_date = "", None
+                if _inferred_title and not st.session_state.get("meeting_title_input", "").strip():
+                    st.session_state["meeting_title_input"] = _inferred_title
+                # st.date_input sempre tem valor (nunca "vazio" como texto) —
+                # "não preenchido" aqui significa "ainda no padrão de hoje,
+                # nunca alterado pelo usuário".
+                _current_date_val = st.session_state.get("meeting_date_input")
+                if _inferred_date and (_current_date_val is None or _current_date_val == date.today()):
+                    st.session_state["meeting_date_input"] = _inferred_date
+
         col_proj, col_title, col_date = st.columns([2, 2, 1])
 
         with col_proj:
