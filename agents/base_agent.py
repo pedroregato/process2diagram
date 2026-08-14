@@ -1,1341 +1,722 @@
-# agents/agent_bpmn.py
+# agents/base_agent.py
 # ─────────────────────────────────────────────────────────────────────────────
-# BPMN Agent — expert em BPMN 2.0 (OMG / ISO-IEC 19510).
+# Abstract base class for all specialist agents.
 #
-# Reads:  hub.transcript_clean, hub.nlp (actors, segments)
-# Writes: hub.bpmn  (BPMNModel — steps, edges, lanes, mermaid,
-#                                bpmn_xml via bpmn_generator)
+# Contract every agent must fulfill:
+#   - skill_path:  path to its SKILL.md file (loaded once at init)
+#   - run(hub):    receives KnowledgeHub, writes its section, returns hub
 #
-# Supports two LLM output formats:
-#   Flat  (single-pool): { "name", "steps", "edges", "lanes" }
-#   Multi-pool:          { "name", "pools": [...], "message_flows": [...] }
+# Infrastructure provided here (agents never duplicate this):
+#   - _call_llm()      → provider-agnostic LLM call (OpenAI-compat + Anthropic)
+#   - _parse_json()    → robust JSON extraction from raw LLM output
+#   - _load_skill()    → reads SKILL.md and exposes it for system prompt injection
+#   - retry logic      → up to max_retries on JSON parse failure
+#   - token tracking   → updates hub.meta.total_tokens_used
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
 
-import json as _json
-import pathlib as _pathlib
-import re as _re
-import unicodedata as _ud
+import json
+import re
+import time
+from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import Any, Optional
 
-from agents.base_agent import BaseAgent
-from core.knowledge_hub import (
-    KnowledgeHub, BPMNModel, BPMNStep, BPMNEdge,
-    BPMNPoolData, BPMNMessageFlow,
+from core.knowledge_hub import KnowledgeHub
+from modules.pii_sanitizer import sanitize, desanitize
+
+
+# ── Name-privacy instruction (injected when hub.meta.name_map is populated) ──
+# Appended to the system prompt so the LLM preserves [PESSOA:XX] tokens intact
+# across all generated artefacts (BPMN lanes, minutes, requirements, etc.).
+# _NOME_PRIVACY_MARKER is used as an idempotent guard — prevents double-injection
+# on retry attempts where system is rebuilt from the same base string.
+
+_NOME_PRIVACY_MARKER = "##NOME_PRIVACY##"
+
+_NOME_INSTRUCTION = (
+    f"\n\n{_NOME_PRIVACY_MARKER}\n"
+    "## TOKENS DE PRIVACIDADE — OBRIGATÓRIO\n"
+    "Nomes de pessoas foram substituídos por tokens no formato [PESSOA:XX] "
+    "antes de chegarem a você.\n"
+    "REGRAS:\n"
+    "1. Copie os tokens EXATAMENTE como estão — nunca os expanda nem os modifique.\n"
+    "2. Use os tokens em todos os artefatos que gerar "
+    "(lanes do BPMN, participantes da ata, autor de requisitos, etc.).\n"
+    "3. NUNCA reconstrua nomes reais a partir dos tokens.\n"
+    "Correto: \"[PESSOA:PG] aprovou o processo\"  "
+    "Incorreto: \"Pedro aprovou o processo\""
 )
-from core.output_schemas import BPMNOutputSchema
 
 
-def _ascii_id(s: str) -> str:
-    """Normalize a string to a safe ASCII XML id segment."""
-    nfkd = _ud.normalize("NFKD", s)
-    return "".join(c for c in nfkd if _ud.category(c) != "Mn").lower().replace(" ", "_")
+# ── Base Agent ────────────────────────────────────────────────────────────────
 
-
-def _infer_lane_name(generic_name: str, model: BPMNModel,
-                     nlp_actors: list | None = None) -> str:
+class BaseAgent(ABC):
     """
-    Infer a real organizational lane name from three sources, in priority order:
+    All specialist agents extend this class.
 
-    Priority 1 — step.actor fields for steps in the generic lane.
-        If a step already has a non-generic actor assigned by the LLM, that
-        actor is the most direct answer.  Prefer NLP-normalized form when
-        there is a close match.
+    Minimal subclass example:
+        class AgentBPMN(BaseAgent):
+            name = "bpmn"
+            skill_path = "skills/skill_bpmn.md"
 
-    Priority 2 — NLP actors that appear verbatim in step texts for this lane.
-        Uses hub.nlp.actors (named entities detected before the LLM call).
+            def build_prompt(self, hub):
+                return self._skill, f"Extract BPMN from:\\n{hub.transcript_clean}"
 
-    Priority 3 — regex over step titles/descriptions (original heuristic).
+            def run(self, hub):
+                system, user = self.build_prompt(hub)
+                data = self._call_with_retry(system, user, hub)
+                hub.bpmn.ready = True
+                hub.mark_agent_run(self.name)
+                hub.bump()
+                return hub
     """
-    from collections import Counter
 
-    _GENERIC_SET = {
-        "usuário", "usuario", "user", "utilizador",
-        "validador", "validator", "revisor", "reviewer",
-        "sistema", "system", "automático", "automatic",
-        "ator", "actor", "papel", "role", "pessoa", "person",
-        "participante", "participant",
-    }
+    # Subclasses must declare these
+    name: str = "base"
+    skill_path: str = ""
+    required_hub_fields: list = []  # dot-paths validated before run(); e.g. ["transcript_clean", "bpmn.ready"]
+    output_schema = None  # Pydantic model class for fail-open output validation; set by subclasses
 
-    # ── Priority 1: step actor fields ────────────────────────────────────────
-    actor_candidates = [
-        s.actor for s in model.steps
-        if s.lane == generic_name
-        and s.actor
-        and s.actor.lower().strip() not in _GENERIC_SET
-    ]
-    if actor_candidates:
-        best = Counter(actor_candidates).most_common(1)[0][0]
-        if nlp_actors:
-            for nlp_actor in nlp_actors:
-                if (nlp_actor.lower() in best.lower()
-                        or best.lower() in nlp_actor.lower()):
-                    return nlp_actor   # prefer NLP-normalized form
-        return best
+    def __init__(self, client_info: dict, provider_cfg: dict):
+        """
+        Args:
+            client_info:  {"api_key": "...", ...}  from session_security
+            provider_cfg: AVAILABLE_PROVIDERS[selected]
+        """
+        self.client_info = client_info
+        self.provider_cfg = provider_cfg
+        self.max_retries: int = 2
+        self.skill_version: Optional[str] = None  # set by _load_skill()
+        self._skill: str = self._load_skill()
 
-    # ── Priority 2: NLP actors appearing in step texts ───────────────────────
-    if nlp_actors:
-        lane_text = " ".join(
-            (s.title or "") + " " + (s.description or "")
-            for s in model.steps if s.lane == generic_name
-        )
-        nlp_hits = Counter(a for a in nlp_actors if a in lane_text)
-        if nlp_hits:
-            return nlp_hits.most_common(1)[0][0]
+    # ── Abstract interface ────────────────────────────────────────────────────
 
-    # ── Priority 3: regex heuristic (original) ───────────────────────────────
-    texts = []
-    for step in model.steps:
-        if step.lane == generic_name:
-            texts.append(step.title)
-            texts.append(step.description)
-    combined = " ".join(texts)
+    @abstractmethod
+    def run(self, hub: KnowledgeHub) -> KnowledgeHub:
+        """Execute agent logic. Reads from hub, writes to hub, returns hub."""
+        ...
 
-    org_patterns = [
-        r'\b(Equipe\s+de\s+[A-ZÁÉÍÓÚÃÕ][a-záéíóúãõ]+(?:\s+[A-ZÁÉÍÓÚÃÕ][a-záéíóúãõ]+)*)\b',
-        r'\b(Gestores?\s+[A-ZÁÉÍÓÚÃÕ][a-záéíóúãõ]+(?:\s+[A-ZÁÉÍÓÚÃÕ][a-záéíóúãõ]+)*)\b',
-        r'\b([A-ZÁÉÍÓÚÃÕ][a-záéíóúãõ]+(?:\s+[A-ZÁÉÍÓÚÃÕ][a-záéíóúãõ]+){1,3})\b',
-    ]
-    _STOP_WORDS = {
-        "cadastrar", "cadastro", "enviar", "validar", "processar",
-        "organograma", "escola", "unidade", "após", "para", "com",
-        "início", "iniciar", "ajustar", "devolvido",
-    }
-    candidates: list[str] = []
-    for pattern in org_patterns:
-        for match in _re.finditer(pattern, combined):
-            phrase = match.group(1).strip()
-            words = phrase.lower().split()
-            if any(w in _STOP_WORDS for w in words):
-                continue
-            if 2 <= len(phrase.split()) <= 4:
-                candidates.append(phrase)
-    if candidates:
-        return Counter(candidates).most_common(1)[0][0]
+    @abstractmethod
+    def build_prompt(self, hub: KnowledgeHub) -> tuple[str, str]:
+        """Return (system_prompt, user_prompt) for this agent."""
+        ...
 
-    return generic_name
+    # ── UTF-8 sanitizer ───────────────────────────────────────────────────────
 
+    @staticmethod
+    def _ensure_utf8(s: str) -> str:
+        """
+        Round-trip through UTF-8 to strip surrogate or corrupt code points.
 
-# ── Event task_type constants ─────────────────────────────────────────────────
+        The httpx layer (used by the OpenAI SDK) serialises the request body as
+        UTF-8.  If a string contains characters that were accidentally encoded as
+        Latin-1, or lone surrogates from a bad decode, httpx raises
+        UnicodeEncodeError before the request leaves the process.
 
-# New event task_types introduced in skill v3.0 that map to BPMN element types.
-_EVENT_TASK_TYPE_MAP: dict[str, tuple[str, str]] = {
-    "noneStartEvent":               ("startEvent",             "none"),
-    "startMessageEvent":            ("startEvent",             "message"),
-    "startTimerEvent":              ("startEvent",             "timer"),
-    "noneEndEvent":                 ("endEvent",               "none"),
-    "endMessageEvent":              ("endEvent",               "message"),
-    "errorEndEvent":                ("endEvent",               "error"),
-    "intermediateTimerCatchEvent":  ("intermediateCatchEvent", "timer"),
-    "intermediateMessageCatchEvent":("intermediateCatchEvent", "message"),
-    "intermediateMessageThrowEvent":("intermediateThrowEvent", "message"),
-    # Legacy / generic event types that the LLM still sometimes emits
-    "startEvent":                   ("startEvent",             "none"),
-    "endEvent":                     ("endEvent",               "none"),
-    "start":                        ("startEvent",             "none"),
-    "end":                          ("endEvent",               "none"),
-}
+        This helper is applied to every string that enters _call_openai and to
+        the error hint that is re-injected on retries.
+        """
+        return s.encode("utf-8", errors="replace").decode("utf-8")
 
-# task_types that represent start events (generator adds its own for single-pool)
-_START_TYPES = {"noneStartEvent", "startMessageEvent", "startTimerEvent", "startEvent", "start"}
-# task_types that represent end events
-_END_TYPES   = {"noneEndEvent", "endMessageEvent", "errorEndEvent", "endEvent", "end"}
+    # ── LLM call ─────────────────────────────────────────────────────────────
 
-_TASK_TYPE_MAP = {
-    # Standard tasks
-    "userTask":          "userTask",
-    "serviceTask":       "serviceTask",
-    "scriptTask":        "scriptTask",
-    "manualTask":        "manualTask",
-    "businessRuleTask":  "businessRuleTask",
-    "sendTask":          "sendTask",
-    "receiveTask":       "receiveTask",
-    # Hierarchical (Silver Level 1) — generator renders as callActivity with double border
-    "callActivity":      "callActivity",
-    # Iteration markers — PC27b will add loop/MI XML markers; render as userTask for now
-    "loopTask":          "userTask",
-    "multiInstanceTask": "userTask",
-    # Boundary events — PC27b will anchor to task boundary; render as userTask for now
-    "boundaryTimerEvent": "userTask",
-    "boundaryErrorEvent": "userTask",
-    # Gateways
-    "parallelGateway":   "parallelGateway",
-    "exclusiveGateway":  "exclusiveGateway",
-    "inclusiveGateway":  "inclusiveGateway",
-    "eventBasedGateway": "eventBasedGateway",
-    "complexGateway":    "complexGateway",
-}
-
-
-# ── Canonical pattern library (few-shot Level 3) ─────────────────────────────
-# JSON files in agents/agent_bpmn/examples/ define canonical BPMN structures for
-# recurring process archetypes.  Loaded once per process; fail-open on any error.
-
-_PATTERNS_DIR = _pathlib.Path(__file__).parent / "agent_bpmn" / "examples"
-_PATTERN_CACHE: dict[str, dict] = {}
-_PATTERNS_LOADED: bool = False
-
-
-def _load_canonical_patterns() -> dict[str, dict]:
-    """Load bpmn_pattern_*.json files once per process from the examples directory."""
-    global _PATTERN_CACHE, _PATTERNS_LOADED
-    if _PATTERNS_LOADED:
-        return _PATTERN_CACHE
-    _PATTERNS_LOADED = True
-    if not _PATTERNS_DIR.exists():
-        return _PATTERN_CACHE
-    for _jf in sorted(_PATTERNS_DIR.glob("bpmn_pattern_*.json")):
+    def _is_long_context_enabled(self) -> bool:
+        """
+        Resolution order (first match wins):
+          1. client_info["enable_long_context"]  — API / explicit config (no Streamlit)
+          2. st.session_state["enable_long_context"]  — Streamlit interactive mode
+          3. True  — safe default when neither is available
+        """
+        if "enable_long_context" in self.client_info:
+            return bool(self.client_info["enable_long_context"])
         try:
-            _p = _json.loads(_jf.read_text(encoding="utf-8"))
-            # Support both old format (pattern_id) and new format (id).
-            _pid = _p.get("id") or _p.get("pattern_id")
-            # Exclude style-guide entries: they apply always via the skill, not
-            # as selectable structural templates.
-            if _pid and _p.get("category", "").lower() != "estilo" and not _p.get("applies_always"):
-                _PATTERN_CACHE[_pid] = _p
+            import streamlit as st
+            return bool(st.session_state.get("enable_long_context", True))
+        except Exception:
+            return True
+
+    def _call_llm(
+        self, system: str, user: str, hub: KnowledgeHub, skip_cache: bool = False
+    ) -> str:
+        """
+        Provider-agnostic LLM call. Routes by client_type in provider_cfg.
+        Updates hub.meta.total_tokens_used on success.
+
+        PII sanitization (Fase A): structured PII in the user prompt
+        (CPF, CNPJ, email, phone, monetary values) is replaced with stable
+        tokens before the text leaves the process. Tokens are restored in the
+        raw LLM response before returning, so callers never see the tokens.
+        Personal names are intentionally preserved (required for BPMN lanes,
+        meeting minutes, and IBIS attribution).
+
+        Long context mode (Fase 2): for agents in LONG_CONTEXT_AGENTS and
+        transcripts estimated above 50k tokens, injects an explicit instruction
+        into the system prompt, increases max_tokens output and API timeout.
+        This prevents truncated outputs (e.g. incomplete BPMN for long meetings).
+        No non-standard API parameters are sent.
+
+        Semantic cache: checks Supabase llm_cache before calling the API.
+        Cache stores the raw output (pre-desanitize); on hit, desanitize is
+        applied with the current session's token_map — PII-safe across sessions.
+        Cache key includes the (possibly modified) system prompt, so long-context
+        and standard calls are cached separately. Pass skip_cache=True to bypass.
+        """
+        client_type = self.provider_cfg["client_type"]
+        api_key = self.client_info["api_key"]
+        model = self.provider_cfg["default_model"]
+
+        # ── Scenario model override ───────────────────────────────────────────
+        # Resolution order: client_info (API mode) → st.session_state (Streamlit) → {}
+        _assignments: dict = self.client_info.get("scenario_assignments") or {}
+        if not _assignments:
+            try:
+                import streamlit as st
+                _assignments = st.session_state.get("scenario_assignments", {})
+            except Exception:
+                pass
+        if self.name in _assignments:
+            model = _assignments[self.name]
+        # ─────────────────────────────────────────────────────────────────────
+
+        # ── A2A delegation hint (LangGraph cross-agent coordination) ─────────
+        # Injected by LGFullPipelineRunner delegation nodes via _lg_delegation_hint.
+        # Appended to system prompt so it influences the LLM without altering the
+        # user prompt or the PII sanitization pipeline.
+        _delegation_hint = getattr(self, "_lg_delegation_hint", "")
+        if _delegation_hint:
+            system = system + "\n\n## CONTEXTO DE COORDENAÇÃO\n" + _delegation_hint
+        # ─────────────────────────────────────────────────────────────────
+
+        # ── PII sanitization ──────────────────────────────────────────────
+        # Tier 1 (always): CPF, CNPJ, email, phone, monetary values.
+        # Tier 2 (when name_map present): personal names → [PESSOA:XX] tokens.
+        # name_map is built once per session (detect_names on the transcript)
+        # and stored in hub.meta.name_map so all agents share a consistent
+        # pseudonymization scheme.
+        _name_map: dict = getattr(getattr(hub, "meta", None), "name_map", None) or {}
+        sanitized = sanitize(user, name_map=_name_map if _name_map else None)
+        safe_user = sanitized.text
+        token_map = sanitized.token_map
+        # Inject LLM instruction to preserve [PESSOA:XX] tokens intact.
+        # Appended once (idempotent check prevents duplication on retries).
+        if _name_map and _NOME_PRIVACY_MARKER not in system:
+            system = system + _NOME_INSTRUCTION
+        # ─────────────────────────────────────────────────────────────────
+
+        # ── Long context detection (before cache hash) ────────────────────
+        try:
+            from services.context_analyzer import (
+                should_use_long_context,
+                inject_long_context_instruction,
+            )
+            use_long_ctx = should_use_long_context(
+                safe_user, self.name, enabled=self._is_long_context_enabled()
+            )
+        except Exception:
+            use_long_ctx = False
+        # _force_long_context is set by _call_with_retry() after a
+        # finish_reason='length' failure — the input-length heuristic above
+        # only estimates INPUT size, but a truncation proves the OUTPUT budget
+        # was too small regardless of input length (e.g. AgentBPMN's dense
+        # collaboration JSON for a short-but-structurally-rich description).
+        # Escalating to the provider's own long_context_max_tokens on retry
+        # avoids repeating the identical truncation for the full retry budget.
+        use_long_ctx = use_long_ctx or getattr(self, "_force_long_context", False)
+
+        if use_long_ctx:
+            system = inject_long_context_instruction(system, True)
+            hub.meta.long_context_calls = getattr(hub.meta, "long_context_calls", 0) + 1
+
+        _timeout = 180 if use_long_ctx else 60
+        # ─────────────────────────────────────────────────────────────────
+
+        # ── Semantic cache lookup ─────────────────────────────────────────
+        # _lg_skip_cache is set by LangGraph runners on retry attempts (attempt > 1)
+        # to guarantee a fresh LLM call and avoid identical results every retry.
+        if not (skip_cache or getattr(self, "_lg_skip_cache", False)):
+            try:
+                from services.semantic_cache import _cache
+                provider_label = self.provider_cfg.get("api_key_label", client_type)
+                cache_hash = _cache.compute_hash(provider_label, model, system, safe_user)
+                self._last_computed_cache_hash = cache_hash  # exposed for retry backfill
+                hit = _cache.get(cache_hash)
+                if hit is not None:
+                    cached_raw, cached_tokens = hit
+                    if cached_raw:  # defense-in-depth: never use empty cached entries
+                        hub.meta.cache_hits = getattr(hub.meta, "cache_hits", 0) + 1
+                        hub.meta.tokens_saved = (
+                            getattr(hub.meta, "tokens_saved", 0) + cached_tokens
+                        )
+                        return desanitize(cached_raw, token_map)
+            except Exception:
+                cache_hash = None  # cache unavailable — proceed to API call
+        else:
+            cache_hash = None
+        # ─────────────────────────────────────────────────────────────────
+
+        t0 = time.time()
+
+        try:
+            if client_type == "openai_compatible":
+                raw, tokens_in, tokens_out = self._call_openai(
+                    system, safe_user, api_key, model,
+                    timeout=_timeout, long_context=use_long_ctx,
+                )
+            elif client_type == "anthropic":
+                raw, tokens_in, tokens_out = self._call_anthropic(
+                    system, safe_user, api_key, model,
+                    timeout=_timeout, long_context=use_long_ctx,
+                )
+            elif client_type == "azure_openai":
+                raw, tokens_in, tokens_out = self._call_azure_openai(
+                    system, safe_user, api_key, model,
+                    timeout=_timeout, long_context=use_long_ctx,
+                )
+            else:
+                raise ValueError(f"Unknown client_type: {client_type}")
+        except Exception as call_exc:
+            # PC183 — previously a failed call left NO telemetry trace at all
+            # (is_error was hardcoded False on the success path only), so the
+            # known intermittent DeepSeek "conteúdo vazio" issue was invisible
+            # to telemetry. Record then re-raise unchanged — _call_with_retry's
+            # retry/escalation logic depends on the exception propagating.
+            try:
+                from services.llm_telemetry import _telemetry, TelemetryRecord
+                _telemetry.record(TelemetryRecord(
+                    agent_name=self.name,
+                    provider=self.provider_cfg.get("api_key_label", client_type),
+                    model=model,
+                    latency_ms=int((time.time() - t0) * 1000),
+                    input_tokens=0,
+                    output_tokens=0,
+                    total_tokens=0,
+                    from_cache=False,
+                    long_context=use_long_ctx,
+                    is_error=True,
+                    benchmark_run=False,
+                    skill_version=getattr(self, "skill_version", None),
+                    error_message=str(call_exc)[:300],
+                ))
+            except Exception:
+                pass
+            raise
+
+        tokens = tokens_in + tokens_out
+        elapsed_ms = int((time.time() - t0) * 1000)
+        hub.meta.total_tokens_used += tokens
+        hub.meta.processing_time_ms += elapsed_ms
+        hub.meta.llm_provider = self.provider_cfg.get("api_key_label", "")
+        hub.meta.llm_model = model
+
+        # ── Telemetry record (async, fail-open) ───────────────────────────
+        try:
+            from services.llm_telemetry import _telemetry, TelemetryRecord
+            _telemetry.record(TelemetryRecord(
+                agent_name=self.name,
+                provider=self.provider_cfg.get("api_key_label", client_type),
+                model=model,
+                latency_ms=elapsed_ms,
+                input_tokens=tokens_in,
+                output_tokens=tokens_out,
+                total_tokens=tokens,
+                from_cache=False,
+                long_context=use_long_ctx,
+                is_error=False,
+                benchmark_run=False,
+                skill_version=getattr(self, "skill_version", None),
+            ))
         except Exception:
             pass
-    return _PATTERN_CACHE
+        # ─────────────────────────────────────────────────────────────────
 
+        # ── Store in cache (raw, pre-desanitize) ──────────────────────────
+        # Never cache empty/None responses — a transient API failure would
+        # permanently poison the cache for the same prompt hash.
+        if cache_hash is not None and raw:
+            try:
+                from services.semantic_cache import _cache
+                _cache.set(cache_hash, self.name, raw, tokens)
+            except Exception:
+                pass
+        # ─────────────────────────────────────────────────────────────────
 
-class AgentBPMN(BaseAgent):
+        # ── Restore originals in response ─────────────────────────────────
+        return desanitize(raw, token_map)
 
-    name = "bpmn"
-    skill_path = "skills/skill_bpmn.md"
-    output_schema = BPMNOutputSchema
-    required_hub_fields = ["transcript_clean"]
-    # Collaboration BPMN JSON with multiple pools can exceed 4096 output tokens.
-    # Guarantee at least 8192 regardless of long-context mode. This is the
-    # class-level FLOOR — run() may raise it per-instance for collaboration
-    # transcripts (see PC_bpmn_length_fallback: _min_output_tokens is
-    # recalculated at the top of run() based on _collaboration_expected).
-    _min_output_tokens: int = 8192
+    def _call_openai(
+        self,
+        system: str,
+        user: str,
+        api_key: str,
+        model: str,
+        timeout: int = 60,
+        long_context: bool = False,
+    ) -> tuple[str, int]:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key, base_url=self.provider_cfg.get("base_url"))
+        return self._run_openai_chat(client, system, user, model, timeout, long_context)
 
-    # Minimum output-token budget when the transcript is expected to produce
-    # multi-pool collaboration JSON (pools + lanes + message_flows is far more
-    # verbose than the flat single-pool format for an equivalent process size).
-    _MIN_OUTPUT_TOKENS_FLAT: int = 8192
-    _MIN_OUTPUT_TOKENS_COLLAB: int = 14000
-
-    # ── Prompt ────────────────────────────────────────────────────────────────
-
-    def build_prompt(self, hub: KnowledgeHub, output_language: str = "Auto-detect") -> tuple[str, str]:
-        lang = self._language_instruction(output_language)
-        system = self._skill.replace("{output_language}", lang)
-
-        if getattr(hub, "context_skill", "").strip():
-            system += f"\n\n## Conhecimento do Contexto\n\n{hub.context_skill.strip()}"
-
-        if getattr(hub, "context_files_text", "").strip():
-            system += f"\n\n## Documentos de Referência do Contexto\n\n{hub.context_files_text.strip()}"
-
-        actor_hint = ""
-        if hub.nlp.actors:
-            actor_hint = f"\nActors identified by NLP pre-processing: {', '.join(hub.nlp.actors)}"
-
-        user = (
-            f"Extract the BPMN 2.0 process from this transcript:{actor_hint}\n\n"
-            f"{hub.transcript_clean}"
-        )
-
-        # ── Passo 0: inject canonical pattern template when detected (few-shot L3) ──
-        # _select_canonical_pattern scans trigger_signals from JSON files in
-        # agents/agent_bpmn/examples/ and returns the best-matching pattern
-        # (minimum 2 signal hits).  The template is prepended to the user prompt
-        # so the LLM uses it as a structural starting point, adapting to the
-        # actual transcript content — not copying it verbatim.
-        _pattern = (
-            None if getattr(self, "_skip_canonical_pattern", False)
-            else self._select_canonical_pattern(hub.transcript_clean or "")
-        )
-        if _pattern:
-            _pid_val   = _pattern.get("id") or _pattern.get("pattern_id", "")
-            _name_val  = _pattern.get("name") or _pattern.get("pattern_name", "")
-            _tpl       = (_pattern.get("ideal_json_output")
-                          or _pattern.get("canonical_template")
-                          or _pattern.get("real_world_example", {}))
-            _rules     = _pattern.get("common_mistakes", _pattern.get("modeling_rules", []))
-            _tpl_str   = _json.dumps(_tpl, ensure_ascii=False, indent=2)
-            _rules_str = "\n".join(f"  {i+1}. {r}" for i, r in enumerate(_rules))
-            user = (
-                f"[GABARITO CANÔNICO: {_pid_val}]\n"
-                f"Padrão detectado: {_name_val}\n\n"
-                f"Use o exemplo canônico abaixo como ponto de partida e adapte "
-                f"titles, lanes e edges ao conteúdo real da transcrição "
-                f"(não copie os placeholders literalmente):\n\n"
-                f"{_tpl_str}\n\n"
-                f"Erros comuns a evitar neste padrão:\n{_rules_str}\n\n"
-                f"---\n\n{user}"
-            )
-
-        return system, user
-
-    @staticmethod
-    def _select_canonical_pattern(transcript: str) -> dict | None:
-        """Detect the best-matching canonical pattern for this transcript.
-
-        Counts trigger_signal hits (case-insensitive substring) per pattern.
-        Returns the pattern with the most hits if >= 2; None otherwise.
-        Minimum threshold of 2 hits prevents false positives on short transcripts.
+    def _call_azure_openai(
+        self,
+        system: str,
+        user: str,
+        api_key: str,
+        model: str,
+        timeout: int = 60,
+        long_context: bool = False,
+    ) -> tuple[str, int]:
         """
-        patterns = _load_canonical_patterns()
-        if not patterns:
-            return None
-        t = transcript.lower()
-        best_pattern: dict | None = None
-        best_hits: int = 1  # strictly above 1 → require >= 2 hits
-        for _pattern in patterns.values():
-            hits = sum(1 for s in _pattern.get("trigger_signals", []) if s.lower() in t)
-            if hits > best_hits:
-                best_hits = hits
-                best_pattern = _pattern
-        return best_pattern
+        Azure OpenAI Service — same chat-completions contract as OpenAI, but a
+        distinct SDK client (endpoint + api_version instead of base_url) and
+        `model` here is the Azure *deployment name*, not a model id.
 
-    # ── Run ───────────────────────────────────────────────────────────────────
-
-    def run(self, hub: KnowledgeHub, output_language: str = "Auto-detect") -> KnowledgeHub:
-        # PC_bpmn_length_fallback — reset per-run truncation-escalation state.
-        # AgentBPMN instances are reused across multiple run() calls in the
-        # multi-run tournament path (core/pipeline.py creates one `agent_bpmn`
-        # and loops n_bpmn_runs times). Without this reset, a truncation on
-        # candidate 1 would leave _force_long_context=True for every
-        # subsequent candidate in the same tournament, even ones that never
-        # truncated — silently changing their token budget and cache key.
-        self._force_long_context = False
-
-        system, user = self.build_prompt(hub, output_language)
-
-        # ── Proactive collaboration detection ─────────────────────────────────
-        # Uses two independent signals: NLP actors (structured) + keyword scan.
-        # When either fires, we inject a mandatory format directive into the
-        # system prompt AND adjust retry hints to never offer flat format.
-        _COLLAB_KEYWORDS = {
-            "cliente", "fornecedor", "banco", "bureau", "serasa", "quod",
-            "receita federal", "parceiro", "portal do cliente", "externo",
-            "contratante", "contratado", "prestador", "tomador",
-        }
-        _transcript_lower = (hub.transcript_clean or "").lower()
-        _kw_hits = sum(1 for kw in _COLLAB_KEYWORDS if kw in _transcript_lower)
-        _nlp_orgs = len(hub.nlp.actors) if (hub.nlp and hub.nlp.actors) else 0
-        # PC127: phase-detail calls (BpmnStudio "Detalhar uma fase") set
-        # _force_single_pool because the input is one callActivity's own
-        # documentation, not a full process description — it already belongs
-        # to a single actor in the parent diagram. Vocabulary like "fornecedor"
-        # or "concorrência" in that text describes what the phase deals with,
-        # not a second organisation to model as its own pool; without this
-        # guard the same keyword/NLP heuristics that correctly detect real
-        # collaborations fire here too and make the detail hallucinate a full
-        # multi-pool process around the phase.
-        _force_single_pool = getattr(self, "_force_single_pool", False)
-        _collaboration_expected = (not _force_single_pool) and (_nlp_orgs >= 2 or _kw_hits >= 2)
-
-        # PC_bpmn_length_fallback — raise the output-token floor up front when
-        # collaboration format is expected. Multi-pool JSON (pools + lanes +
-        # message_flows) is structurally far more verbose than flat JSON for
-        # an equivalent process, so the flat-format floor (8192) is frequently
-        # insufficient and was the single biggest source of finish_reason=
-        # 'length' truncation on first attempt. This does not replace the
-        # retry escalation below — it just makes attempt 0 more likely to
-        # succeed, saving a full retry round-trip in the common case.
-        self._min_output_tokens = (
-            self._MIN_OUTPUT_TOKENS_COLLAB if _collaboration_expected
-            else self._MIN_OUTPUT_TOKENS_FLAT
-        )
-
-        if _force_single_pool:
-            system += (
-                "\n\n## MANDATORY FORMAT — SINGLE-ACTOR PHASE DETAIL\n\n"
-                "This text describes the INTERNAL steps of a single phase that "
-                "already belongs to ONE organisation/actor within a larger "
-                "process — it is not a full process description. Even if it "
-                "mentions a counterparty, supplier or contract, do NOT create "
-                "additional pools/participants for them — that organisation is "
-                "already modelled elsewhere in the parent diagram. "
-                "You MUST use the flat single-actor format: "
-                "{\"name\": \"...\", \"steps\": [...], \"edges\": [...], \"lanes\": [...]}. "
-                "NEVER use the pools/collaboration format here."
-            )
-        elif _collaboration_expected:
-            system += (
-                "\n\n## MANDATORY FORMAT — COLLABORATION\n\n"
-                "This transcript involves legally distinct organisations exchanging messages. "
-                "You MUST use the multi-pool collaboration format:\n"
-                "{\"name\": \"...\", \"pools\": ["
-                "{\"id\": \"pool_1\", \"name\": \"Organisation A\", "
-                "\"steps\": [...], \"edges\": [...], \"lanes\": [...]}, "
-                "{\"id\": \"pool_2\", \"name\": \"Organisation B\", "
-                "\"steps\": [...], \"edges\": [...], \"lanes\": [...]}], "
-                "\"message_flows\": [{\"id\": \"mf_1\", \"name\": \"...\", "
-                "\"source\": {\"pool\": \"pool_1\", \"step\": \"S01\"}, "
-                "\"target\": {\"pool\": \"pool_2\", \"step\": \"S01\"}}]}\n"
-                "NEVER use flat format (steps/edges/lanes at root level) "
-                "when the process involves multiple organisations."
-            )
-
-        # ── Retry hints — separated by error type ────────────────────────────
-        # _flat_hint  : JSON parse errors (KeyError / malformed structure).
-        #               Offers flat format only when collaboration is NOT expected.
-        # _semantic_hint: semantic validation errors (ValueError — edges missing).
-        #               Preserves multi-pool structure; names the failing pool.
-        _flat_hint = (
-            "\n\nIMPORTANT CORRECTION: Your previous response was truncated or malformed. "
-            "Return ONLY valid JSON. "
-            + (
-                "This is a single-actor phase detail — you MUST use the flat "
-                "single-actor format: "
-                "{\"name\": ..., \"steps\": [...], \"edges\": [...], \"lanes\": [...]}. "
-                "NEVER switch to pools/collaboration format."
-                if _force_single_pool else
-                "This transcript involves multiple organisations — you MUST use the "
-                "multi-pool collaboration format: "
-                "{\"name\": ..., \"pools\": [...], \"message_flows\": [...]}. "
-                "NEVER switch to flat format."
-                if _collaboration_expected else
-                "If all participants belong to the same organisation → flat format: "
-                "{\"name\": ..., \"steps\": [...], \"edges\": [...], \"lanes\": [...]}. "
-                "If there are legally distinct organisations → pools format: "
-                "{\"name\": ..., \"pools\": [...], \"message_flows\": [...]}. "
-                "Choose the correct format based on the transcript — do NOT default to flat."
-            )
-        )
-
-        _original_ensure_utf8 = self._ensure_utf8
-
-        def _bpmn_call_with_retry(system, user, hub):
-            parse = self._parse_json
-            last_error = None
-            _h0 = None  # hash of attempt-0 prompt; backfilled on successful retry
-            for attempt in range(1 + self.max_retries):
-                try:
-                    raw = self._call_llm(system, user, hub)
-                    result = parse(raw)
-                    # Semantic validation: steps without edges is an incomplete extraction.
-                    # Pools format: check each pool; flat format: check top-level.
-                    # Only enforce when there are > 2 steps (trivial processes may have no edges).
-                    _pools = result.get("pools") if isinstance(result, dict) else None
-                    if _pools:
-                        # Helper: steps/edges may be nested under pool["process"]
-                        # (code expects that sub-key per docstring) OR at the top level
-                        # of the pool dict (as taught in skill examples).
-                        # Validation must check both to avoid a silent blind spot.
-                        def _pf(p, key):
-                            top = p.get(key) or []
-                            if not top:
-                                _sub = p.get("process")
-                                if isinstance(_sub, dict):
-                                    top = _sub.get(key) or []
-                            return top
-                        _total_steps = sum(len(_pf(p, "steps")) for p in _pools)
-                        _total_edges = sum(len(_pf(p, "edges")) for p in _pools)
-                        # Per-pool check: a pool with steps but no edges is incomplete
-                        # even if other pools have edges (aggregate check misses this).
-                        for _p in _pools:
-                            _p_steps = len(_pf(_p, "steps"))
-                            _p_edges = len(_pf(_p, "edges"))
-                            if _p_steps > 2 and _p_edges == 0:
-                                raise ValueError(
-                                    f"Incomplete BPMN: pool '{_p.get('name', '?')}' has "
-                                    f"{_p_steps} steps but 0 edges — sequence flows missing."
-                                )
-                    else:
-                        _total_steps = len(result.get("steps") or []) if isinstance(result, dict) else 0
-                        _total_edges = len(result.get("edges") or []) if isinstance(result, dict) else 0
-                    if _total_steps > 2 and _total_edges == 0:
-                        raise ValueError(
-                            f"Incomplete BPMN: {_total_steps} steps but 0 edges — "
-                            "all sequence flows are missing."
-                        )
-                    # Message flow coverage: every endMessageEvent and sendTask must
-                    # have a corresponding outgoing message_flow entry.
-                    # An endMessageEvent without a message_flow is a "silent" event —
-                    # it sends nothing and breaks choreography between pools.
-                    if _pools:
-                        _mf_list = result.get("message_flows") or []
-                        _mf_sources = {
-                            (mf.get("source", {}).get("pool"),
-                             mf.get("source", {}).get("step"))
-                            for mf in _mf_list
-                            if isinstance(mf, dict)
-                            and isinstance(mf.get("source"), dict)
-                        }
-                        _orphaned = []
-                        for _p in _pools:
-                            _p_id = _p.get("id", "")
-                            for _s in (_p.get("steps") or []):
-                                _tt = _s.get("task_type", "")
-                                if _tt in ("endMessageEvent", "sendTask"):
-                                    if (_p_id, _s.get("id")) not in _mf_sources:
-                                        _orphaned.append(
-                                            f"'{_s.get('title', _s.get('id', '?'))}'"
-                                            f" ({_tt}) in pool"
-                                            f" '{_p.get('name', _p_id)}'"
-                                        )
-                        if _orphaned:
-                            raise ValueError(
-                                "Incomplete BPMN: the following message-sending elements "
-                                "have no outgoing message_flow — add them to "
-                                "`message_flows`: " + "; ".join(_orphaned)
-                            )
-                    # Linha B: retry succeeded — backfill H0 so future reruns hit cache
-                    if attempt > 0 and _h0 and not getattr(self, "_lg_skip_cache", False):
-                        self._backfill_cache(_h0, raw)
-                    return result
-                except (ValueError, KeyError) as exc:
-                    last_error = exc
-                    if attempt == 0:
-                        _h0 = getattr(self, "_last_computed_cache_hash", None)
-                    if attempt < self.max_retries:
-                        # ── PC_bpmn_length_fallback ────────────────────────────
-                        # finish_reason='length' means the LLM was CUT OFF by the
-                        # output-token budget, not that it produced malformed or
-                        # incomplete-by-choice content. This is a budget problem,
-                        # not a formatting/semantic one — asking the model to
-                        # "fix" it via the same-sized prompt just reproduces the
-                        # identical truncation. Escalate the budget for the next
-                        # attempt (mirrors BaseAgent._call_with_retry, which this
-                        # method bypasses because it needs extra semantic checks)
-                        # and skip straight to the next attempt without injecting
-                        # a correction hint that can't address the real cause.
-                        if "finish_reason='length'" in str(exc):
-                            self._force_long_context = True
-                            continue
-                        hint = repr(str(exc))[:300]
-                        # ── Hint selection by error type ──────────────────────
-                        # ValueError = semantic validation (incomplete content).
-                        #   → preserve format, pinpoint the specific problem.
-                        # KeyError   = JSON parse / structure mismatch.
-                        #   → may need format guidance → use _flat_hint.
-                        if isinstance(exc, ValueError):
-                            _retry_suffix = (
-                                "\n\nCRITICAL CORRECTION REQUIRED: The JSON was parsed "
-                                "successfully but the content is INCOMPLETE. "
-                                + (
-                                    "DO NOT change to flat format — keep the multi-pool "
-                                    "collaboration structure. "
-                                    if _collaboration_expected else ""
-                                )
-                                + "Fix the specific problem described above: "
-                                + str(exc)
-                                + " Ensure EVERY pool has sequence flows (edges) "
-                                "connecting ALL its steps in order."
-                            )
-                        else:
-                            _retry_suffix = _flat_hint
-                        user = _original_ensure_utf8(
-                            f"{user}\n\n"
-                            f"IMPORTANT: Your previous response caused a parse error:\n{hint}\n"
-                            f"Return ONLY valid JSON. No markdown. No explanation."
-                            f"{_retry_suffix}"
-                        )
-            raise RuntimeError(
-                f"[{self.name}] Failed after {1 + self.max_retries} attempts. "
-                f"Last error: {repr(last_error)}"
-            )
-
-        import time as _time
-        import logging as _logging
-        _t0 = _time.monotonic()
-
-        data = _bpmn_call_with_retry(system, user, hub)
-
-        hub.bpmn = self._build_model(data)
-        hub.bpmn.raw_llm_dict = data  # preserved for rerun-without-LLM
-
-        # ── Format escape detection ───────────────────────────────────────────
-        # If collaboration was expected but the LLM returned flat format, log it.
-        _format_escape = _collaboration_expected and not hub.bpmn.is_collaboration
-        if _format_escape:
-            _logging.warning(
-                "[AgentBPMN] Format escape detected: collaboration expected "
-                "(nlp_actors=%d, kw_hits=%d) but LLM returned flat format.",
-                _nlp_orgs, _kw_hits,
-            )
-
-        # Capture enforce_rules changes via before/after step count as proxy
-        _steps_before = len(hub.bpmn.steps)
-        self._enforce_rules(hub.bpmn, getattr(hub.nlp, "actors", None))
-        _steps_after = len(hub.bpmn.steps)
-
-        try:
-            from modules.bpmn_auto_repair import repair_bpmn
-            report = repair_bpmn(hub.bpmn)
-            hub.bpmn.repair_log = report.repairs
-        except Exception:
-            hub.bpmn.repair_log = []
-        try:
-            hub.bpmn.mermaid = self._generate_mermaid(hub.bpmn)
-        except Exception:
-            hub.bpmn.mermaid = ""
-        hub.bpmn.bpmn_xml = self._generate_bpmn_xml(hub.bpmn)
-        from modules.bpmn_auto_repair import reformat_bpmn_labels
-        _xml_fmt, _fmt_changes = reformat_bpmn_labels(hub.bpmn.bpmn_xml)
-        if not any(c.startswith("[ERRO]") for c in _fmt_changes):
-            hub.bpmn.bpmn_xml = _xml_fmt
-
-        # ── Build execution log ───────────────────────────────────────────────
-        from datetime import datetime as _dt, timezone as _tz
-        _long_titles = [
-            s.title for s in hub.bpmn.steps if len(s.title) > 35
-        ]
-        _type_counts: dict = {}
-        for _s in hub.bpmn.steps:
-            _type_counts[_s.task_type] = _type_counts.get(_s.task_type, 0) + 1
-        hub.bpmn.execution_log = {
-            "generated_at": _dt.now(_tz.utc).isoformat(),
-            "source": "llm_call",
-            "llm": {
-                "provider": hub.meta.llm_provider or "",
-                "model":    hub.meta.llm_model or "",
-                "tokens_in":  hub.meta.total_tokens_used,
-                "from_cache": hub.meta.cache_hits > 0,
-                "cache_hits": hub.meta.cache_hits,
-                "latency_s":  round(_time.monotonic() - _t0, 1),
-            },
-            "enforce_rules": {
-                "steps_before": _steps_before,
-                "steps_after":  _steps_after,
-                "removed": _steps_before - _steps_after,
-            },
-            "repair_passes": hub.bpmn.repair_log,
-            "reformat_passes": _fmt_changes,
-            "collaboration": {
-                "expected": _collaboration_expected,
-                "nlp_actors": _nlp_orgs,
-                "keyword_hits": _kw_hits,
-                "format_escape": _format_escape,
-            },
-            "token_budget": {
-                # PC_bpmn_length_fallback — record what floor was used and
-                # whether the truncation-escalation path fired, so repeated
-                # length-truncation on the same project is visible without
-                # re-reading logs after the fact.
-                "min_output_tokens": self._min_output_tokens,
-                "long_context_forced": getattr(self, "_force_long_context", False),
-            },
-            "metrics": {
-                "steps":       len(hub.bpmn.steps),
-                "edges":       len(hub.bpmn.edges),
-                "lanes":       len(hub.bpmn.lanes),
-                "gateways":    sum(1 for s in hub.bpmn.steps if s.is_decision),
-                "task_types":  _type_counts,
-                "long_titles": _long_titles,
-            },
-        }
-        hub.bpmn.ready = True
-        hub.mark_agent_run(self.name)
-        hub.bump()
-        return hub
-
-    # ── Model building ────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _build_model(data: dict) -> BPMNModel:
-        """Dispatch to flat or multi-pool builder based on JSON structure."""
-        if not isinstance(data, dict):
-            return BPMNModel(name="Process")
-        pools_val = data.get("pools")
-        # Use multi-pool only when "pools" is a non-empty list of dicts
-        if isinstance(pools_val, list) and pools_val and isinstance(pools_val[0], dict):
-            return AgentBPMN._build_model_multi(data)
-        return AgentBPMN._build_model_flat(data)
-
-    @staticmethod
-    def _build_model_flat(data: dict) -> BPMNModel:
-        """Parse flat single-pool format: { steps, edges, lanes }."""
-        steps = [
-            BPMNStep(
-                id=s["id"],
-                title=s.get("title", "Step"),
-                description=s.get("description", ""),
-                actor=s.get("actor") or None,
-                is_decision=s.get("is_decision", False),
-                task_type=s.get("task_type", "userTask"),
-                lane=s.get("lane") or None,
-            )
-            for s in data.get("steps", [])
-        ]
-        edges = [
-            BPMNEdge(
-                source=e["source"],
-                target=e["target"],
-                label=e.get("label", ""),
-                condition=e.get("condition", ""),
-            )
-            for e in data.get("edges", [])
-        ]
-        lanes = data.get("lanes") or []
-        if not lanes:
-            # Derive from per-step lane assignments when the LLM omits the top-level list
-            lanes = sorted({s.lane for s in steps if s.lane})
-        return BPMNModel(
-            name=data.get("name", "Process"),
-            description=data.get("description", ""),
-            steps=steps,
-            edges=edges,
-            lanes=lanes,
-            process_trigger=(data.get("process_trigger") or "").strip(),
-            process_outcomes=[
-                o.strip() for o in (data.get("process_outcomes") or [])
-                if isinstance(o, str) and o.strip()
-            ],
-            process_type=(data.get("process_type") or "").strip(),
-            process_description_md=(data.get("process_description") or "").strip(),
-        )
-
-    @staticmethod
-    def _build_model_multi(data: dict) -> BPMNModel:
+        Endpoint/api_version resolution mirrors _is_long_context_enabled():
+        client_info (API mode) → st.session_state extra field (Streamlit
+        sidebar, see modules/session_security.py::render_extra_fields) → "".
         """
-        Parse multi-pool format:
-          { "name", "pools": [{ "id", "name", "process": { steps, edges, lanes } }],
-            "message_flows": [{ "id", "name", "source": {pool,step}, "target": {pool,step} }] }
-
-        Step IDs are namespaced with a pool prefix (p1_, p2_...) in the
-        flattened model.steps/edges so that enforce_rules works across pools
-        without ID collisions.
-        """
-        pool_models: list[BPMNPoolData] = []
-        all_steps:  list[BPMNStep] = []
-        all_edges:  list[BPMNEdge] = []
-        all_lanes:  list[str] = []
-
-        for i, pool_data in enumerate(data.get("pools", [])):
-            if not isinstance(pool_data, dict):
-                continue   # skip malformed pool entries
-            prefix   = f"p{i + 1}_"
-            pool_id  = pool_data.get("id", f"pool_{i + 1}")
-            pool_name = pool_data.get("name", f"Pool {i + 1}")
-            # Steps/edges may be nested under pool["process"] (expected by code)
-            # OR at the top level of the pool dict (as taught in skill examples).
-            # Read from "process" first; fall back to top-level pool fields so that
-            # both LLM output styles are handled without losing data.
-            _proc_sub = pool_data.get("process")
-            proc = _proc_sub if isinstance(_proc_sub, dict) else {}
-
-            raw_steps = proc.get("steps") or pool_data.get("steps") or []
-            raw_edges = proc.get("edges") or pool_data.get("edges") or []
-            raw_lanes = proc.get("lanes") or pool_data.get("lanes") or []
-
-            orig_steps = [
-                BPMNStep(
-                    id=s["id"],
-                    title=s.get("title", "Step"),
-                    description=s.get("description", ""),
-                    actor=s.get("actor") or None,
-                    is_decision=s.get("is_decision", False),
-                    task_type=s.get("task_type", "userTask"),
-                    lane=s.get("lane") or None,
-                )
-                for s in raw_steps
-            ]
-            orig_edges = [
-                BPMNEdge(
-                    source=e["source"],
-                    target=e["target"],
-                    label=e.get("label", ""),
-                    condition=e.get("condition", ""),
-                )
-                for e in raw_edges
-            ]
-
-            pool_models.append(BPMNPoolData(
-                pool_id=pool_id,
-                name=pool_name,
-                steps=orig_steps,
-                edges=orig_edges,
-                lanes=list(raw_lanes),
-            ))
-
-            # Flatten into model with prefixed IDs
-            for s in orig_steps:
-                all_steps.append(BPMNStep(
-                    id=prefix + s.id,
-                    title=s.title,
-                    description=s.description,
-                    actor=s.actor,
-                    is_decision=s.is_decision,
-                    task_type=s.task_type,
-                    lane=s.lane,
-                ))
-            for e in orig_edges:
-                all_edges.append(BPMNEdge(
-                    source=prefix + e.source,
-                    target=prefix + e.target,
-                    label=e.label,
-                    condition=e.condition,
-                ))
-            for lane_name in raw_lanes:
-                if lane_name not in all_lanes:
-                    all_lanes.append(lane_name)
-
-        # Message flows
-        mf_list: list[BPMNMessageFlow] = []
-        for mf in data.get("message_flows", []):
-            src = mf.get("source", {})
-            tgt = mf.get("target", {})
-            mf_list.append(BPMNMessageFlow(
-                id=mf.get("id", f"mf_{len(mf_list) + 1}"),
-                source_pool=src.get("pool", ""),
-                source_step=src.get("step", ""),
-                target_pool=tgt.get("pool", ""),
-                target_step=tgt.get("step", ""),
-                name=mf.get("name", ""),
-            ))
-
-        return BPMNModel(
-            name=data.get("name", "Process"),
-            description=data.get("description", ""),
-            steps=all_steps,
-            edges=all_edges,
-            lanes=all_lanes,
-            is_collaboration=True,
-            pool_models=pool_models,
-            message_flows_data=mf_list,
-        )
-
-    # ── Post-extraction rule enforcement ─────────────────────────────────────
-
-    @staticmethod
-    def _enforce_rules(model: BPMNModel, nlp_actors: list | None = None) -> None:
-        """
-        Deterministic post-processing. Mutates the model in-place.
-
-        Rule 0  — remove steps the LLM declared as start/end events
-                  (single-pool only; multi-pool handles events explicitly)
-        Rule 1  — serviceTask with unnamed system actor → lane = None
-        Rule 1b — generic lane names → infer from step descriptions
-        Rule 2  — correction loop pointing back to gateway → redirect to
-                  the upstream work step that feeds the gateway
-        Rule 3  — remove empty lanes (lanes with 0 steps assigned); runs
-                  after Rules 1/1b so vacated lanes are also pruned
-        """
-        # ── Rule 0: strip redundant start/end event steps (single-pool) ──────
-        if not model.is_collaboration:
-            _start_steps = [s for s in model.steps if s.task_type in _START_TYPES]
-            _end_steps   = [s for s in model.steps if s.task_type in _END_TYPES]
-
-            # Capture meaningful names before stripping (only if not already set by JSON parse)
-            _generic_start = {"início", "inicio", "start", "begin", "iniciar"}
-            _generic_end   = {"fim", "end", "finish", "término", "termino", "encerrar"}
-            if _start_steps and not model.process_trigger:
-                _t = (_start_steps[0].title or "").strip()
-                if _t and _t.lower() not in _generic_start:
-                    model.process_trigger = _t
-            if _end_steps and not model.process_outcomes:
-                _outcomes = [
-                    s.title.strip() for s in _end_steps
-                    if s.title and s.title.strip().lower() not in _generic_end
-                ]
-                if _outcomes:
-                    model.process_outcomes = _outcomes
-
-            event_step_ids = {s.id for s in _start_steps + _end_steps}
-            if event_step_ids:
-                model.steps = [s for s in model.steps if s.id not in event_step_ids]
-                model.edges = [
-                    e for e in model.edges
-                    if e.source not in event_step_ids and e.target not in event_step_ids
-                ]
-
-        # ── Rule 1b: generic lane names → infer from step descriptions ───────
-        _GENERIC_LANE_NAMES = {
-            "usuário", "usuario", "user", "utilizador",
-            "validador", "validator", "revisor", "reviewer",
-            "sistema", "system", "automático", "automatic",
-            "ator", "actor", "papel", "role", "pessoa", "person",
-            "participante", "participant",
-        }
-        lane_replacement: dict[str, str] = {}
-        for lane_name in list(model.lanes):
-            if lane_name.lower().strip() in _GENERIC_LANE_NAMES:
-                candidate = _infer_lane_name(lane_name, model, nlp_actors)
-                if candidate and candidate != lane_name:
-                    lane_replacement[lane_name] = candidate
-
-        if lane_replacement:
-            model.lanes = [lane_replacement.get(ln, ln) for ln in model.lanes]
-            for step in model.steps:
-                if step.lane in lane_replacement:
-                    step.lane = lane_replacement[step.lane]
-            for pm in model.pool_models:
-                pm.lanes = [lane_replacement.get(ln, ln) for ln in pm.lanes]
-                for step in pm.steps:
-                    if step.lane in lane_replacement:
-                        step.lane = lane_replacement[step.lane]
-
-        _GENERIC_ACTORS = {
-            "sistema", "system", "automático", "automatic",
-            "automaticamente", "auto", None,
-        }
-
-        step_map = {s.id: s for s in model.steps}
-
-        # ── Rule 1: serviceTask with unnamed system → lane = None ─────────────
-        # (runs before Rule 3 so that lanes vacated by Rule 1 are also removed)
-        for step in model.steps:
-            if step.task_type == "serviceTask":
-                actor_lower = (step.actor or "").lower().strip()
-                if actor_lower in _GENERIC_ACTORS or not actor_lower:
-                    step.lane = None
-
-        # ── Rule 2: correction loop pointing back to a gateway ────────────────
-        # (no change in order — runs after Rule 1)
-        outgoing: dict[str, list] = {s.id: [] for s in model.steps}
-        for edge in model.edges:
-            if edge.source in outgoing:
-                outgoing[edge.source].append(edge)
-
-        incoming: dict[str, list[str]] = {s.id: [] for s in model.steps}
-        for edge in model.edges:
-            if edge.target in incoming:
-                incoming[edge.target].append(edge.source)
-
-        _ALL_GW_TYPES = {
-            "exclusiveGateway", "parallelGateway", "inclusiveGateway",
-            "eventBasedGateway", "complexGateway", "gateway",
-        }
-        gateway_ids = {
-            s.id for s in model.steps
-            if s.is_decision or s.task_type in _ALL_GW_TYPES
-        }
-
-        for edge in model.edges:
-            if edge.target not in gateway_ids:
-                continue
-
-            gw_id         = edge.target
-            correction_id = edge.source
-            gw_step        = step_map.get(gw_id)
-            correction_step = step_map.get(correction_id)
-            if not gw_step or not correction_step:
-                continue
-
-            gw_out_targets = {e.target for e in outgoing.get(gw_id, [])}
-            if correction_id not in gw_out_targets:
-                continue
-
-            upstream_candidates = [
-                src for src in incoming.get(gw_id, [])
-                if src != correction_id and src in step_map
-            ]
-            if not upstream_candidates:
-                continue
-
-            same_lane = [
-                c for c in upstream_candidates
-                if step_map[c].lane == correction_step.lane
-            ]
-            best = same_lane[0] if same_lane else upstream_candidates[0]
-            edge.target = best
-
-        # ── Rule 3: remove empty lanes (lanes with no step assigned) ──────────
-        # Can happen after Rule 1 sets lane=None for serviceTask, or when the
-        # LLM declares a lane in `lanes` but assigns no steps to it.
-        # Empty lanes create blank rows in the viewer and inflate lane spans,
-        # causing the crossing detector to miscount lane boundaries.
-        populated = {s.lane for s in model.steps if s.lane}
-        model.lanes = [ln for ln in model.lanes if ln in populated]
-        for pm in model.pool_models:
-            pm_pop = {s.lane for s in pm.steps if s.lane}
-            pm.lanes = [ln for ln in pm.lanes if ln in pm_pop]
-
-        # ── Rule 4: exclusiveGateway unlabeled exits → assign default labels ──
-        # BPMN Method and Style Level 1: every outgoing edge from an XOR gateway
-        # MUST have a conditionExpression. Missing labels make the diagram
-        # unreadable and violate the spec.
-        _xor_ids = {
-            s.id for s in model.steps
-            if s.task_type == "exclusiveGateway" or (s.is_decision and s.task_type in ("exclusiveGateway", "gateway"))
-        }
-        # Same for collaboration pools
-        for pm in model.pool_models:
-            for s in pm.steps:
-                if s.task_type == "exclusiveGateway" or (s.is_decision and s.task_type in ("exclusiveGateway", "gateway")):
-                    _xor_ids.add(s.id)
-
-        all_edges = list(model.edges) + [e for pm in model.pool_models for e in pm.edges]
-        for gw_id in _xor_ids:
-            gw_outs = [e for e in all_edges if e.source == gw_id]
-            unlabeled = [e for e in gw_outs if not (e.label or "").strip()]
-            if not unlabeled:
-                continue
-            total = len(gw_outs)
-            if total == 2:
-                # Assign "Sim"/"Não" only if both are unlabeled (avoid overwriting partial labels)
-                labeled = [e for e in gw_outs if (e.label or "").strip()]
-                if not labeled:
-                    unlabeled[0].label = "Sim"
-                    unlabeled[1].label = "Não"
-            else:
-                # Generic labels for N-way gateway (only fill blanks)
-                counter = 1
-                for e in gw_outs:
-                    if not (e.label or "").strip():
-                        e.label = f"Caminho {counter}"
-                        counter += 1
-
-    # ── BPMN XML generation ───────────────────────────────────────────────────
-
-    @staticmethod
-    def _generate_bpmn_xml(model: BPMNModel) -> str:
-        try:
-            from modules.schema import (
-                BpmnProcess, BpmnElement, BpmnPool, BpmnLane,
-                SequenceFlow, MessageFlow,
+        azure_endpoint = self.client_info.get("azure_endpoint", "")
+        deployment = self.client_info.get("azure_deployment", "")
+        api_version = self.provider_cfg.get("api_version", "2024-10-21")
+        if not azure_endpoint or not deployment:
+            try:
+                from modules.session_security import get_extra_field
+                _provider_name = self.provider_cfg.get("provider_name", "Azure OpenAI")
+                azure_endpoint = azure_endpoint or get_extra_field(_provider_name, "azure_endpoint")
+                deployment = deployment or get_extra_field(_provider_name, "deployment_name")
+            except Exception:
+                pass
+        if not azure_endpoint:
+            raise ValueError(
+                f"[{self.name}] Azure OpenAI requer um endpoint configurado "
+                f"(ex: https://<recurso>.openai.azure.com) — configure em "
+                f"Configurações antes de usar este provider."
             )
-            from modules.bpmn_generator import generate_bpmn_xml
+        # Azure routes by deployment name, not model id — an explicit
+        # deployment override (extra field) takes precedence over whatever
+        # model id was resolved upstream (default_model / scenario override).
+        if deployment:
+            model = deployment
 
-            if model.is_collaboration:
-                return AgentBPMN._generate_bpmn_xml_multi(
-                    model, BpmnProcess, BpmnElement, BpmnPool,
-                    BpmnLane, SequenceFlow, MessageFlow, generate_bpmn_xml,
-                )
-            return AgentBPMN._generate_bpmn_xml_single(
-                model, BpmnProcess, BpmnElement, BpmnPool,
-                BpmnLane, SequenceFlow, generate_bpmn_xml,
+        from openai import AzureOpenAI
+        client = AzureOpenAI(
+            api_key=api_key, azure_endpoint=azure_endpoint, api_version=api_version,
+        )
+        return self._run_openai_chat(client, system, user, model, timeout, long_context)
+
+    def _run_openai_chat(
+        self,
+        client,
+        system: str,
+        user: str,
+        model: str,
+        timeout: int,
+        long_context: bool,
+    ) -> tuple[str, int]:
+        """Shared chat-completions call for any client exposing the OpenAI SDK
+        interface (OpenAI, AzureOpenAI, and OpenAI-compatible base_urls)."""
+        # Sanitize before sending — httpx encodes body as UTF-8; corrupt or
+        # surrogate code points raise UnicodeEncodeError inside the SDK.
+        system = self._ensure_utf8(system)
+        user   = self._ensure_utf8(user)
+
+        # Long context mode: use a higher output token limit to prevent
+        # truncation on complex/long transcripts.
+        if long_context:
+            max_out = self.provider_cfg.get(
+                "long_context_max_tokens",
+                max(self.provider_cfg.get("max_tokens", 4096), 8192),
             )
-        except Exception:
-            return ""
-
-    # ── Single-pool BPMN XML bridge ───────────────────────────────────────────
-
-    @staticmethod
-    def _generate_bpmn_xml_single(model, BpmnProcess, BpmnElement, BpmnPool,
-                                  BpmnLane, SequenceFlow, generate_bpmn_xml) -> str:
-        _start_name = model.process_trigger or "Início"
-        _end_name   = (model.process_outcomes[0] if model.process_outcomes else None) or "Fim"
-        elements = []
-        for i, step in enumerate(model.steps):
-            if step.is_decision:
-                el_type = "exclusiveGateway"
-            elif step.task_type in _EVENT_TASK_TYPE_MAP:
-                # Intermediate events are kept; start/end already stripped by Rule 0
-                el_type_str, ev_type = _EVENT_TASK_TYPE_MAP[step.task_type]
-                if "intermediate" in el_type_str.lower():
-                    elements.append(BpmnElement(
-                        id=step.id, name=step.title,
-                        type=el_type_str, event_type=ev_type,
-                        lane=step.lane, actor=step.actor,
-                        documentation=step.description or "",
-                    ))
-                    if i == 0:
-                        elements.insert(0, BpmnElement(
-                            id="ev_start", name=_start_name, type="startEvent",
-                            lane=step.lane, actor=None,
-                        ))
-                    if i == len(model.steps) - 1:
-                        source_ids = {e.source for e in model.edges}
-                        terminal = [s for s in model.steps if s.id not in source_ids]
-                        end_lane = terminal[-1].lane if terminal else step.lane
-                        elements.append(BpmnElement(
-                            id="ev_end", name=_end_name, type="endEvent",
-                            lane=end_lane, actor=None,
-                        ))
-                    continue
-                else:
-                    el_type = _TASK_TYPE_MAP.get(step.task_type, "userTask")
-            else:
-                el_type = _TASK_TYPE_MAP.get(step.task_type, "userTask")
-
-            if i == 0:
-                elements.append(BpmnElement(
-                    id="ev_start", name=_start_name, type="startEvent",
-                    actor=None, lane=step.lane,
-                ))
-
-            elements.append(BpmnElement(
-                id=step.id, name=step.title, type=el_type,
-                actor=step.actor, lane=step.lane,
-                documentation=step.description or "",
-            ))
-
-            if i == len(model.steps) - 1:
-                source_ids = {e.source for e in model.edges}
-                terminal = [s for s in model.steps if s.id not in source_ids]
-                end_lane = terminal[-1].lane if terminal else step.lane
-                elements.append(BpmnElement(
-                    id="ev_end", name=_end_name, type="endEvent",
-                    actor=None, lane=end_lane,
-                ))
-
-        flows = []
-        if model.steps:
-            flows.append(SequenceFlow(id="sf_start", source="ev_start",
-                                      target=model.steps[0].id))
-        for i, edge in enumerate(model.edges):
-            flows.append(SequenceFlow(
-                id=f"sf_{i + 1:03d}",
-                source=edge.source, target=edge.target,
-                name=edge.label or "", condition=edge.condition or "",
-            ))
-        if model.steps:
-            source_ids = {e.source for e in model.edges}
-            terminal = [s for s in model.steps if s.id not in source_ids]
-            if not terminal:
-                terminal = [model.steps[-1]]
-            for _j, _term in enumerate(terminal):
-                _fid = "sf_end" if _j == 0 else f"sf_end_{_j}"
-                flows.append(SequenceFlow(id=_fid, source=_term.id,
-                                          target="ev_end"))
-
-        lane_objects = []
-        if model.lanes:
-            for lane_name in model.lanes:
-                lane_id = "lane_" + _ascii_id(lane_name)
-                member_ids = [
-                    s.id for s in model.steps
-                    if s.lane and s.lane.lower() == lane_name.lower()
-                ]
-                lane_objects.append(BpmnLane(
-                    id=lane_id, name=lane_name, element_ids=member_ids,
-                ))
-        # Pool is always created (even without lanes) so the process name is
-        # always rendered inside the diagram as the pool header — when there
-        # are no real lanes, generate_bpmn_xml() injects a synthetic single
-        # lane internally so the layout math still has ≥1 lane to work with.
-        pools = [BpmnPool(id="pool_1", name=model.name, lanes=lane_objects)]
-
-        bpmn_process = BpmnProcess(
-            name=model.name,
-            documentation=model.description or "",
-            elements=elements,
-            flows=flows,
-            pools=pools,
-        )
-        return generate_bpmn_xml(bpmn_process)
-
-    # ── Multi-pool BPMN XML bridge ────────────────────────────────────────────
-
-    @staticmethod
-    def _generate_bpmn_xml_multi(model, BpmnProcess, BpmnElement, BpmnPool,
-                                 BpmnLane, SequenceFlow, MessageFlow,
-                                 generate_bpmn_xml) -> str:
-        """
-        Build a BpmnProcess with one BpmnPool per pool_model, each pool
-        carrying its own elements and flows.  Message flows are added as
-        MessageFlow objects referencing prefixed element IDs.
-        """
-        pools = []
-
-        # Map pool_id → (xml_pool_id, prefix) for message flow resolution
-        pool_id_to_xml:    dict[str, str] = {}
-        pool_id_to_prefix: dict[str, str] = {}
-
-        for i, pm in enumerate(model.pool_models):
-            prefix       = f"p{i + 1}_"
-            xml_pool_id  = f"pool_{i + 1}"
-            pool_id_to_xml[pm.pool_id]    = xml_pool_id
-            pool_id_to_prefix[pm.pool_id] = prefix
-
-            elements = _build_pool_elements(pm, prefix, BpmnElement)
-            flows    = _build_pool_flows(pm, prefix, elements, SequenceFlow)
-            lanes    = _build_pool_lanes(pm, prefix, xml_pool_id, elements, BpmnLane)
-
-            pools.append(BpmnPool(
-                id=xml_pool_id,
-                name=pm.name,
-                lanes=lanes,
-                elements=elements,
-                flows=flows,
-            ))
-
-        # Build MessageFlow objects (resolve pool aliases and "start"/"end")
-        schema_mf = []
-        for mf in model.message_flows_data:
-            src_prefix = pool_id_to_prefix.get(mf.source_pool, "p1_")
-            tgt_prefix = pool_id_to_prefix.get(mf.target_pool, "p2_")
-
-            src_id = _resolve_mf_step(mf.source_step, src_prefix, "throw")
-            tgt_id = _resolve_mf_step(mf.target_step, tgt_prefix, "catch")
-
-            schema_mf.append(MessageFlow(
-                id=mf.id,
-                source=src_id,
-                target=tgt_id,
-                name=mf.name,
-            ))
-
-        bpmn_process = BpmnProcess(
-            name=model.name,
-            documentation=model.description or "",
-            elements=[],    # elements are owned by each pool
-            flows=[],       # flows are owned by each pool
-            pools=pools,
-            message_flows=schema_mf,
-        )
-        return generate_bpmn_xml(bpmn_process)
-
-    # ── Mermaid generator ─────────────────────────────────────────────────────
-
-    @staticmethod
-    def _generate_mermaid(model: BPMNModel) -> str:
-        from agents.agent_mermaid import MermaidGenerator
-        return MermaidGenerator.generate(model)
-
-
-# ── Pool builder helpers (module-level for readability) ───────────────────────
-
-def _resolve_mf_step(step_ref: str, prefix: str, direction: str) -> str:
-    """
-    Resolve a message-flow step reference to a prefixed element ID.
-    - "start" → ev_start of that pool
-    - "end"   → ev_end of that pool
-    - anything else → prefixed step id
-    direction = "throw" | "catch" (used only to pick ev_end vs ev_start
-    when the reference is ambiguous)
-    """
-    if step_ref in ("start", "ev_start"):
-        return prefix + "ev_start"
-    if step_ref in ("end", "ev_end"):
-        return prefix + "ev_end"
-    return prefix + step_ref
-
-
-def _build_pool_elements(pm: BPMNPoolData, prefix: str, BpmnElement) -> list:
-    """
-    Build the BpmnElement list for one pool.
-    Handles the new event task_types from skill v3.0.
-    If no explicit start/end event step is present, synthetic ones are injected.
-    """
-    from modules.schema import BpmnElement as _BE  # noqa: F401 (type alias)
-
-    steps = pm.steps
-    if not steps:
-        return []
-
-    has_start = any(s.task_type in _START_TYPES for s in steps)
-    has_end   = any(s.task_type in _END_TYPES   for s in steps)
-
-    elements = []
-
-    # Inject synthetic startEvent before first step if needed
-    if not has_start:
-        elements.append(BpmnElement(
-            id=prefix + "ev_start",
-            name="Início",
-            type="startEvent",
-            event_type="none",
-            lane=steps[0].lane,
-            actor=None,
-        ))
-
-    for step in steps:
-        if step.task_type in _EVENT_TASK_TYPE_MAP:
-            el_type_str, ev_type = _EVENT_TASK_TYPE_MAP[step.task_type]
-            elements.append(BpmnElement(
-                id=prefix + step.id,
-                name=step.title,
-                type=el_type_str,
-                event_type=ev_type,
-                lane=step.lane,
-                actor=step.actor,
-                documentation=step.description or "",
-            ))
-        elif step.is_decision:
-            elements.append(BpmnElement(
-                id=prefix + step.id,
-                name=step.title,
-                type="exclusiveGateway",
-                lane=step.lane,
-                actor=step.actor,
-                documentation=step.description or "",
-            ))
         else:
-            el_type = _TASK_TYPE_MAP.get(step.task_type, "userTask")
-            elements.append(BpmnElement(
-                id=prefix + step.id,
-                name=step.title,
-                type=el_type,
-                lane=step.lane,
-                actor=step.actor,
-                documentation=step.description or "",
-            ))
+            max_out = self.provider_cfg.get("max_tokens", 4096)
+        # Agent subclasses may declare _min_output_tokens to guarantee a
+        # minimum output budget regardless of long-context mode.
+        # Example: AgentBPMN sets 8192 because collaboration JSON is large.
+        max_out = max(max_out, getattr(self, "_min_output_tokens", 0))
 
-    # Inject synthetic endEvent after last step if needed
-    if not has_end:
-        source_ids  = {e.source for e in pm.edges}
-        terminal    = [s for s in steps if s.id not in source_ids]
-        end_lane    = terminal[-1].lane if terminal else (steps[-1].lane if steps else None)
-        elements.append(BpmnElement(
-            id=prefix + "ev_end",
-            name="Fim",
-            type="endEvent",
-            event_type="none",
-            lane=end_lane,
-            actor=None,
-        ))
-
-    return elements
-
-
-def _build_pool_flows(pm: BPMNPoolData, prefix: str, elements: list,
-                      SequenceFlow) -> list:
-    """Build SequenceFlow list for one pool, including start/end connectors."""
-    steps    = pm.steps
-    if not steps:
-        return []
-
-    has_start = any(s.task_type in _START_TYPES for s in steps)
-    has_end   = any(s.task_type in _END_TYPES   for s in steps)
-
-    el_ids = {el.id for el in elements}
-
-    flows = []
-
-    # Connect synthetic ev_start → first non-start-event step
-    if not has_start:
-        first_real = next(
-            (s for s in steps if s.task_type not in _START_TYPES), steps[0]
+        kwargs: dict[str, Any] = dict(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user",   "content": user},
+            ],
+            max_tokens=max_out,
+            temperature=0.1,
         )
-        flows.append(SequenceFlow(
-            id=prefix + "sf_start",
-            source=prefix + "ev_start",
-            target=prefix + first_real.id,
-        ))
+        if self.provider_cfg.get("supports_json_mode"):
+            kwargs["response_format"] = {"type": "json_object"}
+            # DeepSeek (and some providers) require the literal word "json"
+            # somewhere in the prompt when json_object mode is active.
+            user_msg = kwargs["messages"][-1]["content"]
+            if "json" not in user_msg.lower():
+                kwargs["messages"][-1]["content"] = (
+                    user_msg + "\n\nRespond with valid json only."
+                )
 
-    for k, edge in enumerate(pm.edges):
-        src = prefix + edge.source
-        tgt = prefix + edge.target
-        if src in el_ids and tgt in el_ids:
-            flows.append(SequenceFlow(
-                id=prefix + f"sf_{k + 1:03d}",
-                source=src,
-                target=tgt,
-                name=edge.label or "",
-                condition=edge.condition or "",
-            ))
+        # Thinking mode — DeepSeek V4 Flash/Pro with reasoning_effort
+        # Temperature is unsupported in thinking mode; extra_body activates it.
+        reasoning_effort = self.provider_cfg.get("reasoning_effort")
+        if reasoning_effort:
+            kwargs["reasoning_effort"] = reasoning_effort
+            kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
+            kwargs.pop("temperature", None)
 
-    # Connect ALL terminal (leaf) steps → synthetic ev_end
-    if not has_end:
-        source_ids = {e.source for e in pm.edges}
-        terminal   = [s for s in steps if s.id not in source_ids
-                      and s.task_type not in _END_TYPES]
-        for _j, _term in enumerate(terminal):
-            _fid = prefix + ("sf_end" if _j == 0 else f"sf_end_{_j}")
-            flows.append(SequenceFlow(
-                id=_fid,
-                source=prefix + _term.id,
-                target=prefix + "ev_end",
-            ))
+        resp = client.chat.completions.create(**kwargs, timeout=timeout)
+        tokens_in  = resp.usage.prompt_tokens     if resp.usage else 0
+        tokens_out = resp.usage.completion_tokens if resp.usage else 0
+        content = resp.choices[0].message.content if resp.choices else None
+        finish_reason = (resp.choices[0].finish_reason if resp.choices else "no_choices")
+        if not content or not content.strip():
+            raise ValueError(
+                f"[{self.name}] LLM retornou conteúdo vazio "
+                f"(finish_reason={finish_reason!r}, model={model!r}). "
+                f"Possíveis causas: filtro de conteúdo, contexto muito longo, "
+                f"ou instabilidade do provider."
+            )
+        # A non-empty response truncated at the token limit is NOT safe to
+        # treat as successful for structured (JSON) output: json_repair can
+        # silently "fix" the cut-off text into something parseable while
+        # entire sections (e.g. a whole BPMN pool) are simply missing —
+        # no exception, no empty content, just quietly incomplete data. Only
+        # the empty-content case above used to be checked, which is why
+        # telemetry showed calls maxing out output_tokens repeatedly without
+        # ever tripping the long-context retry escalation below.
+        if finish_reason == "length":
+            raise ValueError(
+                f"[{self.name}] LLM truncou a resposta antes de completar "
+                f"(finish_reason='length', model={model!r}, output_tokens={tokens_out}). "
+                f"O conteúdo pode parecer válido mas estar incompleto."
+            )
+        return content, tokens_in, tokens_out
 
-    return flows
+    def _call_anthropic(
+        self,
+        system: str,
+        user: str,
+        api_key: str,
+        model: str,
+        timeout: int = 60,
+        long_context: bool = False,
+    ) -> tuple[str, int]:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+        if long_context:
+            max_out = self.provider_cfg.get(
+                "long_context_max_tokens",
+                max(self.provider_cfg.get("max_tokens", 4096), 8192),
+            )
+        else:
+            max_out = self.provider_cfg.get("max_tokens", 4096)
+        max_out = max(max_out, getattr(self, "_min_output_tokens", 0))
+        msg = client.messages.create(
+            model=model,
+            max_tokens=max_out,
+            temperature=0.1,
+            system=system,
+            messages=[{"role": "user", "content": user}],
+            timeout=timeout,
+        )
+        tokens_in  = msg.usage.input_tokens  if msg.usage else 0
+        tokens_out = msg.usage.output_tokens if msg.usage else 0
+        # Anthropic's equivalent of OpenAI's finish_reason='length' — see the
+        # comment in _call_openai for why a non-empty truncated response is
+        # not safe to treat as successful. Same marker string ("finish_reason
+        # ='length'") so _call_with_retry's escalation check catches both.
+        if msg.stop_reason == "max_tokens":
+            raise ValueError(
+                f"[{self.name}] LLM truncou a resposta antes de completar "
+                f"(finish_reason='length', model={model!r}, output_tokens={tokens_out}). "
+                f"O conteúdo pode parecer válido mas estar incompleto."
+            )
+        return msg.content[0].text, tokens_in, tokens_out
 
+    # ── JSON parsing ──────────────────────────────────────────────────────────
 
-def _build_pool_lanes(pm: BPMNPoolData, prefix: str, xml_pool_id: str,
-                      elements: list, BpmnLane) -> list:
-    """Build BpmnLane list for one pool, assigning elements to lanes."""
-    if not pm.lanes:
-        return []
+    def _parse_json(self, raw: str) -> dict:
+        """
+        Robust JSON extraction:
+          1. Strip markdown fences
+          2. Find first { ... last }
+          3. Parse
+        Raises ValueError with context on failure.
+        """
+        clean = re.sub(r"```(?:json)?", "", raw, flags=re.IGNORECASE).strip()
+        clean = clean.rstrip("`").strip()
+        start = clean.find("{")
+        end = clean.rfind("}") + 1
+        if start == -1 or end == 0:
+            raise ValueError(
+                f"[{self.name}] No JSON object found in LLM response.\n"
+                f"Response preview: {raw[:400]}"
+            )
+        # Fast path
+        try:
+            return json.loads(clean[start:end])
+        except json.JSONDecodeError:
+            pass
+        # Fallback: json_repair handles truncated/malformed LLM output
+        try:
+            from json_repair import repair_json
+            repaired = repair_json(clean[start:end], return_objects=True)
+            if isinstance(repaired, dict) and repaired:
+                return repaired
+        except Exception:
+            pass
+        # All attempts failed — raise with diagnostic info
+        try:
+            json.loads(clean[start:end])
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"[{self.name}] JSON decode error: {exc}\n"
+                f"Raw snippet: {clean[start:start+300]}"
+            ) from exc
 
-    el_map: dict[str, object] = {el.id: el for el in elements}
-    lanes  = []
+    def _call_with_retry(
+        self,
+        system: str,
+        user: str,
+        hub: KnowledgeHub,
+        parse_fn=None,
+    ) -> dict:
+        """
+        Call LLM and parse JSON. Retries up to self.max_retries on parse failure.
+        parse_fn: optional callable(raw_str) → dict. Defaults to self._parse_json.
+        """
+        parse = parse_fn or self._parse_json
+        last_error: Optional[Exception] = None
 
-    for lane_name in pm.lanes:
-        lane_id    = f"lane_{xml_pool_id}_" + _ascii_id(lane_name)
-        member_ids = [
-            el.id for el in elements
-            if (getattr(el, "lane", None) or "").lower() == lane_name.lower()
-        ]
-        lanes.append(BpmnLane(id=lane_id, name=lane_name,
-                               element_ids=member_ids))
+        for attempt in range(1 + self.max_retries):
+            try:
+                raw = self._call_llm(system, user, hub)
+                data = parse(raw)
+                # Fail-open schema validation — warns but never blocks the pipeline
+                _schema = getattr(self, "output_schema", None)
+                if _schema is not None:
+                    _schema_valid = True
+                    try:
+                        _schema.model_validate(data)
+                    except Exception as _exc:
+                        _schema_valid = False
+                        import warnings
+                        warnings.warn(
+                            f"[{self.name}] Output schema validation: {_exc}",
+                            stacklevel=2,
+                        )
+                    # PC183 — persist the outcome (previously only the
+                    # ephemeral warnings.warn() above) so "% well-formed
+                    # structured output by agent/skill_version over time" can
+                    # be tracked as a quality metric, not just a live warning.
+                    try:
+                        from services.llm_telemetry import _telemetry
+                        _telemetry.record_validation(
+                            self.name, getattr(self, "skill_version", None), _schema_valid
+                        )
+                    except Exception:
+                        pass
+                return data
+            except (ValueError, KeyError, UnicodeEncodeError) as exc:
+                last_error = exc
+                if attempt < self.max_retries:
+                    # A length-truncated output ("finish_reason='length'") is a
+                    # token-budget problem, not a formatting problem — the
+                    # generic "return only valid JSON" hint below does nothing
+                    # for it and the retry would truncate identically. Escalate
+                    # to the provider's long-context token budget instead.
+                    if "finish_reason='length'" in str(exc):
+                        self._force_long_context = True
+                    # A genuinely EMPTY completion (not just truncated — zero
+                    # output tokens) with finish_reason='length' is not a
+                    # budget problem: telemetry shows calls with the identical
+                    # prompt size succeeding seconds apart, including with far
+                    # fewer output tokens than the cap. This pattern matches a
+                    # transient provider-side hiccup rather than something our
+                    # prompt/budget controls — retrying immediately repeats the
+                    # same bad luck. A brief pause gives the instability a
+                    # chance to clear before the next attempt.
+                    if "retornou conteúdo vazio" in str(exc):
+                        time.sleep(2)
+                    # repr() gives an ASCII-safe representation of the error,
+                    # avoiding re-injection of non-ASCII chars into the next prompt.
+                    hint = repr(str(exc))[:300]
+                    user = self._ensure_utf8(
+                        f"{user}\n\n"
+                        f"IMPORTANT: Your previous response caused a parse error:\n{hint}\n"
+                        f"Return ONLY valid JSON. No markdown. No explanation."
+                    )
 
-    return lanes
+        raise RuntimeError(
+            f"[{self.name}] Failed after {1 + self.max_retries} attempts. "
+            f"Last error: {repr(last_error)}"
+        )
+
+    # ── Cache backfill ────────────────────────────────────────────────────────
+
+    def _backfill_cache(self, cache_hash: str, raw: str) -> None:
+        """Store raw LLM output under an alternate hash (used to backfill H0 after retry)."""
+        if not cache_hash or not raw:
+            return
+        try:
+            from services.semantic_cache import _cache
+            _cache.set(cache_hash, self.name, raw, 0)
+        except Exception:
+            pass
+
+    # ── Pre-condition guard ───────────────────────────────────────────────────
+
+    def _check_preconditions(self, hub: KnowledgeHub) -> None:
+        """Validate hub has required data before this agent runs.
+
+        Checks each path in self.required_hub_fields — supports dotted notation
+        (e.g. "bpmn.ready" → hub.bpmn.ready).  Raises ValueError on any empty
+        or missing field so the pipeline fails fast with an actionable message
+        rather than producing silently invalid output.
+        """
+        missing = []
+        for field_path in getattr(self, "required_hub_fields", []):
+            obj = hub
+            for part in field_path.split("."):
+                obj = getattr(obj, part, None)
+                if obj is None:
+                    break
+            if not obj:
+                missing.append(field_path)
+        if missing:
+            raise ValueError(
+                f"[{self.name}] Pré-condição não atendida — "
+                + ", ".join(f"hub.{f}" for f in missing)
+                + " está vazio ou ausente. "
+                "Verifique se os agentes anteriores foram executados com sucesso."
+            )
+
+    # ── Skill loading ─────────────────────────────────────────────────────────
+
+    def _load_skill(self) -> str:
+        """Load SKILL.md content, stripping YAML frontmatter before returning.
+        Parses 'version:' from frontmatter and stores it in self.skill_version."""
+        if not self.skill_path:
+            return ""
+        # Use absolute path so this works regardless of CWD (local or Streamlit Cloud)
+        project_root = Path(__file__).parent.parent
+        path = project_root / self.skill_path
+        if not path.exists():
+            return ""
+        content = path.read_text(encoding="utf-8")
+        # Parse skill version before stripping frontmatter
+        _fm = re.search(r'^---\s*\n(.*?)\n---\s*\n', content, flags=re.DOTALL)
+        if _fm:
+            _v = re.search(r'^version:\s*(.+)$', _fm.group(1), flags=re.MULTILINE)
+            self.skill_version = _v.group(1).strip() if _v else None
+        # Strip YAML frontmatter (--- ... ---) — metadata noise, not LLM instructions
+        content = re.sub(r'^---\s*\n.*?\n---\s*\n', '', content, flags=re.DOTALL)
+        return content.lstrip('\n')
+
+    # ── Language helper ───────────────────────────────────────────────────────
+
+    @staticmethod
+    def _language_instruction(output_language: str) -> str:
+        return {
+            "Auto-detect": "same language as the input transcript",
+            "English": "English",
+            "Portuguese (BR)": "Brazilian Portuguese",
+        }.get(output_language, "same language as the input transcript")
