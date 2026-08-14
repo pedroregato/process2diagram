@@ -205,8 +205,17 @@ class AgentBPMN(BaseAgent):
     output_schema = BPMNOutputSchema
     required_hub_fields = ["transcript_clean"]
     # Collaboration BPMN JSON with multiple pools can exceed 4096 output tokens.
-    # Guarantee at least 8192 regardless of long-context mode.
+    # Guarantee at least 8192 regardless of long-context mode. This is the
+    # class-level FLOOR — run() may raise it per-instance for collaboration
+    # transcripts (see PC_bpmn_length_fallback: _min_output_tokens is
+    # recalculated at the top of run() based on _collaboration_expected).
     _min_output_tokens: int = 8192
+
+    # Minimum output-token budget when the transcript is expected to produce
+    # multi-pool collaboration JSON (pools + lanes + message_flows is far more
+    # verbose than the flat single-pool format for an equivalent process size).
+    _MIN_OUTPUT_TOKENS_FLAT: int = 8192
+    _MIN_OUTPUT_TOKENS_COLLAB: int = 14000
 
     # ── Prompt ────────────────────────────────────────────────────────────────
 
@@ -285,6 +294,15 @@ class AgentBPMN(BaseAgent):
     # ── Run ───────────────────────────────────────────────────────────────────
 
     def run(self, hub: KnowledgeHub, output_language: str = "Auto-detect") -> KnowledgeHub:
+        # PC_bpmn_length_fallback — reset per-run truncation-escalation state.
+        # AgentBPMN instances are reused across multiple run() calls in the
+        # multi-run tournament path (core/pipeline.py creates one `agent_bpmn`
+        # and loops n_bpmn_runs times). Without this reset, a truncation on
+        # candidate 1 would leave _force_long_context=True for every
+        # subsequent candidate in the same tournament, even ones that never
+        # truncated — silently changing their token budget and cache key.
+        self._force_long_context = False
+
         system, user = self.build_prompt(hub, output_language)
 
         # ── Proactive collaboration detection ─────────────────────────────────
@@ -310,6 +328,19 @@ class AgentBPMN(BaseAgent):
         # multi-pool process around the phase.
         _force_single_pool = getattr(self, "_force_single_pool", False)
         _collaboration_expected = (not _force_single_pool) and (_nlp_orgs >= 2 or _kw_hits >= 2)
+
+        # PC_bpmn_length_fallback — raise the output-token floor up front when
+        # collaboration format is expected. Multi-pool JSON (pools + lanes +
+        # message_flows) is structurally far more verbose than flat JSON for
+        # an equivalent process, so the flat-format floor (8192) is frequently
+        # insufficient and was the single biggest source of finish_reason=
+        # 'length' truncation on first attempt. This does not replace the
+        # retry escalation below — it just makes attempt 0 more likely to
+        # succeed, saving a full retry round-trip in the common case.
+        self._min_output_tokens = (
+            self._MIN_OUTPUT_TOKENS_COLLAB if _collaboration_expected
+            else self._MIN_OUTPUT_TOKENS_FLAT
+        )
 
         if _force_single_pool:
             system += (
@@ -454,6 +485,20 @@ class AgentBPMN(BaseAgent):
                     if attempt == 0:
                         _h0 = getattr(self, "_last_computed_cache_hash", None)
                     if attempt < self.max_retries:
+                        # ── PC_bpmn_length_fallback ────────────────────────────
+                        # finish_reason='length' means the LLM was CUT OFF by the
+                        # output-token budget, not that it produced malformed or
+                        # incomplete-by-choice content. This is a budget problem,
+                        # not a formatting/semantic one — asking the model to
+                        # "fix" it via the same-sized prompt just reproduces the
+                        # identical truncation. Escalate the budget for the next
+                        # attempt (mirrors BaseAgent._call_with_retry, which this
+                        # method bypasses because it needs extra semantic checks)
+                        # and skip straight to the next attempt without injecting
+                        # a correction hint that can't address the real cause.
+                        if "finish_reason='length'" in str(exc):
+                            self._force_long_context = True
+                            continue
                         hint = repr(str(exc))[:300]
                         # ── Hint selection by error type ──────────────────────
                         # ValueError = semantic validation (incomplete content).
@@ -558,6 +603,14 @@ class AgentBPMN(BaseAgent):
                 "nlp_actors": _nlp_orgs,
                 "keyword_hits": _kw_hits,
                 "format_escape": _format_escape,
+            },
+            "token_budget": {
+                # PC_bpmn_length_fallback — record what floor was used and
+                # whether the truncation-escalation path fired, so repeated
+                # length-truncation on the same project is visible without
+                # re-reading logs after the fact.
+                "min_output_tokens": self._min_output_tokens,
+                "long_context_forced": getattr(self, "_force_long_context", False),
             },
             "metrics": {
                 "steps":       len(hub.bpmn.steps),
