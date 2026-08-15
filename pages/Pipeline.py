@@ -62,16 +62,25 @@ render_page_header(
 # ativa, sem chave de API) antes mesmo do spinner aparecer — nesse caso o
 # usuário não via NENHUM feedback visível (toast passa rápido e pode não
 # aparecer se a página já tiver recarregado). Fica visível até ser fechado.
+#
+# st.empty() aqui é obrigatório, não cosmético: sem ele, este bloco ora
+# renderiza 0 elementos (banner ausente) ora ~4 (columns+erro/sucesso+botão)
+# na MESMA posição da árvore entre uma run e outra — exatamente o pitfall
+# "Variable child count in a shared UI component" do CLAUDE.md, que quebra o
+# frontend com `Uncaught Error: Bad 'setIn' index N`. st.empty() garante que
+# o pai sempre veja exatamente 1 filho aqui, com ou sem banner.
+_frb_slot = st.empty()
 if "_full_reprocess_banner" in st.session_state:
-    _frb_level, _frb_msg = st.session_state["_full_reprocess_banner"]
-    _frb_box = st.error if _frb_level == "error" else st.success
-    _frb_col1, _frb_col2 = st.columns([20, 1])
-    with _frb_col1:
-        _frb_box(_frb_msg)
-    with _frb_col2:
-        if st.button("✕", key="btn_dismiss_full_reprocess_banner"):
-            st.session_state.pop("_full_reprocess_banner", None)
-            st.rerun()
+    with _frb_slot.container():
+        _frb_level, _frb_msg = st.session_state["_full_reprocess_banner"]
+        _frb_box = st.error if _frb_level == "error" else st.success
+        _frb_col1, _frb_col2 = st.columns([20, 1])
+        with _frb_col1:
+            _frb_box(_frb_msg)
+        with _frb_col2:
+            if st.button("✕", key="btn_dismiss_full_reprocess_banner"):
+                st.session_state.pop("_full_reprocess_banner", None)
+                st.rerun()
 
 # ── Badge de cenário ativo ────────────────────────────────────────────────────
 _active_assignments = st.session_state.get("scenario_assignments")
