@@ -494,6 +494,7 @@ class BatchPipeline:
             "run_bmm":              agents_config.get("run_bmm",           True),
             "run_dmn":              agents_config.get("run_dmn",           True),
             "run_argumentation":    agents_config.get("run_argumentation", True),
+            "run_communication_noise": agents_config.get("run_communication_noise", False),
             "run_synthesizer":         agents_config.get("run_synthesizer",         True),
             "run_ckf_updater":         agents_config.get("run_ckf_updater",         True),
             "run_query_summarizer":    agents_config.get("run_query_summarizer",    True),
@@ -548,6 +549,21 @@ class BatchPipeline:
                 from agents.agent_req_reconciler import AgentReqReconciler
                 reconciler = AgentReqReconciler(self.client_info, self.provider_cfg)
                 req_counts = reconciler.run(hub, project_id, meeting_id, self.output_language)
+
+            # Provocações (PC190/PC205) — precisa de meeting_id real, mesmo motivo
+            # de run_knowledge_extraction() nunca rodar dentro de run_pipeline().
+            # Opt-in aqui (default False) para não surpreender a tool admin
+            # reprocess_meeting_full() com custo de LLM extra que ela não pedia
+            # antes desta extensão — a UI de "Reprocessar Tudo" do sidebar passa
+            # o valor explícito da checkbox atual.
+            if agents_config.get("run_provocations", False):
+                from core.pipeline import run_provocations
+                run_provocations(
+                    hub, self.client_info, self.provider_cfg, self.output_language,
+                    meeting_id=meeting_id,
+                    project_id=project_id,
+                    progress_callback=lambda *_: None,
+                )
 
             log_meeting_processing(
                 meeting_id=meeting_id,

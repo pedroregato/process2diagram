@@ -194,6 +194,42 @@ def render_sidebar():
         # ══════════════════════════════════════════════════════════════════════
         if "hub" in st.session_state:
             st.markdown("---")
+
+            # ── Reprocessamento total (mesmo escopo do sidebar atual) ────────
+            # Diferente do rerun por agente único abaixo: roda TODOS os agentes
+            # hoje marcados nas checkboxes, com pipeline completo (mesmo caminho
+            # de core/batch_pipeline.py::_reprocess_one() já usado pela tool
+            # admin do Assistente, agora exposto como ação direta na UI). Custa
+            # uma rodada completa de chamadas LLM — pede confirmação antes de
+            # disparar, mesmo padrão já usado em "🗑️ Limpar" no Assistente.
+            if st.session_state.get("_confirm_full_reprocess"):
+                st.warning(
+                    "🔄 Reprocessar a reunião inteira com todos os agentes "
+                    "marcados abaixo? Isso roda o pipeline completo de novo "
+                    "(custo real de LLM, pode incluir torneio de BPMN)."
+                )
+                _rc_yes, _rc_no = st.columns(2)
+                with _rc_yes:
+                    if st.button("Confirmar", key="btn_full_reprocess_yes",
+                                 type="primary", use_container_width=True):
+                        st.session_state.pop("_confirm_full_reprocess", None)
+                        st.session_state["full_reprocess_requested"] = True
+                        st.rerun()
+                with _rc_no:
+                    if st.button("Cancelar", key="btn_full_reprocess_no",
+                                 use_container_width=True):
+                        st.session_state.pop("_confirm_full_reprocess", None)
+                        st.rerun()
+            else:
+                if st.button("🔄 Reprocessar Reunião Completa", key="btn_full_reprocess",
+                             use_container_width=True,
+                             help="Roda todos os agentes marcados abaixo de novo, "
+                                  "no pipeline completo — diferente do rerun por "
+                                  "agente único (um de cada vez)."):
+                    st.session_state["_confirm_full_reprocess"] = True
+                    st.rerun()
+
+            st.markdown("---")
             st.markdown(t("rerun_agent"))
             st.caption(t("rerun_caption"))
             col1, col2 = st.columns(2)

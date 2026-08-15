@@ -741,6 +741,83 @@ if "rerun_agent" in st.session_state:
     else:
         st.error("Nenhuma sessão ativa. Execute o pipeline primeiro.")
 
+# ─────────────────────────────────────────────────────────────────────────────
+# HANDLER DE REPROCESSAMENTO TOTAL — botão "🔄 Reprocessar Reunião Completa"
+# no sidebar (ui/sidebar.py). Diferente do rerun por agente único acima:
+# roda TODOS os agentes hoje marcados nas checkboxes da barra lateral, via o
+# mesmo motor já usado pela tool admin do Assistente
+# (core/tools/tools_admin_charts_entities.py::reprocess_meeting_full →
+# core/batch_pipeline.py::BatchPipeline._reprocess_one()). Mesmo padrão de
+# 2 script runs do bloco acima (spinner limpa a árvore antes do st.rerun()).
+# ─────────────────────────────────────────────────────────────────────────────
+if st.session_state.pop("full_reprocess_requested", False):
+    _fr_meeting_id = (
+        st.session_state.get("current_meeting_id")
+        or st.session_state.get("_loaded_meeting_id")
+    )
+    _fr_project_id = (
+        st.session_state.get("project_id")
+        or st.session_state.get("active_project_id")
+        or st.session_state.get("_loaded_project_id")
+    )
+    if not _fr_meeting_id or not _fr_project_id:
+        st.session_state["_rr_pending_messages"] = [
+            ("error", "❌ Nenhuma reunião salva ativa — reprocessamento total "
+                       "exige uma reunião já persistida (Modo B ou após salvar).")
+        ]
+        st.rerun()
+    else:
+        _fr_client_info = get_session_llm_client(st.session_state.selected_provider)
+        if not _fr_client_info:
+            st.session_state["_rr_pending_messages"] = [("error", "❌ Chave de API não encontrada.")]
+            st.rerun()
+        else:
+            with st.spinner("⏳ Reprocessando reunião completa (todos os agentes marcados)…"):
+                try:
+                    _fr_meeting = next(
+                        (m for m in list_meetings(_fr_project_id) if m.get("id") == _fr_meeting_id),
+                        None,
+                    )
+                    if not _fr_meeting:
+                        raise RuntimeError("Reunião não encontrada no projeto ativo.")
+
+                    from core.batch_pipeline import BatchPipeline
+                    _fr_agents_config = {
+                        "run_quality":              st.session_state.run_quality,
+                        "run_bpmn":                 st.session_state.run_bpmn,
+                        "run_minutes":              st.session_state.run_minutes,
+                        "run_requirements":         st.session_state.run_requirements,
+                        "run_sbvr":                 st.session_state.run_sbvr,
+                        "run_bmm":                  st.session_state.run_bmm,
+                        "run_dmn":                  st.session_state.get("run_dmn", False),
+                        "run_argumentation":        st.session_state.get("run_argumentation", False),
+                        "run_communication_noise":  st.session_state.get("run_communication_noise", False),
+                        "run_synthesizer":          st.session_state.run_synthesizer,
+                        "run_ckf_updater":          st.session_state.run_ckf_updater,
+                        "run_query_summarizer":     st.session_state.get("run_query_summarizer", False),
+                        "run_knowledge_extractor":  st.session_state.get("run_knowledge_extractor", True),
+                        "run_provocations":         st.session_state.get("run_provocations", True),
+                        "use_langgraph":            st.session_state.use_langgraph,
+                    }
+                    _fr_pipeline = BatchPipeline(
+                        _fr_client_info, st.session_state.provider_cfg, st.session_state.output_language,
+                    )
+                    _fr_result = _fr_pipeline._reprocess_one(_fr_meeting, _fr_project_id, _fr_agents_config)
+
+                    if _fr_result.status == "done":
+                        st.session_state.hub = load_meeting_as_hub(_fr_meeting_id, _fr_project_id)
+                        st.session_state["_rr_pending_messages"] = [
+                            ("success", f"✅ Reunião reprocessada por completo com sucesso "
+                                        f"({_fr_result.n_terms} termos SBVR, {_fr_result.n_rules} regras).")
+                        ]
+                    else:
+                        st.session_state["_rr_pending_messages"] = [
+                            ("error", f"❌ Falha no reprocessamento total: {_fr_result.error}")
+                        ]
+                except Exception as _fr_e:
+                    st.session_state["_rr_pending_messages"] = [("error", f"❌ Erro: {str(_fr_e)}")]
+            st.rerun()
+
 if "hub" in st.session_state:
     hub = st.session_state.hub
     prefix = st.session_state.prefix
