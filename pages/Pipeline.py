@@ -56,6 +56,23 @@ render_page_header(
     t("pipeline_caption"),
 )
 
+# ── Resultado do Reprocessamento Total — banner persistente ──────────────────
+# Diferente do toast (_rr_pending_messages, usado no rerun por agente único):
+# um reprocessamento total pode falhar em uma verificação rápida (sem reunião
+# ativa, sem chave de API) antes mesmo do spinner aparecer — nesse caso o
+# usuário não via NENHUM feedback visível (toast passa rápido e pode não
+# aparecer se a página já tiver recarregado). Fica visível até ser fechado.
+if "_full_reprocess_banner" in st.session_state:
+    _frb_level, _frb_msg = st.session_state["_full_reprocess_banner"]
+    _frb_box = st.error if _frb_level == "error" else st.success
+    _frb_col1, _frb_col2 = st.columns([20, 1])
+    with _frb_col1:
+        _frb_box(_frb_msg)
+    with _frb_col2:
+        if st.button("✕", key="btn_dismiss_full_reprocess_banner"):
+            st.session_state.pop("_full_reprocess_banner", None)
+            st.rerun()
+
 # ── Badge de cenário ativo ────────────────────────────────────────────────────
 _active_assignments = st.session_state.get("scenario_assignments")
 if _active_assignments:
@@ -761,15 +778,15 @@ if st.session_state.pop("full_reprocess_requested", False):
         or st.session_state.get("_loaded_project_id")
     )
     if not _fr_meeting_id or not _fr_project_id:
-        st.session_state["_rr_pending_messages"] = [
-            ("error", "❌ Nenhuma reunião salva ativa — reprocessamento total "
-                       "exige uma reunião já persistida (Modo B ou após salvar).")
-        ]
+        st.session_state["_full_reprocess_banner"] = (
+            "error", "❌ Nenhuma reunião salva ativa — reprocessamento total "
+                     "exige uma reunião já persistida (Modo B ou após salvar)."
+        )
         st.rerun()
     else:
         _fr_client_info = get_session_llm_client(st.session_state.selected_provider)
         if not _fr_client_info:
-            st.session_state["_rr_pending_messages"] = [("error", "❌ Chave de API não encontrada.")]
+            st.session_state["_full_reprocess_banner"] = ("error", "❌ Chave de API não encontrada.")
             st.rerun()
         else:
             with st.spinner("⏳ Reprocessando reunião completa (todos os agentes marcados)…"):
@@ -806,16 +823,16 @@ if st.session_state.pop("full_reprocess_requested", False):
 
                     if _fr_result.status == "done":
                         st.session_state.hub = load_meeting_as_hub(_fr_meeting_id, _fr_project_id)
-                        st.session_state["_rr_pending_messages"] = [
-                            ("success", f"✅ Reunião reprocessada por completo com sucesso "
-                                        f"({_fr_result.n_terms} termos SBVR, {_fr_result.n_rules} regras).")
-                        ]
+                        st.session_state["_full_reprocess_banner"] = (
+                            "success", f"✅ Reunião reprocessada por completo com sucesso "
+                                       f"({_fr_result.n_terms} termos SBVR, {_fr_result.n_rules} regras)."
+                        )
                     else:
-                        st.session_state["_rr_pending_messages"] = [
-                            ("error", f"❌ Falha no reprocessamento total: {_fr_result.error}")
-                        ]
+                        st.session_state["_full_reprocess_banner"] = (
+                            "error", f"❌ Falha no reprocessamento total: {_fr_result.error}"
+                        )
                 except Exception as _fr_e:
-                    st.session_state["_rr_pending_messages"] = [("error", f"❌ Erro: {str(_fr_e)}")]
+                    st.session_state["_full_reprocess_banner"] = ("error", f"❌ Erro: {str(_fr_e)}")
             st.rerun()
 
 if "hub" in st.session_state:
