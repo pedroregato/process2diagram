@@ -778,9 +778,21 @@ if st.session_state.pop("full_reprocess_requested", False):
         or st.session_state.get("_loaded_project_id")
     )
     if not _fr_meeting_id or not _fr_project_id:
+        # Diagnóstico temporário (PC-debug): mostra o valor bruto de cada chave
+        # de sessão candidata — sem isso não dá pra saber, a partir do relato
+        # do usuário, qual delas está vazia quando o guard falha mesmo depois
+        # de carregar uma reunião existente via Modo B.
+        _fr_debug = (
+            f"current_meeting_id={st.session_state.get('current_meeting_id')!r}, "
+            f"_loaded_meeting_id={st.session_state.get('_loaded_meeting_id')!r}, "
+            f"project_id={st.session_state.get('project_id')!r}, "
+            f"active_project_id={st.session_state.get('active_project_id')!r}, "
+            f"_loaded_project_id={st.session_state.get('_loaded_project_id')!r}"
+        )
         st.session_state["_full_reprocess_banner"] = (
             "error", "❌ Nenhuma reunião salva ativa — reprocessamento total "
-                     "exige uma reunião já persistida (Modo B ou após salvar)."
+                     "exige uma reunião já persistida (Modo B ou após salvar). "
+                     f"[debug: {_fr_debug}]"
         )
         st.rerun()
     else:
