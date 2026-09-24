@@ -321,21 +321,96 @@ def render_bpmn_process_selector() -> None:
             st.rerun()
 
 
+@st.cache_data(ttl=120, show_spinner=False)
+def _load_tenant_contexts(tenant_id: str | None):
+    return list_contexts(tenant_id=tenant_id)
+
+
+def _activate_context(ctx: dict) -> None:
+    """Grava o contexto ativo (fonte única — NAV-04). Único lugar do app que
+    escreve active_project_id/active_project_name fora de pages/Home.py."""
+    st.session_state["active_project_id"]   = ctx["id"]
+    st.session_state["active_project_name"] = ctx["name"]
+    if ctx.get("sigla"):
+        st.session_state["prefix"] = ctx["sigla"].strip() + "_"
+
+
+def get_active_context() -> dict | None:
+    """Retorna {"id","name","sigla",...} do contexto de trabalho ativo, ou
+    None se nenhum estiver selecionado. Resolve via lista de contextos do
+    tenant (cache 120s) — não apenas o id/nome crus de session_state."""
+    pid = st.session_state.get("active_project_id")
+    if not pid:
+        return None
+    for ctx in _load_tenant_contexts(st.session_state.get("_tenant_id")):
+        if ctx["id"] == pid:
+            return ctx
+    # Contexto ativo não está mais na lista do tenant atual (removido, ou
+    # trocou de domínio) — devolve o que a sessão ainda lembra, sem quebrar
+    # a página chamadora.
+    name = st.session_state.get("active_project_name", "")
+    return {"id": pid, "name": name} if name else None
+
+
+def render_active_context_picker(key: str) -> str | None:
+    """Selectbox do contexto de trabalho ativo — fonte única (NAV-04).
+
+    O índice exibido vem sempre de ``active_project_id`` (nunca de uma chave
+    de widget persistida, que o Streamlit descarta ao navegar entre páginas
+    em ``st.navigation()`` — era a causa do seletor de ``pages/Diagramas.py``
+    voltar ao primeiro contexto da lista após sair e voltar à página).
+
+    A troca só é gravada via ``on_change`` — nunca dispara no valor padrão
+    do primeiro render, então visitar a página sem contexto ativo não
+    ativa silenciosamente o primeiro item da lista antes do usuário decidir.
+
+    Devolve o ``project_id`` atualmente ativo (já refletindo uma troca feita
+    neste mesmo render), ou None se não houver nenhum contexto cadastrado.
+    """
+    contexts = _load_tenant_contexts(st.session_state.get("_tenant_id"))
+    if not contexts:
+        st.info("Nenhum contexto encontrado.")
+        return None
+
+    active_pid = st.session_state.get("active_project_id")
+
+    # Mesma regra de pages/Home.py: com exatamente 1 contexto e nenhum
+    # ativo, ativa automaticamente — não há escolha real a fazer.
+    if not active_pid and len(contexts) == 1:
+        _activate_context(contexts[0])
+        active_pid = contexts[0]["id"]
+
+    names   = [c["name"] for c in contexts]
+    ctx_map = {c["name"]: c for c in contexts}
+    index = 0
+    for i, c in enumerate(contexts):
+        if c["id"] == active_pid:
+            index = i
+            break
+
+    def _on_change():
+        _activate_context(ctx_map[st.session_state[key]])
+
+    st.selectbox("Contexto", names, index=index, key=key, on_change=_on_change)
+    return st.session_state.get("active_project_id")
+
+
 def require_active_project() -> tuple[str, str]:
     """Retorna (context_id, context_name) do contexto de trabalho ativo.
 
-    Se nenhum contexto estiver ativo, exibe aviso com link para a Central de
-    Operações e chama st.stop() — a página chamadora não renderiza mais nada.
+    Se nenhum contexto estiver ativo, renderiza o seletor de contexto na
+    própria página (em vez de mandar o usuário para a Central de Operações
+    — NAV-04) e chama st.stop() só enquanto nada tiver sido escolhido.
     """
     pid  = st.session_state.get("active_project_id")
     name = st.session_state.get("active_project_name", "")
     if not pid:
-        st.warning(
-            "Nenhum contexto de trabalho ativo. "
-            "Selecione um contexto na **Central de Operações**."
-        )
-        st.page_link("pages/Home.py", label="← Ir para a Central de Operações")
-        st.stop()
+        st.info("👋 Escolha o contexto de trabalho para continuar.")
+        render_active_context_picker(key="require_active_ctx_sel")
+        pid  = st.session_state.get("active_project_id")
+        name = st.session_state.get("active_project_name", "")
+        if not pid:
+            st.stop()
     return pid, name
 
 

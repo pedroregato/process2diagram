@@ -4,6 +4,26 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC213 — Concluído (v5.16 / 2026-09-24) — Navegabilidade Onda 1 (NAV-04): fonte única do contexto ativo
+
+**Origem:** `melhorias/parciais/navegabilidade.md` — continuação do PC212 (NAV-03). Fecha a Onda 1 ("Estabilizar") junto com o NAV-05 (ainda pendente).
+
+**NAV-04 — Fonte única do contexto ativo, ALTA**
+- [x] Três sintomas, uma causa: `pages/Diagramas.py` sincronizava o contexto por uma chave de widget (`diag_sb_proj` + flag `_diag_synced_pid`) que o Streamlit descarta ao navegar para outra página em `st.navigation()` e voltar — o seletor revertia ao primeiro contexto da lista; `pages/CostEstimator.py` ignorava `active_project_id` por completo; `require_active_project()` mandava o usuário para a Central de Operações em vez de deixar escolher na própria página
+- [x] `ui/project_selector.py` — 3 funções novas: `get_active_context()` (resolve nome/sigla do contexto ativo via `_load_tenant_contexts`, cache 120s), `_activate_context(ctx)` (único ponto que grava `active_project_id`/`active_project_name`/`prefix` fora de `pages/Home.py`), `render_active_context_picker(key)` — selectbox cujo índice vem sempre de `active_project_id` (nunca de uma chave de widget persistida) e cuja troca só é gravada via `on_change` (nunca no valor padrão do primeiro render — evita ativar silenciosamente o primeiro item da lista antes do usuário decidir; com exatamente 1 contexto e nenhum ativo, ativa automaticamente, mesma regra já usada em `pages/Home.py`)
+  - **Nota de nomenclatura:** a proposta original pedia a função com o nome `render_context_selector(key)` — já existia uma função com esse nome neste mesmo arquivo (o formulário de confirmação de contexto/reunião do Pipeline, com "Título"/"Data"/"Criar novo contexto", propósito bem diferente). Renomeado para `render_active_context_picker` para não colidir; a função antiga não foi tocada
+- [x] `require_active_project()` — sem contexto ativo, renderiza `render_active_context_picker()` inline com a mensagem "Escolha o contexto de trabalho" e só chama `st.stop()` enquanto nada tiver sido escolhido (antes: `st.warning()` + `st.page_link("pages/Home.py")` + `st.stop()` incondicional); mesma assinatura de retorno `(pid, name)`, sem quebrar as 16 páginas que já chamam essa função
+- [x] `pages/Diagramas.py` — `_render_from_supabase()` passa a usar `render_active_context_picker(key="diag_sb_proj")`; removidos `_diag_synced_pid` e o bloco de sincronização manual
+- [x] `pages/CostEstimator.py` — Seção 1 (Histórico Real) passa a usar `render_active_context_picker(key="ce_proj")` em vez de um `list_contexts()` + selectbox local que nunca olhava para `active_project_id`; import morto de `list_contexts` removido
+- [x] `tests/test_active_context_picker.py` — 3 testes via `AppTest`: (a) o seletor de `Diagramas.py` permanece no mesmo contexto ativo em duas execuções independentes (simula navegar para outra página e voltar); (b) sem contexto ativo, `ValidationHub.py` (via `require_active_project()`) mostra o seletor inline e o conteúdo da página NÃO renderiza; (c) escolher um contexto diferente do padrão ativa via `on_change` e a página renderiza na mesma execução
+
+**Aceite:** todas as páginas com contexto mostram o mesmo contexto ativo entre si, e nenhuma força passagem pela Central de Operações.
+
+- **Testes:** `tests/test_active_context_picker.py` (3 novos); suíte completa **1030 testes, 0 falhas**, sem regressão
+- **Fora desta rodada:** NAV-05 (sessão sobrevive a F5 — tabela nova + mecanismo de cookie/token) fecha a Onda 1; NAV-06 a NAV-15 (Ondas 2-3) não avaliadas
+
+---
+
 ### PC212 — Concluído (v5.16 / 2026-09-23) — Navegabilidade Onda 1 (NAV-03): paginação da Validação
 
 **Origem:** `melhorias/parciais/navegabilidade.md` — continuação do PC211 (NAV-01+NAV-02). NAV-03 era a tarefa mais trabalhosa da Onda 1, deixada de fora conscientemente na rodada anterior.

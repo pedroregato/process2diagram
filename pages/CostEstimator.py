@@ -23,6 +23,7 @@ import pandas as pd
 import streamlit as st
 
 from ui.auth_gate import apply_auth_gate
+from ui.project_selector import render_active_context_picker
 from modules.supabase_client import supabase_configured
 from modules.cost_estimator import (
     PROVIDER_PRICING,
@@ -34,7 +35,7 @@ from modules.cost_estimator import (
     cost_for_tokens,
     get_usd_brl_rate,
 )
-from core.project_store import list_contexts, _db, _ok
+from core.project_store import _db, _ok
 
 apply_auth_gate()
 
@@ -82,12 +83,11 @@ st.markdown("## 📊 1. Histórico Real de Consumo")
 if not supabase_configured():
     st.info("Supabase não configurado — histórico indisponível. Veja as seções 2 e 3 para estimativas.")
 else:
-    projects = list_contexts(tenant_id=st.session_state.get("_tenant_id"))
-    if projects:
-        proj_map  = {p["name"]: p for p in projects}
-        sel_proj  = st.selectbox("Contexto", list(proj_map.keys()), key="ce_proj")
-        project_id = proj_map[sel_proj]["id"]
-
+    # Fonte única do contexto ativo (NAV-04) — antes esta página ignorava
+    # active_project_id por completo, mostrando sempre o primeiro contexto
+    # da lista independente do que estivesse ativo em outras páginas.
+    project_id = render_active_context_picker(key="ce_proj")
+    if project_id:
         db = _db()
         hist_rows = []
         total_tok  = 0

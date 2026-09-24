@@ -22,6 +22,7 @@ if str(root_dir) not in sys.path:
 
 from core.knowledge_hub import KnowledgeHub
 from ui.auth_gate import apply_auth_gate
+from ui.project_selector import render_active_context_picker
 from modules.bpmn_viewer import preview_from_xml
 from modules.mermaid_renderer import render_mermaid_block
 from modules.supabase_client import supabase_configured
@@ -44,7 +45,7 @@ hub: KnowledgeHub | None = st.session_state.get("hub")
 
 # ── Fallback: load from Supabase ──────────────────────────────────────────────
 def _render_from_supabase() -> None:
-    from core.project_store import list_contexts, list_bpmn_processes, list_bpmn_versions
+    from core.project_store import list_bpmn_processes, list_bpmn_versions
 
     st.markdown("## 📐 Visualizador de Diagramas")
     st.caption("Nenhuma transcrição processada nesta sessão — carregando diagramas salvos no Supabase.")
@@ -55,29 +56,15 @@ def _render_from_supabase() -> None:
         st.info("Supabase não configurado. Processe uma transcrição primeiro.")
         return
 
-    projects = list_contexts(tenant_id=st.session_state.get("_tenant_id"))
-    if not projects:
-        st.info("Nenhum projeto encontrado no Supabase.")
-        return
-
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        proj_names = [p["name"] for p in projects]
-        proj_map   = {p["name"]: p for p in projects}
-
-        # Sync to active_project_id (Central de Operações) when it changes
-        active_pid = st.session_state.get("active_project_id")
-        _last_synced = st.session_state.get("_diag_synced_pid")
-        if active_pid and active_pid != _last_synced:
-            for p in projects:
-                if p["id"] == active_pid:
-                    st.session_state["diag_sb_proj"]    = p["name"]
-                    st.session_state["_diag_synced_pid"] = active_pid
-                    break
-
-        sel_proj   = st.selectbox("Contexto", proj_names, key="diag_sb_proj")
-        project_id = proj_map[sel_proj]["id"]
+        # Fonte única do contexto ativo (NAV-04) — índice sempre calculado a
+        # partir de active_project_id, nunca de uma chave de widget que o
+        # Streamlit descarta ao sair da página.
+        project_id = render_active_context_picker(key="diag_sb_proj")
+        if not project_id:
+            return
 
     processes = list_bpmn_processes(project_id)
     if not processes:
