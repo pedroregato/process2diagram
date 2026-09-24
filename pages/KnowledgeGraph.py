@@ -87,6 +87,22 @@ _TYPE_SHAPE: dict[str, str] = {
     "LOCATION":   "ellipse",
 }
 
+# Rótulo PT-BR por tipo de entidade — só para exibição (multiselect de
+# filtro + coluna "Tipo" da tabela). O valor gravado no banco continua em
+# inglês (entity_type) — nunca traduzido nos dados, só na UI (NAV-11).
+_TYPE_LABEL_PT: dict[str, str] = {
+    "PERSON":     "Pessoa",
+    "ACTOR":      "Ator",
+    "SYSTEM":     "Sistema",
+    "PROCESS":    "Processo",
+    "DOCUMENT":   "Documento",
+    "CONCEPT":    "Conceito",
+    "RULE":       "Regra",
+    "ROLE":       "Papel",
+    "DEPARTMENT": "Departamento",
+    "LOCATION":   "Local",
+}
+
 # ── Data loading ───────────────────────────────────────────────────────────────
 
 @st.cache_data(ttl=120, show_spinner=False)
@@ -866,38 +882,38 @@ project_id, project_name = require_active_project()
 st.markdown(f"## 🕸️ Grafo de Conhecimento")
 st.caption(f"Projeto: **{project_name}**")
 
-with st.expander("O que e um Grafo de Conhecimento e por que ele importa?", expanded=False):
+with st.expander("O que é um Grafo de Conhecimento e por que ele importa?", expanded=False):
     st.markdown("""
 Um **Grafo de Conhecimento** (Knowledge Graph) representa o conhecimento organizacional
 como uma rede de **entidades** (pessoas, sistemas, conceitos, documentos) ligadas por
-**relacoes semanticas** (fatos extraidos das transcricoes das reunioes).
+**relações semânticas** (fatos extraídos das transcrições das reuniões).
 
 #### Por que usar?
 
 | Perspectiva | Valor gerado |
 |---|---|
-| **Rastreabilidade** | Quem mencionou o que, em qual reuniao, com qual frequencia |
-| **Descoberta de padroes** | Entidades que aparecem juntas frequentemente sinalizam dependencias nao documentadas |
-| **Deteccao de conflitos** | Contradicoes entre fatos de reunioes diferentes ficam visiveis como arestas vermelhas |
-| **Auditoria de decisoes** | Quais atores estiveram envolvidos em cada processo ou decisao |
-| **Inteligencia organizacional** | A base para o Assistente responder perguntas com contexto historico |
+| **Rastreabilidade** | Quem mencionou o quê, em qual reunião, com qual frequência |
+| **Descoberta de padrões** | Entidades que aparecem juntas frequentemente sinalizam dependências não documentadas |
+| **Detecção de conflitos** | Contradições entre fatos de reuniões diferentes ficam visíveis como arestas vermelhas |
+| **Auditoria de decisões** | Quais atores estiveram envolvidos em cada processo ou decisão |
+| **Inteligência organizacional** | A base para o Assistente responder perguntas com contexto histórico |
 
 #### Como ler o grafo
 
-- **No (bolinha/forma):** cada entidade ou processo extraido das reunioes
-- **Tamanho do no:** proporcional ao numero de ocorrencias — entidades mais citadas ficam maiores
-- **Aresta cinza:** relacao (fato) entre duas entidades — o predicado aparece no meio da aresta
-- **Aresta vermelha tracejada:** contradicao detectada entre dois fatos
-- **Forma do no:** indica o tipo — circulo=Ator, losango=Sistema, quadrado=Processo, triangulo=Conceito
+- **Nó (bolinha/forma):** cada entidade ou processo extraído das reuniões
+- **Tamanho do nó:** proporcional ao número de ocorrências — entidades mais citadas ficam maiores
+- **Aresta cinza:** relação (fato) entre duas entidades — o predicado aparece no meio da aresta
+- **Aresta vermelha tracejada:** contradição detectada entre dois fatos
+- **Forma do nó:** indica o tipo — círculo=Ator, losango=Sistema, quadrado=Processo, triângulo=Conceito
 
-#### Interacao
+#### Interação
 
-Use o mouse para **arrastar nos individualmente** (reorganize o layout), **scroll** para zoom e
-**hover** para ver detalhes de cada entidade ou aresta. A simulacao fisica organiza os nos
-automaticamente — desative em "Simulacao fisica" para fixar o layout apos arrastar.
+Use o mouse para **arrastar nós individualmente** (reorganize o layout), **scroll** para zoom e
+**hover** para ver detalhes de cada entidade ou aresta. A simulação física organiza os nós
+automaticamente — desative em "Simulação física" para fixar o layout após arrastar.
 
-**Modo foco:** clique em qualquer no para destacar apenas ele e suas conexoes diretas —
-os demais elementos ficam esmaecidos. Clique novamente no mesmo no, em area vazia, ou em
+**Modo foco:** clique em qualquer nó para destacar apenas ele e suas conexões diretas —
+os demais elementos ficam esmaecidos. Clique novamente no mesmo nó, em área vazia, ou em
 **✕ Limpar foco** na barra de ferramentas para restaurar o grafo completo.
     """)
 
@@ -910,7 +926,7 @@ contradictions = data["contradictions"]
 if not entities and not processes:
     st.info(
         "Nenhum dado de Knowledge Hub encontrado para este projeto. "
-        "Execute o pipeline em pelo menos uma reuniao para popular o grafo."
+        "Execute o pipeline em pelo menos uma reunião para popular o grafo."
     )
     st.stop()
 
@@ -918,8 +934,8 @@ if not entities and not processes:
 k1, k2, k3, k4 = st.columns(4)
 k1.metric("Entidades", len(entities))
 k2.metric("Processos", len(processes))
-k3.metric("Fatos / Relacoes", len(facts))
-k4.metric("Contradicoes", len(contradictions))
+k3.metric("Fatos / Relações", len(facts))
+k4.metric("Contradições", len(contradictions))
 
 st.markdown("---")
 
@@ -928,29 +944,30 @@ with st.sidebar:
     st.markdown("### Filtros do Grafo")
     all_types = sorted({e.get("entity_type", "ACTOR") for e in entities})
     selected_types = st.multiselect(
-        "Tipos de entidade", all_types, default=all_types, key="kg_types"
+        "Tipos de entidade", all_types, default=all_types, key="kg_types",
+        format_func=lambda t: _TYPE_LABEL_PT.get(t, t),
     )
     max_occ = max((e.get("occurrence_count") or 1) for e in entities) if entities else 1
     min_occurrence = st.slider(
-        "Ocorrencias minimas", 1, max(max_occ, 2), 1, key="kg_min_occ",
-        help="Oculta entidades com menos ocorrencias — reduz o cluster central.",
+        "Ocorrências mínimas", 1, max(max_occ, 2), 1, key="kg_min_occ",
+        help="Oculta entidades com menos ocorrências — reduz o cluster central.",
     )
     show_processes = st.toggle("Mostrar processos (KH)", value=True, key="kg_procs")
     show_ep_edges = st.toggle("Arestas entidade→processo", value=True, key="kg_facts",
         help="Conecta entidades aos processos do Knowledge Hub com os quais co-ocorreram.")
     show_entity_edges = st.toggle("Arestas entidade→entidade", value=False, key="kg_ent_edges",
-        help="Conecta entidades que co-ocorrem em N+ reunioes. Pode gerar muitas arestas.")
+        help="Conecta entidades que co-ocorrem em N+ reuniões. Pode gerar muitas arestas.")
     if show_entity_edges:
-        min_shared = st.slider("Reunioes em comum (minimo)", 1, 5, 2, key="kg_shared_mtgs",
-            help="Quantas reunioes as duas entidades precisam compartilhar para serem conectadas.")
+        min_shared = st.slider("Reuniões em comum (mínimo)", 1, 5, 2, key="kg_shared_mtgs",
+            help="Quantas reuniões as duas entidades precisam compartilhar para serem conectadas.")
     else:
         min_shared = 2
     show_contradictions = st.toggle(
-        "Arestas de contradicao", value=True, key="kg_contras",
-        help="Exibe arestas vermelhas tracejadas entre entidades de reunioes com contradicoes detectadas.",
+        "Arestas de contradição", value=True, key="kg_contras",
+        help="Exibe arestas vermelhas tracejadas entre entidades de reuniões com contradições detectadas.",
     )
-    physics_enabled = st.toggle("Simulacao fisica (mover nos)", value=True, key="kg_physics",
-        help="Ativa a simulacao Barnes-Hut — os nos se atraem/repelem organicamente. Desative para fixar o layout.")
+    physics_enabled = st.toggle("Simulação física (mover nós)", value=True, key="kg_physics",
+        help="Ativa a simulação Barnes-Hut — os nós se atraem/repelem organicamente. Desative para fixar o layout.")
     max_nodes = st.slider(
         "Max entidades no grafo", 10, min(150, len(entities)), min(60, len(entities)), key="kg_maxn"
     )
@@ -992,33 +1009,33 @@ with tab_graph:
             components.html(html_graph, height=graph_height + 80, scrolling=False)
         except ImportError:
             st.error(
-                "A biblioteca **pyvis** nao esta instalada. "
+                "A biblioteca **pyvis** não está instalada. "
                 "Execute `pip install pyvis==0.3.2` e reinicie o servidor."
             )
 
         if contradictions and not show_contradictions:
             st.info(
-                f"**{len(contradictions)} contradicao(oes)** detectada(s) — "
-                "ative 'Arestas de contradicao' no painel lateral para visualizar no grafo."
+                f"**{len(contradictions)} contradição(ões)** detectada(s) — "
+                "ative 'Arestas de contradição' no painel lateral para visualizar no grafo."
             )
 
 with tab_table:
-    st.markdown("#### Entidades extraidas")
+    st.markdown("#### Entidades extraídas")
     if entities:
         rows = []
         for e in entities:
             aliases = ", ".join((e.get("aliases") or [])[:5])
             meta = e.get("metadata") or {}
             rows.append({
-                "Tipo": e.get("entity_type", "—"),
+                "Tipo": _TYPE_LABEL_PT.get(e.get("entity_type", ""), e.get("entity_type", "—")),
                 "Nome": e.get("canonical_name", "—"),
-                "Ocorrencias": e.get("occurrence_count", 1),
+                "Ocorrências": e.get("occurrence_count", 1),
                 "Aliases": aliases,
-                "Descricao": (meta.get("description") or "")[:60],
+                "Descrição": (meta.get("description") or "")[:60],
             })
         st.dataframe(rows, use_container_width=True, hide_index=True)
     else:
-        st.info("Nenhuma entidade disponivel.")
+        st.info("Nenhuma entidade disponível.")
 
     if processes:
         st.markdown("#### Processos")
@@ -1027,29 +1044,29 @@ with tab_table:
             proc_rows.append({
                 "Processo": p.get("process_name", "—"),
                 "Status": p.get("status", "—"),
-                "Versoes": p.get("version_count", 1),
-                "Descricao": (p.get("description") or "")[:80],
+                "Versões": p.get("version_count", 1),
+                "Descrição": (p.get("description") or "")[:80],
             })
         st.dataframe(proc_rows, use_container_width=True, hide_index=True)
 
 with tab_facts:
-    st.markdown("#### Fatos / Decisoes / Regras extraidos")
+    st.markdown("#### Fatos / Decisões / Regras extraídos")
     if facts:
         fact_rows = []
         for f in facts:
             conf = f.get("confidence")
             fact_rows.append({
                 "Tipo":         f.get("fact_type") or "—",
-                "Conteudo":     (f.get("content") or "")[:120],
-                "Confianca":    f"{int((conf or 1.0) * 100)}%" if conf is not None else "—",
-                "Ato Dialogo":  f.get("dialogue_act") or "—",
+                "Conteúdo":     (f.get("content") or "")[:120],
+                "Confiança":    f"{int((conf or 1.0) * 100)}%" if conf is not None else "—",
+                "Ato Diálogo":  f.get("dialogue_act") or "—",
             })
-        st.caption(f"{len(fact_rows)} fato(s) extraido(s) das transcricoes.")
+        st.caption(f"{len(fact_rows)} fato(s) extraído(s) das transcrições.")
         st.dataframe(fact_rows, use_container_width=True, hide_index=True)
     else:
         st.info(
-            "Nenhum fato disponivel para este projeto ainda. "
-            "Os fatos sao extraidos pelo **Knowledge Extractor** durante o pipeline "
+            "Nenhum fato disponível para este projeto ainda. "
+            "Os fatos são extraídos pelo **Knowledge Extractor** durante o pipeline "
             "(ative o checkbox 'Grafo de Conhecimento (KH)' na barra lateral)."
         )
 

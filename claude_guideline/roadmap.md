@@ -4,6 +4,21 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC217 — Concluído (v5.16 / 2026-09-24) — Navegabilidade Onda 2 (NAV-11 parcial): PT-BR — os 2 fixes concretos
+
+**Origem:** `melhorias/parciais/navegabilidade.md` — só os 2 itens concretos citados no plano; a varredura ampla (20 arquivos com match de `[a-z]cao\b|[a-z]coes\b`, majoritariamente ruído — nomes de variável, comentários) fica no backlog.
+
+**NAV-11 (parcial) — Interface em português, MÉDIA**
+- [x] `ui/input_area.py` — "Input Transcript"→"Transcrição", "Paste your meeting transcript here"→"Cole aqui a transcrição da reunião", "Or upload a file"→"Ou envie um arquivo", "Generate Insights"→"Gerar Análise" (2 strings a mais do que o levantamento original — labels `label_visibility="collapsed"` também ficam em inglês para leitores de tela)
+- [x] `pages/KnowledgeGraph.py` — bloco inteiro do expander de ajuda ("O que é um Grafo de Conhecimento") sem acentuação corrigido (tabela de perspectivas, "Como ler o grafo", "Interação"); KPIs (`Relações`, `Contradições`); controles da sidebar (`Ocorrências mínimas`, `Simulação física`, etc.); tabelas de entidades/processos/fatos (`Ocorrências`, `Descrição`, `Versões`, `Confiança`)
+- [x] `pages/KnowledgeGraph.py` — legenda de tipo de entidade traduzida pra exibição: `_TYPE_LABEL_PT` (10 tipos: Pessoa/Ator/Sistema/Processo/Documento/Conceito/Regra/Papel/Departamento/Local) aplicado via `format_func` no multiselect de filtro (valor armazenado continua em inglês, só o rótulo mostrado muda) e na coluna "Tipo" da tabela de entidades — antes vazava `entity_type` cru (ex.: "DEPARTMENT", "PERSON") direto pro usuário
+- [x] `tests/test_ptbr_accents_nav11.py` — 5 testes estáticos (guarda contra strings em inglês/sem acento voltarem)
+
+- **Testes:** `tests/test_ptbr_accents_nav11.py` (5 novos); suíte completa **1060 testes, 0 falhas**, sem regressão
+- **Fora desta rodada:** a varredura ampla de acentuação (18 outros arquivos com match no grep do plano) fica no backlog — ruído alto, precisa de revisão caso a caso
+
+---
+
 ### PC216 — Concluído (v5.16 / 2026-09-24) — Navegabilidade Onda 2 (NAV-10): ícones únicos
 
 **Origem:** `melhorias/parciais/navegabilidade.md` — 9 pares de páginas com o mesmo emoji, confirmados ainda válidos na auditoria de priorização da Onda 2.

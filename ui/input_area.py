@@ -10,9 +10,9 @@ def update_transcript():
 
 def render_input_area():
     with st.container():
-        st.markdown("### 📥 Input Transcript")
+        st.markdown("### 📥 Transcrição")
         st.text_area(
-            "Paste your meeting transcript here",
+            "Cole aqui a transcrição da reunião",
             value=st.session_state.transcript_text,
             height=250,
             key="transcript_input",
@@ -22,7 +22,7 @@ def render_input_area():
         col_up, col_btn = st.columns([1, 1])
         with col_up:
             uploaded = st.file_uploader(
-                "Or upload a file",
+                "Ou envie um arquivo",
                 type=["txt", "docx", "pdf"],
                 label_visibility="collapsed",
             )
@@ -68,4 +68,4 @@ def render_input_area():
                 st.session_state.transcript_text = st.session_state.curated_clean
                 st.success("Texto curado definido como transcrição principal.")
 
-        return st.button("🚀 Generate Insights", type="primary", use_container_width=True)
+        return st.button("🚀 Gerar Análise", type="primary", use_container_width=True)
