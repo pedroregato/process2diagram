@@ -73,9 +73,26 @@ def is_admin() -> bool:
 
 
 def logout() -> None:
+    # NAV-05 (PC214): revoga a sessão persistente antes de limpar o
+    # session_state — sem isso o cookie continuaria válido no navegador e
+    # a próxima visita restauraria o login automaticamente.
+    token = st.session_state.get("_session_token")
+    if token:
+        try:
+            from core.project_store import revoke_user_session
+            revoke_user_session(token)
+        except Exception:
+            pass
+        try:
+            from modules.session_cookie import clear_session_cookie
+            clear_session_cookie()
+        except Exception:
+            pass
+
     for key in (
         "_autenticado", "_usuario_login", "_usuario_nome", "_login_erro",
         "_tenant_id", "_domain", "_tenant_name", "_role",
+        "_session_token", "_session_restore_attempted",
     ):
         st.session_state.pop(key, None)
     st.rerun()

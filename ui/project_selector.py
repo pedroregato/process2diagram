@@ -326,13 +326,23 @@ def _load_tenant_contexts(tenant_id: str | None):
     return list_contexts(tenant_id=tenant_id)
 
 
-def _activate_context(ctx: dict) -> None:
+def activate_context(ctx: dict) -> None:
     """Grava o contexto ativo (fonte única — NAV-04). Único lugar do app que
-    escreve active_project_id/active_project_name fora de pages/Home.py."""
+    escreve active_project_id/active_project_name — pages/Home.py e todo
+    seletor deste módulo passam por aqui.
+
+    NAV-05 (PC214): também espelha a troca em user_sessions.last_context_id
+    quando existe uma sessão persistente ativa (_session_token), para que
+    um F5 restaure o mesmo contexto, não só o login."""
     st.session_state["active_project_id"]   = ctx["id"]
     st.session_state["active_project_name"] = ctx["name"]
     if ctx.get("sigla"):
         st.session_state["prefix"] = ctx["sigla"].strip() + "_"
+
+    token = st.session_state.get("_session_token")
+    if token:
+        from core.project_store import update_user_session_context
+        update_user_session_context(token, ctx["id"])
 
 
 def get_active_context() -> dict | None:
@@ -377,7 +387,7 @@ def render_active_context_picker(key: str) -> str | None:
     # Mesma regra de pages/Home.py: com exatamente 1 contexto e nenhum
     # ativo, ativa automaticamente — não há escolha real a fazer.
     if not active_pid and len(contexts) == 1:
-        _activate_context(contexts[0])
+        activate_context(contexts[0])
         active_pid = contexts[0]["id"]
 
     names   = [c["name"] for c in contexts]
@@ -389,7 +399,7 @@ def render_active_context_picker(key: str) -> str | None:
             break
 
     def _on_change():
-        _activate_context(ctx_map[st.session_state[key]])
+        activate_context(ctx_map[st.session_state[key]])
 
     st.selectbox("Contexto", names, index=index, key=key, on_change=_on_change)
     return st.session_state.get("active_project_id")

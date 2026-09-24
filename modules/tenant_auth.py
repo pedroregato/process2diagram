@@ -171,6 +171,60 @@ def login_tenant_debug(domain: str, login: str, password: str) -> tuple[dict | N
     return result, "OK"
 
 
+def get_tenant_user(tenant_id: str, login: str) -> dict | None:
+    """Busca um usuário multi-tenant por tenant_id+login, sem checar senha —
+    usado na restauração de sessão persistente (NAV-05, PC214), depois que
+    core.project_store.validate_user_session() já confirmou um token
+    válido. Mesmo shape de retorno de login_tenant(). Rechecagem em tempo
+    real de tenant.active/user.active — uma sessão persistente não
+    sobrevive a uma desativação feita por um admin depois do login."""
+    client = get_supabase_client()
+    if client is None:
+        return None
+    login_norm = login.lower().strip()
+
+    try:
+        t_resp = (
+            client.table("tenants")
+            .select("id, display_name, domain_slug, active")
+            .eq("id", tenant_id)
+            .limit(1)
+            .execute()
+        )
+        t_rows = t_resp.data or []
+    except Exception:
+        return None
+    if not t_rows or not t_rows[0].get("active", True):
+        return None
+    tenant = t_rows[0]
+
+    try:
+        u_resp = (
+            client.table("tenant_users")
+            .select("id, display_name, role, active")
+            .eq("tenant_id", tenant_id)
+            .eq("login", login_norm)
+            .limit(1)
+            .execute()
+        )
+        u_rows = u_resp.data or []
+    except Exception:
+        return None
+    if not u_rows or not u_rows[0].get("active", True):
+        return None
+    user = u_rows[0]
+
+    return {
+        "tenant_id":    tenant_id,
+        "domain":       tenant["domain_slug"],
+        "tenant_name":  tenant["display_name"],
+        "user_id":      user["id"],
+        "user_name":    login_norm,
+        "display_name": user["display_name"],
+        "role":         user.get("role", "user"),
+    }
+
+
 def tenant_auth_available() -> bool:
     """True quando o Supabase está configurado e a tabela tenants existe."""
     client = get_supabase_client()

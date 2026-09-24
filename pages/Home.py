@@ -23,6 +23,7 @@ if str(root_dir) not in sys.path:
 import streamlit as st
 
 from ui.auth_gate import apply_auth_gate
+from ui.project_selector import activate_context
 from modules.auth import is_admin
 from modules.i18n import t
 from core.project_store import get_domain_stats, get_context_stats, list_recent_meetings, list_contexts, list_meetings_quality
@@ -248,10 +249,7 @@ _ap_name = st.session_state.get("active_project_name", "")
 # Auto-selecionar quando houver apenas 1 contexto e nenhum ativo
 if _all_projects and not _ap_id and len(_all_projects) == 1:
     _p = _all_projects[0]
-    st.session_state["active_project_id"]   = _p["id"]
-    st.session_state["active_project_name"] = _p["name"]
-    if _p.get("sigla"):
-        st.session_state["prefix"] = _p["sigla"].strip() + "_"
+    activate_context(_p)
     _ap_id   = _p["id"]
     _ap_name = _p["name"]
 
@@ -275,11 +273,7 @@ elif _all_projects:
         )
         if st.button(t("activate"), key="home_activate_proj",
                      type="primary", use_container_width=True):
-            _p = _proj_map[_proj_sel]
-            st.session_state["active_project_id"]   = _p["id"]
-            st.session_state["active_project_name"] = _p["name"]
-            if _p.get("sigla"):
-                st.session_state["prefix"] = _p["sigla"].strip() + "_"
+            activate_context(_proj_map[_proj_sel])
             _load_projects.clear()  # invalida cache do tenant atual
             st.rerun()
 else:

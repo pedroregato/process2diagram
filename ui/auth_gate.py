@@ -169,7 +169,8 @@ def _handle_tenant_login(domain: str, usuario: str, senha: str) -> None:
     """Valida via Supabase tenant_auth. Em caso de falha exibe erro."""
     from modules.tenant_auth   import login_tenant_debug
     from modules.tenant_config import load_all_config, apply_config_to_session
-    from core.project_store    import log_login_event
+    from core.project_store    import log_login_event, create_user_session
+    from modules.session_cookie import write_session_cookie
 
     result, motivo = login_tenant_debug(domain, usuario, senha)
     if result:
@@ -182,6 +183,15 @@ def _handle_tenant_login(domain: str, usuario: str, senha: str) -> None:
         st.session_state["_tenant_name"]   = result["tenant_name"]
         st.session_state["_role"]          = result["role"]
         st.session_state["_login_erro"]    = False
+
+        # NAV-05 (PC214): sessão persistente — sobrevive a F5/fechar o
+        # navegador. Fail-open: sem token, a sessão fica só em memória
+        # (comportamento anterior ao NAV-05), nunca bloqueia o login.
+        token = create_user_session(result["tenant_id"], result["user_name"])
+        if token:
+            st.session_state["_session_token"] = token
+            write_session_cookie(token)
+
         log_login_event(
             login=result["user_name"],
             domain=result["domain"],
@@ -227,8 +237,99 @@ def _handle_local_login(usuario: str, senha: str) -> None:
         st.rerun()
 
 
+def _render_restoring_placeholder() -> None:
+    """Placeholder neutro exibido enquanto o cookie de sessão (NAV-05) ainda
+    não foi entregue pelo componente JS — evita mostrar a tela de login por
+    uma fração de segundo para quem já tem uma sessão válida."""
+    st.markdown(_LOGIN_CSS, unsafe_allow_html=True)
+    st.markdown("""
+<div class="l-card">
+<div class="l-banner">
+<div class="icon">⚡</div>
+<div class="title">Process2Diagram</div>
+<div class="sub">Restaurando sessão…</div>
+</div>
+</div>
+""", unsafe_allow_html=True)
+
+
+def _try_restore_session() -> bool:
+    """NAV-05 (PC214): tenta restaurar a sessão a partir do cookie
+    persistente. Devolve True se a sessão foi restaurada (session_state
+    populado, contexto ativo incluso) — False em qualquer outro caso
+    (sem cookie, token inválido/expirado, tenant/usuário desativado depois
+    do login, ou Supabase indisponível). Fail-open em todos os ramos: nunca
+    lança exceção, nunca impede o fallback para a tela de login normal."""
+    from modules.session_cookie import read_session_cookie
+    from core.project_store    import validate_user_session
+    from modules.tenant_auth   import get_tenant_user
+    from modules.tenant_config import load_all_config, apply_config_to_session
+
+    token = read_session_cookie()
+    if not token:
+        return False
+
+    session = validate_user_session(token)
+    if not session:
+        return False
+
+    user = get_tenant_user(session["tenant_id"], session["username"])
+    if not user:
+        return False
+
+    st.session_state["_session_token"]  = token
+    st.session_state["_autenticado"]    = True
+    st.session_state["_usuario_login"]  = user["user_name"]
+    st.session_state["_usuario_nome"]   = user["display_name"]
+    st.session_state["_tenant_id"]      = user["tenant_id"]
+    st.session_state["_domain"]         = user["domain"]
+    st.session_state["_tenant_name"]    = user["tenant_name"]
+    st.session_state["_role"]           = user["role"]
+
+    if session.get("last_context_id"):
+        st.session_state["active_project_id"] = session["last_context_id"]
+        try:
+            from ui.project_selector import get_active_context
+            ctx = get_active_context()
+            if ctx:
+                st.session_state["active_project_name"] = ctx.get("name", "")
+        except Exception:
+            pass
+
+    try:
+        apply_config_to_session(load_all_config(user["tenant_id"]))
+    except Exception:
+        pass
+
+    return True
+
+
+def _maybe_restore_session() -> None:
+    """Orquestra a restauração de sessão antes de decidir mostrar o login.
+
+    streamlit_javascript entrega o valor do cookie de forma ASSÍNCRONA — a
+    1ª chamada num rerun novo (típico: logo após F5) tipicamente devolve
+    "sem valor ainda" mesmo com um cookie válido presente; o valor real só
+    chega num rerun seguinte, disparado automaticamente pelo componente.
+    Por isso: na 1ª tentativa desta sessão de script, se a restauração não
+    completou de primeira, mostra um placeholder neutro (nunca o formulário
+    de login) e para — o rerun automático do componente tenta de novo. Só
+    na 2ª tentativa uma ausência de sessão é tratada como definitiva."""
+    first_attempt = not st.session_state.get("_session_restore_attempted")
+    st.session_state["_session_restore_attempted"] = True
+
+    if _try_restore_session():
+        return
+    if first_attempt:
+        _render_restoring_placeholder()
+        st.stop()
+    # 2ª tentativa sem sessão restaurada — segue para o login normal.
+
+
 def apply_auth_gate() -> None:
     """Gate de autenticação. Chamar logo após st.set_page_config()."""
+    if not is_authenticated():
+        _maybe_restore_session()
     if not is_authenticated():
         render_login_page()
     # Inject colour theme CSS (no-op for default dark theme)

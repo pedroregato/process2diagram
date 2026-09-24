@@ -4,6 +4,36 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC214 — Concluído (v5.16 / 2026-09-24) — Navegabilidade Onda 1 (NAV-05): sessão persistente — fecha a Onda 1
+
+**Origem:** `melhorias/parciais/navegabilidade.md` — última tarefa do NAV-05, fecha a Onda 1 ("Estabilizar") completa (NAV-01 a NAV-05, PC211-214).
+
+**NAV-05 — Sessão e contexto sobrevivem ao recarregamento, CRÍTICA**
+
+**Decisão de design tomada nesta rodada (o plano original pedia para avaliar):** o plano cogitava cookie `HttpOnly` (via `extra-streamlit-components`) como opção preferida, com `st.query_params` como alternativa. Investigação mostrou que **nenhuma das duas é `HttpOnly` de verdade** — um app Streamlit puro não expõe hook para `Set-Cookie` no response; qualquer cookie definido a partir do código Python (inclusive via `extra-streamlit-components`) passa por JS injetado no navegador. Dado isso, optei por `streamlit_javascript` — **já pinado em `requirements.txt`, sem uso real no código até então** (comentário dizia "BpmnEditor", mas nenhum arquivo do projeto importava o pacote) — em vez de adicionar `extra-streamlit-components` como dependência nova. Mesmo perfil de segurança real das duas opções; zero dependência nova.
+
+- [x] `setup/supabase_migration_user_sessions.sql` — tabela `user_sessions` (`token_hash` único, `tenant_id`, `username`, `last_context_id`, `expires_at`, `created_at`) — **migração executada e verificada em produção** (mesmo padrão de PCs anteriores: `psycopg2` via `st.secrets["database"]["connection_string"]`)
+- [x] `core/project_store.py` — `create_user_session()` (gera `secrets.token_urlsafe(32)`, grava só o hash SHA-256), `validate_user_session()` (expiração deslizante — renova 12h a cada validação bem-sucedida), `update_user_session_context()`, `revoke_user_session()` — todas fail-open (Supabase indisponível ou tabela ainda sem migração → `None`/no-op, nunca bloqueia login)
+- [x] `modules/tenant_auth.py::get_tenant_user(tenant_id, login)` — busca usuário sem checar senha, usado na restauração; rechecagem em tempo real de `tenant.active`/`user.active` (uma sessão persistente não sobrevive a uma desativação feita por um admin depois do login)
+- [x] `modules/session_cookie.py` (novo) — `read_session_cookie()`/`write_session_cookie()`/`clear_session_cookie()` via `streamlit_javascript`; cookie `path=/; SameSite=Lax`, 12h
+- [x] `ui/auth_gate.py` — `_handle_tenant_login()` cria a sessão persistente + grava o cookie após login bem-sucedido; `_try_restore_session()`/`_maybe_restore_session()` tentam restaurar antes de mostrar o login. **Corrida de entrega assíncrona:** `streamlit_javascript` só entrega o valor real do cookie num rerun automático disparado pelo próprio componente — a 1ª tentativa dentro de uma sessão de script nova tipicamente ainda não tem o valor. Tratamento: 1ª tentativa sem sessão restaurada mostra um placeholder neutro ("Restaurando sessão…") em vez do formulário de login, e para; só a 2ª tentativa trata ausência de sessão como definitiva — evita mostrar/esconder a tela de login num "flash" para quem tem sessão válida. Custo aceito: um rerun extra na primeira visita de qualquer usuário genuinamente deslogado (sem cookie nenhum)
+- [x] `modules/auth.py::logout()` — revoga a sessão persistente (`revoke_user_session`) e limpa o cookie (`clear_session_cookie`) antes de limpar `session_state`
+- [x] `ui/project_selector.py::activate_context()` (renomeado de `_activate_context`, NAV-04) — toda troca de contexto agora também atualiza `user_sessions.last_context_id` quando há sessão persistente ativa; `pages/Home.py` refatorado pra usar esse helper compartilhado em vez de duplicar a gravação de `active_project_id`/`active_project_name`/`prefix` inline (2 pontos) — sem isso, trocar de contexto pela Central de Operações não atualizaria `last_context_id`
+- [x] **Escopo:** só o login multi-tenant (`_handle_tenant_login`). O login local (`USUARIOS` hardcoded em `modules/auth.py`, documentado como fallback de desenvolvimento/emergência) permanece efêmero — `user_sessions.tenant_id` é `NOT NULL`, não há tenant nesse modo
+- [x] `tests/test_user_sessions.py` — 11 testes unitários (mock de banco em memória): criar/validar/expirar/deslizar expiração/atualizar contexto/revogar
+- [x] `tests/test_session_restore.py` — 5 testes `AppTest` (página mínima via `AppTest.from_string()`, isolando só o mecanismo de auth): token válido pula o login e restaura `_autenticado`+contexto; sem cookie/token expirado/usuário desativado depois do login → tela de login (2ª tentativa, simulando o rerun automático do componente)
+
+**Não verificado nesta rodada (limitação conhecida):** a corrida de entrega assíncrona do `streamlit_javascript` (cookie real, timing real do navegador) foi validada só via mock determinístico em `AppTest` — não há como reproduzir o timing real de um componente JS num teste headless. Recomendação: testar manualmente em um navegador real após o deploy (login → F5 → confirma sessão e contexto mantidos; aba anônima/sem cookie → confirma login normal em 2 reruns, sem flash perceptível).
+
+**Fora de escopo (não implementado, decisão consciente):** limpeza automática de linhas expiradas em `user_sessions` (ficam no banco indefinidamente até expiração — não há job de cleanup, diferente de outras tabelas do projeto como `llm_telemetry`, 90d). Revisitar se o volume crescer.
+
+**Aceite:** F5 em qualquer página mantém o usuário logado (multi-tenant), no mesmo contexto — sujeito à limitação de timing documentada acima. Sair invalida o token (revogado no banco + cookie limpo).
+
+- **Testes:** `tests/test_user_sessions.py` (11 novos) + `tests/test_session_restore.py` (5 novos); suíte completa **1046 testes, 0 falhas**, sem regressão
+- **Fecha a Onda 1** (Estabilizar) do plano `melhorias/parciais/navegabilidade.md` — NAV-01 a NAV-05 completos (PC211-214). Onda 2 (NAV-06 a NAV-11, menu/desempenho) e Onda 3 (NAV-12 a NAV-15, consistência) não avaliadas.
+
+---
+
 ### PC213 — Concluído (v5.16 / 2026-09-24) — Navegabilidade Onda 1 (NAV-04): fonte única do contexto ativo
 
 **Origem:** `melhorias/parciais/navegabilidade.md` — continuação do PC212 (NAV-03). Fecha a Onda 1 ("Estabilizar") junto com o NAV-05 (ainda pendente).

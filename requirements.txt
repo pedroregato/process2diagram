@@ -41,7 +41,7 @@ lxml==6.1.1                      # validação do BPMN XML contra XSD da OMG
 python-dateutil==2.9.0.post0     # parsing de datas nos action items
 
 # ── Componentes Streamlit extras ─────────────────────────────────────────────
-streamlit-javascript==0.1.5     # executa JS no browser e retorna valor ao Python (BpmnEditor)
+streamlit-javascript==0.1.5     # executa JS no browser e retorna valor ao Python — cookie de sessão persistente (modules/session_cookie.py, NAV-05/PC214)
 
 # ── Orquestração com grafo (LangGraph) ───────────────────────────────────────
 langgraph==1.2.0                # adaptive BPMN retry loop (core/lg_pipeline.py); pinado pois langchain==1.3.0 exige <1.3.0

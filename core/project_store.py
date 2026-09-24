@@ -3784,6 +3784,114 @@ def log_login_event(
         pass  # auditoria nunca deve bloquear o fluxo de login
 
 
+# ── Sessões persistentes (NAV-05, PC214) ───────────────────────────────────────
+# Escopo: só login multi-tenant (ui/auth_gate.py::_handle_tenant_login) — o
+# modo local (USUARIOS hardcoded) é fallback de emergência e fica efêmero.
+
+_SESSION_TTL_HOURS = 12
+
+
+def _hash_session_token(token: str) -> str:
+    import hashlib
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def create_user_session(tenant_id: str, username: str) -> str | None:
+    """Cria uma sessão persistente e devolve o token OPAQUE em texto puro —
+    única vez que ele existe fora do cookie do navegador do usuário. No
+    banco fica só o hash SHA-256 (token_hash). Fail-open: None se Supabase
+    indisponível ou a migração user_sessions ainda não tiver sido aplicada
+    (cai silenciosamente numa sessão só-em-memória, comportamento anterior
+    ao NAV-05)."""
+    db = _db()
+    if not db:
+        return None
+    import secrets as _secrets
+    from datetime import datetime, timedelta, timezone
+    token = _secrets.token_urlsafe(32)
+    try:
+        db.table("user_sessions").insert({
+            "token_hash": _hash_session_token(token),
+            "tenant_id":  tenant_id,
+            "username":   username,
+            "expires_at": (datetime.now(timezone.utc) + timedelta(hours=_SESSION_TTL_HOURS)).isoformat(),
+        }).execute()
+        return token
+    except Exception:
+        return None
+
+
+def validate_user_session(token: str) -> dict | None:
+    """Valida um token de sessão persistente (cookie). Token ausente,
+    inexistente ou expirado → None (cai no login normal). Token válido →
+    renova a expiração (deslizante, 12h a partir de agora) e devolve
+    {"tenant_id", "username", "last_context_id"}."""
+    if not token:
+        return None
+    db = _db()
+    if not db:
+        return None
+    from datetime import datetime, timedelta, timezone
+    token_hash = _hash_session_token(token)
+    try:
+        rows = _ok(
+            db.table("user_sessions")
+            .select("tenant_id, username, last_context_id, expires_at")
+            .eq("token_hash", token_hash)
+            .limit(1)
+            .execute()
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        expires_at = datetime.fromisoformat(str(row["expires_at"]).replace("Z", "+00:00"))
+        if expires_at <= datetime.now(timezone.utc):
+            return None
+        new_expiry = datetime.now(timezone.utc) + timedelta(hours=_SESSION_TTL_HOURS)
+        db.table("user_sessions").update(
+            {"expires_at": new_expiry.isoformat()}
+        ).eq("token_hash", token_hash).execute()
+        return {
+            "tenant_id":       row["tenant_id"],
+            "username":        row["username"],
+            "last_context_id": row.get("last_context_id"),
+        }
+    except Exception:
+        return None
+
+
+def update_user_session_context(token: str, context_id: str | None) -> None:
+    """Atualiza o contexto ativo salvo na sessão persistente — chamado por
+    ui/project_selector.py::activate_context() a cada troca de contexto
+    (NAV-04). Fire-and-forget."""
+    if not token:
+        return
+    db = _db()
+    if not db:
+        return
+    try:
+        db.table("user_sessions").update(
+            {"last_context_id": context_id}
+        ).eq("token_hash", _hash_session_token(token)).execute()
+    except Exception:
+        pass
+
+
+def revoke_user_session(token: str) -> None:
+    """Invalida uma sessão persistente (Logout). Fire-and-forget."""
+    if not token:
+        return
+    db = _db()
+    if not db:
+        return
+    try:
+        db.table("user_sessions").delete().eq(
+            "token_hash", _hash_session_token(token)
+        ).execute()
+    except Exception:
+        pass
+
+
 # ── Google Calendar per project ───────────────────────────────────────────────
 
 def get_project_calendar_id(project_id: str) -> str | None:
