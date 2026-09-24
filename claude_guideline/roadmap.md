@@ -4,6 +4,26 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC212 — Concluído (v5.16 / 2026-09-23) — Navegabilidade Onda 1 (NAV-03): paginação da Validação
+
+**Origem:** `melhorias/parciais/navegabilidade.md` — continuação do PC211 (NAV-01+NAV-02). NAV-03 era a tarefa mais trabalhosa da Onda 1, deixada de fora conscientemente na rodada anterior.
+
+**NAV-03 — Paginar a Validação, CRÍTICA**
+- [x] `pages/ValidationHub.py` — filtro de status padrão trocado de "Todos" para "Pendentes" (`index=filter_opts.index("Pendentes")`)
+- [x] Leituras (`list_requirements_light`, `list_sbvr_terms`, `list_sbvr_rules`, `list_bpmn_processes`) envolvidas em `@st.cache_data(ttl=60)`; `list_requirements` (join pesado com `requirement_versions(*)`, não usado nesta página) trocado por `list_requirements_light` — precisou de `validation_status`/`validation_notes` adicionados ao `select()` de `list_requirements_light()` em `core/project_store.py` (aditivo, não quebra outros chamadores)
+- [x] Paginação por aba (`_paginate()`): 25/50/100 itens por página (seletor), navegação ◀ Anterior/Próximo ▶ com legenda "X–Y de N · Pág. P/N", estado em `session_state["vh_page_<aba>"]` + `session_state["vh_pagesize_<aba>"]`, resetando a página ao mudar reunião/status (assinatura de filtro compartilhada `_filter_sig`)
+- [x] Os 3 botões por item (`_quick_actions`: Validar/Em Revisão/Rejeitar) substituídos por `st.data_editor` com coluna Status editável (por página) + botão "💾 Salvar alterações" que grava só as linhas com `edited_rows` alterado (delta nativo do `data_editor`, não itera a página inteira); popover "✏️ Editar conteúdo" mantido por item (delimitado à página, no máximo 25/50/100 popovers em vez de todos os artefatos)
+- [x] KPIs do topo (Total/Concluídos/Pendentes/Em Revisão/Rejeitados) trocados de `len()` sobre as 4 listas completas para `core.project_store.count_validation_status()` — `count="exact"` agregado (20 queries leves, sem transferir linha de conteúdo) sobre as 4 tabelas; linhas com `validation_status` NULL (registros legados) contam como "proposto" via `total − soma dos demais status`, mesmo critério do resto do app
+- [x] `tests/test_validation_hub_pagination.py` — 3 testes via `AppTest`: filtro padrão "Pendentes", 60 requisitos sintéticos renderizam no máximo 25 cards por página, botão "Próximo" avança sem repetir o item da primeira página
+- [x] **Bug de isolamento de teste encontrado de passagem:** `tests/test_project_selector_confirmed_reset.py` fazia `st.session_state = _FakeSessionState()` sem nunca restaurar — como `streamlit.session_state` é um singleton de módulo, isso vazava para QUALQUER teste `AppTest` rodando depois dele na mesma sessão pytest (ordem alfabética), quebrando silenciosamente a página renderizada (zero elementos, sem exceção) sem relação alguma com o código sob teste. Descoberto porque o novo teste passava isolado e falhava na suíte completa. Fix: fixture `autouse` que salva/restaura `st.session_state` real ao redor de cada teste do arquivo.
+
+**Aceite:** com o filtro padrão em "Pendentes" e paginação a 25 itens/página, um contexto com milhares de artefatos renderiza no máximo `page_size` cards por aba (antes: todos de uma vez) — mesma classe de correção do PC178 (paginação SBVR), aplicada agora à Validação.
+
+- **Testes:** `tests/test_validation_hub_pagination.py` (3 novos) + fix de isolamento em `tests/test_project_selector_confirmed_reset.py`; suíte completa **1027 testes, 0 falhas**, sem regressão
+- **Fora desta rodada:** NAV-04 (fonte única do contexto ativo) e NAV-05 (sessão sobrevive a F5) seguem pendentes — ver PC211; NAV-06 a NAV-15 (Ondas 2-3) não avaliadas
+
+---
+
 ### PC211 — Concluído (v5.16 / 2026-09-23) — Navegabilidade Onda 1 (NAV-01 + NAV-02): isolamento de tenant e mensagem de login
 
 **Origem:** `melhorias/parciais/navegabilidade.md` — auditoria de navegabilidade em produção (41 páginas, contexto SDEA, domínio fgv), 15 tarefas `NAV-01..15` em 3 ondas. Esta entrega cobre os 2 primeiros itens de segurança da Onda 1 ("Estabilizar"); NAV-03 a NAV-15 ficam de fora desta rodada — ver avaliação em `MANIFESTO_MELHORIAS.md §navegabilidade.md`.

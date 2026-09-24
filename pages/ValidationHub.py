@@ -20,9 +20,10 @@ from core.project_store import (
     list_meetings,
     list_meetings_quality,
     list_requirements_light,
-    list_requirements, list_sbvr_terms, list_sbvr_rules, list_bpmn_processes,
+    list_sbvr_terms, list_sbvr_rules, list_bpmn_processes,
     list_dmn_by_project,
     validate_artifact, update_artifact_content,
+    count_validation_status,
 )
 from ui.project_selector import require_active_project
 
@@ -55,6 +56,31 @@ def _type_badge(label: str, color: str = "#1e293b") -> str:
         f'font-size:.68rem;font-weight:600;background:{color};color:#e2e8f0;'
         f'margin-left:6px">{label}</span>'
     )
+
+
+# ── Cache de leitura (NAV-03) ─────────────────────────────────────────────────
+# A página renderizava todos os artefatos de uma vez (contexto com 2.252
+# artefatos → ~2.490 botões, 42s + queda de sessão). O fix real é a paginação
+# abaixo; este cache evita reconsultar o Supabase a cada rerun (ex.: clique
+# de paginação) dentro da mesma janela de 60s.
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_artifacts(pid: str):
+    return (
+        list_requirements_light(pid),
+        list_sbvr_terms(pid),
+        list_sbvr_rules(pid),
+        list_bpmn_processes(pid),
+    )
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_status_counts(pid: str):
+    return count_validation_status(pid)
+
+
+def _invalidate_caches() -> None:
+    _load_artifacts.clear()
+    _load_status_counts.clear()
 
 
 _me = st.session_state.get("_usuario_nome") or st.session_state.get("_usuario_login", "sistema")
@@ -93,13 +119,14 @@ with col_meet:
 
 with col_status:
     filter_opts = ["Todos", "Pendentes", "Concluídos", "Rejeitados"]
-    sel_filter  = st.selectbox("Filtro de status", filter_opts, key="vhub_filter")
+    sel_filter  = st.selectbox(
+        "Filtro de status", filter_opts,
+        index=filter_opts.index("Pendentes"),  # NAV-03: padrão era "Todos"
+        key="vhub_filter",
+    )
 
-# ── Carrega artefatos ──────────────────────────────────────────────────────────
-all_reqs  = list_requirements(proj_id)
-all_terms = list_sbvr_terms(proj_id)
-all_rules = list_sbvr_rules(proj_id)
-all_bpmn  = list_bpmn_processes(proj_id)  # type: ignore[arg-type]
+# ── Carrega artefatos (cache 60s — NAV-03) ─────────────────────────────────────
+all_reqs, all_terms, all_rules, all_bpmn = _load_artifacts(proj_id)
 
 # Aplica filtro de reunião
 def _meet_filter(items: list[dict], field: str) -> list[dict]:
@@ -127,20 +154,16 @@ terms = _status_filter(terms)
 rules = _status_filter(rules)
 bpmn  = _status_filter(bpmn)
 
-# ── Métricas ──────────────────────────────────────────────────────────────────
-def _counts(items: list[dict]) -> dict:
-    c = {"proposto": 0, "em_revisão": 0, "validado": 0, "ajustado": 0, "rejeitado": 0}
-    for i in items:
-        s = i.get("validation_status") or "proposto"
-        if s in c:
-            c[s] += 1
-        else:
-            c["proposto"] += 1
-    return c
+# Assinatura dos filtros ativos — usada por _paginate() para resetar a página
+# de cada aba quando reunião/status mudam (NAV-03).
+_filter_sig = f"{proj_id}|{sel_meet_lbl}|{sel_filter}"
 
-all_items = all_reqs + all_terms + all_rules + all_bpmn
-tc = _counts(all_items)
-n_total    = len(all_items)
+# ── Métricas (contagem agregada — NAV-03) ─────────────────────────────────────
+# Antes: len() sobre as 4 listas completas já carregadas para renderizar a
+# página. Agora: count="exact" no Supabase, sem transferir nenhuma linha de
+# conteúdo — ver core/project_store.py::count_validation_status().
+tc         = _load_status_counts(proj_id)
+n_total    = sum(tc.values())
 n_done     = tc["validado"] + tc["ajustado"]
 n_pending  = tc["proposto"] + tc["em_revisão"]
 n_rejected = tc["rejeitado"]
@@ -155,31 +178,84 @@ m5.metric("❌ Rejeitados",      n_rejected)
 
 st.markdown("---")
 
-# ── Helpers de card ───────────────────────────────────────────────────────────
-def _quick_actions(table: str, art_id: str, current_vs: str | None, key_pfx: str) -> None:
-    """Botões de ação rápida — validar, em_revisão, rejeitar."""
-    vs = current_vs or "proposto"
-    c1, c2, c3, _ = st.columns([1, 1, 1, 5])
-    with c1:
-        if vs not in ("validado", "ajustado") and st.button(
-            "✅ Validar", key=f"{key_pfx}_val", use_container_width=True
-        ):
-            validate_artifact(table, art_id, "validado", _me)
-            st.session_state["_vhub_msg"] = ("success", "✅ Artefato validado.")
-            st.rerun()
-    with c2:
-        if vs not in ("em_revisão",) and st.button(
-            "🔄 Em Revisão", key=f"{key_pfx}_rev", use_container_width=True
-        ):
-            validate_artifact(table, art_id, "em_revisão", _me)
-            st.session_state["_vhub_msg"] = ("info", "🔄 Marcado para revisão.")
-            st.rerun()
-    with c3:
-        if vs != "rejeitado" and st.button(
-            "❌ Rejeitar", key=f"{key_pfx}_rej", use_container_width=True
-        ):
-            validate_artifact(table, art_id, "rejeitado", _me)
-            st.session_state["_vhub_msg"] = ("warning", "❌ Artefato rejeitado.")
+# ── Paginação e edição em lote (NAV-03) ────────────────────────────────────────
+_PAGE_SIZE_OPTS = [25, 50, 100]
+
+
+def _paginate(items: list[dict], tab_key: str, filter_sig: str) -> list[dict]:
+    """Pagina uma lista já filtrada por reunião/status; navegação + seletor de
+    tamanho, com estado em session_state por aba (vh_page_<tab_key>)."""
+    sig_key = f"_vh_last_filter_{tab_key}"
+    if st.session_state.get(sig_key) != filter_sig:
+        st.session_state[f"vh_page_{tab_key}"] = 0
+        st.session_state[sig_key] = filter_sig
+
+    size_key = f"vh_pagesize_{tab_key}"
+    page_key = f"vh_page_{tab_key}"
+    n = len(items)
+
+    c_size, c_nav = st.columns([1, 3])
+    with c_size:
+        page_size = st.selectbox(
+            "Itens por página", _PAGE_SIZE_OPTS,
+            index=_PAGE_SIZE_OPTS.index(st.session_state.get(size_key, 25)),
+            key=size_key,
+        )
+
+    n_pages = max(1, (n + page_size - 1) // page_size)
+    page  = min(st.session_state.get(page_key, 0), n_pages - 1)
+    start = page * page_size
+    end   = min(start + page_size, n)
+
+    if n > page_size:
+        with c_nav:
+            nv1, nv2, nv3 = st.columns([1, 1, 2])
+            with nv1:
+                if st.button("← Anterior", key=f"{tab_key}_prev", disabled=(page == 0)):
+                    st.session_state[page_key] = page - 1
+                    st.rerun()
+            with nv2:
+                if st.button("Próximo →", key=f"{tab_key}_next", disabled=(page == n_pages - 1)):
+                    st.session_state[page_key] = page + 1
+                    st.rerun()
+            with nv3:
+                st.caption(f"**{start + 1}–{end}** de **{n}** · Pág. **{page + 1}/{n_pages}**")
+
+    return items[start:end]
+
+
+def _status_editor(table: str, page_items: list[dict], label_fn, key_pfx: str) -> None:
+    """Grade de edição em lote do Status da página atual — substitui os 3
+    botões por item (Validar/Em Revisão/Rejeitar). Grava só as linhas cuja
+    coluna Status foi alterada (delta de st.data_editor via `edited_rows`)."""
+    if not page_items:
+        return
+    editor_key = f"vh_editor_{key_pfx}"
+    rows = [
+        {"Item": label_fn(it), "Status": (it.get("validation_status") or "proposto")}
+        for it in page_items
+    ]
+    st.data_editor(
+        rows,
+        column_config={
+            "Item":   st.column_config.TextColumn("Item", disabled=True),
+            "Status": st.column_config.SelectboxColumn("Status", options=list(_VS.keys()), required=True),
+        },
+        column_order=["Item", "Status"],
+        hide_index=True,
+        use_container_width=True,
+        key=editor_key,
+    )
+    if st.button("💾 Salvar alterações", key=f"vh_save_{key_pfx}"):
+        edited = st.session_state.get(editor_key, {}).get("edited_rows", {})
+        changed = {int(i): c["Status"] for i, c in edited.items() if "Status" in c}
+        if not changed:
+            st.info("Nenhuma alteração de status para salvar.")
+        else:
+            for row_idx, new_status in changed.items():
+                validate_artifact(table, page_items[row_idx]["id"], new_status, _me)
+            _invalidate_caches()
+            st.session_state["_vhub_msg"] = ("success", f"💾 {len(changed)} artefato(s) atualizado(s).")
             st.rerun()
 
 
@@ -195,12 +271,14 @@ def _edit_form_req(req: dict) -> None:
         if save_adj:
             update_artifact_content("requirements", req["id"], {"title": new_title, "description": new_desc})
             validate_artifact("requirements", req["id"], "ajustado", _me, new_notes)
+            _invalidate_caches()
             st.session_state["_vhub_msg"] = ("success", "🔧 Requisito ajustado e validado.")
             st.rerun()
         if save_only:
             update_artifact_content("requirements", req["id"], {"title": new_title, "description": new_desc})
             if new_notes:
                 validate_artifact("requirements", req["id"], req.get("validation_status") or "proposto", _me, new_notes)
+            _invalidate_caches()
             st.session_state["_vhub_msg"] = ("info", "💾 Conteúdo salvo.")
             st.rerun()
 
@@ -217,12 +295,14 @@ def _edit_form_term(term: dict) -> None:
         if save_adj:
             update_artifact_content("sbvr_terms", term["id"], {"term": new_term, "definition": new_def})
             validate_artifact("sbvr_terms", term["id"], "ajustado", _me, new_notes)
+            _invalidate_caches()
             st.session_state["_vhub_msg"] = ("success", "🔧 Termo ajustado e validado.")
             st.rerun()
         if save_only:
             update_artifact_content("sbvr_terms", term["id"], {"term": new_term, "definition": new_def})
             if new_notes:
                 validate_artifact("sbvr_terms", term["id"], term.get("validation_status") or "proposto", _me, new_notes)
+            _invalidate_caches()
             st.session_state["_vhub_msg"] = ("info", "💾 Conteúdo salvo.")
             st.rerun()
 
@@ -238,12 +318,14 @@ def _edit_form_rule(rule: dict) -> None:
         if save_adj:
             update_artifact_content("sbvr_rules", rule["id"], {"statement": new_stmt})
             validate_artifact("sbvr_rules", rule["id"], "ajustado", _me, new_notes)
+            _invalidate_caches()
             st.session_state["_vhub_msg"] = ("success", "🔧 Regra ajustada e validada.")
             st.rerun()
         if save_only:
             update_artifact_content("sbvr_rules", rule["id"], {"statement": new_stmt})
             if new_notes:
                 validate_artifact("sbvr_rules", rule["id"], rule.get("validation_status") or "proposto", _me, new_notes)
+            _invalidate_caches()
             st.session_state["_vhub_msg"] = ("info", "💾 Conteúdo salvo.")
             st.rerun()
 
@@ -259,12 +341,14 @@ def _edit_form_bpmn(proc: dict) -> None:
         if save_adj:
             update_artifact_content("bpmn_processes", proc["id"], {"name": new_name})
             validate_artifact("bpmn_processes", proc["id"], "ajustado", _me, new_notes)
+            _invalidate_caches()
             st.session_state["_vhub_msg"] = ("success", "🔧 Processo ajustado e validado.")
             st.rerun()
         if save_only:
             update_artifact_content("bpmn_processes", proc["id"], {"name": new_name})
             if new_notes:
                 validate_artifact("bpmn_processes", proc["id"], proc.get("validation_status") or "proposto", _me, new_notes)
+            _invalidate_caches()
             st.session_state["_vhub_msg"] = ("info", "💾 Conteúdo salvo.")
             st.rerun()
 
@@ -276,6 +360,7 @@ def _bulk_validate(table: str, items: list[dict], key: str) -> None:
     if st.button(f"✅ Validar todos pendentes ({len(pending)})", key=key):
         for item in pending:
             validate_artifact(table, item["id"], "validado", _me)
+        _invalidate_caches()
         st.session_state["_vhub_msg"] = ("success", f"✅ {len(pending)} artefato(s) validado(s).")
         st.rerun()
 
@@ -424,6 +509,13 @@ with tab_req:
         st.info("Nenhum requisito para exibir com os filtros selecionados.")
     else:
         _bulk_validate("requirements", reqs, "bulk_req")
+        page_reqs = _paginate(reqs, "req", _filter_sig)
+        _status_editor(
+            "requirements", page_reqs,
+            lambda r: f"REQ-{r.get('req_number', 0):03d} — {r.get('title', '—')}",
+            "req",
+        )
+        st.markdown("")
 
         def _render_req(r: dict) -> None:
             vs   = r.get("validation_status") or "proposto"
@@ -445,11 +537,10 @@ with tab_req:
                 st.caption(f'💬 *"{r["source_quote"]}"*')
             if r.get("validation_notes"):
                 st.caption(f"📝 Nota: {r['validation_notes']}")
-            _quick_actions("requirements", r["id"], vs, f"req_{r['id']}")
             _edit_form_req(r)
 
-        _render_group(reqs, pending=True,  render_fn=_render_req)
-        _render_group(reqs, pending=False, render_fn=_render_req)
+        _render_group(page_reqs, pending=True,  render_fn=_render_req)
+        _render_group(page_reqs, pending=False, render_fn=_render_req)
 
 # ── TAB: Termos SBVR ─────────────────────────────────────────────────────────
 _CAT_COLORS = {"concept": "#1e3a6e", "fact_type": "#0d4f2e", "role": "#4a3000", "process": "#134e4a"}
@@ -459,6 +550,9 @@ with tab_terms:
         st.info("Nenhum termo SBVR para exibir com os filtros selecionados.")
     else:
         _bulk_validate("sbvr_terms", terms, "bulk_terms")
+        page_terms = _paginate(terms, "terms", _filter_sig)
+        _status_editor("sbvr_terms", page_terms, lambda t: t.get("term", "—"), "terms")
+        st.markdown("")
 
         def _render_term(t: dict) -> None:
             vs  = t.get("validation_status") or "proposto"
@@ -477,11 +571,10 @@ with tab_terms:
             st.caption(origin)
             if t.get("validation_notes"):
                 st.caption(f"📝 Nota: {t['validation_notes']}")
-            _quick_actions("sbvr_terms", t["id"], vs, f"term_{t['id']}")
             _edit_form_term(t)
 
-        _render_group(terms, pending=True,  render_fn=_render_term)
-        _render_group(terms, pending=False, render_fn=_render_term)
+        _render_group(page_terms, pending=True,  render_fn=_render_term)
+        _render_group(page_terms, pending=False, render_fn=_render_term)
 
 # ── TAB: Regras SBVR ─────────────────────────────────────────────────────────
 _RULE_COLORS = {"constraint": "#4a0d0d", "operational": "#0d4f2e",
@@ -492,6 +585,13 @@ with tab_rules:
         st.info("Nenhuma regra SBVR para exibir com os filtros selecionados.")
     else:
         _bulk_validate("sbvr_rules", rules, "bulk_rules")
+        page_rules = _paginate(rules, "rules", _filter_sig)
+        _status_editor(
+            "sbvr_rules", page_rules,
+            lambda r: (r.get("rule_id") or "BR-?") + (f" — {r['nucleo_nominal']}" if r.get("nucleo_nominal") else ""),
+            "rules",
+        )
+        st.markdown("")
 
         def _render_rule(r: dict) -> None:
             vs    = r.get("validation_status") or "proposto"
@@ -513,11 +613,10 @@ with tab_rules:
             st.caption(origin)
             if r.get("validation_notes"):
                 st.caption(f"📝 Nota: {r['validation_notes']}")
-            _quick_actions("sbvr_rules", r["id"], vs, f"rule_{r['id']}")
             _edit_form_rule(r)
 
-        _render_group(rules, pending=True,  render_fn=_render_rule)
-        _render_group(rules, pending=False, render_fn=_render_rule)
+        _render_group(page_rules, pending=True,  render_fn=_render_rule)
+        _render_group(page_rules, pending=False, render_fn=_render_rule)
 
 # ── TAB: Processos BPMN ───────────────────────────────────────────────────────
 with tab_bpmn:
@@ -525,6 +624,9 @@ with tab_bpmn:
         st.info("Nenhum processo BPMN para exibir com os filtros selecionados.")
     else:
         _bulk_validate("bpmn_processes", bpmn, "bulk_bpmn")
+        page_bpmn = _paginate(bpmn, "bpmn", _filter_sig)
+        _status_editor("bpmn_processes", page_bpmn, lambda p: p.get("name", "—"), "bpmn")
+        st.markdown("")
 
         def _render_bpmn_proc(p: dict) -> None:
             vs     = p.get("validation_status") or "proposto"
@@ -539,11 +641,10 @@ with tab_bpmn:
             st.caption(f"🔑 `{p.get('slug','')}` · {n_ver} versão(ões)")
             if p.get("validation_notes"):
                 st.caption(f"📝 Nota: {p['validation_notes']}")
-            _quick_actions("bpmn_processes", p["id"], vs, f"bpmn_{p['id']}")
             _edit_form_bpmn(p)
 
-        _render_group(bpmn, pending=True,  render_fn=_render_bpmn_proc)
-        _render_group(bpmn, pending=False, render_fn=_render_bpmn_proc)
+        _render_group(page_bpmn, pending=True,  render_fn=_render_bpmn_proc)
+        _render_group(page_bpmn, pending=False, render_fn=_render_bpmn_proc)
 
 # ── Rodapé ────────────────────────────────────────────────────────────────────
 st.markdown("---")

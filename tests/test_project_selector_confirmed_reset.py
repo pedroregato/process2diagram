@@ -27,8 +27,24 @@ CHANGE of that value, not merely because it differs from Pipeline's
 already-confirmed project_id.
 """
 
+import pytest
 import streamlit as st
 from ui.project_selector import _init
+
+
+@pytest.fixture(autouse=True)
+def _restore_real_session_state():
+    """Every test in this module replaces st.session_state wholesale with a
+    plain-dict fake (see _fresh_session() below) and never restores it —
+    since streamlit.session_state is a module-level singleton, this leaked
+    into every OTHER test file that runs later in the same pytest process
+    (alphabetically after "project_selector"), breaking AppTest-based tests
+    that rely on Streamlit's real SessionStateProxy (discovered via
+    tests/test_validation_hub_pagination.py — passed isolated, failed in the
+    full suite with zero elements rendered, no exception raised)."""
+    original = st.session_state
+    yield
+    st.session_state = original
 
 
 class _FakeSessionState(dict):

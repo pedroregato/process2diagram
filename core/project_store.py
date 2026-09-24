@@ -1531,7 +1531,8 @@ def list_requirements_light(project_id: str) -> list[dict]:
                 "id, req_number, title, description, req_type, priority, status, "
                 "origin, doc_ref, first_meeting_id, last_meeting_id, "
                 "owner, status_note, cited_by, source_quote, project_id, "
-                "resolution_notes, implemented_at"
+                "resolution_notes, implemented_at, "
+                "validation_status, validation_notes"
             )
             .eq("project_id", project_id)
             .order("req_number")
@@ -3001,6 +3002,42 @@ def _exact_count(db, table: str, filters: dict | None = None) -> int:
             q = q.eq(col, val)
     resp = q.limit(1).execute()
     return resp.count or 0
+
+
+_VALIDATION_STATUSES = ("proposto", "em_revisão", "validado", "ajustado", "rejeitado")
+_VALIDATABLE_TABLES = ("requirements", "sbvr_terms", "sbvr_rules", "bpmn_processes")
+
+
+def count_validation_status(project_id: str) -> dict:
+    """Agrega contagens de validation_status entre requirements/sbvr_terms/
+    sbvr_rules/bpmn_processes de um projeto via count="exact" (_exact_count),
+    sem carregar nenhuma linha de conteúdo — usado pelos KPIs do topo de
+    pages/ValidationHub.py (NAV-03: antes os KPIs vinham de len() sobre as
+    listas completas já carregadas para renderizar a página).
+
+    Linhas com validation_status NULL (registros legados, anteriores ao
+    default da coluna) contam como "proposto" — total da tabela menos a soma
+    dos demais status conhecidos — mesmo critério usado no resto do app via
+    `item.get("validation_status") or "proposto"`.
+    """
+    counts = {s: 0 for s in _VALIDATION_STATUSES}
+    db = _db()
+    if not db:
+        return counts
+    for table in _VALIDATABLE_TABLES:
+        try:
+            total = _exact_count(db, table, {"project_id": project_id})
+            non_proposto_sum = 0
+            for status in _VALIDATION_STATUSES:
+                if status == "proposto":
+                    continue
+                c = _exact_count(db, table, {"project_id": project_id, "validation_status": status})
+                counts[status] += c
+                non_proposto_sum += c
+            counts["proposto"] += max(0, total - non_proposto_sum)
+        except Exception:
+            continue
+    return counts
 
 
 def get_domain_stats(tenant_id: str | None) -> dict:
