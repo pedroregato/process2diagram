@@ -235,7 +235,7 @@ def _get_or_create_course_project() -> dict | None:
     username = get_current_user() or "default"
     project_name = f"Curso P2D - {username}"
     try:
-        contexts = list_contexts()
+        contexts = list_contexts(tenant_id=st.session_state.get("_tenant_id"))
         for ctx in contexts:
             if ctx.get("name") == project_name:
                 return ctx

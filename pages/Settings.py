@@ -1104,7 +1104,7 @@ $$;
 
         # Formulário para adicionar/atualizar
         with st.expander("➕ Associar / Atualizar calendar_id", expanded=False):
-            projects = list_contexts()
+            projects = list_contexts(tenant_id=st.session_state.get("_tenant_id"))
             if not projects:
                 st.caption("Nenhum contexto cadastrado.")
             else:

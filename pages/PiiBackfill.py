@@ -27,7 +27,7 @@ import streamlit as st
 
 from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured, get_supabase_client
-from core.project_store import list_projects, list_meetings_pii_summary
+from core.project_store import list_contexts, list_meetings_pii_summary
 from core.pipeline import backfill_meeting_pii
 
 apply_auth_gate()
@@ -53,7 +53,7 @@ if not db:
 
 # ── 1. Projeto ────────────────────────────────────────────────────────────────
 st.markdown("## 1️⃣ Projeto")
-projects = list_projects()
+projects = list_contexts(tenant_id=st.session_state.get("_tenant_id"))
 if not projects:
     st.warning("Nenhum projeto encontrado no banco de dados.")
     st.stop()

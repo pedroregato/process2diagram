@@ -28,7 +28,7 @@ from modules.supabase_client import supabase_configured
 from modules.session_security import get_session_llm_client, render_api_key_readonly
 from modules.ingest import load_transcript
 from core.project_store import (
-    list_projects, create_project,
+    list_contexts, create_project,
     is_file_processed, list_batch_log, list_meetings,
 )
 from core.batch_pipeline import (
@@ -119,7 +119,7 @@ def _load_files_from_folder(folder_path: str) -> list[tuple[str, str]]:
 # ── 1. Seleção de Projeto ─────────────────────────────────────────────────────
 st.markdown("## 1️⃣ Projeto")
 
-projects = list_projects()
+projects = list_contexts(tenant_id=st.session_state.get("_tenant_id"))
 proj_names   = [p["name"] for p in projects] + ["➕ Criar novo projeto"]
 proj_map     = {p["name"]: p for p in projects}
 _active_pid  = st.session_state.get("active_project_id")

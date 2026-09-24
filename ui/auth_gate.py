@@ -110,10 +110,7 @@ def render_login_page() -> None:
     tenant_mode = _is_tenant_mode()
     erro        = st.session_state.get("_login_erro", False)
 
-    if isinstance(erro, str) and erro.startswith("tenant:"):
-        motivo_diag = erro[7:]
-        erro_html = f'<div class="l-err">⚠️ Falha no login. Diagnóstico: {motivo_diag}</div>'
-    elif erro == "tenant":
+    if erro == "tenant":
         erro_html = '<div class="l-err">⚠️ Domínio, usuário ou senha incorretos.</div>'
     elif erro == "local":
         erro_html = '<div class="l-err">⚠️ Usuário ou senha incorretos.</div>'
@@ -195,13 +192,18 @@ def _handle_tenant_login(domain: str, usuario: str, senha: str) -> None:
         apply_config_to_session(config)
         st.rerun()
     else:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Login tenant falhou: domain=%s usuario=%s motivo=%s",
+            domain.strip(), usuario.strip(), motivo,
+        )
         log_login_event(
             login=usuario.strip(),
             domain=domain.strip(),
             success=False,
             fail_reason=motivo or "credenciais inválidas",
         )
-        st.session_state["_login_erro"] = f"tenant:{motivo}"
+        st.session_state["_login_erro"] = "tenant"
         st.rerun()
 
 

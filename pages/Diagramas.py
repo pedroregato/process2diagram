@@ -44,7 +44,7 @@ hub: KnowledgeHub | None = st.session_state.get("hub")
 
 # ── Fallback: load from Supabase ──────────────────────────────────────────────
 def _render_from_supabase() -> None:
-    from core.project_store import list_projects, list_bpmn_processes, list_bpmn_versions
+    from core.project_store import list_contexts, list_bpmn_processes, list_bpmn_versions
 
     st.markdown("## 📐 Visualizador de Diagramas")
     st.caption("Nenhuma transcrição processada nesta sessão — carregando diagramas salvos no Supabase.")
@@ -55,7 +55,7 @@ def _render_from_supabase() -> None:
         st.info("Supabase não configurado. Processe uma transcrição primeiro.")
         return
 
-    projects = list_projects()
+    projects = list_contexts(tenant_id=st.session_state.get("_tenant_id"))
     if not projects:
         st.info("Nenhum projeto encontrado no Supabase.")
         return

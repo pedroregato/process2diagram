@@ -34,7 +34,7 @@ from modules.cost_estimator import (
     cost_for_tokens,
     get_usd_brl_rate,
 )
-from core.project_store import list_projects, _db, _ok
+from core.project_store import list_contexts, _db, _ok
 
 apply_auth_gate()
 
@@ -82,7 +82,7 @@ st.markdown("## 📊 1. Histórico Real de Consumo")
 if not supabase_configured():
     st.info("Supabase não configurado — histórico indisponível. Veja as seções 2 e 3 para estimativas.")
 else:
-    projects = list_projects()
+    projects = list_contexts(tenant_id=st.session_state.get("_tenant_id"))
     if projects:
         proj_map  = {p["name"]: p for p in projects}
         sel_proj  = st.selectbox("Contexto", list(proj_map.keys()), key="ce_proj")

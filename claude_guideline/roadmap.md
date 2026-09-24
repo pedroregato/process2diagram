@@ -4,6 +4,122 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC211 — Concluído (v5.16 / 2026-09-23) — Navegabilidade Onda 1 (NAV-01 + NAV-02): isolamento de tenant e mensagem de login
+
+**Origem:** `melhorias/parciais/navegabilidade.md` — auditoria de navegabilidade em produção (41 páginas, contexto SDEA, domínio fgv), 15 tarefas `NAV-01..15` em 3 ondas. Esta entrega cobre os 2 primeiros itens de segurança da Onda 1 ("Estabilizar"); NAV-03 a NAV-15 ficam de fora desta rodada — ver avaliação em `MANIFESTO_MELHORIAS.md §navegabilidade.md`.
+
+**NAV-01 — Filtrar contextos por domínio (tenant), CRÍTICA**
+- [x] `core/project_store.py:374` — removido o alias cego `list_projects = list_contexts` (chamado sem `tenant_id` em todo o código, devolvia contextos de **todos** os tenants)
+- [x] 14 pontos de chamada corrigidos para `list_contexts(tenant_id=st.session_state.get("_tenant_id"))`, mesmo padrão de `pages/Home.py`/`ui/project_selector.py`: `pages/Diagramas.py`, `CostEstimator.py`, `Pipeline.py`, `Settings.py` (aba Calendar), `Capacitacao.py` (`_get_or_create_course_project`), e as 9 páginas admin-only de Manutenção (`BatchRunner`, `BpmnBackfill`, `DmnBackfill`, `IbisBackfill`, `MinutesBackfill`, `PiiBackfill`, `ProvocationsBackfill`, `RequirementsBackfill`, `TranscriptBackfill`)
+- [x] `Settings.py` e `Capacitacao.py` — 2 vazamentos a mais do que os listados na proposta original (achados durante a auditoria de `grep -rn "list_contexts()"`); `Capacitacao.py` era o mais sério: buscava por **nome** entre todos os tenants (`"Curso P2D - {username}"`), com risco de reaproveitar/colidir com um projeto de treinamento de outro tenant em caso de coincidência de nome
+- [x] `pages/MasterAdmin.py` — import não usado de `list_projects` removido (a página já usa `list_contexts(tenant_id=sel_tid)` corretamente com o seletor explícito de tenant — não alterada, conforme a proposta)
+- [x] `tests/test_tenant_isolation.py` — 6 testes: filtragem real por tenant (fake DB), guard estático que falha se qualquer `pages/*.py` chamar `list_contexts()` sem argumento ou referenciar `list_projects`, e confirmação de que o alias foi removido de `core.project_store`
+
+**NAV-02 — Mensagem de login genérica, ALTA**
+- [x] `modules/tenant_auth.py::login_tenant_debug()` — a branch de senha incorreta parava de devolver `f"Hash não confere. Armazenado={stored[:12]}… Calculado={computed[:12]}…"` (vazava prefixo de 2 hashes SHA-256 para qualquer visitante não autenticado); agora devolve só `"Senha incorreta."`
+- [x] `ui/auth_gate.py::_handle_tenant_login()` — removida a branch `erro.startswith("tenant:")` que interpolava o motivo detalhado na HTML da tela de login; toda falha de credencial multi-tenant grava `_login_erro = "tenant"` (mensagem genérica já existente, sem distinguir domínio/usuário/senha); motivo detalhado agora só via `logging.getLogger(__name__).warning(...)`, nunca chega à UI
+- [x] `tests/test_auth_messages.py` — 3 testes: usuário inexistente e senha errada nunca devolvem "Hash"/"Armazenado"/"Calculado" no motivo, e guard estático confirma que `ui/auth_gate.py` não interpola mais `motivo`/`motivo_diag` na tela de login
+
+**Fora desta rodada (decisão consciente):** NAV-03 (paginação de `ValidationHub.py`), NAV-04 (fonte única do contexto ativo), NAV-05 (sessão sobrevive a F5 — exige tabela nova + mecanismo de cookie/token) fecham a Onda 1 mas pedem decisões de design própria; NAV-06 a NAV-15 (Ondas 2-3, reorganização de menu/desempenho/consistência) não avaliadas item a item nesta rodada.
+
+- **Testes:** `tests/test_tenant_isolation.py` (6) + `tests/test_auth_messages.py` (3) novos; suíte completa **1024 testes, 0 falhas**, sem regressão
+- **Proposta:** movida de artefato de patch cru (`melhorias/navegabilidade/navegacao001.md`) para `melhorias/parciais/navegabilidade.md`, status registrado em `MANIFESTO_MELHORIAS.md`
+
+---
+
+### PC210 — Concluído (v5.16 / 2026-08-22) — Fallback de ingestão para o formato manual "Copiar transcrição" do Teams
+
+**Contexto:** ao testar o PC209 contra uma transcrição real (reunião SDEA/Auditoria, nota de
+qualidade "E"), `parse_turn_spans()` e o `_turn_positions()` já existente de
+`agent_provocations.py` (PC190) retornaram **zero turnos** — nenhum dos dois achava
+estrutura de falante/timestamp nessa transcrição real. Usuário confirmou: quando não se tem
+permissão de exportar a transcrição oficial do Teams (só quem criou a reunião tem esse
+direito), a única opção é copiar manualmente do painel ao vivo do navegador — e esse
+"Copiar transcrição" produz um layout bem diferente do export oficial (duplica a linha do
+falante, escreve a duração por extenso em português colada ao timestamp curto, ex.:
+`"0 minutos 4 segundos0:04"`). Nenhuma linha bate com `_SPEAKER_LINE_PAT`
+(`"Nome  H:MM:SS"`), então `modules/transcript_preprocessor.py` caía inteiro no modo "texto
+não estruturado" — perdendo toda marcação de falante/timestamp, não só para o PC209, mas
+também para as janelas de evidência de `asymmetry`/`premise` do `AgentProvocations` já em
+produção desde o PC190. Bug pré-existente, exposto pelo teste do PC209, não causado por ele.
+
+- `modules/transcript_preprocessor.py::_parse_teams_verbose_duration_transcript()` — parser
+  fallback para esse formato. 2 passadas determinísticas: (1) remove linhas de "duração +
+  timestamp colados" (padrão autocontido, não depende de nomes conhecidos); (2) remove
+  linhas de "nome solto" (uma linha cujo texto é exatamente o prefixo da linha-marcador
+  seguinte). `_pt_duration_to_timestamp()` converte a duração por extenso ("1 hora 10
+  minutos 53 segundos") para o formato `H:MM:SS`/`M:SS` usado no resto do sistema.
+  `_parse_teams_transcript()` tenta o formato primário primeiro; só usa o fallback quando
+  ele achar mais turnos (mesma heurística "usa o que casar mais" de
+  `agent_provocations.py::_turn_positions()`).
+- Fix colateral em `modules/transcript_time_parser.py::parse_turn_spans()` (PC209): a linha
+  de cabeçalho "sexta-feira, 14 de agosto de 2026 16:00 - 17:30" (intervalo de horário da
+  reunião) estava sendo confundida com um marcador de turno ("Nome 17:30") — nenhum nome de
+  falante real contém um horário embutido, então isso vira um filtro barato e seguro
+  (`_NESTED_TIME_IN_NAME`).
+- **Verificado contra a transcrição real:** de 0 turnos detectados para 30 (batendo
+  exatamente com a contagem de turnos real do parser primário/`_Turn`); dominância de fala
+  calculada corretamente (Maria de Fátima Duarte Moura, 79.5% das palavras, acima do limiar
+  de 65%); risco de atribuição de falante identificou "Deise" corretamente, com a citação
+  verbatim como evidência.
+- Sem chave de LLM neste ambiente de teste — só a parte 100% determinística
+  (dominância/atribuição) foi verificada contra a transcrição real; os 3 `gap_type` novos
+  (dependem de LLM) ficam para verificação numa sessão com provider configurado.
+
+---
+
+### PC209 — Concluído (v5.16 / 2026-08-15) — `AgentCommunicationNoise` ganha dinâmica de turno: dominância de fala, interrupção, tema repetido e rejeitado, desqualificação de falante, risco de atribuição
+
+**Contexto:** usuário trouxe uma transcrição real (reunião SDEA/Auditoria, Teams) onde um
+participante ("Maria de Fátima") claramente domina a conversa, corta e apressa o outro
+participante, e o próprio Pedro nomeia isso em tempo real ("Claro, você está falando o
+tempo todo."). O pipeline não sinalizava nada disso — nem como ruído de comunicação, nem
+como provocação. Investigação mostrou que é uma 3ª categoria estrutural, distinta das duas
+existentes: não é ambiguidade de conteúdo (`communication_noise`) nem objeção/ausência/
+premissa não examinada (`provocations`) — é dinâmica de turno/tempo de fala.
+
+- **`SpeakerDominance`** (100% determinístico, sem LLM) — `modules/transcript_time_parser.py`
+  ganha `parse_turn_spans()`/`TurnSpan` (segmenta a transcrição por falante+timestamp+
+  conteúdo, tolerante a espaço único — mesma lição do bug do PC190). `agent_communication_noise.py::
+  _compute_dominance()` calcula % de palavras/turnos por falante direto do texto; falante
+  ≥65% das palavras é sinalizado como dominante. Zero chamada LLM extra.
+- **`SpeakerAttributionRisk`** (100% determinístico) — caso real do usuário: uma segunda
+  funcionária (Deise) participou da reunião no mesmo notebook/microfone de Maria de Fátima,
+  então sua fala pode ter sido atribuída ao rótulo errado. Diarização real por texto não é
+  possível sem áudio (ver proposta de áudio abaixo) — o que É possível e seguro:
+  `_compute_attribution_risks()` cruza `hub.minutes.participants` contra os rótulos de
+  falante reais da transcrição; participante citado (ex. "obrigado, Deise") mas nunca dono
+  de um turno próprio gera um alerta de qualidade de dado — nunca uma correção/reatribuição,
+  e nunca sem uma citação verbatim como evidência (sem citação, não alerta — mesma
+  disciplina "nunca aprova por omissão" do resto do sistema).
+- **3 novos `gap_type` evidence-backed** em `CommunicationGap` (`interrupted_resumed`,
+  `repeated_unresolved_topic`, `speaker_disqualification`) — LLM propõe com `references`
+  (2-3 citações verbatim + timestamp + falante), `agent_communication_noise.py::
+  _validate_and_rank_strict_gaps()` confere cada citação contra a transcrição real, o
+  falante contra turnos de fato existentes, e a ordem/identidade exigida por tipo (mesmo
+  falante na interrupção+retomada; timestamps crescentes na repetição; alvo real e distinto
+  do falante na desqualificação) — mesmo "coração da proposta" de `agent_provocations.py`
+  (PC190): nunca aprova por omissão. `rejected_count`/`rejected_reasons` em
+  `CommunicationNoiseModel` dão a mesma observabilidade de taxa de reprovação do PC190-fix.
+- **Robustez a ruído ASR do Teams** (pedido explícito do usuário: "ninguém fala em Inglês,
+  ninguém repete Carlos, Carlos, Carlos") — `skill_communication_noise.md` instrui o LLM a
+  nunca tratar os marcadores `[? ...]`/`[rep: ...]` (já produzidos por
+  `modules/transcript_preprocessor.py` antes do agente rodar) como fala real; o validador
+  determinístico não precisa de proteção extra porque opera sobre `hub.transcript_clean`
+  (já limpo) e sobre citações que precisam bater literalmente com ele.
+- `core/knowledge_hub.py`: `SpeakerDominance`, `SpeakerAttributionRisk`,
+  `CommunicationGap.{target_speaker,references,confidence}`, `CommunicationNoiseModel.
+  {dominance,attribution_risks,rejected_count,rejected_reasons}` + guards em `migrate()`.
+  `core/project_store.py` (load path) e `ui/tabs/communication_noise_tab.py` (seções
+  "Dominância de Fala" e "Risco de Atribuição de Falante" + badges dos 3 gap_types novos)
+  atualizados. `skill_communication_noise.md` v1.2.
+- **Proposta de evolução registrada, não implementada:** `melhorias/backlog/
+  analise-de-audio-em-reunioes.md` — considerar processamento de áudio (não só transcrição
+  texto) para diarização real e detecção de sobreposição de fala genuína, resolvendo de
+  forma definitiva o que a flag de atribuição hoje só sinaliza como risco.
+
+---
+
 ### PC208 — Concluído (v5.15 / 2026-07-27) — Nova seção lateral "Artefatos": divisão por assunto
 
 **Contexto:** usuário relatou que `pages/Artefatos.py` (3332 linhas, 13 `st.tabs()`) tinha

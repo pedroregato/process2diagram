@@ -371,7 +371,9 @@ def delete_ata_template(template_id: str) -> bool:
 
 
 # ── Compatibility aliases (remove after v4.21 rollout confirmed) ──────────────
-list_projects  = list_contexts
+# list_projects removed (NAV-01, PC211) — was a bare alias for list_contexts()
+# with no tenant_id, so every caller silently returned contexts across all
+# tenants. Callers now pass tenant_id=st.session_state.get("_tenant_id") explicitly.
 get_project    = get_context
 create_project = create_context
 			

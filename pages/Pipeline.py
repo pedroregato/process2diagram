@@ -24,7 +24,7 @@ from core.rerun_handlers import handle_rerun
 from core.project_store import (
     create_meeting, save_transcript, save_meeting_artifacts,
     save_sbvr_from_hub, save_bpmn_from_hub, save_requirements_from_hub,
-    list_contexts as list_projects, list_meetings, load_meeting_as_hub,
+    list_contexts, list_meetings, load_meeting_as_hub,
     log_meeting_processing,
 )
 from agents.agent_req_reconciler import AgentReqReconciler
@@ -539,7 +539,7 @@ else:
         st.stop()
 
     # Mostra o contexto ativo como informação (somente leitura)
-    _projects = list_projects()
+    _projects = list_contexts(tenant_id=st.session_state.get("_tenant_id"))
     _active_proj = next((p for p in _projects if p["id"] == selected_proj_id), None)
     if _active_proj:
         st.caption(f"Contexto ativo: **{_active_proj['name']}**")

@@ -36,7 +36,7 @@ from modules.tenant_config import (
     load_all_config, save_config, delete_config,
     mask_key, PROVIDER_KEY_MAP, PREFS_MAP, PREFS_LABELS,
 )
-from core.project_store import list_projects, list_contexts, create_project
+from core.project_store import list_contexts, create_project
 
 # ── Header ─────────────────────────────────────────────────────────────────────
 st.markdown("# 🛡️ Master Administration")

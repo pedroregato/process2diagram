@@ -22,7 +22,7 @@ from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured
 from modules.ingest import load_transcript
 from core.project_store import (
-    list_projects,
+    list_contexts,
     list_meetings_without_transcript,
     save_transcript_text,
 )
@@ -43,7 +43,7 @@ if not supabase_configured():
 
 # ── 1. Projeto ────────────────────────────────────────────────────────────────
 st.markdown("## 1️⃣ Projeto")
-projects = list_projects()
+projects = list_contexts(tenant_id=st.session_state.get("_tenant_id"))
 if not projects:
     st.warning("Nenhum projeto disponível.")
     st.stop()

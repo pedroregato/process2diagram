@@ -31,7 +31,7 @@ from modules.config import AVAILABLE_PROVIDERS
 from modules.session_security import render_api_key_readonly
 from modules.ingest import load_transcript
 from core.project_store import (
-    list_projects,
+    list_contexts,
     list_meetings_without_bpmn,
     save_transcript,
     save_bpmn_from_hub,
@@ -82,7 +82,7 @@ if not bpmn_tables_exist():
 
 # ── 1. Projeto ────────────────────────────────────────────────────────────────
 st.markdown("## 1️⃣ Contexto")
-projects = list_projects()
+projects = list_contexts(tenant_id=st.session_state.get("_tenant_id"))
 proj_map     = {p["name"]: p for p in projects}
 _active_pid  = st.session_state.get("active_project_id")
 _default_idx = next((i for i, p in enumerate(projects) if p["id"] == _active_pid), 0)

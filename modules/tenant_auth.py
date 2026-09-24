@@ -101,7 +101,10 @@ def login_tenant(domain: str, login: str, password: str) -> dict | None:
 
 def login_tenant_debug(domain: str, login: str, password: str) -> tuple[dict | None, str]:
     """Versão diagnóstica de login_tenant — retorna (resultado, motivo_falha).
-    Usar apenas para debug; remover após resolver o problema.
+
+    `motivo_falha` é só para log/auditoria interna (NAV-02, PC211) — nunca deve
+    ser exibido na UI de login. Nenhuma variante do motivo inclui hash ou
+    qualquer outro segredo; ui/auth_gate.py exibe sempre uma mensagem genérica.
     """
     client = get_supabase_client()
     if client is None:
@@ -154,7 +157,7 @@ def login_tenant_debug(domain: str, login: str, password: str) -> tuple[dict | N
     stored = user.get("password_hash", "").strip()
     computed = _hash(password)
     if stored != computed:
-        return None, f"Hash não confere. Armazenado={stored[:12]}… Calculado={computed[:12]}…"
+        return None, "Senha incorreta."
 
     result = {
         "tenant_id":    tenant_id,
