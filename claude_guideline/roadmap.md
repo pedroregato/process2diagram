@@ -4,6 +4,18 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC216 — Concluído (v5.16 / 2026-09-24) — Navegabilidade Onda 2 (NAV-10): ícones únicos
+
+**Origem:** `melhorias/parciais/navegabilidade.md` — 9 pares de páginas com o mesmo emoji, confirmados ainda válidos na auditoria de priorização da Onda 2.
+
+**NAV-10 — Ícones únicos por página, MÉDIA**
+- [x] `app.py` — 9 ícones trocados pra eliminar as 9 duplicatas: Cenários de Custo (💰→🧮), Modelagem Formal (📐→🧱), Ferramentas do Assistente (💬→🛠️), Arquiteturas (🏗️→🏛️), Guia CKF (🧠→💡), Cache LLM (🗄️→💾), Minutes Backfill (📝→🗒️), IBIS Backfill (🗺️→🧵), Backfill — Relatório Executivo (📄→🖨️, já movido pro NAV-07a nesta mesma rodada)
+- [x] `tests/test_app_page_icons_unique.py` — 2 testes: nenhum ícone repetido entre as 52 páginas registradas (admin + não-admin), guarda contra a regex silenciosamente parar de casar nada
+
+- **Testes:** `tests/test_app_page_icons_unique.py` (2 novos); suíte completa **1060 testes, 0 falhas**, sem regressão
+
+---
+
 ### PC215 — Concluído (v5.16 / 2026-09-24) — Navegabilidade Onda 2 (NAV-07a): ReportBackfill vira admin-only
 
 **Origem:** `melhorias/parciais/navegabilidade.md` — achado durante a avaliação/priorização da Onda 2: `pages/ReportBackfill.py` não tinha nenhum gate de `is_admin()` e ficava em "Análise" (visível a todo usuário autenticado) — a única página tipo-backfill do app fora de "Manutenção". Qualquer usuário comum conseguia disparar `AgentSynthesizer` (custo real de LLM) pra qualquer reunião do próprio contexto sem checagem de perfil nenhuma. Mesma classe de achado do NAV-01/02, sem cross-tenant leak (o contexto já é isolado por tenant desde o NAV-01), mas inconsistente com a convenção do resto do app (as outras 10 páginas de Manutenção só existem no dict de `app.py` quando `is_admin()` é `True` — nenhuma delas se autogatilha internamente).
