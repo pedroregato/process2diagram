@@ -4,6 +4,21 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC215 — Concluído (v5.16 / 2026-09-24) — Navegabilidade Onda 2 (NAV-07a): ReportBackfill vira admin-only
+
+**Origem:** `melhorias/parciais/navegabilidade.md` — achado durante a avaliação/priorização da Onda 2: `pages/ReportBackfill.py` não tinha nenhum gate de `is_admin()` e ficava em "Análise" (visível a todo usuário autenticado) — a única página tipo-backfill do app fora de "Manutenção". Qualquer usuário comum conseguia disparar `AgentSynthesizer` (custo real de LLM) pra qualquer reunião do próprio contexto sem checagem de perfil nenhuma. Mesma classe de achado do NAV-01/02, sem cross-tenant leak (o contexto já é isolado por tenant desde o NAV-01), mas inconsistente com a convenção do resto do app (as outras 10 páginas de Manutenção só existem no dict de `app.py` quando `is_admin()` é `True` — nenhuma delas se autogatilha internamente).
+
+**NAV-07a — gatear e mover ReportBackfill, elevado de "MÉDIA" pra tratamento imediato**
+- [x] `app.py` — `pages/ReportBackfill.py` movido da seção "Análise" pra "Manutenção" (dentro do `if _admin:`) — mesmo mecanismo de proteção de toda página de backfill do app; nenhuma checagem `is_admin()` adicionada à própria página (seria inconsistente — nenhuma das 10 páginas irmãs faz isso)
+- [x] Título do menu alinhado à convenção das páginas irmãs: "Relatório Executivo" → "Backfill — Relatório Executivo" (como "Backfill — Provocações", "Backfill — PII")
+- [x] `core/tools/tools_meetings_requirements.py` — descrição estática de páginas usada por `get_system_capabilities()` (texto que o Assistente usa pra descrever a si mesmo) ganha o sufixo "(admin)" em ReportBackfill, mesma convenção já usada em DatabaseOverview/BatchRunner
+- [x] `tests/test_report_backfill_admin_gate.py` — 4 testes estáticos sobre o texto-fonte de `app.py`: ausente de "Análise", presente em "Manutenção", seção só registrada quando `_admin` é `True`, título segue a convenção "Backfill — X"
+
+- **Testes:** `tests/test_report_backfill_admin_gate.py` (4 novos); suíte completa **1060 testes, 0 falhas**, sem regressão
+- **Continuação:** NAV-07b (aba de leitura em Artefatos) — ver PC218
+
+---
+
 ### PC214 — Concluído (v5.16 / 2026-09-24) — Navegabilidade Onda 1 (NAV-05): sessão persistente — fecha a Onda 1
 
 **Origem:** `melhorias/parciais/navegabilidade.md` — última tarefa do NAV-05, fecha a Onda 1 ("Estabilizar") completa (NAV-01 a NAV-05, PC211-214).

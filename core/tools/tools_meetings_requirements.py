@@ -1449,7 +1449,7 @@ class _MeetingsRequirementsToolsMixin:
   • KnowledgeHub     — visão consolidada do KnowledgeHub da reunião
   • KnowledgeGraph   — grafo de conhecimento interativo (entidades, fatos, contradições)
   • MeetingROI       — dashboard ROI-TR por tipo de reunião
-  • ReportBackfill   — geração/regeneração de relatório executivo
+  • ReportBackfill   — geração/regeneração de relatório executivo (admin)
   • EntityRecognition — reconhecimento de entidades (NER) por reunião
   • DocumentManager  — gestão de documentos com extração de artefatos e análise cruzada
   • CostBenefitScenarios — compara combinações agente→modelo (custo/qualidade) antes de aplicar ao pipeline

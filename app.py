@@ -68,7 +68,6 @@ pages = {
         st.Page("pages/Assistente.py",        title="Assistente",            icon="💬"),
         st.Page("pages/ValidationHub.py",     title="Validação",             icon="✅"),
         st.Page("pages/MeetingROI.py",        title="Qualidade ROI-TR",      icon="📊"),
-        st.Page("pages/ReportBackfill.py",    title="Relatório Executivo",   icon="📄"),
         st.Page("pages/EntityRecognition.py", title="Entidades (NER)",       icon="🔍"),
         st.Page("pages/KnowledgeHub.py",      title="Knowledge Hub",         icon="🧠"),
         st.Page("pages/KnowledgeGraph.py",    title="Grafo de Conhecimento", icon="🕸️"),
@@ -115,6 +114,7 @@ if _admin:
         st.Page("pages/TesteProvocacoes.py",   title="Teste — Provocações", icon="🎭"),
         st.Page("pages/ProvocationsBackfill.py", title="Backfill — Provocações", icon="🌉"),
         st.Page("pages/PiiBackfill.py",         title="Backfill — PII",         icon="🔐"),
+        st.Page("pages/ReportBackfill.py",      title="Backfill — Relatório Executivo", icon="🖨️"),
     ]
 pg = st.navigation(pages)
 
