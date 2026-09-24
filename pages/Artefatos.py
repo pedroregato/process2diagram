@@ -18,12 +18,14 @@ if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
 import streamlit as st
+import streamlit.components.v1 as components
 from concurrent.futures import ThreadPoolExecutor as _TPE
 
 from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured
 from modules.reqtracker_exporter import to_html as export_html, to_pdf as export_pdf
 from ui.project_selector import require_active_project
+from core.project_store import list_reports_by_project, get_report_html
 from ui.artefatos_shared import (
     inject_artefatos_css, render_artefatos_nav,
     dmn_session_key, ibis_session_key, noise_session_key,
@@ -159,6 +161,37 @@ with st.expander("📦 Exportar Relatório", expanded=False):
             mime="application/pdf",
             key="rt_dl_pdf",
         )
+
+# ── Relatórios (NAV-07b, PC218) ────────────────────────────────────────────────
+# Somente leitura — gerar/regenerar continua restrito a
+# Manutenção → "Backfill — Relatório Executivo" (admin only, NAV-07a).
+with st.expander("📄 Relatórios das Reuniões", expanded=False):
+    st.caption(
+        "Relatório Executivo já gerado para reuniões deste contexto. Para gerar ou "
+        "regenerar um relatório, peça a um administrador (Manutenção → Backfill — "
+        "Relatório Executivo)."
+    )
+    _reports = list_reports_by_project(project_id)
+    if not _reports:
+        st.info("Nenhum relatório executivo gerado ainda para este contexto.")
+    else:
+        _report_labels = {
+            f"Reunião {r['meeting_number']} — {r['title']} ({r['meeting_date'][:10]})": r["id"]
+            for r in _reports
+        }
+        _sel_report = st.selectbox("Reunião", list(_report_labels.keys()), key="art_report_sel")
+        _report_html = get_report_html(_report_labels[_sel_report])
+        if not _report_html:
+            st.warning("Não foi possível carregar o relatório desta reunião.")
+        else:
+            st.download_button(
+                "⬇️ Download HTML",
+                data=_report_html.encode("utf-8"),
+                file_name=f"Relatorio_{_sel_report.split(' — ')[0].replace(' ', '_')}.html",
+                mime="text/html",
+                key="art_report_dl",
+            )
+            components.html(_report_html, height=700, scrolling=True)
 
 st.markdown("---")
 

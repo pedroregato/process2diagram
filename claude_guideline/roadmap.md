@@ -4,6 +4,21 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC218 — Concluído (v5.16 / 2026-09-24) — Navegabilidade Onda 2 (NAV-07b): leitura de relatórios pra usuário comum
+
+**Origem:** `melhorias/parciais/navegabilidade.md` — segunda metade do NAV-07, depois do NAV-07a (PC215) ter movido a geração/regeneração pra admin-only.
+
+**NAV-07b — aba "Relatórios" somente-leitura na Central de Artefatos, MÉDIA**
+- [x] `pages/Artefatos.py` — nova seção `📄 Relatórios das Reuniões` (expander, mesmo padrão de `📦 Exportar Relatório`) usando `core.project_store.list_reports_by_project()` (já existia, sem nenhum consumidor até agora) + `get_report_html()`; seletor de reunião, preview via `components.html()` (mesmo padrão de `pages/ReportBackfill.py`), botão de download HTML
+- [x] Caption explícita: "Para gerar ou regenerar um relatório, peça a um administrador" — deixa claro que geração continua restrita (NAV-07a), essa aba é só leitura
+- [x] `tests/test_artefatos_reports_tab.py` — 3 testes: estado vazio (sem relatórios), seletor + reunião correta com relatórios disponíveis, caption aponta pra admin
+- [x] `tests/test_artefatos_pages_boot_smoke.py` — mock de `list_reports_by_project` adicionado ao boot-smoke existente de `Artefatos.py` (evita chamada real ao Supabase nesse teste)
+
+- **Testes:** `tests/test_artefatos_reports_tab.py` (3 novos); suíte completa **1060 testes, 0 falhas**, sem regressão
+- **Fecha o NAV-07** (junto com PC215/NAV-07a)
+
+---
+
 ### PC217 — Concluído (v5.16 / 2026-09-24) — Navegabilidade Onda 2 (NAV-11 parcial): PT-BR — os 2 fixes concretos
 
 **Origem:** `melhorias/parciais/navegabilidade.md` — só os 2 itens concretos citados no plano; a varredura ampla (20 arquivos com match de `[a-z]cao\b|[a-z]coes\b`, majoritariamente ruído — nomes de variável, comentários) fica no backlog.

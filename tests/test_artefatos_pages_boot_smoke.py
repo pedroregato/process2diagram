@@ -50,7 +50,8 @@ class TestVisaoGeralBootSmoke:
              patch(f"{_PS}.bpmn_tables_exist", lambda: False), \
              patch(f"{_PS}.list_documents", lambda pid, **_: []), \
              patch(f"{_PS}.get_asset_metadata_map", lambda pid: {}), \
-             patch(f"{_PS}.list_provocations_by_project", lambda pid, status=None: []):
+             patch(f"{_PS}.list_provocations_by_project", lambda pid, status=None: []), \
+             patch("core.project_store.list_reports_by_project", lambda pid: []):
             at = _base_app("pages/Artefatos.py")
             at.run()
         assert not at.exception
