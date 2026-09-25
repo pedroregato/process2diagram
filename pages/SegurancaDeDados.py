@@ -650,9 +650,9 @@ st.markdown("""
     </tr>
     <tr>
       <td><strong>Telemetria LLM</strong> (<code>llm_telemetry</code>)</td>
-      <td>90 dias</td>
-      <td>Via <code>delete_expired_llm_cache()</code></td>
-      <td>Admin — limpeza automática</td>
+      <td>Indefinido — só metadados operacionais (modelo, tokens, latência, erros), sem conteúdo das reuniões</td>
+      <td>Sim — <code>delete_old_llm_telemetry()</code> (90 dias) disponível, não agendada</td>
+      <td>Master admin — execução manual da função</td>
     </tr>
     <tr>
       <td><strong>API Keys</strong></td>

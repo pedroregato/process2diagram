@@ -3,8 +3,12 @@
 -- Registro da migration aplicada em produção em 2026-09-25
 -- (pg_cron_cleanup_jobs_20260925). Horários em UTC (03:xx UTC = 00:xx BRT).
 --
--- llm_telemetry (delete_old_llm_telemetry, 90 dias) NÃO foi agendada:
--- a primeira execução apagaria ~58% do histórico — decisão pendente.
+-- llm_telemetry NÃO é limpa automaticamente (decisão de 2026-09-25): guarda só
+-- metadados operacionais (modelo, tokens, latência, erros, skill_version), sem
+-- conteúdo das reuniões; ocupa ~664 kB e o histórico tem valor para comparar
+-- versões de skills/provedores ao longo do tempo. delete_old_llm_telemetry()
+-- continua disponível para execução manual. Transcrições e artefatos (meetings,
+-- transcript_chunks etc.) também não têm limpeza automática — são ativos brutos.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE EXTENSION IF NOT EXISTS pg_cron;
