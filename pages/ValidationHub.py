@@ -26,6 +26,7 @@ from core.project_store import (
     count_validation_status,
 )
 from ui.project_selector import require_active_project
+from ui.components.paginator import paginate
 
 apply_auth_gate()
 
@@ -154,7 +155,7 @@ terms = _status_filter(terms)
 rules = _status_filter(rules)
 bpmn  = _status_filter(bpmn)
 
-# Assinatura dos filtros ativos — usada por _paginate() para resetar a página
+# Assinatura dos filtros ativos — usada por paginate() para resetar a página
 # de cada aba quando reunião/status mudam (NAV-03).
 _filter_sig = f"{proj_id}|{sel_meet_lbl}|{sel_filter}"
 
@@ -178,50 +179,9 @@ m5.metric("❌ Rejeitados",      n_rejected)
 
 st.markdown("---")
 
-# ── Paginação e edição em lote (NAV-03) ────────────────────────────────────────
-_PAGE_SIZE_OPTS = [25, 50, 100]
-
-
-def _paginate(items: list[dict], tab_key: str, filter_sig: str) -> list[dict]:
-    """Pagina uma lista já filtrada por reunião/status; navegação + seletor de
-    tamanho, com estado em session_state por aba (vh_page_<tab_key>)."""
-    sig_key = f"_vh_last_filter_{tab_key}"
-    if st.session_state.get(sig_key) != filter_sig:
-        st.session_state[f"vh_page_{tab_key}"] = 0
-        st.session_state[sig_key] = filter_sig
-
-    size_key = f"vh_pagesize_{tab_key}"
-    page_key = f"vh_page_{tab_key}"
-    n = len(items)
-
-    c_size, c_nav = st.columns([1, 3])
-    with c_size:
-        page_size = st.selectbox(
-            "Itens por página", _PAGE_SIZE_OPTS,
-            index=_PAGE_SIZE_OPTS.index(st.session_state.get(size_key, 25)),
-            key=size_key,
-        )
-
-    n_pages = max(1, (n + page_size - 1) // page_size)
-    page  = min(st.session_state.get(page_key, 0), n_pages - 1)
-    start = page * page_size
-    end   = min(start + page_size, n)
-
-    if n > page_size:
-        with c_nav:
-            nv1, nv2, nv3 = st.columns([1, 1, 2])
-            with nv1:
-                if st.button("← Anterior", key=f"{tab_key}_prev", disabled=(page == 0)):
-                    st.session_state[page_key] = page - 1
-                    st.rerun()
-            with nv2:
-                if st.button("Próximo →", key=f"{tab_key}_next", disabled=(page == n_pages - 1)):
-                    st.session_state[page_key] = page + 1
-                    st.rerun()
-            with nv3:
-                st.caption(f"**{start + 1}–{end}** de **{n}** · Pág. **{page + 1}/{n_pages}**")
-
-    return items[start:end]
+# ── Paginação e edição em lote (NAV-03 / NAV-09) ───────────────────────────────
+# Lógica de paginação extraída para ui/components/paginator.py (NAV-09) —
+# reutilizada aqui e em pages/ArtefatosModelagem.py.
 
 
 def _status_editor(table: str, page_items: list[dict], label_fn, key_pfx: str) -> None:
@@ -509,7 +469,7 @@ with tab_req:
         st.info("Nenhum requisito para exibir com os filtros selecionados.")
     else:
         _bulk_validate("requirements", reqs, "bulk_req")
-        page_reqs = _paginate(reqs, "req", _filter_sig)
+        page_reqs = paginate(reqs, key_prefix="req", filter_sig=_filter_sig)
         _status_editor(
             "requirements", page_reqs,
             lambda r: f"REQ-{r.get('req_number', 0):03d} — {r.get('title', '—')}",
@@ -550,7 +510,7 @@ with tab_terms:
         st.info("Nenhum termo SBVR para exibir com os filtros selecionados.")
     else:
         _bulk_validate("sbvr_terms", terms, "bulk_terms")
-        page_terms = _paginate(terms, "terms", _filter_sig)
+        page_terms = paginate(terms, key_prefix="terms", filter_sig=_filter_sig)
         _status_editor("sbvr_terms", page_terms, lambda t: t.get("term", "—"), "terms")
         st.markdown("")
 
@@ -585,7 +545,7 @@ with tab_rules:
         st.info("Nenhuma regra SBVR para exibir com os filtros selecionados.")
     else:
         _bulk_validate("sbvr_rules", rules, "bulk_rules")
-        page_rules = _paginate(rules, "rules", _filter_sig)
+        page_rules = paginate(rules, key_prefix="rules", filter_sig=_filter_sig)
         _status_editor(
             "sbvr_rules", page_rules,
             lambda r: (r.get("rule_id") or "BR-?") + (f" — {r['nucleo_nominal']}" if r.get("nucleo_nominal") else ""),
@@ -624,7 +584,7 @@ with tab_bpmn:
         st.info("Nenhum processo BPMN para exibir com os filtros selecionados.")
     else:
         _bulk_validate("bpmn_processes", bpmn, "bulk_bpmn")
-        page_bpmn = _paginate(bpmn, "bpmn", _filter_sig)
+        page_bpmn = paginate(bpmn, key_prefix="bpmn", filter_sig=_filter_sig)
         _status_editor("bpmn_processes", page_bpmn, lambda p: p.get("name", "—"), "bpmn")
         st.markdown("")
 

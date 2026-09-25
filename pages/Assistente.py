@@ -817,7 +817,27 @@ with st.sidebar:
 selected_provider = st.session_state.get("asst_provider", "DeepSeek")
 provider_cfg = AVAILABLE_PROVIDERS.get(selected_provider, AVAILABLE_PROVIDERS.get("DeepSeek", {}))
 api_key = st.session_state.get("asst_api_key", "")
-_chunks_table_ok = supabase_configured() and transcript_chunks_table_exists()
+
+
+# NAV-09: transcript_chunks_table_exists() faz uma query real ao Supabase
+# sem cache nenhum — como o chat inteiro reroda a cada mensagem enviada,
+# essa checagem (cujo resultado não muda durante a sessão — é schema, não
+# dado) repetia a cada rerun. Medido em produção: 16,9s de carregamento,
+# o mais lento das 5 páginas pesadas do NAV-09.
+@st.cache_data(ttl=300, show_spinner=False)
+def _chunks_table_ok_cached() -> bool:
+    return supabase_configured() and transcript_chunks_table_exists()
+
+
+_chunks_table_ok = _chunks_table_ok_cached()
+
+
+# NAV-09: mesmo problema — get_embedding_coverage() faz 2 SELECTs reais sem
+# cache, repetidos a cada rerun do chat só pra popular um badge informativo.
+@st.cache_data(ttl=120, show_spinner=False)
+def _load_embedding_coverage(pid: str) -> dict:
+    return get_embedding_coverage(pid)
+
 
 if "asst_use_semantic" not in st.session_state:
     st.session_state["asst_use_semantic"] = bool(
@@ -1041,7 +1061,7 @@ else:
     _badges.append(_badge("🔑", "Busca", "Keyword", "#374151"))
 
 if _chunks_table_ok:
-    _cov = get_embedding_coverage(project_id)
+    _cov = _load_embedding_coverage(project_id)
     _idx = _cov.get("indexed_meetings", 0)
     _tot = _cov.get("total_meetings", 0)
     _chunks_n = _cov.get("total_chunks", 0)

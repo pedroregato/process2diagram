@@ -57,6 +57,7 @@ from ui.components.promote_asset import (
 apply_auth_gate()
 
 from ui.components.page_header import render_page_header
+from ui.components.paginator import paginate
 render_page_header(
     "📦", "Ativos de Negócio",
     "Artefatos promovidos explicitamente a ativo de negócio — com classificação de "
@@ -212,7 +213,16 @@ for artifact_type in _TYPE_META:
     label, icon = _TYPE_META[artifact_type]
     st.subheader(f"{icon} {label} ({len(items)})")
 
-    for item in items:
+    # Paginação por tipo (NAV-09) — sem limite, a página inteira (todos os
+    # tipos, todos os itens) chegou a 79 mil caracteres numa carga só,
+    # medido em produção (8,5s de carregamento).
+    _an_filter_sig = (
+        f"{project_id}|{is_domain_scope}|{search_term}|{selected_contexts}|"
+        f"{show_archived}|{selected_interests}|{selected_perspectives}|{selected_classifications}"
+    )
+    page_items = paginate(items, key_prefix=f"an_{artifact_type}", filter_sig=_an_filter_sig)
+
+    for item in page_items:
         title = item.get("title") or "(sem título)"
         meeting_ref = item.get("meeting_ref") or ""
         meeting_date = item.get("meeting_date") or ""

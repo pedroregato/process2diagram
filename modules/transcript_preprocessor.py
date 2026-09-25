@@ -235,6 +235,108 @@ _HEADER_DATE_PAT = re.compile(
 )
 
 
+# ── Fallback: Teams' manual "Copiar transcrição" clipboard format ─────────────
+#
+# Quando o usuário não tem permissão para exportar a transcrição oficial do
+# Teams (só quem criou a reunião tem esse direito), a única opção é copiar
+# manualmente do painel de transcrição ao vivo no navegador. Esse "Copiar
+# transcrição" produz um layout bem diferente do export oficial: duplica a
+# linha do falante e escreve a duração por extenso em português colada ao
+# timestamp curto, em vez de "Nome  H:MM:SS" numa linha só — por isso
+# _SPEAKER_LINE_PAT nunca casa nele. Sem este fallback, o transcript inteiro
+# caía no modo "não estruturado" (`preprocess()` abaixo) e toda marcação de
+# falante/timestamp se perdia — confirmado contra uma transcrição real de
+# produção (2026-08-15, reunião nota de qualidade "E"). Exemplo real:
+#
+#   Maria de Fátima Duarte Moura              <- nome solto (ruído, ver abaixo)
+#   0 minutos 4 segundos0:04                  <- duração+timestamp colados (ruído)
+#   Maria de Fátima Duarte Moura 0 minutos 4 segundos   <- linha-marcador real
+#   Eu criei esse documento aqui...
+#   Maria de Fátima Duarte Moura 0 minutos 9 segundos   <- próximo turno, mesmo falante
+#   On your dance.
+#
+# A linha-marcador ("Nome <duração por extenso>") é a única consistente em
+# todo turno (inclusive o 1º de cada bloco de falante) — as outras duas linhas
+# são ruído estrutural do Teams, removidas nas 2 passadas abaixo antes do
+# parse. Risco aceito, mesma classe do resto do sistema (_TEAMS_SPEAKER_LINE em
+# agent_provocations.py tem o mesmo tipo de heurística): uma fala real que seja
+# uma linha inteira terminando em "N minutos/segundos" pode, em tese, ser
+# confundida com um marcador — raro o suficiente para não justificar mais
+# complexidade.
+
+_PT_DURATION = (
+    r"(?:\d+\s+horas?\s+)?(?:\d+\s+minutos?\s+)?\d+\s+segundos?"
+    r"|(?:\d+\s+horas?\s+)?\d+\s+minutos?"
+)
+
+# "0 minutos 4 segundos0:04" — duração por extenso colada, sem espaço, ao
+# timestamp curto. Padrão autocontido (não depende de conhecer nomes de
+# falantes) — removido globalmente antes do parse real.
+_GLUED_DURATION_TS_LINE = re.compile(
+    rf"^(?:{_PT_DURATION})\d{{1,2}}:\d{{2}}(?::\d{{2}})?\s*$",
+    re.IGNORECASE,
+)
+
+_TEAMS_VERBOSE_MARKER_PAT = re.compile(
+    rf"^(.+?)\s+({_PT_DURATION})\s*$", re.IGNORECASE | re.MULTILINE
+)
+
+_PT_HOUR_RE = re.compile(r"(\d+)\s+horas?", re.IGNORECASE)
+_PT_MIN_RE  = re.compile(r"(\d+)\s+minutos?", re.IGNORECASE)
+_PT_SEC_RE  = re.compile(r"(\d+)\s+segundos?", re.IGNORECASE)
+
+
+def _pt_duration_to_timestamp(phrase: str) -> str:
+    """'1 hora 10 minutos 53 segundos' -> '1:10:53' (mesmo formato H:MM:SS / M:SS usado no resto do sistema)."""
+    h = int(m.group(1)) if (m := _PT_HOUR_RE.search(phrase)) else 0
+    mm = int(m.group(1)) if (m := _PT_MIN_RE.search(phrase)) else 0
+    s = int(m.group(1)) if (m := _PT_SEC_RE.search(phrase)) else 0
+    if h:
+        return f"{h}:{mm:02d}:{s:02d}"
+    return f"{mm}:{s:02d}"
+
+
+def _parse_teams_verbose_duration_transcript(raw: str) -> tuple[list[str], list[_Turn], list[str]]:
+    """Fallback parser for Teams' manual clipboard format — see comment above."""
+    raw_lines = raw.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+
+    # Passada 1: remove linhas de duração+timestamp colados (ruído autocontido).
+    lines = [ln for ln in raw_lines if not _GLUED_DURATION_TS_LINE.match(ln.strip())]
+
+    # Passada 2: remove linhas de "nome solto" — uma linha cujo texto é
+    # exatamente o prefixo da linha-marcador seguinte (ex.: "Maria de Fátima
+    # Duarte Moura" imediatamente seguida por "Maria de Fátima Duarte Moura 0
+    # minutos 4 segundos"). Puramente estrutural, não depende de lista de
+    # participantes conhecida.
+    kept: list[str] = []
+    n = len(lines)
+    for idx, ln in enumerate(lines):
+        stripped = ln.strip()
+        nxt = lines[idx + 1].strip() if idx + 1 < n else ""
+        if stripped and nxt.startswith(stripped + " ") and re.search(r"\d", nxt[len(stripped):]):
+            continue
+        kept.append(ln)
+
+    cleaned = "\n".join(kept)
+    matches = list(_TEAMS_VERBOSE_MARKER_PAT.finditer(cleaned))
+    if len(matches) < 2:
+        return [], [], []
+
+    header_lines = [ln for ln in cleaned[:matches[0].start()].splitlines() if ln.strip()]
+
+    turns: list[_Turn] = []
+    for i, m in enumerate(matches):
+        speaker = m.group(1).strip()
+        timestamp = _pt_duration_to_timestamp(m.group(2))
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(cleaned)
+        content = cleaned[start:end].strip()
+        if content:
+            turns.append(_Turn(speaker=speaker, timestamp=timestamp, lines=[content]))
+
+    return header_lines, turns, []
+
+
 def _parse_teams_transcript(raw: str) -> tuple[list[str], list[_Turn], list[str]]:
     """
     Parse a Teams transcript into (header_lines, turns, metadata_issues).
@@ -309,6 +411,16 @@ def _parse_teams_transcript(raw: str) -> tuple[list[str], list[_Turn], list[str]
             timestamp=current_timestamp,
             lines=current_lines,
         ))
+
+    if len(turns) < 2:
+        # Formato primário não achou estrutura real — tenta o fallback do
+        # "Copiar transcrição" manual do Teams antes de desistir (ver comentário
+        # de _parse_teams_verbose_duration_transcript). Mesma heurística de
+        # "usa o que casar mais" do resto do sistema (ex. agent_provocations.py
+        # ::_turn_positions()) — só troca se o fallback achar mais turnos.
+        alt_header, alt_turns, alt_issues = _parse_teams_verbose_duration_transcript(raw)
+        if len(alt_turns) > len(turns):
+            return alt_header, alt_turns, alt_issues
 
     return header_lines, turns, metadata_issues
 

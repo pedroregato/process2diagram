@@ -75,7 +75,19 @@ def _load_requirements(project_id):
     try:
         return db.table("requirements").select("req_type,priority,status,meeting_id") \
                  .eq("project_id", project_id).execute().data or []
-    except Exception:
+    except Exception as e:
+        # NAV-09: achado em produção — um contexto com 885 requisitos reais
+        # mostrava "Nenhum requisito encontrado", indistinguível de um
+        # contexto genuinamente vazio. A causa exata (falha transitória de
+        # rede/API vs. algo determinístico) não foi reproduzida em revisão
+        # de código — mas o swallow silencioso da exceção não deixava
+        # nenhum rastro pra diagnosticar. Loga pra próxima ocorrência ter
+        # evidência; pages/ContextHealth.py:1043 também deixou de afirmar
+        # categoricamente que não há requisitos.
+        import logging
+        logging.getLogger(__name__).warning(
+            "ContextHealth._load_requirements falhou para project_id=%s: %s", project_id, e
+        )
         return []
 
 
@@ -885,19 +897,26 @@ c7.metric("Contradições",   str(total_contra),
 
 st.markdown("---")
 
-# ── Tabs ─────────────────────────────────────────────────────────────────────
-tab_qual, tab_art, tab_dist, tab_know, tab_alerts = st.tabs([
+# ── Seções (NAV-09) ────────────────────────────────────────────────────────────
+# st.tabs() executa o corpo de TODAS as abas a cada rerun, independente de
+# qual está visível — st.radio troca só a seção ativa (medido em produção:
+# 13,2s de carregamento, mesma classe de causa já diagnosticada no
+# segfault investigado no PC176-178). Mesmo padrão de
+# pages/ArtefatosModelagem.py (paginação SBVR, PC178) pro problema irmão.
+_CH_SECTIONS = [
     "📈 Qualidade & Evolução",
     "📦 Artefatos",
     "🎯 Distribuição",
     "🧠 Conhecimento",
     "⚡ Alertas & Insights",
-])
+]
+_ch_view = st.radio("Seção", _CH_SECTIONS, horizontal=True, key="ch_view",
+                     label_visibility="collapsed")
 
 # ═══════════════════════════════════════════════════════════════
 # Tab 1 — Qualidade & Evolução
 # ═══════════════════════════════════════════════════════════════
-with tab_qual:
+if _ch_view == "📈 Qualidade & Evolução":
     col_radar, col_roi = st.columns([1, 2])
 
     with col_radar:
@@ -973,7 +992,7 @@ with tab_qual:
 # ═══════════════════════════════════════════════════════════════
 # Tab 2 — Artefatos
 # ═══════════════════════════════════════════════════════════════
-with tab_art:
+if _ch_view == "📦 Artefatos":
     st.plotly_chart(_chart_artefacts(roi_data), use_container_width=True,
                     config={"displayModeBar": False})
     _cap(
@@ -995,7 +1014,7 @@ with tab_art:
 # ═══════════════════════════════════════════════════════════════
 # Tab 3 — Distribuição
 # ═══════════════════════════════════════════════════════════════
-with tab_dist:
+if _ch_view == "🎯 Distribuição":
     col_type, col_act = st.columns(2)
 
     with col_type:
@@ -1040,12 +1059,16 @@ with tab_dist:
                 "Uma distribuição piramidal (Alta < Média < Baixa) é saudável na maioria dos projetos."
             )
     else:
-        st.info("Nenhum requisito encontrado para este contexto.")
+        st.info(
+            "Nenhum requisito encontrado para este contexto — ou a busca falhou "
+            "(rede/API instável). Se este contexto já tem requisitos noutras páginas, "
+            "use **🔄 Atualizar dados** no rodapé desta página para tentar de novo."
+        )
 
 # ═══════════════════════════════════════════════════════════════
 # Tab 4 — Conhecimento
 # ═══════════════════════════════════════════════════════════════
-with tab_know:
+if _ch_view == "🧠 Conhecimento":
     ckf_text  = (ctx_info.get("skill_md") or "").strip()
     ckf_words = len(ckf_text.split()) if ckf_text else 0
 
@@ -1094,7 +1117,7 @@ with tab_know:
 # ═══════════════════════════════════════════════════════════════
 # Tab 5 — Alertas & Insights
 # ═══════════════════════════════════════════════════════════════
-with tab_alerts:
+if _ch_view == "⚡ Alertas & Insights":
     _render_insights(insights)
 
     # ── Contradições em Requisitos ────────────────────────────────────────────

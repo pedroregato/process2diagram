@@ -94,6 +94,73 @@ _PATTERNS: list[tuple[str, re.Pattern]] = [
 _TS_FIRST_PATTERNS = {"bracket_ts_speaker", "ts_dash_speaker", "ts_space_speaker", "mmss_space_speaker"}
 
 
+# ── Turn-span parser (speaker + timestamp + own text) ──────────────────────────
+#
+# Used by agent_communication_noise.py for turn-level checks (dominância,
+# interrupção, desqualificação) that need each turn's actual content, not just
+# its timing. Deliberately separate from agent_provocations.py's
+# `_turn_positions()` (which only needs seconds+position, not speaker/text) —
+# not reused here to avoid touching that file's validator, hardened by the
+# PC190 bugfix. Same underlying format assumption as that regex: single-space
+# tolerant ("Nome<space>timestamp"), because hub.transcript_clean already
+# collapsed the raw Teams format's 2+ space separator down to one (see the
+# long comment above `_TEAMS_SPEAKER_LINE` in agent_provocations.py).
+
+_TURN_SPEAKER_LINE = re.compile(
+    r"^(.+?)\s+(\d{1,2}:\d{2}(?::\d{2})?)\s*$", re.MULTILINE
+)
+
+# A real speaker name never contains a clock time. Filters out header/metadata
+# lines that end in something timestamp-shaped by coincidence — e.g. a meeting
+# time range like "sexta-feira, 14 de agosto de 2026 16:00 - 17:30" would
+# otherwise be mistaken for "Nome 17:30" (confirmed against a real transcript,
+# PC209/PC210 — it inflated word counts for a fabricated 3rd "speaker").
+_NESTED_TIME_IN_NAME = re.compile(r"\d{1,2}:\d{2}")
+
+
+@dataclass
+class TurnSpan:
+    """One speaker turn: who, when, and what they said (own text only)."""
+    speaker: str
+    timestamp: str
+    seconds: int
+    text: str
+    start: int   # char offset in the source transcript where this turn's content starts
+    end: int     # char offset where it ends (start of next turn's header, or EOF)
+
+
+def parse_turn_spans(transcript: str) -> list["TurnSpan"]:
+    """
+    Segments a transcript into per-speaker turns with content. Returns []
+    when fewer than 2 turns are detected (nothing to compare).
+    """
+    if not transcript:
+        return []
+
+    matches = [
+        m for m in _TURN_SPEAKER_LINE.finditer(transcript)
+        if not _NESTED_TIME_IN_NAME.search(m.group(1))
+    ]
+    if len(matches) < 2:
+        return []
+
+    spans: list[TurnSpan] = []
+    for i, m in enumerate(matches):
+        speaker = m.group(1).strip()
+        ts_str = m.group(2).strip()
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(transcript)
+        spans.append(TurnSpan(
+            speaker=speaker,
+            timestamp=ts_str,
+            seconds=_ts_to_seconds(ts_str),
+            text=transcript[start:end].strip(),
+            start=start,
+            end=end,
+        ))
+    return spans
+
+
 # ── Main parser ───────────────────────────────────────────────────────────────
 
 @dataclass

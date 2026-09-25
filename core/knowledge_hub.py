@@ -564,13 +564,45 @@ class AmbiguityItem:
 @dataclass
 class CommunicationGap:
     """A missing, unanswered or abandoned communication thread."""
-    gap_type: str                           # unanswered_question | abandoned_topic | implicit_disagreement | missing_info
+    gap_type: str                           # unanswered_question | abandoned_topic | implicit_disagreement | missing_info | interrupted_resumed | repeated_unresolved_topic | speaker_disqualification
     description: str                        # what the gap is
     raised_by: str = ""                     # who raised the topic (initials or "–")
     topic: str = ""                         # thematic category
     evidence_quote: str = ""               # supporting text from transcript
     impact: str = ""                        # potential impact if unresolved
     recommendation: str = ""               # suggested follow-up action
+    # ── fields below only populated for the 3 evidence-backed gap_types
+    # (interrupted_resumed / repeated_unresolved_topic / speaker_disqualification)
+    # — those go through AgentCommunicationNoise._validate_and_rank_strict_gaps(),
+    # same verbatim-citation-against-transcript discipline as agent_provocations.py.
+    target_speaker: str = ""               # who is affected (interrupted, or disqualified)
+    references: list[dict] = field(default_factory=list)  # [{"timestamp","speaker","excerpt"}, ...] — verified verbatim
+    confidence: str = ""                    # "high" | "medium" — only set for the 3 strict gap_types
+
+
+@dataclass
+class SpeakerDominance:
+    """Per-speaker share of turns/words in the transcript — purely deterministic (no LLM)."""
+    speaker: str
+    turns: int
+    word_share_pct: float           # % of total words in the transcript
+    turn_share_pct: float           # % of total turns in the transcript
+    dominant: bool = False          # word_share_pct exceeds the dominance threshold
+
+
+@dataclass
+class SpeakerAttributionRisk:
+    """
+    Data-quality flag: a participant is named in the transcript (e.g. addressed
+    or thanked by another speaker) but never appears as the speaker of their
+    own turn — a sign their speech may have been merged into another
+    participant's label (shared device/microphone). This is a WARNING, not a
+    correction: text alone cannot reliably re-attribute which turns are
+    actually theirs.
+    """
+    mentioned_name: str
+    mentioned_context: str          # verbatim quote where the name is addressed/thanked
+    possibly_merged_into: str = ""  # speaker label with the most turns, as a hint
 
 
 @dataclass
@@ -578,9 +610,15 @@ class CommunicationNoiseModel:
     """Output of AgentCommunicationNoise — ambiguities + gaps detected in transcript."""
     ambiguities: list[AmbiguityItem] = field(default_factory=list)
     gaps: list[CommunicationGap] = field(default_factory=list)
+    dominance: list[SpeakerDominance] = field(default_factory=list)
+    attribution_risks: list[SpeakerAttributionRisk] = field(default_factory=list)
     noise_score: float = 0.0    # 0–10, lower = cleaner communication
     summary: str = ""
     ready: bool = False
+    # Observability into the strict validator's rejection rate — same purpose
+    # as ProvocationsModel.rejected_count/rejected_reasons (PC190-fix §4).
+    rejected_count: int = 0
+    rejected_reasons: dict = field(default_factory=dict)
 
 
 # ── Query Summary Model (Fase F — multi-perspective summarization) ────────────
@@ -992,6 +1030,24 @@ class KnowledgeHub:
         # ── PC190: ProvocationsModel ──────────────────────────────────────────
         if not hasattr(hub, 'provocations'):
             hub.provocations = ProvocationsModel()
+
+        # ── PC209: dominância de fala, risco de atribuição de falante e os 3
+        # novos gap_types evidence-backed em CommunicationNoiseModel ───────────
+        if not hasattr(hub.communication_noise, 'dominance'):
+            hub.communication_noise.dominance = []
+        if not hasattr(hub.communication_noise, 'attribution_risks'):
+            hub.communication_noise.attribution_risks = []
+        if not hasattr(hub.communication_noise, 'rejected_count'):
+            hub.communication_noise.rejected_count = 0
+        if not hasattr(hub.communication_noise, 'rejected_reasons'):
+            hub.communication_noise.rejected_reasons = {}
+        for _gap in getattr(hub.communication_noise, 'gaps', []):
+            if not hasattr(_gap, 'target_speaker'):
+                _gap.target_speaker = ""
+            if not hasattr(_gap, 'references'):
+                _gap.references = []
+            if not hasattr(_gap, 'confidence'):
+                _gap.confidence = ""
 
         return hub
 

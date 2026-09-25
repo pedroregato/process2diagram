@@ -1427,10 +1427,15 @@ class _AdminChartsEntitiesToolsMixin:
             save_meeting_artifacts(mid, hub)
 
             cn = hub.communication_noise
+            dominance_note = ""
+            if getattr(cn, "dominance", None):
+                top = max(cn.dominance, key=lambda d: d.word_share_pct)
+                if top.dominant:
+                    dominance_note = f", dominância de fala: {top.speaker} ({top.word_share_pct:.0f}%)"
             return (
                 f"  ✅ Reunião {num} — '{title}': "
                 f"{len(cn.ambiguities)} ambiguidades, {len(cn.gaps)} lacunas, "
-                f"índice de ruído {cn.noise_score:.1f}/10."
+                f"índice de ruído {cn.noise_score:.1f}/10{dominance_note}."
             )
         except Exception as exc:
             return f"  ❌ Reunião {num} — '{title}': {exc}"

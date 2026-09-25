@@ -20,6 +20,7 @@ import streamlit as st
 from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured
 from ui.project_selector import require_active_project
+from ui.components.paginator import paginate
 from ui.artefatos_shared import (
     inject_artefatos_css, render_artefatos_nav, ibis_session_key,
     _load_meetings, _load_argumentation,
@@ -610,7 +611,13 @@ with tab_ibis:
         # ════════════════════════════════════════════════════════════════════
         if ibis_view == "📋 Lista":
             st.markdown("")
-            for q in filtered_ibis:
+            # Paginação (NAV-09) — a lista renderizava um st.expander() por
+            # questão sem limite; um contexto com muitos debates gerava
+            # centenas de expanders de uma vez (medido em produção: 177
+            # expanders, 52 mil caracteres, 16,6s de carregamento).
+            _ibis_filter_sig = f"{project_id}|{sel_meet_ibis}|{sel_res}|{_ibis_search}|{_sel_actor}"
+            _page_ibis = paginate(filtered_ibis, key_prefix="ibis_list", filter_sig=_ibis_filter_sig)
+            for q in _page_ibis:
                 q_id        = q.get("id", "—")
                 statement   = q.get("statement", "—")
                 raised_by   = q.get("raised_by", "")

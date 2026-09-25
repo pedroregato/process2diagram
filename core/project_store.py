@@ -1274,13 +1274,22 @@ def load_meeting_as_hub(meeting_id: str, project_id: str):
     if cn_raw:
         try:
             import json as _json_cn
-            from core.knowledge_hub import CommunicationNoiseModel, AmbiguityItem, CommunicationGap
+            from core.knowledge_hub import (
+                CommunicationNoiseModel, AmbiguityItem, CommunicationGap,
+                SpeakerDominance, SpeakerAttributionRisk,
+            )
             cn_data = _json_cn.loads(cn_raw)
             hub.communication_noise = CommunicationNoiseModel(
                 ambiguities=[AmbiguityItem(**a) for a in cn_data.get("ambiguities", [])],
                 gaps=[CommunicationGap(**g) for g in cn_data.get("gaps", [])],
+                dominance=[SpeakerDominance(**d) for d in cn_data.get("dominance", [])],
+                attribution_risks=[
+                    SpeakerAttributionRisk(**r) for r in cn_data.get("attribution_risks", [])
+                ],
                 noise_score=cn_data.get("noise_score", 0.0),
                 summary=cn_data.get("summary", ""),
+                rejected_count=cn_data.get("rejected_count", 0),
+                rejected_reasons=cn_data.get("rejected_reasons", {}),
                 ready=True,
             )
         except Exception:

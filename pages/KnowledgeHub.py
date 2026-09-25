@@ -18,6 +18,7 @@ import streamlit as st
 from ui.auth_gate import apply_auth_gate
 from ui.project_selector import require_active_project
 from ui.components.page_header import render_page_header
+from ui.components.paginator import paginate
 from modules.supabase_client import supabase_configured
 
 apply_auth_gate()
@@ -48,17 +49,23 @@ if not kh_tables_exist():
         """)
     st.stop()
 
-# ── Tabs ──────────────────────────────────────────────────────────────────────
-tab_entities, tab_processes, tab_facts, tab_contradictions, tab_analyses = st.tabs([
+# ── Seções (NAV-09) ────────────────────────────────────────────────────────────
+# st.tabs() executa o corpo de TODAS as abas a cada rerun, independente de
+# qual está visível — st.radio troca só a seção ativa (medido em produção:
+# 310 botões, 80 expanders, 6,7s de carregamento — a soma das 5 abas
+# sempre computando/renderizando juntas, cada uma com um loop sem limite).
+_KH_SECTIONS = [
     "👥 Entidades",
     "⚙️ Processos",
     "📌 Fatos",
     "⚠️ Contradições",
     "📜 Análises Anteriores",
-])
+]
+_kh_view = st.radio("Seção", _KH_SECTIONS, horizontal=True, key="kh_view",
+                     label_visibility="collapsed")
 
 # ── Tab: Entidades ────────────────────────────────────────────────────────────
-with tab_entities:
+if _kh_view == "👥 Entidades":
     from core.knowledge_store import get_entities
 
     st.markdown(
@@ -129,6 +136,7 @@ with tab_entities:
             "other":      "#8496B0",
         }
 
+        entities = paginate(entities, key_prefix="kh_ent", filter_sig=f"{project_id}|{_type_filter}")
         for ent in entities:
             etype_label = ent.get("entity_type", "other")
             color = _TYPE_COLORS.get(etype_label, "#8496B0")
@@ -149,7 +157,7 @@ with tab_entities:
 
 
 # ── Tab: Processos ────────────────────────────────────────────────────────────
-with tab_processes:
+if _kh_view == "⚙️ Processos":
     from core.knowledge_store import get_processes
 
     st.markdown("Processos de negócio identificados e rastreados ao longo das reuniões.")
@@ -166,6 +174,7 @@ with tab_processes:
         st.info("Nenhum processo identificado ainda.")
     else:
         st.caption(f"{len(processes)} processo(s)")
+        processes = paginate(processes, key_prefix="kh_proc", filter_sig=f"{project_id}|{_status_filter}")
         for proc in processes:
             with st.container():
                 col_name, col_vers, col_status = st.columns([5, 1, 1])
@@ -180,7 +189,7 @@ with tab_processes:
 
 
 # ── Tab: Fatos ────────────────────────────────────────────────────────────────
-with tab_facts:
+if _kh_view == "📌 Fatos":
     from core.knowledge_store import get_facts
 
     st.markdown(
@@ -218,6 +227,7 @@ with tab_facts:
         st.info("Nenhum fato encontrado com os filtros selecionados.")
     else:
         st.caption(f"{len(facts)} fato(s)")
+        facts = paginate(facts, key_prefix="kh_fact", filter_sig=f"{project_id}|{_fact_type}|{_active_only}")
         for fact in facts:
             ftype_label = fact.get("fact_type", "decision")
             icon  = _FACT_ICONS.get(ftype_label, "📌")
@@ -239,7 +249,7 @@ with tab_facts:
 
 
 # ── Tab: Contradições ─────────────────────────────────────────────────────────
-with tab_contradictions:
+if _kh_view == "⚠️ Contradições":
     from core.knowledge_store import get_contradictions, resolve_contradiction
     from modules.auth import is_admin
 
@@ -329,6 +339,10 @@ with tab_contradictions:
             st.info("Nenhuma contradição encontrada com os filtros selecionados.")
     else:
         st.caption(f"{len(contradictions)} item(ns)")
+        contradictions = paginate(
+            contradictions, key_prefix="kh_contra",
+            filter_sig=f"{project_id}|{_contra_status}|{_relation_filter}",
+        )
         for c in contradictions:
             sev          = c.get("severity", "medium")
             color        = _SEV_COLORS.get(sev, "#8496B0")
@@ -397,7 +411,7 @@ with tab_contradictions:
 
 
 # ── Tab: Análises Anteriores ───────────────────────────────────────────────────
-with tab_analyses:
+if _kh_view == "📜 Análises Anteriores":
     from core.analyst_store import get_analyses, get_analysis, analyses_table_exists
 
     st.markdown(
@@ -422,6 +436,9 @@ with tab_analyses:
         else:
             st.caption(f"{len(analyses_list)} análise(s) encontrada(s)")
 
+            analyses_list = paginate(
+                analyses_list, key_prefix="kh_anal", filter_sig=f"{project_id}|{_show_failed}",
+            )
             for anal in analyses_list:
                 _aid       = anal["id"]
                 _obj       = (anal.get("objective") or "—")[:120]

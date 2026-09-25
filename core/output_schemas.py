@@ -429,6 +429,13 @@ class CommunicationGapSchema(_PermissiveModel):
     evidence_quote: str = ""
     impact: str = ""
     recommendation: str = ""
+    # PC209 — only populated for the 3 evidence-backed gap_types (interrupted_resumed /
+    # repeated_unresolved_topic / speaker_disqualification); the deterministic validator
+    # in agent_communication_noise.py re-checks these against the transcript regardless
+    # of what passes here — this schema only gates shape, not grounding.
+    target_speaker: str = ""
+    references: list[dict] = []
+    confidence: str = ""
 
 
 class CommunicationNoiseOutputSchema(_PermissiveModel):

@@ -13,7 +13,12 @@ _GAP_LABELS = {
     "abandoned_topic":       ("🚪 Tópico abandonado",       "#fd7e14"),
     "implicit_disagreement": ("⚡ Divergência implícita",   "#ffc107"),
     "missing_info":          ("📭 Informação ausente",       "#6c757d"),
+    "interrupted_resumed":       ("✂️ Turno interrompido",      "#dc3545"),
+    "repeated_unresolved_topic": ("🔁 Tema repetido e rejeitado", "#fd7e14"),
+    "speaker_disqualification":  ("🚫 Desqualificação de falante", "#dc3545"),
 }
+
+_STRICT_GAP_KINDS = {"interrupted_resumed", "repeated_unresolved_topic", "speaker_disqualification"}
 
 _SCORE_COLOR = [
     (0, 2,  "#28a745", "Excelente"),
@@ -43,9 +48,11 @@ def render(hub, prefix=None, suffix=None):
 
     st.markdown("### Análise de Ruídos de Comunicação")
     st.caption(
-        "Identifica **ambiguidades** (termos ou compromissos com múltiplas interpretações) "
-        "e **lacunas** (perguntas sem resposta, tópicos abandonados, divergências implícitas) "
-        "que podem causar mal-entendidos ou retrabalho."
+        "Identifica **ambiguidades** (termos ou compromissos com múltiplas interpretações), "
+        "**lacunas** (perguntas sem resposta, tópicos abandonados, divergências implícitas) e "
+        "**dinâmica de turno** (dominância de fala, turnos interrompidos, temas repetidos e "
+        "rejeitados, desqualificação de falantes) que podem causar mal-entendidos, retrabalho "
+        "ou indicar disfunção na condução da reunião."
     )
 
     # KPI strip
@@ -63,7 +70,53 @@ def render(hub, prefix=None, suffix=None):
             unsafe_allow_html=True,
         )
 
+    if noise.rejected_count:
+        st.caption(
+            f"🔍 {noise.rejected_count} sinal(is) de dinâmica de turno descartado(s) por falta de "
+            f"evidência verificável (não aparece na lista abaixo)."
+        )
+
     st.markdown("---")
+
+    # ── Dominância de Fala ───────────────────────────────────────────────────
+    dominance = getattr(noise, "dominance", None) or []
+    if dominance:
+        st.markdown("#### 🗣️ Dominância de Fala")
+        st.caption(
+            "Calculado por código a partir de tempo/turnos de fala reais — sem LLM. "
+            "Falante em destaque concentra uma parcela desproporcional da conversa."
+        )
+        cols = st.columns(len(dominance))
+        for col, d in zip(cols, dominance):
+            label = f"⚠️ {d.speaker}" if d.dominant else d.speaker
+            col.metric(label, f"{d.word_share_pct:.0f}% das palavras", f"{d.turns} turnos")
+        if any(d.dominant for d in dominance):
+            top = dominance[0]
+            st.warning(
+                f"**{top.speaker}** concentrou **{top.word_share_pct:.0f}%** das palavras da reunião "
+                f"— acima do limiar de dominância (65%)."
+            )
+        st.markdown("---")
+
+    # ── Risco de Atribuição de Falante ───────────────────────────────────────
+    attribution_risks = getattr(noise, "attribution_risks", None) or []
+    if attribution_risks:
+        st.markdown("#### 🎙️ Risco de Atribuição de Falante")
+        st.caption(
+            "Participante mencionado na reunião mas sem nenhum turno próprio na transcrição — "
+            "sinal de que a fala pode ter sido registrada sob outro rótulo (ex.: dispositivo/"
+            "microfone compartilhado). Isto é um alerta de qualidade de dado, não uma correção: "
+            "não é possível reatribuir falas com confiança só a partir do texto."
+        )
+        for risk in attribution_risks:
+            st.warning(
+                f"**{risk.mentioned_name}** é mencionado(a) mas nenhum turno está atribuído a "
+                f"ela/ele na transcrição"
+                + (f" — possivelmente misturado(a) com **{risk.possibly_merged_into}**"
+                   if risk.possibly_merged_into else "")
+                + f".\n\n*Evidência:* \"{risk.mentioned_context}\""
+            )
+        st.markdown("---")
 
     # ── Ambiguidades ─────────────────────────────────────────────────────────
     st.markdown(f"#### 🔍 Ambiguidades ({n_amb})")
@@ -127,10 +180,31 @@ def render(hub, prefix=None, suffix=None):
                     meta_parts.append(f"Levantado por: **{gap.raised_by}**")
                 if gap.topic:
                     meta_parts.append(f"Tema: **{gap.topic}**")
+                if getattr(gap, "target_speaker", ""):
+                    meta_parts.append(f"Falante afetado: **{gap.target_speaker}**")
+                if getattr(gap, "confidence", ""):
+                    meta_parts.append(f"Confiança: **{gap.confidence}**")
                 if meta_parts:
                     st.caption("  |  ".join(meta_parts))
 
-                if gap.evidence_quote:
+                references = getattr(gap, "references", None) or []
+                if gap.gap_type in _STRICT_GAP_KINDS and references:
+                    # Multi-quote grounding, verified verbatim against the transcript —
+                    # show each reference in order instead of a single evidence_quote.
+                    for ref in references:
+                        ts = ref.get("timestamp", "")
+                        spk = ref.get("speaker", "")
+                        excerpt = ref.get("excerpt", "")
+                        label = " — ".join(p for p in (ts, spk) if p)
+                        st.markdown(
+                            f'<div style="margin-bottom:4px;">'
+                            f'<span style="color:#888;font-size:0.8em;">{label}</span><br>'
+                            f'<blockquote style="border-left:3px solid #555;'
+                            f'padding:6px 12px;color:#aaa;font-style:italic;margin:2px 0;">'
+                            f'"{excerpt}"</blockquote></div>',
+                            unsafe_allow_html=True,
+                        )
+                elif gap.evidence_quote:
                     st.markdown(
                         f'<blockquote style="border-left:3px solid #555;'
                         f'padding:6px 12px;color:#aaa;font-style:italic;">'
