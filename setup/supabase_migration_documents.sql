@@ -144,9 +144,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
 CREATE INDEX IF NOT EXISTS idx_doc_chunks_document_id  ON document_chunks(document_id);
 CREATE INDEX IF NOT EXISTS idx_doc_chunks_chunk_index  ON document_chunks(document_id, chunk_index);
 
--- IVFFlat index for fast ANN search (create after data is loaded)
--- CREATE INDEX IF NOT EXISTS idx_doc_chunks_embedding
---     ON document_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
+-- Vector index: see supabase_migration_embedding_512.sql (HNSW, document_chunks_embedding_idx)
 
 ALTER TABLE document_chunks DISABLE ROW LEVEL SECURITY;
 
