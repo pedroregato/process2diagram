@@ -90,7 +90,7 @@ CREATE INDEX IF NOT EXISTS idx_req_contradiction     ON requirement_versions(con
 
 -- Índice vetorial para busca semântica (F3)
 CREATE INDEX IF NOT EXISTS idx_req_embedding ON requirements
-    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+    USING hnsw (embedding vector_cosine_ops);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- FUNÇÃO: próximo número de requisito por projeto

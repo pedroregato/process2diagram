@@ -29,8 +29,7 @@ CREATE TABLE transcript_chunks (
 -- ── Índices ───────────────────────────────────────────────────────────────────
 CREATE INDEX transcript_chunks_embedding_idx
     ON transcript_chunks
-    USING ivfflat (embedding vector_cosine_ops)
-    WITH (lists = 100);
+    USING hnsw (embedding vector_cosine_ops);
 
 CREATE INDEX transcript_chunks_project_idx  ON transcript_chunks (project_id);
 CREATE INDEX transcript_chunks_meeting_idx  ON transcript_chunks (meeting_id);

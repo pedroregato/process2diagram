@@ -142,14 +142,16 @@ streamlit run app.py
 ### Supabase (opcional — necessario para persistencia, RAG e analise cross-meeting)
 
 1. Crie um projeto em [supabase.com](https://supabase.com)
-2. Execute o DDL em `setup/supabase_schema_transcript_chunks.sql` (tabela `transcript_chunks` com `vector(1536)`, indice `ivfflat` coseno)
+2. Execute o DDL em `setup/supabase_schema_transcript_chunks.sql` (tabela `transcript_chunks`; a migracao `setup/supabase_migration_embedding_512.sql` converte para `vector(512)` com indice HNSW coseno)
 3. Adicione as credenciais em `.streamlit/secrets.toml`:
 
 ```toml
 [supabase]
 url = "https://<projeto>.supabase.co"
-key = "<anon-key>"
+key = "<service-role-key>"
 ```
+
+> Use a chave **`service_role`** (Project Settings → API). Todas as tabelas `public` tem RLS ativo sem policies para `anon`/`authenticated`, entao com a anon key as leituras voltam vazias e as gravacoes falham. A chave fica so no servidor (`secrets.toml` / Streamlit Cloud secrets) — nunca a exponha em codigo cliente.
 
 Sem esse arquivo o app funciona normalmente em modo local — todas as funcoes Supabase retornam `[]`/`None` sem erro.
 
@@ -282,7 +284,7 @@ Cobertura:
 | BPMN viewer / editor | bpmn-js 17 (inline, sem CDN) |
 | Diagramas Mermaid | mermaid.ink (SVG server-side) |
 | Banco de dados | Supabase (PostgreSQL + pgvector) |
-| Busca semantica | pgvector ivfflat coseno, vector(1536) |
+| Busca semantica | pgvector HNSW coseno, vector(512) |
 | Embeddings | Google Gemini `gemini-embedding-001` |
 | Export Word | python-docx 1.1.2 |
 | Export PDF | fpdf2 2.8.2 (puro Python, sem GTK) |
