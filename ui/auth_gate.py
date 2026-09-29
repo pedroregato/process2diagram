@@ -319,7 +319,19 @@ def _maybe_restore_session() -> None:
     st.session_state["_session_restore_attempted"] = True
 
     if _try_restore_session():
-        return
+        # NAV-16 (achado em auditoria de produção, 2026-09-28): app.py
+        # calcula is_admin() pra montar o menu (st.navigation) ANTES de
+        # chamar apply_auth_gate() — nesta MESMA execução, o menu já foi
+        # registrado com o perfil ANTIGO (não-admin, sessão ainda vazia no
+        # topo do script). Sem forçar um rerun agora, esse menu desalinhado
+        # é o que efetivamente roda (pg.run()) nesta passada — e qualquer
+        # st.page_link para página admin (ex. pages/Home.py → Banco de
+        # Dados/Master Admin) quebra com StreamlitPageNotFoundError, porque
+        # o restante da página já enxerga is_admin()==True (session_state
+        # acabou de ser populado) mas a página-alvo nunca foi registrada
+        # nesta execução. Forçar o rerun aqui garante que a PRÓXIMA
+        # execução monte o menu com o session_state já restaurado.
+        st.rerun()
     if first_attempt:
         _render_restoring_placeholder()
         st.stop()

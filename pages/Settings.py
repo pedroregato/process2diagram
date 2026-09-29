@@ -30,6 +30,7 @@ from modules.supabase_client import supabase_configured, get_supabase_client
 apply_auth_gate()
 
 from ui.components.page_header import render_page_header
+from ui.components.safe_page_link import safe_page_link
 render_page_header(
     "⚙️", "Configurações da Sessão",
     "Configure provedores, chaves de API, modo de busca e preferências. "
@@ -1064,7 +1065,7 @@ $$;
         "e cobertura de embeddings, acesse a página **🗄️ Visão do Banco** no menu "
         "**Operações** na barra lateral esquerda."
     )
-    st.page_link("pages/DatabaseOverview.py", label="Abrir Visão do Banco →", icon="🗄️")
+    safe_page_link("pages/DatabaseOverview.py", label="Abrir Visão do Banco →", icon="🗄️")
 
     # ── Google Calendar por Contexto (admin) ──────────────────────────────────
     from modules.auth import is_admin
@@ -1301,7 +1302,7 @@ with tab_domain:
                 "🛡️ Você tem perfil **master**. "
                 "Gerencie domínios, usuários e configurações de todos os tenants na página dedicada."
             )
-            st.page_link("pages/MasterAdmin.py", label="Abrir Master Admin →", icon="🛡️")
+            safe_page_link("pages/MasterAdmin.py", label="Abrir Master Admin →", icon="🛡️")
             st.markdown("---")
             st.markdown("#### Configurações do seu domínio (leitura)")
             # Fonte única: AVAILABLE_PROVIDERS — skip alias providers (compartilham chave)

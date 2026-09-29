@@ -24,6 +24,7 @@ import streamlit as st
 
 from ui.auth_gate import apply_auth_gate
 from ui.project_selector import activate_context
+from ui.components.safe_page_link import safe_page_link
 from modules.auth import is_admin
 from modules.i18n import t
 from core.project_store import get_domain_stats, get_context_stats, list_recent_meetings, list_contexts, list_meetings_quality
@@ -432,9 +433,9 @@ with col_nav:
         with s1:
             st.page_link("pages/Settings.py",         label=t("btn_settings"),      use_container_width=True)
         with s2:
-            st.page_link("pages/DatabaseOverview.py", label=t("btn_database"),      use_container_width=True)
+            safe_page_link("pages/DatabaseOverview.py", label=t("btn_database"),      use_container_width=True)
         with s3:
-            st.page_link("pages/MasterAdmin.py",      label=t("btn_master_admin"),  use_container_width=True)
+            safe_page_link("pages/MasterAdmin.py",      label=t("btn_master_admin"),  use_container_width=True)
         with s4:
             st.page_link("pages/CostEstimator.py",    label=t("btn_costs"),         use_container_width=True)
     else:

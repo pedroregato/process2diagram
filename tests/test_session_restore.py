@@ -92,6 +92,51 @@ class TestSessionRestoreWithValidToken:
         assert at.session_state["_session_token"] == "tok-valido-2"
 
 
+_PAGE_SRC_COUNT_RUNS = """
+import streamlit as st
+from ui.auth_gate import apply_auth_gate
+
+st.session_state["_run_count"] = st.session_state.get("_run_count", 0) + 1
+apply_auth_gate()
+st.markdown("PAGE_CONTENT_RENDERED")
+"""
+
+
+class TestSuccessfulRestoreForcesRerunBeforeRenderingNav16:
+    """NAV-16 (achado em auditoria de produção, 2026-09-28): app.py calcula
+    is_admin() pra montar st.navigation() ANTES de apply_auth_gate(). Sem um
+    rerun logo após uma restauração de sessão bem-sucedida, o menu (e
+    qualquer st.page_link pra página admin) fica montado com o papel ANTIGO
+    nesta mesma execução, mesmo com session_state já correto pro resto da
+    página — pages/Home.py chegava a quebrar com StreamlitPageNotFoundError
+    por causa disso.
+
+    Fix: _maybe_restore_session() chama st.rerun() assim que a restauração
+    funciona, em vez de simplesmente devolver e deixar o resto do script
+    rodar nesta mesma passada. Este teste prova que o rerun de fato
+    acontece — não só que o estado final está correto (isso já era verdade
+    mesmo sem o fix, testes acima) — contando quantas vezes o corpo do
+    script executa dentro de uma única chamada externa de .run()."""
+
+    def test_valid_token_causes_an_internal_rerun_not_a_same_pass_render(self):
+        patches = _patched(
+            read_cookie_value="tok-valido-nav16",
+            session_value={"tenant_id": "tenant-1", "username": "pedro", "last_context_id": None},
+        )
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+            at = AppTest.from_string(_PAGE_SRC_COUNT_RUNS, default_timeout=30)
+            at.run()
+
+        assert not at.exception
+        assert at.session_state["_run_count"] == 2, (
+            "esperava 2 execuções do script dentro de 1 chamada .run() — "
+            "1ª calcula is_admin()/monta menu com sessão ainda vazia, restaura, "
+            "força rerun; 2ª já vê a sessão restaurada desde o topo do script. "
+            "Só 1 execução significaria que o rerun do NAV-16 não está disparando."
+        )
+        assert [m for m in at.markdown if "PAGE_CONTENT_RENDERED" in m.value]
+
+
 def _run_twice(at: AppTest) -> None:
     """_maybe_restore_session() nunca trata a 1ª tentativa sem sessão como
     definitiva — mostra um placeholder neutro (nunca a tela de login) e

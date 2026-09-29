@@ -4,6 +4,25 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC219 — Concluído (v5.16 / 2026-09-29) — NAV-16 + UX-01: menu/página quebrando após restaurar sessão
+
+**Origem:** duas auditorias de produção feitas em outra sessão (2026-09-28, commits `807a778`/`c8e2436`/`700d7d5`, não documentados no roadmap por essa sessão): `melhorias/parciais/navegabilidade-auditoria-2026-09-28.md` (NAV-16 a NAV-20, mesclado de volta em `navegabilidade.md` nesta rodada) e `melhorias/ux-amigabilidade-e-elegancia.md` (UX-01 a UX-14). Achado crítico comum às duas: `pages/Home.py` quebrava com `StreamlitPageNotFoundError` num reload como usuário Master.
+
+**Causa raiz:** `app.py` calcula `_admin = is_admin()` (usado pra montar `st.navigation()`) ANTES de chamar `apply_auth_gate()`. Numa restauração de sessão persistente (NAV-05/PC214), o run em que `_try_restore_session()` finalmente tem sucesso já deixa o `session_state` correto para o RESTO daquele run — mas o menu já tinha sido montado no TOPO da mesma execução com o papel antigo (não-admin, sessão ainda vazia). Efeito: sidebar com 40 itens em vez de 54 durante a janela de restauração, e qualquer `st.page_link` para página admin (`Home.py:435`, `st.page_link("pages/DatabaseOverview.py")`) quebrando, porque o restante da página já vê `is_admin()==True` mas a página-alvo nunca foi registrada nesta execução.
+
+- [x] `ui/auth_gate.py::_maybe_restore_session()` — ao restaurar a sessão com sucesso, força `st.rerun()` na hora em vez de só devolver o controle; a próxima execução calcula `is_admin()` já com `session_state` restaurado, antes de `st.navigation()` rodar. Corrige o NAV-16 e a causa raiz do A1/UX-01
+- [x] `ui/components/safe_page_link.py` (novo) — camada de defesa complementar pedida pelo UX-01: `st.page_link()` que nunca lança `StreamlitPageNotFoundError`, cai num `st.caption()` de fallback se a página-alvo ainda não estiver registrada nesta execução
+- [x] `pages/Home.py` (linhas do achado A1: Database Overview, Master Admin) e `pages/Settings.py` (2 links equivalentes: Database Overview — achado de passagem, sem nenhum gate de `is_admin()`, ver nota abaixo — e Master Admin, esse sim gated por `role == "master"`) migrados pra `safe_page_link()`
+- [x] `tests/test_session_restore.py::TestSuccessfulRestoreForcesRerunBeforeRenderingNav16` — prova que o rerun de fato acontece (conta execuções do script via um contador em `session_state`), não só que o estado final fica correto
+- [x] `tests/test_safe_page_link.py` — 3 testes unitários (mock direto de `streamlit.page_link`/`streamlit.caption`, não via `AppTest` — vários arquivos deste projeto fazem `st.page_link = lambda *a,**k: None` em nível de módulo sem restaurar, um monkeypatch global que mascararia exatamente o comportamento que este teste precisa observar)
+- [x] `melhorias/parciais/navegabilidade-auditoria-2026-09-28.md` mesclado de volta em `melhorias/parciais/navegabilidade.md` (NAV-16 marcado como corrigido) e removido, como a própria auditoria pedia
+
+**Achado de passagem, não corrigido nesta rodada:** `pages/Settings.py` (aba "Banco de Dados", ~L490-503) mostra contagens agregadas (`contexts`, `meetings`, `requirements`) via `db.table(...).select("id").execute()` **sem filtro de `tenant_id`**, visível a QUALQUER usuário autenticado (não só admin) — mesma classe de vazamento cross-tenant do NAV-01 (PC211), mas aqui é métricas agregadas, não a lista de contextos em si. O `st.page_link("pages/DatabaseOverview.py")` logo abaixo também não tem gate de `is_admin()` — diferente do link para Master Admin na mesma página, que é corretamente restrito a `role == "master"`. Fora de escopo desta rodada (não foi o que a auditoria pediu para investigar); recomendo tratar como um NAV-01-bis.
+
+- **Testes:** `tests/test_session_restore.py` (+1) + `tests/test_safe_page_link.py` (3 novos); suíte completa **1082 testes, 0 falhas**, sem regressão
+
+---
+
 ### PC218 — Concluído (v5.16 / 2026-09-24) — Navegabilidade Onda 2 (NAV-07b): leitura de relatórios pra usuário comum
 
 **Origem:** `melhorias/parciais/navegabilidade.md` — segunda metade do NAV-07, depois do NAV-07a (PC215) ter movido a geração/regeneração pra admin-only.
