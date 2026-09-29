@@ -434,10 +434,22 @@ class AgentProvocations(BaseAgent):
     # bastante para virar um card na aba Provocações — zero risco de
     # alucinação nova, o julgamento já foi feito e já está no banco.
     @staticmethod
-    def bridge_contradictions(project_id: str, meeting_id: str) -> list[ProvocationItem]:
-        from core.knowledge_store import get_contradictions
-
-        rows = get_contradictions(project_id, status="open", limit=200)
+    def bridge_contradictions(
+        project_id: str,
+        meeting_id: str,
+        contradictions: list[dict] | None = None,
+    ) -> list[ProvocationItem]:
+        """contradictions: lista de kh_contradictions JÁ buscada pelo chamador
+        (NAV-17) — a query get_contradictions(project_id, ...) não depende de
+        meeting_id, então um chamador que itera várias reuniões do mesmo
+        projeto (ProvocationsBackfill.py, core.pipeline.backfill_contradiction_
+        provocations()) deve buscar uma vez só e passar aqui, em vez de refazer
+        a mesma consulta a cada reunião. None (default) preserva o
+        comportamento original de 1-reunião-por-vez (run_provocations())."""
+        if contradictions is None:
+            from core.knowledge_store import get_contradictions
+            contradictions = get_contradictions(project_id, status="open", limit=200)
+        rows = contradictions
         items: list[ProvocationItem] = []
 
         for c in rows:

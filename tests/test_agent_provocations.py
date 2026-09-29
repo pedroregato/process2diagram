@@ -690,3 +690,29 @@ class TestBridgeContradictions:
             lambda project_id, status="open", limit=200: [],
         )
         assert AgentProvocations.bridge_contradictions(PROJECT_ID, MEETING_ID) == []
+
+    def test_contradictions_param_skips_the_query_entirely(self, monkeypatch):
+        """NAV-17: um chamador que itera várias reuniões do mesmo projeto
+        (ProvocationsBackfill.py, backfill_contradiction_provocations()) busca
+        get_contradictions() 1 vez e passa via contradictions= — a função não
+        deve chamar get_contradictions() de novo nesse caso (era a causa da
+        lentidão: a mesma query refeita 1x por reunião)."""
+        def _boom(*a, **kw):
+            raise AssertionError("get_contradictions() não deveria ser chamada quando contradictions= é passado")
+        monkeypatch.setattr("core.knowledge_store.get_contradictions", _boom)
+
+        items = AgentProvocations.bridge_contradictions(
+            PROJECT_ID, MEETING_ID, contradictions=[_kh_row()],
+        )
+        assert len(items) == 1
+        assert items[0].contradiction_ref["source_contradiction_id"] == "kh-contra-1"
+
+    def test_contradictions_param_none_falls_back_to_the_query(self, monkeypatch):
+        """Comportamento original preservado para o chamador single-meeting
+        (run_provocations()) — contradictions=None (default) ainda busca."""
+        monkeypatch.setattr(
+            "core.knowledge_store.get_contradictions",
+            lambda project_id, status="open", limit=200: [_kh_row()],
+        )
+        items = AgentProvocations.bridge_contradictions(PROJECT_ID, MEETING_ID, contradictions=None)
+        assert len(items) == 1

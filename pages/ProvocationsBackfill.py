@@ -32,6 +32,7 @@ import streamlit as st
 from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured, get_supabase_client
 from core.project_store import list_contexts, list_meetings, list_provocations_by_project
+from core.knowledge_store import get_contradictions
 from agents.agent_provocations import AgentProvocations
 from core.pipeline import backfill_contradiction_provocations
 
@@ -89,10 +90,17 @@ with st.spinner("Verificando contradições pendentes..."):
                 (p.get("grounding") or {}).get("source_contradiction_id")
             )
 
+    # NAV-17: get_contradictions(project_id, ...) não depende de meeting_id —
+    # buscada 1x aqui em vez de 1x por reunião dentro do laço abaixo
+    # (bridge_contradictions() refazia a mesma query pra cada reunião).
+    _project_contradictions = get_contradictions(project_id, status="open", limit=200)
+
     eligible = []
     for m in meetings:
         try:
-            bridged = AgentProvocations.bridge_contradictions(project_id, m["id"])
+            bridged = AgentProvocations.bridge_contradictions(
+                project_id, m["id"], contradictions=_project_contradictions,
+            )
         except Exception:
             bridged = []
         already = already_bridged_by_meeting.get(m["id"], set())

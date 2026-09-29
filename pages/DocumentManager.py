@@ -66,7 +66,17 @@ def _cached_types_by_category():
 def _cached_asset_meta_map(pid):
     return get_asset_metadata_map(pid)
 
-def _list_meetings() -> list[dict]:
+# NAV-17: list_documents(project_id, ...) e a query de reuniões eram
+# refeitas sem cache em cada uma das 7 abas que a chama (st.tabs renderiza
+# todos os corpos a cada rerun) — até 6 idas ao Supabase por load. Cache
+# compartilhado entre as abas: a 1ª aba paga a consulta, as demais reusam.
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_list_documents(pid: str, meeting_id: str | None = None,
+                            doc_type: str | None = None, limit: int = 200) -> list[dict]:
+    return list_documents(pid, meeting_id=meeting_id, doc_type=doc_type, limit=limit)
+
+@st.cache_data(ttl=120, show_spinner=False)
+def _list_meetings(pid: str) -> list[dict]:
     """Fetch project meetings for linking documents."""
     try:
         from modules.supabase_client import get_supabase_client
@@ -76,7 +86,7 @@ def _list_meetings() -> list[dict]:
         return (
             db.table("meetings")
             .select("id, title, created_at")
-            .eq("project_id", project_id)
+            .eq("project_id", pid)
             .order("created_at", desc=True)
             .limit(100)
             .execute().data or []
@@ -211,7 +221,7 @@ with tab_upload:
 
     types_by_cat = _cached_types_by_category()
     all_types    = _cached_doc_types()
-    meetings     = _list_meetings()
+    meetings     = _list_meetings(project_id)
 
     col_meta, col_source = st.columns([1, 1], gap="large")
 
@@ -448,7 +458,7 @@ with tab_library:
             docs = search_documents_keyword(lib_query, project_id)
     else:
         doc_type_filter = None if filter_type == "(todos)" else filter_type
-        docs = list_documents(project_id, doc_type=doc_type_filter)
+        docs = _cached_list_documents(project_id, doc_type=doc_type_filter)
 
     if not docs:
         st.info("Nenhum documento encontrado. Use a aba **Enviar Documento** para adicionar.")
@@ -611,7 +621,7 @@ with tab_extract:
         "regras de negócio, metas BMM, estratégias, políticas e decisões DMN."
     )
 
-    docs_ext = list_documents(project_id)
+    docs_ext = _cached_list_documents(project_id)
     if not docs_ext:
         st.info("Nenhum documento disponível. Envie um documento na aba **📤 Enviar Documento**.")
         st.stop()
@@ -785,8 +795,8 @@ with tab_analysis:
         "e produz um relatório de alinhamento, conflitos, lacunas e recomendações."
     )
 
-    docs_all  = list_documents(project_id, limit=200)
-    meetings_all = _list_meetings()
+    docs_all  = _cached_list_documents(project_id, limit=200)
+    meetings_all = _list_meetings(project_id)
 
     if not docs_all:
         st.info("Nenhum documento disponível. Faça upload na aba **Enviar Documento**.")
@@ -1017,7 +1027,7 @@ with tab_crossdoc:
         "identificando equivalências, complementaridades, contradições e gaps."
     )
 
-    _all_docs = list_documents(project_id)
+    _all_docs = _cached_list_documents(project_id)
     if len(_all_docs) < 2:
         st.info("É necessário ter pelo menos 2 documentos na biblioteca para usar esta análise.")
         st.stop()

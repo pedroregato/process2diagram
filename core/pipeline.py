@@ -370,6 +370,7 @@ def backfill_contradiction_provocations(project_id, meeting_ids=None, progress_c
     """
     from agents.agent_provocations import AgentProvocations
     from core.project_store import list_meetings, save_provocations, list_provocations_by_project
+    from core.knowledge_store import get_contradictions
 
     meetings = list_meetings(project_id)
     if meeting_ids:
@@ -384,13 +385,19 @@ def backfill_contradiction_provocations(project_id, meeting_ids=None, progress_c
                 (p.get("grounding") or {}).get("source_contradiction_id")
             )
 
+    # NAV-17: mesma lógica — get_contradictions(project_id, ...) não depende
+    # de meeting_id, buscada 1x aqui em vez de 1x por reunião dentro do laço.
+    _project_contradictions = get_contradictions(project_id, status="open", limit=200)
+
     total = len(meetings)
     results = []
     for i, m in enumerate(meetings):
         mid = m["id"]
         row = {"meeting_id": mid, "meeting_number": m.get("meeting_number"), "title": m.get("title")}
         try:
-            bridged = AgentProvocations.bridge_contradictions(project_id, mid)
+            bridged = AgentProvocations.bridge_contradictions(
+                project_id, mid, contradictions=_project_contradictions,
+            )
             already = already_bridged_by_meeting.get(mid, set())
             new_items = [
                 b for b in bridged

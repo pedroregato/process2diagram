@@ -80,9 +80,20 @@ def _load_status_counts(pid: str):
     return count_validation_status(pid)
 
 
+# NAV-17: list_meetings() trazia transcript_raw/transcript_clean completos
+# de TODAS as reuniões do projeto só para popular o rótulo do selectbox de
+# reunião — sem cache, refeita em toda interação (clique de paginação,
+# mudança de filtro). Maior causa isolada dos ~17s medidos mesmo após o
+# cache do PC212 nas demais consultas desta página.
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_meetings_list(pid: str):
+    return list_meetings(pid)
+
+
 def _invalidate_caches() -> None:
     _load_artifacts.clear()
     _load_status_counts.clear()
+    _load_meetings_list.clear()
 
 
 _me = st.session_state.get("_usuario_nome") or st.session_state.get("_usuario_login", "sistema")
@@ -110,7 +121,7 @@ with _col_ch:
 col_meet, col_status = st.columns(2)
 
 with col_meet:
-    meetings   = list_meetings(proj_id)
+    meetings   = _load_meetings_list(proj_id)
     meet_map   = {"Todas as reuniões": None}
     for m in meetings:
         dt  = (m.get("meeting_date") or "")[:10]

@@ -38,9 +38,10 @@ class TestBackfillContradictionProvocations:
     def test_processes_all_meetings_and_saves_new_items(self):
         with patch("core.project_store.list_meetings", return_value=MEETINGS), \
              patch("core.project_store.list_provocations_by_project", return_value=[]), \
+             patch("core.knowledge_store.get_contradictions", return_value=[]), \
              patch("core.project_store.save_provocations", return_value=1) as mock_save, \
              patch("agents.agent_provocations.AgentProvocations.bridge_contradictions",
-                   side_effect=lambda pid, mid: [_item(f"kh-{mid}")]):
+                   side_effect=lambda pid, mid, **kw: [_item(f"kh-{mid}")]):
             results = backfill_contradiction_provocations("proj-1")
 
         assert len(results) == 3
@@ -53,11 +54,28 @@ class TestBackfillContradictionProvocations:
         single-meeting já existente em run_provocations()."""
         with patch("core.project_store.list_meetings", return_value=MEETINGS), \
              patch("core.project_store.list_provocations_by_project", return_value=[]) as mock_list_prov, \
+             patch("core.knowledge_store.get_contradictions", return_value=[]), \
              patch("core.project_store.save_provocations", return_value=0), \
              patch("agents.agent_provocations.AgentProvocations.bridge_contradictions", return_value=[]):
             backfill_contradiction_provocations("proj-1")
 
         assert mock_list_prov.call_count == 1
+
+    def test_contradictions_fetched_once_not_per_meeting(self):
+        """NAV-17: get_contradictions() não depende de meeting_id — deve ser
+        buscada 1 vez pro lote inteiro e repassada a bridge_contradictions(),
+        não refeita a cada reunião (era a maior causa de lentidão medida)."""
+        with patch("core.project_store.list_meetings", return_value=MEETINGS), \
+             patch("core.project_store.list_provocations_by_project", return_value=[]), \
+             patch("core.knowledge_store.get_contradictions", return_value=[]) as mock_get_contra, \
+             patch("core.project_store.save_provocations", return_value=0), \
+             patch("agents.agent_provocations.AgentProvocations.bridge_contradictions", return_value=[]) as mock_bridge:
+            backfill_contradiction_provocations("proj-1")
+
+        assert mock_get_contra.call_count == 1
+        assert mock_bridge.call_count == 3
+        for call in mock_bridge.call_args_list:
+            assert call.kwargs.get("contradictions") == []
 
     def test_dedup_skips_already_bridged_per_meeting(self):
         existing = [{
@@ -66,6 +84,7 @@ class TestBackfillContradictionProvocations:
         }]
         with patch("core.project_store.list_meetings", return_value=MEETINGS[:1]), \
              patch("core.project_store.list_provocations_by_project", return_value=existing), \
+             patch("core.knowledge_store.get_contradictions", return_value=[]), \
              patch("core.project_store.save_provocations") as mock_save, \
              patch("agents.agent_provocations.AgentProvocations.bridge_contradictions",
                    return_value=[_item("kh-m1")]):
@@ -79,17 +98,19 @@ class TestBackfillContradictionProvocations:
     def test_filters_by_meeting_ids(self):
         with patch("core.project_store.list_meetings", return_value=MEETINGS), \
              patch("core.project_store.list_provocations_by_project", return_value=[]), \
+             patch("core.knowledge_store.get_contradictions", return_value=[]), \
              patch("core.project_store.save_provocations", return_value=0), \
              patch("agents.agent_provocations.AgentProvocations.bridge_contradictions", return_value=[]) as mock_bridge:
             results = backfill_contradiction_provocations("proj-1", meeting_ids=["m2"])
 
         assert len(results) == 1
         assert results[0]["meeting_id"] == "m2"
-        mock_bridge.assert_called_once_with("proj-1", "m2")
+        mock_bridge.assert_called_once_with("proj-1", "m2", contradictions=[])
 
     def test_empty_meeting_ids_filter_yields_no_results(self):
         with patch("core.project_store.list_meetings", return_value=MEETINGS), \
              patch("core.project_store.list_provocations_by_project", return_value=[]), \
+             patch("core.knowledge_store.get_contradictions", return_value=[]), \
              patch("core.project_store.save_provocations"), \
              patch("agents.agent_provocations.AgentProvocations.bridge_contradictions", return_value=[]):
             results = backfill_contradiction_provocations("proj-1", meeting_ids=["nonexistent"])
@@ -97,13 +118,14 @@ class TestBackfillContradictionProvocations:
         assert results == []
 
     def test_isolated_error_does_not_abort_other_meetings(self):
-        def _bridge(pid, mid):
+        def _bridge(pid, mid, **kw):
             if mid == "m2":
                 raise RuntimeError("kaboom")
             return []
 
         with patch("core.project_store.list_meetings", return_value=MEETINGS), \
              patch("core.project_store.list_provocations_by_project", return_value=[]), \
+             patch("core.knowledge_store.get_contradictions", return_value=[]), \
              patch("core.project_store.save_provocations", return_value=0), \
              patch("agents.agent_provocations.AgentProvocations.bridge_contradictions", side_effect=_bridge):
             results = backfill_contradiction_provocations("proj-1")
@@ -117,6 +139,7 @@ class TestBackfillContradictionProvocations:
         calls = []
         with patch("core.project_store.list_meetings", return_value=MEETINGS), \
              patch("core.project_store.list_provocations_by_project", return_value=[]), \
+             patch("core.knowledge_store.get_contradictions", return_value=[]), \
              patch("core.project_store.save_provocations", return_value=0), \
              patch("agents.agent_provocations.AgentProvocations.bridge_contradictions", return_value=[]):
             backfill_contradiction_provocations(
@@ -128,6 +151,7 @@ class TestBackfillContradictionProvocations:
     def test_no_progress_callback_is_optional(self):
         with patch("core.project_store.list_meetings", return_value=MEETINGS), \
              patch("core.project_store.list_provocations_by_project", return_value=[]), \
+             patch("core.knowledge_store.get_contradictions", return_value=[]), \
              patch("core.project_store.save_provocations", return_value=0), \
              patch("agents.agent_provocations.AgentProvocations.bridge_contradictions", return_value=[]):
             results = backfill_contradiction_provocations("proj-1")  # sem progress_callback, não deve lançar
@@ -136,7 +160,8 @@ class TestBackfillContradictionProvocations:
 
     def test_no_meetings_in_project_returns_empty_list(self):
         with patch("core.project_store.list_meetings", return_value=[]), \
-             patch("core.project_store.list_provocations_by_project", return_value=[]):
+             patch("core.project_store.list_provocations_by_project", return_value=[]), \
+             patch("core.knowledge_store.get_contradictions", return_value=[]):
             results = backfill_contradiction_provocations("proj-1")
 
         assert results == []

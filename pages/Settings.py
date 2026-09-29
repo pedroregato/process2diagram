@@ -468,6 +468,61 @@ with tab_embed:
     else:
         st.caption("ℹ️ Faça login com domínio para persistir estas configurações entre sessões.")
 
+# NAV-17: aba "Banco de Dados" (Tab 4) rodava a cada rerun de Settings.py
+# inteiro, não só quando visitada — st.tabs() renderiza todos os corpos
+# sempre. Contagens de reuniões/requisitos traziam a lista completa de IDs
+# só pra fazer len() em Python (count="exact" + limit(1) evita transferir
+# as linhas — mesmo padrão de KnowledgeGraph.py::_true_count(), NAV-15); os
+# 6 probes de "tabela existe?" viravam 6 queries sempre, mesmo sem nenhuma
+# mudança de schema entre reruns.
+@st.cache_data(ttl=120, show_spinner=False)
+def _db_overview_stats(tid: str | None):
+    db = get_supabase_client()
+    if not db:
+        return None
+    ctx_ids = [
+        c["id"] for c in
+        (db.table("contexts").select("id").eq("tenant_id", tid).execute().data or [])
+    ]
+    n_proj = len(ctx_ids)
+    n_meet = 0
+    n_req = 0
+    if ctx_ids:
+        n_meet = (
+            db.table("meetings").select("id", count="exact")
+            .in_("project_id", ctx_ids).limit(1).execute().count or 0
+        )
+        n_req = (
+            db.table("requirements").select("id", count="exact")
+            .in_("project_id", ctx_ids).limit(1).execute().count or 0
+        )
+    return {"n_proj": n_proj, "n_meet": n_meet, "n_req": n_req}
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _optional_tables_status():
+    db = get_supabase_client()
+    if not db:
+        return []
+    optional_tables = {
+        "bpmn_processes":    "Processos BPMN",
+        "bpmn_versions":     "Versões BPMN",
+        "sbvr_terms":        "Termos SBVR",
+        "sbvr_rules":        "Regras SBVR",
+        "transcript_chunks": "Chunks de Embedding (busca semântica)",
+        "batch_log":         "Log do Batch Runner",
+    }
+    rows = []
+    for tbl, desc in optional_tables.items():
+        try:
+            db.table(tbl).select("id").limit(1).execute()
+            status = "✅ Existe"
+        except Exception:
+            status = "❌ Não encontrada"
+        rows.append({"Tabela": tbl, "Descrição": desc, "Status": status})
+    return rows
+
+
 # ╔══════════════════════════════════════════════════════╗
 # ║  TAB 4 — Banco de Dados                             ║
 # ╚══════════════════════════════════════════════════════╝
@@ -506,40 +561,18 @@ with tab_db:
             # meetings/requirements não têm tenant_id direto (só project_id →
             # contexts.id), por isso filtram pelos ids de contexto do tenant.
             try:
-                _ctx_ids = [
-                    c["id"] for c in
-                    (db.table("contexts").select("id").eq("tenant_id", _tid).execute().data or [])
-                ]
-                n_proj = len(_ctx_ids)
-                n_meet = len(db.table("meetings").select("id").in_("project_id", _ctx_ids).execute().data or []) if _ctx_ids else 0
-                n_req  = len(db.table("requirements").select("id").in_("project_id", _ctx_ids).execute().data or []) if _ctx_ids else 0
+                _stats = _db_overview_stats(_tid)
                 c1, c2, c3 = st.columns(3)
-                c1.metric("Projetos",   n_proj)
-                c2.metric("Reuniões",   n_meet)
-                c3.metric("Requisitos", n_req)
+                c1.metric("Projetos",   _stats["n_proj"])
+                c2.metric("Reuniões",   _stats["n_meet"])
+                c3.metric("Requisitos", _stats["n_req"])
             except Exception as e:
                 st.warning(f"Erro ao consultar tabelas: {e}")
 
             # Tabelas opcionais
             st.markdown("#### Tabelas opcionais")
-            optional_tables = {
-                "bpmn_processes":    "Processos BPMN",
-                "bpmn_versions":     "Versões BPMN",
-                "sbvr_terms":        "Termos SBVR",
-                "sbvr_rules":        "Regras SBVR",
-                "transcript_chunks": "Chunks de Embedding (busca semântica)",
-                "batch_log":         "Log do Batch Runner",
-            }
-            tbl_rows = []
-            for tbl, desc in optional_tables.items():
-                try:
-                    db.table(tbl).select("id").limit(1).execute()
-                    status = "✅ Existe"
-                except Exception:
-                    status = "❌ Não encontrada"
-                tbl_rows.append({"Tabela": tbl, "Descrição": desc, "Status": status})
             import pandas as pd
-            st.dataframe(pd.DataFrame(tbl_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(_optional_tables_status()), use_container_width=True, hide_index=True)
         else:
             st.error("❌ Falha ao conectar ao Supabase.")
 
