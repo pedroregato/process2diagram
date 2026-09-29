@@ -489,14 +489,30 @@ with tab_db:
         )
     else:
         db = get_supabase_client()
+        # NAV-01-bis (achado de passagem no PC219, claude_guideline/roadmap.md):
+        # toda esta aba consultava a tabela contexts (e meetings/requirements
+        # por extensão) sem filtro de tenant_id — qualquer usuário
+        # autenticado via QUALQUER domínio via/editava contextos de QUALQUER
+        # outro tenant (não só métricas agregadas: a seção "Contextos" logo
+        # abaixo tinha um formulário de EDIÇÃO — name/description/sigla/
+        # ata_slug/meeting_location — de contextos de outros tenants). Mesma
+        # classe de vazamento do NAV-01 (PC211), só que aqui é escrita
+        # cross-tenant, não só leitura numa lista.
+        _tid = st.session_state.get("_tenant_id")
         if db:
             st.success("✅ Conexão com Supabase estabelecida.")
 
-            # Quick stats
+            # Quick stats — escopados ao tenant ativo via contexts.tenant_id;
+            # meetings/requirements não têm tenant_id direto (só project_id →
+            # contexts.id), por isso filtram pelos ids de contexto do tenant.
             try:
-                n_proj = len(db.table("contexts").select("id").execute().data or [])
-                n_meet = len(db.table("meetings").select("id").execute().data or [])
-                n_req  = len(db.table("requirements").select("id").execute().data or [])
+                _ctx_ids = [
+                    c["id"] for c in
+                    (db.table("contexts").select("id").eq("tenant_id", _tid).execute().data or [])
+                ]
+                n_proj = len(_ctx_ids)
+                n_meet = len(db.table("meetings").select("id").in_("project_id", _ctx_ids).execute().data or []) if _ctx_ids else 0
+                n_req  = len(db.table("requirements").select("id").in_("project_id", _ctx_ids).execute().data or []) if _ctx_ids else 0
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Projetos",   n_proj)
                 c2.metric("Reuniões",   n_meet)
@@ -535,7 +551,7 @@ with tab_db:
         st.caption("Visualize e edite a sigla dos contextos cadastrados.")
 
         try:
-            proj_rows = db.table("contexts").select("*").order("name").execute().data or []
+            proj_rows = db.table("contexts").select("*").eq("tenant_id", _tid).order("name").execute().data or []
         except Exception as e:
             proj_rows = []
             st.warning(f"Erro ao carregar contextos: {e}")
@@ -614,7 +630,10 @@ with tab_db:
                             if new_location:
                                 patch["meeting_location"] = new_location
                             try:
-                                db.table("contexts").update(patch).eq("id", pid).execute()
+                                # .eq("tenant_id", _tid) é defesa em profundidade — pid só
+                                # chega aqui vindo do SELECT já filtrado por tenant acima,
+                                # mas o update nunca deve alcançar outro tenant mesmo assim.
+                                db.table("contexts").update(patch).eq("id", pid).eq("tenant_id", _tid).execute()
                                 st.success("✅ Contexto atualizado.")
                                 st.rerun()
                             except Exception as upd_err:
@@ -631,7 +650,7 @@ with tab_db:
         )
 
         try:
-            ckf_proj_rows = db.table("contexts").select("id, name, skill_md").order("name").execute().data or []
+            ckf_proj_rows = db.table("contexts").select("id, name, skill_md").eq("tenant_id", _tid).order("name").execute().data or []
         except Exception:
             ckf_proj_rows = []
 
@@ -665,7 +684,7 @@ with tab_db:
                     with col_save:
                         if st.button("💾 Salvar CKF", key=f"ckf_save_{cpid}", type="primary", use_container_width=True):
                             try:
-                                db.table("contexts").update({"skill_md": new_skill.strip() or None}).eq("id", cpid).execute()
+                                db.table("contexts").update({"skill_md": new_skill.strip() or None}).eq("id", cpid).eq("tenant_id", _tid).execute()
                                 st.session_state["_ckf_ok"]    = f"✅ CKF salvo para '{cpname}'."
                                 st.session_state["_ckf_ok_id"] = cpid
                                 st.rerun()
@@ -674,7 +693,7 @@ with tab_db:
                     with col_clear:
                         if st.button("🗑 Limpar CKF", key=f"ckf_clear_{cpid}", use_container_width=True):
                             try:
-                                db.table("contexts").update({"skill_md": None}).eq("id", cpid).execute()
+                                db.table("contexts").update({"skill_md": None}).eq("id", cpid).eq("tenant_id", _tid).execute()
                                 st.session_state["_ckf_ok"]    = f"CKF de '{cpname}' removido."
                                 st.session_state["_ckf_ok_id"] = cpid
                                 st.rerun()
@@ -695,7 +714,7 @@ with tab_db:
         try:
             from modules.context_files import extract_text, SUPPORTED_EXTENSIONS, MAX_FILE_SIZE
             from core.project_store import list_context_files, save_context_file, delete_context_file
-            _ctxf_proj_rows = db.table("contexts").select("id, name").order("name").execute().data or []
+            _ctxf_proj_rows = db.table("contexts").select("id, name").eq("tenant_id", _tid).order("name").execute().data or []
         except Exception as _ctxf_init_err:
             st.warning(f"Módulo de arquivos de contexto indisponível: {_ctxf_init_err}")
             _ctxf_proj_rows = []
@@ -811,7 +830,7 @@ with tab_db:
                     list_ata_templates, get_active_ata_template, save_ata_template,
                     activate_ata_template, deactivate_ata_template, delete_ata_template,
                 )
-                _atatpl_ctx_rows = db.table("contexts").select("id, name").order("name").execute().data or []
+                _atatpl_ctx_rows = db.table("contexts").select("id, name").eq("tenant_id", _tid).order("name").execute().data or []
             except Exception as _atatpl_init_err:
                 st.warning(f"Módulo de templates de ata indisponível: {_atatpl_init_err}")
                 _atatpl_ctx_rows = []
@@ -1058,17 +1077,22 @@ $$;
         )
         st.code(_v421_sql, language="sql")
 
-    st.markdown("---")
-    st.markdown("#### 📊 Painel completo do banco")
-    st.markdown(
-        "Para ver totais de registros, integridade de dados, distribuição de requisitos "
-        "e cobertura de embeddings, acesse a página **🗄️ Visão do Banco** no menu "
-        "**Operações** na barra lateral esquerda."
-    )
-    safe_page_link("pages/DatabaseOverview.py", label="Abrir Visão do Banco →", icon="🗄️")
+    # NAV-01-bis: pages/DatabaseOverview.py só é registrada em app.py quando
+    # is_admin() é True — o link abaixo não tinha essa checagem, aparecendo
+    # (e sempre quebrando, mesmo com safe_page_link) para qualquer usuário
+    # comum.
+    from modules.auth import is_admin
+    if is_admin():
+        st.markdown("---")
+        st.markdown("#### 📊 Painel completo do banco")
+        st.markdown(
+            "Para ver totais de registros, integridade de dados, distribuição de requisitos "
+            "e cobertura de embeddings, acesse a página **🗄️ Visão do Banco** no menu "
+            "**Operações** na barra lateral esquerda."
+        )
+        safe_page_link("pages/DatabaseOverview.py", label="Abrir Visão do Banco →", icon="🗄️")
 
     # ── Google Calendar por Contexto (admin) ──────────────────────────────────
-    from modules.auth import is_admin
     if is_admin():
         st.markdown("---")
         st.markdown("#### 📅 Google Calendar por Contexto")

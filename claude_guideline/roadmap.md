@@ -4,6 +4,24 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC220 — Concluído (v5.16 / 2026-09-29) — NAV-01-bis: vazamento cross-tenant em Settings.py (aba Banco de Dados)
+
+**Origem:** achado de passagem registrado no PC219 — investigando o NAV-16/UX-01, `pages/Settings.py` mostrou contagens agregadas sem filtro de tenant. Investigação mais a fundo revelou que o problema é bem maior do que métricas: é escrita cross-tenant, não só leitura.
+
+**Causa:** a aba "Banco de Dados" de `pages/Settings.py` consulta e atualiza a tabela `contexts` via `db.table("contexts")` **direto** (não via `core.project_store.list_contexts()`), por isso os 8 pontos de chamada passaram batido do fix original do NAV-01 (PC211), que corrigiu só os call sites daquela função. Nenhum tinha filtro de `tenant_id`. O mais sério: a seção "📁 Contextos" lista TODOS os contextos de TODOS os tenants com um formulário de edição completo (nome, sigla, descrição, slug de ata, local padrão) e um botão "💾 Salvar" que faz `UPDATE` direto por `id` — qualquer usuário autenticado de qualquer domínio conseguia **editar** contextos de outros tenants, não só visualizá-los. As seções de CKF, upload de arquivos de contexto e modelo de ata tinham o mesmo problema (leitura+escrita cross-tenant nas 3).
+
+- [x] `pages/Settings.py` — as 8 chamadas a `db.table("contexts")` (5 SELECTs + 3 UPDATEs) passam a filtrar por `.eq("tenant_id", _tid)`; os UPDATEs ganham o filtro como defesa em profundidade (o `id` só deveria chegar ao formulário via um SELECT já filtrado, mas o UPDATE nunca deve alcançar outro tenant mesmo assim)
+- [x] Métricas agregadas (Projetos/Reuniões/Requisitos) — `meetings`/`requirements` não têm `tenant_id` direto (só `project_id → contexts.id`), então passam a filtrar via `.in_("project_id", <ids de contexto do tenant>)`
+- [x] `st.page_link("pages/DatabaseOverview.py", ...)` — não tinha nenhum gate de `is_admin()` (diferente do link para Master Admin na mesma página, que já era `role == "master"`); agora só aparece para admin
+- [x] `tests/test_settings_tenant_isolation.py` — guarda estática (regex sobre o texto-fonte, garante que nenhuma das 8 chamadas fique sem `tenant_id`) + 1 teste dinâmico via `AppTest` com 2 tenants semeados numa fake DB, confirmando que só o contexto do tenant ativo aparece na lista de edição
+
+**Aceite:** usuário do domínio A não vê nem consegue editar contextos do domínio B na aba Banco de Dados.
+
+- **Testes:** `tests/test_settings_tenant_isolation.py` (2 novos); suíte completa **1084 testes, 0 falhas**, sem regressão
+- **Fecha o achado de passagem do PC219**
+
+---
+
 ### PC219 — Concluído (v5.16 / 2026-09-29) — NAV-16 + UX-01: menu/página quebrando após restaurar sessão
 
 **Origem:** duas auditorias de produção feitas em outra sessão (2026-09-28, commits `807a778`/`c8e2436`/`700d7d5`, não documentados no roadmap por essa sessão): `melhorias/parciais/navegabilidade-auditoria-2026-09-28.md` (NAV-16 a NAV-20, mesclado de volta em `navegabilidade.md` nesta rodada) e `melhorias/ux-amigabilidade-e-elegancia.md` (UX-01 a UX-14). Achado crítico comum às duas: `pages/Home.py` quebrava com `StreamlitPageNotFoundError` num reload como usuário Master.
@@ -17,7 +35,7 @@ Histórico completo de entregas por ciclo de projeto.
 - [x] `tests/test_safe_page_link.py` — 3 testes unitários (mock direto de `streamlit.page_link`/`streamlit.caption`, não via `AppTest` — vários arquivos deste projeto fazem `st.page_link = lambda *a,**k: None` em nível de módulo sem restaurar, um monkeypatch global que mascararia exatamente o comportamento que este teste precisa observar)
 - [x] `melhorias/parciais/navegabilidade-auditoria-2026-09-28.md` mesclado de volta em `melhorias/parciais/navegabilidade.md` (NAV-16 marcado como corrigido) e removido, como a própria auditoria pedia
 
-**Achado de passagem, não corrigido nesta rodada:** `pages/Settings.py` (aba "Banco de Dados", ~L490-503) mostra contagens agregadas (`contexts`, `meetings`, `requirements`) via `db.table(...).select("id").execute()` **sem filtro de `tenant_id`**, visível a QUALQUER usuário autenticado (não só admin) — mesma classe de vazamento cross-tenant do NAV-01 (PC211), mas aqui é métricas agregadas, não a lista de contextos em si. O `st.page_link("pages/DatabaseOverview.py")` logo abaixo também não tem gate de `is_admin()` — diferente do link para Master Admin na mesma página, que é corretamente restrito a `role == "master"`. Fora de escopo desta rodada (não foi o que a auditoria pediu para investigar); recomendo tratar como um NAV-01-bis.
+**Achado de passagem, corrigido no PC220:** `pages/Settings.py` (aba "Banco de Dados") tinha 8 chamadas a `db.table("contexts")` sem filtro de `tenant_id` — inclusive um formulário de EDIÇÃO completo (não só leitura). Ver PC220.
 
 - **Testes:** `tests/test_session_restore.py` (+1) + `tests/test_safe_page_link.py` (3 novos); suíte completa **1082 testes, 0 falhas**, sem regressão
 
