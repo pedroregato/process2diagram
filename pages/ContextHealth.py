@@ -19,6 +19,7 @@ import plotly.graph_objects as go
 from ui.auth_gate import apply_auth_gate
 from ui.project_selector import require_active_project
 from modules.supabase_client import get_supabase_client, supabase_configured
+from ui.components.kpi_row import kpi_row
 
 apply_auth_gate()
 
@@ -625,8 +626,17 @@ def _build_html_report(project_name, health, roi_data, reqs, sbvr, n_files,
           font-family:'Segoe UI',system-ui,sans-serif; font-size:14px;
           line-height:1.6; padding:0 0 60px; }}
   .hero {{ background:linear-gradient(135deg,var(--navy) 0%,#112240 100%);
-           border-bottom:3px solid {color}; padding:32px 48px; }}
-  .hero h1 {{ font-size:1.8rem; font-weight:800; color:#fff; margin-bottom:4px; }}
+           border-bottom:3px solid {color}; padding:32px 48px;
+           flex-wrap:wrap; gap:16px 24px; }}
+  /* UX-05: título longo espremia contra o score num viewport estreito —
+     flex-wrap deixa o bloco de score descer pra 2ª linha em vez de
+     forçar os dois lado a lado até sobrepor; min-width:0 permite o
+     título quebrar em vez de vazar da caixa flex (comportamento padrão
+     de flex item é min-width:auto, que ignora overflow-wrap). */
+  .hero .hero-title {{ min-width:0; flex:1 1 320px; }}
+  .hero h1 {{ font-size:1.8rem; font-weight:800; color:#fff; margin-bottom:4px;
+              overflow-wrap:anywhere; }}
+  .hero .hero-score {{ flex-shrink:0; }}
   .hero .score {{ font-size:3rem; font-weight:900; color:{color}; }}
   .hero .meta {{ font-size:0.82rem; color:var(--sub); margin-top:6px; }}
   .badge {{ background:{color}22; color:{color}; padding:3px 12px;
@@ -654,7 +664,7 @@ def _build_html_report(project_name, health, roi_data, reqs, sbvr, n_files,
 <body>
 
 <div class="hero" style="display:flex;justify-content:space-between;align-items:center;">
-  <div>
+  <div class="hero-title">
     <div style="font-size:0.72rem;color:var(--sub);letter-spacing:1px;text-transform:uppercase;">
       Relatório de Saúde do Contexto · {today}
     </div>
@@ -667,7 +677,7 @@ def _build_html_report(project_name, health, roi_data, reqs, sbvr, n_files,
     </div>
     <div class="badge">{label}</div>
   </div>
-  <div style="text-align:center;">
+  <div class="hero-score" style="text-align:center;">
     <div class="score">{score:.1f}</div>
     <div class="sub">/ 10 &nbsp;·&nbsp; SAÚDE</div>
   </div>
@@ -879,21 +889,24 @@ avg_fill = health["avg_fulfill"]
 n_act    = health["total_actions"]
 n_done   = health["struct_actions"]
 
-c1,c2,c3,c4,c5,c6,c7 = st.columns(7)
-c1.metric("Saúde Geral",    f"{score:.1f}/10")
-c2.metric("ROI-TR Médio",   f"{avg_roi:.1f}",
-          delta="Alto" if avg_roi >= 7.5 else ("Médio" if avg_roi >= 4.5 else "Baixo"),
-          delta_color="normal" if avg_roi >= 4.5 else "inverse")
-c3.metric("Fulfillment",    f"{avg_fill*100:.0f}%")
-c4.metric("TRC (linguagem)",f"{avg_trc:.0f}%",
-          delta="Alto" if avg_trc > 40 else ("Médio" if avg_trc > 20 else "Baixo"),
-          delta_color="inverse" if avg_trc > 20 else "normal")
-c5.metric("Ações estr.",    f"{n_done}/{n_act}",
-          help="Itens de ação com responsável E prazo identificados na transcrição — heurística textual.")
-c6.metric("SBVR",           f"{sbvr['terms']}T · {sbvr['rules']}R")
-c7.metric("Contradições",   str(total_contra),
-          delta=f"Req:{len(req_contra)} KH:{len(kh_contra)}" if total_contra else "Nenhuma",
-          delta_color="inverse" if total_contra else "normal")
+# UX-02: 7 métricas numa linha só truncavam rótulo/valor em ~840px —
+# kpi_row() quebra em linhas de no máx. 4.
+kpi_row([
+    {"label": "Saúde Geral", "value": f"{score:.1f}/10"},
+    {"label": "ROI-TR Médio", "value": f"{avg_roi:.1f}",
+     "delta": "Alto" if avg_roi >= 7.5 else ("Médio" if avg_roi >= 4.5 else "Baixo"),
+     "delta_color": "normal" if avg_roi >= 4.5 else "inverse"},
+    {"label": "Fulfillment", "value": f"{avg_fill*100:.0f}%"},
+    {"label": "TRC (linguagem)", "value": f"{avg_trc:.0f}%",
+     "delta": "Alto" if avg_trc > 40 else ("Médio" if avg_trc > 20 else "Baixo"),
+     "delta_color": "inverse" if avg_trc > 20 else "normal"},
+    {"label": "Ações estr.", "value": f"{n_done}/{n_act}",
+     "help": "Itens de ação com responsável E prazo identificados na transcrição — heurística textual."},
+    {"label": "SBVR", "value": f"{sbvr['terms']}T · {sbvr['rules']}R"},
+    {"label": "Contradições", "value": str(total_contra),
+     "delta": f"Req:{len(req_contra)} KH:{len(kh_contra)}" if total_contra else "Nenhuma",
+     "delta_color": "inverse" if total_contra else "normal"},
+])
 
 st.markdown("---")
 

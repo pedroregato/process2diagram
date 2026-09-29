@@ -326,9 +326,9 @@ with tab_ibis:
                                 with st.popover("ℹ️"):
                                     st.markdown(f"**Questão:** {_t_stmt}")
                                     if _t_rat:
-                                        st.info(f"**Resolução:** {_t_rat}")
+                                        st.markdown(f"💡 **Resolução:** {_t_rat}")
                                     for _cav in _t_cav:
-                                        st.warning(f"Ressalva: {_cav}")
+                                        st.markdown(f"⚠️ Ressalva: {_cav}")
 
                     # Linha de progresso visual
                     _statuses = [
@@ -666,13 +666,16 @@ with tab_ibis:
                                 st.caption(" | ".join(parts))
                             st.markdown("---")
 
+                    # NAV-18: alerta colorido por questão virava ruído visual em
+                    # listas com muitas questões (174 no SDEA) — texto leve com
+                    # ícone no lugar de st.info/warning/error por item.
                     if res_type != "unresolved":
                         if resolution.get("rationale"):
-                            st.info(f"**Resolução:** {resolution['rationale']}")
+                            st.markdown(f"💡 **Resolução:** {resolution['rationale']}")
                         if resolution.get("with_caveats"):
-                            st.warning("**Ressalvas:**\n" + "\n".join(f"- {c}" for c in resolution["with_caveats"]))
+                            st.markdown("⚠️ **Ressalvas:**\n" + "\n".join(f"- {c}" for c in resolution["with_caveats"]))
                     else:
-                        st.error("Questão sem resolução ao final da reunião.")
+                        st.caption("❓ Questão sem resolução ao final da reunião.")
 
         # ════════════════════════════════════════════════════════════════════
         # MODO MAPA VISUAL (pyvis)

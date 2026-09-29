@@ -38,6 +38,7 @@ from modules.cross_meeting_analyzer import (
 )
 from modules.config import AVAILABLE_PROVIDERS
 from modules.session_security import render_api_key_readonly
+from ui.components.kpi_row import kpi_row
 
 apply_auth_gate()
 
@@ -176,13 +177,21 @@ avg_label = (
     "🔴 Crítico"
 )
 
-c1, c2, c3, c4, c5, c6 = st.columns(6)
-c1.metric("ROI-TR Médio",         f"{avg_roi:.1f} / 10",      delta=avg_label, delta_color="off")
-c2.metric("TRC Médio",            f"{avg_trc:.0f} %",         delta="🔴 Alto" if avg_trc > 40 else ("🟠 Médio" if avg_trc > 20 else "🟢 Baixo"), delta_color="off")
-c3.metric("Custo total est.",     f"R$ {total_cost:,.0f}" if total_cost > 0 else "—", help="Soma dos custos de todas as reuniões.")
-c4.metric("Melhor reunião",       f"Reunião {best.meeting_number}",  delta=f"ROI {best.roi_tr:.1f}",  delta_color="normal")
-c5.metric("Pior reunião",         f"Reunião {worst.meeting_number}", delta=f"ROI {worst.roi_tr:.1f}", delta_color="inverse")
-c6.metric("Tipos classificados",  f"{n_typed} / {len(roi_data)}", help="Reuniões com tipo definido por IA ou por heurística de título.")
+# UX-02: 6 métricas numa linha só truncavam rótulo/valor em ~840px —
+# kpi_row() quebra em linhas de no máx. 4.
+kpi_row([
+    {"label": "ROI-TR Médio", "value": f"{avg_roi:.1f} / 10", "delta": avg_label, "delta_color": "off"},
+    {"label": "TRC Médio", "value": f"{avg_trc:.0f} %",
+     "delta": "🔴 Alto" if avg_trc > 40 else ("🟠 Médio" if avg_trc > 20 else "🟢 Baixo"), "delta_color": "off"},
+    {"label": "Custo total est.", "value": f"R$ {total_cost:,.0f}" if total_cost > 0 else "—",
+     "help": "Soma dos custos de todas as reuniões."},
+    {"label": "Melhor reunião", "value": f"Reunião {best.meeting_number}",
+     "delta": f"ROI {best.roi_tr:.1f}", "delta_color": "normal"},
+    {"label": "Pior reunião", "value": f"Reunião {worst.meeting_number}",
+     "delta": f"ROI {worst.roi_tr:.1f}", "delta_color": "inverse"},
+    {"label": "Tipos classificados", "value": f"{n_typed} / {len(roi_data)}",
+     "help": "Reuniões com tipo definido por IA ou por heurística de título."},
+])
 
 st.markdown("---")
 

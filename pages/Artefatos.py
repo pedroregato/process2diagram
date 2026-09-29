@@ -28,11 +28,12 @@ from ui.project_selector import require_active_project
 from core.project_store import list_reports_by_project, get_report_html
 from ui.artefatos_shared import (
     inject_artefatos_css, render_artefatos_nav,
-    dmn_session_key, ibis_session_key, noise_session_key,
     _load_meetings, _load_requirements, _load_contradictions,
     _load_sbvr_terms, _load_sbvr_rules, _load_bpmn_procs,
     _load_documents, _load_asset_meta_map, _load_provocations,
+    _load_dmn, _load_argumentation, _load_noise,
 )
+from ui.components.kpi_row import kpi_row
 
 apply_auth_gate()
 inject_artefatos_css()
@@ -55,7 +56,14 @@ with _col_change:
     st.page_link("pages/Home.py", label="Trocar")
 
 # ── Carrega dados (com cache compartilhado com as demais páginas da seção) ───
-with _TPE(max_workers=9) as _artefatos_pool:
+# UX-04: DMN/IBIS/Ruídos entraram no mesmo pool — antes só apareciam com
+# contagem real se o usuário já tivesse visitado a subseção correspondente
+# nesta sessão (senão um placeholder ambíguo, fácil de confundir com zero
+# ou página quebrada). Os 3 loaders já são @st.cache_data(ttl=300)
+# (ui/artefatos_shared.py) — mesma função usada pelas páginas de detalhe,
+# então visitar Modelagem Formal/Debates/Qualidade depois só custa
+# cache-hit, não repete a consulta.
+with _TPE(max_workers=12) as _artefatos_pool:
     _f_meetings       = _artefatos_pool.submit(_load_meetings, project_id)
     _f_requirements   = _artefatos_pool.submit(_load_requirements, project_id)
     _f_contradictions = _artefatos_pool.submit(_load_contradictions, project_id)
@@ -65,6 +73,9 @@ with _TPE(max_workers=9) as _artefatos_pool:
     _f_documents      = _artefatos_pool.submit(_load_documents, project_id)
     _f_asset_meta     = _artefatos_pool.submit(_load_asset_meta_map, project_id)
     _f_provocations   = _artefatos_pool.submit(_load_provocations, project_id)
+    _f_dmn            = _artefatos_pool.submit(_load_dmn, project_id)
+    _f_ibis           = _artefatos_pool.submit(_load_argumentation, project_id)
+    _f_noise          = _artefatos_pool.submit(_load_noise, project_id)
 
     meetings         = _f_meetings.result()
     requirements     = _f_requirements.result()
@@ -75,14 +86,9 @@ with _TPE(max_workers=9) as _artefatos_pool:
     documents        = _f_documents.result()
     asset_meta_map   = _f_asset_meta.result()  # {(artifact_type, artifact_id): row} — só PROMOVIDOS
     provocations     = _f_provocations.result()
-
-# DMN/IBIS/Ruídos: lê do session_state — só ficam populados nesta sessão se o
-# usuário já visitou a subseção correspondente (Modelagem Formal / Debates /
-# Qualidade & Sinais). Mesmo comportamento lazy de antes do PC208, agora
-# entre páginas em vez de entre abas.
-dmn_decisions  = st.session_state.get(dmn_session_key(project_id),   None)
-ibis_questions = st.session_state.get(ibis_session_key(project_id),  None)
-noise_items    = st.session_state.get(noise_session_key(project_id), None)
+    dmn_decisions    = _f_dmn.result()
+    ibis_questions   = _f_ibis.result()
+    noise_items      = _f_noise.result()
 
 # ── Métricas resumo ───────────────────────────────────────────────────────────
 n_total        = len(requirements)
@@ -93,20 +99,22 @@ n_req_doc      = sum(1 for r in requirements if r.get("origin") == "documento")
 n_terms_doc    = sum(1 for t in sbvr_terms if t.get("origin") == "documento")
 n_rules_doc    = sum(1 for r in sbvr_rules if r.get("origin") == "documento")
 
-c1, c2, c3, c4, c5, c6 = st.columns(6)
-c1.metric("Requisitos", n_total, help=f"{n_req_doc} de documentos · {n_total - n_req_doc} de transcrições")
-c2.metric("Reuniões", n_meetings)
-c3.metric("Revisados", n_revised)
-c4.metric("⚠️ Contradições", n_contradicted, delta=None,
-          delta_color="off" if n_contradicted == 0 else "inverse")
-c5.metric("Termos SBVR", len(sbvr_terms), help=f"{n_terms_doc} de documentos")
-c6.metric("Regras SBVR", len(sbvr_rules), help=f"{n_rules_doc} de documentos")
+# UX-02: 6 métricas numa linha só truncavam rótulo/valor em ~840px —
+# kpi_row() quebra em linhas de no máx. 4.
+kpi_row([
+    {"label": "Requisitos", "value": n_total,
+     "help": f"{n_req_doc} de documentos · {n_total - n_req_doc} de transcrições"},
+    {"label": "Reuniões", "value": n_meetings},
+    {"label": "Revisados", "value": n_revised},
+    {"label": "⚠️ Contradições", "value": n_contradicted,
+     "delta_color": "off" if n_contradicted == 0 else "inverse"},
+    {"label": "Termos SBVR", "value": len(sbvr_terms), "help": f"{n_terms_doc} de documentos"},
+    {"label": "Regras SBVR", "value": len(sbvr_rules), "help": f"{n_rules_doc} de documentos"},
+])
 
 col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-col_m1.metric("Decisões DMN",  len(dmn_decisions)  if dmn_decisions  is not None else "—",
-              help="Acesse Modelagem Formal para carregar" if dmn_decisions is None else None)
-col_m2.metric("Questões IBIS", len(ibis_questions) if ibis_questions is not None else "—",
-              help="Acesse Debates (IBIS) para carregar" if ibis_questions is None else None)
+col_m1.metric("Decisões DMN", len(dmn_decisions))
+col_m2.metric("Questões IBIS", len(ibis_questions))
 col_m3.metric("Processos BPMN", len(bpmn_procs))
 col_m4.metric("Documentos", len(documents))
 
@@ -206,9 +214,9 @@ _CARDS = [
     ("pages/ArtefatosReunioes.py", "🗓️ Reuniões",
      f"{n_meetings} reuniões · Rastreabilidade de origem · Comparação"),
     ("pages/ArtefatosDebates.py", "🗺️ Debates (IBIS)",
-     f"{len(ibis_questions) if ibis_questions is not None else '…'} questões · Evolução temporal · Mapa visual"),
+     f"{len(ibis_questions)} questões · Evolução temporal · Mapa visual"),
     ("pages/ArtefatosQualidade.py", "🔎 Qualidade & Sinais",
-     f"{len(noise_items) if noise_items is not None else '…'} ruídos · {len(provocations)} provocações"),
+     f"{len(noise_items)} ruídos · {len(provocations)} provocações"),
 ]
 
 _cc1, _cc2 = st.columns(2)

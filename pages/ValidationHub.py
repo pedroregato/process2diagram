@@ -27,6 +27,7 @@ from core.project_store import (
 )
 from ui.project_selector import require_active_project
 from ui.components.paginator import paginate
+from ui.components.kpi_row import kpi_row
 
 apply_auth_gate()
 
@@ -170,12 +171,15 @@ n_pending  = tc["proposto"] + tc["em_revisão"]
 n_rejected = tc["rejeitado"]
 pct        = int(n_done / n_total * 100) if n_total else 0
 
-m1, m2, m3, m4, m5 = st.columns(5)
-m1.metric("Total de artefatos", n_total)
-m2.metric("✅ Concluídos",      n_done,     delta=f"{pct}%")
-m3.metric("💡 Pendentes",       n_pending)
-m4.metric("🔄 Em Revisão",      tc["em_revisão"])
-m5.metric("❌ Rejeitados",      n_rejected)
+# UX-02: 5 métricas numa linha só truncavam rótulo/valor em ~840px —
+# kpi_row() quebra em linhas de no máx. 4.
+kpi_row([
+    {"label": "Total de artefatos", "value": n_total},
+    {"label": "✅ Concluídos", "value": n_done, "delta": f"{pct}%"},
+    {"label": "💡 Pendentes", "value": n_pending},
+    {"label": "🔄 Em Revisão", "value": tc["em_revisão"]},
+    {"label": "❌ Rejeitados", "value": n_rejected},
+])
 
 st.markdown("---")
 
@@ -389,14 +393,17 @@ with tab_health:
                 _dmn_count[_mid] = _dmn_count.get(_mid, 0) + 1
 
         # ── Coverage KPIs ─────────────────────────────────────────────────────
+        # UX-02: 6 métricas numa linha só truncavam rótulo/valor em ~840px —
+        # kpi_row() quebra em linhas de no máx. 4.
         _n = len(_mq)
-        _kc1, _kc2, _kc3, _kc4, _kc5, _kc6 = st.columns(6)
-        _kc1.metric("Reuniões",    _n)
-        _kc2.metric("🗺️ BPMN",     sum(1 for m in _mq if m["has_bpmn"]),      delta=f"/{_n}")
-        _kc3.metric("📋 Ata",      sum(1 for m in _mq if m["has_minutes"]),    delta=f"/{_n}")
-        _kc4.metric("⚖️ DMN",      sum(1 for m in _mq if m["has_dmn"]),        delta=f"/{_n}")
-        _kc5.metric("🗣️ IBIS",     sum(1 for m in _mq if m["has_ibis"]),       delta=f"/{_n}")
-        _kc6.metric("📄 Relatório",sum(1 for m in _mq if m["has_synthesizer"]),delta=f"/{_n}")
+        kpi_row([
+            {"label": "Reuniões", "value": _n},
+            {"label": "🗺️ BPMN", "value": sum(1 for m in _mq if m["has_bpmn"]), "delta": f"/{_n}"},
+            {"label": "📋 Ata", "value": sum(1 for m in _mq if m["has_minutes"]), "delta": f"/{_n}"},
+            {"label": "⚖️ DMN", "value": sum(1 for m in _mq if m["has_dmn"]), "delta": f"/{_n}"},
+            {"label": "🗣️ IBIS", "value": sum(1 for m in _mq if m["has_ibis"]), "delta": f"/{_n}"},
+            {"label": "📄 Relatório", "value": sum(1 for m in _mq if m["has_synthesizer"]), "delta": f"/{_n}"},
+        ])
 
         st.markdown("")
 

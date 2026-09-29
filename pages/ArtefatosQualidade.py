@@ -170,7 +170,9 @@ with tab_noise:
                             for _idx, _interp in enumerate(_interps, 1):
                                 st.markdown(f"&nbsp;&nbsp;{_idx}. {_interp}")
                         if _amb.get("suggestion"):
-                            st.info(f"Sugestão: {_amb['suggestion']}")
+                            # NAV-18: st.info por ambiguidade virava ruído
+                            # visual em listas longas — texto leve no lugar.
+                            st.markdown(f"💡 Sugestão: {_amb['suggestion']}")
 
                 if _gaps:
                     st.markdown("**🕳️ Lacunas**")
@@ -201,11 +203,13 @@ with tab_noise:
                                 f'color:#aaa;font-style:italic;">"{_gap["evidence_quote"]}"</blockquote>',
                                 unsafe_allow_html=True,
                             )
+                        # NAV-18: warning/success por lacuna virava ruído
+                        # visual em listas longas — texto leve no lugar.
                         _gi1, _gi2 = st.columns(2)
                         if _gap.get("impact"):
-                            _gi1.warning(f"Impacto: {_gap['impact']}")
+                            _gi1.markdown(f"⚠️ **Impacto:** {_gap['impact']}")
                         if _gap.get("recommendation"):
-                            _gi2.success(f"Recomendação: {_gap['recommendation']}")
+                            _gi2.markdown(f"✅ **Recomendação:** {_gap['recommendation']}")
 
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 12 — PROVOCAÇÕES (PC190, melhorias/arquivados/agente-de-provocacoes.md)
@@ -277,7 +281,9 @@ with tab_prov:
                 _b3.caption(f"Status: **{_prov_status_label.get(_status, _status)}**")
 
                 st.markdown(p.get("body", ""))
-                st.info(f"❓ {p.get('question', '')}")
+                # NAV-18: st.info por provocação virava ruído visual em
+                # listas longas — texto leve no lugar.
+                st.markdown(f"**❓ {p.get('question', '')}**")
 
                 _grounding = p.get("grounding") or {}
                 if _kind == "contradiction":
