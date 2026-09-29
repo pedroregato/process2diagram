@@ -573,4 +573,7 @@ document.querySelectorAll('.toc a[data-target]').forEach(function(link) {
 </body>
 </html>"""
 
-st.components.v1.html(_guide_html, height=900, scrolling=True)
+# NAV-13: altura aumentada de 900 pra reduzir a rolagem interna do iframe
+# se sobrepondo à rolagem da página (fallback seguro documentado no plano
+# de navegabilidade — sem mecanismo de auto-altura via JS).
+st.components.v1.html(_guide_html, height=1600, scrolling=True)

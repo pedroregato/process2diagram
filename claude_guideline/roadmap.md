@@ -4,6 +4,24 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC221 — Concluído (v5.16 / 2026-09-29) — Navegabilidade Onda 3 (NAV-15, NAV-13 parcial, NAV-14 parcial, NAV-12)
+
+**Origem:** avaliação e priorização da Onda 3 (NAV-12 a NAV-15), com a parte "cabeçalho padrão" do NAV-13 e "sidebar auto-collapse"/"KPIs em grade" do NAV-14 deliberadamente adiadas por já estarem superadas pela auditoria mais nova `melhorias/ux-amigabilidade-e-elegancia.md` (UX-07 e UX-02/UX-03, respectivamente) — evita retrabalho duplicado entre as duas auditorias.
+
+- [x] **NAV-15** (`pages/KnowledgeGraph.py`) — os 4 KPIs do topo (Entidades/Processos/Fatos/Contradições) mostravam contagens já cortadas pelos `.limit()` fixos (150/50/300/50) sem nenhuma indicação de corte. Novo helper `_true_count()` (`count="exact"`, sem transferir linha nenhuma) compara com o total real e exibe "N de M" + `help` explicativo quando há corte
+- [x] **NAV-13 (parte "guias nativos")** — Glossário, Guia CKF, Cache LLM e Avaliação e Feedback rodam dentro de `st.components.v1.html()`; altura fixa (860/900px) causava rolagem dupla em conteúdo maior. Altura aumentada pra 1600px nas 4 páginas; Glossário tinha ainda um bug concreto — o índice alfabético lateral tinha `overflow-y: auto` + `height: calc(100vh - 97px)` próprios, rolando independente do conteúdo — removido
+- [x] **NAV-14 (parte "Sair no rodapé")** — "Sair" saía do menu "Início" (`pages/Logout.py`, removido do repo — página órfã sem mais nenhuma referência) e virou rodapé fixo de `st.sidebar` em `app.py`, escrito depois de `pg.run()`, com nome do usuário + contexto ativo + botão que chama `modules.auth.logout()` diretamente
+- [x] **NAV-14 (cold start)** — documentação das opções avaliadas (keep-alive agendado, plano pago do Streamlit Cloud, Cloud Run `min-instances=1` — este último já referenciado em `manifestos/ENGINEERING_MANIFESTO.md §10`) em `claude_guideline/pitfalls.md`, sem nenhuma mudança de infraestrutura — decisão de custo/operação é do usuário, não uma escolha de engenharia a se fazer sozinho
+- [x] **NAV-12** — novo módulo `ui/components/deep_links.py`: `resolve_context_from_query_params()` (lê `?ctx=<sigla>`, só ativa se a sigla pertencer ao tenant da sessão atual — reforça NAV-01, ignora + loga qualquer outro caso) + helpers de leitura/escrita de `st.query_params` + `st.session_state["_pending_*"]` (usado com `st.switch_page()` pra navegação dentro da mesma sessão, já que `st.page_link()` não aceita query params)
+  - `pages/Diagramas.py` e `pages/BpmnEditor.py` — leem/gravam `?process=<id>&v=<n>` nos seletores de processo/versão
+  - `pages/Assistente.py` — `?meeting=<n>` sugere uma pergunta pronta sobre a reunião (botão explícito, não dispara LLM sozinho ao carregar a página — `st.chat_input` não aceita valor pré-preenchido)
+  - `pages/ArtefatosReunioes.py` — `?meeting=<n>` abre direto o expander daquela reunião na aba "Reuniões"
+  - `pages/Home.py` — os botões "💬 Assistente" e "✏️ Editor" de cada card de "Reuniões recentes" eram `st.page_link()` genéricos (o texto de ajuda já prometia escopo pra reunião, mas nunca entregava) — viraram `st.button()` + `st.switch_page()` com `?ctx=&meeting=` + pendência de sessão, agora abrindo de fato na reunião do card
+- **Testes:** `tests/test_knowledge_graph_truncation.py` (2), `tests/test_guides_scroll_fix.py` (2), `tests/test_sidebar_logout_footer.py` (6), `tests/test_deep_links.py` (13, unitários sobre `deep_links.py`) + `tests/test_deep_links_wiring.py` (7, checagem estática de que as 5 páginas usam o mecanismo) — 30 novos; suíte completa **1114 testes, 0 falhas**, sem regressão
+- **Não fechado nesta rodada:** NAV-13 (cabeçalho padrão) e NAV-14 (sidebar auto-collapse / grade de KPIs) — ver UX-07/UX-02/UX-03 em `melhorias/ux-amigabilidade-e-elegancia.md`. `pages/ValidationHub.py` (3º botão dos cards de reunião de Home.py) não ganhou deep link — fora do escopo original do NAV-12, mesmo gap de "ajuda promete escopo que não entrega" identificado ali, não corrigido
+
+---
+
 ### PC220 — Concluído (v5.16 / 2026-09-29) — NAV-01-bis: vazamento cross-tenant em Settings.py (aba Banco de Dados)
 
 **Origem:** achado de passagem registrado no PC219 — investigando o NAV-16/UX-01, `pages/Settings.py` mostrou contagens agregadas sem filtro de tenant. Investigação mais a fundo revelou que o problema é bem maior do que métricas: é escrita cross-tenant, não só leitura.

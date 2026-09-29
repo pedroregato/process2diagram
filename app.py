@@ -55,7 +55,6 @@ pages = {
         st.Page("pages/SobreP2D.py",          title="Sobre o P2D",          icon="ℹ️"),
         st.Page("pages/ApresentacaoGeral.py", title="Apresentação Geral",   icon="🎯"),
         st.Page("pages/SegurancaDeDados.py",  title="Segurança de Dados",   icon="🔒"),
-        st.Page("pages/Logout.py",            title="Sair",                 icon="🚪"),
     ],
     "Pipeline": [
         st.Page("pages/Pipeline.py",    title="Processar Transcrição", icon="🚀"),
@@ -124,3 +123,21 @@ pg = st.navigation(pages)
 apply_auth_gate()
 
 pg.run()
+
+# ── NAV-14: rodapé fixo da sidebar (usuário/contexto ativo + Sair) ────────────
+# "Sair" saiu do menu "Início" (era só mais um item de página entre outros,
+# fácil de perder de vista) e virou rodapé sempre visível da sidebar, no
+# padrão comum de apps multi-página — usuário/contexto ativo servem de
+# lembrete de "em qual sessão/tenant estou" antes de qualquer ação sensível.
+if st.session_state.get("_autenticado"):
+    from modules.auth import get_current_name, logout
+
+    with st.sidebar:
+        st.divider()
+        _nome = get_current_name() or ""
+        _ctx = st.session_state.get("_tenant_name") or ""
+        _label = f"{_nome} · {_ctx}" if (_nome and _ctx) else (_nome or _ctx)
+        if _label:
+            st.caption(_label)
+        if st.button("🚪 Sair", key="_nav14_sidebar_logout", use_container_width=True):
+            logout()

@@ -222,3 +222,17 @@ Claude (Anthropic) does not support `json_mode`. Enforce JSON output via system 
 ```
 
 `BaseAgent._call_llm()` routes on `client_type`: `"anthropic"` uses native Anthropic SDK; `"openai_compatible"` uses OpenAI SDK with custom `base_url`.
+
+---
+
+## Streamlit Cloud cold start (free tier, NAV-14)
+
+Streamlit Community Cloud puts idle apps to sleep after a period of inactivity. The first request after sleep can take 30s+ (container boot + `import` of the full page module graph + first `init_session_state()`), which reads as "the app is broken" to a user who just clicked a link.
+
+**Options evaluated (documentation only — none implemented, no infra change made):**
+- **Keep-alive agendado** — an external scheduler (cron job, GitHub Actions on a schedule, UptimeRobot-style pinger) hits the app URL every ~10–15 min to prevent the sleep timer from ever firing. Zero code change, but depends on an external always-on trigger the project doesn't currently have, and only delays the problem (still cold on the first ping after a longer gap, e.g. overnight).
+- **Streamlit Cloud paid tier** — removes the sleep-on-idle behavior entirely. Simplest fix, but a recurring cost decision, not an engineering one.
+- **Cloud Run** — full migration path already scoped in `manifestos/ENGINEERING_MANIFESTO.md` §10 (Checklist de Migração para Google Cloud); Cloud Run supports `min-instances=1` to keep a warm instance, at a cost. This is the only option that also addresses the broader single-process/threading.Lock concurrency limits described in that same section — a cold-start fix bundled with the rest of that migration, not a standalone task.
+- **Reduce work done at import/login time** — independent of which of the above is chosen, `app.py` and `init_session_state()` should avoid heavy Supabase queries or large module-level work during the login path, since that's on the critical path of every cold start regardless of which mitigation (if any) is layered on top. Not audited as part of NAV-14 — flagged here for a future pass.
+
+No action taken beyond this write-up: the actual choice among keep-alive / paid tier / Cloud Run is a cost/ops decision for the user, not something to default into silently.

@@ -105,11 +105,25 @@ _TYPE_LABEL_PT: dict[str, str] = {
 
 # ── Data loading ───────────────────────────────────────────────────────────────
 
+def _true_count(db, table: str, filters: dict) -> int:
+    """count="exact" sem transferir linha nenhuma — só pra saber se um
+    .limit() abaixo cortou resultados (NAV-15). Fail-open: 0 em qualquer
+    erro (a UI trata 0 como "sem info de corte", nunca bloqueia a página)."""
+    try:
+        q = db.table(table).select("id", count="exact")
+        for col, val in filters.items():
+            q = q.eq(col, val)
+        return q.limit(1).execute().count or 0
+    except Exception:
+        return 0
+
+
 @st.cache_data(ttl=120, show_spinner=False)
 def _load_graph_data(project_id: str) -> dict:
     db = get_supabase_client()
     if not db:
-        return {"entities": [], "processes": [], "facts": [], "contradictions": []}
+        return {"entities": [], "processes": [], "facts": [], "contradictions": [],
+                "total_counts": {}}
 
     try:
         entities = (
@@ -226,6 +240,18 @@ def _load_graph_data(project_id: str) -> dict:
     except Exception:
         pass
 
+    # NAV-15: entities/processes/facts/contradictions são cortados por
+    # .limit() acima sem nenhum indicador — um contexto com mais dados do
+    # que o teto mostrava "150 entidades" sem deixar claro que existiam
+    # mais. total_counts guarda o total real (count="exact", sem transferir
+    # linha) pra UI mostrar "mostrando 150 de 623" quando houver corte.
+    total_counts = {
+        "entities":       _true_count(db, "kh_entities", {"project_id": project_id}),
+        "processes":      _true_count(db, "kh_processes", {"project_id": project_id}),
+        "facts":          _true_count(db, "kh_facts", {"project_id": project_id, "is_active": True}),
+        "contradictions": _true_count(db, "kh_contradictions", {"project_id": project_id}),
+    }
+
     return {
         "entities": entities,
         "processes": processes,
@@ -233,6 +259,7 @@ def _load_graph_data(project_id: str) -> dict:
         "contradictions": contradictions,
         "participant_names": participant_names,
         "meeting_map": meeting_map,
+        "total_counts": total_counts,
     }
 
 
@@ -931,11 +958,30 @@ if not entities and not processes:
     st.stop()
 
 # ── KPI strip ─────────────────────────────────────────────────────────────────
+# NAV-15: entities/processes/facts/contradictions vêm com .limit() na query
+# (150/50/300/50) — quando o total real é maior, o metric mostra
+# "mostrando N de M" em vez do número cru, que antes sugeria (errado) que
+# aquele era o total do contexto.
+_total_counts = data.get("total_counts") or {}
+
+
+def _kpi_value_and_help(label: str, shown: list, key: str) -> tuple[str, str | None]:
+    total = _total_counts.get(key, 0)
+    n = len(shown)
+    if total > n:
+        return f"{n} de {total}", f"{label}: mostrando os {n} mais relevantes de {total} no total — corte por limite de performance."
+    return str(n), None
+
+
 k1, k2, k3, k4 = st.columns(4)
-k1.metric("Entidades", len(entities))
-k2.metric("Processos", len(processes))
-k3.metric("Fatos / Relações", len(facts))
-k4.metric("Contradições", len(contradictions))
+_v, _h = _kpi_value_and_help("Entidades", entities, "entities")
+k1.metric("Entidades", _v, help=_h)
+_v, _h = _kpi_value_and_help("Processos", processes, "processes")
+k2.metric("Processos", _v, help=_h)
+_v, _h = _kpi_value_and_help("Fatos / Relações", facts, "facts")
+k3.metric("Fatos / Relações", _v, help=_h)
+_v, _h = _kpi_value_and_help("Contradições", contradictions, "contradictions")
+k4.metric("Contradições", _v, help=_h)
 
 st.markdown("---")
 

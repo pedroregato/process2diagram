@@ -41,10 +41,19 @@ from core.project_store import (
 )
 from ui.project_selector import require_active_project
 from ui.components.copy_button import copy_button
+from ui.components.deep_links import (
+    resolve_context_from_query_params,
+    get_query_param_str,
+    get_query_param_int,
+    pop_pending,
+)
 from modules.bpmn_editor import editor_from_xml
 from modules.bpmn_viewer import preview_from_xml, pretty_print_xml
 
 apply_auth_gate()
+
+# NAV-12: ?ctx=<sigla> ativa o contexto certo antes de require_active_project().
+resolve_context_from_query_params()
 
 # ── Feedback persistido entre reruns ──────────────────────────────────────────
 if "_bpme_ok" in st.session_state:
@@ -95,8 +104,26 @@ with col_proc:
         return label
 
     proc_opts = {_proc_label(p): p["id"] for p in processes}
-    proc_label = st.selectbox("Processo BPMN", list(proc_opts.keys()), key="bpme_process")
+    proc_labels_list = list(proc_opts.keys())
+
+    # NAV-12: ?process=<id> ou ?meeting=<n> (ou um switch_page pendente de
+    # Home.py) pré-seleciona o processo — só na 1a renderização, depois a
+    # própria chave do widget manda no valor.
+    _default_proc_idx = 0
+    if "bpme_process" not in st.session_state:
+        _wanted_process_id = pop_pending("process_id") or get_query_param_str("process")
+        _wanted_meeting_num = pop_pending("meeting_number") or get_query_param_int("meeting")
+        for _i, _p in enumerate(processes):
+            if _wanted_process_id and _p["id"] == _wanted_process_id:
+                _default_proc_idx = _i
+                break
+            if _wanted_meeting_num and (_p.get("meetings") or {}).get("meeting_number") == _wanted_meeting_num:
+                _default_proc_idx = _i
+                break
+
+    proc_label = st.selectbox("Processo BPMN", proc_labels_list, index=_default_proc_idx, key="bpme_process")
     process_id = proc_opts[proc_label]
+    st.query_params["process"] = process_id
 
 # ── Versões ───────────────────────────────────────────────────────────────────
 versions = list_bpmn_versions(process_id)
@@ -127,15 +154,26 @@ ver_opts_labels = [
     f"{(v.get('meetings') or {}).get('title', 'sem reunião')}"
     for v in versions
 ]
+_default_ver_idx = 0
+if "bpme_version_sel" not in st.session_state:
+    _wanted_version = pop_pending("version") or get_query_param_int("v")
+    if _wanted_version is not None:
+        for _i, _v in enumerate(versions):
+            if _v.get("version") == _wanted_version:
+                _default_ver_idx = _i
+                break
+
 ver_sel_idx = st.selectbox(
     "Versão base para editar",
     range(len(versions)),
     format_func=lambda i: ver_opts_labels[i],
+    index=_default_ver_idx,
     key="bpme_version_sel",
 )
 selected_version = versions[ver_sel_idx]
 base_xml         = selected_version.get("bpmn_xml") or ""
 meeting_id_for_version = selected_version.get("meeting_id") or ""
+st.query_params["v"] = str(selected_version.get("version", ""))
 
 if not base_xml.strip():
     st.error("Esta versão não possui XML BPMN armazenado.")

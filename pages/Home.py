@@ -25,6 +25,7 @@ import streamlit as st
 from ui.auth_gate import apply_auth_gate
 from ui.project_selector import activate_context
 from ui.components.safe_page_link import safe_page_link
+from ui.components.deep_links import active_context_sigla
 from modules.auth import is_admin
 from modules.i18n import t
 from core.project_store import get_domain_stats, get_context_stats, list_recent_meetings, list_contexts, list_meetings_quality
@@ -479,14 +480,28 @@ with col_recent:
   <div class="mtg-meta">📁 {proj} &nbsp;·&nbsp; 📅 {date}</div>
 </div>""", unsafe_allow_html=True)
 
+            # NAV-12: Assistente e Editor BPMN passam a abrir JÁ escopados
+            # nesta reunião (?ctx=&meeting= + pendência de sessão pro
+            # st.switch_page) — antes eram st.page_link genéricos, sem
+            # nenhuma ligação real com a reunião do card apesar do texto de
+            # ajuda prometer isso ("Consultar dados desta reunião...").
+            # st.page_link não aceita query params, por isso viram st.button.
+            _mtg_deeplinkable = isinstance(num, int)
+
             lc1, lc2, lc3 = st.columns(3)
             with lc1:
-                st.page_link(
-                    "pages/Assistente.py",
-                    label=t("mtg_link_assistant"),
-                    help=t("mtg_help_assistant"),
-                    use_container_width=True,
-                )
+                if _mtg_deeplinkable:
+                    if st.button(t("mtg_link_assistant"), key=f"_nav12_mtg_asst_{mtg['id']}",
+                                 help=t("mtg_help_assistant"), use_container_width=True):
+                        st.session_state["_pending_meeting_number"] = num
+                        _sigla = active_context_sigla()
+                        if _sigla:
+                            st.query_params["ctx"] = _sigla
+                        st.query_params["meeting"] = str(num)
+                        st.switch_page("pages/Assistente.py")
+                else:
+                    st.page_link("pages/Assistente.py", label=t("mtg_link_assistant"),
+                                 help=t("mtg_help_assistant"), use_container_width=True)
             with lc2:
                 st.page_link(
                     "pages/ValidationHub.py",
@@ -495,12 +510,18 @@ with col_recent:
                     use_container_width=True,
                 )
             with lc3:
-                st.page_link(
-                    "pages/BpmnEditor.py",
-                    label=t("mtg_link_editor"),
-                    help=t("mtg_help_editor"),
-                    use_container_width=True,
-                )
+                if _mtg_deeplinkable:
+                    if st.button(t("mtg_link_editor"), key=f"_nav12_mtg_editor_{mtg['id']}",
+                                 help=t("mtg_help_editor"), use_container_width=True):
+                        st.session_state["_pending_meeting_number"] = num
+                        _sigla = active_context_sigla()
+                        if _sigla:
+                            st.query_params["ctx"] = _sigla
+                        st.query_params["meeting"] = str(num)
+                        st.switch_page("pages/BpmnEditor.py")
+                else:
+                    st.page_link("pages/BpmnEditor.py", label=t("mtg_link_editor"),
+                                 help=t("mtg_help_editor"), use_container_width=True)
 
         st.markdown(
             "<div style='text-align:right;margin-top:.4rem'>",

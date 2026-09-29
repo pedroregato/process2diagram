@@ -228,12 +228,15 @@ def _build_glossary_html() -> str:
   }}
 
   /* ── ÍNDICE LATERAL ── */
+  /* NAV-13 (guias nativos): "height: calc(100vh - 97px); overflow-y: auto"
+     dava a este índice sua PRÓPRIA barra de rolagem, independente da
+     barra de rolagem do iframe do componente inteiro (rolagem dupla —
+     rolar o índice não rolava o conteúdo, e vice-versa). Removido — o
+     índice agora acompanha a única área de rolagem do componente. */
   nav {{
     border-right: 1px solid var(--border);
     padding: 18px 0;
     position: sticky; top: 97px;
-    height: calc(100vh - 97px);
-    overflow-y: auto;
     background: var(--s1);
   }}
   nav::-webkit-scrollbar {{ width: 3px; }}
@@ -581,4 +584,9 @@ document.addEventListener('DOMContentLoaded', () => {{
 # ─────────────────────────────────────────────────────────────────────────────
 
 html = _build_glossary_html()
-components.html(html, height=860, scrolling=True)
+# NAV-13: altura aumentada de 860 pra reduzir a frequência da rolagem
+# interna do iframe se sobrepondo à rolagem da página do Streamlit
+# (components.html não tem "auto-altura" nativo — sem um mecanismo de
+# resize via JS, ajustar a altura fixa pra um valor generoso é o fallback
+# seguro documentado no próprio plano de navegabilidade).
+components.html(html, height=1600, scrolling=True)

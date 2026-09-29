@@ -26,9 +26,19 @@ from ui.project_selector import render_active_context_picker
 from modules.bpmn_viewer import preview_from_xml
 from modules.mermaid_renderer import render_mermaid_block
 from modules.supabase_client import supabase_configured
+from ui.components.deep_links import (
+    resolve_context_from_query_params,
+    get_query_param_str,
+    get_query_param_int,
+    pop_pending,
+)
 
 # ── Autenticação ───────────────────────────────────────────────────────────────
 apply_auth_gate()
+
+# NAV-12: ?ctx=<sigla> ativa o contexto certo antes de qualquer seletor rodar
+# (também cobre um link aberto direto, sem contexto ativo na sessão ainda).
+resolve_context_from_query_params()
 
 st.markdown("""
 <style>
@@ -79,8 +89,22 @@ def _render_from_supabase() -> None:
 
         proc_labels = [_proc_label(p) for p in processes]
         proc_map    = {lbl: p for lbl, p in zip(proc_labels, processes)}
-        sel_proc    = st.selectbox("Processo", proc_labels, key="diag_sb_proc")
+
+        # NAV-12: ?process=<id> (ou um switch_page pendente de Home.py)
+        # pré-seleciona o processo, só na primeira renderização — depois
+        # disso a própria chave do widget já manda no valor.
+        _default_proc_idx = 0
+        if "diag_sb_proc" not in st.session_state:
+            _wanted_process_id = pop_pending("process_id") or get_query_param_str("process")
+            if _wanted_process_id:
+                for _i, _p in enumerate(processes):
+                    if _p["id"] == _wanted_process_id:
+                        _default_proc_idx = _i
+                        break
+
+        sel_proc    = st.selectbox("Processo", proc_labels, index=_default_proc_idx, key="diag_sb_proc")
         process_id  = proc_map[sel_proc]["id"]
+        st.query_params["process"] = process_id
 
     versions = list_bpmn_versions(process_id)
     if not versions:
@@ -95,8 +119,19 @@ def _render_from_supabase() -> None:
 
         ver_labels = [_ver_label(v) for v in versions]
         ver_map    = {lbl: v for lbl, v in zip(ver_labels, versions)}
-        sel_ver    = st.selectbox("Versão", ver_labels, key="diag_sb_ver")
+
+        _default_ver_idx = 0
+        if "diag_sb_ver" not in st.session_state:
+            _wanted_version = pop_pending("version") or get_query_param_int("v")
+            if _wanted_version is not None:
+                for _i, _v in enumerate(versions):
+                    if _v.get("version") == _wanted_version:
+                        _default_ver_idx = _i
+                        break
+
+        sel_ver    = st.selectbox("Versão", ver_labels, index=_default_ver_idx, key="diag_sb_ver")
         version    = ver_map[sel_ver]
+        st.query_params["v"] = str(version.get("version", ""))
 
     bpmn_xml = version.get("bpmn_xml") or ""
     mermaid  = version.get("mermaid_code") or ""

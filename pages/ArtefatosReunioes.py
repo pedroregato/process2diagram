@@ -21,6 +21,11 @@ from modules.supabase_client import supabase_configured
 from services.export_service import format_date_suffix
 from ui.project_selector import require_active_project
 from ui.components.artifact_feedback import render_artifact_feedback
+from ui.components.deep_links import (
+    resolve_context_from_query_params,
+    get_query_param_int,
+    pop_pending,
+)
 from ui.artefatos_shared import (
     inject_artefatos_css, render_artefatos_nav,
     dmn_session_key, ibis_session_key,
@@ -30,6 +35,10 @@ from ui.artefatos_shared import (
 )
 
 apply_auth_gate()
+
+# NAV-12: ?ctx=<sigla> ativa o contexto certo antes de require_active_project().
+resolve_context_from_query_params()
+
 inject_artefatos_css()
 
 st.markdown("# 🗓️ Artefatos — Reuniões")
@@ -124,6 +133,11 @@ with tab_meet:
         except Exception:
             pass
 
+        # NAV-12: ?meeting=<n> (ou um switch_page pendente de outra página)
+        # abre direto o expander dessa reunião, em vez do usuário ter que
+        # rolar e procurar entre todas.
+        _deeplink_meeting_num = pop_pending("meeting_number") or get_query_param_int("meeting")
+
         for m in meetings:
             num   = m.get("meeting_number", "?")
             title = m.get("title", "")
@@ -133,7 +147,8 @@ with tab_meet:
             pii   = pii_map.get(m["id"])
             pii_badge = _PII_BADGE.get(pii["pii_risk_level"], "⚪") if pii else "⚪"
 
-            with st.expander(f"{pii_badge} **Reunião {num}** — {title} · {dt}"):
+            _is_deeplinked = _deeplink_meeting_num is not None and num == _deeplink_meeting_num
+            with st.expander(f"{pii_badge} **Reunião {num}** — {title} · {dt}", expanded=_is_deeplinked):
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Tokens usados", f"{tok:,}")
                 c2.metric("Provedor LLM", prov)

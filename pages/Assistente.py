@@ -28,6 +28,11 @@ from ui.project_selector import require_active_project
 from agents.agent_assistant import AgentAssistant
 from ui.components.copy_button import copy_button
 from ui.components.promote_asset import render_promote_assistant_content_button
+from ui.components.deep_links import (
+    resolve_context_from_query_params,
+    get_query_param_int,
+    pop_pending,
+)
 from core.chart_config import CHART_PALETTES, DEFAULT_PALETTE
 from modules.excel_exporter import export_table_to_excel
 
@@ -714,6 +719,9 @@ def _render_analyst_report(report, project_id: str) -> None:
 # ── Page config ───────────────────────────────────────────────────────────────
 apply_auth_gate()
 
+# NAV-12: ?ctx=<sigla> ativa o contexto certo antes de require_active_project().
+resolve_context_from_query_params()
+
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### 💬 Assistente")
@@ -1022,6 +1030,24 @@ with _col_proj:
     st.success(f"📁 **Contexto:** {project_name}")
 with _col_change:
     st.page_link("pages/Home.py", label="Trocar")
+
+# NAV-12: ?meeting=<n> (ou um switch_page pendente do card de "Reuniões
+# recentes" da Central) sugere uma pergunta pronta sobre aquela reunião —
+# st.chat_input não aceita valor pré-preenchido (limitação da API), então
+# a sugestão vira um botão que usa o mesmo mecanismo de "_resubmit_question"
+# já existente para reenviar uma pergunta reeditada, em vez de disparar a
+# chamada LLM sozinho ao carregar a página (custo real, nunca silencioso).
+_deeplink_meeting = pop_pending("meeting_number") or get_query_param_int("meeting")
+if _deeplink_meeting and not st.session_state.get("assistant_history"):
+    if st.button(
+        f"💬 Perguntar sobre a Reunião #{_deeplink_meeting}",
+        key="_nav12_asst_meeting_suggestion",
+    ):
+        st.session_state["_resubmit_question"] = (
+            f"Me dê um resumo da Reunião #{_deeplink_meeting}: participantes, "
+            "decisões e itens de ação."
+        )
+        st.rerun()
 
 # ── Guard: LLM API key ───────────────────────────────────────────────────────
 if not api_key:
