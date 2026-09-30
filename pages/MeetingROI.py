@@ -196,18 +196,20 @@ kpi_row([
 st.markdown("---")
 
 # ── Save scores button ────────────────────────────────────────────────────────
-save_col, hist_col = st.columns([1, 4])
-with save_col:
-    if st.button("💾 Salvar Scores no Banco", use_container_width=True,
-                 help="Persiste os indicadores ROI-TR atuais em meeting_quality_scores."):
-        result = save_project_scores(project_id, roi_data)
-        if result["saved"] > 0:
-            st.toast(f"✅ {result['saved']} scores salvos!", icon="✅")
-        if result["errors"]:
-            for e in result["errors"]:
-                st.warning(e)
-        if result["saved"] == 0 and not result["errors"]:
-            st.info("Tabela meeting_quality_scores não encontrada. Execute o SQL de migração em Configurações → Banco de Dados.")
+# UX-03: st.columns([1, 4]) espremia o botão em 20% da largura (rótulo
+# quebrava letra a letra em ~840px) — hist_col nunca foi usado (código
+# morto). Botão sem use_container_width renderiza no tamanho natural do
+# texto, nunca quebra.
+if st.button("💾 Salvar Scores no Banco",
+             help="Persiste os indicadores ROI-TR atuais em meeting_quality_scores."):
+    result = save_project_scores(project_id, roi_data)
+    if result["saved"] > 0:
+        st.toast(f"✅ {result['saved']} scores salvos!", icon="✅")
+    if result["errors"]:
+        for e in result["errors"]:
+            st.warning(e)
+    if result["saved"] == 0 and not result["errors"]:
+        st.info("Tabela meeting_quality_scores não encontrada. Execute o SQL de migração em Configurações → Banco de Dados.")
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
 tab_charts, tab_table, tab_detail, tab_cross, tab_cache = st.tabs([

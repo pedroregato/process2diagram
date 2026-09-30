@@ -4,6 +4,18 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC226 — Concluído (v5.16 / 2026-09-30) — UX-03: botões e filtros espremidos
+
+**Origem:** avaliação e priorização do UX-03 (`melhorias/ux-amigabilidade-e-elegancia.md`) — 4 itens verificados contra o código atual antes de implementar, todos confirmados de baixo risco (mecânicos, sem lógica de negócio envolvida).
+
+- [x] `ui/components/paginator.py` — botões "← Anterior"/"Próximo →" quebravam letra a letra em ~840px (colunas `[1,1,2]` dividindo espaço com o seletor de tamanho). Viraram "‹"/"›" com `help=` explicando + `use_container_width=True`, colunas `[1,1,3]` dando mais espaço à legenda. Componente único usado em ≥5 páginas (Modelagem Formal/SBVR, Validação, Debates, Ativos de Negócio, Knowledge Hub) — 1 fix beneficia todas
+- [x] `pages/ArtefatosRequisitos.py` — 5 filtros (Status/Tipo/Prioridade/Origem/Buscar) numa linha só (`st.columns(5)`) quebrados em 2 linhas (3+2)
+- [x] `pages/Assistente.py` — toolbar do chat (Markdown/HTML/Limpar em `st.columns([1.1,1.1,1,5])`) consolidou Markdown+HTML (mesma ação, exportar) num `st.popover("⬇️ Exportar")`; Limpar continua botão próprio (ação destrutiva, categoria diferente)
+- [x] `pages/MeetingROI.py` — "💾 Salvar Scores no Banco" perdeu o `st.columns([1,4])` que o espremia em 20% da largura — `hist_col` nunca tinha sido usado (código morto); botão sem `use_container_width` renderiza no tamanho natural do texto, nunca quebra
+- **Testes:** `tests/test_paginator_component.py` (+2), `tests/test_artefatos_requisitos_filter_layout.py` (2, novo), `tests/test_assistente_export_popover.py` (4, novo) — 8 novos; suíte completa **1175 testes, 0 falhas**, sem regressão
+
+---
+
 ### PC225 — Concluído (v5.16 / 2026-09-29) — NAV-17 fechado: CostBenefitScenarios — st.tabs → st.radio
 
 **Origem:** avaliação do último item pendente do NAV-17. A investigação inicial (PC224) tinha estimado esse fix como "médio-alto risco, refactor arquitetural" — leitura mais cuidadosa do código revelou que a separação necessária ("ler configuração salva" vs. "renderizar widgets") **já existia**: `_build_scenario(scen_idx)` já lia exclusivamente de `st.session_state`, sem depender de nenhum widget ter sido renderizado na execução, e `_init_scenario_defaults()` já populava os 5 slots de cenário desde o carregamento inicial da página. O autor original já tinha desenhado pra isso, só nunca aproveitou pra pular a renderização dos cenários não-visíveis.

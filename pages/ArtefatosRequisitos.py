@@ -111,7 +111,9 @@ with tab_req:
         st.info("Nenhum requisito registrado para este projeto.")
     else:
         # ── Filtros ──────────────────────────────────────────────────────
-        col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5)
+        # UX-03: 5 filtros numa linha só espremiam cada selectbox — quebra
+        # em 2 linhas (3 + 2) em vez de 1 linha de 5 colunas.
+        col_f1, col_f2, col_f3 = st.columns(3)
         with col_f1:
             sel_status = st.selectbox(
                 "Status",
@@ -125,6 +127,8 @@ with tab_req:
         with col_f3:
             _prios = sorted({r.get("priority", "") for r in requirements if r.get("priority")})
             sel_prio = st.selectbox("Prioridade", ["Todos"] + _prios, key="rt_prio")
+
+        col_f4, col_f5 = st.columns(2)
         with col_f4:
             sel_origin_req = st.selectbox(
                 "Origem", ["Todas", "Transcrição", "Documento"], key="rt_origin"

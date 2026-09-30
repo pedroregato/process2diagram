@@ -86,6 +86,32 @@ class TestPaginatorWithoutSizeSelector:
         assert len(rendered) == 25
 
 
+class TestPaginatorShortLabelsUX03:
+    """UX-03 (melhorias/ux-amigabilidade-e-elegancia.md): "← Anterior"/
+    "Próximo →" quebravam letra a letra em viewports estreitos — rótulos
+    viraram chevron curto ("‹"/"›") com help= explicando, sem perder a
+    funcionalidade (mesmas keys, mesmo comportamento de navegação)."""
+
+    def test_buttons_use_short_chevron_labels_with_explanatory_help(self):
+        at = AppTest.from_string(_PAGE_SRC, default_timeout=30)
+        at.run()
+        prev_btn = next(b for b in at.button if b.key == "t_prev")
+        next_btn = next(b for b in at.button if b.key == "t_next")
+        assert prev_btn.label == "‹"
+        assert next_btn.label == "›"
+        assert prev_btn.help == "Página anterior"
+        assert next_btn.help == "Próxima página"
+
+    def test_navigation_still_works_with_short_labels(self):
+        at = AppTest.from_string(_PAGE_SRC, default_timeout=30)
+        at.run()
+        next_btn = next(b for b in at.button if b.key == "t_next")
+        next_btn.click().run()
+        assert not at.exception
+        rendered = [m.value for m in at.markdown if m.value.startswith("item-")]
+        assert rendered[0] == "item-025"
+
+
 class TestPaginatorFilterSignatureReset:
     def test_changing_filter_sig_resets_to_first_page(self):
         at = AppTest.from_string(_PAGE_SRC, default_timeout=30)

@@ -1643,29 +1643,35 @@ if st.session_state.get("_confirm_clear"):
     st.markdown("---")
 
 if history:
-    _tb_md, _tb_html, _tb_clear, _tb_info = st.columns([1.1, 1.1, 1, 5])
+    # UX-03: Markdown/HTML/Limpar em 3 colunas estreitas quebravam o
+    # rótulo letra a letra em ~840px ("Ma/rkd/ow/n") — Markdown e HTML
+    # (mesma ação, exportar) viram opções dentro de um único popover;
+    # Limpar continua botão próprio (ação destrutiva, não exportação).
+    _tb_export, _tb_clear, _tb_info = st.columns([1.3, 1, 5.7])
     from datetime import datetime as _dt2
     _ts_str = _dt2.now().strftime("%Y%m%d_%H%M")
-    with _tb_md:
-        _export_md = _export_chat_to_markdown(history, project_name, selected_provider)
-        st.download_button(
-            "⬇️ Markdown",
-            data=_export_md,
-            file_name=f"conversa_{_ts_str}.md",
-            mime="text/markdown",
-            key="btn_export_chat_md",
-            help="Baixar conversa como Markdown",
-        )
-    with _tb_html:
-        _export_html = _export_chat_to_html(history, project_name, selected_provider)
-        st.download_button(
-            "⬇️ HTML",
-            data=_export_html.encode("utf-8"),
-            file_name=f"conversa_{_ts_str}.html",
-            mime="text/html",
-            key="btn_export_chat_html",
-            help="Baixar conversa como HTML com gráficos interativos",
-        )
+    with _tb_export:
+        with st.popover("⬇️ Exportar", use_container_width=True):
+            _export_md = _export_chat_to_markdown(history, project_name, selected_provider)
+            st.download_button(
+                "⬇️ Markdown",
+                data=_export_md,
+                file_name=f"conversa_{_ts_str}.md",
+                mime="text/markdown",
+                key="btn_export_chat_md",
+                help="Baixar conversa como Markdown",
+                use_container_width=True,
+            )
+            _export_html = _export_chat_to_html(history, project_name, selected_provider)
+            st.download_button(
+                "⬇️ HTML",
+                data=_export_html.encode("utf-8"),
+                file_name=f"conversa_{_ts_str}.html",
+                mime="text/html",
+                key="btn_export_chat_html",
+                help="Baixar conversa como HTML com gráficos interativos",
+                use_container_width=True,
+            )
     with _tb_clear:
         if st.button("🗑️ Limpar", key="btn_clear_chat", help="Limpar historico"):
             st.session_state["_confirm_clear"] = True

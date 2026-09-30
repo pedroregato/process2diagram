@@ -78,13 +78,20 @@ def paginate(
 
     if n > page_size:
         with c_nav:
-            nv1, nv2, nv3 = st.columns([1, 1, 2])
+            # UX-03: rótulos "← Anterior"/"Próximo →" quebravam letra a
+            # letra em viewports estreitos (~840px, sidebar aberta) — a
+            # coluna do botão não tinha largura suficiente. Rótulos curtos
+            # (chevron) + help= com o texto completo evita a quebra sem
+            # perder a explicação; [1,1,3] dá mais espaço pra legenda.
+            nv1, nv2, nv3 = st.columns([1, 1, 3])
             with nv1:
-                if st.button("← Anterior", key=f"{key_prefix}_prev", disabled=(page == 0)):
+                if st.button("‹", key=f"{key_prefix}_prev", disabled=(page == 0),
+                             help="Página anterior", use_container_width=True):
                     st.session_state[page_key] = page - 1
                     st.rerun()
             with nv2:
-                if st.button("Próximo →", key=f"{key_prefix}_next", disabled=(page == n_pages - 1)):
+                if st.button("›", key=f"{key_prefix}_next", disabled=(page == n_pages - 1),
+                             help="Próxima página", use_container_width=True):
                     st.session_state[page_key] = page + 1
                     st.rerun()
             with nv3:
