@@ -4,6 +4,17 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC224 — Concluído (v5.16 / 2026-09-29) — NAV-17 (parcial): KnowledgeGraph — cache do grafo pyvis
+
+**Origem:** avaliação e priorização dos 2 itens restantes do NAV-17 (KnowledgeGraph e CostBenefitScenarios). Os dois tinham a mesma causa estrutural (`st.tabs` renderiza todos os corpos a cada rerun), mas risco/esforço bem diferentes: KnowledgeGraph tinha um fix isolado e de baixo risco (memoizar uma função pura já existente); CostBenefitScenarios exigiria separar "ler configuração salva" de "renderizar widgets" — refactor maior, sem rede de testes pré-existente na página. Usuário optou por seguir com o KnowledgeGraph agora e decidir o CostBenefitScenarios depois.
+
+- [x] `pages/KnowledgeGraph.py::_build_pyvis_graph()` — reconstruía o grafo pyvis (HTML+JS, 150 entidades/608 arestas no caso medido) do zero em todo rerun, inclusive ao trocar pra aba "Fatos"/"Timeline" (`st.tabs` roda todos os corpos sempre). A função já era pura (recebe tudo via argumento, sem I/O) — só precisou de `@st.cache_data(ttl=120)`. Botão "🔄 Recarregar dados" (que já limpava `_load_graph_data`) passa a limpar os dois caches
+- **Testes:** `tests/test_knowledge_graph_pyvis_caching.py` (2, novo — 2 instâncias de `AppTest` com o mesmo `project_id`/filtros padrão, `pyvis.network.Network` mockado pra contar construções reais; sanity-check manual confirmou que o teste falha de verdade sem o decorator antes de restaurar o fix); suíte completa **1160 testes, 0 falhas**, sem regressão
+- **Achado de ambiente:** `pyvis` (dependência declarada em `requirements.txt`) não estava instalada no venv local de desenvolvimento — instalada pra viabilizar o teste dinâmico (sem isso, o teste só exercitaria o branch `except ImportError:`, sem validar o cache de verdade)
+- **Não fechado nesta rodada:** `pages/CostBenefitScenarios.py` — causa confirmada (`st.tabs` com ~150 widgets de até 5 cenários × 9 agentes, não falta de cache), mas o fix exige um refactor estrutural (separar leitura de `session_state` da renderização de widgets, pra só desenhar o cenário ativo sem perder os dados dos outros que alimentam a seção de comparação) sem teste pré-existente na página — decisão de escopo/momento em aberto
+
+---
+
 ### PC223 — Concluído (v5.16 / 2026-09-29) — NAV-17 (parcial): 4 páginas lentas — ValidationHub, Provocações Backfill, Documentos, Configurações
 
 **Origem:** avaliação e priorização do NAV-17 (páginas lentas, 30s a 9s medidos em produção) — investigação de causa real via subagente antes de priorizar (as hipóteses do audit original nem sempre bateram com o código: `CostBenefitScenarios` não tinha nada relacionado a cache, era `st.tabs` renderizando todos os cenários; alguns números do audit já estavam desatualizados pelo NAV-09/PC219, que tinha cacheado Assistente/ContextHealth/ArtefatosDebates/AtivosDeNegocio/KnowledgeHub numa rodada anterior).

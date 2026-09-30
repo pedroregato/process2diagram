@@ -297,6 +297,13 @@ def _render_legend(type_color: dict[str, str]) -> None:
     )
 
 
+# NAV-17: reconstruía o grafo pyvis (HTML+JS) do zero em TODO rerun da
+# página, mesmo trocando de aba pra "Fatos"/"Timeline" (st.tabs renderiza
+# todos os corpos sempre) — maior causa isolada dos ~30s medidos num
+# contexto com 150 entidades/608 arestas. A função já é pura (recebe tudo
+# via argumento, sem I/O nem side-effect) — memoizar por conteúdo dos
+# argumentos evita reconstruir quando nada que afeta o grafo mudou.
+@st.cache_data(ttl=120, show_spinner=False)
 def _build_pyvis_graph(
     data: dict, max_nodes: int, show_ep_edges: bool,
     show_processes: bool, entity_types: list[str],
@@ -1025,6 +1032,7 @@ with st.sidebar:
     if st.button("🔄 Recarregar dados", key="kg_refresh", use_container_width=True,
                  help="Limpa o cache e recarrega do Supabase. Use após apagar ou fundir entidades."):
         _load_graph_data.clear()
+        _build_pyvis_graph.clear()
         st.rerun()
 
 # ── Main graph ────────────────────────────────────────────────────────────────
