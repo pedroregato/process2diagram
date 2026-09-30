@@ -322,113 +322,128 @@ tab_labels = [
     st.session_state.get(_scen_name_key(i), f"Cenário {i+1}")
     for i in range(n_scen)
 ]
-scen_tabs = st.tabs(tab_labels)
 
-built_scenarios: list[ScenarioConfig] = []
-built_results:   list[ScenarioResult]  = []
+# NAV-17: st.tabs() renderizava TODOS os corpos a cada rerun — com 5
+# cenários x 9 agentes x ~3 widgets cada, ~150 widgets construídos sempre,
+# mesmo olhando só um cenário (maior causa isolada dos ~30s medidos).
+# _build_scenario() já lê só session_state, sem depender de nenhum widget
+# ter sido renderizado nesta execução — e _init_scenario_defaults() (acima)
+# já popula os 5 slots de cenário desde o início. Por isso dá pra calcular
+# TODOS os cenários pra comparação abaixo sem pagar custo de renderização,
+# e desenhar os widgets de edição só do cenário escolhido no radio.
+built_scenarios: list[ScenarioConfig] = [_build_scenario(i) for i in range(n_scen)]
+built_results:   list[ScenarioResult] = [
+    project_cost(cfg, word_count, catalog) for cfg in built_scenarios
+]
 
-for scen_idx, tab in enumerate(scen_tabs):
-    with tab:
-        # Nome
-        new_name = st.text_input(
-            "Nome do cenário",
-            value=st.session_state.get(_scen_name_key(scen_idx), f"Cenário {scen_idx+1}"),
-            key=f"cbs_nameInput_{scen_idx}",
-        )
-        st.session_state[_scen_name_key(scen_idx)] = new_name
+if st.session_state.get("cbs_active_scenario_idx", 0) >= n_scen:
+    st.session_state["cbs_active_scenario_idx"] = 0
 
-        # Presets
-        p1, p2, p3 = st.columns(3)
-        if p1.button("Custo Mínimo",   key=f"cbs_pmin_{scen_idx}", use_container_width=True):
-            _apply_preset_min_cost(scen_idx, catalog)
-            st.rerun()
-        if p2.button("Qualidade Máx.", key=f"cbs_pmax_{scen_idx}", use_container_width=True):
-            _apply_preset_max_quality(scen_idx, catalog)
-            st.rerun()
-        if p3.button("Balanceado",     key=f"cbs_pbal_{scen_idx}", use_container_width=True):
-            _apply_preset_balanced(scen_idx, catalog)
-            st.rerun()
+scen_idx = st.radio(
+    "Cenário para editar", list(range(n_scen)),
+    format_func=lambda i: tab_labels[i],
+    horizontal=True, key="cbs_active_scenario_idx",
+)
 
-        st.caption("Configure o provedor e o modelo para cada agente:")
+# Nome
+new_name = st.text_input(
+    "Nome do cenário",
+    value=st.session_state.get(_scen_name_key(scen_idx), f"Cenário {scen_idx+1}"),
+    key=f"cbs_nameInput_{scen_idx}",
+)
+st.session_state[_scen_name_key(scen_idx)] = new_name
 
-        active_agents = st.session_state["cost_active_agents"]
+# Presets
+p1, p2, p3 = st.columns(3)
+if p1.button("Custo Mínimo",   key=f"cbs_pmin_{scen_idx}", use_container_width=True):
+    _apply_preset_min_cost(scen_idx, catalog)
+    st.rerun()
+if p2.button("Qualidade Máx.", key=f"cbs_pmax_{scen_idx}", use_container_width=True):
+    _apply_preset_max_quality(scen_idx, catalog)
+    st.rerun()
+if p3.button("Balanceado",     key=f"cbs_pbal_{scen_idx}", use_container_width=True):
+    _apply_preset_balanced(scen_idx, catalog)
+    st.rerun()
 
-        for agent_name in active_agents:
-            display  = _AGENT_DISPLAY.get(agent_name, agent_name)
-            prov_key = _scen_key(scen_idx, agent_name, "provider")
-            mod_key  = _scen_key(scen_idx, agent_name, "model")
+st.caption("Configure o provedor e o modelo para cada agente:")
 
-            cur_provider = st.session_state.get(prov_key, providers_in_catalog[0])
-            if cur_provider not in providers_in_catalog:
-                cur_provider = providers_in_catalog[0]
+active_agents = st.session_state["cost_active_agents"]
 
-            st.markdown(f"**{display}**")
-            col_prov, col_mod, col_cost = st.columns([3, 4, 2])
+for agent_name in active_agents:
+    display  = _AGENT_DISPLAY.get(agent_name, agent_name)
+    prov_key = _scen_key(scen_idx, agent_name, "provider")
+    mod_key  = _scen_key(scen_idx, agent_name, "model")
 
-            new_provider = col_prov.selectbox(
-                "Provedor",
-                options=providers_in_catalog,
-                index=providers_in_catalog.index(cur_provider),
-                key=f"cbs_prov_{scen_idx}_{agent_name}",
-            )
-            st.session_state[prov_key] = new_provider
+    cur_provider = st.session_state.get(prov_key, providers_in_catalog[0])
+    if cur_provider not in providers_in_catalog:
+        cur_provider = providers_in_catalog[0]
 
-            models_for_prov = get_models_for_provider(new_provider, catalog)
-            model_ids = [m.model_id for m in models_for_prov]
-            cur_model = st.session_state.get(mod_key, model_ids[0] if model_ids else "")
-            if cur_model not in model_ids:
-                cur_model = model_ids[0] if model_ids else ""
+    st.markdown(f"**{display}**")
+    col_prov, col_mod, col_cost = st.columns([3, 4, 2])
 
-            new_model = col_mod.selectbox(
-                "Modelo",
-                options=model_ids,
-                index=model_ids.index(cur_model) if cur_model in model_ids else 0,
-                format_func=lambda mid: catalog_by_id[mid].label if mid in catalog_by_id else mid,
-                key=f"cbs_mod_{scen_idx}_{agent_name}",
-            )
-            st.session_state[mod_key] = new_model
+    new_provider = col_prov.selectbox(
+        "Provedor",
+        options=providers_in_catalog,
+        index=providers_in_catalog.index(cur_provider),
+        key=f"cbs_prov_{scen_idx}_{agent_name}",
+    )
+    st.session_state[prov_key] = new_provider
 
-            # Custo parcial estimado
-            from core.cost_model import estimate_tokens, DEFAULT_TOKEN_PROFILES as _DTP
-            _prof = next((p for p in _DTP if p.agent_name == agent_name), None)
-            if _prof and new_model in catalog_by_id:
-                _pr   = catalog_by_id[new_model]
-                _inp, _out = estimate_tokens(_prof, word_count)
-                _n = st.session_state["cost_n_bpmn_runs"] if agent_name == "bpmn" else 1
-                _c = (_inp * _n * _pr.input_price_per_1m + _out * _n * _pr.output_price_per_1m) / 1_000_000
-                col_cost.metric("Custo est.", f"${_c:.5f}")
+    models_for_prov = get_models_for_provider(new_provider, catalog)
+    model_ids = [m.model_id for m in models_for_prov]
+    cur_model = st.session_state.get(mod_key, model_ids[0] if model_ids else "")
+    if cur_model not in model_ids:
+        cur_model = model_ids[0] if model_ids else ""
 
-        # Rodapé com total + Aplicar
-        scen_cfg = _build_scenario(scen_idx)
-        result   = project_cost(scen_cfg, word_count, catalog)
-        built_scenarios.append(scen_cfg)
-        built_results.append(result)
+    new_model = col_mod.selectbox(
+        "Modelo",
+        options=model_ids,
+        index=model_ids.index(cur_model) if cur_model in model_ids else 0,
+        format_func=lambda mid: catalog_by_id[mid].label if mid in catalog_by_id else mid,
+        key=f"cbs_mod_{scen_idx}_{agent_name}",
+    )
+    st.session_state[mod_key] = new_model
 
-        st.markdown("---")
-        rf1, rf2 = st.columns([3, 2])
-        rf1.markdown(
-            f"**Custo total estimado:** `${result.total_cost_usd:.5f}` &nbsp;|&nbsp; "
-            f"**Quality Index:** `{result.avg_quality_index:.1f}/10`"
-        )
+    # Custo parcial estimado
+    from core.cost_model import estimate_tokens, DEFAULT_TOKEN_PROFILES as _DTP
+    _prof = next((p for p in _DTP if p.agent_name == agent_name), None)
+    if _prof and new_model in catalog_by_id:
+        _pr   = catalog_by_id[new_model]
+        _inp, _out = estimate_tokens(_prof, word_count)
+        _n = st.session_state["cost_n_bpmn_runs"] if agent_name == "bpmn" else 1
+        _c = (_inp * _n * _pr.input_price_per_1m + _out * _n * _pr.output_price_per_1m) / 1_000_000
+        col_cost.metric("Custo est.", f"${_c:.5f}")
 
-        if result.warnings:
-            for w in result.warnings:
-                st.warning(w, icon="⚠️")
+# Rodapé com total + Aplicar — reusa o cenário já calculado acima (mesmo
+# session_state desta execução, sem recomputar).
+scen_cfg = built_scenarios[scen_idx]
+result   = built_results[scen_idx]
 
-        # ── Botão Aplicar por cenário ──────────────────────────────────────
-        if rf2.button(
-            f"Aplicar '{new_name}' ao Pipeline",
-            key=f"cbs_apply_{scen_idx}",
-            type="primary",
-            use_container_width=True,
-        ):
-            _do_apply(scen_cfg)
-            st.success(
-                f"Cenário **{new_name}** aplicado a {len(scen_cfg.assignments)} agente(s). "
-                f"Vá para o Pipeline para executar."
-            )
-            st.page_link("pages/Pipeline.py", label="Ir para Pipeline", icon="🚀")
-            st.rerun()
+st.markdown("---")
+rf1, rf2 = st.columns([3, 2])
+rf1.markdown(
+    f"**Custo total estimado:** `${result.total_cost_usd:.5f}` &nbsp;|&nbsp; "
+    f"**Quality Index:** `{result.avg_quality_index:.1f}/10`"
+)
+
+if result.warnings:
+    for w in result.warnings:
+        st.warning(w, icon="⚠️")
+
+# ── Botão Aplicar por cenário ──────────────────────────────────────────────
+if rf2.button(
+    f"Aplicar '{new_name}' ao Pipeline",
+    key=f"cbs_apply_{scen_idx}",
+    type="primary",
+    use_container_width=True,
+):
+    _do_apply(scen_cfg)
+    st.success(
+        f"Cenário **{new_name}** aplicado a {len(scen_cfg.assignments)} agente(s). "
+        f"Vá para o Pipeline para executar."
+    )
+    st.page_link("pages/Pipeline.py", label="Ir para Pipeline", icon="🚀")
+    st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # COMPARAÇÃO — gráficos + tabela (incluindo Default)

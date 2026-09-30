@@ -4,6 +4,16 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC225 — Concluído (v5.16 / 2026-09-29) — NAV-17 fechado: CostBenefitScenarios — st.tabs → st.radio
+
+**Origem:** avaliação do último item pendente do NAV-17. A investigação inicial (PC224) tinha estimado esse fix como "médio-alto risco, refactor arquitetural" — leitura mais cuidadosa do código revelou que a separação necessária ("ler configuração salva" vs. "renderizar widgets") **já existia**: `_build_scenario(scen_idx)` já lia exclusivamente de `st.session_state`, sem depender de nenhum widget ter sido renderizado na execução, e `_init_scenario_defaults()` já populava os 5 slots de cenário desde o carregamento inicial da página. O autor original já tinha desenhado pra isso, só nunca aproveitou pra pular a renderização dos cenários não-visíveis.
+
+- [x] `pages/CostBenefitScenarios.py` — `st.tabs(tab_labels)` (até 5 cenários × 9 agentes × ~3 widgets cada, ~150 widgets construídos em todo rerun mesmo olhando 1 cenário só) virou `st.radio()`. `built_scenarios`/`built_results` passam a ser calculados pra **todos** os `n_scen` cenários via `_build_scenario(i)` + `project_cost(...)` direto (Python puro, sem widget envolvido) — a seção de comparação continua vendo todos os cenários; só o editor de widgets do cenário selecionado no radio é desenhado. Guarda adicionada pra quando o usuário reduz "Nº de cenários" abaixo do índice atualmente selecionado (reseta pro cenário 0 em vez de quebrar o `st.radio`)
+- **Testes:** `tests/test_cost_benefit_scenarios_tabs_to_radio.py` (7, novo — página sem Supabase/LLM, testável via `AppTest.from_file()` direto): confirma que só 1 cenário's worth de selectboxes renderiza, que a comparação inclui todos os cenários mesmo sem visitá-los, que trocar de cenário no radio preserva a config dos outros, que o botão Aplicar continua funcionando, e que reduzir a contagem de cenários não quebra o radio. Suíte completa **1167 testes, 0 falhas**, sem regressão
+- **Fecha o NAV-17** — todos os itens com causa real confirmada (ValidationHub, Provocações Backfill, Documentos, Configurações, KnowledgeGraph, CostBenefitScenarios) corrigidos nesta e nas 2 rodadas anteriores (PC223/PC224); Assistente/ContextHealth/ArtefatosModelagem confirmados já corrigidos pelo NAV-09/PC219 (números do audit desatualizados)
+
+---
+
 ### PC224 — Concluído (v5.16 / 2026-09-29) — NAV-17 (parcial): KnowledgeGraph — cache do grafo pyvis
 
 **Origem:** avaliação e priorização dos 2 itens restantes do NAV-17 (KnowledgeGraph e CostBenefitScenarios). Os dois tinham a mesma causa estrutural (`st.tabs` renderiza todos os corpos a cada rerun), mas risco/esforço bem diferentes: KnowledgeGraph tinha um fix isolado e de baixo risco (memoizar uma função pura já existente); CostBenefitScenarios exigiria separar "ler configuração salva" de "renderizar widgets" — refactor maior, sem rede de testes pré-existente na página. Usuário optou por seguir com o KnowledgeGraph agora e decidir o CostBenefitScenarios depois.
