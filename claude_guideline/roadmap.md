@@ -4,6 +4,18 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC227 — Concluído (v5.16 / 2026-10-01) — Onda B (parcial): UX-07 — cabeçalho padrão + chip de contexto neutro
+
+**Origem:** avaliação e priorização da Onda B (`melhorias/ux-amigabilidade-e-elegancia.md`) — UX-06/UX-08/UX-09 avaliados e adiados por serem redesign subjetivo ou mudança comportamental sem forma de validar/testar com segurança numa sessão sem ambiente de renderização; UX-07 escopado para o que é mecânico e de baixo risco: padronizar cabeçalho + resolver o achado E7 ("banners verdes de Contexto repetidos... o verde de sucesso perde significado").
+
+- [x] `ui/components/page_header.py` ganhou `render_context_chip(project_name, change_page="pages/Home.py")` — pill compacto (`rgba(148,163,184,.12)`, não verde) substituindo o padrão repetido `st.success(f"📁 **Contexto:** ...")` + coluna "Trocar"
+- [x] Migradas 12 páginas de trabalho (não-vitrine, não-admin): as 6 `Artefatos*.py` (byte-idênticas entre si — `grep` confirmou antes de migrar) + `EntityRecognition.py` + `ValidationHub.py` + `BpmnEditor.py` (9 páginas com o banner verde completo → `render_context_chip`); `CostEstimator.py`/`KnowledgeGraph.py`/`Diagramas.py` (cabeçalho solto sem banner → `render_page_header`, caption dobrada no parâmetro do componente)
+- [x] `Assistente.py` (chat-first, sem H1 de página) e `ContextHealth.py` (hero HTML custom, por design) avaliados e **excluídos** — retrofit arriscaria regressão sem ganho real
+- **Testes:** `tests/test_page_header_context_chip.py` (5, novo — componente isolado via `AppTest.from_string()`) + `tests/test_ux07_page_header_migration.py` (6, novo — checagem estática das 12 páginas) — 11 novos; suíte completa **1186 testes, 0 falhas**, sem regressão
+- **Não fechado nesta rodada:** UX-06 (tokens CSS centralizados — `ui/theme.py` já existe e já é aplicado via `auth_gate`, achado de passagem; expor como custom properties é redesign sem validação visual disponível), UX-08 (unificar `st.radio`-como-aba → `st.segmented_control`, mudança comportamental em 5+ páginas), UX-09 (paleta vitrine×trabalho, decisão subjetiva). Restam ~25 páginas de trabalho sem `render_context_chip`/banner padronizado (ex. `AtivosDeNegocio.py`, `DocumentManager.py`, `KnowledgeHub.py`) — escopo do UX-07 original ("40 páginas não-admin") não fechado, só a fração com o padrão mecânico confirmado
+
+---
+
 ### PC226 — Concluído (v5.16 / 2026-09-30) — UX-03: botões e filtros espremidos
 
 **Origem:** avaliação e priorização do UX-03 (`melhorias/ux-amigabilidade-e-elegancia.md`) — 4 itens verificados contra o código atual antes de implementar, todos confirmados de baixo risco (mecânicos, sem lógica de negócio envolvida).

@@ -25,6 +25,7 @@ from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured
 from modules.reqtracker_exporter import to_html as export_html, to_pdf as export_pdf
 from ui.project_selector import require_active_project
+from ui.components.page_header import render_context_chip
 from core.project_store import list_reports_by_project, get_report_html
 from ui.artefatos_shared import (
     inject_artefatos_css, render_artefatos_nav,
@@ -49,11 +50,7 @@ if not supabase_configured():
 project_id, project_name = require_active_project()
 render_artefatos_nav("pages/Artefatos.py")
 
-_col_proj, _col_change = st.columns([5, 1])
-with _col_proj:
-    st.success(f"📁 **Contexto:** {project_name}")
-with _col_change:
-    st.page_link("pages/Home.py", label="Trocar")
+render_context_chip(project_name)
 
 # ── Carrega dados (com cache compartilhado com as demais páginas da seção) ───
 # UX-04: DMN/IBIS/Ruídos entraram no mesmo pool — antes só apareciam com

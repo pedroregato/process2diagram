@@ -20,6 +20,7 @@ import streamlit as st
 from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured
 from ui.project_selector import require_active_project
+from ui.components.page_header import render_context_chip
 from ui.components.paginator import paginate
 from ui.artefatos_shared import (
     inject_artefatos_css, render_artefatos_nav, ibis_session_key,
@@ -39,11 +40,7 @@ if not supabase_configured():
 project_id, project_name = require_active_project()
 render_artefatos_nav("pages/ArtefatosDebates.py")
 
-_col_proj, _col_change = st.columns([5, 1])
-with _col_proj:
-    st.success(f"📁 **Contexto:** {project_name}")
-with _col_change:
-    st.page_link("pages/Home.py", label="Trocar")
+render_context_chip(project_name)
 
 meetings = _load_meetings(project_id)
 meet_map = {m["id"]: m for m in meetings}

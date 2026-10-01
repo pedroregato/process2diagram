@@ -26,6 +26,7 @@ from ui.project_selector import render_active_context_picker
 from modules.bpmn_viewer import preview_from_xml
 from modules.mermaid_renderer import render_mermaid_block
 from modules.supabase_client import supabase_configured
+from ui.components.page_header import render_page_header
 from ui.components.deep_links import (
     resolve_context_from_query_params,
     get_query_param_str,
@@ -57,8 +58,10 @@ hub: KnowledgeHub | None = st.session_state.get("hub")
 def _render_from_supabase() -> None:
     from core.project_store import list_bpmn_processes, list_bpmn_versions
 
-    st.markdown("## 📐 Visualizador de Diagramas")
-    st.caption("Nenhuma transcrição processada nesta sessão — carregando diagramas salvos no Supabase.")
+    render_page_header(
+        "📐", "Visualizador de Diagramas",
+        "Nenhuma transcrição processada nesta sessão — carregando diagramas salvos no Supabase.",
+    )
     st.page_link("pages/Pipeline.py", label="← Processar nova transcrição", icon="🚀")
     st.divider()
 
@@ -178,10 +181,10 @@ if hub is None:
 hub = KnowledgeHub.migrate(hub)
 
 # ── Header ────────────────────────────────────────────────────────────────────
-st.markdown("## 📐 Visualizador de Diagramas")
-st.caption(
+render_page_header(
+    "📐", "Visualizador de Diagramas",
     f"Processo: **{hub.bpmn.name or hub.requirements.name or '—'}**  ·  "
-    f"Hub v{hub.version}  ·  Provider: `{hub.meta.llm_provider}`"
+    f"Hub v{hub.version}  ·  Provider: `{hub.meta.llm_provider}`",
 )
 st.page_link("pages/Pipeline.py", label="← Voltar para o pipeline", icon="⚙️")
 st.divider()

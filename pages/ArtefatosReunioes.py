@@ -21,6 +21,7 @@ from modules.supabase_client import supabase_configured
 from services.export_service import format_date_suffix
 from ui.project_selector import require_active_project
 from ui.components.artifact_feedback import render_artifact_feedback
+from ui.components.page_header import render_context_chip
 from ui.components.deep_links import (
     resolve_context_from_query_params,
     get_query_param_int,
@@ -50,11 +51,7 @@ if not supabase_configured():
 project_id, project_name = require_active_project()
 render_artefatos_nav("pages/ArtefatosReunioes.py")
 
-_col_proj, _col_change = st.columns([5, 1])
-with _col_proj:
-    st.success(f"📁 **Contexto:** {project_name}")
-with _col_change:
-    st.page_link("pages/Home.py", label="Trocar")
+render_context_chip(project_name)
 
 from core.project_store import list_meetings_pii_summary
 

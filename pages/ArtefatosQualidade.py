@@ -19,6 +19,7 @@ from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured
 from core.project_store import update_provocation_status
 from ui.project_selector import require_active_project
+from ui.components.page_header import render_context_chip
 from ui.artefatos_shared import (
     inject_artefatos_css, render_artefatos_nav, noise_session_key,
     _load_meetings, _load_noise, _load_provocations,
@@ -36,11 +37,7 @@ if not supabase_configured():
 project_id, project_name = require_active_project()
 render_artefatos_nav("pages/ArtefatosQualidade.py")
 
-_col_proj, _col_change = st.columns([5, 1])
-with _col_proj:
-    st.success(f"📁 **Contexto:** {project_name}")
-with _col_change:
-    st.page_link("pages/Home.py", label="Trocar")
+render_context_chip(project_name)
 
 meetings     = _load_meetings(project_id)
 provocations = _load_provocations(project_id)  # tabela dedicada — leve, carrega sempre (PC190)

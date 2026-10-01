@@ -28,6 +28,7 @@ from core.project_store import (
 from ui.project_selector import require_active_project
 from ui.components.paginator import paginate
 from ui.components.kpi_row import kpi_row
+from ui.components.page_header import render_page_header, render_context_chip
 
 apply_auth_gate()
 
@@ -99,7 +100,7 @@ def _invalidate_caches() -> None:
 _me = st.session_state.get("_usuario_nome") or st.session_state.get("_usuario_login", "sistema")
 
 # ── Header ────────────────────────────────────────────────────────────────────
-st.markdown("# ✅ Validação de Artefatos")
+render_page_header("✅", "Validação de Artefatos")
 
 if not supabase_configured():
     st.error("⚙️ Supabase não configurado. Adicione as credenciais em Configurações.")
@@ -112,11 +113,7 @@ if "_vhub_msg" in st.session_state:
 
 # ── Projeto de trabalho ativo + seletores ─────────────────────────────────────
 proj_id, proj_name = require_active_project()
-_col_p, _col_ch = st.columns([5, 1])
-with _col_p:
-    st.success(f"📁 **Contexto:** {proj_name}")
-with _col_ch:
-    st.page_link("pages/Home.py", label="Trocar")
+render_context_chip(proj_name)
 
 col_meet, col_status = st.columns(2)
 

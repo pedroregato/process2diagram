@@ -25,6 +25,7 @@ import streamlit as st
 from ui.auth_gate import apply_auth_gate
 from modules.supabase_client import supabase_configured, get_supabase_client
 from ui.project_selector import require_active_project
+from ui.components.page_header import render_page_header, render_context_chip
 
 apply_auth_gate()
 
@@ -43,10 +44,10 @@ with st.sidebar:
 client_info = {"api_key": api_key} if api_key else None
 
 # ── Header ────────────────────────────────────────────────────────────────────
-st.markdown("# 🔍 Reconhecimento de Entidades")
-st.caption(
+render_page_header(
+    "🔍", "Reconhecimento de Entidades",
     "Identifica automaticamente pessoas, áreas, unidades organizacionais e cargos "
-    "mencionados nas transcrições de reuniões. Usa LLM (primário) ou spaCy + padrões linguísticos + dicionário (fallback)."
+    "mencionados nas transcrições de reuniões. Usa LLM (primário) ou spaCy + padrões linguísticos + dicionário (fallback).",
 )
 
 if not supabase_configured():
@@ -78,11 +79,7 @@ if not _entities_tables_exist():
 # ── Projeto ───────────────────────────────────────────────────────────────────
 project_id, project_name = require_active_project()
 
-_col_proj, _col_change = st.columns([5, 1])
-with _col_proj:
-    st.success(f"📁 **Contexto:** {project_name}")
-with _col_change:
-    st.page_link("pages/Home.py", label="Trocar")
+render_context_chip(project_name)
 
 st.markdown("---")
 

@@ -36,6 +36,7 @@ from modules.cost_estimator import (
     get_usd_brl_rate,
 )
 from core.project_store import _db, _ok
+from ui.components.page_header import render_page_header
 
 apply_auth_gate()
 
@@ -49,10 +50,10 @@ if _usd_brl_missing or _usd_brl_age > 3600:
     st.session_state["usd_brl_ts"]   = _time_now()
 
 # ── Header ────────────────────────────────────────────────────────────────────
-st.markdown("# 💰 Estimativa de Custos LLM")
-st.caption(
+render_page_header(
+    "💰", "Estimativa de Custos LLM",
     "Análise de custo real (histórico de tokens do banco) e estimativas para cenários futuros. "
-    "Preços aproximados — consulte a página oficial de cada provedor para valores atualizados."
+    "Preços aproximados — consulte a página oficial de cada provedor para valores atualizados.",
 )
 
 # ── Aviso de preços ───────────────────────────────────────────────────────────

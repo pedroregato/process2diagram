@@ -21,6 +21,7 @@ from modules.supabase_client import supabase_configured
 from modules.text_utils import rule_keyword_pt
 from core.project_store import load_meeting_as_hub, save_bpmn_from_hub, bpmn_tables_exist
 from ui.project_selector import require_active_project
+from ui.components.page_header import render_context_chip
 from ui.components.artifact_feedback import render_artifact_feedback
 from ui.components.paginator import paginate
 from ui.artefatos_shared import (
@@ -43,11 +44,7 @@ if not supabase_configured():
 project_id, project_name = require_active_project()
 render_artefatos_nav("pages/ArtefatosModelagem.py")
 
-_col_proj, _col_change = st.columns([5, 1])
-with _col_proj:
-    st.success(f"📁 **Contexto:** {project_name}")
-with _col_change:
-    st.page_link("pages/Home.py", label="Trocar")
+render_context_chip(project_name)
 
 with _TPE(max_workers=5) as _pool:
     _f_meetings   = _pool.submit(_load_meetings, project_id)

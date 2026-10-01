@@ -21,6 +21,7 @@ import streamlit.components.v1 as components
 
 from ui.auth_gate import apply_auth_gate
 from ui.project_selector import require_active_project
+from ui.components.page_header import render_page_header
 from modules.supabase_client import get_supabase_client
 
 apply_auth_gate()
@@ -913,8 +914,7 @@ network.on('stabilizationIterationsDone', function() {{
 
 project_id, project_name = require_active_project()
 
-st.markdown(f"## 🕸️ Grafo de Conhecimento")
-st.caption(f"Projeto: **{project_name}**")
+render_page_header("🕸️", "Grafo de Conhecimento", f"Projeto: **{project_name}**")
 
 with st.expander("O que é um Grafo de Conhecimento e por que ele importa?", expanded=False):
     st.markdown("""

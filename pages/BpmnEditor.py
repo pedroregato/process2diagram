@@ -41,6 +41,7 @@ from core.project_store import (
 )
 from ui.project_selector import require_active_project
 from ui.components.copy_button import copy_button
+from ui.components.page_header import render_page_header, render_context_chip
 from ui.components.deep_links import (
     resolve_context_from_query_params,
     get_query_param_str,
@@ -67,8 +68,10 @@ if st.session_state.pop("_bpme_reset_fields", False):
     st.session_state["bpme_notes"]     = ""
 
 # ── Cabeçalho ─────────────────────────────────────────────────────────────────
-st.title("✏️ Editor BPMN")
-st.caption("Edite diagramas BPMN visualmente e registre novas versões no banco de dados.")
+render_page_header(
+    "✏️", "Editor BPMN",
+    "Edite diagramas BPMN visualmente e registre novas versões no banco de dados.",
+)
 
 # ── Guarda de pré-requisitos ──────────────────────────────────────────────────
 if not bpmn_tables_exist():
@@ -80,11 +83,7 @@ if not bpmn_tables_exist():
 
 # ── Contexto de trabalho ativo + seletor de processo ─────────────────────────
 project_id, proj_name = require_active_project()
-_col_proj, _col_change = st.columns([5, 1])
-with _col_proj:
-    st.success(f"📁 **Contexto:** {proj_name}")
-with _col_change:
-    st.page_link("pages/Home.py", label="Trocar")
+render_context_chip(proj_name)
 
 processes = sorted(
     list_bpmn_processes(project_id),
