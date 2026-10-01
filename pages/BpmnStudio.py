@@ -26,7 +26,7 @@ import streamlit.components.v1 as components
 
 from ui.auth_gate import apply_auth_gate
 from ui.project_selector import require_active_project
-from ui.components.page_header import render_page_header
+from ui.components.page_header import render_page_header, render_context_chip
 from ui.components.copy_button import copy_button
 from modules.session_security import get_session_llm_client
 from modules.bpmn_editor import editor_from_xml
@@ -79,11 +79,7 @@ if not bpmn_tables_exist():
     st.stop()
 
 project_id, project_name = require_active_project()
-_col_proj, _col_change = st.columns([5, 1])
-with _col_proj:
-    st.success(f"📁 **Contexto:** {project_name}")
-with _col_change:
-    st.page_link("pages/Home.py", label="Trocar")
+render_context_chip(project_name)
 
 # Clear the paste-back widget BEFORE it's instantiated below — Streamlit
 # forbids writing to a widget's session_state key once that widget has

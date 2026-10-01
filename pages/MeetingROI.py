@@ -42,7 +42,7 @@ from ui.components.kpi_row import kpi_row
 
 apply_auth_gate()
 
-from ui.components.page_header import render_page_header
+from ui.components.page_header import render_page_header, render_context_chip
 render_page_header(
     "📊", "Qualidade de Reuniões — ROI-TR",
     "Indicador de eficiência das reuniões: ROI-TR sensível ao tipo de reunião, "
@@ -126,11 +126,7 @@ Proxy linguístico de repetição de conceitos na transcrição.
 
 # ── Contexto de trabalho ativo ───────────────────────────────────────────────
 project_id, project_name = require_active_project()
-_col_p, _col_ch = st.columns([5, 1])
-with _col_p:
-    st.success(f"📁 **Contexto:** {project_name}")
-with _col_ch:
-    st.page_link("pages/Home.py", label="Trocar")
+render_context_chip(project_name)
 
 st.markdown("---")
 

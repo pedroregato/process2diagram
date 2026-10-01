@@ -1,21 +1,28 @@
 # tests/test_ux07_page_header_migration.py
 """
 UX-07 (melhorias/ux-amigabilidade-e-elegancia.md, Onda B): confirma que as
-12 paginas de trabalho migradas nesta rodada usam os componentes
-padronizados (render_page_header / render_context_chip) em vez do padrao
-antigo (st.markdown("# ...") solto + st.success(f"Contexto: ...") verde).
+paginas de trabalho migradas usam os componentes padronizados
+(render_page_header / render_context_chip) em vez do padrao antigo
+(st.markdown("# ...") solto + st.success(f"Contexto: ...") verde).
 
-9 paginas tinham o padrao completo (titulo solto + banner verde de
-contexto + link Trocar): Artefatos.py e as 5 subsecoes
+Rodada 1 (2026-10-01) -- 9 paginas tinham o padrao completo (titulo solto
++ banner verde de contexto + link Trocar): Artefatos.py e as 5 subsecoes
 (ArtefatosDebates/Modelagem/Qualidade/Requisitos/Reunioes), BpmnEditor.py,
-EntityRecognition.py, ValidationHub.py.
-3 paginas so tinham titulo solto, sem banner de contexto (nada pra
-preservar alem do titulo): CostEstimator.py, KnowledgeGraph.py,
-Diagramas.py (2 ocorrencias, uma no fallback Supabase, uma no fluxo
-principal).
+EntityRecognition.py, ValidationHub.py. 3 paginas so tinham titulo solto,
+sem banner de contexto (nada pra preservar alem do titulo):
+CostEstimator.py, KnowledgeGraph.py, Diagramas.py (2 ocorrencias, uma no
+fallback Supabase, uma no fluxo principal).
+
+Rodada 2 (2026-10-01) -- avaliacao das ~25 paginas restantes mostrou que
+a maioria nunca teve o banner verde pra substituir (AtivosDeNegocio,
+KnowledgeHub, LLMBenchmark, CostBenefitScenarios: sem banner; Pipeline.py:
+seletor de contexto proprio, diferente; Settings.py/DocumentManager.py:
+st.success() ali sao feedback de acao pontual, uso legitimo). So 2 paginas
+tinham o padrao identico: BpmnStudio.py e MeetingROI.py (ambas ja usavam
+render_page_header, so faltava o chip).
 
 Checagem estatica (mesmo padrao de tests/test_report_backfill_admin_gate.py
-e outros desta sessao) -- renderizar as 12 paginas via AppTest exigiria
+e outros desta sessao) -- renderizar as paginas via AppTest exigiria
 simular sessao + Supabase + varios loaders por pagina; a garantia que
 importa (uso do componente certo, ausencia do padrao antigo) e observavel
 direto no codigo-fonte.
@@ -35,6 +42,8 @@ _CONTEXT_CHIP_PAGES = [
     "EntityRecognition.py",
     "ValidationHub.py",
     "BpmnEditor.py",
+    "BpmnStudio.py",
+    "MeetingROI.py",
 ]
 
 _PAGE_HEADER_ONLY_PAGES = [
@@ -49,7 +58,7 @@ def _read(fname: str) -> str:
 
 
 class TestContextChipPagesMigrated:
-    def test_all_nine_pages_import_render_context_chip(self):
+    def test_all_eleven_pages_import_render_context_chip(self):
         for fname in _CONTEXT_CHIP_PAGES:
             src = _read(fname)
             assert "render_context_chip" in src, f"{fname}: nao importa/usa render_context_chip"
@@ -81,6 +90,23 @@ class TestPageHeaderOnlyPagesMigrated:
             "(fallback Supabase + fluxo principal)"
         )
         assert 'st.markdown("## \U0001f4d0 Visualizador de Diagramas")' not in src
+
+
+class TestBpmnStudioAndMeetingRoiMigratedInRound2:
+    """BpmnStudio.py e MeetingROI.py ja usavam render_page_header antes
+    desta rodada -- so o banner verde de contexto precisava virar
+    render_context_chip(). Confirma que os dois continuam usando
+    render_page_header (nao regrediu) alem de ganhar o chip."""
+
+    def test_both_pages_still_use_render_page_header(self):
+        for fname in ("BpmnStudio.py", "MeetingROI.py"):
+            src = _read(fname)
+            assert "render_page_header(" in src, f"{fname}: perdeu render_page_header"
+
+    def test_both_pages_call_render_context_chip_with_project_name(self):
+        for fname in ("BpmnStudio.py", "MeetingROI.py"):
+            src = _read(fname)
+            assert "render_context_chip(project_name)" in src
 
 
 class TestArtefatosSixPagesUseIdenticalCallPattern:

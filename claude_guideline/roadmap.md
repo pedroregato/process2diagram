@@ -4,6 +4,17 @@ Histórico completo de entregas por ciclo de projeto.
 
 ---
 
+### PC228 — Concluído (v5.16 / 2026-10-01) — UX-07 fechado: BpmnStudio.py + MeetingROI.py
+
+**Origem:** reavaliação do escopo restante do UX-07 ("~25 páginas") deixado em aberto no PC227 — levantamento real (não estimativa) mostrou que a maioria das candidatas nunca teve o banner verde de contexto pra substituir: `AtivosDeNegocio.py`/`KnowledgeHub.py`/`LLMBenchmark.py`/`CostBenefitScenarios.py` nunca mostraram o banner; `Pipeline.py` usa um seletor de contexto próprio e mais rico (`render_context_selector()`, formulário com confirmação) — substituir por um chip simples seria perda de funcionalidade; `Settings.py`/`DocumentManager.py` têm `st.success()` mas são feedback de ação pontual (upload concluído, chave salva), uso legítimo do alerta verde, não o padrão repetido do achado E7.
+
+- [x] `pages/BpmnStudio.py` — banner verde + coluna "Trocar" → `render_context_chip(project_name)` (já usava `render_page_header` desde antes, só faltava o chip)
+- [x] `pages/MeetingROI.py` — mesmo fix, mesmo padrão idêntico às 9 páginas do PC227
+- **Testes:** `tests/test_ux07_page_header_migration.py` estendido (+2 métodos de teste, classe nova `TestBpmnStudioAndMeetingRoiMigratedInRound2`); suíte completa **1188 testes, 0 falhas**, sem regressão
+- **Fecha o achado E7** (banner verde de contexto repetido) para todas as instâncias confirmadas no código — 14 páginas migradas no total entre as duas rodadas. UX-07 permanece parcialmente aberto só quanto ao parâmetro `actions=[...]` (depende do UX-10, não implementado)
+
+---
+
 ### PC227 — Concluído (v5.16 / 2026-10-01) — Onda B (parcial): UX-07 — cabeçalho padrão + chip de contexto neutro
 
 **Origem:** avaliação e priorização da Onda B (`melhorias/ux-amigabilidade-e-elegancia.md`) — UX-06/UX-08/UX-09 avaliados e adiados por serem redesign subjetivo ou mudança comportamental sem forma de validar/testar com segurança numa sessão sem ambiente de renderização; UX-07 escopado para o que é mecânico e de baixo risco: padronizar cabeçalho + resolver o achado E7 ("banners verdes de Contexto repetidos... o verde de sucesso perde significado").
