@@ -122,6 +122,27 @@ pg = st.navigation(pages)
 # st.stop() — pg.run() nunca é alcançado. O CSS do login já esconde a sidebar.
 apply_auth_gate()
 
+# ── UX-13: busca rápida no topo da sidebar ────────────────────────────────────
+# 39+ itens visíveis pro usuário comum (54 no total) tornam rolar a sidebar
+# procurando uma página específica incômodo. Introspecta os mesmos objetos
+# st.Page() já construídos acima (.title/.icon são propriedades públicas da
+# API do Streamlit) — zero lista duplicada, zero risco de ficar fora de
+# sincronia ao adicionar/remover uma página do dict `pages`. Renderizado
+# ANTES de pg.run() pra aparecer no topo, antes de qualquer conteúdo de
+# sidebar específico da página atual.
+if st.session_state.get("_autenticado"):
+    with st.sidebar:
+        _flat_pages = [p for _group, _plist in pages.items() for p in _plist]
+        _goto_options = ["―"] + [f"{p.icon} {p.title}" for p in _flat_pages]
+        _goto_sel = st.selectbox(
+            "🔎 Ir para...", _goto_options, key="_ux13_goto",
+            label_visibility="collapsed",
+            help="Buscar e navegar direto para qualquer página do menu",
+        )
+        if _goto_sel != "―":
+            st.switch_page(_flat_pages[_goto_options.index(_goto_sel) - 1])
+        st.divider()
+
 pg.run()
 
 # ── NAV-14: rodapé fixo da sidebar (usuário/contexto ativo + Sair) ────────────

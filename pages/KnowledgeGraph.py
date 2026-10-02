@@ -1045,12 +1045,18 @@ with tab_graph:
         st.warning("Selecione pelo menos um tipo de entidade no painel lateral.")
     else:
         try:
-            html_graph, type_color = _build_pyvis_graph(
-                data, max_nodes, show_ep_edges, show_processes, selected_types,
-                min_occurrence=min_occurrence, graph_height=graph_height,
-                show_entity_edges=show_entity_edges, min_shared_meetings=min_shared,
-                physics_enabled=physics_enabled, show_contradictions=show_contradictions,
-            )
+            # UX-14: mensagem de carregamento especifica (num. de entidades
+            # no grafo) em vez do "Running..." generico do Streamlit — só
+            # aparece de fato num cache miss (st.cache_data já evita
+            # recomputar em reruns subsequentes com os mesmos filtros).
+            _n_nodes_est = min(max_nodes, len(entities))
+            with st.spinner(f"Calculando grafo de {_n_nodes_est} entidades..."):
+                html_graph, type_color = _build_pyvis_graph(
+                    data, max_nodes, show_ep_edges, show_processes, selected_types,
+                    min_occurrence=min_occurrence, graph_height=graph_height,
+                    show_entity_edges=show_entity_edges, min_shared_meetings=min_shared,
+                    physics_enabled=physics_enabled, show_contradictions=show_contradictions,
+                )
             _render_legend(type_color)
             if show_contradictions and contradictions:
                 st.markdown(

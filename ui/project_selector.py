@@ -153,7 +153,7 @@ def render_context_selector() -> None:
         col_proj, col_title, col_date = st.columns([2, 2, 1])
 
         with col_proj:
-            sel = st.selectbox("Contexto / Iniciativa", options,
+            sel = st.selectbox("Contexto", options,
                                index=default_idx,
                                key="proj_sel",
                                help="Selecione um contexto existente ou crie um novo")

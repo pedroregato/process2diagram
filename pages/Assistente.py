@@ -726,7 +726,7 @@ resolve_context_from_query_params()
 with st.sidebar:
     st.markdown("### 💬 Assistente")
 
-    st.markdown("#### 📁 Projeto de Trabalho")
+    st.markdown("#### 📁 Contexto de Trabalho")
     _ap_name = st.session_state.get("active_project_name", "")
     if _ap_name:
         st.success(f"**{_ap_name}**")
