@@ -299,3 +299,9 @@ O XML gerado e compativel com ferramentas que suportam BPMN 2.0 (OMG ISO/IEC 195
 - [Bizagi Modeler](https://www.bizagi.com)
 - [draw.io / diagrams.net](https://app.diagrams.net)
 - [bpmn.io](https://bpmn.io)
+
+---
+
+## Contribuindo
+
+Contribuições entram via branch + pull request (a `main` é protegida e faz deploy automático). Veja [`CONTRIBUTING.md`](CONTRIBUTING.md) e o guia completo do colaborador em [`docs/CONTRIBUTOR_GUIDE.html`](docs/CONTRIBUTOR_GUIDE.html).
