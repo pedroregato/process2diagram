@@ -580,6 +580,8 @@ Local edit (PyCharm / Windows)
     → Streamlit Cloud detects push → automatic rebuild
 ```
 
+**Proteção da `main` (desde 15/11/2026):** ruleset **"Protect main"** no GitHub — PR obrigatório com 1 aprovação, aprovação descartada em novos commits, conversas resolvidas antes do merge, force-push e exclusão bloqueados. **Repository admin tem bypass** (o fluxo direto acima continua valendo para o Pedro). Colaboradores (ex.: `sankha0012`) e agentes sem papel de admin trabalham em branch + PR. Guia do colaborador: `CONTRIBUTING.md` + `docs/CONTRIBUTOR_GUIDE.html`.
+
 Never edit multi-hundred-line files in the GitHub web editor — corrupts complex files on paste.
 
 ### 📂 Pasta `manifestos/` — Governança Macro
